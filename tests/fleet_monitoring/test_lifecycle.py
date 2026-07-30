@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import time
+import tempfile
 
 import pytest
 
+from tests.utils.polling import wait_until
 from tools.system.fleet_monitoring.lifecycle import TerminateResult, terminate
 
 # Windows ``os.kill`` / ``signal.SIGTERM`` delivery to a Python ``Popen`` child
@@ -21,42 +22,91 @@ _skip_win32_posix_signals = pytest.mark.skipif(
 )
 
 
+def _make_ready_path() -> str:
+    """Reserve a path that does not yet exist, for a child to touch once ready."""
+    fd, ready_path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(ready_path)
+    return ready_path
+
+
+def _cleanup_ready_path(ready_path: str) -> None:
+    """Remove the readiness marker if the child created it."""
+    if os.path.exists(ready_path):
+        os.unlink(ready_path)
+
+
+def _wait_for_ready(ready_path: str) -> None:
+    """Poll until the child signals it has registered its handler, then clean up."""
+    try:
+        wait_until(lambda: os.path.exists(ready_path), timeout=2.0, interval=0.01)
+    finally:
+        _cleanup_ready_path(ready_path)
+
+
 def _spawn_sleep() -> subprocess.Popen[bytes]:
     """Spawn a Python child that exits cleanly on SIGTERM.
 
-    The child installs a SIGTERM handler that calls ``sys.exit(0)``
-    so it exits promptly and predictably.
+    The child installs a SIGTERM handler that calls ``sys.exit(0)`` so it
+    exits promptly and predictably, then touches ``ready_path`` so the parent
+    can wait_until the handler is actually registered instead of sleeping a
+    fixed guess before sending the signal.
     """
+    ready_path = _make_ready_path()
     proc = subprocess.Popen(
         [
             sys.executable,
             "-c",
             (
-                "import signal, sys, time; "
+                "import pathlib, signal, sys; "
                 "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0)); "
-                "time.sleep(60)"
+                f"pathlib.Path({ready_path!r}).touch(); "
+                "import time; time.sleep(60)"
             ),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    # Give the child a moment to register its signal handler.
-    time.sleep(0.2)
+    try:
+        _wait_for_ready(ready_path)
+    except TimeoutError:
+        proc.kill()
+        proc.wait()
+        # The child is now guaranteed dead (proc.wait() returned), so this
+        # check can't race with a late touch() the way _wait_for_ready's own
+        # cleanup could if the child wrote the marker just before the raise.
+        _cleanup_ready_path(ready_path)
+        raise
     return proc
 
 
 def _spawn_unkillable() -> subprocess.Popen[bytes]:
     """Spawn a child that traps SIGTERM and refuses to die."""
+    ready_path = _make_ready_path()
     proc = subprocess.Popen(
         [
             sys.executable,
             "-c",
-            ("import signal, time; signal.signal(signal.SIGTERM, lambda *_: None); time.sleep(60)"),
+            (
+                "import pathlib, signal; "
+                "signal.signal(signal.SIGTERM, lambda *_: None); "
+                f"pathlib.Path({ready_path!r}).touch(); "
+                "import time; time.sleep(60)"
+            ),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    time.sleep(0.2)
+    try:
+        _wait_for_ready(ready_path)
+    except TimeoutError:
+        proc.kill()
+        proc.wait()
+        # The child is now guaranteed dead (proc.wait() returned), so this
+        # check can't race with a late touch() the way _wait_for_ready's own
+        # cleanup could if the child wrote the marker just before the raise.
+        _cleanup_ready_path(ready_path)
+        raise
     return proc
 
 

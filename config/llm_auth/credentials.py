@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -18,10 +19,14 @@ from config.llm_auth.records import (
     save_provider_auth_record,
     save_provider_auth_record_values,
 )
+from config.secrets.store import SecretSaveResult
 
 CredentialSource = Literal[
     "env",
     "keyring",
+    # The owner-only local file used when no OS keychain could store the secret.
+    # Distinct from "local", which means a locally hosted model runtime (Ollama).
+    "fallback",
     "metadata",
     "cli",
     "ambient",
@@ -44,6 +49,14 @@ class CredentialStatus:
     source: CredentialSource
     verified: bool
     stale: bool
+    detail: str
+
+
+@dataclass(frozen=True)
+class _AmbientProbeResult:
+    """Outcome of an actual (not env-presence-only) ambient credential check."""
+
+    ok: bool
     detail: str
 
 
@@ -78,12 +91,83 @@ def _bool_record_value(record: dict[str, str], key: str, default: bool) -> bool:
 
 def _normalize_source(raw: str | None, *, fallback: CredentialSource) -> CredentialSource:
     value = (raw or "").strip().lower()
-    allowed = {"env", "keyring", "metadata", "cli", "ambient", "local", "none", "unknown"}
+    allowed = {
+        "env",
+        "keyring",
+        "fallback",
+        "metadata",
+        "cli",
+        "ambient",
+        "local",
+        "none",
+        "unknown",
+    }
     return value if value in allowed else fallback  # type: ignore[return-value]
 
 
 def _env_value(env_var: str) -> str:
     return os.getenv(env_var, "").strip()
+
+
+def _probe_vertex_ai_ambient(spec: ProviderSpec) -> _AmbientProbeResult:
+    """Attempt real Google ADC resolution; env vars alone do not prove ADC works."""
+    import google.auth
+    from google.auth.exceptions import DefaultCredentialsError
+
+    project_hint = _env_value(spec.project_env) if spec.project_env else ""
+    location = _env_value(spec.location_env) if spec.location_env else ""
+    location_detail = f", location {location}" if location else ""
+
+    try:
+        _credentials, discovered_project = google.auth.default()
+    except DefaultCredentialsError as exc:
+        return _AmbientProbeResult(
+            ok=False,
+            detail=(
+                f"Google Application Default Credentials are not configured ({exc}). "
+                "Run `gcloud auth application-default login` or set "
+                "GOOGLE_APPLICATION_CREDENTIALS."
+            ),
+        )
+    except Exception as exc:
+        return _AmbientProbeResult(
+            ok=False,
+            detail=f"Could not resolve Google Application Default Credentials: {exc}",
+        )
+
+    project = project_hint or discovered_project
+    if not project:
+        return _AmbientProbeResult(
+            ok=False,
+            detail=(
+                "Google Application Default Credentials resolved, but no GCP project "
+                "could be determined (ADC did not discover one and VERTEX_AI_PROJECT is "
+                "not set). Set VERTEX_AI_PROJECT — Vertex AI requests require a project."
+            ),
+        )
+    return _AmbientProbeResult(
+        ok=True,
+        detail=(
+            f"Google Application Default Credentials resolved (project {project}"
+            f"{location_detail}); {spec.label} uses ADC."
+        ),
+    )
+
+
+def _probe_bedrock_ambient(spec: ProviderSpec) -> _AmbientProbeResult:
+    region = os.getenv("AWS_REGION", "").strip() or os.getenv("AWS_DEFAULT_REGION", "").strip()
+    if not region:
+        return _AmbientProbeResult(detail="AWS_REGION or AWS_DEFAULT_REGION is not set.", ok=False)
+    return _AmbientProbeResult(
+        ok=True,
+        detail=f"AWS region is configured ({region}); {spec.label} uses the AWS credential chain.",
+    )
+
+
+_AMBIENT_PROBES: dict[str, Callable[[ProviderSpec], _AmbientProbeResult]] = {
+    "vertex-ai": _probe_vertex_ai_ambient,
+    "bedrock": _probe_bedrock_ambient,
+}
 
 
 def _source_status(provider: str, source: CredentialSource, detail: str) -> CredentialStatus:
@@ -108,7 +192,7 @@ def _record_status(spec: ProviderSpec, record: dict[str, str]) -> CredentialStat
     return CredentialStatus(
         provider=spec.value,
         configured=True,
-        source=source if source != "keyring" else "metadata",
+        source="metadata" if source in {"keyring", "fallback"} else source,
         verified=verified and not stale,
         stale=stale,
         detail=detail,
@@ -200,18 +284,34 @@ def status(provider: str) -> CredentialStatus:
         )
 
     if spec.credential_kind == "ambient":
-        region = os.getenv("AWS_REGION", "").strip() or os.getenv("AWS_DEFAULT_REGION", "").strip()
+        ambient_probe = _AMBIENT_PROBES.get(spec.value)
+        if ambient_probe is None:
+            return CredentialStatus(
+                spec.value,
+                False,
+                "unknown",
+                False,
+                False,
+                "No ambient credential probe registered.",
+            )
+        try:
+            result = ambient_probe(spec)
+        except Exception as exc:
+            return CredentialStatus(
+                spec.value,
+                False,
+                "unknown",
+                False,
+                False,
+                f"{spec.label} ambient credential check failed unexpectedly: {exc}",
+            )
         return CredentialStatus(
             provider=spec.value,
-            configured=bool(region),
-            source="ambient" if region else "none",
-            verified=bool(region),
+            configured=result.ok,
+            source="ambient" if result.ok else "none",
+            verified=result.ok,
             stale=False,
-            detail=(
-                f"AWS region is configured ({region}); Bedrock uses the AWS credential chain."
-                if region
-                else "AWS_REGION or AWS_DEFAULT_REGION is not set."
-            ),
+            detail=result.detail,
         )
 
     if spec.credential_kind == "local":
@@ -257,44 +357,46 @@ def resolve_for_request(provider: str) -> CredentialResolution:
                 detail=f"{spec.api_key_env} resolved from environment.",
             )
 
-        import keyring.errors
+        from config.secrets.store import lookup
 
-        from config.llm_keyring import keyring_is_disabled, read_keychain_secret
-
-        if not keyring_is_disabled():
-            try:
-                key = read_keychain_secret(spec.api_key_env)
-            except keyring.errors.KeyringError as exc:
-                # The backend itself couldn't be reached (e.g. no D-Bus/Secret
-                # Service session in this process) — this is not evidence the
-                # credential is missing, so leave any previously-verified
-                # metadata untouched instead of marking it stale.
-                return CredentialResolution(
-                    provider=spec.value,
-                    api_key="",
-                    source="unknown",
-                    detail=(
-                        f"Could not reach the system keychain to check {spec.api_key_env}: "
-                        f"{exc}. Retry once the keychain is reachable."
-                    ),
-                )
-            if key:
-                save_provider_auth_record(
-                    provider=spec.value,
-                    auth_name=spec.value,
-                    kind="api_key",
-                    source="keyring",
-                    detail=f"{spec.api_key_env} stored in the system keychain.",
-                    verified=True,
-                    stale=False,
-                    env_var=spec.api_key_env,
-                )
-                return CredentialResolution(
-                    provider=spec.value,
-                    api_key=key,
-                    source="keyring",
-                    detail=f"{spec.api_key_env} resolved from secure local storage.",
-                )
+        found = lookup(spec.api_key_env)
+        if found.value and found.tier in {"keyring", "fallback"}:
+            source: CredentialSource = "keyring" if found.tier == "keyring" else "fallback"
+            detail = (
+                f"{spec.api_key_env} resolved from secure local storage."
+                if found.tier == "keyring"
+                else f"{spec.api_key_env} resolved from the local fallback credential store."
+            )
+            save_provider_auth_record(
+                provider=spec.value,
+                auth_name=spec.value,
+                kind="api_key",
+                source=source,
+                detail=detail,
+                verified=True,
+                stale=False,
+                env_var=spec.api_key_env,
+            )
+            return CredentialResolution(
+                provider=spec.value,
+                api_key=found.value,
+                source=source,
+                detail=detail,
+            )
+        if found.keyring_unreachable:
+            # The backend couldn't be reached (no D-Bus/Secret Service session,
+            # locked keychain) and no fallback copy exists — that is not evidence
+            # the credential is missing, so leave previously verified metadata
+            # alone instead of marking it stale.
+            return CredentialResolution(
+                provider=spec.value,
+                api_key="",
+                source="unknown",
+                detail=(
+                    f"Could not reach the system keychain to check {spec.api_key_env}: "
+                    f"{found.keyring_error} Retry once the keychain is reachable."
+                ),
+            )
 
         detail = (
             f"Missing credential for LLM provider '{spec.value}'. Set {spec.api_key_env} "
@@ -346,33 +448,41 @@ def resolve_api_key_env_for_request(env_var: str) -> str:
     return resolve_env_credential(normalized)
 
 
-def save_api_key(provider: str, value: str, *, detail: str | None = None) -> None:
-    """Store an OpenSRE-managed API key and refresh prompt-safe metadata."""
+def save_api_key(provider: str, value: str, *, detail: str | None = None) -> SecretSaveResult:
+    """Store an OpenSRE-managed API key and refresh prompt-safe metadata.
+
+    Returns which tier accepted the write so onboarding can tell the user when
+    the credential landed in the local fallback file rather than the keychain.
+    """
     spec = require_provider_spec(provider)
     if not spec.uses_open_sre_api_key:
         raise ValueError(f"{spec.value} does not use an OpenSRE-managed API key")
-    from config.llm_keyring import save_keyring_secret
+    from config.secrets.store import save_secret
 
-    save_keyring_secret(spec.api_key_env, value)
+    result = save_secret(spec.api_key_env, value)
+    source: CredentialSource = "fallback" if result.used_fallback else "keyring"
     save_provider_auth_record(
         provider=spec.value,
         auth_name=spec.value,
         kind="api_key",
-        source="keyring",
-        detail=detail or f"{spec.api_key_env} stored in the system keychain.",
+        source=source,
+        detail=detail or result.detail,
         verified=True,
         stale=False,
         env_var=spec.api_key_env,
     )
+    return result
 
 
 def delete(provider: str) -> None:
     """Delete OpenSRE-managed provider auth metadata and API key when applicable."""
     spec = require_provider_spec(provider)
     if spec.uses_open_sre_api_key:
-        from config.llm_keyring import delete_keyring_secret
+        from config.secrets.store import delete_secret
 
-        delete_keyring_secret(spec.api_key_env)
+        # Clears the keyring entry *and* any fallback-file copy — leaving the
+        # latter would let a logged-out credential keep resolving at request time.
+        delete_secret(spec.api_key_env)
     delete_provider_auth_record(spec.value)
 
 
@@ -409,15 +519,9 @@ def has_api_key_env_status(env_var: str) -> bool:
 
 
 def llm_api_key_source(env_var: str) -> str:
-    """Return where an LLM credential resolves from: ``env``, ``keyring``, or ``none``."""
-    import keyring
-    import keyring.errors
-
-    from config.llm_keyring import (
-        _KEYRING_SERVICE,
-        keyring_is_disabled,
-        macos_keychain_item_exists,
-    )
+    """Return where an LLM credential resolves from: ``env``, ``keyring``, ``fallback``, or ``none``."""
+    from config.secrets import os_keyring
+    from config.secrets.store import secret_source
 
     prompt_safe_source = source_for_api_key_env(env_var)
     if prompt_safe_source != "none":
@@ -426,26 +530,20 @@ def llm_api_key_source(env_var: str) -> str:
         return "none"
     if os.getenv(env_var, "").strip():
         return "env"
-    if keyring_is_disabled():
+    if os_keyring.keyring_is_disabled():
         return "none"
-    item_exists = macos_keychain_item_exists(env_var)
-    if item_exists is not None:
-        return "keyring" if item_exists else "none"
-    try:
-        if (keyring.get_password(_KEYRING_SERVICE, env_var) or "").strip():
-            return "keyring"
-    except keyring.errors.KeyringError:
-        return "none"
-    return "none"
+    # Answers without decrypting the secret (and so without a macOS auth prompt)
+    # when the platform supports it; falls through to a real read otherwise.
+    item_exists = os_keyring.item_exists(env_var)
+    if item_exists:
+        return "keyring"
+    return secret_source(env_var)
 
 
 def has_llm_api_key(env_var: str) -> bool:
     """Return True when an API key is available from env or secure local storage."""
-    from config.llm_keyring import (
-        keyring_is_disabled,
-        macos_keychain_item_exists,
-        resolve_keyring_secret,
-    )
+    from config.secrets import os_keyring
+    from config.secrets.store import secret_source
 
     if has_api_key_env_status(env_var):
         return True
@@ -453,12 +551,11 @@ def has_llm_api_key(env_var: str) -> bool:
         return False
     if os.getenv(env_var, "").strip():
         return True
-    if keyring_is_disabled():
+    if os_keyring.keyring_is_disabled():
         return False
-    item_exists = macos_keychain_item_exists(env_var)
-    if item_exists is not None:
-        return item_exists
-    return bool(resolve_keyring_secret(env_var))
+    if os_keyring.item_exists(env_var):
+        return True
+    return secret_source(env_var) != "none"
 
 
 __all__ = [

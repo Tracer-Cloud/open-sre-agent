@@ -32,7 +32,8 @@ from platform.scheduler.agent_runner import AgentPayload
 logger = logging.getLogger(__name__)
 
 _MORNING_DIGEST_BASE_PROMPT = (
-    "Sentry morning digest: summarize unresolved Sentry issues from the last 24 hours. "
+    "Sentry morning digest: summarize unresolved Sentry issues from the last 24 hours "
+    "and include uptime status from the watch transition log. "
     "Follow the sentry-summary skill workflow."
 )
 

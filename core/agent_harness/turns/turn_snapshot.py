@@ -10,7 +10,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from core.agent_harness.prompts.conversation_memory import MAX_CONVERSATION_MESSAGES
+from core.state import MAX_CONVERSATION_MESSAGES
+from core.state.transcript_window import compact_messages_to_window
 
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice
@@ -112,7 +113,8 @@ class TurnSnapshot:
 
     conversation_messages: tuple[tuple[str, str], ...]
     """Snapshot of recent CLI conversation: ``(role, content)`` pairs, oldest
-    first, capped to ``MAX_CONVERSATION_MESSAGES`` entries at assembly time."""
+    first, compacted to the ``MAX_CONVERSATION_MESSAGES`` window at assembly
+    time (overflow becomes a leading session-summary message)."""
 
     configured_integrations: tuple[str, ...]
     """Integration names known to be configured at turn start."""
@@ -167,11 +169,13 @@ class TurnSnapshot:
         source also exposes ``select_turn_runtime_input`` directly or through
         ``source.agent``, runtime request fields are snapshotted too.
         """
-        messages = session.cli_agent_messages
-        snapshot: tuple[tuple[str, str], ...] = tuple(
+        valid_messages = [
             (str(role), str(content))
-            for role, content in messages[-MAX_CONVERSATION_MESSAGES:]
+            for role, content in session.cli_agent_messages
             if isinstance(role, str) and isinstance(content, str)
+        ]
+        snapshot: tuple[tuple[str, str], ...] = tuple(
+            compact_messages_to_window(valid_messages, max_messages=MAX_CONVERSATION_MESSAGES)
         )
         runtime_input = _select_runtime_request_input(text, session)
         last_observation = _read_last_observation(session, runtime_input)

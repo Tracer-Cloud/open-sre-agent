@@ -6,8 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from config.config import (
+    Environment,
     LLMSettings,
     describe_llm_resolution,
+    get_environment,
     has_credentials_for_active_llm_provider,
     llm_provider_error_context,
     resolve_llm_settings,
@@ -105,6 +107,38 @@ def test_llm_settings_from_env_deepseek(monkeypatch) -> None:
 
     assert settings.provider == "deepseek"
     assert settings.deepseek_api_key == ""
+
+
+def test_llm_settings_accepts_vertex_ai_without_project() -> None:
+    settings = LLMSettings.model_validate({"provider": "vertex-ai"})
+
+    assert settings.provider == "vertex-ai"
+    assert settings.vertex_ai_project == ""
+    assert settings.vertex_ai_location == "us-central1"
+
+
+def test_llm_settings_from_env_vertex_ai(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "vertex-ai")
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+
+    settings = LLMSettings.from_env()
+
+    assert settings.provider == "vertex-ai"
+    assert settings.vertex_ai_project == "my-gcp-project"
+    assert settings.vertex_ai_location == "us-central1"
+    assert settings.vertex_ai_reasoning_model == "gemini-2.5-pro"
+    assert settings.vertex_ai_toolcall_model == "gemini-2.5-flash-lite"
+
+
+def test_llm_settings_from_env_vertex_ai_custom_location(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "vertex-ai")
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LOCATION", "europe-west1")
+
+    settings = LLMSettings.from_env()
+
+    assert settings.vertex_ai_location == "europe-west1"
 
 
 def test_llm_settings_minimax_provider_accepted() -> None:
@@ -386,3 +420,29 @@ def test_llm_provider_error_context_never_raises(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "not-a-real-provider")
 
     assert llm_provider_error_context() == ""
+
+
+def test_environment_is_str_enum_with_stable_values() -> None:
+    assert set(Environment) == {Environment.DEVELOPMENT, Environment.PRODUCTION}
+    assert Environment.DEVELOPMENT.value == "development"
+    assert Environment.PRODUCTION.value == "production"
+    # StrEnum round-trips from its string value and compares equal to it,
+    # which is what the `.value` call sites and `== Environment.X` checks rely on.
+    assert Environment("production") is Environment.PRODUCTION
+    assert Environment.PRODUCTION == "production"
+
+
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [
+        ("production", Environment.PRODUCTION),
+        ("prod", Environment.PRODUCTION),
+        ("development", Environment.DEVELOPMENT),
+        ("", Environment.DEVELOPMENT),
+        ("anything-else", Environment.DEVELOPMENT),
+    ],
+)
+def test_get_environment_maps_env_var(monkeypatch, env_value: str, expected: Environment) -> None:
+    monkeypatch.setenv("ENV", env_value)
+
+    assert get_environment() == expected

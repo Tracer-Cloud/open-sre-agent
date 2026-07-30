@@ -1,42 +1,17 @@
-"""Interactive setup coverage for the Helm integration."""
+"""Interactive setup coverage for the Helm integration.
+
+Prompt order, defaults, and persistence to the keyring/``.env``/store are
+covered generically for every spec-backed integration (including Helm) in
+:mod:`tests.integrations.test_cli_spec_setup`; this file only pins the
+handler's registration.
+"""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-from integrations.cli import _setup_helm, cmd_setup
+from integrations.cli import cmd_setup
 from integrations.registry import SUPPORTED_SETUP_SERVICES
-
-
-def test_setup_helm_persists_credentials() -> None:
-    prompts = {
-        "Helm binary path or name": "/usr/local/bin/helm",
-        "Kubernetes context (optional, passed as --kube-context)": "prod-admin",
-        "Kubeconfig file path (optional, passed as --kubeconfig)": "~/.kube/config",
-        "Default namespace when alerts do not specify one (optional)": "production",
-    }
-
-    def fake_prompt(label: str, default: str = "", secret: bool = False) -> str:
-        del secret
-        return prompts.get(label, default)
-
-    with (
-        patch("integrations.cli._p", side_effect=fake_prompt),
-        patch("integrations.cli.upsert_integration") as mock_upsert,
-    ):
-        _setup_helm()
-
-    mock_upsert.assert_called_once_with(
-        "helm",
-        {
-            "credentials": {
-                "helm_path": "/usr/local/bin/helm",
-                "kube_context": "prod-admin",
-                "kubeconfig": "~/.kube/config",
-                "default_namespace": "production",
-            }
-        },
-    )
 
 
 def test_cmd_setup_helm_dispatches_handler() -> None:

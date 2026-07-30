@@ -8,7 +8,7 @@ from core.domain.alerts.alert_source import (
     primary_sources_for_alert,
     relevant_sources_for_alert,
 )
-from core.domain.alerts.tool_planning import FALLBACK_TOOL_NAMES, score_tools
+from core.domain.alerts.tool_planning import score_tools
 from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
 from core.state import InvestigationState
@@ -81,7 +81,7 @@ def _available_investigation_tools(resolved_integrations: dict[str, Any]) -> lis
 
 def _is_candidate(action: PlannedInvestigationAction) -> bool:
     """A scored action eligible for selection: a positive score, or a fallback tool."""
-    return action.score > 0 or action.name in FALLBACK_TOOL_NAMES
+    return action.score > 0 or action.is_fallback
 
 
 def _apply_budget(
@@ -89,7 +89,7 @@ def _apply_budget(
     scored: list[PlannedInvestigationAction],
 ) -> tuple[list[PlannedInvestigationAction], list[PlannedInvestigationAction]]:
     positive = [action for action in scored if action.score > 0]
-    fallback = [action for action in scored if action.name in FALLBACK_TOOL_NAMES]
+    fallback = [action for action in scored if action.is_fallback]
     candidates = positive or fallback
     budget = _tool_budget(state)
     selected = candidates[:budget]

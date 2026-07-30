@@ -38,12 +38,11 @@ later action consumes the earlier action's output:
     placeholder or empty content. Do NOT stop after A either — once A's result
     arrives you MUST continue and emit B. The loop has budget for these steps.
     Examples (emit ONE tool now, the consumer next turn):
-      "check the weather in Antarctica and then send it to slack"
+      "check the weather in Antarctica and then send it to the team channel"
           → shell_run(command="curl 'wttr.in/Antarctica?format=3'")   [this turn]
           → (observe the temperature in the tool result)
-          → slack_send_message(message="<the actual temperature text>")  [next turn]
-      "get the latest error count and post it to slack"
-          → run the lookup first, THEN slack_send_message with the real count.
+          → the matching send/notify tool for that channel (from available tools),
+            with the actual temperature text  [next turn]
     Recognize the dependency from words like "send it", "post that", "report the
     result", "share the output" — the pronoun/result reference means B needs A's
     output. Never fabricate the value and never send a "checking…" placeholder in
@@ -136,9 +135,14 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   Examples that are NOT diagnostic questions (assistant_handoff):
   "CPU is spiking to 99% on orders-api", "checkout-api has elevated 500s and
   latency after deploy". Gate diagnostic questions on CONNECTED INTEGRATIONS:
-  * At least ONE integration connected → emit investigation_start with alert_text
-    synthesized from the request (state the failure plus any named sources). Do
-    NOT hand off — run the investigation.
+  * At least ONE integration connected → emit ONLY investigation_start with
+    alert_text synthesized from the request (state the failure plus any named
+    sources). Do NOT hand off — run the investigation. Do NOT also emit
+    shell_run, github_cli, slash_invoke, or any other tool in the same turn to
+    "cover" named sources (Sentry/GitHub/PostHog/etc.): the investigation
+    pipeline queries those sources. Never invent placeholder shell commands
+    such as `echo 'PostHog query requested…'` for a source you cannot reach
+    here.
   * "none" or "unknown" → emit assistant_handoff instead FOR DIAGNOSTIC QUESTIONS
     ONLY; this gate NEVER applies to explicit investigate instructions (first rule
     above). With no connected data source an implicit diagnostic question would be
@@ -153,12 +157,13 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   EVEN WHEN integrations are connected. The investigation rule applies ONLY when
   the request asks for the CAUSE of a failure, crash, error, outage, or incident;
   a lookup with no failure being diagnosed is never investigation_start.
-  Exception: GitHub issue/PR/repo create/list/view/merge/comment as a *standalone*
-  request via `gh` is NOT this handoff — call github_cli (see GITHUB CLI REQUESTS
-  below). That exception does NOT apply when GitHub is named as one of several
-  sources to query while diagnosing a crash/failure/outage (with or without
-  Sentry/PostHog/Datadog) — that remains investigation_start when integrations
-  are connected.
+  Exception: a vendor fragment may define its own action-tool exception to this
+  handoff for standalone product operations on that vendor (see the vendor's
+  action-prompt fragment, e.g. GitHub CLI requests below). Any such exception
+  never applies when that vendor is named as one of several sources to query
+  while diagnosing a crash/failure/outage — that case remains investigation_start
+  when integrations are connected, regardless of what the vendor fragment allows
+  standalone.
   Examples that are HANDOFFS (data lookups), NOT investigations:
   * "events for the person whose github_username is davincios in posthog"
   * "show me the latest sessions for user X"
@@ -166,9 +171,10 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   * "list the open sentry issues for checkout"
   Contrast: "why is checkout crashing — check sentry and posthog" names a
   FAILURE to root-cause, so it IS investigation_start (per the rule above).
-  Contrast: "figure out why the agent is crashing on Windows by querying sentry,
-  github issues, and posthog" is ALSO investigation_start — do NOT call
-  github_cli for the github-issues clause.
+  Contrast: naming a vendor's own standalone-action tool (e.g. GitHub) as one
+  of several sources while diagnosing a crash/failure/outage does NOT downgrade
+  it to that tool's standalone action — it stays investigation_start (see the
+  vendor exception note above and its fragment for a worked example).
 - NEITHER an instruction NOR a diagnostic question → assistant_handoff. A message
   that is JUST an alert or incident — a pasted alert payload (JSON, YAML, or
   key-value blob) on its own, or a bare incident statement such as "CPU is
@@ -179,8 +185,11 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   investigation for it.
 - A diagnostic question that is a FOLLOW-UP about a result you already produced
   (see RECENT CONVERSATION) — e.g. "why did it fail?" / "what caused the spike?"
-  after a completed investigation — is answered from that prior context: emit
-  assistant_handoff, do NOT start a new investigation.
+  / "what happened?" after a completed investigation — is answered from that
+  prior context: emit assistant_handoff(content="follow_up:prior_investigation")
+  so the turn answers from the completed RCA instead of re-querying integrations.
+  Do NOT start a new investigation. Use this content value only for a question
+  about an investigation already completed in this session.
 - When unsure AND the message lacks an explicit investigate/analyze/diagnose/
   RCA/root-cause instruction, choose assistant_handoff. An explicit investigate
   verb is never "unsure" — emit investigation_start per the rule above.
@@ -208,12 +217,11 @@ just proposed. Resolve the referent against the assistant's previous reply:
   "/integrations remove github" and "/integrations list" and the user says
   "do both" → emit slash_invoke("/integrations", args=["remove", "github"])
   then slash_invoke("/integrations", args=["list"]).
-- If that reply ended with Want me to: offering more Slack roster/detail
-  (display names, titles, members, …), call slack_list_team_members (or the
-  matching slack_* tool) — do NOT assistant_handoff and do NOT treat "yes" as
-  a new investigation or docs question. Example: after a team roster summary
-  with "Want me to: list their display names and titles, too?" and the user
-  says "yes" → slack_list_team_members.
+- If that reply ended with Want me to: offering more detail from a vendor tool
+  (roster, message history, etc.), call the matching vendor tool for that
+  offer — do NOT assistant_handoff and do NOT treat "yes" as a new
+  investigation or docs question. (Vendor fragments give concrete examples,
+  e.g. a Slack roster follow-up.)
 - If the USER MESSAGE was already expanded to "Yes — please <offer>." treat
   that as the concrete request and emit the matching tool.
 - If you cannot confidently map the referent to a concrete action from the
@@ -282,36 +290,32 @@ Other tools:
   * "run synthetic test 004" → scenario="004-cpu-saturation-bad-query"
   Never substitute a different numbered scenario or default scenario when a
   numeric id is present.
+- memory_remember — proactively save durable knowledge the moment it appears in
+  the user's message. The user does NOT need to say "remember", "save", or
+  "note" — if a user-authored fact will help future sessions,
+  call memory_remember in this same turn (alongside other tools as needed).
+  Save: user identity/role, work preferences, infrastructure conventions,
+  known-flaky services, default channels, or incident lessons.
+  Save facts from tool results only when the user explicitly asks to remember
+  them or confirms they describe their real environment. Never save built-in
+  sample/demo/synthetic/test alert output as the user's infrastructure or
+  incident history. Do NOT save transient task state, one-off command output,
+  secrets, credentials, tokens, passwords, private keys, or raw auth material.
+  If an equivalent memory may already exist, call memory_recall first or reuse the
+  exact existing name from recent memory/tool context, then update via
+  memory_remember instead of creating a near-duplicate.
+- memory_recall — read memory when answering needs prior durable facts about
+  the user, preferences, infrastructure, conventions, or an incident lesson.
+  Use name when exact, query when fuzzy, or no arguments for the index.
+- memory_forget — delete a stored memory when the user asks to forget,
+  delete, remove, or stop keeping a durable fact. If the target is vague,
+  call memory_recall first to identify likely names rather than guessing.
 - cli_exec — run opensre <subcommand> when user explicitly says opensre
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind
-- telegram_send_message — send a Telegram message ONLY when Telegram is connected
-  and the user explicitly asks to send, post, notify, or message Telegram. Use the
-  user's requested message body as `message`; do NOT use this for generic alerts
-  or investigations unless the user specifically asks to send the result to Telegram.
-- rocketchat_send_message — send a Rocket.Chat message ONLY when Rocket.Chat is
-  connected and the user explicitly asks to send, post, notify, or message
-  Rocket.Chat. Use the user's requested message body as `message` and the named
-  destination (#channel / @user) as `channel`; with a webhook-only setup the
-  destination is fixed, so omit `channel`.
-- slack_send_message — send a Slack notification via the **incoming webhook**
-  (fixed preconfigured channel) when the user asks to post/notify Slack and you
-  do NOT need a specific channel or thread. Put the exact text in `message`.
-  Prefer `slack_reply_message` when a bot token is available and the user names
-  a channel (#name / C…) or thread.
-- slack_reply_message — post to a specific Slack channel or thread with the bot
-  token (`channel_id` = C… or #name, optional `thread_ts`). Prefer this over
-  slack_send_message for teammate-style replies.
-- slack_read_messages — read recent *message history* in one channel/thread
-  (`thread_ts`). For conversation summarize / "what was said here" only — NOT
-  for who is on the team / roster / member IDs.
-- slack_search_messages — workspace *message* search (Slack search syntax).
-- slack_list_team_members — workspace *roster* (who is on the team / member IDs).
-  Never substitute slack_read_messages for this.
-- slack_join_channel — join a public #channel before reading/posting.
-- slack_add_reaction — add an emoji reaction to a message ts.
-- slack_capture_task — when the user says "add task …", "remind me …", or
-  "todo: …", store the reminder locally and confirm it back in the thread.
+- (vendor messaging/delivery tools — e.g. Slack, Telegram, Rocket.Chat send/reply/
+  read/search/roster tools — are documented in their own vendor action-prompt
+  fragments, appended below, rather than named here.)
 - shell_run — narrowly scoped local diagnostic shell commands
 - code_implement — code implementation workflow, only for a direct user request
   to change code. Do NOT use it for assistant-style offers or pasted suggested
@@ -319,71 +323,27 @@ Other tools:
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
 
-SLACK TEAMMATE REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
-When the user asks to read, summarize, search, join, react, list members, reply
-in, or capture a task from Slack / a #channel / a thread, call the matching
-slack_* tool directly. Do NOT emit assistant_handoff for these — they are NOT
-docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule (that rule
-is for Datadog/Grafana/Sentry/PostHog record lookups via the gather loop).
-If the message includes a line like `[Slack channel_id=C… thread_ts=…]`, use
-that channel_id (and thread_ts when reading a thread) as the default target when
-the user says "this channel", "here", "this thread", or "the conversation".
-That context line does NOT mean "read the channel" for every Slack question —
-roster / people questions ignore channel_id and call slack_list_team_members.
-Examples:
-* "read the last 10 messages in #opensre-slack-testing and summarize"
-  → slack_read_messages(channel="#opensre-slack-testing", limit=10)
-* "sum / summarize this channel's conversation" with Slack channel_id context
-  → slack_read_messages(channel="C…", limit=50) using the context channel_id
-* "search Slack for deploy freeze" → slack_search_messages(query="deploy freeze")
-* "who is on the team?" / "who's on the team" / "list team members" / "who are
-  the members?" — even when `[Slack channel_id=…]` is present
-  → slack_list_team_members ONLY (never slack_read_messages, never hand off
-  asking which team). Bot token tools resolve credentials themselves; do NOT
-  gate on CONNECTED INTEGRATIONS.
-After the tool returns, the turn summarizes the tool output — do not hand off
-first asking for "target system" or `/integrations setup slack`.
-
-GITHUB CLI REQUESTS ARE ACTION TOOLS — NOT HANDOFFS:
-When the user asks to create, list, view, edit, close, comment, assign, label,
-merge, or search GitHub issues/PRs/repos *as the primary request* (including
-github.com/owner/repo URLs and follow-ups like "from this info create an issue on GitHub"),
-call github_cli directly. Do NOT emit assistant_handoff for these — they are NOT
-docs questions and are NOT covered by the DATA-RETRIEVAL handoff rule. Prefer
-github_cli over shell_run / !gh / raw gh. github_cli is action-only and will not
-run in gather.
-Do NOT use github_cli when the user is diagnosing a crash/failure/outage and
-names GitHub among other sources to query (e.g. sentry + github issues +
-posthog) — emit investigation_start instead; the investigation gathers those
-sources. github_cli is for GitHub-only product operations, not multi-source RCA.
-Pass args after the `gh` binary; optional repo as owner/name for -R.
-Examples:
-* "create an issue titled X with body Y"
-  → github_cli(args=["issue", "create", "--title", "X", "--body", "Y"])
-* "list open PRs" → github_cli(args=["pr", "list", "--state", "open"])
-* "merge PR 45 with squash auto"
-  → github_cli(args=["pr", "merge", "45", "--squash", "--auto"])
-* "figure out why OpenSRE is crashing on Windows — query sentry, github issues,
-  and posthog" → investigation_start (NOT github_cli)
-After the tool returns, reply briefly from the result summary — do not hand off
-asking the user to run `gh` themselves.
-
 Delivery tool unavailable — never fabricate a command to deliver. When the user
-asks to send, post, notify, share, or message a channel (Slack, Telegram, etc.)
-but the matching send tool (slack_send_message, telegram_send_message, …) is NOT
-in your available tools, that channel is not configured. Do NOT invent or guess a
-slash/CLI subcommand to deliver the message (e.g. `/messaging send slack …` is NOT
-a real command) and do NOT substitute a different channel. Instead do ONE of: emit
-assistant_handoff (report any value you already looked up and say the channel is
-not configured), OR route the user to enable it with the real integration command
-slash_invoke(command="/integrations", args=["setup", "<service>"]). This applies
-even mid-chain: if a data-dependent lookup already ran and the delivery tool is
-missing, hand off or route to setup with the looked-up value rather than
-fabricating a delivery command.
+asks to send, post, notify, share, or message a channel but the matching send
+tool for that destination is NOT in your available tools, that channel is not
+configured. Do NOT invent or guess a slash/CLI subcommand to deliver the
+message (vendor fragments give worked examples of invented commands to avoid
+for their own channel) and do NOT substitute a different channel. Instead do
+ONE of: emit assistant_handoff (report any value you already looked up and say
+the channel is not configured), OR route the user to enable it with the real
+integration command slash_invoke(command="/integrations", args=["setup", "<service>"]).
+This applies even mid-chain: if a data-dependent lookup already ran and the
+delivery tool is missing, hand off or route to setup with the looked-up value
+rather than fabricating a delivery command.
 
 Never use shell_run for OpenSRE product requests like "show integration details",
 "list connected services", "show model/provider", or docs/how-to questions.
 Those are assistant_handoff or slash/cli operations, not shell diagnostics.
+Never use shell_run as a stand-in for querying observability sources (PostHog,
+Sentry, Datadog, Grafana, GitHub issues, etc.) — including echo/printf
+placeholders that only acknowledge the request. Those sources are reached via
+investigation_start (multi-source RCA) or assistant_handoff (data lookup), not
+local shell.
 Use shell_run only when the user explicitly asks for a local shell command
 (for example: backticks, command names, or "run command ..."). A message
 that consists solely of a command invocation with no surrounding natural
@@ -435,8 +395,10 @@ service. Requests to list/query Datadog monitors, Grafana logs, Sentry issues,
 PostHog events, traces, sessions, or similar integration data are data lookups:
 emit assistant_handoff so the conversational gather loop can use the integration
 tools. Do not substitute `/integrations show <service>` for those records.
-Slack channel history, thread reads, workspace search, roster, join, reply, and
-task capture are NOT this category — use the slack_* action tools above.
+A vendor's own teammate-messaging actions (channel history, thread reads,
+workspace search, roster, join, reply, task capture, etc.) are NOT this
+category — use that vendor's action tools instead (see its action-prompt
+fragment, e.g. Slack).
 
 Live external lookups: when the user asks a factual question about external
 live data that a single, safe, read-only shell command would directly answer —

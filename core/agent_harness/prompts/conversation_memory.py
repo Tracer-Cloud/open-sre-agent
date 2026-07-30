@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import re
 
-MAX_CONVERSATION_TURNS = 12
-MAX_CONVERSATION_MESSAGES = MAX_CONVERSATION_TURNS * 2
+from core.state import MAX_CONVERSATION_TURNS
+from core.state.transcript_window import SESSION_SUMMARY_PREFIX
+from platform.harness_ports import strip_message_context_prefix
 
 NO_HISTORY_PLACEHOLDER = "(no prior messages in this CLI thread)"
 _ACTION_FACT_MARKERS = (
@@ -23,8 +24,6 @@ _ACTION_FACT_MARKERS = (
 _VALUE_LINE_RE = re.compile(
     r"(?im)^[A-Z][A-Za-z0-9 ._/-]{1,64}:\s+.*(?:[-+]?\d+(?:\.\d+)?\s*°?\s*[CF]|sent|true|false|\{|\[)"
 )
-# Gateway may prefix Slack channel metadata; strip before affirmative matching.
-_SLACK_CONTEXT_PREFIX_RE = re.compile(r"(?is)^\s*\[Slack[^\]]*\]\s*")
 _AFFIRMATIVE_RE = re.compile(
     r"(?is)^\s*(?:yes|y|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that)"
     r"(?:\s*please)?\s*[.!?]?\s*$"
@@ -55,12 +54,7 @@ def expand_affirmative_follow_up(
     if not raw.strip() or not messages:
         return raw
 
-    prefix = ""
-    remainder = raw
-    ctx = _SLACK_CONTEXT_PREFIX_RE.match(raw)
-    if ctx:
-        prefix = ctx.group(0)
-        remainder = raw[ctx.end() :]
+    prefix, remainder = strip_message_context_prefix(raw)
     if not (_AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)):
         return raw
 
@@ -87,6 +81,10 @@ def _latest_want_me_to_offer(
         except (TypeError, ValueError):
             continue
         if role != "assistant" or not isinstance(content, str):
+            continue
+        # A compacted session summary can quote an old offer; only live
+        # assistant messages carry an actionable "Want me to:".
+        if content.startswith(SESSION_SUMMARY_PREFIX):
             continue
         match = _WANT_ME_TO_RE.search(content)
         if not match:
@@ -137,12 +135,21 @@ def format_prior_action_facts(
     command stdout, and value-shaped lines such as weather readings.
     """
     facts: list[str] = []
-    for entry in messages:
+    limit = max_entries if max_entries > 0 else None
+    # Walk newest-first so we can stop as soon as `limit` facts are found,
+    # instead of scanning the full history and trimming afterward.
+    for entry in reversed(messages):
         try:
             role, content = entry
         except (TypeError, ValueError):
             continue
         if role != "assistant" or not isinstance(content, str):
+            continue
+        # A compacted session summary quotes old tool output wholesale; letting
+        # it in as one giant "fact" can spend the whole budget and starve
+        # newer live results. The summary reaches the model via the history
+        # block instead.
+        if content.startswith(SESSION_SUMMARY_PREFIX):
             continue
         text = content.strip()
         if not text:
@@ -153,13 +160,16 @@ def format_prior_action_facts(
         ) and not _VALUE_LINE_RE.search(text):
             continue
         facts.append(text)
+        if limit is not None and len(facts) >= limit:
+            break
 
     if not facts:
         return ""
 
     rendered: list[str] = []
     remaining = max(max_chars, 0)
-    for idx, fact in enumerate(facts[-max_entries:], start=1):
+    # `facts` was collected newest-first; reverse back to maintain chronological order
+    for idx, fact in enumerate(reversed(facts), start=1):
         if remaining <= 0:
             break
         chunk = f"- Prior assistant/tool output {idx}:\n{fact.strip()}"

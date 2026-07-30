@@ -18,6 +18,8 @@ def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     """Credit metering must never fire real HTTP from worker tests."""
     for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV, ORGANIZATION_ID_ENV):
         monkeypatch.delenv(name, raising=False)
+    # Lifecycle analytics enrichment is covered separately; keep worker tests offline.
+    monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
 
 
 def _queued(store: InMemoryInvestigationStore, org: str = "org_a") -> str:

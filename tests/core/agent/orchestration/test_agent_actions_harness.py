@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from typing import Any
 
@@ -10,6 +11,9 @@ from rich.console import Console
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.prompts.prior_investigation import (
+    PRIOR_INVESTIGATION_RECALL_SECONDS,
+)
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ToolCallingDeps,
@@ -504,6 +508,85 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
     assert result.final_intent == "cli_agent_fallback"
 
 
+def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
+    """Prior-investigation follow-ups must answer from last_state, not live tools."""
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
+    gather_calls: list[str] = []
+    answer_kwargs: list[dict[str, Any]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("follow_up:prior_investigation",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
+
+    def _answer(*_args: Any, **kwargs: Any) -> None:
+        answer_kwargs.append(kwargs)
+        return None
+
+    result = run_turn(
+        "what happened?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "what happened?"),
+    )
+
+    assert gather_calls == []
+    assert answer_kwargs
+    assert answer_kwargs[0].get("tool_observation") is None
+    assert answer_kwargs[0].get("handoff_contents") == ("follow_up:prior_investigation",)
+    assert result.final_intent == "cli_agent_fallback"
+
+
+def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> None:
+    """Non-follow-up handoffs keep the gather path even when last_state exists."""
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("provider:local_llama_connect",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: x\nArguments: {}\nResult: y"
+
+    run_turn(
+        "connect local llama",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "connect local llama"),
+    )
+
+    assert gather_calls == ["connect local llama"]
+
+
 def test_execute_with_harness_handles_llm_unavailable() -> None:
     def _raise() -> object:
         raise RuntimeError("action agent unavailable")
@@ -697,3 +780,42 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     plan = TurnPlan(snapshot=snapshot)
 
     assert _turn_resolved_integrations(Session(), plan) == {}
+
+
+def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() -> None:
+    """The planner's follow-up tag is not age-gated.
+
+    Gathering here would answer a question about a past incident with current
+    integration results.
+    """
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
+    }
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("follow_up:prior_investigation",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
+
+    run_turn(
+        "what happened?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "what happened?"),
+    )
+
+    assert gather_calls == []

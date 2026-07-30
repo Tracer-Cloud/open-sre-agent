@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from core.domain.alerts.extraction import (
     AlertDetails,
+    build_alert_details_model,
     enrich_raw_alert,
     fallback_details,
     format_raw_alert,
@@ -125,7 +126,7 @@ def _render_alert_summary(details: AlertDetails, raw_alert: Any) -> None:
     alert_id = raw_alert.get("alert_id") if isinstance(raw_alert, dict) else None
     debug_print(
         f"Alert: {details.alert_name} | Severity: {details.severity} | "
-        f"namespace={details.kube_namespace} | Alert ID: {alert_id}"
+        f"namespace={getattr(details, 'kube_namespace', None)} | Alert ID: {alert_id}"
     )
     render_investigation_header(details.alert_name, details.severity, alert_id=alert_id)
 
@@ -163,13 +164,13 @@ def _extract_alert_details(state: InvestigationState) -> AlertDetails:
     try:
         details = cast(
             AlertDetails,
-            llm.with_structured_output(AlertDetails)
+            llm.with_structured_output(build_alert_details_model())
             .with_config(run_name="LLM – Classify + extract alert")
             .invoke(prompt),
         )
         debug_print(
             f"Alert classified: {'NOISE' if details.is_noise else 'ALERT'} | "
-            f"namespace={details.kube_namespace} | error={details.error_message}"
+            f"namespace={getattr(details, 'kube_namespace', None)} | error={details.error_message}"
         )
         return details
     except Exception as err:
@@ -214,8 +215,10 @@ def _resolve_slack_reactions_port() -> SlackReactionsPort | None:
 
 
 def _slack_reaction_context(state: InvestigationState) -> tuple[str, str, str] | None:
-    slack_ctx = state.get("slack_context", {}) or {}
-    if not isinstance(slack_ctx, dict):
+    from core.state.channel_context import get_channel_context
+
+    slack_ctx = get_channel_context(state, "slack")
+    if not slack_ctx:
         return None
 
     timestamp = slack_ctx.get("ts") or slack_ctx.get("thread_ts")

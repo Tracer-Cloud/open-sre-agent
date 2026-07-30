@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 from contextlib import suppress
+from http import HTTPStatus
 from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
@@ -121,7 +122,7 @@ def get_function_code(
             import requests
 
             zip_response = requests.get(code_location, timeout=30)
-            if zip_response.status_code == 200:
+            if zip_response.status_code == HTTPStatus.OK:
                 files: dict[str, Any] = {}
                 try:
                     with ZipFile(BytesIO(zip_response.content)) as zf:

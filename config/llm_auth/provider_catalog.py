@@ -29,6 +29,8 @@ class ProviderSpec:
     cli_model_env: str | None = None
     endpoint_env: str = ""
     api_version_env: str = ""
+    project_env: str = ""
+    location_env: str = ""
     allow_custom_models: bool = False
 
     @property
@@ -144,6 +146,17 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         model_env="BEDROCK_REASONING_MODEL",
         toolcall_model_env="BEDROCK_TOOLCALL_MODEL",
         classification_model_env="BEDROCK_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="vertex-ai",
+        label="Google Vertex AI (ADC auth)",
+        credential_kind="ambient",
+        model_env="VERTEX_AI_REASONING_MODEL",
+        toolcall_model_env="VERTEX_AI_TOOLCALL_MODEL",
+        classification_model_env="VERTEX_AI_CLASSIFICATION_MODEL",
+        project_env="VERTEX_AI_PROJECT",
+        location_env="VERTEX_AI_LOCATION",
         allow_custom_models=True,
     ),
     ProviderSpec(

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from core.agent_harness.prompts.conversation_memory import (
-    MAX_CONVERSATION_MESSAGES,
-    MAX_CONVERSATION_TURNS,
     NO_HISTORY_PLACEHOLDER,
     format_prior_action_facts,
     format_recent_conversation,
 )
+from core.state import MAX_CONVERSATION_MESSAGES, MAX_CONVERSATION_TURNS
 
 
 def test_placeholder_when_no_history() -> None:
@@ -91,3 +90,22 @@ def test_prior_action_facts_extracts_tool_outputs_and_values() -> None:
     assert "slack_send_message input" in rendered
     assert "London" in rendered
     assert "paste the original message" not in rendered
+
+
+def test_prior_action_facts_skips_session_summary() -> None:
+    """A tool-heavy summary must not consume the facts budget and starve
+    live tool results."""
+    summary_body = "\n".join(
+        f"- assistant: tool: old_tool_{i} result: stale-summary-output-{i} " + "x" * 300
+        for i in range(20)
+    )
+    messages = [
+        ("assistant", f"Session summary:\n{summary_body}"),
+        ("user", "check the queue"),
+        ("assistant", "queue_depth result: important-live-fact"),
+    ]
+
+    rendered = format_prior_action_facts(messages)
+
+    assert "important-live-fact" in rendered
+    assert "stale-summary-output" not in rendered

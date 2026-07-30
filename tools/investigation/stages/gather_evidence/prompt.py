@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from core.domain.alerts.alert_source import (
-    SECONDARY_TOOL_SOURCES,
     relevant_sources_for_alert,
     resolve_alert_source,
     routing_for_alert_source,
+    secondary_tool_sources,
 )
 from core.domain.diagnosis import root_cause_category_instruction_for_source
 from tools.investigation.stages.gather_evidence.tools import (
@@ -117,8 +117,6 @@ Severity: {severity}
 
 {start_guidance}
 """
-
-_SECONDARY_SOURCES = SECONDARY_TOOL_SOURCES
 
 
 def build_investigation_system_prompt(state: dict[str, Any]) -> str:
@@ -239,7 +237,8 @@ def _build_start_guidance(
     primary_sources = routing.relevance_tool_sources if routing is not None else ()
     available_primary = [s for s in primary_sources if s in tools_by_source]
 
-    non_secondary = [s for s in tools_by_source if s not in _SECONDARY_SOURCES]
+    secondary_sources = secondary_tool_sources()
+    non_secondary = [s for s in tools_by_source if s not in secondary_sources]
     if not available_primary and not non_secondary:
         return "No integration-specific tools are available. Use the knowledge tools to reason about this alert."
 
@@ -282,7 +281,8 @@ def _format_call_first(
         tool_names = [f"`{t.name}`" for t in source_tools]
         lines.append(f"- **{source}**: {', '.join(tool_names)}")
 
-    secondary = [s for s in tools_by_source if s not in _SECONDARY_SOURCES and s not in call_first]
+    secondary_sources = secondary_tool_sources()
+    secondary = [s for s in tools_by_source if s not in secondary_sources and s not in call_first]
     if secondary:
         lines.append("")
         lines.append(

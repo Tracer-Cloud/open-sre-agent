@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import subprocess
 
+import google.auth
 import keyring
+from google.auth.exceptions import DefaultCredentialsError
 
 import config.llm_credentials as llm_credentials
-import config.llm_keyring as llm_keyring
 from config.llm_auth.credentials import (
     has_llm_api_key,
     llm_api_key_source,
@@ -13,6 +14,8 @@ from config.llm_auth.credentials import (
     status,
 )
 from config.llm_auth.records import save_provider_auth_record
+from config.secrets import guidance, os_keyring
+from config.secrets.store import lookup
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -27,8 +30,77 @@ def _security_tool_path(name: str) -> str:
     return f"/usr/bin/{name}"
 
 
-def _darwin_platform() -> str:
-    return "Darwin"
+def test_status_vertex_ai_configured_when_adc_resolves(monkeypatch) -> None:
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LOCATION", "europe-west1")
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), "my-gcp-project"))
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "my-gcp-project" in result.detail
+
+
+def test_status_vertex_ai_not_configured_when_adc_missing_despite_project_env(
+    monkeypatch,
+) -> None:
+    """VERTEX_AI_PROJECT being set is not proof that ADC actually resolves."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+
+    def _raise_no_adc() -> tuple[object, str | None]:
+        raise DefaultCredentialsError("no ADC found")
+
+    monkeypatch.setattr(google.auth, "default", _raise_no_adc)
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+
+
+def test_status_vertex_ai_configured_via_metadata_without_project_env(monkeypatch) -> None:
+    """ADC discovered through GCE/GKE metadata counts even with no project env set."""
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), "discovered-project"))
+
+    result = status("vertex-ai")
+
+    assert result.configured is True
+    assert result.source == "ambient"
+    assert "discovered-project" in result.detail
+
+
+def test_status_vertex_ai_not_configured_when_adc_resolves_without_project(
+    monkeypatch,
+) -> None:
+    """ADC succeeding is not enough — a request still needs a resolvable project.
+
+    Regression test: this used to fall back to a display-only "auto-discovered"
+    placeholder and report configured=True, even though request routing has no
+    project to send and the subsequent LiteLLM call would fail.
+    """
+    monkeypatch.delenv("VERTEX_AI_PROJECT", raising=False)
+    monkeypatch.setattr(google.auth, "default", lambda: (object(), None))
+
+    result = status("vertex-ai")
+
+    assert result.configured is False
+    assert result.source == "none"
+    assert "VERTEX_AI_PROJECT" in result.detail
+
+
+def test_status_bedrock_ignores_vertex_project_env(monkeypatch) -> None:
+    """The ambient status branch must not cross-check unrelated providers' env vars."""
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+
+    result = status("bedrock")
+
+    assert result.configured is False
+    assert "AWS_REGION" in result.detail
 
 
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
@@ -44,7 +116,7 @@ def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
         keyring.set_keyring(previous_backend)
 
 
-def test_resolve_keyring_secret_reads_keyring_only(monkeypatch) -> None:
+def test_lookup_reports_the_keyring_tier(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
 
@@ -52,13 +124,22 @@ def test_resolve_keyring_secret_reads_keyring_only(monkeypatch) -> None:
     keyring.set_keyring(MemoryKeyring())
     try:
         llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-keyring")
-        assert llm_credentials.resolve_keyring_secret("GITLAB_ACCESS_TOKEN") == "from-keyring"
+        monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
+        found = lookup("GITLAB_ACCESS_TOKEN")
     finally:
         keyring.set_keyring(previous_backend)
 
+    assert found.value == "from-keyring"
+    assert found.tier == "keyring"
+    assert found.keyring_unreachable is False
 
-def test_resolve_keyring_secret_swallows_backend_runtime_error(monkeypatch) -> None:
-    """SecretService can raise bare RuntimeError when D-Bus is unset."""
+
+def test_backend_runtime_error_resolves_empty_but_flags_unreachable(monkeypatch) -> None:
+    """SecretService can raise bare RuntimeError when D-Bus is unset.
+
+    Resolution must not blow up, but the caller has to be able to tell this
+    apart from "the keychain says there is no such credential".
+    """
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     # Use a name unlikely to be present in CI secrets / ambient env.
     env_var = "OPENSRE_TEST_MISSING_KEYRING_SECRET"
@@ -67,9 +148,9 @@ def test_resolve_keyring_secret_swallows_backend_runtime_error(monkeypatch) -> N
     def _boom(_service: str, _username: str) -> str:
         raise RuntimeError("Unable to initialize SecretService: DBUS unset")
 
-    monkeypatch.setattr(llm_keyring.keyring, "get_password", _boom)
-    assert llm_credentials.resolve_keyring_secret(env_var) == ""
+    monkeypatch.setattr(os_keyring.keyring, "get_password", _boom)
     assert llm_credentials.resolve_env_credential(env_var) == ""
+    assert lookup(env_var).keyring_unreachable is True
 
 
 def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) -> None:
@@ -94,9 +175,9 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(llm_keyring.platform, "system", _darwin_platform)
-    monkeypatch.setattr(llm_keyring.shutil, "which", _security_tool_path)
-    monkeypatch.setattr(llm_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
+    monkeypatch.setattr(os_keyring.sys, "platform", "darwin")
+    monkeypatch.setattr(os_keyring.shutil, "which", _security_tool_path)
+    monkeypatch.setattr(os_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
 
     def _run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         assert command == [
@@ -113,8 +194,8 @@ def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     def _get_password(_service: str, _username: str) -> str:
         raise AssertionError("metadata source check must not read the keychain secret")
 
-    monkeypatch.setattr(llm_keyring.subprocess, "run", _run)
-    monkeypatch.setattr(llm_keyring.keyring, "get_password", _get_password)
+    monkeypatch.setattr(os_keyring.subprocess, "run", _run)
+    monkeypatch.setattr(os_keyring.keyring, "get_password", _get_password)
     save_provider_auth_record(
         provider="openai",
         auth_name="openai",
@@ -134,9 +215,9 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr(llm_keyring.platform, "system", _darwin_platform)
-    monkeypatch.setattr(llm_keyring.shutil, "which", _security_tool_path)
-    monkeypatch.setattr(llm_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
+    monkeypatch.setattr(os_keyring.sys, "platform", "darwin")
+    monkeypatch.setattr(os_keyring.shutil, "which", _security_tool_path)
+    monkeypatch.setattr(os_keyring.keyring, "get_keyring", _MacOSKeyringBackend)
 
     def _run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(command, 44)
@@ -144,8 +225,8 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     def _get_password(_service: str, _username: str) -> str:
         raise AssertionError("metadata source check must not read the keychain secret")
 
-    monkeypatch.setattr(llm_keyring.subprocess, "run", _run)
-    monkeypatch.setattr(llm_keyring.keyring, "get_password", _get_password)
+    monkeypatch.setattr(os_keyring.subprocess, "run", _run)
+    monkeypatch.setattr(os_keyring.keyring, "get_password", _get_password)
 
     assert llm_api_key_source("OPENAI_API_KEY") == "none"
     assert has_llm_api_key("OPENAI_API_KEY") is False
@@ -210,19 +291,22 @@ def test_get_keyring_setup_instructions_for_linux_without_gnome_keyring(monkeypa
 
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
-    monkeypatch.setattr(llm_keyring.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(llm_keyring.shutil, "which", lambda _name: None)
-    monkeypatch.setattr(llm_keyring.keyring, "get_keyring", lambda: backend_class())
+    monkeypatch.setattr(guidance.sys, "platform", "linux")
+    monkeypatch.setattr(guidance.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(os_keyring.keyring, "get_keyring", lambda: backend_class())
 
     lines = llm_credentials.get_keyring_setup_instructions("ANTHROPIC_API_KEY")
 
     assert lines[0] == "Current keyring backend: keyring.backends.fail.Keyring."
-    assert "missing the GNOME Keyring daemon" in lines[1]
+    # Reached only once the fallback file has also failed, so the guidance leads
+    # with the writable-path fix rather than a D-Bus tutorial.
+    assert any("could not use the system keychain or write" in line for line in lines)
+    assert any("write access to that path" in line for line in lines)
     assert any(
         "sudo apt update && sudo apt install -y gnome-keyring dbus-user-session" in line
         for line in lines
     )
-    assert any("dbus-run-session -- sh" in line for line in lines)
+    assert any("export ANTHROPIC_API_KEY" in line for line in lines)
 
 
 def test_get_keyring_setup_instructions_when_keyring_is_disabled(monkeypatch) -> None:
@@ -232,5 +316,6 @@ def test_get_keyring_setup_instructions_when_keyring_is_disabled(monkeypatch) ->
 
     assert lines == (
         "Secure local credential storage is disabled by OPENSRE_DISABLE_KEYRING.",
-        "Unset OPENSRE_DISABLE_KEYRING and rerun `opensre onboard` to save OPENAI_API_KEY securely.",
+        "Unset OPENSRE_DISABLE_KEYRING and rerun `opensre onboard` to save "
+        "OPENAI_API_KEY, or export OPENAI_API_KEY in your shell.",
     )

@@ -1,9 +1,17 @@
-"""Configurator handlers for the GitHub MCP integration."""
+"""Configurator handlers for the GitHub MCP integration.
+
+Collection stays custom (browser OAuth + optional repo-scope probes). Persist
+goes through :func:`integrations.setup_flow.apply_setup` so the token lands in
+the keyring and the non-secrets in ``.env``, not just the store.
+"""
 
 from __future__ import annotations
 
-from config.env_file import sync_env_values
-from integrations.store import upsert_integration
+import dataclasses
+
+from integrations.github.mcp import DEFAULT_GITHUB_MCP_MODE, DEFAULT_GITHUB_MCP_URL
+from integrations.github.setup import GITHUB_SETUP
+from integrations.setup_flow import apply_setup
 from platform.terminal.theme import DEVICE_CODE, SECONDARY
 from surfaces.cli.wizard._ui import (
     Choice,
@@ -17,9 +25,7 @@ from surfaces.cli.wizard._ui import (
     _string_value,
 )
 from surfaces.cli.wizard.integration_health import validate_github_mcp_integration
-
-DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
-DEFAULT_GITHUB_MCP_MODE = "streamable-http"
+from surfaces.cli.wizard.integration_validators.shared import IntegrationHealthResult
 
 
 def _github_wizard_browser_authorize() -> str | None:
@@ -108,29 +114,10 @@ def _configure_github_mcp() -> tuple[str, str]:
     mode = DEFAULT_GITHUB_MCP_MODE
 
     while True:
-        url = ""
-        command = ""
-        args: list[str] = []
-        if mode == "stdio":
-            command = _prompt_value(
-                "GitHub MCP command",
-                default=_string_value(credentials.get("command"), "github-mcp-server"),
-            )
-            args_raw = _prompt_value(
-                "GitHub MCP args",
-                default=_joined_values(
-                    credentials.get("args"),
-                    separator=" ",
-                    fallback="stdio --toolsets repos,issues,pull_requests,actions,search",
-                ),
-            )
-            args = [part for part in args_raw.split() if part]
-        else:
-            url = _prompt_value(
-                "GitHub MCP URL",
-                default=_string_value(credentials.get("url"), DEFAULT_GITHUB_MCP_URL),
-            )
-
+        url = _prompt_value(
+            "GitHub MCP URL",
+            default=_string_value(credentials.get("url"), DEFAULT_GITHUB_MCP_URL),
+        )
         toolsets = _parse_csv_values(
             _prompt_value(
                 "GitHub MCP toolsets (comma-separated)",
@@ -168,8 +155,8 @@ def _configure_github_mcp() -> tuple[str, str]:
                 url=url,
                 mode=mode,
                 auth_token=auth_token,
-                command=command,
-                args=args,
+                command="",
+                args=[],
                 toolsets=toolsets,
                 repo_view=repo_view,
                 repo_visibility=repo_visibility,
@@ -197,32 +184,28 @@ def _configure_github_mcp() -> tuple[str, str]:
             github_display_level=display_level,
         )
         if result.ok:
-            credentials = {
-                "url": url,
-                "mode": mode,
-                "auth_token": auth_token,
-                "command": command,
-                "args": args,
-                "toolsets": toolsets,
-            }
             authenticated_user = ""
             if result.github_mcp is not None:
                 authenticated_user = (result.github_mcp.authenticated_user or "").strip()
-            if authenticated_user:
-                credentials["username"] = authenticated_user
-            upsert_integration("github", {"credentials": credentials})
-            if authenticated_user:
-                from platform.analytics.cli import identify_github_username
-
-                identify_github_username(authenticated_user)
-            env_path = sync_env_values(
+            # Already verified above (with optional repo-scope probes). Skip the
+            # spec's simpler probe so we do not hit the hosted server twice.
+            outcome = apply_setup(
+                dataclasses.replace(GITHUB_SETUP, verify=None),
                 {
-                    "GITHUB_MCP_URL": url,
-                    "GITHUB_MCP_MODE": mode,
-                    "GITHUB_MCP_COMMAND": command,
-                    "GITHUB_MCP_ARGS": " ".join(args),
-                    "GITHUB_MCP_TOOLSETS": ",".join(toolsets),
-                }
+                    "mode": mode,
+                    "url": url,
+                    "auth_token": auth_token,
+                    "toolsets": ",".join(toolsets),
+                    "username": authenticated_user,
+                },
             )
-            return "GitHub MCP", str(env_path)
+            _render_integration_result(
+                "GitHub MCP",
+                IntegrationHealthResult(ok=outcome.ok, detail=outcome.detail),
+            )
+            if outcome.ok:
+                assert outcome.env_path is not None, (
+                    "apply_setup returned ok=True without an env_path"
+                )
+                return "GitHub MCP", str(outcome.env_path)
         _console.print(f"[{SECONDARY}]Try again or press Ctrl+C to cancel.[/]")

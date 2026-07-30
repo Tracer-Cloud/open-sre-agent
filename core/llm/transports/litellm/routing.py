@@ -19,6 +19,10 @@ from core.llm.providers.openai_compat_providers import (
     is_openai_compat_provider,
     resolve_openai_compat_provider,
 )
+from core.llm.providers.vertex_ai import (
+    is_vertex_ai_provider,
+    resolve_vertex_ai_request_kwargs,
+)
 from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 from core.llm.types import ModelType
 
@@ -44,7 +48,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
     if is_azure_openai_provider(provider):
         from config.config import AZURE_OPENAI_LLM_CONFIG
 
-        azure = resolve_azure_openai_request_kwargs(settings, model_type="reasoning")
+        azure = resolve_azure_openai_request_kwargs(settings, model_type=ModelType.REASONING)
         return LiteLLMAgentClient(
             litellm_model=azure["litellm_model"],
             max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
@@ -56,7 +60,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
     if is_openai_compat_provider(provider):
         from config.config import PROVIDER_OLLAMA
 
-        resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
+        resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
         max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return LiteLLMAgentClient(
             litellm_model=_litellm_model_for_compat(resolved.model),
@@ -65,6 +69,18 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
             api_key_env=resolved.api_key_env,
             api_key_default=resolved.api_key_default,
             temperature=resolved.temperature,
+        )
+
+    if is_vertex_ai_provider(provider):
+        from config.config import VERTEX_AI_LLM_CONFIG
+
+        vertex = resolve_vertex_ai_request_kwargs(settings, model_type=ModelType.REASONING)
+        return LiteLLMAgentClient(
+            litellm_model=vertex["litellm_model"],
+            max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
+            vertex_project=vertex.get("vertex_project"),
+            vertex_location=vertex.get("vertex_location"),
+            api_key_env=None,
         )
 
     raise RuntimeError(
@@ -85,7 +101,7 @@ def build_litellm_llm_client(
     from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
     def _fallback(provider_prefix: str) -> str | None:
-        if model_type == "toolcall":
+        if model_type is ModelType.TOOLCALL:
             return None
         attr = f"{provider_prefix}_toolcall_model"
         return str(getattr(settings, attr, None) or "")
@@ -127,7 +143,7 @@ def build_litellm_llm_client(
         raw_fallback = _fallback(provider)
         fallback_model: str | None = None
         if raw_fallback:
-            fallback_compat = resolve_openai_compat_provider(settings, provider, "toolcall")
+            fallback_compat = resolve_openai_compat_provider(settings, provider, ModelType.TOOLCALL)
             fallback_model = _litellm_model_for_compat(fallback_compat.model)
         return LiteLLMLLMClient(
             litellm_model=_litellm_model_for_compat(compat.model),
@@ -137,6 +153,22 @@ def build_litellm_llm_client(
             api_key_env=compat.api_key_env,
             api_key_default=compat.api_key_default,
             temperature=compat.temperature,
+            usage_callback=usage_callback,
+        )
+
+    if is_vertex_ai_provider(provider):
+        from config.config import VERTEX_AI_LLM_CONFIG
+
+        vertex = resolve_vertex_ai_request_kwargs(settings, model_type=model_type)
+        raw_fallback = _fallback("vertex_ai")
+        vertex_fallback_model = f"vertex_ai/{raw_fallback}" if raw_fallback else None
+        return LiteLLMLLMClient(
+            litellm_model=vertex["litellm_model"],
+            model_fallback=vertex_fallback_model,
+            max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
+            vertex_project=vertex.get("vertex_project"),
+            vertex_location=vertex.get("vertex_location"),
+            api_key_env=None,
             usage_callback=usage_callback,
         )
 

@@ -189,7 +189,14 @@ def test_classify_servicenow_falls_back_to_url_when_instance_url_blank() -> None
     assert resolved["servicenow"].instance_url == "https://dev9.service-now.com"
 
 
-def test_verify_servicenow_passes_with_full_config() -> None:
+def test_verify_servicenow_passes_with_full_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Resp:
+        status_code = 200
+
+    monkeypatch.setattr(
+        "integrations.servicenow.verifier.httpx.get",
+        lambda *_args, **_kwargs: _Resp(),
+    )
     result = _verify_servicenow(
         "local env",
         {
@@ -199,7 +206,7 @@ def test_verify_servicenow_passes_with_full_config() -> None:
         },
     )
     assert result["status"] == "passed"
-    assert result["detail"] == "Configured for ServiceNow at https://dev12345.service-now.com."
+    assert "ServiceNow connected as admin" in result["detail"]
 
 
 def test_verify_servicenow_missing_without_credentials() -> None:
@@ -207,12 +214,22 @@ def test_verify_servicenow_missing_without_credentials() -> None:
         "local env",
         {"instance_url": "https://dev12345.service-now.com", "username": "", "password": ""},
     )
-    assert result["status"] == "missing"
+    # Validation-style verifiers report incomplete credentials as failed rather
+    # than the legacy presence-only "missing" status.
+    assert result["status"] == "failed"
+    assert "Missing" in result["detail"]
 
 
 def test_verify_integrations_dispatches_to_servicenow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    class _Resp:
+        status_code = 200
+
+    monkeypatch.setattr(
+        "integrations.servicenow.verifier.httpx.get",
+        lambda *_args, **_kwargs: _Resp(),
+    )
     monkeypatch.setattr(
         "integrations.catalog.load_integrations",
         lambda: [

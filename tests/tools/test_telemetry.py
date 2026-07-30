@@ -277,6 +277,34 @@ def _github_repository_case() -> ToolFailureCase:
     )
 
 
+def _github_star_history_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        from integrations.github.client import GitHubApiError
+
+        def request(_method: str, path: str, **_kwargs: Any) -> dict[str, Any]:
+            if path == "/repos/o/r":
+                return {"stargazers_count": 1}
+            raise GitHubApiError("forbidden", status_code=403, path="/repos/o/r/stargazers")
+
+        mp.setattr(
+            "integrations.github.tools.stargazers.GitHubRestClient.request",
+            MagicMock(side_effect=request),
+        )
+
+    def invoke() -> dict[str, Any]:
+        from integrations.github.tools.stargazers import get_github_star_history
+
+        return get_github_star_history(owner="o", repo="r", github_token="tok")
+
+    return ToolFailureCase(
+        "github_star_history",
+        patch,
+        invoke,
+        "get_github_star_history",
+        "github",
+    )
+
+
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
         import integrations.eks.tools as mod
@@ -757,6 +785,7 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _cloudwatch_batch_case(),
     _google_docs_case(),
     _github_repository_case(),
+    _github_star_history_case(),
     _eks_list_clusters_case(),
     _eks_describe_cluster_case(),
     _eks_nodegroup_case(),
@@ -949,6 +978,7 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_cloudwatch_batch_metrics",
         "create_google_docs_incident_report",
         "get_github_repository",
+        "get_github_star_history",
         # EKS — enumerated in #1463
         "list_eks_clusters",
         "describe_eks_cluster",
@@ -1113,6 +1143,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_redis_slowlog",
         "get_s3_object",
         "get_sentry_issue_details",
+        "get_sentry_uptime_digest",
         "get_sre_guidance",
         "get_supabase_service_health",
         "get_supabase_storage_buckets",
@@ -1126,6 +1157,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "incident_io_incidents",
         "inspect_lambda_function",
         "inspect_s3_object",
+        "inspect_railway_deployment",
         "investigation_start",
         "jira_add_comment",
         "jira_create_issue",
@@ -1154,6 +1186,13 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "list_sentry_uptime_alerts",
         "llm_set_provider",
         "lookup_cloudtrail_events",
+        # Long-term memory tools: local-file CRUD over core/domain/memory;
+        # expected failures return structured error dicts without catching,
+        # unexpected exceptions escape to the global wrapper. The domain
+        # store's OSError handling mirrors the misses store (stderr notice).
+        "memory_forget",
+        "memory_recall",
+        "memory_remember",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
         "pagerduty_incident_detail",
@@ -1187,6 +1226,8 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_signoz_traces",
         "query_splunk_logs",
         "query_tempo",
+        "redeploy_railway_service",
+        "replay_slack_thread_locally",
         "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",

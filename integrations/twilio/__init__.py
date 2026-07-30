@@ -14,12 +14,15 @@ logger = logging.getLogger(__name__)
 def classify(
     credentials: dict[str, Any], record_id: str
 ) -> tuple[TwilioIntegrationConfig | None, str | None]:
+    from integrations.twilio.setup import shape_twilio_credentials
+
     try:
+        shaped = shape_twilio_credentials(credentials)
         cfg = TwilioIntegrationConfig.model_validate(
             {
-                "account_sid": credentials.get("account_sid", ""),
-                "auth_token": credentials.get("auth_token", ""),
-                "sms": credentials.get("sms", {}),
+                "account_sid": shaped.get("account_sid", ""),
+                "auth_token": shaped.get("auth_token", ""),
+                "sms": shaped.get("sms", {}),
                 "integration_id": record_id,
             }
         )

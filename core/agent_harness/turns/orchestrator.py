@@ -36,11 +36,10 @@ from core.agent_harness.ports import (
     TurnAccounting,
 )
 from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.conversation_memory import (
-    MAX_CONVERSATION_MESSAGES,
-    expand_affirmative_follow_up,
-)
+from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+from core.agent_harness.prompts.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
+from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
@@ -127,10 +126,7 @@ def _stream_response(
 
 
 def _record_answer_turn(session: SessionStore, message: str, assistant_text: str) -> None:
-    session.cli_agent_messages.append(("user", message))
-    session.cli_agent_messages.append(("assistant", assistant_text))
-    if len(session.cli_agent_messages) > MAX_CONVERSATION_MESSAGES:
-        session.cli_agent_messages[:] = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
+    record_conversation_turn(session, message, assistant_text)
 
 
 def _record_action_only_turn(session: SessionStore, message: str, assistant_text: str) -> None:
@@ -276,6 +272,11 @@ def _routing_input_from_result(
     )
 
 
+def _is_prior_investigation_follow_up_handoff(handoff_contents: tuple[str, ...]) -> bool:
+    """True when the action planner handed off a session-prior-investigation follow-up."""
+    return is_prior_investigation_follow_up(handoff_contents)
+
+
 def _gather_and_answer(
     *,
     text: str,
@@ -286,7 +287,19 @@ def _gather_and_answer(
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
 ) -> Any | None:
-    gathered = gather(text, is_tty=is_tty, turn_plan=turn_plan)
+    # Retrospective follow-ups already have grounding in ``last_state`` (injected
+    # into the assistant prompt). Running the live gather loop for those turns
+    # is wasteful and often violates "do not call integration tools" contracts
+    # by probing Datadog/Sentry for a question the prior RCA already answered.
+    # Not age-gated: the planner emitting the tag *is* the judgement that the
+    # user means that incident, so a clock must not override it and answer with
+    # current conditions instead of what happened.
+    skip_gather = _is_prior_investigation_follow_up_handoff(handoff_contents) and (
+        turn_plan.snapshot.last_state is not None
+    )
+    gathered = None if skip_gather else gather(text, is_tty=is_tty, turn_plan=turn_plan)
+    if skip_gather:
+        log.debug("gather skipped: follow_up handoff with prior investigation state")
 
     # When evidence was gathered, mark it off-screen so the prompt builder
     # includes it. When nothing was gathered, omit the flag entirely so the

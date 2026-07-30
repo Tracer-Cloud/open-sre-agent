@@ -29,15 +29,11 @@ from core.agent_harness.prompts.conversation_memory import (
 )
 from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
-from core.domain.alerts.alert_source import SECONDARY_TOOL_SOURCES
+from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
+from core.state import MAX_CONVERSATION_MESSAGES
 from platform.analytics.react_turn import run_react_agent_with_telemetry
-from platform.harness_ports import (
-    apply_github_repo_scope,
-    apply_gitlab_repo_scope,
-    infer_github_repo_scope,
-    infer_gitlab_repo_scope,
-)
+from platform.harness_ports import enrich_resolved_with_repo_scopes
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
@@ -136,40 +132,35 @@ def _resolve_gather_integrations(
     ``resolved_integrations`` is the turn's already-resolved view (from
     ``TurnSnapshot``); when supplied it is used as the base instead of resolving
     again, so the gather phase agrees with the action prompt and tools about what
-    is connected. GitHub repo scope is still applied on top.
+    is connected. VCS repo scope is still applied on top via the harness port.
     """
     base = (
         dict(resolved_integrations)
         if resolved_integrations is not None
         else resolve_and_cache_integrations(session)
     )
-    resolved = base
-    github_scope = infer_github_repo_scope(
-        message=message,
-        conversation_messages=session.cli_agent_messages,
-        env=os.environ,
-        cwd=os.getcwd(),
-        cached=session.github_repo_scope,
-    )
-    if github_scope:
-        session.github_repo_scope = github_scope
-        resolved = apply_github_repo_scope(resolved, github_scope[0], github_scope[1])
 
-    gitlab_scope = infer_gitlab_repo_scope(
+    def _set_cached_scope(vendor: str, scope: tuple[str, ...] | None) -> None:
+        scopes = dict(session.vcs_repo_scopes)
+        if scope is None:
+            scopes.pop(vendor, None)
+        else:
+            scopes[vendor] = scope
+        session.vcs_repo_scopes = scopes
+
+    return enrich_resolved_with_repo_scopes(
+        resolved=base,
         message=message,
         conversation_messages=session.cli_agent_messages,
         env=os.environ,
         cwd=os.getcwd(),
-        cached=session.gitlab_repo_scope,
+        cached_scopes=dict(session.vcs_repo_scopes),
+        set_cached_scope=_set_cached_scope,
     )
-    if gitlab_scope:
-        session.gitlab_repo_scope = gitlab_scope
-        resolved = apply_gitlab_repo_scope(resolved, *gitlab_scope)
-    return resolved
 
 
 def _build_gather_user_message(session: SessionStore, message: str) -> str:
-    messages = session.cli_agent_messages[-24:]
+    messages = session.cli_agent_messages[-MAX_CONVERSATION_MESSAGES:]
     history = format_recent_conversation(messages, max_turns=3)
     if history == NO_HISTORY_PLACEHOLDER:
         return message
@@ -184,7 +175,8 @@ def _has_usable_gather_tools(gather_tools: list[Any]) -> bool:
     """
     if not gather_tools:
         return False
-    return any(str(t.source) not in SECONDARY_TOOL_SOURCES for t in gather_tools)
+    secondary = secondary_tool_sources()
+    return any(str(t.source) not in secondary for t in gather_tools)
 
 
 def _load_gather_llm_or_none(error_reporter: ErrorReporter | None) -> Any | None:

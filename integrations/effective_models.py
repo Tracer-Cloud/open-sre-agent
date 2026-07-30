@@ -38,6 +38,7 @@ class EffectiveIntegrations(StrictConfigModel):
     google_docs: EffectiveIntegrationEntry | None = None
     gitlab: EffectiveIntegrationEntry | None = None
     vercel: EffectiveIntegrationEntry | None = None
+    railway: EffectiveIntegrationEntry | None = None
     jira: EffectiveIntegrationEntry | None = None
     servicenow: EffectiveIntegrationEntry | None = None
     opsgenie: EffectiveIntegrationEntry | None = None

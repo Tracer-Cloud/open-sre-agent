@@ -46,6 +46,8 @@ def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
         "CREDENTIAL",
         # Substring-based sensitives.
         "DATABASE_CONNECTION_STRING",
+        # Inline kubeconfig YAML embeds credentials; path-only KUBECONFIG does not.
+        "KUBECONFIG_CONTENT",
     ],
 )
 def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
@@ -66,6 +68,11 @@ def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
         "OPENAI_TOKEN_LIMIT",
         # Explicit exception: a public discord key is not sensitive.
         "DISCORD_PUBLIC_KEY",
+        # Explicit exception: paired with a private key, not a secret itself.
+        "MONGODB_ATLAS_PUBLIC_KEY",
+        # Path to a kubeconfig file is not the credential itself.
+        "KUBECONFIG",
+        "HELM_KUBECONFIG",
     ],
 )
 def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
@@ -584,6 +591,29 @@ def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> Non
         assert "GITLAB_BASE_URL=https://gitlab.corp.com\n" in content
         assert "GITLAB_ACCESS_TOKEN=" not in content
         assert resolve_env_credential("GITLAB_ACCESS_TOKEN") == "gl-secret-token"
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
+def test_sync_env_secret_with_blank_value_deletes_the_stored_secret(monkeypatch) -> None:
+    """A field cleared back to blank must remove the old keyring entry, not just skip writing.
+
+    apply_setup calls sync_env_secret for every secret field on every save,
+    submitted or not (see integrations/setup_flow.py:_persist_env) — so clearing
+    an optional token in the UI has to reach here as a real deletion.
+    """
+    monkeypatch.delenv("DAGSTER_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        sync_env_secret("DAGSTER_API_TOKEN", "dag_stale_token")
+        assert resolve_env_credential("DAGSTER_API_TOKEN") == "dag_stale_token"
+
+        sync_env_secret("DAGSTER_API_TOKEN", "")
+
+        assert resolve_env_credential("DAGSTER_API_TOKEN") == ""
     finally:
         keyring.set_keyring(previous_backend)
 

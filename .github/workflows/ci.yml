@@ -7,7 +7,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment/**"
+      - "platform/deployment_fargate/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -30,7 +30,7 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment/**"
+      - "platform/deployment_fargate/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -87,7 +87,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra cdk
 
       - name: Lint
         run: uv run python -m ruff check $PYTHON_SOURCE_PATHS tests/
@@ -97,6 +97,9 @@ jobs:
 
       - name: Typecheck
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
+
+      - name: Verify Fargate CDK
+        run: make cdk-verify
 
       - name: Verify integration registry (smoke)
         run: make verify-integrations-smoke
@@ -165,6 +168,7 @@ jobs:
               tests/packaging
               tests/scheduler
               gateway/tests
+          # install/ + quickstart/ are opt-in live (CDN/brew/LLM); not PR CI.
           - os: ubuntu-latest
             shard: e2e-general
             pytest_paths: >-
@@ -175,6 +179,8 @@ jobs:
               --ignore=tests/e2e/upstream_lambda
               --ignore=tests/e2e/upstream_prefect_ecs_fargate
               --ignore=tests/e2e/upstream_apache_flink_ecs
+              --ignore=tests/e2e/install
+              --ignore=tests/e2e/quickstart
           - os: ubuntu-latest
             shard: e2e-provider-and-openclaw
             pytest_paths: >-
@@ -252,7 +258,7 @@ jobs:
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=platform.deployment.aws --cov=platform.deployment
+          --cov=platform.deployment_ec2 --cov=platform.deployment_fargate
           --cov=integrations
           --cov=platform
           --cov=surfaces
@@ -384,7 +390,7 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "platform/deployment/**"
+              - "platform/deployment_fargate/**"
               - "integrations/**"
               - "tools/investigation/**"
               - "tools/**"
@@ -472,3 +478,31 @@ jobs:
       - name: Run test
         run: uv run ${{ matrix.command }}
         timeout-minutes: 30
+
+  ci-gate:
+    name: CI Gate
+    needs: [quality, test, coverage-report]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # Single required check: branch protection points here instead of at every
+      # matrix leg. `always()` is what lets this run when an upstream job failed
+      # or was skipped — without it the gate would be skipped too, and a skipped
+      # required check reads as passing.
+      - name: Require green upstream jobs
+        run: |
+          set -euo pipefail
+          quality='${{ needs.quality.result }}'
+          test_result='${{ needs.test.result }}'
+          coverage='${{ needs.coverage-report.result }}'
+          echo "quality=$quality test=$test_result coverage-report=$coverage"
+
+          [ "$quality" = success ] || { echo "::error::quality is $quality"; exit 1; }
+          [ "$test_result" = success ] || { echo "::error::test is $test_result"; exit 1; }
+
+          # coverage-report only runs on pushes to main; on pull requests it is
+          # skipped, which is not a failure.
+          case "$coverage" in
+            success|skipped) ;;
+            *) echo "::error::coverage-report is $coverage"; exit 1 ;;
+          esac

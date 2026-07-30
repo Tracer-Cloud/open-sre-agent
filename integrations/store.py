@@ -46,11 +46,19 @@ from typing import Any
 
 from filelock import FileLock, Timeout
 
-from config.constants.paths import INTEGRATIONS_STORE_PATH
+from config.constants.paths import integrations_store_path
 
 logger = logging.getLogger(__name__)
 
-STORE_PATH = INTEGRATIONS_STORE_PATH
+# Tests may point this at a concrete Path; unset, the store follows the
+# customer whose scope is bound for this turn.
+STORE_PATH: Path | None = None
+
+
+def _store_path() -> Path:
+    return Path(STORE_PATH) if STORE_PATH is not None else integrations_store_path()
+
+
 _VERSION = 2
 _LOCK_TIMEOUT_SECONDS = 10.0
 
@@ -65,7 +73,7 @@ class IntegrationStoreLockTimeout(TimeoutError):
 
 def _lock_timeout_error() -> IntegrationStoreLockTimeout:
     return IntegrationStoreLockTimeout(
-        f"Integration store locked: {_lock_path()} (store: {STORE_PATH})"
+        f"Integration store locked: {_lock_path()} (store: {_store_path()})"
     )
 
 
@@ -108,18 +116,26 @@ def _migrate_if_needed(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 def _lock_path() -> Path:
     """Return the file lock path derived from the current STORE_PATH."""
-    return STORE_PATH.with_suffix(".lock")
+    return _store_path().with_suffix(".lock")
+
+
+def _ensure_private_store_directory(path: Path) -> None:
+    """Create the store directory and restrict it to the current user."""
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != "nt":
+        with contextlib.suppress(OSError):
+            path.chmod(0o700)
 
 
 def _acquire_lock() -> FileLock:
     """Create and return a FileLock for the current STORE_PATH."""
-    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_store_directory(_store_path().parent)
     return FileLock(str(_lock_path()), timeout=_LOCK_TIMEOUT_SECONDS)
 
 
 def _atomic_write(dest: Path, data: dict[str, Any]) -> None:
     """Write ``data`` to ``dest`` atomically via a temp file + fsync + replace."""
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_store_directory(dest.parent)
     serialized = json.dumps(data, indent=2) + "\n"
     fd: int | None = None
     tmp_path_str: str | None = None
@@ -148,7 +164,7 @@ def _save_unlocked(data: dict[str, Any]) -> None:
 
     Callers must already hold the store lock.
     """
-    _atomic_write(STORE_PATH, data)
+    _atomic_write(_store_path(), data)
 
 
 def _load_raw_unlocked() -> tuple[dict[str, Any], bool]:
@@ -157,13 +173,13 @@ def _load_raw_unlocked() -> tuple[dict[str, Any], bool]:
     Returns ``(data, did_migrate)``.  This helper does **not** write back
     migrations and does **not** acquire any lock.
     """
-    if not STORE_PATH.exists():
+    if not _store_path().exists():
         return {"version": _VERSION, "integrations": []}, False
     try:
-        text = STORE_PATH.read_text(encoding="utf-8")
+        text = _store_path().read_text(encoding="utf-8")
         data = json.loads(text)
     except (json.JSONDecodeError, OSError):
-        logger.warning("Failed to read integrations store at %s", STORE_PATH, exc_info=True)
+        logger.warning("Failed to read integrations store at %s", _store_path(), exc_info=True)
         return {"version": _VERSION, "integrations": []}, False
     if not isinstance(data, dict) or "integrations" not in data:
         return {"version": _VERSION, "integrations": []}, False
@@ -233,6 +249,17 @@ def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str,
 def load_integrations() -> list[dict[str, Any]]:
     """Return all active local integrations (v2 shape)."""
     return list(_load_raw().get("integrations", []))
+
+
+def replace_integrations(integrations: list[dict[str, Any]]) -> None:
+    """Atomically replace the complete local integration set.
+
+    Remote hydration uses this all-or-nothing operation so a failed write
+    cannot leave a partially updated credential store behind.
+    """
+    if any(not isinstance(record, dict) for record in integrations):
+        raise ValueError("integrations must contain only objects")
+    _save({"version": _VERSION, "integrations": integrations})
 
 
 def _record_with_flat_credentials_view(record: dict[str, Any]) -> dict[str, Any]:

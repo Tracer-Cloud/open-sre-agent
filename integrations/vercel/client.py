@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import time
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
@@ -532,7 +533,7 @@ class VercelClient:
                     break
                 time.sleep(min(8.0, 2.0**attempt))
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
+                if exc.response.status_code == HTTPStatus.NOT_FOUND:
                     return {"success": True, "logs": [], "total": 0}
                 capture_service_error(
                     exc,

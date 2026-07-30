@@ -5,8 +5,11 @@ with OpenSRE:
 
 * :mod:`surfaces.cli` — stateless command runner (``opensre <command>``)
 * :mod:`surfaces.interactive_shell` — stateful REPL surface (``opensre``)
-* :mod:`surfaces.slack_app` — Slack bot surface (Phase 2 of V0.2)
 * :mod:`surfaces.shared` — code two or more surfaces import
+
+Slack lives elsewhere: the inbound transport in :mod:`gateway.slack` (the
+layering contract forbids ``gateway`` → ``surfaces`` imports), outbound
+delivery in :mod:`integrations.slack`.
 
 Layering rule: surfaces may import from ``core/``, ``tools/``,
 ``integrations/``, ``platform/``. Nothing first-party may import from

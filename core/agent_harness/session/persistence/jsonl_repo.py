@@ -9,6 +9,7 @@ from typing import Any
 
 import core.agent_harness.session.persistence.paths as storage_paths
 from core.agent_harness.session.persistence.ports import CHAT_KINDS
+from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
 _ROOT_CAUSE_PREVIEW_CHARS = 80
 _DEFAULT_RCA_HISTORY_LIMIT = 50
@@ -257,7 +258,10 @@ def _resolve_entry_id(entries: list[dict[str, Any]], entry_ref: str | None) -> s
         ]
         return matches[0] if len(matches) == 1 else entry_ref
     for rec in reversed(entries):
-        if rec.get("type") == "leaf":
+        rec_type = rec.get("type")
+        if rec_type == "trace_span":
+            continue
+        if rec_type == "leaf":
             parent = str(rec.get("parent_id") or "")
             return parent or None
         return str(rec.get("id") or "") or None
@@ -288,7 +292,7 @@ def _messages_for_branch(branch: list[dict[str, Any]]) -> list[tuple[str, str]]:
         if rec.get("type") == "compaction":
             summary = str(rec.get("summary") or "").strip()
             if summary:
-                messages.append(("assistant", f"Session summary:\n{summary}"))
+                messages.append(("assistant", f"{SESSION_SUMMARY_PREFIX}{summary}"))
             continue
         if rec.get("type") != "message":
             continue

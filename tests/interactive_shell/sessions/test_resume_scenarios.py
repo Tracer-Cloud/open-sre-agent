@@ -130,7 +130,10 @@ def isolated_sessions(tmp_path: Path) -> Path:
     """Sessions directory with SessionStore patched for the test."""
     directory = tmp_path / "sessions"
     directory.mkdir()
-    with patch("config.constants.OPENSRE_HOME_DIR", tmp_path):
+    with (
+        patch("config.constants.OPENSRE_HOME_DIR", tmp_path),
+        patch("config.constants.paths.OPENSRE_HOME_DIR", tmp_path),
+    ):
         yield directory
 
 

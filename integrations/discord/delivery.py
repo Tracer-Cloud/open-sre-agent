@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from config.constants.discord import DISCORD_API_BASE
 from platform.common.truncation import truncate
 from platform.notifications.delivery_errors import extract_http_error
 from platform.notifications.delivery_transport import post_json
@@ -32,7 +33,7 @@ def post_discord_message(
     """
     logger.debug("[discord] post message params channel_id: %s", channel_id)
     response = post_json(
-        url=f"https://discord.com/api/v10/channels/{channel_id}/messages",
+        url=f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
         payload={"content": content, "embeds": embeds},
         headers=_discord_auth_headers(bot_token),
     )
@@ -61,7 +62,7 @@ def create_discord_thread(
     Returns True on success, False on expected failures.
     """
     response = post_json(
-        url=f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/threads",
+        url=f"{DISCORD_API_BASE}/channels/{channel_id}/messages/{message_id}/threads",
         payload={"name": name, "auto_archive_duration": 1440},
         headers=_discord_auth_headers(bot_token),
     )

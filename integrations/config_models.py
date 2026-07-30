@@ -22,8 +22,7 @@ from platform.common.url_validation import validate_https_or_loopback_http_url
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
 DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"
-DEFAULT_HONEYCOMB_BASE_URL = "https://api.honeycomb.io"
-DEFAULT_HONEYCOMB_DATASET = "__all__"
+DEFAULT_DATADOG_SITE = "datadoghq.com"
 DEFAULT_CORALOGIX_BASE_URL = "https://api.coralogix.com"
 DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
     "us": "https://api.opsgenie.com",
@@ -122,11 +121,11 @@ class DatadogIntegrationConfig(StrictConfigModel):
 
     api_key: str
     app_key: str
-    site: str = "datadoghq.com"
+    site: str = DEFAULT_DATADOG_SITE
     integration_id: str = ""
 
     _normalize_site = field_validator("site", mode="before")(
-        normalize_with_default("datadoghq.com")
+        normalize_with_default(DEFAULT_DATADOG_SITE)
     )
 
     @property
@@ -195,22 +194,6 @@ class GroundcoverIntegrationConfig(StrictConfigModel):
         if self.backend_id:
             headers["X-Backend-Id"] = self.backend_id
         return headers
-
-
-class HoneycombIntegrationConfig(StrictConfigModel):
-    """Normalized Honeycomb credentials used by resolution and verification flows."""
-
-    api_key: str
-    dataset: str = DEFAULT_HONEYCOMB_DATASET
-    base_url: str = DEFAULT_HONEYCOMB_BASE_URL
-    integration_id: str = ""
-
-    _normalize_dataset = field_validator("dataset", mode="before")(
-        normalize_with_default(DEFAULT_HONEYCOMB_DATASET)
-    )
-    _normalize_base_url = field_validator("base_url", mode="before")(
-        normalize_url(DEFAULT_HONEYCOMB_BASE_URL)
-    )
 
 
 class CoralogixIntegrationConfig(StrictConfigModel):
@@ -525,6 +508,26 @@ class HelmIntegrationConfig(StrictConfigModel):
     @property
     def is_configured(self) -> bool:
         return bool(str(self.helm_path or "").strip())
+
+
+class RailwayIntegrationConfig(StrictConfigModel):
+    token: str = ""
+    railway_path: str = "railway"
+    project: str = ""
+    service: str = ""
+    environment: str = ""
+    integration_id: str = ""
+
+    _normalize_railway_path = field_validator("railway_path", mode="before")(
+        normalize_with_default("railway")
+    )
+    _normalize_strs = field_validator(
+        "token", "project", "service", "environment", "integration_id", mode="before"
+    )(normalize_str())
+
+    @property
+    def has_default_scope(self) -> bool:
+        return bool(self.project and self.service and self.environment)
 
 
 # ---------------------------------------------------------------------------

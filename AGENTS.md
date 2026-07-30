@@ -23,6 +23,44 @@
   solely inside `config/config.py` (nothing it imports needs it) may live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
+- Protocol methods you **add or change** use a **docstring-only body** — no
+  `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
+  a trailing `...`/`pass`. Precedent (all fully compliant):
+  `platform/filestorage/ports.py`, `platform/deployment_contracts/ports.py`,
+  `core/agent/loop_host.py`, `gateway/runtime/sink_protocol.py`,
+  `core/llm/types.py`.
+
+  ```python
+  class ObjectStore(Protocol):
+      def put_object(self, key: str, data: bytes) -> None:
+          """Store ``data`` under ``key``."""
+  ```
+
+  **The codebase is not yet compliant, and no tool will tell you.** An AST scan
+  of product code counts 89 docstring-only Protocol methods against **108
+  `raise NotImplementedError` stubs in 23 files** (`core/agent_harness/ports.py`,
+  `platform/harness_ports.py`, `gateway/storage/session/binding_store.py` and
+  others). Those are pre-existing and out of scope for a drive-by — do not
+  mass-convert them, and do not cite a file as precedent without checking it.
+
+  Enforcement is review-only:
+  - CodeQL `py/ineffectual-statement` catches **only** the bare `...` form.
+  - `pass` and `raise NotImplementedError` trip nothing.
+  - mypy exempts Protocol bodies from "missing return", so `pass` under a
+    `-> list[str]` signature passes `make typecheck`.
+
+### Docs under `docs/`
+
+`docs/` is user-facing. Test every sentence: *does this change what the reader
+does?* If not, cut it.
+
+- Cut vendor API endpoints (`getMe`), internal function names, which credential
+  tier a value lands in, and the bug a change fixed — that belongs in the PR
+  description or a module docstring.
+- Keep required vs optional, shortcuts that save real work, gotchas that are
+  invisible until they bite, and the exact commands and env vars they type.
+- Say "a chat the bot was never added to fails during setup", not "`getChat`
+  returns `ok: false`".
 
 ### Performance (algorithms & data structures)
 
@@ -93,7 +131,7 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 | `surfaces/interactive_shell/`                 | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI.                                                                                                                                                                                                                        |
 | `integrations/`                               | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`.                                                                                                                                                 |
 | `tools/`                                      | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`.                |
-| `platform/`                                   | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, harness ports (`platform/harness_ports.py`), and EC2 deployment (`platform/deployment/`).                                                                                                                                |
+| `platform/`                                   | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, harness ports (`platform/harness_ports.py`), shared multi-tenant contracts (`platform/deployment_contracts/`), Fargate deployment (private submodule `platform/deployment_multi_tenant/` → `opensre-infra-aws`), and EC2 AWS helpers (`platform/deployment_ec2/`). |
 | `config/`                                     | Shared constants, prompts, and UI theme.                                                                                                                                                                                                                                                                                               |
 | `tests/`                                      | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.                                                                                                                                                                                                                                                   |
 | `docs/`                                       | User-facing documentation, integration guides, and docs-site assets.                                                                                                                                                                                                                                                                   |
@@ -118,8 +156,13 @@ Main packages one level deeper:
 - `platform/auth/` — JWT and authentication helpers for local and hosted runtime access.
 - `surfaces/interactive_shell/` — REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
-- `platform/deployment/aws/` — Shared boto3 client factory, deployment constants (`config.py`), VPC/subnet/SG helpers, EC2/IAM provisioning, ECR build/push, and SSM run-command primitives. Import from here in deployment scripts instead of duplicating.
-- `platform/deployment/` — EC2 deploy/destroy: `opensre-web` and `opensre-gateway` on one instance. Makefile: `make deploy`.
+- `platform/deployment_ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
+- `platform/deployment_multi_tenant/` — private git submodule
+ (`https://github.com/Tracer-Cloud/opensre-infra-aws.git`): Fargate fleet Terraform
+ (`modules/fargate_fleet`), Lambda runtimes (`lambda_control_plane/`,
+ `lambda_public_forwarder/`), and shared / team stacks under `stacks/`. Init with
+ `git submodule update --init platform/deployment_multi_tenant`. Makefile:
+ `make cdk-verify` (bundle path check).
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
@@ -192,4 +235,40 @@ Steps:
 - Interactive-shell action selection: do not implement regex/keyword/fuzzy intent routing or deterministic action bypasses around the action-agent path. See `surfaces/interactive_shell/AGENTS.md` ("Action Selection And Execution") for the full rule and the sanctioned literal-`/slash` exception.
 - Information exposure through an exception (CWE-209 / CodeQL `py/stack-trace-exposure`): never send an exception's detail — `str(exc)`, `repr(exc)`, `traceback.format_exc()`, `exc.args`, provider/model/field internals — to an **external surface**. External surfaces are HTTP responses (`JSONResponse`/`HTTPException.detail` in `gateway/http/`) and chat gateway messages delivered to Slack/Telegram users (`OutputSink.render_error` on the gateway sinks). Log full detail server-side (`logger` + `capture_exception`) and return a generic message or `type(exc).__name__` only. The local CLI/terminal sink is **not** external — it may show detail. Redact at the sink/response boundary, not per call site, so the shared turn engine keeps detail for local dev.
 - Cyclic imports (CodeQL `py/cyclic-import`): CodeQL counts **function-local** and `TYPE_CHECKING` imports as part of a cycle, so making an import lazy does **not** clear the alert. Break the cycle structurally — move the shared symbol (type, exception, helper) into a **leaf** module both sides import, and never add a back-edge from a lower-level module up to a higher-level one. Precedent: `surfaces/cli/wizard/validation_result.py` and `surfaces/cli/llm_auth/persist.py` exist only to hold shared symbols so `validation` ↔ `azure_openai` and `_ui` → `service` stay acyclic.
+- CodeQL does not model `NoReturn`: it treats `pytest.skip`, `pytest.fail`, `sys.exit`, `typer.Exit` and custom raise-helpers as if they return, so any code after them looks reachable. Two alerts come from this — `py/uninitialized-local-variable` when a name is bound in `try` and the `except` only calls such a function, and unreachable-code when a `with` body ends in a bare `raise`. Do **not** silence with a comment: bind the name on every path CodeQL can see. Prefer a sentinel over exception control flow for ordinary "not found" — `next(iterable, None)` plus an explicit `if x is None:` guard, not `try: next(...) except StopIteration:`. `mypy` narrows correctly after the guard because it *does* honour `NoReturn`. For the bare-`raise` case, extract a `_raise()` helper.
+- Protocol stub bodies (CodeQL `py/ineffectual-statement`): a bare `...` on a
+  `Protocol` method is a valid PEP-544 idiom but trips CodeQL as a statement
+  with no effect. Do **not** write `def foo(self) -> T: ...`. Use a one-line
+  docstring as the only body (see Code Style above), and do not keep both a
+  docstring and a trailing `...`/`pass`. Prefer documenting the contract on the
+  port over silencing the alert with a comment. Note the scope: CodeQL catches
+  only `...`, so a clean scan does **not** mean the codebase follows the rule —
+  `pass` and `raise NotImplementedError` are invisible to it, and 108 of the
+  latter remain.
+- `py/ineffectual-statement` does **not** understand `await`: a bare
+  `await some_task` reads to CodeQL as a discarded expression. It is not — the
+  await is the side effect (e.g. reaping a cancelled task so `client.close()`
+  runs). Do **not** delete the await. Prefer a small helper that binds the
+  result (`_finished = await task` in `gateway/discord/worker.py`
+  `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
+  skipping the await.
+- Mixed import styles (CodeQL `py/import-and-import-from`): importing one
+  module with both `import X as alias` and `from X import name` — even when
+  the `from` import is function-local — raises an alert. It usually happens
+  when appending to an existing file: **use the import style the file already
+  established** (an existing `import core.context_budget as budget` means new
+  code calls `budget.name`, not `from core.context_budget import name`).
+- Shared client state under concurrent turns: LLM clients are cached per role
+  (`get_llm`) and the gateway runs turns in parallel, so **one client instance
+  serves several in-flight requests**. An instance flag mutated inside an error
+  handler is then read by requests that were already built under the old value.
+  Branch on **what the current request carried**, not on the flag's present
+  value — capture the fact locally where the request is built
+  (`marked = strip_cache_markers(kwargs) != kwargs`) and consult that in the
+  `except`. Precedent: the prompt-cache fallback, where a first 400 cleared
+  `_cache_markers_enabled` and a second already-marked request skipped its
+  uncached retry and failed the turn. Test it by having the fake dependency
+  mutate the shared state *before* raising, which reproduces the race
+  deterministically without threads.
+- CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
 

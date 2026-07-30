@@ -454,15 +454,25 @@ class KubernetesDescribePodTool(BaseTool):
     name = "kubernetes_describe_pod"
     source = "kubernetes"
     description = (
-        "Fetch the full spec and status for a single pod: containers, images, resource requests/limits, "
-        "environment variables, volume mounts, conditions, container states, and owner references. "
-        "Use when list_pods shows a problem and you need deeper detail on one pod."
+        "Fetch the full spec and status for a single pod: containers, images, resource "
+        "requests/limits, environment variables (values redacted, keys only), volume "
+        "mounts, conditions, container states, and owner references. Use when list_pods "
+        "shows a problem and you need deeper detail on one pod. Preferred over "
+        "kubernetes_get_resource for pods specifically — both redact env values "
+        "identically, but this tool returns a curated, investigation-shaped view "
+        "(container states, owner references) rather than the raw API object. For any "
+        "resource type other than pod, use kubernetes_get_resource instead."
     )
     use_cases = [
         "Inspecting container image versions and resource limits on a specific pod",
         "Diagnosing why a pod is stuck in Pending or Init state via detailed conditions",
         "Identifying owner (Deployment, StatefulSet, Job) of a pod",
         "Checking environment variable names (keys only) injected into a container — values are redacted",
+    ]
+    anti_examples = [
+        "Fetching a non-pod resource such as a deployment, service, or node (use "
+        + "kubernetes_get_resource)",
+        "Listing many pods at once (use kubernetes_list_pods)",
     ]
     surfaces = ("investigation", "chat")
     requires = ["pod_name"]
@@ -1076,16 +1086,28 @@ class KubernetesGetResourceTool(BaseTool):
     name = "kubernetes_get_resource"
     source = "kubernetes"
     description = (
-        "Fetch the full spec and status of a single named Kubernetes resource. "
-        "Supports: pod, deployment, statefulset, daemonset, service, ingress, configmap, "
-        "replicaset, persistentvolumeclaim (pvc), and node. "
-        "Returns the raw resource object as a dict."
+        "Fetch the raw spec and status of a single named Kubernetes resource, "
+        "equivalent to `kubectl get <type> <name> -o json`. Supports: pod, deployment, "
+        "statefulset, daemonset, service, ingress, configmap, replicaset, "
+        "persistentvolumeclaim (pvc), and node. Env variable values are redacted (keys "
+        "only) for pod and workload types (deployment, statefulset, daemonset, "
+        "replicaset), same as kubernetes_describe_pod. For POD detail specifically, "
+        "prefer kubernetes_describe_pod instead — it returns the same redacted data in "
+        "a curated, investigation-shaped view (container states, owner references) "
+        "rather than the raw API object. The namespace field is ignored for "
+        "cluster-scoped types like node."
     )
     use_cases = [
-        "Fetching the full YAML-equivalent of any named resource for deep inspection",
+        "Fetching the full YAML-equivalent of any non-pod named resource for deep inspection",
         "Reading a specific deployment's full spec including strategy and selector",
         "Inspecting a PVC's storage class, capacity, and bound status",
         "Getting the full node spec to check kubelet version and OS image",
+    ]
+    anti_examples = [
+        "Inspecting a pod's containers, conditions, or env var keys (use "
+        + "kubernetes_describe_pod — same detail, redacts env values)",
+        "Listing multiple resources or filtering by label/field selector (use the "
+        + "matching kubernetes_list_* tool instead)",
     ]
     surfaces = ("investigation", "chat")
     requires = ["resource_type", "name"]

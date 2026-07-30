@@ -48,6 +48,10 @@ def _get_provider_base_url(provider_value: str) -> str | None:
         from config.config import GROQ_BASE_URL
 
         return GROQ_BASE_URL
+    if provider_value == "minimax":
+        from config.config import MINIMAX_BASE_URL
+
+        return MINIMAX_BASE_URL
     return None
 
 
@@ -76,7 +80,13 @@ def _check_ollama(host: str, model: str) -> ValidationResult:
 
     normalized_model = normalize_model_tag(model)
     base_name = model.split(":")[0]
-    matched = normalized_model in available or any(m.split(":")[0] == base_name for m in available)
+    # An explicit tag must match exactly: asking for llama3.1:8b and silently
+    # accepting llama3.1:latest would validate a different model than the one
+    # that then gets used. Only an untagged request falls back to the base name.
+    asked_for_a_tag = ":" in model
+    matched = normalized_model in available or (
+        not asked_for_a_tag and any(m.split(":")[0] == base_name for m in available)
+    )
     if not matched:
         listed = ", ".join(available) or "none pulled yet"
         return ValidationResult(
@@ -149,7 +159,9 @@ def validate_provider_credentials(
                 ok=True, detail="Anthropic API key validated.", sample_response=sample_text
             )
 
-        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia)
+        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia,
+        # groq, minimax) — a provider missing from _get_provider_base_url silently falls
+        # back to api.openai.com and its (valid) key is reported as rejected.
         base_url = _get_provider_base_url(provider.value)
         openai_client = openai_client_cls(api_key=api_key, base_url=base_url, timeout=30.0)
         # Only native OpenAI reasoning models use max_completion_tokens; others use max_tokens

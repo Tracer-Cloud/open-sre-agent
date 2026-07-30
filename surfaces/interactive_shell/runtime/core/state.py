@@ -151,7 +151,7 @@ class SpinnerState:
     # callback runs: prompt_toolkit evaluates the message several times per
     # render pass (layout measurement + paint), so a per-call counter can land
     # on the same frame every visible render and freeze the animation.
-    _FRAME_INTERVAL_S = 0.1
+    _FRAME_INTERVAL_SECONDS = 0.1
     _THINKING_VERBS = (
         "thinking",
         "pondering",
@@ -224,7 +224,7 @@ class SpinnerState:
             return ""
         elapsed = time.monotonic() - self.started_at
         token_count = self.bytes_in // _CHARS_PER_TOKEN
-        frame_idx = int(elapsed / self._FRAME_INTERVAL_S)
+        frame_idx = int(elapsed / self._FRAME_INTERVAL_SECONDS)
         glyph = self._SPINNER_FRAMES[frame_idx % len(self._SPINNER_FRAMES)]
         if token_count > 0:
             tokens_str = format_token_count_short(token_count)

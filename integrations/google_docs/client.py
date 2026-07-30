@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, cast
 
@@ -28,15 +29,15 @@ def _handle_google_api_error(exc: Exception, operation: str) -> dict[str, Any]:
     # Try to extract HTTP error details
     if hasattr(exc, "resp"):
         status_code = getattr(exc.resp, "status", None)
-        if status_code == 403:
+        if status_code == HTTPStatus.FORBIDDEN:
             error_msg = (
                 f"Insufficient permissions to {operation}. Check service account has access."
             )
-        elif status_code == 404:
+        elif status_code == HTTPStatus.NOT_FOUND:
             error_msg = f"Resource not found while {operation}. Verify folder/document ID."
-        elif status_code == 429:
+        elif status_code == HTTPStatus.TOO_MANY_REQUESTS:
             error_msg = f"Rate limit exceeded while {operation}. Please retry later."
-        elif status_code == 400:
+        elif status_code == HTTPStatus.BAD_REQUEST:
             error_msg = f"Invalid request while {operation}. Check parameters."
         elif status_code:
             error_msg = f"HTTP {status_code} error while {operation}: {exc}"

@@ -6,7 +6,7 @@ external side effects (no IO, no network, no filesystem).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,8 +34,7 @@ class InMemorySessionStore:
     history: list[dict[str, Any]] = field(default_factory=list)
     last_command_observation: str | None = None
     resolved_integrations_cache: dict[str, Any] | None = None
-    github_repo_scope: tuple[str, str] | None = None
-    gitlab_repo_scope: tuple[str, str, str] | None = None
+    vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     records: list[tuple[str, str, bool]] = field(default_factory=list)
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
@@ -94,7 +93,15 @@ class EmptyPromptContextProvider:
     def investigation_flow(self) -> str:
         return ""
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> Mapping[str, Any]:
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:  # noqa: ARG002 - empty grounding
+        return ""
+
+    def long_term_memory(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:

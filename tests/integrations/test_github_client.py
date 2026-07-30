@@ -40,12 +40,19 @@ class _RawResponse(_Response):
 
 
 def test_resolve_github_token_prefers_explicit_then_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "mcp-token")
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.setenv("GH_TOKEN", "gh-token")
     assert resolve_github_token("explicit") == "explicit"
+    assert resolve_github_token(None) == "mcp-token"
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN")
     assert resolve_github_token(None) == "env-token"
+    monkeypatch.delenv("GITHUB_TOKEN")
+    assert resolve_github_token(None) == "gh-token"
 
 
 def test_missing_token_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     client = GitHubRestClient(github_token=None)
@@ -101,6 +108,25 @@ def test_http_error_preserves_status_and_rate_limit_headers(
     assert exc.value.status_code == 403
     assert exc.value.rate_limit_remaining == "0"
     assert exc.value.rate_limit_reset == "123"
+
+
+def test_request_accept_header_can_be_overridden(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_accept = ""
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        nonlocal seen_accept
+        seen_accept = str(req.headers["Accept"])
+        return _Response([{"starred_at": "2026-07-27T00:00:00Z"}])
+
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token="tok")
+
+    assert client.request(
+        "GET",
+        "/repos/o/r/stargazers",
+        accept="application/vnd.github.star+json",
+    ) == [{"starred_at": "2026-07-27T00:00:00Z"}]
+    assert seen_accept == "application/vnd.github.star+json"
 
 
 def test_invalid_json_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> None:

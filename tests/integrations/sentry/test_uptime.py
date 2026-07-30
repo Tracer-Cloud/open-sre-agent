@@ -10,15 +10,20 @@ import pytest
 from integrations.sentry import SentryConfig
 from integrations.sentry.uptime import (
     UptimeMonitor,
+    UptimeTransitionRecord,
     WatchState,
+    append_transition_records,
     detect_uptime_transitions,
     format_uptime_transition_message,
     health_snapshot,
     list_sentry_uptime_monitors,
+    load_all_watch_states,
     load_watch_state,
     normalize_uptime_monitor,
+    prune_transition_records,
     run_uptime_watch_tick,
     save_watch_state,
+    transition_record_from,
 )
 
 
@@ -236,3 +241,70 @@ def test_run_uptime_watch_tick_notifies_then_quiets(
     assert "CRITICAL downtime" in first
     second = run_uptime_watch_tick(task_id="t1", state_path=state_path)
     assert second == ""
+
+
+def test_transition_records_append_and_roundtrip(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    down = _monitor("1", health="down", url="https://sandbox.example.com", name="sandbox")
+    transitions, open_set = detect_uptime_transitions({}, [down], notify_initial_down=True)
+    state = WatchState(open_incidents=open_set)
+    append_transition_records(state, transitions)
+    save_watch_state("task-a", state, path=path)
+
+    loaded = load_watch_state("task-a", path=path)
+    assert len(loaded.transitions) == 1
+    assert loaded.transitions[0].kind == "down"
+    assert loaded.transitions[0].monitor_id == "1"
+    assert loaded.transitions[0].url == "https://sandbox.example.com"
+
+    all_states = load_all_watch_states(path=path)
+    assert "task-a" in all_states
+    assert len(all_states["task-a"].transitions) == 1
+
+
+def test_prune_transition_records_drops_old_entries() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    old = UptimeTransitionRecord(
+        monitor_id="1",
+        kind="down",
+        at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+        name="old",
+        url="https://old.example.com",
+        project_slug="web",
+    )
+    recent = UptimeTransitionRecord(
+        monitor_id="2",
+        kind="down",
+        at=datetime.now(UTC).isoformat(),
+        name="recent",
+        url="https://recent.example.com",
+        project_slug="web",
+    )
+    pruned = prune_transition_records([old, recent], now=datetime.now(UTC))
+    assert pruned == [recent]
+
+
+def test_prune_transition_records_keeps_open_incident_down() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC)
+    old = UptimeTransitionRecord(
+        monitor_id="1",
+        kind="down",
+        at=(now - timedelta(days=10)).isoformat(),
+        name="sandbox",
+        url="https://sandbox.example.com",
+        project_slug="web",
+    )
+    pruned = prune_transition_records([old], now=now, open_incident_ids={"1"})
+    assert pruned == [old]
+
+
+def test_transition_record_from_uses_monitor_metadata() -> None:
+    down = _monitor("9", health="down", name="api", url="https://api.example.com")
+    transitions, _ = detect_uptime_transitions({}, [down], notify_initial_down=True)
+    record = transition_record_from(transitions[0])
+    assert record.monitor_id == "9"
+    assert record.name == "api"
+    assert record.project_slug == "tracer-30"

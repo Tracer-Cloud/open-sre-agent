@@ -1,31 +1,50 @@
-"""SQLite persistence for gateway session bindings."""
+"""Where the gateway's session-binding index lives.
+
+Session bindings map a conversation to a session inside one organization, so
+they follow that organization's context root — the mounted volume in a deployed
+service.
+
+The team → organization mapping is deliberately absent: it is control-plane
+data the webapp already owns, so this process reads it from configuration
+rather than keeping a copy.
+
+Not SQLite: the context root is an NFS-backed mount, where SQLite's advisory
+locking is unreliable.
+"""
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
-from config.constants import OPENSRE_HOME_DIR
+from config.constants.paths import host_home, opensre_home
 
-_GATEWAY_DIR = OPENSRE_HOME_DIR / "gateway"
-_DEFAULT_DB_PATH = _GATEWAY_DIR / "state.db"
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS gateway_session_bindings (
-    platform TEXT NOT NULL,
-    chat_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    updated_at REAL NOT NULL,
-    PRIMARY KEY (platform, chat_id)
-);
-"""
+_GATEWAY_DIR_NAME = "gateway"
+_BINDINGS_FILE_NAME = "bindings.json"
 
 
-def connect_gateway_db(path: Path | None = None) -> sqlite3.Connection:
-    db_path = path or _DEFAULT_DB_PATH
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.executescript(_SCHEMA)
-    conn.commit()
-    return conn
+def gateway_dir() -> Path:
+    """Host directory for gateway process state (pidfile, logs)."""
+    return host_home() / _GATEWAY_DIR_NAME
+
+
+def bindings_file_path() -> Path:
+    """Session bindings for the organization bound to the current turn."""
+    return opensre_home() / _GATEWAY_DIR_NAME / _BINDINGS_FILE_NAME
+
+
+def legacy_binding_dirs(current_dir: Path) -> list[Path]:
+    """Directories that may hold a pre-JSON SQLite index.
+
+    Both the directory the bindings file lives in and the host gateway
+    directory, so a silo whose context moved onto a mounted volume still finds
+    the rows it wrote before the move.
+    """
+    candidates = [current_dir, gateway_dir()]
+    return list(dict.fromkeys(candidates))
+
+
+__all__ = [
+    "bindings_file_path",
+    "gateway_dir",
+    "legacy_binding_dirs",
+]

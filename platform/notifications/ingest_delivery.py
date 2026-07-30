@@ -25,7 +25,9 @@ def _resolve_source(state: InvestigationState) -> str:
     raw_alert = state.get("raw_alert") or {}
     if isinstance(raw_alert, dict) and raw_alert.get("source"):
         return str(raw_alert.get("source"))
-    slack_ctx = state.get("slack_context") or {}
+    from core.state.channel_context import get_channel_context
+
+    slack_ctx = get_channel_context(state, "slack")
     if slack_ctx.get("team_id"):
         return "slack"
     return "tracer"
@@ -35,7 +37,9 @@ def _resolve_thread_id(state: InvestigationState) -> str:
     thread_id = state.get("thread_id") or ""
     if thread_id:
         return thread_id
-    slack_ctx = state.get("slack_context") or {}
+    from core.state.channel_context import get_channel_context
+
+    slack_ctx = get_channel_context(state, "slack")
     fallback = slack_ctx.get("thread_ts") or slack_ctx.get("ts") or ""
     if fallback:
         return fallback

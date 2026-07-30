@@ -16,7 +16,11 @@ from typing import Any
 
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
-from core.context_budget import context_budget_ceiling_for_model, enforce_context_budget
+from core.context_budget import (
+    context_budget_ceiling_for_model,
+    enforce_context_budget,
+    system_and_tools_overhead,
+)
 from core.events import (
     AgentEndEvent,
     AgentStartEvent,
@@ -72,6 +76,8 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._runtime_tools = list(host._filter_tools(run_input.tools))
         self._tool_schemas = self._llm.tool_schemas(self._runtime_tools)
         self._ceiling = context_budget_ceiling_for_model(getattr(self._llm, "_model", None))
+        # System prompt and tool schemas are fixed for the run; serialize once.
+        self._fixed_overhead_tokens = system_and_tools_overhead(self._system, self._tool_schemas)
         self._executed: list[tuple[ToolCall, Any]] = []
         self._tool_results: list[tuple[ToolCall, ToolExecutionResult]] = []
         self._final_text = ""
@@ -137,7 +143,9 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         transformed_messages = self._host._transform_messages(self._messages)
         llm_messages = self._host._convert_to_llm(self._llm, transformed_messages)
         enforce_context_budget(
-            llm_messages, system=self._system, tools=self._tool_schemas, ceiling=self._ceiling
+            llm_messages,
+            fixed_overhead_tokens=self._fixed_overhead_tokens,
+            ceiling=self._ceiling,
         )
         provider_request = ProviderRequest(
             messages=llm_messages,

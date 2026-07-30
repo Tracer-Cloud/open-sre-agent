@@ -140,7 +140,7 @@ Extract incident-command fields when present:
     schema_instance = (
         raw_schema if isinstance(raw_schema, BaseModel) else schema_model.model_validate(raw_schema)
     )
-    schema = cast(_DiagnosisPayload, schema_instance.model_dump())
+    schema = cast(_DiagnosisPayload, schema_instance.model_dump(mode="json"))
 
     return build_investigation_result(
         root_cause=schema["root_cause"],

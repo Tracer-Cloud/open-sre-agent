@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -123,10 +124,12 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             if self.server.callback_result is None:
                 self._handle_success_token_callback(parsed.query)
                 return
-            self._write_page(200, "OpenSRE OAuth login completed. You can close this tab.")
+            self._write_page(
+                HTTPStatus.OK, "OpenSRE OAuth login completed. You can close this tab."
+            )
             return
         if parsed.path != CODEX_OAUTH_CALLBACK_PATH:
-            self.send_response(404)
+            self.send_response(HTTPStatus.NOT_FOUND)
             self.end_headers()
             return
 
@@ -138,7 +141,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description="OAuth callback state did not match the login request.",
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login failed. Return to the terminal and retry.",
             )
             self.server.callback_event.set()
@@ -151,7 +154,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description=query.get("error_description", [""])[0],
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login was not completed. Return to the terminal.",
             )
             self.server.callback_event.set()
@@ -164,7 +167,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description="OAuth callback did not include an authorization code.",
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login failed. Return to the terminal and retry.",
             )
             self.server.callback_event.set()
@@ -183,7 +186,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description=str(exc),
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login failed while saving credentials. Return to the terminal.",
             )
             self.server.callback_event.set()
@@ -205,7 +208,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description="OAuth success callback did not include an id_token.",
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login failed. Return to the terminal and retry.",
             )
             self.server.callback_event.set()
@@ -231,18 +234,18 @@ class _CallbackHandler(BaseHTTPRequestHandler):
                 error_description=str(exc),
             )
             self._write_page(
-                400,
+                HTTPStatus.BAD_REQUEST,
                 "OpenSRE OAuth login failed while saving credentials. Return to the terminal.",
             )
             self.server.callback_event.set()
             return
 
         self.server.callback_result = _CallbackResult(login=result)
-        self._write_page(200, "OpenSRE OAuth login completed. You can close this tab.")
+        self._write_page(HTTPStatus.OK, "OpenSRE OAuth login completed. You can close this tab.")
         self.server.callback_event.set()
 
     def _redirect(self, location: str) -> None:
-        self.send_response(302)
+        self.send_response(HTTPStatus.FOUND)
         self.send_header("Location", location)
         self.send_header("Content-Length", "0")
         self.end_headers()
@@ -330,7 +333,7 @@ def exchange_codex_oauth_code(
         )
     except httpx.HTTPError as exc:
         raise CodexOAuthError(f"OpenAI OAuth token exchange failed: {exc}") from exc
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         raise CodexOAuthError(
             f"OpenAI OAuth token exchange failed with HTTP {response.status_code}."
         )

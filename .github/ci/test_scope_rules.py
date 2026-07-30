@@ -24,6 +24,17 @@ class PathRule:
 
 # Matched in list order — more specific prefixes must appear before parents.
 RULES: tuple[PathRule, ...] = (
+    # User-facing quickstart surface
+    PathRule("docs/quickstart.mdx", ("tests/cli/test_quickstart.py",)),
+    # Installer surfaces (curl/bash, PowerShell, docs, Homebrew sync)
+    PathRule("install.sh", ("tests/cli/test_install_matrix.py", "tests/cli/test_install_sh_path.py", "tests/cli/test_install_sh_resolution.py")),
+    PathRule("install.ps1", ("tests/cli/test_install_matrix.py", "tests/cli/test_install_ps1_progress.py")),
+    PathRule("docs/install.mdx", ("tests/cli/test_install_matrix.py",)),
+    PathRule("docs/install-local.mdx", ("tests/cli/test_install_matrix.py",)),
+    PathRule(
+        ".github/scripts/sync-homebrew-tap-formula.sh",
+        ("tests/cli/test_install_matrix.py",),
+    ),
     # Shared core (always escalate)
     PathRule("core/domain/", (), always_escalate=True),
     PathRule("core/", ("tests/core/",)),
@@ -547,8 +558,32 @@ RULES: tuple[PathRule, ...] = (
     PathRule("platform/packaging/", ("tests/packaging/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
     PathRule(
-        "platform/deployment/",
-        ("tests/deployment/", "tests/platform/deployment/test_deployment_health.py"),
+        "platform/deployment_ec2/",
+        (
+            "tests/platform/deployment_fargate/test_deploy_account_guard.py",
+            "tests/platform/deployment_fargate/test_ec2_launch_instance.py",
+            "tests/platform/deployment_fargate/test_ec2_security_group.py",
+            "tests/platform/deployment_fargate/test_ec2_stack_instances.py",
+            "tests/platform/deployment_ec2/telegram_gateway/",
+        ),
+    ),
+    PathRule(
+        "platform/deployment_fargate/lambda_control_plane/",
+        (
+            "tests/deployment/",
+            "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",
+        ),
+    ),
+    PathRule(
+        "platform/deployment_fargate/lambda_public_forwarder/",
+        (
+            "tests/deployment/",
+            "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",
+        ),
+    ),
+    PathRule(
+        "platform/deployment_fargate/",
+        ("tests/deployment/", "tests/platform/deployment_fargate/"),
     ),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
     PathRule("gateway/http/webapp.py", ("gateway/tests/http/test_webapp.py",)),
@@ -567,7 +602,9 @@ def _matches(path: str, prefix: str) -> bool:
 
 def _area_key(prefix: str) -> str:
     parts = prefix.split("/")
-    if parts[0] == "deployment" or parts[:2] == ["platform", "deployment"]:
+    if parts[0] == "deployment" or (
+        len(parts) >= 2 and parts[0] == "platform" and parts[1].startswith("deployment")
+    ):
         return "deployment"
     return prefix
 

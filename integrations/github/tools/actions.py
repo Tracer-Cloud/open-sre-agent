@@ -8,6 +8,7 @@ from typing import Any, cast
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.github.helpers import (
+    GITHUB_INJECTED_PARAMS,
     github_creds,
     github_source_available,
     normalize_github_tool_result,
@@ -289,6 +290,7 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_github_actions_is_available,
     extract_params=_github_actions_repo_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def list_github_actions_workflow_runs(
     owner: str,
@@ -378,6 +380,7 @@ def list_github_actions_workflow_runs(
     },
     is_available=_github_actions_is_available,
     extract_params=_github_actions_repo_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def list_github_actions_active_runs(
     owner: str,
@@ -490,6 +493,7 @@ def list_github_actions_active_runs(
     },
     is_available=_github_actions_is_available,
     extract_params=_github_actions_run_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def list_github_actions_run_jobs(
     owner: str,
@@ -568,6 +572,7 @@ def list_github_actions_run_jobs(
     },
     is_available=_github_actions_is_available,
     extract_params=_github_actions_run_params,
+    injected_params=GITHUB_INJECTED_PARAMS,
 )
 def get_github_actions_step_log(
     owner: str,

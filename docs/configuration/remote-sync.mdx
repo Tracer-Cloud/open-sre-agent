@@ -1,0 +1,126 @@
+---
+title: "Sync to your own object store"
+description: "Carry your conversations and memory between machines, using a store you own."
+---
+
+opensre keeps everything on your laptop by default. Turn on remote sync and it
+also mirrors your conversation history and memory to an object store **you**
+own, so a second machine picks up where the first left off.
+
+Your cloud credentials are read from the usual places — environment, profile,
+SSO session. opensre never stores them.
+
+## What is mirrored
+
+| | |
+|---|---|
+| Mirrored | `~/.opensre/sessions/` — your conversations |
+| Mirrored | `~/.opensre/memory/` — what opensre remembers |
+| **Never uploaded** | integration credentials and model API keys |
+
+Credentials stay on the machine. On a second laptop you run the integration
+setup again; everything else is already there.
+
+## Turn it on
+
+```bash
+export OPENSRE_REMOTE_SYNC=1
+export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
+```
+
+| Variable | Description |
+|---|---|
+| `OPENSRE_REMOTE_SYNC` | Set to `1` to enable. Nothing uploads until you do |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws` (S3). Community backends register under the same name |
+| `OPENSRE_REMOTE_SYNC_BUCKET` | Object-store name you own (S3 bucket today). Required |
+| `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
+| `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it |
+| `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default |
+
+Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
+too, so a bucket variable left over from another tool never starts uploading.
+
+You can also persist settings under `remote_sync` in `~/.opensre/config.yml`
+(`enabled`, `bucket`, `provider`, `prefix`, …). Environment variables still
+win for a single run.
+
+<Note>
+Every machine that should share your history needs the **same provider, bucket,
+and prefix**. Change the prefix only when you want a separate, isolated set of
+conversations — a different prefix is a different history, not a backup of the
+same one.
+</Note>
+
+All surfaces share one remote-sync engine entry point:
+
+| Surface | How you invoke it |
+|---|---|
+| CLI | `opensre remote-sync status` / `opensre remote-sync sync` |
+| Interactive shell | `/remote-sync status` / `/remote-sync sync` |
+| Gateway (Telegram, and any unbound chat) | same `/remote-sync` slash command |
+
+<Warning>
+This mirrors a **personal machine**. Turns that belong to an organization —
+Slack and Discord, which bind an org principal — are refused, because object
+keys carry no organization or member id and every member would otherwise share
+the same keys. Organization history already persists through the mounted
+context root (`OPENSRE_CONTEXT_ROOT`); it does not need this.
+</Warning>
+
+Check what would move before moving it:
+
+```bash
+opensre remote-sync status
+# or, in the REPL / a chat that supports slash commands:
+# /remote-sync status
+```
+
+Then sync:
+
+```bash
+opensre remote-sync sync
+opensre remote-sync sync --pull-only    # new machine, fetch only
+opensre remote-sync sync --push-only    # back up without pulling
+```
+
+## Providers
+
+The sync engine talks only to a small object-store interface. Amazon S3 is the
+built-in backend today (`OPENSRE_REMOTE_SYNC_PROVIDER=aws`, the default). Other
+clouds (GCS, Azure, …) are community additions: implement `ObjectStore`, call
+`register_object_store("<name>", factory)`, and set
+`OPENSRE_REMOTE_SYNC_PROVIDER` — the engine, CLI, and REPL do not change.
+
+### AWS / S3 (default)
+
+Any private bucket works. Uploads request server-side encryption, so a bucket
+that requires encryption accepts them unchanged.
+
+Minimum permissions on the prefix you use:
+
+```
+s3:ListBucket, s3:GetObject, s3:PutObject
+```
+
+`s3:DeleteObject` is not needed — sync never deletes anything.
+
+## The store
+
+<Warning>
+Keep the store private. It holds your incident conversations and everything
+opensre has remembered about your systems.
+</Warning>
+
+## How conflicts resolve
+
+Sync pulls first, then pushes. A file that exists on only one side is copied to
+the other. When both sides changed the same file, the more recently written one
+wins.
+
+Nothing is ever deleted, on either side. A machine that has been offline for a
+month cannot erase work done elsewhere — worst case it re-uploads an old copy
+under the same name, and the newer one wins on the next sync.
+
+Deleting a session or a memory on one machine does **not** remove it from the
+store or from your other machines. Delete it in the store too if you want it
+gone everywhere.

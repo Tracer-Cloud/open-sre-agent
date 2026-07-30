@@ -135,7 +135,39 @@ def apply_github_repo_scope(
     return merged
 
 
+class _GithubVcsRepoScopeProvider:
+    """Adapts GitHub's owner/repo scope to :class:`platform.harness_ports.VcsRepoScopeProvider`."""
+
+    vendor = "github"
+
+    def infer(
+        self,
+        *,
+        message: str,
+        conversation_messages: Sequence[tuple[str, str]] | None,
+        env: Mapping[str, str] | None,
+        cwd: str | Path | None,
+        cached: tuple[str, ...] | None,
+    ) -> tuple[str, ...] | None:
+        cached_pair = (cached[0], cached[1]) if cached and len(cached) >= 2 else None
+        return infer_github_repo_scope(
+            message=message,
+            conversation_messages=conversation_messages,
+            env=env,
+            cwd=cwd,
+            cached=cached_pair,
+        )
+
+    def apply(self, resolved: dict[str, Any], scope: tuple[str, ...]) -> dict[str, Any]:
+        owner, repo = scope[0], scope[1]
+        return apply_github_repo_scope(resolved, owner, repo)
+
+
+GITHUB_VCS_REPO_SCOPE_PROVIDER = _GithubVcsRepoScopeProvider()
+
+
 __all__ = [
+    "GITHUB_VCS_REPO_SCOPE_PROVIDER",
     "apply_github_repo_scope",
     "detect_git_remote_repo_scope",
     "infer_github_repo_scope",

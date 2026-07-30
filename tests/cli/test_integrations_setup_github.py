@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
+import integrations.setup_flow as setup_flow
 from integrations.cli import _setup_github, cmd_setup
 from integrations.github.mcp import GitHubMCPValidationResult
 from surfaces.cli.__main__ import cli
-
-
-def _upsert_should_not_run(*_a: object, **_k: object) -> None:
-    raise AssertionError("upsert_integration should not be called when validation fails")
 
 
 def _mock_confirm(monkeypatch: pytest.MonkeyPatch, *, advanced: bool) -> None:
@@ -22,6 +20,11 @@ def _mock_confirm(monkeypatch: pytest.MonkeyPatch, *, advanced: bool) -> None:
         "integrations.cli.questionary.confirm",
         lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: advanced})(),
     )
+
+
+def _patch_apply_setup(monkeypatch: pytest.MonkeyPatch, fake: object) -> None:
+    """Patch ``apply_setup`` where the function-local import resolves it."""
+    monkeypatch.setattr(setup_flow, "apply_setup", fake)
 
 
 def test_setup_github_prints_connected_and_saves_on_validation_success(
@@ -59,11 +62,14 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
         ),
     )
 
-    saved: list[tuple[str, dict]] = []
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
+    saved: list[dict] = []
+
+    def _fake_apply(_spec: object, values: object) -> setup_flow.SetupOutcome:
+        assert isinstance(values, dict)
+        saved.append(values)
+        return setup_flow.SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
+
+    _patch_apply_setup(monkeypatch, _fake_apply)
 
     _setup_github()
 
@@ -74,18 +80,13 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
     assert "Repositories returned" in out
     assert "Tracer-Cloud/opensre" in out
     assert saved == [
-        (
-            "github",
-            {
-                "credentials": {
-                    "mode": "streamable-http",
-                    "url": "https://api.githubcopilot.com/mcp/",
-                    "auth_token": "ghp_x",
-                    "toolsets": ["repos", "issues"],
-                    "username": "devuser",
-                },
-            },
-        ),
+        {
+            "mode": "streamable-http",
+            "url": "https://api.githubcopilot.com/mcp/",
+            "auth_token": "ghp_x",
+            "toolsets": "repos,issues",
+            "username": "devuser",
+        },
     ]
 
 
@@ -118,11 +119,14 @@ def test_setup_github_simple_path_uses_hosted_defaults(
         ),
     )
 
-    saved: list[tuple[str, dict]] = []
-    monkeypatch.setattr(
-        "integrations.cli.upsert_integration",
-        lambda service, entry: saved.append((service, entry)),
-    )
+    saved: list[dict] = []
+
+    def _fake_apply(_spec: object, values: object) -> setup_flow.SetupOutcome:
+        assert isinstance(values, dict)
+        saved.append(values)
+        return setup_flow.SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
+
+    _patch_apply_setup(monkeypatch, _fake_apply)
 
     _setup_github()
 
@@ -132,18 +136,13 @@ def test_setup_github_simple_path_uses_hosted_defaults(
     assert "Access source" not in out
     assert "Starred" not in out
     assert saved == [
-        (
-            "github",
-            {
-                "credentials": {
-                    "mode": "streamable-http",
-                    "url": "https://api.githubcopilot.com/mcp/",
-                    "auth_token": "gho_browser",
-                    "toolsets": ["repos", "issues", "pull_requests", "actions", "search"],
-                    "username": "u",
-                },
-            },
-        ),
+        {
+            "mode": "streamable-http",
+            "url": "https://api.githubcopilot.com/mcp/",
+            "auth_token": "gho_browser",
+            "toolsets": "repos,issues,pull_requests,actions,search",
+            "username": "u",
+        },
     ]
 
 
@@ -171,7 +170,11 @@ def test_setup_github_exits_without_save_on_validation_failure(
             failure_category="authentication",
         ),
     )
-    monkeypatch.setattr("integrations.cli.upsert_integration", _upsert_should_not_run)
+
+    def _apply_should_not_run(*_a: object, **_k: object) -> setup_flow.SetupOutcome:
+        raise AssertionError("apply_setup should not be called when validation fails")
+
+    _patch_apply_setup(monkeypatch, _apply_should_not_run)
 
     with pytest.raises(SystemExit) as exc:
         _setup_github()
@@ -209,7 +212,11 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
             failure_category="connectivity",
         ),
     )
-    monkeypatch.setattr("integrations.cli.upsert_integration", _upsert_should_not_run)
+
+    def _apply_should_not_run(*_a: object, **_k: object) -> setup_flow.SetupOutcome:
+        raise AssertionError("apply_setup should not be called when validation fails")
+
+    _patch_apply_setup(monkeypatch, _apply_should_not_run)
 
     with pytest.raises(SystemExit) as exc:
         cmd_setup("github")
@@ -249,7 +256,11 @@ def test_cmd_setup_github_prints_saved_after_success(
             repo_access_samples=(),
         ),
     )
-    monkeypatch.setattr("integrations.cli.upsert_integration", lambda *_a, **_k: None)
+
+    def _fake_apply(_spec: object, _values: object) -> setup_flow.SetupOutcome:
+        return setup_flow.SetupOutcome(ok=True, detail="ok", env_path=Path("/tmp/.env"))
+
+    _patch_apply_setup(monkeypatch, _fake_apply)
 
     cmd_setup("github")
     out = capsys.readouterr().out

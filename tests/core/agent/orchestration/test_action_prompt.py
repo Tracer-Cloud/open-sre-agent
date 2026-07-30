@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -86,8 +90,17 @@ def test_system_prompt_documents_followup_resolution() -> None:
     assert "do both" in prompt
     assert "recent conversation" in prompt
     assert "assistant_handoff" in prompt
-    assert "want me to: offering more slack roster" in prompt
+    assert "want me to: offering more detail from a vendor tool" in prompt
     assert "yes — please" in prompt
+
+
+def test_system_prompt_slack_fragment_documents_roster_followup() -> None:
+    # Slack-specific "Want me to" roster follow-up now lives in
+    # integrations.slack.action_prompt and is appended to the composed action
+    # prompt via the harness-ports fragment registry, not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
+    assert "want me to: offering more slack roster" in prompt
+    assert "slack_list_team_members" in prompt
 
 
 def test_system_prompt_requires_same_response_for_slash_then_investigation() -> None:
@@ -127,7 +140,10 @@ def test_system_prompt_hands_off_natural_language_slash_status_questions() -> No
 
 
 def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
+    # Vendor recipe now lives in integrations.slack.action_prompt and is
+    # appended to the composed action prompt via the harness-ports fragment
+    # registry (see integrations/harness_adapters.py), not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
     compact = prompt.replace(" ", "")
     assert "slack teammate requests are action tools" in prompt
     assert "not handoffs" in prompt
@@ -140,13 +156,39 @@ def test_system_prompt_routes_slack_teammate_reads_to_action_tools() -> None:
 
 
 def test_system_prompt_routes_github_cli_to_action_tools() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
+    # Vendor recipe now lives in integrations.github.action_prompt and is
+    # appended to the composed action prompt via the harness-ports fragment
+    # registry (see integrations/harness_adapters.py), not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
     assert "github cli requests are action tools" in prompt
     assert "not handoffs" in prompt
     assert "call github_cli directly" in prompt
     assert "from this info create an issue on github" in prompt
     assert "github_cli is action-only" in prompt
     assert "exception: github issue/pr/repo" in prompt
+    assert "get_github_star_history" in prompt
+    assert "day-by-day stars" in prompt
+
+
+def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
+    cached_load_skills_block.cache_clear()
+    block = load_skills_block().lower()
+    assert "star history" in block
+    assert "get_github_star_history" in block
+    assert "assistant_handoff" in block
+    assert "undercount" in block or "false zeros" in block
+
+
+def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
+    """Multi-source crash RCA must be investigation_start alone (scenario 314)."""
+    prompt = _SYSTEM_PROMPT_BASE.lower()
+    assert "emit only investigation_start" in prompt
+    assert "never invent placeholder shell commands" in prompt
+    assert "posthog query requested" in prompt
+    assert "never use shell_run as a stand-in for querying observability sources" in prompt
+    composed = " ".join(build_action_system_prompt(_ctx()).lower().split())
+    assert "investigation_start only" in composed
+    assert "alone or paired with investigation_start" in composed
 
 
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
@@ -161,12 +203,20 @@ def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
     prompt = _SYSTEM_PROMPT_BASE.lower()
     compact_prompt = " ".join(prompt.split())
     assert "delivery tool unavailable — never fabricate a command to deliver" in prompt
-    assert "matching send tool" in prompt
+    assert "matching send tool" in compact_prompt
     assert "that channel is not configured" in compact_prompt
     assert "do not invent or guess a slash/cli subcommand to deliver" in compact_prompt
-    assert "`/messaging send slack …` is not a real command" in compact_prompt
     assert "route the user to enable it" in compact_prompt
     assert "this applies even mid-chain" in compact_prompt
+
+
+def test_system_prompt_slack_fragment_documents_invented_command_example() -> None:
+    # The Slack-specific invented-delivery-command example now lives in
+    # integrations.slack.action_prompt, appended via the harness-ports
+    # fragment registry, not hardcoded in core.
+    prompt = build_action_system_prompt(_ctx()).lower()
+    compact_prompt = " ".join(prompt.split())
+    assert "`/messaging send slack …` is not a real command" in compact_prompt
 
 
 def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
@@ -174,6 +224,17 @@ def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
     assert "run synthetic test 005 now" in prompt
     assert 'scenario="005-failover"' in prompt
     assert "never substitute a different numbered" in prompt
+
+
+def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    assert "memory_remember" in prompt
+    assert "proactively save durable knowledge" in prompt
+    assert "the user does not need to say" in prompt
+    assert "memory_recall" in prompt
+    assert "memory_forget" in prompt
+    assert "do not save transient task state" in prompt
+    assert "never save built-in sample/demo/synthetic/test alert output" in prompt
 
 
 def test_connected_integrations_block_renders_state() -> None:
@@ -329,7 +390,16 @@ class _FakePrompts:
     def investigation_flow(self) -> str:
         return ""
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> dict[str, object]:
+
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime=None) -> str:  # noqa: ANN001, ARG002
+        return ""
+
+    def long_term_memory(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:
@@ -412,3 +482,23 @@ def test_docs_grounding_reaches_assistant_prompt() -> None:
     assert "--- Documentation reference (docs/) ---" in prompt
     assert "docs/messaging/telegram.mdx" in prompt
     assert "@BotFather" in prompt
+
+
+def test_action_prompt_includes_long_term_memory_bodies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
+    from core.domain.memory import save_memory
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
+    save_memory(
+        slug="user-profile",
+        memory_type="user",
+        description="Name is Vaibhav",
+        body="The user's name is Vaibhav on the platform team.",
+    )
+    prompt = build_action_system_prompt(_ctx())
+    assert "LONG-TERM MEMORY" in prompt
+    assert "user-profile" in prompt
+    assert "platform team" in prompt

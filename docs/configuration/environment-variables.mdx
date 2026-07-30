@@ -151,13 +151,25 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 Sensitive variables (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, and similar)
 resolve through `resolve_env_credential`: **process env first**, then the OS
-keyring when the env var is unset. Wizard setup dual-writes many of these to
-the keyring via `sync_env_secret` so a cleared `.env` still works locally.
+keyring, then the local fallback store described below. Wizard setup dual-writes
+many of these so a cleared `.env` still works locally.
 
-**Exceptions (never keyring):** webhook and other `*_URL` values such as
+**Exceptions (never stored):** webhook and other `*_URL` values such as
 `SLACK_WEBHOOK_URL` and `ROCKETCHAT_WEBHOOK_URL` stay store / plain env only.
 They may still embed secret tokens — do not log them unmasked.
-Set `OPENSRE_DISABLE_KEYRING=1` to skip keyring reads and writes entirely.
+Set `OPENSRE_DISABLE_KEYRING=1` to skip local credential storage entirely; you
+then have to export every credential in your shell.
+
+### When there is no system keychain
+
+Headless Linux, EC2 over SSH, Docker, and CI have no keyring backend, and a
+macOS login Keychain can be locked. Rather than failing setup, OpenSRE writes
+the credential to `~/.opensre/credentials.json` with owner-only (`0600`)
+permissions and tells you it did. Unlock or install a keychain and re-run the
+command to move the credential back into secure storage.
+
+To keep credentials off disk entirely, set `OPENSRE_DISABLE_KEYRING=1` and
+export them in your shell instead.
 
 Contributor contract: [Credential resolution](https://github.com/Tracer-Cloud/opensre/blob/main/docs/adding-tools-and-integrations.md#credential-resolution)
 in *Adding tools and integrations* (internal contributor markdown in the repo;
@@ -165,7 +177,7 @@ not a Mintlify docs-site page).
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `OPENSRE_DISABLE_KEYRING` | `0` | Disable OS keyring for credential storage | `llm_credentials` |
+| `OPENSRE_DISABLE_KEYRING` | `0` | Disable local credential storage; credentials must come from the environment | `config/secrets` |
 | `OPENSRE_LLM_AUTH_METADATA_PATH` | `~/.opensre/llm-auth.json` | Non-secret LLM auth metadata path used by prompt-safe status checks | `llm_auth/records` |
 | `OPENSRE_API_KEY` | | API key for remote OpenSRE instances | `remote/server` |
 | `DBUS_SESSION_BUS_ADDRESS` | | D-Bus socket address (Linux keyring) | `llm_credentials` |

@@ -3,8 +3,10 @@
 OpenSRE persists configuration in three places, and which one a value belongs in
 is decided by its **env var name**, not by the caller:
 
-* **system keyring** — anything :func:`is_sensitive_env_key` classifies as a
-  secret (``*_TOKEN``, ``*_KEY``, ``*_PASSWORD``, connection strings, …)
+* **secure local storage** (``config.secrets``) — anything
+  :func:`is_sensitive_env_key` classifies as a secret (``*_TOKEN``, ``*_KEY``,
+  ``*_PASSWORD``, connection strings, …). That is the OS keyring, or an
+  owner-only file when the machine has no working keychain.
 * **project ``.env``** — everything else (URLs, ids, channels, model names)
 * the integration store — owned by ``integrations.store``, not this module
 
@@ -38,7 +40,11 @@ from config.local_env import get_project_env_path
 PROJECT_ENV_PATH = get_project_env_path()
 
 _ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
-_NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY"})
+# Names whose terminal token would otherwise flag them sensitive, but whose
+# value is meant to be public: Discord's public key verifies signatures rather
+# than authenticating, and MongoDB Atlas's public key is a paired identifier
+# next to a private key, not a secret on its own.
+_NON_SECRET_ENV_KEYS: frozenset[str] = frozenset({"DISCORD_PUBLIC_KEY", "MONGODB_ATLAS_PUBLIC_KEY"})
 # Underscore-separated terminal tokens that mark an env var as sensitive.
 # Matching the terminal component (rather than a substring or a fixed suffix
 # like ``_token``) catches both ``GITLAB_ACCESS_TOKEN`` and a bare ``TOKEN``
@@ -55,7 +61,12 @@ _SENSITIVE_TERMINAL_TOKENS: frozenset[str] = frozenset(
         "credentials",
     }
 )
-_SENSITIVE_SUBSTRINGS: tuple[str, ...] = ("connection_string",)
+_SENSITIVE_SUBSTRINGS: tuple[str, ...] = (
+    "connection_string",
+    # Inline kubeconfig YAML embeds bearer tokens / client keys / certs; the
+    # path-only ``KUBECONFIG`` env var does not match this needle.
+    "kubeconfig_content",
+)
 
 
 @dataclass(frozen=True)
@@ -114,7 +125,7 @@ def _ensure_no_sensitive_env_lines(lines: list[str]) -> None:
 
 
 def _persist_env_secret(key: str, value: str) -> bool:
-    """Store a secret in the keyring. Returns False when keyring is unavailable."""
+    """Store a secret in secure local storage. False when no tier accepted it."""
     normalized = value.strip()
     provider = next(
         (name for name, env_var in API_KEY_PROVIDER_ENVS.items() if env_var == key),
@@ -131,7 +142,9 @@ def _persist_env_secret(key: str, value: str) -> bool:
             save_api_key(provider, normalized)
         else:
             save_keyring_secret(key, normalized)
-    except RuntimeError:
+    except (RuntimeError, OSError):
+        # RuntimeError covers KeyringUnavailableError, raised only once *both*
+        # the keyring and the fallback file have refused the write.
         return False
     return True
 
@@ -192,8 +205,8 @@ def sync_env_secret(key: str, value: str) -> None:
         raise ValueError(f"{key!r} is not classified as sensitive; use sync_env_values instead.")
     if not _persist_env_secret(key, value):
         raise RuntimeError(
-            f"Failed to persist {key!r} to the system keyring; "
-            "secure local credential storage is unavailable."
+            f"Failed to persist {key!r}: neither the system keyring nor the local "
+            "fallback credential store could hold it."
         )
 
 

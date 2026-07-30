@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from platform.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
     bound_loop_metrics,
@@ -57,6 +58,33 @@ async def test_astream_failure_propagates_wrapped_stream_error(
     assert wrapped.loop_count == 5
     assert wrapped.iteration_cap == 20
     assert isinstance(wrapped.cause, RuntimeError)
+
+
+@pytest.mark.anyio
+async def test_astream_delivers_stream_error_when_deferred_import_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failing deferred stage import must still reach the consumer as a wrapped error."""
+    monkeypatch.delattr("core.state.updates.apply_state_updates")
+
+    with pytest.raises(InvestigationPipelineStreamError) as exc_info:
+        async for _event in astream_investigation("alert text"):
+            pass
+
+    wrapped = exc_info.value
+    assert isinstance(wrapped.cause, ImportError)
+    assert wrapped.loop_count == 0
+    assert wrapped.iteration_cap == MAX_INVESTIGATION_LOOPS
+
+
+def test_loop_metrics_for_error_falls_back_when_metrics_import_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tools.investigation.capability import _loop_metrics_for_error
+
+    monkeypatch.delattr("platform.analytics.investigation_loop.loop_metrics_from_state")
+
+    assert _loop_metrics_for_error(None) == (0, MAX_INVESTIGATION_LOOPS)
 
 
 def test_main_thread_bridge_binds_metrics_from_wrapped_stream_failure() -> None:

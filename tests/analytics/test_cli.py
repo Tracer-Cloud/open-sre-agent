@@ -147,7 +147,13 @@ def test_capture_github_login_completed(monkeypatch: pytest.MonkeyPatch) -> None
     assert stub.events == [
         (
             Event.GITHUB_LOGIN_COMPLETED,
-            {"github_username": "octocat", "github_gate_variant": "forced"},
+            {
+                "github_username": "octocat",
+                "experiment_key": cli.GITHUB_GATE_EXPERIMENT,
+                "variant": "forced",
+                "gate_version": cli.GITHUB_GATE_VERSION,
+                "github_gate_variant": "forced",
+            },
         ),
     ]
 
@@ -178,19 +184,39 @@ def test_capture_github_login_lifecycle_events(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(cli, "get_analytics", lambda: stub)
 
     cli.capture_github_login_prompted(variant="control")
-    cli.capture_github_login_skipped(variant="control")
+    cli.capture_github_login_skipped(variant="control", skip_source=cli.GITHUB_SKIP_SOURCE_MENU)
     cli.capture_github_login_abandoned(variant="forced", reason="cancelled")
+    cli.capture_github_login_failed(variant="forced", reason_category=cli.GITHUB_FAIL_DEVICE_FLOW)
     cli.stamp_github_gate_variant("forced")
 
+    exp_control = cli.github_gate_experiment_properties("control")
+    exp_forced = cli.github_gate_experiment_properties("forced")
     assert stub.events == [
-        (Event.GITHUB_LOGIN_PROMPTED, {"github_gate_variant": "control"}),
-        (Event.GITHUB_LOGIN_SKIPPED, {"github_gate_variant": "control"}),
+        (Event.GITHUB_LOGIN_GATE_SHOWN, exp_control),
+        (Event.GITHUB_LOGIN_PROMPTED, exp_control),
+        (
+            Event.GITHUB_LOGIN_SKIPPED,
+            {**exp_control, "skip_source": cli.GITHUB_SKIP_SOURCE_MENU},
+        ),
         (
             Event.GITHUB_LOGIN_ABANDONED,
-            {"github_gate_variant": "forced", "reason": "cancelled"},
+            {**exp_forced, "reason": "cancelled"},
+        ),
+        (
+            Event.GITHUB_LOGIN_FAILED,
+            {**exp_forced, "reason_category": cli.GITHUB_FAIL_DEVICE_FLOW},
         ),
     ]
-    assert stub.persistent_properties == {"github_gate_variant": "forced"}
+    assert stub.persistent_properties == exp_forced
+
+
+def test_github_gate_experiment_properties_shape() -> None:
+    props = cli.github_gate_experiment_properties("control", skip_source="menu")
+    assert props["experiment_key"] == "github_gate_v1"
+    assert props["variant"] == "control"
+    assert props["gate_version"] == "1"
+    assert props["github_gate_variant"] == "control"
+    assert props["skip_source"] == "menu"
 
 
 def test_build_cli_invoked_properties_includes_full_command_path() -> None:
