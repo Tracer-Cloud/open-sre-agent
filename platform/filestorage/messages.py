@@ -21,14 +21,14 @@ from platform.filestorage.operations import SyncStatus
 
 
 def _human_size(n: int) -> str:
-    """Format byte count as a human-readable string (e.g. ``"1.2 KB"``)."""
+    """Format byte count as a human-readable string (e.g. ``"1.2 KiB"``)."""
     if n < 1024:
         return f"{n} B"
     if n < 1024**2:
-        return f"{n / 1024:.1f} KB"
+        return f"{n / 1024:.1f} KiB"
     if n < 1024**3:
-        return f"{n / 1024**2:.1f} MB"
-    return f"{n / 1024**3:.1f} GB"
+        return f"{n / 1024**2:.1f} MiB"
+    return f"{n / 1024**3:.1f} GiB"
 
 
 DISABLED_HELP = f"""Remote sync is off.

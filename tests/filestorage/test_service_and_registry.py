@@ -97,9 +97,9 @@ def test_format_report_lines_shows_nonzero_byte_sizes() -> None:
         skipped=2,
     )
     lines = format_report_lines(report)
-    assert "4.4 KB" in lines[0]
-    assert "1.2 KB" in lines[0]
-    assert "5.6 KB total" in lines[0]
+    assert "4.4 KiB" in lines[0]
+    assert "1.2 KiB" in lines[0]
+    assert "5.6 KiB total" in lines[0]
 
 
 def test_format_report_lines_omits_size_when_no_bytes_moved() -> None:
@@ -115,8 +115,8 @@ def test_format_report_lines_shows_only_download_size_when_upload_is_zero() -> N
         uploaded=[], downloaded=["b"], uploaded_bytes=0, downloaded_bytes=2048, skipped=1
     )
     lines = format_report_lines(report)
-    assert "2.0 KB" in lines[0]
-    assert "2.0 KB total" in lines[0]
+    assert "2.0 KiB" in lines[0]
+    assert "2.0 KiB total" in lines[0]
 
 
 def test_format_report_lines_shows_small_byte_count_in_bytes() -> None:
@@ -133,8 +133,8 @@ def test_format_report_lines_handles_megabyte_boundary() -> None:
         uploaded=[], downloaded=[], uploaded_bytes=0, downloaded_bytes=2_500_000, skipped=3
     )
     lines = format_report_lines(report)
-    assert "2.4 MB" in lines[0]
-    assert "2.4 MB total" in lines[0]
+    assert "2.4 MiB" in lines[0]
+    assert "2.4 MiB total" in lines[0]
 
 
 def test_factory_delegates_to_registry() -> None:
