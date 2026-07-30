@@ -390,7 +390,13 @@ class _FakePrompts:
     def investigation_flow(self) -> str:
         return ""
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> dict[str, object]:
+
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime=None) -> str:  # noqa: ANN001, ARG002
         return ""
 
     def long_term_memory(self) -> str:

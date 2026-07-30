@@ -83,10 +83,17 @@ class _StubPromptContextProvider:
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> dict[str, object]:
+
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime=None) -> str:  # noqa: ANN001
         return build_environment_block(
             integrations=self._configured_integrations,
             known=self._configured_integrations_known,
+            runtime=runtime,
         )
 
     def long_term_memory(self) -> str:
