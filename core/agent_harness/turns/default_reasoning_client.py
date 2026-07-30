@@ -38,6 +38,10 @@ class DefaultReasoningClientProvider:
         self._error_reporter = error_reporter
         self._session = session
 
+    def bind_session(self, session: Any | None) -> None:
+        """Point error staging at a freshly resolved session (gateway reuse)."""
+        self._session = session
+
     def get(self) -> Any | None:
         try:
             from core.llm.factory import LLMRole, get_llm

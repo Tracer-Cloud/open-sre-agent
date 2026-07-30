@@ -49,6 +49,10 @@ class DefaultPromptContextProvider:
         self._session = session
         self._surface = surface
 
+    def bind_session(self, session: Any) -> None:
+        """Point this provider at a freshly resolved session (gateway reuse)."""
+        self._session = session
+
     def surface(self) -> str:
         return self._surface
 

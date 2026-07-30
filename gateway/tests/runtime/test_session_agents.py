@@ -70,6 +70,7 @@ def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> 
         def __init__(self, **kwargs: Any) -> None:
             constructed.append(kwargs)
             self.bind_turn = MagicMock()
+            self.bind_session = MagicMock()
             self.dispatch = MagicMock(return_value=_empty_result())
 
     def _fake_build(**kwargs: Any) -> Any:
@@ -94,6 +95,7 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
     class _FakeAgent:
         def __init__(self, **_kwargs: Any) -> None:
             self.bind_turn = MagicMock()
+            self.bind_session = MagicMock()
 
     monkeypatch.setattr(
         "gateway.runtime.session_agents.build_default_headless_agent",
@@ -107,6 +109,35 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
     agent_b = pool.agent_for(session=b, sink=MagicMock(), logger=logger)
     assert agent_a is not agent_b
     assert pool.cached_session_ids == frozenset({a.session_id, b.session_id})
+
+
+def test_pool_rebinds_current_session_on_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gateway resolve() yields a new SessionCore each turn; reuse must follow it."""
+    bound: list[Any] = []
+
+    class _FakeAgent:
+        def __init__(self, **kwargs: Any) -> None:
+            self.session = kwargs["session"]
+            self.bind_turn = MagicMock()
+
+        def bind_session(self, session: Any) -> None:
+            bound.append(session)
+            self.session = session
+
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        lambda **kwargs: _FakeAgent(**kwargs),
+    )
+    pool = SessionAgentPool(console=Console(force_terminal=False))
+    first = SessionCore(storage=InMemorySessionStorage())
+    # Same logical id, different object — what SessionManager.resolve returns.
+    second = SessionCore(storage=InMemorySessionStorage(), session_id=first.session_id)
+    logger = logging.getLogger("test.pool.rebind")
+    agent_a = pool.agent_for(session=first, sink=MagicMock(), logger=logger)
+    agent_b = pool.agent_for(session=second, sink=MagicMock(), logger=logger)
+    assert agent_a is agent_b
+    assert bound == [second]
+    assert agent_b.session is second
 
 
 def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -89,6 +89,7 @@ class GatewayTurnHandler:
                     capture_gateway_turn_started(surface=surface)
                 agent = self._pool.agent_for(session=session, sink=sink, logger=logger)
                 agent.bind_turn(
+                    session=session,
                     accounting=DefaultTurnAccounting(session, text),
                     tool_hooks=getattr(sink, "tool_hooks", None),
                 )

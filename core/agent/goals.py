@@ -50,24 +50,30 @@ def should_accept_with_goal(
     final_text: str,
     evidence_count: int,
     iteration: int,
-    max_iterations: int,
+    max_iterations: int | None,
     extras: dict[str, Any] | None = None,
 ) -> tuple[bool, str | None]:
     """Decide whether the ReAct loop may conclude.
 
     Returns ``(True, None)`` to accept, or ``(False, nudge)`` to continue.
     When ``iteration`` has reached the last allowed lap, accept even if the
-    goal is unmet (budget ceiling).
+    goal is unmet (budget ceiling). When ``max_iterations`` is unset, there is
+    no ceiling — only a met goal accepts.
     """
     if goal is None:
         return True, None
     # iteration is 0-based inside ReactLoop; last lap is max_iterations - 1.
-    at_ceiling = iteration >= max(0, max_iterations - 1)
+    # None/non-positive budgets mean "no ceiling" (do not treat as already done).
+    at_ceiling = (
+        max_iterations is not None
+        and max_iterations > 0
+        and iteration >= max(0, max_iterations - 1)
+    )
     observation = GoalObservation(
         final_text=final_text,
         evidence_count=evidence_count,
         iteration=iteration,
-        max_iterations=max_iterations,
+        max_iterations=max_iterations if max_iterations is not None else 0,
         extras=extras,
     )
     if goal_met(goal, observation):

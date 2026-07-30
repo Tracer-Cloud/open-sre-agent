@@ -86,6 +86,26 @@ def test_network_probe_does_not_make_a_real_request(monkeypatch: Any) -> None:
     probe_capabilities()
 
 
+def test_network_probe_uses_default_sandbox_policy(monkeypatch: Any) -> None:
+    """Do not pass allow_network=True — that bypasses the normal sandbox block."""
+    import platform.sandbox.capabilities as capabilities
+
+    calls: list[dict[str, Any]] = []
+
+    def _fake_run(code: str, **kwargs: Any) -> Any:
+        calls.append({"code": code, **kwargs})
+        return type(
+            "R",
+            (),
+            {"stdout": "", "stderr": "PermissionError: Network access is not permitted"},
+        )()
+
+    monkeypatch.setattr("platform.sandbox.runner.run_python_sandbox", _fake_run)
+    assert capabilities._network_available() is False
+    assert calls and calls[0].get("allow_network", False) is False
+    assert "socket.socket" in calls[0]["code"]
+
+
 def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> None:
     seen_tools: list[Any] = []
 

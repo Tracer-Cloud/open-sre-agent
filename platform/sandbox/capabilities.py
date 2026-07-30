@@ -60,16 +60,15 @@ def _file_read_available() -> bool:
 
 
 def _network_available() -> bool:
-    """True when outbound requests are not blocked by policy.
+    """True when the default sandbox policy allows outbound sockets.
 
-    Deliberately does **not** open a socket: startup must not depend on an
-    external host being reachable, and a probe that hangs on a firewalled
-    network is worse than the gap it reports. Only the local policy that would
-    refuse the call is inspected.
+    Probes under the normal runner defaults (``allow_network=False``). Opening a
+    real remote connection is avoided — ``socket.socket()`` is enough to hit the
+    injected policy block without depending on an external host.
     """
     from platform.sandbox.runner import run_python_sandbox
 
-    result = run_python_sandbox("import socket", allow_network=True)
+    result = run_python_sandbox("import socket; socket.socket()")
     return "Network access is not permitted" not in str(getattr(result, "stderr", ""))
 
 

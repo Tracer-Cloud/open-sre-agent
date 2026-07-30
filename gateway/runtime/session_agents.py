@@ -70,6 +70,9 @@ class SessionAgentPool:
 
         cached = self._agents.get(session_id) if session_id else None
         if cached is not None:
+            # Resolve returns a new SessionCore each turn; keep the cached agent
+            # but point every session-scoped port at the current object.
+            cached.bind_session(session)
             return cached
 
         observer = _ToolStatusObserver(live_sink)

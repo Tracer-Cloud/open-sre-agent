@@ -160,13 +160,12 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
             return True, None
         from core.agent.goals import should_accept_with_goal
 
-        max_iterations = self._max_iterations if self._max_iterations is not None else iteration + 1
         return should_accept_with_goal(
             self._goal,
             final_text=final_text,
             evidence_count=evidence_count,
             iteration=iteration,
-            max_iterations=max_iterations,
+            max_iterations=self._max_iterations,
         )
 
     # Thin forwarders to ``self._hooks`` (a ProviderHookDelegate). Kept as

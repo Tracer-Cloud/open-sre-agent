@@ -133,6 +133,20 @@ def test_no_goal_always_accepts() -> None:
     ) == (True, None)
 
 
+def test_missing_max_iterations_is_not_a_ceiling() -> None:
+    """Unset budget must not make every request-driven turn look finished."""
+    goal = Goal(description="investigate", success_criteria="root cause named")
+    accept, nudge = should_accept_with_goal(
+        goal,
+        final_text="",
+        evidence_count=0,
+        iteration=0,
+        max_iterations=None,
+    )
+    assert accept is False
+    assert nudge is not None
+
+
 def test_agent_goal_nudges_then_accepts_at_ceiling() -> None:
     """Wired path: Agent._should_accept_conclusion consults goals until budget."""
     goal = Goal(description="count stars", success_criteria="numeric velocity")
