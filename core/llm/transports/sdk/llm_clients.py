@@ -275,6 +275,9 @@ class LLMClient:
 
     def _create_with_retry(self, kwargs: dict[str, Any]) -> Any:
         """Call the messages API with the shared backoff and error mapping."""
+        # What this request carries, decided before any concurrent turn can
+        # clear the shared flag.
+        marked = strip_cache_markers(kwargs) != kwargs
         from platform.guardrails.engine import GuardrailBlockedError
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
@@ -298,10 +301,10 @@ class LLMClient:
                 # only dependable probe is to retry without them. Markers are
                 # disabled only if that retry actually succeeds, leaving genuine
                 # bad requests (bad max_tokens, oversized prompt) untouched.
-                if self._cache_markers_enabled and is_cache_unsupported_error(err):
-                    # Caching is best-effort: retry the same request uncached
-                    # and never mark again on this client. The flag guards the
-                    # recursion, so this path runs at most once.
+                if marked and is_cache_unsupported_error(err):
+                    # Keyed on what this request carried: a concurrent turn may
+                    # already have cleared the shared flag. The stripped retry
+                    # carries no markers, so this path runs at most once.
                     self._cache_markers_enabled = False
                     logger.warning(
                         "Model '%s' rejected prompt-cache markers; retrying without "
@@ -332,6 +335,9 @@ class LLMClient:
         from platform.guardrails.engine import GuardrailBlockedError
 
         kwargs = self._build_request_kwargs(prompt_or_messages)
+        # What this request carries, decided before any concurrent turn can
+        # clear the shared flag.
+        marked = strip_cache_markers(kwargs) != kwargs
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
@@ -353,9 +359,10 @@ class LLMClient:
                     "Check your configured model name and try again."
                 ) from err
             except AnthropicBadRequestError as err:
-                if not emitted and self._cache_markers_enabled and is_cache_unsupported_error(err):
-                    # Best-effort caching: rebuild the request without markers
-                    # (the flag now disables them) and stream that instead.
+                if not emitted and marked and is_cache_unsupported_error(err):
+                    # Keyed on what this request carried, not the shared flag.
+                    # Only before the first chunk: retrying after output has
+                    # reached the caller would duplicate visible text.
                     self._cache_markers_enabled = False
                     logger.warning(
                         "Model '%s' rejected prompt-cache markers; retrying without "
@@ -435,6 +442,9 @@ class BedrockLLMClient:
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
 
+        # What this request carries, decided before any concurrent turn can
+        # clear the shared flag.
+        marked = strip_cache_markers(kwargs) != kwargs
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
         last_err: Exception | None = None
@@ -447,10 +457,10 @@ class BedrockLLMClient:
                 # so wording alone cannot tell a marker rejection from any other
                 # bad request. Retry once stripped and keep markers off only if
                 # that actually fixed it.
-                if self._cache_markers_enabled and is_cache_unsupported_error(err):
-                    # Caching is best-effort: retry the same request uncached
-                    # and never mark again on this client. The flag guards the
-                    # recursion, so this path runs at most once.
+                if marked and is_cache_unsupported_error(err):
+                    # Keyed on what this request carried: a concurrent turn may
+                    # already have cleared the shared flag. The stripped retry
+                    # carries no markers, so this path runs at most once.
                     self._cache_markers_enabled = False
                     logger.warning(
                         "Bedrock model '%s' rejected prompt-cache markers; retrying "

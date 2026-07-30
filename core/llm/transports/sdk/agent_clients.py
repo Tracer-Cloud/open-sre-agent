@@ -189,10 +189,11 @@ class AnthropicAgentClient:
                 # distinguish credit exhaustion (fatal) from real schema
                 # errors before wrapping into a generic RuntimeError.
                 maybe_raise_credit_exhausted(self.provider_name, err)
-                if self._cache_markers_enabled and _is_cache_unsupported_error(err):
-                    # Caching is best-effort: rebuild the request without
-                    # markers (the flag now disables them) and never mark
-                    # again on this client. The flag guards the recursion.
+                if cache and _is_cache_unsupported_error(err):
+                    # Keyed on what *this* request carried, not the shared
+                    # flag: a concurrent turn may already have cleared it, and
+                    # this request still went out marked. Rebuilding with the
+                    # flag off guards the recursion.
                     self._cache_markers_enabled = False
                     logger.warning(
                         "%s model '%s' rejected prompt-cache markers; retrying without "

@@ -156,3 +156,33 @@ def test_bedrock_client_falls_back_the_same_way(monkeypatch: Any) -> None:
     assert response.content == "fine"
     retried = sdk.messages.create.call_args_list[-1].kwargs
     assert "cache_control" not in json.dumps(retried["system"])
+
+
+def test_concurrent_rejection_still_retries_uncached(monkeypatch: Any) -> None:
+    """A second in-flight marked request must not be stranded by the first.
+
+    Clients are shared across concurrent turns. If one call's rejection flips
+    the shared flag before another call handles its own rejection, the second
+    request — already sent *with* markers — would see the flag off, skip its
+    retry, and fail. The retry decision must depend on what this request
+    carried, not on the shared flag's current value.
+    """
+    # Arrange: the SDK flips the flag before raising, as a racing call would.
+    client, sdk = _anthropic_client(monkeypatch)
+    calls: list[dict[str, Any]] = []
+
+    def _create(**kwargs: Any) -> Any:
+        calls.append(kwargs)
+        if "cache_control" in json.dumps(kwargs.get("system", "")):
+            client._cache_markers_enabled = False  # another turn got there first
+            raise _bad_request(GENERIC_BEDROCK_REJECTION)
+        return _ok_response()
+
+    sdk.messages.create.side_effect = _create
+
+    # Act
+    response = client.invoke(_messages())
+
+    # Assert: it still recovered rather than surfacing the 400.
+    assert response.content == "fine"
+    assert "cache_control" not in json.dumps(calls[-1].get("system", ""))
