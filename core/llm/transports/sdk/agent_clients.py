@@ -38,6 +38,15 @@ from core.llm.shared.openai_responses import (
 )
 from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
 from core.llm.shared.usage import emit_provider_usage, extract_cache_tokens
+from core.llm.transports.sdk.anthropic_cache import (
+    cached_system as _anthropic_cached_system,
+)
+from core.llm.transports.sdk.anthropic_cache import (
+    messages_with_cache as _anthropic_messages_with_cache,
+)
+from core.llm.transports.sdk.anthropic_cache import (
+    tools_with_cache as _anthropic_tools_with_cache,
+)
 from core.llm.types import AgentLLMResponse, ToolCall
 
 logger = logging.getLogger(__name__)
@@ -55,61 +64,6 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
 # Anthropic prompt-caching breakpoint (ephemeral, 5-minute TTL by default).
 # Prefix match order is tools → system → messages; mark the last tool and the
 # system block so ReAct iterations can reuse the stable prefix.
-_ANTHROPIC_CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
-
-
-def _anthropic_cached_system(system: str) -> list[dict[str, Any]]:
-    return [
-        {
-            "type": "text",
-            "text": system,
-            "cache_control": dict(_ANTHROPIC_CACHE_CONTROL),
-        }
-    ]
-
-
-def _anthropic_tools_with_cache(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if not tools:
-        return tools
-    cached = [dict(tool) for tool in tools]
-    cached[-1] = {**cached[-1], "cache_control": dict(_ANTHROPIC_CACHE_CONTROL)}
-    return cached
-
-
-def _anthropic_messages_with_cache(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Mark the newest message's last content block as a cache breakpoint.
-
-    Tools and system cover the static prefix; this marker lets the growing
-    conversation history accrue incremental cache hits across ReAct
-    iterations. Copies, never mutates — the caller reuses ``messages`` on
-    retries. Content that cannot carry a marker (empty text, unknown shapes)
-    is left untouched.
-    """
-    if not messages:
-        return messages
-    last = messages[-1]
-    content = last.get("content")
-    if isinstance(content, str) and content:
-        marked_content: list[Any] = [
-            {
-                "type": "text",
-                "text": content,
-                "cache_control": dict(_ANTHROPIC_CACHE_CONTROL),
-            }
-        ]
-    elif isinstance(content, list) and content and isinstance(content[-1], dict):
-        # Copy every block, not just the marked one: the transcript is reused
-        # across ReAct iterations, and a shared dict would let a later payload
-        # mutation write through into live history.
-        marked_content = [
-            dict(block) if isinstance(block, dict) else block for block in content[:-1]
-        ]
-        marked_content.append({**content[-1], "cache_control": dict(_ANTHROPIC_CACHE_CONTROL)})
-    else:
-        return messages
-    return [*messages[:-1], {**last, "content": marked_content}]
-
-
 class AnthropicAgentClient:
     """Anthropic client with native tool-calling for the agent loop."""
 

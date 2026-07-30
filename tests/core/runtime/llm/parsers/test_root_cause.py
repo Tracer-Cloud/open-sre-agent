@@ -7,7 +7,7 @@ readability without changing what it produces.
 from __future__ import annotations
 
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
-from core.llm.parsers.root_cause import parse_root_cause
+from core.llm.parsers.root_cause import _extract_category, parse_root_cause
 
 _CATEGORY = sorted(VALID_ROOT_CAUSE_CATEGORIES)[0]  # a deterministic valid category
 
@@ -73,3 +73,41 @@ def test_remediation_stops_at_a_trailing_section_header() -> None:
     )
 
     assert result.remediation_steps == ["1. do this"]
+
+
+class TestCategoryProseForms:
+    """A category written in prose must still resolve to its canonical name.
+
+    The model is asked for a canonical category but often writes it the way it
+    reads in the report ("resource exhaustion"). Dropping that to ``unknown``
+    loses the diagnosis label while the narrative still names the cause, so
+    incident records, dashboards, and memory all see ``unknown``.
+    """
+
+    def test_space_separated_category_resolves(self) -> None:
+        # Arrange / Act
+        category = _extract_category("ROOT_CAUSE_CATEGORY:\nresource exhaustion")
+
+        # Assert
+        assert category == "resource_exhaustion"
+
+    def test_multi_word_narrow_category_resolves(self) -> None:
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\npod oomkilled") == "pod_oomkilled"
+
+    def test_longest_match_wins_over_a_contained_one(self) -> None:
+        """``dual resource exhaustion`` must not degrade to ``resource_exhaustion``."""
+        category = _extract_category("ROOT_CAUSE_CATEGORY:\ndual resource exhaustion")
+        assert category == "dual_resource_exhaustion"
+
+    def test_hyphenated_category_resolves(self) -> None:
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\nresource-exhaustion") == (
+            "resource_exhaustion"
+        )
+
+    def test_underscored_form_still_wins(self) -> None:
+        """Existing behavior is preserved for the canonical spelling."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled") == "pod_oomkilled"
+
+    def test_unrecognized_wording_stays_unknown(self) -> None:
+        """No fuzzy guessing — an unmapped name must not be invented."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\ngremlins in the rack") == "unknown"

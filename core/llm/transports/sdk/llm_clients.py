@@ -41,6 +41,7 @@ from core.llm.shared.openai_chat_completions import (
 )
 from core.llm.shared.structured_output import StructuredOutputClient
 from core.llm.shared.usage import llm_response_with_usage
+from core.llm.transports.sdk.anthropic_cache import cached_system
 from core.llm.types import LLMResponse
 
 logger = logging.getLogger(__name__)
@@ -218,7 +219,7 @@ class LLMClient:
             "messages": messages,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = cached_system(system)
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs
@@ -362,7 +363,7 @@ class BedrockLLMClient:
             "messages": messages,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = cached_system(system)
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
 

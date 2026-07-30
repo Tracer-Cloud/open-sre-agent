@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import Final
 
 from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 
@@ -66,6 +67,27 @@ def _cleaned_bullets(section: str, strip: str = "*-• ") -> Iterator[str]:
             yield line
 
 
+#: Longest canonical category, in words — bounds the n-gram join below.
+_MAX_CATEGORY_WORDS: Final[int] = max(len(name.split("_")) for name in VALID_ROOT_CAUSE_CATEGORIES)
+
+
+def _category_candidates(line: str) -> Iterator[str]:
+    """Yield candidate category names from one line, longest form first.
+
+    Models often write the category the way it reads in prose ("resource
+    exhaustion", "resource-exhaustion") rather than the canonical underscored
+    name. Joining adjacent word runs recovers those without guessing: a
+    candidate is only ever accepted on an exact taxonomy match. Longest first so
+    ``dual resource exhaustion`` cannot degrade to ``resource_exhaustion``.
+    """
+    yield re.sub(r"[^a-z0-9]+", "_", line).strip("_")
+    words = re.findall(r"[a-z0-9]+", line)
+    for size in range(min(_MAX_CATEGORY_WORDS, len(words)), 1, -1):
+        for start in range(len(words) - size + 1):
+            yield "_".join(words[start : start + size])
+    yield from re.findall(r"[a-z_][a-z0-9_]*", line)
+
+
 def _extract_category(response: str) -> str:
     """First valid category found on any line after ``ROOT_CAUSE_CATEGORY:``."""
     section = _text_between(response, "ROOT_CAUSE_CATEGORY:", ())
@@ -77,9 +99,9 @@ def _extract_category(response: str) -> str:
             continue
         if candidate in VALID_ROOT_CAUSE_CATEGORIES:
             return candidate
-        for token in re.findall(r"[a-z_][a-z0-9_]*", candidate):
-            if token in VALID_ROOT_CAUSE_CATEGORIES:
-                return str(token)
+        for form in _category_candidates(candidate):
+            if form in VALID_ROOT_CAUSE_CATEGORIES:
+                return str(form)
     return "unknown"
 
 
