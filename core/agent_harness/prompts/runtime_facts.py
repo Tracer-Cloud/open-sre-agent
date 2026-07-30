@@ -26,14 +26,16 @@ _STATIC_GUIDANCE = (
     "When the user asks for the local timezone name, Python version, process "
     "id, parent process id, host/pod name, cloud provider or region, "
     "kubeconfig path, or which tools are installed, answer from the strings "
-    "above — never run "
+    "above directly, WITHOUT any tool call — these facts are authoritative "
+    "and re-reading them through the sandbox wastes a round-trip. Never run "
     f"{_BLOCKED_COMMANDS}, and never probe cloud instance metadata over the "
     "network. To list files in the scratchpad or another directory, "
     "use the Python execution sandbox with `pathlib.Path(...).iterdir()` — "
     "never `ls` or subprocess. Do NOT "
     "invent field names, values, or numbers not present above. Do NOT shell "
     "out or use subprocess — the Python execution sandbox blocks process "
-    "spawning; use `inputs['opensre_runtime']` inside the sandbox instead."
+    "spawning; when Python code you are already running for another reason "
+    "needs these facts, read `inputs['opensre_runtime']` instead."
 )
 
 _LIVE_GUIDANCE = (
