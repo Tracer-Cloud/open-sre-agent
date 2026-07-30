@@ -156,9 +156,8 @@ class TestCanonicalNameNegationSafety:
     """Negation must also be respected when the model uses canonical names.
 
     The prompt asks for underscored taxonomy names, so ``Not pod_oomkilled;
-    this is a code_defect`` is the *likely* phrasing — and the bare-token scan
-    would return the rejected category. A line that rejects something is not a
-    verdict line.
+    this is a code_defect`` is the *likely* phrasing. Mid-sentence taxonomy
+    tokens are never trusted — only a whole-line verdict resolves.
     """
 
     def test_leading_negation_with_canonical_names(self) -> None:
@@ -187,13 +186,76 @@ class TestCanonicalNameNegationSafety:
     def test_verdict_plus_parenthetical_rejection_yields_unknown(self) -> None:
         """Accepted trade-off: recall lost, correctness kept.
 
-        ``code_defect (not pod_oomkilled)`` names the verdict *and* rejects an
-        alternative on one line. Distinguishing which side of the cue the verdict
-        sits on is not reliable — ``pod_oomkilled ruled out; actual: code_defect``
-        leads with the rejected name — so a rejecting line yields no verdict.
-        Storing ``unknown`` is recoverable; storing the opposite of the model's
-        conclusion is not.
+        ``code_defect (not pod_oomkilled)`` is not a sole whole-line verdict
+        after decoration strip (``not`` remains), so it yields ``unknown``.
+        Storing ``unknown`` is recoverable; storing a mid-sentence guess is not.
         """
         assert (
             _extract_category("ROOT_CAUSE_CATEGORY:\ncode_defect (not pod_oomkilled)") == "unknown"
         )
+
+    def test_unrecognized_rejection_wording_does_not_persist_category(self) -> None:
+        """Mid-sentence matches are never trusted — wording does not matter."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled is incorrect") == "unknown"
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\ncannot be resource_exhaustion") == "unknown"
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\nThis cannot be pod_oomkilled") == "unknown"
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\nresource_exhaustion is wrong; code_defect")
+            == "unknown"
+        )
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled is bogus here") == "unknown"
+
+
+class TestUnenumeratedRejectionWording:
+    """Any residual English on the line blocks a category verdict.
+
+    No rejection-word dictionary and no mid-sentence token scan — prose with
+    one or two category names yields ``unknown``.
+    """
+
+    def test_prose_with_alternative_stays_unknown(self) -> None:
+        """Safety over recall: the conclusion is lost, but nothing wrong is stored."""
+        assert (
+            _extract_category(
+                "ROOT_CAUSE_CATEGORY:\npod_oomkilled is incorrect; actual code_defect"
+            )
+            == "unknown"
+        )
+
+    def test_unenumerated_prose_stays_unknown(self) -> None:
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled superseded by code_defect")
+            == "unknown"
+        )
+
+    def test_two_category_prose_stays_unknown(self) -> None:
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled ; final answer code_defect")
+            == "unknown"
+        )
+
+    def test_label_prefixed_line_still_resolves(self) -> None:
+        """Pre-existing shape: a label followed by the name."""
+        assert _extract_category("ROOT_CAUSE_CATEGORY:\ncategory -> delivery_hang") == (
+            "delivery_hang"
+        )
+
+    def test_trailing_qualifier_still_resolves(self) -> None:
+        assert (
+            _extract_category("ROOT_CAUSE_CATEGORY:\ncpu_saturation (high confidence)")
+            == "cpu_saturation"
+        )
+
+
+def test_affirmative_qualifier_keeps_the_verdict() -> None:
+    """``confirmed`` affirms the category — it must not block the verdict."""
+    assert _extract_category("ROOT_CAUSE_CATEGORY:\nnode_not_ready (confirmed)") == (
+        "node_not_ready"
+    )
+
+
+def test_affirmative_qualifier_does_not_rescue_a_second_category() -> None:
+    """Two categories on one line still yield nothing, qualifier or not."""
+    assert (
+        _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled confirmed, code_defect") == "unknown"
+    )

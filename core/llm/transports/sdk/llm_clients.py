@@ -39,7 +39,10 @@ from core.llm.shared.openai_chat_completions import (
     LLM_CLIENT_TIMEOUT_SEC,
     normalize_messages_openai,
 )
-from core.llm.shared.structured_output import StructuredOutputClient
+from core.llm.shared.structured_output import (
+    StructuredOutputClient,
+    json_schema_for_structured_output,
+)
 from core.llm.shared.usage import llm_response_with_usage
 from core.llm.transports.sdk.anthropic_cache import cached_system
 from core.llm.types import LLMResponse
@@ -190,6 +193,29 @@ class LLMClient:
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
 
+    def invoke_structured(self, model: type[BaseModel], prompt: str) -> str:
+        """Constrained JSON via Anthropic ``output_config.format`` (json_schema).
+
+        Uses the same retry policy and usage reporting as :meth:`invoke`: this
+        call carries the cached system prefix, so leaving it out of token
+        accounting would hide the diagnose stage's spend and cache hits.
+        """
+        kwargs = self._build_request_kwargs(prompt)
+        kwargs["output_config"] = {
+            "format": {
+                "type": "json_schema",
+                "schema": json_schema_for_structured_output(model),
+            }
+        }
+        response = self._create_with_retry(kwargs)
+        return llm_response_with_usage(
+            _extract_text(response),
+            self._model,
+            getattr(response, "usage", None),
+            input_key="input_tokens",
+            output_key="output_tokens",
+        ).content
+
     def _ensure_client(self) -> None:
         api_key = provider_credentials.resolve_llm_api_key("ANTHROPIC_API_KEY")
         if not api_key:
@@ -225,17 +251,29 @@ class LLMClient:
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
-        from platform.guardrails.engine import GuardrailBlockedError
-
         kwargs = self._build_request_kwargs(prompt_or_messages)
+        response = self._create_with_retry(kwargs)
+
+        content = _extract_text(response)
+        usage = getattr(response, "usage", None)
+        return llm_response_with_usage(
+            content,
+            self._model,
+            usage,
+            input_key="input_tokens",
+            output_key="output_tokens",
+        )
+
+    def _create_with_retry(self, kwargs: dict[str, Any]) -> Any:
+        """Call the messages API with the shared backoff and error mapping."""
+        from platform.guardrails.engine import GuardrailBlockedError
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
         last_err: Exception | None = None
         for attempt in range(max_attempts):
             try:
-                response = self._client.messages.create(**kwargs)
-                break
+                return self._client.messages.create(**kwargs)
             except AuthenticationError as err:
                 raise RuntimeError(
                     "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
@@ -255,18 +293,7 @@ class LLMClient:
                     raise RuntimeError(_format_anthropic_retry_error(err)) from err
                 time.sleep(backoff_seconds)
                 backoff_seconds *= 2
-        else:
-            raise RuntimeError("LLM invocation failed without a concrete error") from last_err
-
-        content = _extract_text(response)
-        usage = getattr(response, "usage", None)
-        return llm_response_with_usage(
-            content,
-            self._model,
-            usage,
-            input_key="input_tokens",
-            output_key="output_tokens",
-        )
+        raise RuntimeError("LLM invocation failed without a concrete error") from last_err
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
         """Yield text chunks as the model emits them.
@@ -619,6 +646,58 @@ class OpenAILLMClient:
 
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
+
+    def invoke_structured(self, model: type[BaseModel], prompt: str) -> BaseModel:
+        """Constrained JSON via OpenAI ``chat.completions.parse`` (strict schema)."""
+        kwargs = self._build_request_kwargs(prompt)
+        client = self._ensure_client()
+        parse_kwargs: dict[str, Any] = {
+            "model": kwargs["model"],
+            "messages": kwargs["messages"],
+            "response_format": model,
+        }
+        if "max_tokens" in kwargs:
+            parse_kwargs["max_tokens"] = kwargs["max_tokens"]
+        if "max_completion_tokens" in kwargs:
+            parse_kwargs["max_completion_tokens"] = kwargs["max_completion_tokens"]
+        if "temperature" in kwargs:
+            parse_kwargs["temperature"] = kwargs["temperature"]
+        if "reasoning_effort" in kwargs:
+            parse_kwargs["reasoning_effort"] = kwargs["reasoning_effort"]
+        completion = self._parse_with_retry(client, parse_kwargs)
+        # Same accounting as invoke(): this call carries the cached prefix, so
+        # leaving it out would hide the diagnose stage's spend and cache hits.
+        llm_response_with_usage(
+            "",
+            self._model,
+            getattr(completion, "usage", None),
+            input_key="prompt_tokens",
+            output_key="completion_tokens",
+        )
+        message = completion.choices[0].message
+        if getattr(message, "refusal", None):
+            raise RuntimeError(f"OpenAI refused structured output: {message.refusal}")
+        parsed = message.parsed
+        if not isinstance(parsed, BaseModel):
+            raise RuntimeError("OpenAI structured output returned no parsed payload")
+        return parsed
+
+    def _parse_with_retry(self, client: OpenAI, parse_kwargs: dict[str, Any]) -> Any:
+        """Structured parse with the same backoff as :meth:`invoke`."""
+        backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
+        last_err: Exception | None = None
+        for attempt in range(_RETRY_MAX_ATTEMPTS):
+            try:
+                return client.chat.completions.parse(**parse_kwargs)
+            except (OpenAIAuthError, OpenAINotFoundError, OpenAIBadRequestError):
+                raise
+            except Exception as err:
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
+        raise RuntimeError("OpenAI structured invocation failed") from last_err
 
     def _ensure_client(self) -> OpenAI:
         api_key = (

@@ -111,10 +111,19 @@ def test_environment_block_renders_cloud_provider_and_region() -> None:
     assert "`nslookup`" in block
 
 
-def test_environment_block_omits_cloud_when_not_deployed() -> None:
-    """Local dev: empty cloud facts must not render empty slots the LLM could
-    fill with invented values."""
+def test_environment_block_states_cloud_absence_when_not_deployed() -> None:
+    """Local dev: absence must be stated, not left as a gap.
+
+    Omitting the fact was the earlier approach; a live agent turn still answered
+    with a confident provider and region on a laptop, so the vacuum was being
+    filled by a guess. An explicit "not detected" gives the model a true fact to
+    quote, and the instruction not to name one is attached to it.
+    """
     block = _env_block({"opensre_version": "0.1", "cloud_provider": "", "cloud_region": ""})
+    assert "no cloud provider or cloud region was detected" in block
+    assert "not running in a recognised cloud environment" in block
+    assert "rather than naming" in block
+    # No value slot is rendered, so there is nothing that reads as a detected one.
     assert "cloud provider is" not in block
     assert "cloud region is" not in block
 
@@ -196,3 +205,12 @@ def test_environment_block_instructs_verbatim_quoting_not_field_names() -> None:
     assert "verbatim" in block
     assert "Do NOT invent field names" in block
     assert "build marker" not in block, "the 'build marker' phrase was a hallucination sink"
+
+
+def test_environment_block_stays_empty_without_runtime_facts() -> None:
+    """No facts supplied means detection never ran — the block must stay empty.
+
+    ``_build_environment_block`` returns "" for an unknown session; a cloud
+    'not detected' line rendered from an empty mapping would break that.
+    """
+    assert _env_block({}) == "" or "cloud" not in _env_block({})
