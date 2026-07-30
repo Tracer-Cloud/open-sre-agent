@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 import requests
+from http import HTTPStatus
 
 from config.llm_credentials import resolve_env_credential
 from integrations.grafana.base import GrafanaClientBase
@@ -113,7 +114,7 @@ class GrafanaLogSink:
             resp = requests.post(
                 url, json={"streams": streams}, headers=headers, timeout=10, verify=verify
             )
-            if resp.status_code in (200, 204):
+            if resp.status_code in (HTTPStatus.OK, HTTPStatus.NO_CONTENT):
                 return True
             resp.raise_for_status()
             return True
