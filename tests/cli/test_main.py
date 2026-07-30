@@ -685,3 +685,21 @@ def test_main_does_not_block_when_no_events_are_pending(
 
     assert exit_code != 0
     assert calls == [{"flush": False}]
+
+
+def test_root_main_propagates_the_cli_exit_code(monkeypatch) -> None:
+    """``python main.py`` must exit with the CLI's status, not always 0.
+
+    main.py is the documented entry point, so a swallowed exit code silently
+    breaks CI steps, shell `&&` chains, and anything that checks $?.
+    """
+    # Arrange
+    import main as root_main
+
+    monkeypatch.setattr("surfaces.cli.__main__.main", lambda *_a, **_k: 2)
+
+    # Act
+    status = root_main.main()
+
+    # Assert
+    assert status == 2

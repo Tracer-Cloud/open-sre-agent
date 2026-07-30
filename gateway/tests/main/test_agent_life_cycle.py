@@ -57,7 +57,10 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
-    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
     monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
@@ -66,7 +69,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
     # Patch the agent class the gateway constructs so the turn callback is spyable.
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", agent_cls)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)
@@ -111,7 +114,11 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert agent_cls.return_value.dispatch.call_args.args == ("hello",)
     ctor = agent_cls.call_args
     assert ctor.kwargs["session"] is session
-    assert ctor.kwargs["output"] is sink
+    # Session-scoped agent holds a live sink proxy; the transport sink is bound
+    # each turn (not passed as the constructor ``output`` identity).
+    from gateway.runtime.live_sink import LiveOutputSink
+
+    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     tool_provider = ctor.kwargs["tools"]
     assert isinstance(tool_provider, DefaultToolProvider)
     assert tool_provider._precomputed_action_tools is None
@@ -128,7 +135,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert isinstance(ctor.kwargs["prompts"], DefaultPromptContextProvider)
     assert isinstance(ctor.kwargs["reasoning"], DefaultReasoningClientProvider)
     assert isinstance(ctor.kwargs["run_factory"], DefaultRunRecordFactory)
-    assert isinstance(ctor.kwargs["accounting"], DefaultTurnAccounting)
+    bind_kwargs = agent_cls.return_value.bind_turn.call_args.kwargs
+    assert isinstance(bind_kwargs["accounting"], DefaultTurnAccounting)
     assert isinstance(ctor.kwargs["error_reporter"], DefaultErrorReporter)
     assert ctor.kwargs["gather_enabled"] is True
 
@@ -158,7 +166,10 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             assert chat_id == "chat-1"
             return self._session
 
-    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
     monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
@@ -214,7 +225,10 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> None:
     """The unified daemon keeps its other components when Telegram is unconfigured."""
     logger = logging.getLogger("gateway.lifecycle.test")
-    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
     monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
     monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
     monkeypatch.setattr("gateway.runtime.manager.clear_component_status", lambda: None)

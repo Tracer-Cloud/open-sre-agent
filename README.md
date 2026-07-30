@@ -126,6 +126,8 @@ pipx install opensre
 
 ## Quick Start
 
+Contributors: start reading at [`main.py`](main.py) (narrative composition root).
+
 Configure once, then pick how you want to run investigations:
 
 ```bash

@@ -609,19 +609,11 @@ def _render_integration_result(
             _console.print(detail_text)
 
 
-def _render_next_steps() -> None:
+def _render_next_steps(*, aha: bool = False) -> None:
     """Print the 'What's next' section after successful onboarding.
 
-    Rendered output (colour roles):
-      ─────────────────────────────────────────  [DIM rule]
-      What's next                                [SECONDARY label]
-      ─────────────────────────────────────────  [DIM rule]
-        opensre                                  [BRAND runnable command]
-          Start the interactive agent
-        opensre investigate -i alert.json        [BRAND runnable command]
-          Run root-cause analysis on an alert
-        opensre doctor                           [BRAND runnable command]
-          Verify your environment setup
+    When ``aha`` is true, keep the path to one successful agent turn — not a
+    tour of every subcommand.
     """
     _console.print(Rule(style=DIM))
 
@@ -632,17 +624,29 @@ def _render_next_steps() -> None:
     _console.print(Rule(style=DIM))
     _console.print()
 
-    _NEXT: tuple[tuple[str, str], ...] = (
-        ("opensre", "Start the interactive agent"),
-        (
-            "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-            "Run root-cause analysis on a sample alert",
-        ),
-        ("opensre doctor", "Verify your full environment setup"),
-        ("opensre onboard", "Re-run this setup at any time"),
-    )
+    if aha:
+        next_steps: tuple[tuple[str, str], ...] = (
+            (
+                "opensre",
+                'Start the agent and ask: "what OpenSRE version am I running?"',
+            ),
+            (
+                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+                "Or run one sample investigation for your first RCA success",
+            ),
+        )
+    else:
+        next_steps = (
+            ("opensre", "Start the interactive agent"),
+            (
+                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+                "Run root-cause analysis on a sample alert",
+            ),
+            ("opensre doctor", "Verify your full environment setup"),
+            ("opensre onboard", "Re-run this setup at any time"),
+        )
 
-    for cmd, description in _NEXT:
+    for cmd, description in next_steps:
         cmd_line = Text()
         cmd_line.append(f"  {cmd}", style=f"bold {BRAND}")
         _console.print(cmd_line)

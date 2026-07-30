@@ -150,6 +150,37 @@ def _cloud_line(runtime: Mapping[str, Any]) -> str | None:
     )
 
 
+def _workspace_line(runtime: Mapping[str, Any]) -> str | None:
+    """Which repo is “ours” — or an explicit unknown.
+
+    Without this, “our GitHub stars” triggers follow-ups instead of resolving to
+    the OpenSRE checkout / configured workspace repo.
+    """
+    if "workspace_repo" not in runtime:
+        return None
+    repo = _clean_str(runtime, "workspace_repo")
+    if repo:
+        return (
+            f"this OpenSRE workspace repo is {repo} — treat “our” / “this repo” "
+            f"as {repo} unless the user names a different repository"
+        )
+    return (
+        "no workspace git/GitHub repo was detected for this process — ask which "
+        "repository the user means rather than assuming Tracer-Cloud/opensre or "
+        "any other default"
+    )
+
+
+def _capability_warnings_line(runtime: Mapping[str, Any]) -> str | None:
+    warnings = runtime.get("capability_warnings")
+    if not isinstance(warnings, list) or not warnings:
+        return None
+    parts = [str(item).strip() for item in warnings if str(item).strip()]
+    if not parts:
+        return None
+    return "capability warnings at boot: " + "; ".join(parts)
+
+
 # Order is part of the prompt contract — keep stable for snapshot/tests.
 _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _version_line,
@@ -159,7 +190,9 @@ _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _str_fact("python_version", "Python interpreter version is {}"),
     _pid_line,
     _cloud_line,
+    _workspace_line,
     _tools_line,
+    _capability_warnings_line,
     _str_fact("kubeconfig", "kubeconfig path is {}"),
     _str_fact("scratchpad_dir", "scratchpad directory is {}"),
 )

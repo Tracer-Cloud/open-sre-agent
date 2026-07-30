@@ -636,6 +636,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         "How do you want to get started?",
         [
             Choice(
+                value="aha",
+                label="First success",
+                hint="Provider → one integration → one agent action",
+            ),
+            Choice(
                 value="quickstart", label="Quickstart", hint="Local setup with the usual defaults"
             ),
             Choice(
@@ -644,7 +649,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 hint="Show probes and choose the target explicitly",
             ),
         ],
-        default=default_wizard_mode,
+        default=default_wizard_mode
+        if default_wizard_mode in {"aha", "quickstart", "advanced"}
+        else "aha",
     )
 
     store_path = get_store_path()
@@ -894,18 +901,27 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     if credential_state == UNSAVED:
         # sync_provider_env pops every secret provider's api-key env; re-apply the
         # session-only value the user chose to continue with so the in-process shell
-        # handoff can read it. A secret is never written to .env — the keyring stays the
-        # only persistent store. A ``host`` value normally goes straight to .env
-        # and never reaches this sink; it only lands here when its .env write failed and
-        # the user picked "continue without saving", where re-applying it to os.environ
-        # is exactly what is wanted.
+        # handoff can read it. Secrets persist via the secret store (file-first by
+        # default; OS keyring only when OPENSRE_USE_KEYRING=1). A ``host`` value
+        # normally goes straight to .env and never reaches this sink; it only lands
+        # here when its .env write failed and the user picked "continue without
+        # saving", where re-applying it to os.environ is exactly what is wanted.
         os.environ.update(session_env_sink)
 
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
+        if wizard_mode == "aha":
+            # One integration max — path to a first successful agent action, not
+            # open-ended config tourism.
+            _console.print(
+                f"[{SECONDARY}]Pick at most one integration for your first success "
+                f"(or skip and talk to the agent immediately).[/]"
+            )
         configured_integrations, integration_env_path = (
             _integration_configurators_module._configure_selected_integrations()
         )
+        if wizard_mode == "aha" and len(configured_integrations) > 1:
+            configured_integrations = configured_integrations[:1]
     except KeyboardInterrupt:
         cancelled = Text()
         cancelled.append(f"\n  {GLYPH_WARNING}  ", style=f"bold {WARNING}")
@@ -927,5 +943,5 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider, persisted_auth_method, credential_state=credential_state
         ),
     )
-    _render_next_steps()
+    _render_next_steps(aha=wizard_mode == "aha")
     return 0

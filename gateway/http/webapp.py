@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
+from config.local_env import bootstrap_opensre_env_once
 from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_opensre_version
 from core.domain.alerts.inbox import (
@@ -33,27 +34,22 @@ from core.domain.alerts.inbox import (
 )
 
 ensure_project_platform_package()
+bootstrap_opensre_env_once(override=False)
 
 from gateway.http.investigations import router as investigations_router  # noqa: E402
 from gateway.runtime.readiness import is_gateway_ready  # noqa: E402
-from integrations.harness_adapters import (  # noqa: E402
-    register_harness_adapters as _register_integration_adapters,
-)
 from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
-from tools.harness_adapters import (  # noqa: E402
-    register_harness_adapters as _register_tool_adapters,
-)
 from tools.investigation.capability import (  # noqa: E402
     resolve_investigation_context,
     run_investigation_payload,
 )
+from tools.runtime_bootstrap import install_runtime  # noqa: E402
 
 # Mirror shell/gateway boot: /investigate runs the full pipeline, which reads the
 # vendor registries (alert-source routing, incident anchors, taxonomy, alert
 # detail fields). Without this they stay empty and degrade silently. Registering
 # here rather than via surfaces.boundary keeps gateway off a surfaces import.
-_register_integration_adapters()
-_register_tool_adapters()
+install_runtime(harness_adapters=True, scheduler_runners=False)
 
 init_sentry(entrypoint="webapp")
 

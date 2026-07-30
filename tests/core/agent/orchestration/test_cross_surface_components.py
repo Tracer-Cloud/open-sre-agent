@@ -31,19 +31,23 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
         ),
         assistant_response_text="gateway-ok",
     )
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", agent_cls)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
 
-    # The message is dispatched per-turn; the ports are wired once at construction.
+    # The message is dispatched per-turn; session-stable ports are wired once,
+    # with a live sink proxy rebound to the transport sink each turn.
+    from gateway.runtime.live_sink import LiveOutputSink
+
     agent_cls.return_value.dispatch.assert_called_once()
     assert agent_cls.return_value.dispatch.call_args.args == ("hello gateway",)
     ctor = agent_cls.call_args
     assert ctor.kwargs["session"] is session
-    assert ctor.kwargs["output"] is sink
+    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert ctor.kwargs["output"].bound is sink
     assert ctor.kwargs["gather_enabled"] is True
     assert isinstance(ctor.kwargs["tools"], DefaultToolProvider)
     assert ctor.kwargs["tools"]._precomputed_action_tools is None
@@ -60,7 +64,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         assistant_response_text="streamed answer",
         llm_run=object(),
     )
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", agent_cls)
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()

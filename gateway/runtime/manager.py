@@ -93,8 +93,7 @@ class GatewayManager:
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start all components, and own the lifecycle."""
-        from integrations.harness_adapters import register_harness_adapters as register_integrations
-        from tools.harness_adapters import register_harness_adapters as register_tools
+        from tools.runtime_bootstrap import install_runtime
 
         logger = self.logger = configure_gateway_logging()
         set_gateway_ready(False)
@@ -104,12 +103,17 @@ class GatewayManager:
         harness.resolve_env_variables()
         # Mirror shell boot: register harness adapters here (gateway cannot import
         # surfaces.boundary without a surfaces↔gateway peer import).
-        register_integrations()
-        register_tools()
+        install_runtime(harness_adapters=True, scheduler_runners=False)
         # Env-gated (OPENSRE_NO_TELEMETRY / DO_NOT_TRACK / missing DSN) — free when off.
         from platform.observability.errors.sentry import init_sentry
 
         init_sentry(entrypoint="gateway")
+        # Surface capability gaps at boot (curl/shell/network) so operators see
+        # them before the first mid-turn tool failure.
+        from config.runtime_metadata import build_runtime_metadata
+
+        for warning in build_runtime_metadata().get("capability_warnings") or []:
+            logger.warning("[gateway] capability: %s", warning)
         # Load the LLM client graph as one snapshot at boot (avoids a stale
         # mixed-version process after a code change).
         preload_llm_clients()
@@ -252,12 +256,11 @@ class GatewayManager:
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
-        from integrations.sentry.scheduler_bootstrap import install as install_sentry_runner
         from platform.scheduler.runner import start_background_scheduler
-        from tools.investigation.scheduler_bootstrap import install as install_scheduler_runner
+        from tools.runtime_bootstrap import install_runtime
 
-        install_scheduler_runner()
-        install_sentry_runner()
+        # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
+        install_runtime(harness_adapters=False, scheduler_runners=True)
         from gateway.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 
         gate_registered_scheduler_runners(self.turn_gate)

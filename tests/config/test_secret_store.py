@@ -16,7 +16,7 @@ import keyring
 import keyring.errors
 import pytest
 
-from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
+from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV, OPENSRE_USE_KEYRING_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import resolve_for_request, save_api_key
 from config.secrets import local_file, os_keyring
@@ -61,8 +61,13 @@ class _LockedKeyring(MemoryKeyring):
 
 @pytest.fixture
 def keyring_enabled(monkeypatch) -> None:
-    """Undo the suite-wide disable switch so tier policy is actually exercised."""
+    """Undo the suite-wide disable switch so tier policy is actually exercised.
+
+    Also opts into keyring *writes* (``OPENSRE_USE_KEYRING``) — the product
+    default is file-first; these tests pin the opt-in keychain path.
+    """
     monkeypatch.delenv(OPENSRE_DISABLE_KEYRING_ENV, raising=False)
+    monkeypatch.setenv(OPENSRE_USE_KEYRING_ENV, "1")
     monkeypatch.delenv(_ENV_VAR, raising=False)
     os_keyring.reset_keyring_state()
 
@@ -86,6 +91,21 @@ def _fallback_contents() -> dict[str, str]:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))["secrets"]
+
+
+def test_save_defaults_to_fallback_file_without_keyring_opt_in(monkeypatch, use_backend) -> None:
+    """Vincent M6: env/file-first — keyring writes require OPENSRE_USE_KEYRING=1."""
+    use_backend(MemoryKeyring())
+    monkeypatch.delenv(OPENSRE_USE_KEYRING_ENV, raising=False)
+
+    result = save_secret(_ENV_VAR, "sk-file-first")
+
+    assert result.tier == "fallback"
+    assert "OPENSRE_USE_KEYRING=1" in result.detail
+    assert _fallback_contents() == {_ENV_VAR: "sk-file-first"}
+    from config.constants.secrets import KEYRING_SERVICE
+
+    assert keyring.get_password(KEYRING_SERVICE, _ENV_VAR) in (None, "")
 
 
 def test_save_falls_back_to_local_file_when_no_backend_exists(use_backend) -> None:

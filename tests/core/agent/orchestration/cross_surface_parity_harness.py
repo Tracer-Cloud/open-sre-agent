@@ -354,7 +354,7 @@ def snapshot_gateway_handler(
             captured.append(result)
             return result
 
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
+    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
     handler = GatewayTurnHandler(
         console=console(),
@@ -429,7 +429,7 @@ def run_gateway_turn_with_sink(
             captured.append(result)
             return result
 
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
+    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", _SpyAgent)
     before = probe_run_count()
     handler = GatewayTurnHandler(
         console=console(),

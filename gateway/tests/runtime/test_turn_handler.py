@@ -39,7 +39,7 @@ def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMoc
     """
     agent_cls = MagicMock()
     agent_cls.return_value.dispatch.return_value = result
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", agent_cls)
     return agent_cls
 
 
@@ -128,14 +128,15 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
 
 
 def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
-    """A sink carrying tool hooks (Slack's approval gate) wires them into the agent."""
+    """A sink carrying tool hooks (Slack's approval gate) rebinds them each turn."""
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
     hooks = object()
     sink.tool_hooks = hooks
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
-    assert agent_cls.call_args.kwargs["tool_hooks"] is hooks
+    agent = agent_cls.return_value
+    assert agent.bind_turn.call_args.kwargs["tool_hooks"] is hooks
 
 
 def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
@@ -150,7 +151,8 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     handler(
         "hi", SessionCore(storage=InMemorySessionStorage()), _BareSink(), logging.getLogger("test")
     )
-    assert agent_cls.call_args.kwargs["tool_hooks"] is None
+    agent = agent_cls.return_value
+    assert agent.bind_turn.call_args.kwargs["tool_hooks"] is None
 
 
 def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:

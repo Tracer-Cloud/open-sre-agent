@@ -114,6 +114,25 @@ class HeadlessAgent:
         self._is_tty = is_tty
         self._tool_hooks = tool_hooks
 
+    def bind_turn(
+        self,
+        *,
+        output: OutputSink | None = None,
+        accounting: TurnAccounting | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
+    ) -> None:
+        """Swap turn-scoped ports so one agent can serve many turns.
+
+        Session-stable ports (tools, prompts, reasoning, store) stay put;
+        gateway sinks and per-message accounting change every inbound message.
+        """
+        if output is not None:
+            self._output = output
+        if accounting is not None:
+            self._accounting = accounting
+        if tool_hooks is not None:
+            self._tool_hooks = tool_hooks
+
     def _accounting_for(self, message: str) -> TurnAccounting:
         if self._accounting is not None:
             return self._accounting

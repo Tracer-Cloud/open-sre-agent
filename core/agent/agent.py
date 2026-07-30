@@ -29,6 +29,7 @@ from core.provider import ProviderHooks, ProviderRequest
 from core.types import RuntimeTool
 
 if TYPE_CHECKING:
+    from core.agent.goals import Goal
     from core.agent_harness.turns.turn_snapshot import AgentRuntimeRequest
 
 
@@ -54,6 +55,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         tool_hooks: ToolExecutionHooks | None = None,
         tool_resources: dict[str, Any] | None = None,
         provider_hooks: ProviderHooks | None = None,
+        goal: Goal | None = None,
     ) -> None:
         self._llm = llm
         self._system = system
@@ -65,6 +67,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._tool_hooks = tool_hooks or ToolExecutionHooks()
         self._tool_resources = dict(tool_resources or {})
         self._hooks = ProviderHookDelegate(provider_hooks or ProviderHooks())
+        self._goal = goal
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
         self._react_iterations_used = 0
@@ -141,15 +144,30 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     def _should_accept_conclusion(
         self,
         *,
-        evidence_count: int,  # noqa: ARG002
-        iteration: int,  # noqa: ARG002
+        evidence_count: int,
+        iteration: int,
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         """Hook: decide what to do when the LLM stops requesting tools.
 
         Return ``(True, None)`` to accept the conclusion and end the loop.
         Return ``(False, nudge_text)`` to inject a user message and continue.
+        When a :class:`~core.agent.goals.Goal` is set, defer to
+        :func:`core.agent.goals.should_accept_with_goal` (budget ceiling
+        still forces accept on the last iteration).
         """
-        return True, None
+        if self._goal is None:
+            return True, None
+        from core.agent.goals import should_accept_with_goal
+
+        max_iterations = self._max_iterations if self._max_iterations is not None else iteration + 1
+        return should_accept_with_goal(
+            self._goal,
+            final_text=final_text,
+            evidence_count=evidence_count,
+            iteration=iteration,
+            max_iterations=max_iterations,
+        )
 
     # Thin forwarders to ``self._hooks`` (a ProviderHookDelegate). Kept as
     # methods rather than an exposed attribute so LoopHost's contract is
