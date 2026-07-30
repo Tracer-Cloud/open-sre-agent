@@ -1550,6 +1550,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
         from tools.interactive_shell.shared import (
             ExecutionPolicyResult,
+            ExecutionVerdict,
         )
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -1560,7 +1561,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
             raise controller_runtime.DispatchCancelled("cancelled while awaiting confirmation")
 
         policy = ExecutionPolicyResult(
-            verdict="ask",
+            verdict=ExecutionVerdict.ASK,
             tool_type="opensre_cli",
             reason="this opensre subcommand may change local config or infrastructure",
         )
@@ -1592,6 +1593,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
         from tools.interactive_shell.shared import (
             ExecutionPolicyResult,
+            ExecutionVerdict,
         )
 
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
@@ -1599,7 +1601,7 @@ class TestExecutionAllowedRespectsDispatchCancelled:
         console = Console(file=io.StringIO(), force_terminal=False, highlight=False)
 
         policy = ExecutionPolicyResult(
-            verdict="ask",
+            verdict=ExecutionVerdict.ASK,
             tool_type="opensre_cli",
             reason="this opensre subcommand may change local config or infrastructure",
         )

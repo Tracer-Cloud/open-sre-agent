@@ -37,9 +37,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
 
-ExecutionVerdict = Literal["allow", "ask", "deny"]
+
+class ExecutionVerdict(StrEnum):
+    """Policy decision for whether a tool may execute."""
+
+    ALLOW = "allow"
+    ASK = "ask"
+    DENY = "deny"
 
 
 class ToolExecutionMode(StrEnum):
@@ -57,6 +62,10 @@ class ExecutionPolicyResult:
     reason: str | None
     hint: str | None = None
     shell_classification: str | None = None
+
+    def __post_init__(self) -> None:
+        """Normalize string verdicts supplied by existing callers."""
+        object.__setattr__(self, "verdict", ExecutionVerdict(self.verdict))
 
 
 @dataclass(frozen=True)
@@ -106,7 +115,7 @@ def resolve_confirmation(
     (``interactive_shell.ui.execution_confirm``) renders the decision and emits
     analytics.
     """
-    if result.verdict == "deny":
+    if result.verdict is ExecutionVerdict.DENY:
         return ConfirmationPlan(
             outcome=ConfirmationOutcome.DENY,
             result=result,
@@ -114,7 +123,7 @@ def resolve_confirmation(
             analytics_reason=result.reason,
         )
 
-    if result.verdict == "allow":
+    if result.verdict is ExecutionVerdict.ALLOW:
         return ConfirmationPlan(
             outcome=ConfirmationOutcome.ALLOW,
             result=result,
@@ -153,7 +162,11 @@ def allow_tool(tool_type: str) -> ExecutionPolicyResult:
     so every caller resolves to ``allow``. ``tool_type`` is carried through for
     analytics and confirmation UX.
     """
-    return ExecutionPolicyResult(verdict="allow", tool_type=tool_type, reason=None)
+    return ExecutionPolicyResult(
+        verdict=ExecutionVerdict.ALLOW,
+        tool_type=tool_type,
+        reason=None,
+    )
 
 
 def plan_foreground_tool(

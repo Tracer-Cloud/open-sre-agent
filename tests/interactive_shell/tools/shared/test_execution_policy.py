@@ -18,6 +18,7 @@ from __future__ import annotations
 from tools.interactive_shell.shared import (
     ConfirmationOutcome,
     ExecutionPolicyResult,
+    ExecutionVerdict,
     ToolExecutionMode,
     ToolExecutionPlan,
     allow_tool,
@@ -29,10 +30,29 @@ from tools.interactive_shell.shared import (
 def _ask_result() -> ExecutionPolicyResult:
     """An explicit ``ask`` verdict (the default policy no longer emits these)."""
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict=ExecutionVerdict.ASK,
         tool_type="slash",
         reason="this command may change configuration or run heavy work",
     )
+
+
+def test_execution_verdict_members_round_trip_from_strings() -> None:
+    assert ExecutionVerdict.ALLOW.value == "allow"
+    assert ExecutionVerdict.ASK.value == "ask"
+    assert ExecutionVerdict.DENY.value == "deny"
+    assert ExecutionVerdict("allow") is ExecutionVerdict.ALLOW
+    assert ExecutionVerdict("ask") is ExecutionVerdict.ASK
+    assert ExecutionVerdict("deny") is ExecutionVerdict.DENY
+
+
+def test_execution_policy_result_normalizes_string_verdict() -> None:
+    result = ExecutionPolicyResult(
+        verdict="allow",
+        tool_type="slash",
+        reason=None,
+    )
+
+    assert result.verdict is ExecutionVerdict.ALLOW
 
 
 # --- Default-allow policy decisions -----------------------------------------
@@ -40,7 +60,7 @@ def _ask_result() -> ExecutionPolicyResult:
 
 def test_allow_tool_is_allow() -> None:
     r = allow_tool("slash")
-    assert r.verdict == "allow"
+    assert r.verdict is ExecutionVerdict.ALLOW
     assert r.tool_type == "slash"
     assert r.reason is None
 
@@ -48,7 +68,7 @@ def test_allow_tool_is_allow() -> None:
 def test_allow_tool_carries_arbitrary_tool_type() -> None:
     for tool_type in ("investigation", "sample_alert", "synthetic_test", "code_agent"):
         r = allow_tool(tool_type)
-        assert r.verdict == "allow"
+        assert r.verdict is ExecutionVerdict.ALLOW
         assert r.tool_type == tool_type
 
 
@@ -61,7 +81,7 @@ def test_plan_foreground_tool_defaults_classification_to_tool_type() -> None:
     assert plan.tool_type == "slash"
     assert plan.classification == "slash"
     assert plan.execution_mode is ToolExecutionMode.FOREGROUND
-    assert plan.policy.verdict == "allow"
+    assert plan.policy.verdict is ExecutionVerdict.ALLOW
 
 
 def test_plan_foreground_tool_accepts_explicit_classification() -> None:
@@ -69,7 +89,7 @@ def test_plan_foreground_tool_accepts_explicit_classification() -> None:
     assert plan.tool_type == "investigation"
     assert plan.classification == "investigation_launch"
     assert plan.execution_mode is ToolExecutionMode.FOREGROUND
-    assert plan.policy.verdict == "allow"
+    assert plan.policy.verdict is ExecutionVerdict.ALLOW
 
 
 # --- resolve_confirmation: pure decision (no side effects) ------------------
@@ -83,7 +103,7 @@ def test_resolve_allow_verdict_proceeds() -> None:
 
 def test_resolve_deny_verdict_blocks() -> None:
     result = ExecutionPolicyResult(
-        verdict="deny",
+        verdict=ExecutionVerdict.DENY,
         tool_type="shell",
         reason="empty command.",
         hint="Enter a command to run.",

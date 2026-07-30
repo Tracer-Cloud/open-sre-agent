@@ -15,6 +15,7 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
+    ExecutionVerdict,
     allow_tool,
 )
 
@@ -22,7 +23,7 @@ from tools.interactive_shell.shared import (
 def _ask_result() -> ExecutionPolicyResult:
     """An explicit ``ask`` verdict (the default policy no longer emits these)."""
     return ExecutionPolicyResult(
-        verdict="ask",
+        verdict=ExecutionVerdict.ASK,
         tool_type="slash",
         reason="this command may change configuration or run heavy work",
     )
@@ -73,7 +74,7 @@ def test_deny_verdict_blocks() -> None:
     # The default policy never emits a deny; construct one explicitly to cover
     # the execution_allowed deny path.
     r = ExecutionPolicyResult(
-        verdict="deny",
+        verdict=ExecutionVerdict.DENY,
         tool_type="shell",
         reason="empty command.",
         hint="Enter a command to run.",
