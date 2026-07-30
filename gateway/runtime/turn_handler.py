@@ -86,11 +86,11 @@ class GatewayTurnHandler:
             # Held for the whole turn: the pooled agent's session, sink and
             # accounting are rebound per message, so an overlapping turn for the
             # same session would retarget an agent that is still dispatching.
+            self._pool.session_agent(session=session, sink=sink, logger=logger) as agent,
         ):
             try:
                 if surface:
                     capture_gateway_turn_started(surface=surface)
-                agent = self._pool.agent_for(session=session, sink=sink, logger=logger)
                 agent.bind_turn(
                     session=session,
                     accounting=DefaultTurnAccounting(session, text),

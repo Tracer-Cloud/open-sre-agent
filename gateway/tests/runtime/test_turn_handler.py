@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -260,3 +261,36 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     assert len(completed) == 1
     assert completed[0]["surface"] == SURFACE_SLACK
     assert completed[0]["answered"] is False
+
+
+def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any) -> None:
+    """The handler must take the pool's lock, not the unsynchronised primitive.
+
+    ``session_agent`` holds the per-session lock across dispatch. Calling
+    ``agent_for`` directly returns an unguarded agent, so an overlapping turn
+    for the same session can rebind its session and sink mid-dispatch and route
+    output to the wrong conversation.
+    """
+    # Arrange: record when the lock is held relative to the dispatch.
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
+    events: list[str] = []
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    real_session_agent = handler._pool.session_agent
+
+    @contextmanager
+    def _tracking_session_agent(**kwargs: Any) -> Any:
+        events.append("lock-acquired")
+        with real_session_agent(**kwargs) as agent:
+            yield agent
+        events.append("lock-released")
+
+    monkeypatch.setattr(handler._pool, "session_agent", _tracking_session_agent)
+
+    # Act
+    handler(
+        "hi", SessionCore(storage=InMemorySessionStorage()), MagicMock(), logging.getLogger("test")
+    )
+
+    # Assert: the turn ran inside the lock. Calling agent_for directly would
+    # leave this empty, since session_agent would never be entered.
+    assert events == ["lock-acquired", "lock-released"]
