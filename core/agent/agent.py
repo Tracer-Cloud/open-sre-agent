@@ -62,6 +62,8 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._tools: list[RuntimeToolT] | None = list(tools) if tools is not None else None
         self._resolved = resolved_integrations
         self._max_iterations = max_iterations
+        # Set per run from the run input; falls back to the constructed value.
+        self._effective_max_iterations = max_iterations
         self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tool_hooks = tool_hooks or ToolExecutionHooks()
@@ -85,6 +87,10 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._react_executed = []
         self._react_hit_iteration_cap = False
         run_input = self._build_run_input(initial_messages, runtime_request)
+        # A runtime_request carries its own budget, which is what ReactLoop
+        # iterates. Goal acceptance must use that, not the construction-time
+        # value, or the ceiling never lands on the real last lap.
+        self._effective_max_iterations = run_input.max_iterations
         return run_react_loop(run_input, self)
 
     def _note_react_run_progress(
@@ -165,7 +171,7 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
             final_text=final_text,
             evidence_count=evidence_count,
             iteration=iteration,
-            max_iterations=self._max_iterations,
+            max_iterations=self._effective_max_iterations,
         )
 
     # Thin forwarders to ``self._hooks`` (a ProviderHookDelegate). Kept as

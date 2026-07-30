@@ -176,3 +176,39 @@ def test_agent_without_goal_accepts_first_conclusion() -> None:
     )
     result = agent.run([{"role": "user", "content": "hi"}])
     assert result.final_text == "done"
+
+
+def test_goal_ceiling_uses_the_runtime_requests_budget() -> None:
+    """The ceiling must match the budget the loop is actually running.
+
+    ``ReactLoop`` iterates ``run_input.max_iterations``. A ``runtime_request``
+    carries its own budget, so reading the construction-time value means the
+    goal never yields on the real last lap — the loop exhausts with the goal
+    still refusing to accept, and the ceiling escape hatch never fires.
+    """
+    # Arrange: constructed for 10 laps, this run is budgeted 3.
+    from unittest.mock import MagicMock
+
+    from core.agent.agent import Agent
+    from core.agent.goals import Goal
+
+    agent = Agent(
+        llm=MagicMock(),
+        system="s",
+        tools=[],
+        max_iterations=10,
+        goal=Goal(
+            description="never satisfied",
+            success_criteria="impossible",
+            verify=lambda _observation: False,
+        ),
+    )
+    agent._effective_max_iterations = 3
+
+    # Act: the last lap of the *run* budget is iteration 2 (0-based).
+    accept, _nudge = agent._should_accept_conclusion(
+        evidence_count=0, iteration=2, final_text="done"
+    )
+
+    # Assert
+    assert accept is True
