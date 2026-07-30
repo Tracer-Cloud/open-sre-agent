@@ -43,20 +43,20 @@ SETUP = REPO_ROOT / "SETUP.md"
 HOMEBREW_SYNC = REPO_ROOT / ".github" / "scripts" / "sync-homebrew-tap-formula.sh"
 
 
+#: Release-asset naming for the hosts install.sh publishes builds for.
+_HOST_PLATFORMS = {"darwin": "darwin", "linux": "linux"}
+_HOST_ARCHES = {"x86_64": "x64", "amd64": "x64", "arm64": "arm64", "aarch64": "arm64"}
+
+
 def _host_platform_arch() -> tuple[str, str]:
+    """Release-asset ``(platform, arch)`` for this host, or skip if unsupported."""
     system = py_platform.system().lower()
-    if system == "darwin":
-        plat = "darwin"
-    elif system == "linux":
-        plat = "linux"
-    else:
+    plat = _HOST_PLATFORMS.get(system)
+    if plat is None:
         pytest.skip(f"unsupported host for install.sh e2e: {system}")
     machine = py_platform.machine().lower()
-    if machine in {"x86_64", "amd64"}:
-        arch = "x64"
-    elif machine in {"arm64", "aarch64"}:
-        arch = "arm64"
-    else:
+    arch = _HOST_ARCHES.get(machine)
+    if arch is None:
         pytest.skip(f"unsupported arch for install.sh e2e: {machine}")
     return plat, arch
 

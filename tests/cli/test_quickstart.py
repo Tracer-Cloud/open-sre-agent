@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import errno
 import json
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -112,7 +113,11 @@ def test_quickstart_install_urls_match_update_lifecycle() -> None:
     assert _INSTALL_SCRIPT == "https://install.opensre.com"
     assert _INSTALL_SCRIPT_PS1 == "https://install.opensre.com"
     install_sh = (REPO_ROOT / "install.sh").read_text(encoding="utf-8")
-    assert "https://install.opensre.com" in install_sh
+    # Anchored: a bare substring test would also accept a lookalike host such
+    # as ``https://install.opensre.com.evil.test``.
+    assert re.search(r"https://install\.opensre\.com(?![\w.-])", install_sh), (
+        "install.sh must reference the documented installer URL"
+    )
     # install.ps1 is what ``irm https://install.opensre.com | iex`` downloads;
     # the script body talks to GitHub releases, but must still hand off to onboard.
     install_ps1 = (REPO_ROOT / "install.ps1").read_text(encoding="utf-8")
