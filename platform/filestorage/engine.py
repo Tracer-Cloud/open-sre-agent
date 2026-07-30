@@ -40,10 +40,16 @@ class SyncReport:
     #: resolves these by pulling first; a push-only run cannot.
     kept_remote: list[str] = field(default_factory=list)
     skipped: int = 0
+    uploaded_bytes: int = 0
+    downloaded_bytes: int = 0
 
     @property
     def changed(self) -> int:
         return len(self.uploaded) + len(self.downloaded)
+
+    @property
+    def total_bytes(self) -> int:
+        return self.uploaded_bytes + self.downloaded_bytes
 
 
 def content_tag(data: bytes) -> str:
@@ -144,6 +150,7 @@ def push(
                 continue
         store.put_object(key, data)
         result.uploaded.append(key)
+        result.uploaded_bytes += len(data)
     return result
 
 
@@ -166,7 +173,9 @@ def pull(
         if not _should_download(obj, target):
             result.skipped += 1
             continue
-        _write_atomically(target, store.get_object(obj.key))
+        data = store.get_object(obj.key)
+        result.downloaded_bytes += len(data)
+        _write_atomically(target, data)
         result.downloaded.append(obj.key)
     return result
 

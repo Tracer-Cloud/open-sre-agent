@@ -24,6 +24,7 @@ from integrations.registry import (
     INTEGRATION_SPECS_BY_SERVICE,
     SUPPORTED_VERIFY_SERVICES,
 )
+from integrations.probes import ProbeStatus
 from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 from integrations.store import get_integration
 from integrations.verification import VerifierFn, get_verifier, result
@@ -46,10 +47,10 @@ register_all_verifiers()
 # than spawning one thread per integration (SUPPORTED_VERIFY_SERVICES is 50+).
 _MAX_PARALLEL_VERIFIERS = 16
 
-_STATUS_STYLE: dict[str, tuple[str, str]] = {
-    "passed": (GLYPH_SUCCESS, f"bold {HIGHLIGHT}"),
-    "failed": (GLYPH_ERROR, f"bold {ERROR}"),
-    "missing": (GLYPH_WARNING, f"bold {WARNING}"),
+_STATUS_STYLE: dict[ProbeStatus, tuple[str, str]] = {
+    ProbeStatus.PASSED: (GLYPH_SUCCESS, f"bold {HIGHLIGHT}"),
+    ProbeStatus.FAILED: (GLYPH_ERROR, f"bold {ERROR}"),
+    ProbeStatus.MISSING: (GLYPH_WARNING, f"bold {WARNING}"),
 }
 
 
@@ -180,7 +181,11 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
 
     for row in results:
         status = row.get("status", "?")
-        glyph, style = _STATUS_STYLE.get(status, (GLYPH_BULLET, TEXT))
+        try:
+            probe_status = ProbeStatus(status)
+            glyph, style = _STATUS_STYLE.get(probe_status, (GLYPH_BULLET, TEXT))
+        except ValueError:
+            glyph, style = (GLYPH_BULLET, TEXT)
         table.add_row(
             escape(row.get("service", "?")),
             escape(row.get("source", "-")),

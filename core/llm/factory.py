@@ -26,7 +26,7 @@ in :mod:`core.llm.internal.client_cache`.
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal, overload
 
 from core.llm import client_builders
@@ -36,7 +36,7 @@ from core.llm.transport_mode import use_litellm_for_provider
 from core.llm.types import AgentLLMClient, LLMRoute, ModelType
 
 
-class LLMRole(Enum):
+class LLMRole(StrEnum):
     """The model tier a caller needs, independent of provider/transport."""
 
     AGENT = "agent"  # tool-calling ReAct (action, gather, investigation)
@@ -47,9 +47,9 @@ class LLMRole(Enum):
 
 # The non-agent roles map onto the model-tier attribute suffix used by settings.
 _MODEL_TYPE_BY_ROLE: dict[LLMRole, ModelType] = {
-    LLMRole.REASONING: "reasoning",
-    LLMRole.CLASSIFICATION: "classification",
-    LLMRole.TOOLCALL: "toolcall",
+    LLMRole.REASONING: ModelType.REASONING,
+    LLMRole.CLASSIFICATION: ModelType.CLASSIFICATION,
+    LLMRole.TOOLCALL: ModelType.TOOLCALL,
 }
 
 
