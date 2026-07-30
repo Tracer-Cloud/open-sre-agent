@@ -7,6 +7,7 @@ from typing import Any
 from platform.sandbox.capabilities import (
     Capability,
     _file_read_available,
+    _network_available,
     boot_capability_warnings,
     probe_capabilities,
     unavailable_capability_warnings,
@@ -88,8 +89,6 @@ def test_network_probe_does_not_make_a_real_request(monkeypatch: Any) -> None:
 
 def test_network_probe_uses_default_sandbox_policy(monkeypatch: Any) -> None:
     """Do not pass allow_network=True — that bypasses the normal sandbox block."""
-    import platform.sandbox.capabilities as capabilities
-
     calls: list[dict[str, Any]] = []
 
     def _fake_run(code: str, **kwargs: Any) -> Any:
@@ -101,7 +100,7 @@ def test_network_probe_uses_default_sandbox_policy(monkeypatch: Any) -> None:
         )()
 
     monkeypatch.setattr("platform.sandbox.runner.run_python_sandbox", _fake_run)
-    assert capabilities._network_available() is False
+    assert _network_available() is False
     assert calls and calls[0].get("allow_network", False) is False
     assert "socket.socket" in calls[0]["code"]
 
