@@ -32,15 +32,35 @@ def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
-    """Patch the gateway's ``HeadlessAgent`` so construction is inert and dispatch returns ``result``.
+    """Patch the gateway agent factory so construction is inert and dispatch returns ``result``.
 
-    Returns the patched class mock; ``mock.call_args.kwargs`` exposes the constructor
-    ports (e.g. ``tools``) the gateway wired for the turn.
+    Returns the factory mock. The built agent is ``factory.return_value``; when the
+    test needs the real tool provider, read ``factory.return_value.tools_for_test``.
     """
-    agent_cls = MagicMock()
-    agent_cls.return_value.dispatch.return_value = result
-    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", agent_cls)
-    return agent_cls
+    from core.agent_harness.tools.tool_provider import DefaultToolProvider
+
+    agent = MagicMock()
+    agent.dispatch.return_value = result
+    factory = MagicMock()
+
+    def _build(**kwargs: Any) -> MagicMock:
+        agent.tools_for_test = DefaultToolProvider(
+            kwargs["session"],
+            kwargs["console"],
+            tool_action_logger=kwargs.get("logger"),
+            observer_factory=kwargs.get("observer_factory"),
+            subprocess_presenter_factory=kwargs.get("subprocess_presenter_factory"),
+            slash_ports_factory=kwargs.get("slash_ports_factory"),
+        )
+        return agent
+
+    factory.side_effect = _build
+    factory.return_value = agent
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        factory,
+    )
+    return factory
 
 
 def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) -> None:
@@ -86,7 +106,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_handler"))
 
-    tool_provider = agent_cls.call_args.kwargs["tools"]
+    tool_provider = agent_cls.return_value.tools_for_test
     tools = tool_provider.action_tools(confirm_fn=None, is_tty=False)
     assert len(tools) == 1
     assert recorded == [chat_integrations]

@@ -72,7 +72,14 @@ def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> 
             self.bind_turn = MagicMock()
             self.dispatch = MagicMock(return_value=_empty_result())
 
-    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", _FakeAgent)
+    def _fake_build(**kwargs: Any) -> Any:
+        agent = _FakeAgent(**kwargs)
+        return agent
+
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        _fake_build,
+    )
     pool = SessionAgentPool(console=Console(force_terminal=False))
     session = SessionCore(storage=InMemorySessionStorage())
     logger = logging.getLogger("test.pool")
@@ -88,7 +95,10 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
         def __init__(self, **_kwargs: Any) -> None:
             self.bind_turn = MagicMock()
 
-    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", _FakeAgent)
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        lambda **kwargs: _FakeAgent(**kwargs),
+    )
     pool = SessionAgentPool(console=Console(force_terminal=False))
     a = SessionCore(storage=InMemorySessionStorage())
     b = SessionCore(storage=InMemorySessionStorage())
@@ -100,9 +110,13 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
 
 
 def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.MonkeyPatch) -> None:
-    agent_cls = MagicMock()
-    agent_cls.return_value.dispatch.return_value = _empty_result()
-    monkeypatch.setattr("gateway.runtime.session_agents.HeadlessAgent", agent_cls)
+    agent = MagicMock()
+    agent.dispatch.return_value = _empty_result()
+    factory = MagicMock(return_value=agent)
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        factory,
+    )
 
     session = SessionCore(storage=InMemorySessionStorage())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
@@ -110,6 +124,6 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     handler("one", session, MagicMock(), logger)
     handler("two", session, MagicMock(), logger)
 
-    assert agent_cls.call_count == 1
-    assert agent_cls.return_value.dispatch.call_count == 2
-    assert agent_cls.return_value.bind_turn.call_count == 2
+    assert factory.call_count == 1
+    assert agent.dispatch.call_count == 2
+    assert agent.bind_turn.call_count == 2

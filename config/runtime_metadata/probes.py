@@ -10,12 +10,14 @@ identity (instance metadata endpoint).
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
 import sys
 import time as _time
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
+from urllib.parse import urlsplit
 
 from config.constants.runtime_metadata import (
     OPENSRE_ALLOW_NETWORK_ENV,
@@ -161,19 +163,41 @@ def kubeconfig_path() -> str:
     return str(default) if default.is_file() else ""
 
 
+#: Hosts whose remotes shorten to a bare ``owner/repo`` identity.
+_GITHUB_HOSTS: Final[frozenset[str]] = frozenset({"github.com", "www.github.com"})
+
+#: scp-style remote: ``[user@]host:path`` (no scheme, so urlsplit cannot parse it).
+_SCP_REMOTE_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:[^@/]+@)?(?P<host>[A-Za-z0-9._-]+):(?P<path>.+)$"
+)
+
+
+def _remote_host_and_path(text: str) -> tuple[str, str]:
+    """Split a git remote into (host, path), or ``("", "")`` when unrecognised."""
+    if "://" in text:
+        parsed = urlsplit(text)
+        return (parsed.hostname or "").lower(), parsed.path
+    match = _SCP_REMOTE_RE.match(text)
+    if match is None:
+        return "", ""
+    return match.group("host").lower(), match.group("path")
+
+
 def _normalize_repo_identity(raw: str) -> str:
+    """Shorten a GitHub remote to ``owner/repo``; leave anything else as-is.
+
+    The host is compared exactly. A substring test would accept
+    ``https://evil.test/github.com/attacker/repo`` and report ``attacker/repo``
+    as this project's repository, and that fact reaches prompts and reports.
+    """
     text = raw.strip()
     if not text:
         return ""
     if text.endswith(".git"):
         text = text[:-4]
-    if "github.com" in text:
-        # ssh: git@github.com:org/repo  or https://github.com/org/repo
-        if "github.com:" in text:
-            text = text.split("github.com:", 1)[1]
-        else:
-            text = text.split("github.com/", 1)[1]
-        text = text.strip("/")
+    host, path = _remote_host_and_path(text)
+    if host in _GITHUB_HOSTS and path.strip("/"):
+        return path.strip("/")
     return text
 
 

@@ -6,6 +6,8 @@ from typing import Any
 
 from platform.sandbox.capabilities import (
     Capability,
+    _file_read_available,
+    boot_capability_warnings,
     probe_capabilities,
     unavailable_capability_warnings,
 )
@@ -55,13 +57,12 @@ def test_no_warnings_when_everything_works() -> None:
 
 def test_probe_never_raises_even_when_the_check_explodes(monkeypatch: Any) -> None:
     """A diagnostic must not be able to take down startup."""
-    # Arrange
-    import platform.sandbox.capabilities as capabilities
 
+    # Arrange
     def _boom(*_args: Any, **_kwargs: Any) -> bool:
         raise OSError("environment is hostile")
 
-    monkeypatch.setattr(capabilities, "_python_available", _boom)
+    monkeypatch.setattr("platform.sandbox.capabilities._python_available", _boom)
 
     # Act
     results = probe_capabilities()
@@ -86,11 +87,15 @@ def test_network_probe_does_not_make_a_real_request(monkeypatch: Any) -> None:
 
 
 def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> None:
-    from platform.sandbox.capabilities import boot_capability_warnings
+    seen_tools: list[Any] = []
+
+    def _facts(tools: Any = None) -> dict[str, list[str]]:
+        seen_tools.append(tools)
+        return {"capability_warnings": ["curl is not on PATH", "dup"]}
 
     monkeypatch.setattr(
         "config.runtime_metadata.probes.capability_warning_facts",
-        lambda _tools=None: {"capability_warnings": ["curl is not on PATH", "dup"]},
+        _facts,
     )
     monkeypatch.setattr(
         "platform.sandbox.capabilities.unavailable_capability_warnings",
@@ -102,6 +107,14 @@ def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> N
         "dup",
         "network requests is unavailable",
     ]
+    assert boot_capability_warnings(
+        installed_tools={"curl": "", "bash": "/bin/bash"},
+    ) == [
+        "curl is not on PATH",
+        "dup",
+        "network requests is unavailable",
+    ]
+    assert seen_tools[-1] == {"curl": "", "bash": "/bin/bash"}
     assert boot_capability_warnings(include_path_facts=False) == [
         "dup",
         "network requests is unavailable",
@@ -110,9 +123,7 @@ def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> N
 
 def test_file_read_available_when_cwd_is_empty(tmp_path: Any, monkeypatch: Any) -> None:
     """An empty working tree is still readable — do not require a child entry."""
-    import platform.sandbox.capabilities as capabilities
-
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.chdir(empty)
-    assert capabilities._file_read_available() is True
+    assert _file_read_available() is True

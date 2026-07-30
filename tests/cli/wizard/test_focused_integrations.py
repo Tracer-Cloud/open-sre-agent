@@ -2,9 +2,25 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from surfaces.cli.wizard import _integration_configurators as configurators
+from surfaces.cli.wizard import _ui
+
+
+def test_local_defaults_maps_legacy_aha_mode_to_focused(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "store.json")
+    monkeypatch.setattr(
+        _ui,
+        "load_local_config",
+        lambda _path: {"wizard": {"mode": "aha"}, "targets": {"local": {}}},
+    )
+    assert _ui._local_defaults()["wizard_mode"] == "focused"
 
 
 def test_configure_selected_integrations_focused_prompt(

@@ -63,9 +63,11 @@ def build_default_headless_agent(
             subprocess_presenter_factory=subprocess_presenter_factory,
             slash_ports_factory=slash_ports_factory,
         ),
-        prompts=DefaultPromptContextProvider(session, surface=surface)
-        if surface is not None
-        else DefaultPromptContextProvider(session),
+        prompts=(
+            DefaultPromptContextProvider(session, surface=surface)
+            if surface is not None
+            else DefaultPromptContextProvider(session)
+        ),
         reasoning=DefaultReasoningClientProvider(
             output=output,
             error_reporter=error_reporter,

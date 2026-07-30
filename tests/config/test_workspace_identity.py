@@ -67,3 +67,41 @@ def test_capability_warnings_line_in_prompt() -> None:
         }
     )
     assert "capability warnings at boot: curl is not on PATH; network egress is blocked" in block
+
+
+class TestRepoIdentityHostIsExact:
+    """Only a real GitHub host may yield a bare ``owner/repo`` identity.
+
+    Substring matching on "github.com" accepts any URL that merely contains it,
+    so a remote pointing at an attacker host resolves to a clean-looking
+    identity. That fact reaches prompts and reports, where it reads as the
+    project's real repository.
+    """
+
+    def test_genuine_github_remotes_resolve(self) -> None:
+        from config.runtime_metadata.probes import _normalize_repo_identity
+
+        for url in (
+            "https://github.com/Tracer-Cloud/opensre",
+            "https://github.com/Tracer-Cloud/opensre.git",
+            "git@github.com:Tracer-Cloud/opensre.git",
+            "ssh://git@github.com/Tracer-Cloud/opensre",
+        ):
+            assert _normalize_repo_identity(url) == "Tracer-Cloud/opensre", url
+
+    def test_host_containing_github_com_is_not_treated_as_github(self) -> None:
+        from config.runtime_metadata.probes import _normalize_repo_identity
+
+        # A planted identity that must never be reported as owner/repo.
+        for url in (
+            "https://evil.test/github.com/attacker/repo",
+            "git@notgithub.com:attacker/repo",
+            "https://github.com.attacker.test/attacker/repo",
+        ):
+            assert _normalize_repo_identity(url) != "attacker/repo", url
+
+    def test_non_github_remotes_are_left_alone(self) -> None:
+        from config.runtime_metadata.probes import _normalize_repo_identity
+
+        url = "https://gitlab.com/org/repo"
+        assert _normalize_repo_identity(url) == url

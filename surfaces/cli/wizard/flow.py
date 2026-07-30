@@ -617,8 +617,6 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     default_wizard_mode = (
         defaults["wizard_mode"] if isinstance(defaults["wizard_mode"], str) else "quickstart"
     )
-    if default_wizard_mode == "aha":
-        default_wizard_mode = "focused"
     raw_saved_auth_method = defaults.get("auth_method")
     saved_auth_method = (
         normalize_llm_auth_method(raw_saved_auth_method)
