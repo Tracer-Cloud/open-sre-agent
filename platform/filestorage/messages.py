@@ -72,9 +72,10 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     skipped = report.skipped
     down_size = f" ({_human_size(report.downloaded_bytes)})" if report.downloaded_bytes else ""
     up_size = f" ({_human_size(report.uploaded_bytes)})" if report.uploaded_bytes else ""
+    total_size = f" ({_human_size(report.total_bytes)} total)" if report.total_bytes else ""
     lines: list[str] = [
         f"Sync complete — {len(downloaded)} downloaded{down_size}, "
-        f"{len(uploaded)} uploaded{up_size}, {skipped} already current."
+        f"{len(uploaded)} uploaded{up_size}, {skipped} already current{total_size}."
     ]
     if kept_remote:
         lines.append(f"{len(kept_remote)} kept the store's newer copy:")
