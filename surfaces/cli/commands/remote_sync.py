@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import click
 import sys
 
+import click
 from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
