@@ -910,6 +910,23 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     assert config.prefix == "env-prefix"
 
 
+def test_stored_remote_sync_values_are_validated_on_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bad stored remote_sync value should fail early with its key name."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": True, "bucket": ["my-bucket"]})
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncConfigError, match=r"remote_sync\.bucket"):
+        load_remote_sync_config()
+
+
 def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:
     """Prefix "opensre" must not also sweep in "opensre-backup/"."""
     # Arrange

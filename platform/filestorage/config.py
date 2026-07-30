@@ -26,6 +26,7 @@ from config.constants.filestorage import (
 from platform.filestorage.errors import RemoteSyncConfigError
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+_REMOTE_SYNC_STRING_KEYS = frozenset({"bucket", "provider", "prefix", "region", "profile"})
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,26 @@ def _stored_section() -> dict[str, Any]:
         raise RemoteSyncConfigError(str(exc)) from exc
 
 
+def _validated_stored_section() -> dict[str, Any]:
+    """Stored settings with scalar fields validated before downstream use."""
+    section = _stored_section()
+    for key in ("enabled", *sorted(_REMOTE_SYNC_STRING_KEYS)):
+        if key not in section:
+            continue
+        value = section[key]
+        if key == "enabled":
+            if isinstance(value, (bool, str)):
+                continue
+            raise RemoteSyncConfigError(
+                f"invalid remote_sync.enabled: expected a bool or string, got {type(value).__name__}"
+            )
+        if not isinstance(value, str):
+            raise RemoteSyncConfigError(
+                f"invalid remote_sync.{key}: expected a string, got {type(value).__name__}"
+            )
+    return section
+
+
 def _truthy(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -91,7 +112,7 @@ def remote_sync_enabled() -> bool:
     env = os.getenv(REMOTE_SYNC_ENV)
     if env is not None and env.strip() != "":
         return env.strip().lower() in _TRUTHY
-    return _truthy(_stored_section().get("enabled"))
+    return _truthy(_validated_stored_section().get("enabled"))
 
 
 def _lazy_stored() -> Callable[[], dict[str, Any]]:
@@ -104,7 +125,7 @@ def _lazy_stored() -> Callable[[], dict[str, Any]]:
 
     def read() -> dict[str, Any]:
         if "section" not in cache:
-            cache["section"] = _stored_section()
+            cache["section"] = _validated_stored_section()
         return cache["section"]
 
     return read
