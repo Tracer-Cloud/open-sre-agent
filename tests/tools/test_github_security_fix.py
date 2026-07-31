@@ -93,6 +93,13 @@ def test_parse_security_alert_url_supports_common_github_urls() -> None:
     assert quality_finding.alert_type == "code_quality"
     assert quality_finding.number == 42
 
+    quality_ui = parse_security_alert_url(
+        "https://github.com/acme/app/security/quality/findings/42"
+    )
+    assert quality_ui is not None
+    assert quality_ui.alert_type == "code_quality"
+    assert quality_ui.number == 42
+
 
 def test_available_when_github_token_present(monkeypatch) -> None:
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
@@ -188,6 +195,10 @@ def test_gather_code_quality_context_builds_coding_task() -> None:
     assert ctx.alert_type == "code_quality"
     assert ctx.number == 42
     assert ctx.summary == "Unused import"
+    assert ctx.url == "https://github.com/acme/app/security/quality/findings/42"
+    assert "api.github.com" not in ctx.url
+    assert "api.github.com" not in ctx.task
+    assert "https://github.com/acme/app/security/quality/findings/42" in ctx.task
     assert "app/main.py:9" in ctx.task
     assert "maintainability" in ctx.task
     assert "This import is unused." in ctx.task

@@ -456,11 +456,11 @@ def _code_quality_context(
     description = str(rule.get("description") or "").strip()
     category = str(rule.get("category") or "")
     severity = str(rule.get("severity") or "")
-    url = str(
-        finding.get("html_url")
-        or finding.get("url")
-        or f"https://github.com/{owner}/{repo}/security/quality"
-    )
+    # The Code Quality findings API only returns an authenticated API ``url``
+    # (``html_url`` is null today). Prefer a real ``html_url`` when present;
+    # otherwise synthesize the public github.com finding page — never surface
+    # ``api.github.com/...`` in tasks, PR bodies, or tool responses.
+    url = _code_quality_public_url(owner=owner, repo=repo, number=number, finding=finding)
     summary = title
     task = _masked_lines(
         [
@@ -622,6 +622,14 @@ def _has_builtin_local_fix(alert_type: ResolvedAlertType, alert: dict[str, Any])
 def _github_error(exc: GitHubApiError) -> GitHubSecurityFixError:
     kind = ERR_ALERT_NOT_FOUND if exc.status_code == 404 else ERR_GITHUB_UNAVAILABLE
     return GitHubSecurityFixError(kind, str(exc))
+
+
+def _code_quality_public_url(*, owner: str, repo: str, number: int, finding: dict[str, Any]) -> str:
+    """Return a github.com URL for a Code Quality finding (never api.github.com)."""
+    html_url = str(finding.get("html_url") or "").strip()
+    if html_url.startswith("https://github.com/"):
+        return html_url
+    return f"https://github.com/{owner}/{repo}/security/quality/findings/{number}"
 
 
 def _format_location(value: Any) -> str:
