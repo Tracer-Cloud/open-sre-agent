@@ -79,7 +79,10 @@ class VercelBlobObjectStore:
                         etag=str(blob.get("etag", "")).strip('"'),
                     )
                 )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, TypeError, ValueError) as exc:
+            # HTTP failures and malformed success payloads (non-JSON body,
+            # non-object root, unparsable field types) all map to unavailable
+            # so CLI/REPL get an actionable remote-sync error, not a raw crash.
             raise RemoteSyncUnavailableError(
                 f"cannot list {self.describe()} — {_reason(exc)}"
             ) from exc
@@ -131,7 +134,7 @@ class VercelBlobObjectStore:
                 headers=self._auth_headers(),
             )
             response.raise_for_status()
-            payload = response.json()
+            payload = _json_object(response, what="list blobs")
             for blob in payload.get("blobs", []) or []:
                 if isinstance(blob, dict):
                     yield blob
@@ -184,6 +187,17 @@ def _parse_uploaded_at(value: object) -> datetime:
             return datetime.now(tz=UTC)
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
     return datetime.now(tz=UTC)
+
+
+def _json_object(response: httpx.Response, *, what: str) -> dict[str, Any]:
+    """Parse a JSON object body, or raise :class:`ValueError` for the caller."""
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise ValueError(f"malformed JSON while trying to {what}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"expected a JSON object while trying to {what}, got {type(payload).__name__}")
+    return payload
 
 
 def _reason(exc: Exception) -> str:

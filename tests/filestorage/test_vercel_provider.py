@@ -188,6 +188,31 @@ def test_http_errors_name_their_cause() -> None:
     assert "Access denied" in str(caught.value)
 
 
+def test_malformed_list_payload_is_remote_sync_unavailable() -> None:
+    """Success responses that are not a JSON object stay in the provider hierarchy."""
+
+    class _Weird(httpx.BaseTransport):
+        def __init__(self, body: bytes) -> None:
+            self._body = body
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                content=self._body,
+                headers={"content-type": "application/json"},
+                request=request,
+            )
+
+    for body in (b"not-json", b'["array"]', b"null"):
+        store = VercelBlobObjectStore(
+            _config(),
+            token=_TOKEN,
+            client=httpx.Client(transport=_Weird(body)),
+        )
+        with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+            store.list_objects("")
+
+
 def test_engine_push_restore_via_registry(tmp_path_factory: pytest.TempPathFactory) -> None:
     """Registry → Vercel store → push → pull into a second tree (same contract as S3)."""
     from pathlib import Path
