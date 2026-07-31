@@ -213,6 +213,40 @@ def test_malformed_list_payload_is_remote_sync_unavailable() -> None:
             store.list_objects("")
 
 
+def test_malformed_blobs_field_is_remote_sync_unavailable() -> None:
+    """Nested list shape failures must not look like an authoritative empty store."""
+
+    class _Weird(httpx.BaseTransport):
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=self._payload, request=request)
+
+    bad_payloads = (
+        {},  # missing blobs
+        {"blobs": None},
+        {"blobs": "nope"},
+        {"blobs": [{"pathname": "ok"}, "not-an-object"]},
+    )
+    for payload in bad_payloads:
+        store = VercelBlobObjectStore(
+            _config(),
+            token=_TOKEN,
+            client=httpx.Client(transport=_Weird(payload)),
+        )
+        with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+            store.list_objects("")
+
+    # Empty list is a real empty store — not a failure.
+    store = VercelBlobObjectStore(
+        _config(),
+        token=_TOKEN,
+        client=httpx.Client(transport=_Weird({"blobs": [], "hasMore": False})),
+    )
+    assert store.list_objects("") == []
+
+
 def test_engine_push_restore_via_registry(tmp_path_factory: pytest.TempPathFactory) -> None:
     """Registry → Vercel store → push → pull into a second tree (same contract as S3)."""
     from pathlib import Path

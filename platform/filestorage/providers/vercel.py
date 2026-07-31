@@ -135,9 +135,7 @@ class VercelBlobObjectStore:
             )
             response.raise_for_status()
             payload = _json_object(response, what="list blobs")
-            for blob in payload.get("blobs", []) or []:
-                if isinstance(blob, dict):
-                    yield blob
+            yield from _blobs_from_list_payload(payload)
             if not payload.get("hasMore"):
                 break
             next_cursor = payload.get("cursor")
@@ -196,8 +194,33 @@ def _json_object(response: httpx.Response, *, what: str) -> dict[str, Any]:
     except ValueError as exc:
         raise ValueError(f"malformed JSON while trying to {what}") from exc
     if not isinstance(payload, dict):
-        raise ValueError(f"expected a JSON object while trying to {what}, got {type(payload).__name__}")
+        raise ValueError(
+            f"expected a JSON object while trying to {what}, got {type(payload).__name__}"
+        )
     return payload
+
+
+def _blobs_from_list_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the ``blobs`` list, or raise if the field shape is unusable.
+
+    An empty list is valid (nothing under the prefix). Missing, null, non-list,
+    or non-object entries must not look like an authoritative empty listing —
+    that would make the sync engine skip remote-only restores and re-upload
+    over remote data.
+    """
+    if "blobs" not in payload:
+        raise ValueError("list response is missing the 'blobs' field")
+    raw = payload["blobs"]
+    if not isinstance(raw, list):
+        raise ValueError(f"list response 'blobs' must be a list, got {type(raw).__name__}")
+    out: list[dict[str, Any]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"list response blobs[{index}] must be an object, got {type(item).__name__}"
+            )
+        out.append(item)
+    return out
 
 
 def _reason(exc: Exception) -> str:
