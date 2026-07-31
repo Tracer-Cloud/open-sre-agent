@@ -12,7 +12,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
@@ -32,7 +32,7 @@ def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
+def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     """Patch the gateway agent factory so construction is inert and dispatch returns ``result``.
 
     Returns the factory mock. The built agent is ``factory.return_value``; when the
@@ -88,7 +88,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
 
     agent_cls = _patch_headless_agent(
         monkeypatch,
-        ShellTurnResult(
+        TurnResult(
             final_intent="cli_agent_handled",
             action_result=ToolCallingTurnResult(
                 planned_count=1,
@@ -113,8 +113,8 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     assert recorded == [chat_integrations]
 
 
-def _empty_turn_result(*, llm_run: Any = None) -> ShellTurnResult:
-    return ShellTurnResult(
+def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
+    return TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=0,

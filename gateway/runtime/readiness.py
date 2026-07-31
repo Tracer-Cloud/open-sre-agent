@@ -8,7 +8,7 @@ _lock = threading.Lock()
 _ready = False
 
 
-def set_gateway_ready(ready: bool) -> None:
+def set_ready(ready: bool) -> None:
     """Publish whether mandatory Gateway startup dependencies are healthy."""
     global _ready
     with _lock:
@@ -21,4 +21,4 @@ def is_gateway_ready() -> bool:
         return _ready
 
 
-__all__ = ["is_gateway_ready", "set_gateway_ready"]
+__all__ = ["is_gateway_ready", "set_ready"]

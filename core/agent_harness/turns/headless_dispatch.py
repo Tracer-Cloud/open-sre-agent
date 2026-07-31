@@ -59,7 +59,7 @@ from core.agent_harness.turns.headless_adapters import (
 )
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
 
 
@@ -156,8 +156,8 @@ class HeadlessAgent:
             return DefaultTurnAccounting(self._store, message)
         return NoopTurnAccounting()
 
-    def dispatch(self, message: str) -> ShellTurnResult:
-        """Run one full turn for ``message`` and return the :class:`ShellTurnResult`."""
+    def dispatch(self, message: str) -> TurnResult:
+        """Run one full turn for ``message`` and return the :class:`TurnResult`."""
         accounting = self._accounting_for(message)
 
         def execute_actions(

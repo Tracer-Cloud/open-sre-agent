@@ -123,6 +123,6 @@ def test_manager_fails_closed_with_generic_error() -> None:
     )
 
     with pytest.raises(GatewayConfigurationError, match="hydration failed"):
-        manager._hydrate_credentials(logging.getLogger("test"))
+        manager._load_credentials(logging.getLogger("test"))
 
     assert manager.components["credentials"] == "failed"
