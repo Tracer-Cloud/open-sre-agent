@@ -60,6 +60,7 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     for root in status.roots:
         state = "exists" if root.exists else "not created yet"
         lines.append(f"  {root.name:<10} {root.path} ({state})")
+    lines.extend(status.warnings)
     lines.append("Never uploaded: integration credentials and model keys.")
     return tuple(lines)
 

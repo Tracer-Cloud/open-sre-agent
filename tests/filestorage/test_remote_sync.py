@@ -18,10 +18,16 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PREFIX_ENV,
 )
 from platform.filestorage import engine as sync_module
-from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
+from platform.filestorage.config import (
+    RemoteSyncConfig,
+    load_remote_sync_config,
+    remote_sync_enabled,
+)
 from platform.filestorage.engine import content_tag, pull, push, resolve_direction, run_sync
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
+from platform.filestorage.messages import format_status_lines
+from platform.filestorage.operations import get_sync_status
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.syncable import SyncRoot, is_syncable
 
@@ -349,6 +355,40 @@ def test_second_push_reuploads_nothing(home: Path, roots: tuple[SyncRoot, ...]) 
     # Assert
     assert report.uploaded == []
     assert report.skipped == 2
+
+
+def test_status_reports_public_bucket_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "platform.filestorage.operations.describe_bucket_public_access",
+        lambda _bucket: True,
+    )
+    monkeypatch.setattr(
+        "platform.filestorage.operations.load_remote_sync_config",
+        lambda: RemoteSyncConfig(bucket="public-bucket"),
+    )
+
+    status = get_sync_status()
+
+    assert status.warnings == ("Warning: public-bucket is publicly readable.",)
+    assert "publicly readable" in "\n".join(format_status_lines(status))
+
+
+def test_status_reports_bucket_policy_status_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "platform.filestorage.operations.describe_bucket_public_access",
+        lambda _bucket: None,
+    )
+    monkeypatch.setattr(
+        "platform.filestorage.operations.load_remote_sync_config",
+        lambda: RemoteSyncConfig(bucket="note-bucket"),
+    )
+
+    status = get_sync_status()
+
+    assert status.warnings == (
+        "Bucket visibility note: note-bucket could not be checked because "
+        "s3:GetBucketPolicyStatus is not available for this caller.",
+    )
 
 
 def test_aws_failures_name_their_cause() -> None:

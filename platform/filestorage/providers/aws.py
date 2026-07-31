@@ -86,6 +86,35 @@ class S3ObjectStore:
         return full_key[len(prefix) :] if full_key.startswith(prefix) else full_key
 
 
+def describe_bucket_public_access(
+    bucket: str,
+    *,
+    client: Any | None = None,
+) -> bool | None:
+    """Return whether the bucket is publicly readable, or ``None`` if unknown.
+
+    ``None`` is reserved for the permission gap the issue calls out:
+    ``s3:GetBucketPolicyStatus`` can be missing even when the bucket itself is
+    reachable. Other AWS errors still surface as ``RemoteSyncUnavailableError``
+    so status commands can report the local failure clearly.
+    """
+    s3 = client if client is not None else boto3.Session().client("s3")
+    try:
+        response = s3.get_bucket_policy_status(Bucket=bucket)
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        if error.get("Code") == "AccessDenied":
+            return None
+        raise RemoteSyncUnavailableError(
+            f"cannot inspect bucket policy status for {bucket} — {_reason(exc)}"
+        ) from exc
+    except (BotoCoreError, ValueError) as exc:
+        raise RemoteSyncUnavailableError(
+            f"cannot inspect bucket policy status for {bucket} — {_reason(exc)}"
+        ) from exc
+    return bool(response.get("PolicyStatus", {}).get("IsPublic"))
+
+
 def _reason(exc: Exception) -> str:
     """The AWS-side cause, for a local operator to act on."""
     return f"{type(exc).__name__}: {exc}"
