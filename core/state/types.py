@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 from pydantic import Field
 from typing_extensions import TypedDict
@@ -10,7 +11,11 @@ from typing_extensions import TypedDict
 from config.strict_config import StrictConfigModel
 from core.state.agent_state import AgentMessageRole
 
-AgentMode = Literal["chat", "investigation", "agent_incident"]
+
+class AgentMode(StrEnum):
+    CHAT = "chat"
+    INVESTIGATION = "investigation"
+    AGENT_INCIDENT = "agent_incident"
 
 
 class ChatMessage(TypedDict, total=False):

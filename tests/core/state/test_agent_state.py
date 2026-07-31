@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.state import MAX_CONVERSATION_MESSAGES, MutableAgentState
+from core.state import MAX_CONVERSATION_MESSAGES, AgentMode, AgentStateModel, MutableAgentState
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
 
@@ -32,6 +32,14 @@ def test_messages_setter_replaces_and_compacts() -> None:
     assert len(state.messages) <= MAX_CONVERSATION_MESSAGES
     assert state.messages[0][1].startswith(SESSION_SUMMARY_PREFIX)
 
+
+def test_agent_mode_accepts_existing_strings_and_serializes_to_strings() -> None:
+    state = AgentStateModel.model_validate({"mode": AgentMode.INVESTIGATION})
+
+    assert state.mode is AgentMode.INVESTIGATION
+    assert AgentMode("chat") is AgentMode.CHAT
+    assert AgentMode("agent_incident") is AgentMode.AGENT_INCIDENT
+    assert state.model_dump(mode="json")["mode"] == "investigation"
 
 def test_last_observation_roundtrip_and_reset() -> None:
     state = MutableAgentState()
