@@ -1,15 +1,15 @@
 """Optional mirroring of conversation context to a store the user owns.
 
 Off by default. When switched on, conversation history and memory are copied
-to the user's own object store (AWS/S3 today; other backends register under
-:mod:`platform.filestorage.providers`). Credentials never leave the machine —
-see :mod:`platform.filestorage.syncable`.
+to the user's own object store (built-in: AWS/S3 and Vercel Blob; others
+register under :mod:`platform.filestorage.providers`). Credentials never leave
+the machine — see :mod:`platform.filestorage.syncable`.
 
 Surfaces share one **stateless, thread-safe** service
 (:mod:`platform.filestorage.operations`): ``opensre remote-sync``, REPL
-``/remote-sync``, and gateway headless slash ports. No cached config or store —
-each call re-reads settings and builds a fresh backend. Roots follow the
-active principal scope (``sessions_dir`` / ``get_memory_dir``).
+``/remote-sync``, and gateway headless slash ports. Setup writes the stored
+``remote_sync`` section; each sync re-reads settings and builds a fresh backend.
+Roots follow the active principal scope (``sessions_dir`` / ``get_memory_dir``).
 
 This is the object-store counterpart to a mounted org context root: same idea,
 different mechanism, because a laptop has no provisioned filesystem and the

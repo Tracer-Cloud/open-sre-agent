@@ -6,11 +6,19 @@ import logging
 
 from rich.console import Console
 
-from config.constants.filestorage import DEFAULT_REMOTE_SYNC_PROVIDER
+from config.constants.filestorage import (
+    DEFAULT_REMOTE_SYNC_PREFIX,
+    DEFAULT_REMOTE_SYNC_PROVIDER,
+)
 from platform.filestorage import OrgScopeNotSupportedError, RemoteSyncError
 from platform.filestorage.enums import RemoteSyncSubcommand
-from platform.filestorage.messages import DISABLED_HELP, format_report_lines
+from platform.filestorage.messages import (
+    DISABLED_HELP,
+    format_report_lines,
+    format_setup_lines,
+)
 from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
@@ -18,8 +26,9 @@ from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
 logger = logging.getLogger(__name__)
 
 _USAGE = (
-    f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}] "
-    "[--pull-only|--push-only]"
+    f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}|"
+    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only] "
+    f"[--provider … --bucket …]"
 )
 
 
@@ -62,6 +71,47 @@ def _run_sync(console: Console, args: list[str]) -> bool:
     return True
 
 
+def _flag_value(args: list[str], name: str) -> str | None:
+    """Return ``--name value`` from ``args``, or None."""
+    token = f"--{name}"
+    for index, arg in enumerate(args):
+        if arg == token and index + 1 < len(args):
+            return args[index + 1]
+        if arg.startswith(f"{token}="):
+            return arg.split("=", 1)[1]
+    return None
+
+
+def _run_setup(console: Console, args: list[str]) -> bool:
+    """Write stored settings from flags (gateway-safe: no interactive prompts)."""
+    provider = _flag_value(args, "provider") or DEFAULT_REMOTE_SYNC_PROVIDER
+    bucket = _flag_value(args, "bucket")
+    if not bucket or not bucket.strip():
+        console.print(
+            f"[{ERROR}]setup needs --bucket[/]. "
+            "Example: [bold]/remote-sync setup --provider vercel "
+            "--bucket opensre-remote-sync[/]\n"
+            f"[{DIM}]Interactive prompts: opensre remote-sync setup[/]"
+        )
+        return True
+    prefix = _flag_value(args, "prefix") or DEFAULT_REMOTE_SYNC_PREFIX
+    region = _flag_value(args, "region") or ""
+    profile = _flag_value(args, "profile") or ""
+    enabled = "--disabled" not in {a.lower() for a in args}
+    config = save_remote_sync_settings(
+        RemoteSyncSetupRequest(
+            bucket=bucket,
+            provider=provider,
+            prefix=prefix,
+            region=region,
+            profile=profile,
+            enabled=enabled,
+        )
+    )
+    _print_lines(console, format_setup_lines(config))
+    return True
+
+
 def _parse_subcommand(raw: str) -> RemoteSyncSubcommand | None:
     try:
         return RemoteSyncSubcommand(raw)
@@ -77,6 +127,8 @@ def _cmd_remote_sync(_session: Session, console: Console, args: list[str]) -> bo
             return _print_status(console)
         if sub is RemoteSyncSubcommand.SYNC:
             return _run_sync(console, args[1:])
+        if sub is RemoteSyncSubcommand.SETUP:
+            return _run_setup(console, args[1:])
     except OrgScopeNotSupportedError as exc:
         # Safe to show: our own wording, no vendor or credential detail.
         console.print(f"[{DIM}]{exc}[/]")
@@ -86,7 +138,7 @@ def _cmd_remote_sync(_session: Session, console: Console, args: list[str]) -> bo
         # provider's message never reaches the reply. Detail goes to the log.
         logger.warning("[remote-sync] command failed", exc_info=True)
         console.print(
-            f"[{ERROR}]Sync failed.[/] Check the opensre log, "
+            f"[{ERROR}]Remote-sync command failed.[/] Check the opensre log, "
             "or run [bold]opensre remote-sync status[/bold] locally for detail."
         )
         return True
@@ -104,11 +156,11 @@ COMMANDS: tuple[SlashCommand, ...] = (
         _cmd_remote_sync,
         usage=(_USAGE,),
         notes=(
-            "Off unless OPENSRE_REMOTE_SYNC is set. Default provider is "
-            f"{DEFAULT_REMOTE_SYNC_PROVIDER}; set OPENSRE_REMOTE_SYNC_PROVIDER "
-            "to choose another registered backend. Integration credentials and "
-            "model keys are never uploaded. Same service as "
-            "`opensre remote-sync` (gateway clients share this slash command).",
+            "Off until setup or OPENSRE_REMOTE_SYNC is set. "
+            f"Subcommands: status, sync, setup. Default provider is "
+            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: aws, vercel). "
+            "Credentials stay ambient; integration keys are never uploaded. "
+            "Same service as `opensre remote-sync`.",
         ),
         first_arg_completions=(
             (
@@ -116,8 +168,13 @@ COMMANDS: tuple[SlashCommand, ...] = (
                 "show whether sync is on and what would be mirrored",
             ),
             (RemoteSyncSubcommand.SYNC.value, "pull remote changes, then push local ones"),
+            (
+                RemoteSyncSubcommand.SETUP.value,
+                "save provider/bucket/prefix to ~/.opensre/config.yml",
+            ),
         ),
         use_cases=(
+            "set up remote sync to Vercel Blob",
             "sync my conversations to S3",
             "back up my opensre memory",
             "set up opensre on my second laptop",
