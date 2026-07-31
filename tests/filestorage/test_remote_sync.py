@@ -8,6 +8,7 @@ file are excluded by an allowlist of roots and again by name.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import threading
 from pathlib import Path
 
 import pytest
@@ -349,6 +350,53 @@ def test_second_push_reuploads_nothing(home: Path, roots: tuple[SyncRoot, ...]) 
     # Assert
     assert report.uploaded == []
     assert report.skipped == 2
+
+
+def test_push_uses_bounded_concurrency(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    """A sync should overlap uploads without skipping the validation pass."""
+
+    class _BlockingStore(FakeObjectStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.active = 0
+            self.max_active = 0
+            self.lock = threading.Lock()
+            self.entered = threading.Event()
+            self.release = threading.Event()
+
+        def put_object(self, key: str, data: bytes) -> None:
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                self.entered.set()
+            try:
+                self.release.wait(timeout=2)
+                super().put_object(key, data)
+            finally:
+                with self.lock:
+                    self.active -= 1
+
+    store = _BlockingStore()
+    waiter = threading.Thread(target=push, args=(store,), kwargs={"roots": roots})
+    waiter.start()
+    assert store.entered.wait(timeout=2)
+
+    for _ in range(200):
+        with store.lock:
+            if store.max_active >= 2:
+                break
+        threading.Event().wait(0.01)
+    else:
+        store.release.set()
+        waiter.join(timeout=2)
+        assert not waiter.is_alive()
+        raise AssertionError(f"expected concurrent uploads, saw max_active={store.max_active}")
+
+    store.release.set()
+    waiter.join(timeout=2)
+
+    assert not waiter.is_alive()
+    assert store.max_active >= 2
 
 
 def test_aws_failures_name_their_cause() -> None:

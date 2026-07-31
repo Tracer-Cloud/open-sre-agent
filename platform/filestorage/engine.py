@@ -18,6 +18,7 @@ import hashlib
 import logging
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -135,22 +136,30 @@ def push(
                 raise UnsyncablePathError(f"refusing to upload {path}")
             planned.append((root, path))
 
-    for root, path in planned:
+    def _upload(root: SyncRoot, path: Path) -> tuple[str, str, int]:
         key = _relative_key(root, path)
         data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
             if comparable_etag(existing) == content_tag(data):
-                result.skipped += 1
-                continue
+                return ("skipped", key, 0)
             if existing.last_modified > _modified_at(path):
                 # The store holds the more recent write, so uploading would
                 # destroy it. Same rule pull applies in the other direction.
-                result.kept_remote.append(key)
-                continue
+                return ("kept_remote", key, 0)
         store.put_object(key, data)
-        result.uploaded.append(key)
-        result.uploaded_bytes += len(data)
+        return ("uploaded", key, len(data))
+
+    max_workers = min(4, len(planned)) or 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for status, key, size in executor.map(lambda item: _upload(*item), planned):
+            if status == "skipped":
+                result.skipped += 1
+            elif status == "kept_remote":
+                result.kept_remote.append(key)
+            else:
+                result.uploaded.append(key)
+                result.uploaded_bytes += size
     return result
 
 
