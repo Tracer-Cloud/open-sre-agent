@@ -23,9 +23,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.llm.internal.preload import preload_llm_clients
-from gateway.config.configure_gateway_logging import configure_gateway_logging
+from gateway.config.logging_config import configure_logging
 from gateway.discord.background import DiscordGatewayBackground
 from gateway.discord.wiring import start_discord_worker
 from gateway.runtime.concurrency import (
@@ -42,7 +40,7 @@ from gateway.runtime.daemon import (
     write_component_status,
 )
 from gateway.runtime.errors import GatewayConfigurationError
-from gateway.runtime.readiness import set_gateway_ready
+from gateway.runtime.readiness import set_ready
 from gateway.runtime.remote_run_worker import (
     RemoteRunWorker,
     build_remote_run_worker,
@@ -93,29 +91,12 @@ class GatewayManager:
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start all components, and own the lifecycle."""
-        from gateway.runtime.bootstrap import install_runtime
+        from gateway.runtime import startup
 
-        logger = self.logger = configure_gateway_logging()
-        set_gateway_ready(False)
-        bootstrap = self._hydrate_credentials(logger)
-
-        harness = AgentHarness(HarnessConfig(open_storage=False))
-        harness.resolve_env_variables()
-        # Mirror shell boot: register harness adapters here (gateway cannot import
-        # surfaces.boundary without a surfaces↔gateway peer import).
-        install_runtime(harness_adapters=True, scheduler_runners=False)
-        # Env-gated (OPENSRE_NO_TELEMETRY / DO_NOT_TRACK / missing DSN) — free when off.
-        from platform.observability.errors.sentry import init_sentry
-
-        init_sentry(entrypoint="gateway")
-        # PATH gaps + sandbox usability probes — before the first mid-turn failure.
-        from platform.sandbox.capabilities import boot_capability_warnings
-
-        for warning in boot_capability_warnings():
-            logger.warning("[gateway] capability: %s", warning)
-        # Load the LLM client graph as one snapshot at boot (avoids a stale
-        # mixed-version process after a code change).
-        preload_llm_clients()
+        logger = self.logger = configure_logging()
+        set_ready(False)
+        bootstrap = self._load_credentials(logger)
+        startup.run(logger)
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
@@ -141,7 +122,7 @@ class GatewayManager:
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
         # and/or Slack — do not rely on transport-specific log strings alone.
         logger.info("[gateway] ready")
-        set_gateway_ready(True)
+        set_ready(True)
 
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
@@ -152,7 +133,7 @@ class GatewayManager:
 
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Shut down all components and return whether the chat worker stopped."""
-        set_gateway_ready(False)
+        set_ready(False)
         stopped = True
         if self.remote_run_worker is not None:
             stopped = self.remote_run_worker.stop(timeout=timeout)
@@ -173,7 +154,7 @@ class GatewayManager:
         self._stopped.set()
         return stopped
 
-    def _hydrate_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
+    def _load_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
         """Hydrate before any transport, scheduler, or worker can start."""
         try:
             hydrator = self._credential_hydrator_factory()

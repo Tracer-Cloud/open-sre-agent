@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from core.agent_harness.ports import PromptContextProvider
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.turns.headless_dispatch import HeadlessAgent
-    from core.agent_harness.turns.turn_results import ShellTurnResult
+    from core.agent_harness.turns.turn_results import TurnResult
 
 
 @dataclass(frozen=True)
@@ -175,7 +175,7 @@ class AgentHarness:
         message: str,
         *,
         agent: HeadlessAgent | None = None,
-    ) -> ShellTurnResult:
+    ) -> TurnResult:
         """Run one headless turn for ``message``.
 
         Prefer :meth:`attach_agent` once, then call this per message::
