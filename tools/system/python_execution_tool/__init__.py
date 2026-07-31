@@ -18,6 +18,12 @@ _RUNTIME_FACT_KEYS = ", ".join((*STATIC_FACT_KEYS, *LIVE_FACT_KEYS))
 _NEVER_RUN = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTION_COMMANDS)
 
 
+_RUNTIME_FACTS_ANTI_EXAMPLE = (
+    "Calling this tool only to read inputs['opensre_runtime'] — runtime facts "
+    "(version, PID, host, cloud, disk, memory, tools) are already in the environment block"
+)
+
+
 class PythonExecutionTool(BaseTool):
     """Run generated Python code with structured inputs and approved credentials."""
 
@@ -51,8 +57,7 @@ class PythonExecutionTool(BaseTool):
         "List scratchpad files with pathlib; read disk/memory with psutil (no ls/df/free)",
     ]
     anti_examples = [
-        "Calling this tool only to read inputs['opensre_runtime'] — runtime facts "
-        "(version, PID, host, cloud, disk, memory, tools) are already in the environment block",
+        _RUNTIME_FACTS_ANTI_EXAMPLE,
         "Changing local files or shelling out to other processes",
         f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
         "Probing cloud instance metadata over the network (use the injected cloud facts)",

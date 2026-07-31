@@ -266,6 +266,17 @@ Steps:
   result (`_finished = await task` in `gateway/discord/worker.py`
   `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
   skipping the await.
+- Implicit string concatenation in a list (CodeQL
+  `py/implicit-string-concatenation-in-list`): two adjacent string literals
+  inside a list/tuple display are indistinguishable from a **missing comma**,
+  so a long message split over two lines trips it. Do not silence it with an
+  explicit `+` — extract the text to a module constant and reference that. The
+  same implicit concatenation is fine in a parenthesised assignment, where no
+  comma could have been intended. Precedent:
+  `tools/system/python_execution_tool/__init__.py`
+  (`_RUNTIME_FACTS_ANTI_EXAMPLE`). Bites hardest in `use_cases` /
+  `anti_examples` / `examples` tool metadata, where entries are prose and
+  routinely exceed the 100-char line limit.
 - Mixed import styles (CodeQL `py/import-and-import-from`): importing one
   module with both `import X as alias` and `from X import name` — even when
   the `from` import is function-local — raises an alert. It usually happens
