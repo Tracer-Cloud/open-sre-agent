@@ -13,13 +13,18 @@ from platform.filestorage import RemoteSyncError
 from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    SETUP_DISABLED_CONFIRM,
     format_report_lines,
     format_setup_lines,
     format_status_lines,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
 from platform.filestorage.providers.registry import provider_extra_fields
-from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
+from platform.filestorage.setup import (
+    RemoteSyncSetupRequest,
+    disable_remote_sync,
+    save_remote_sync_settings,
+)
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -65,9 +70,13 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
 @click.option(
     "--provider",
     default=None,
-    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: aws, vercel).",
+    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: aws, gcs, vercel).",
 )
-@click.option("--bucket", default=None, help="Store name you own (S3 bucket or Blob store id).")
+@click.option(
+    "--bucket",
+    default=None,
+    help="Store name you own (S3 bucket, GCS bucket, or Blob store id).",
+)
 @click.option(
     "--prefix",
     default=None,
@@ -90,6 +99,15 @@ def setup_command(
     enabled: bool,
 ) -> None:
     """Write remote_sync settings to ~/.opensre/config.yml (interactive if flags omitted)."""
+    if not enabled and (bucket is None or not bucket.strip()):
+        # --disabled with no new settings just switches the stored section off.
+        try:
+            disable_remote_sync()
+        except RemoteSyncError as exc:
+            click.echo(str(exc), err=True)
+            raise SystemExit(ERROR) from exc
+        click.echo(SETUP_DISABLED_CONFIRM)
+        raise SystemExit(SUCCESS)
     try:
         request = _collect_setup_request(
             provider=provider,
@@ -140,7 +158,7 @@ def _collect_setup_request(
         "Bucket / store name", default=bucket or "", show_default=bool(bucket)
     )
     provider_value = click.prompt(
-        "Provider (aws, vercel, …)",
+        "Provider (aws, gcs, vercel, …)",
         default=provider or DEFAULT_REMOTE_SYNC_PROVIDER,
         show_default=True,
     )

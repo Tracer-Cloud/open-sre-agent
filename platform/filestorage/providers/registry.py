@@ -62,6 +62,7 @@ _REGISTRY_LOCK = threading.RLock()
 # register ahead of time instead and never appear here.
 _BUILTIN_MODULES = {
     BuiltInProvider.AWS.value: "platform.filestorage.providers.aws",
+    BuiltInProvider.GCS.value: "platform.filestorage.providers.gcs",
     BuiltInProvider.VERCEL.value: "platform.filestorage.providers.vercel",
 }
 
