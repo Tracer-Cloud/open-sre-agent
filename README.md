@@ -158,6 +158,19 @@ opensre investigate --service api-backend
 opensre hermes watch
 ```
 
+**From Python** — drive the agent in-process from your own code (source checkout required):
+
+```python
+from core.agent_harness import AgentHarness
+
+harness = AgentHarness.start()
+result = harness.dispatch_message("why is checkout-api slow?")
+if result.answered:
+    print(result.primary_response_text)
+```
+
+See **[Python API](https://www.opensre.com/docs/python-api)** for sessions, conversations, and custom output sinks.
+
 Other useful commands:
 
 ```bash

@@ -3,12 +3,32 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 from config.platform_bootstrap import ensure_project_platform_package
 
 ensure_project_platform_package()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_gateway_runtime_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep every gateway test off the developer's real ``~/.opensre/gateway``.
+
+    ``GatewayManager.stop()`` clears the component status file, and
+    ``start_gateway`` rewrites the pidfile. Both resolve through module globals
+    captured at import time, so the root ``OPENSRE_HOME_DIR`` override does not
+    reach them: a unit test that merely constructs a manager and stops it
+    deleted the status file of the daemon actually running on the machine,
+    leaving ``opensre gateway status`` blank until the next restart.
+    """
+    from gateway.runtime import daemon
+
+    runtime_dir = tmp_path / "gateway"
+    monkeypatch.setattr(daemon, "GATEWAY_PID_FILE", runtime_dir / "gateway.pid")
+    monkeypatch.setattr(daemon, "GATEWAY_LOG_FILE", runtime_dir / "gateway.log")
+    monkeypatch.setattr(daemon, "GATEWAY_COMPONENTS_FILE", runtime_dir / "components.json")
 
 
 @pytest.fixture(autouse=True)

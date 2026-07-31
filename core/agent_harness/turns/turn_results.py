@@ -33,7 +33,7 @@ class ToolCallingTurnResult:
 
 
 @dataclass(frozen=True)
-class ShellTurnResult:
+class TurnResult:
     """Outcome of a full turn: the action phase plus the conversational answer."""
 
     final_intent: str
@@ -56,7 +56,7 @@ class ShellTurnResult:
 
 
 __all__ = [
-    "ShellTurnResult",
     "ToolCallingAccountingStatus",
     "ToolCallingTurnResult",
+    "TurnResult",
 ]

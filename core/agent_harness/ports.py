@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
@@ -203,7 +203,7 @@ class TurnAccounting(Protocol):
     def record_action_result(self, action_result: ToolCallingTurnResult) -> None:
         raise NotImplementedError
 
-    def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+    def finalize(self, result: TurnResult) -> TurnResult:
         raise NotImplementedError
 
 
