@@ -347,6 +347,20 @@ def test_skills_loader_bundles_github_security_fix_skill() -> None:
     cached_load_skills_block.cache_clear()
 
 
+def test_skills_loader_bundles_github_ci_fix_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill = skills_dir() / "github_ci_fix" / "SKILL.md"
+    assert skill.is_file()
+
+    block = load_skills_block()
+    assert "GITHUB PR CI FIX SKILL" in block
+    assert "fix_github_pr_ci" in block
+    assert "output exactly that text and stop" in block
+    assert 'Do not say "next steps"' in block
+    assert "pushes to the existing PR head branch" in block
+    cached_load_skills_block.cache_clear()
+
+
 def test_action_system_prompt_includes_context_blocks() -> None:
     prompt = build_action_system_prompt(
         _ctx(

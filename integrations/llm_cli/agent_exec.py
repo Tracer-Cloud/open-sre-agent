@@ -118,10 +118,12 @@ def _signal_process_group(proc: subprocess.Popen[str], *, forceful: bool) -> Non
     """
     if proc.poll() is not None:
         return
-    if proc.pid is not None and hasattr(os, "killpg"):
+    # getattr: test doubles may omit ``pid``; None steers us to terminate/kill.
+    pid = getattr(proc, "pid", None)
+    if pid is not None and hasattr(os, "killpg"):
         sig = signal.SIGKILL if forceful else signal.SIGTERM
         with contextlib.suppress(Exception):
-            os.killpg(os.getpgid(proc.pid), sig)
+            os.killpg(os.getpgid(pid), sig)
             return
     with contextlib.suppress(Exception):
         if forceful:

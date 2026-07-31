@@ -19,6 +19,8 @@ Do NOT use this skill for:
 - Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
 - Slack → GitHub propose/execute mutations (workflow tools)
 - Architecture audit (architecture_* tools + architecture audit skill)
+- GitHub PR CI remediation / failing checks fixes / "fix CI and push" — use
+  fix_github_pr_ci when available
 - GitHub security alert remediation / vulnerable dependencies / code-scanning
   fixes — use fix_github_security_alert when available
 
