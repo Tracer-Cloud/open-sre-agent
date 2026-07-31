@@ -121,3 +121,26 @@ def test_ready_box_shortcut_lines_stay_within_width() -> None:
             max(cell_len(line.rstrip()) for line in box_lines)
         }
         assert all(cell_len(line.rstrip()) <= width for line in plain.splitlines())
+
+
+def test_every_row_keeps_a_gap_between_command_and_description() -> None:
+    """A label longer than the fixed column must not collide with its text.
+
+    The landing page is the first screen a new user reads. With a hardcoded
+    column narrower than the longest command, ``f"{label:<44}"`` emits the label
+    unpadded and the description begins immediately after the closing quote.
+    """
+    # Arrange
+    from rich.console import Console
+
+    from surfaces.interactive_shell.ui.layout import _LANDING_EXAMPLES, _render_rows
+
+    console = Console(force_terminal=False, width=200, record=True)
+
+    # Act
+    _render_rows(console, title="Quick start", rows=_LANDING_EXAMPLES, width=42)
+    output = console.export_text()
+
+    # Assert: each command is followed by whitespace before its description.
+    for label, description in _LANDING_EXAMPLES:
+        assert f"{label} " in output, f"{label!r} runs straight into {description!r}"

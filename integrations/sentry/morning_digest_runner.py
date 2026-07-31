@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import logging
-from io import StringIO
 from typing import Any
-
-from rich.console import Console
 
 from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.agent_harness.session.integration_resolution import (
@@ -78,11 +75,9 @@ def _dispatch_headless_turn(message: str, payload: AgentPayload) -> ShellTurnRes
     session = startup.session
     _apply_digest_project_scope(session, payload)
     output = BufferOutputSink()
-    console = Console(force_terminal=False, file=StringIO())
     agent = build_default_headless_agent(
         session=session,
         output=output,
-        console=console,
         logger=logger,
         message=message,
         gather_enabled=True,

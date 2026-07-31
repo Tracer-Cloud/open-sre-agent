@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import logging
-from io import StringIO
-
-from rich.console import Console
 
 from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
@@ -48,11 +45,9 @@ def run_github_pr_sweep(payload: AgentPayload) -> str:
     startup = harness.startup()
     session = startup.session
     output = BufferOutputSink()
-    console = Console(force_terminal=False, file=StringIO())
     agent = build_default_headless_agent(
         session=session,
         output=output,
-        console=console,
         logger=logger,
         message=_PR_SWEEP_PROMPT,
         gather_enabled=True,

@@ -129,6 +129,36 @@ class AgentHarness:
         """Return the surface's grounding-context provider, if any."""
         return self._config.prompts
 
+    @classmethod
+    def start(cls, config: HarnessConfig | None = None) -> AgentHarness:
+        """Return a harness that is ready to :meth:`dispatch_message`.
+
+        Runs startup and attaches a default agent, so the common case is two
+        lines rather than assembling a console, logger, sink and factory call::
+
+            harness = AgentHarness.start()
+            result = harness.dispatch_message("why is checkout-api slow?")
+
+        Surfaces that need their own ports (a live gateway sink, a REPL console)
+        still build the agent themselves and call :meth:`attach_agent`.
+        """
+        from core.agent_harness.turns.default_headless_agent import (
+            build_default_headless_agent,
+        )
+        from core.agent_harness.turns.headless_adapters import BufferOutputSink
+
+        harness = cls(config)
+        startup = harness.startup()
+        harness.attach_agent(
+            build_default_headless_agent(session=startup.session, output=BufferOutputSink())
+        )
+        return harness
+
+    @property
+    def agent(self) -> HeadlessAgent | None:
+        """The attached agent, if one has been bound."""
+        return self._agent
+
     def startup(self) -> HarnessStartupResult:
         """Run env resolution, session bootstrap/resume, and context loading."""
         self.resolve_env_variables()
