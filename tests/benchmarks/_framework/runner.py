@@ -306,7 +306,16 @@ class BenchmarkRunner:
 
         # Persist a JSON sidecar to output_dir/report.json regardless of validation
         (output_dir / "report.json").write_text(
-            json.dumps(_report_to_dict(report, self.cost), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(
+                _report_to_dict(
+                    report,
+                    self.cost,
+                    aborted=aborted,
+                    abort_reason=abort_reason,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            ) + "\n",
             encoding="utf-8",
         )
 
@@ -824,13 +833,21 @@ def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict
     }
 
 
-def _report_to_dict(report: BenchmarkReport, cost: CostTracker) -> dict[str, Any]:
+def _report_to_dict(
+    report: BenchmarkReport,
+    cost: CostTracker,
+    *,
+    aborted: bool,
+    abort_reason: str | None,
+) -> dict[str, Any]:
     """Serializable shape for report.json."""
     return {
         "run_id": report.run_id,
         "config_hash": report.config_hash,
         "started_at": report.started_at,
         "ended_at": report.ended_at,
+        "aborted": aborted,
+        "abort_reason": abort_reason,
         "per_stratum": report.per_stratum,
         "reported_metrics": report.reported_metrics,
         "negative_results": report.negative_results,

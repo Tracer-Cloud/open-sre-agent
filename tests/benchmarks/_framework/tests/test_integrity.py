@@ -26,6 +26,8 @@ from tests.benchmarks._framework.integrity import (
     IntegrityViolation,
     make_baseline_report,
 )
+from tests.benchmarks._framework.cost import CostTracker
+from tests.benchmarks._framework.runner import _report_to_dict
 
 # --------------------------------------------------------------------------- #
 # Minimal honest adapter — passes M3 + M7 by default                          #
@@ -131,6 +133,19 @@ def test_pre_flight_passes_with_honest_config_and_adapter(tmp_path: Path) -> Non
     config = _honest_config(tmp_path)
     adapter = _HonestAdapter()
     guard.pre_flight(config, adapter)
+
+
+def test_report_serialization_includes_completion_state(tmp_path: Path) -> None:
+    report = _honest_report(tmp_path)
+    tracker = CostTracker(budget_usd=10.0)
+
+    halted = _report_to_dict(report, tracker, aborted=True, abort_reason="LLM dispatch failed")
+    finished = _report_to_dict(report, tracker, aborted=False, abort_reason=None)
+
+    assert halted["aborted"] is True
+    assert halted["abort_reason"] == "LLM dispatch failed"
+    assert finished["aborted"] is False
+    assert finished["abort_reason"] is None
 
 
 # --------------------------------------------------------------------------- #

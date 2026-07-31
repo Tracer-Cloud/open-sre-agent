@@ -27,6 +27,8 @@ def _write_report_json(run_dir: Path) -> dict:
         "config_hash": "abc123",
         "started_at": "2026-01-01T00:00:00+00:00",
         "ended_at": "2026-01-01T00:05:00+00:00",
+        "aborted": False,
+        "abort_reason": None,
         "per_stratum": {
             "all": {
                 "opensre+llm/claude_sonnet": {"a1": 0.65, "grounding": 0.80},
