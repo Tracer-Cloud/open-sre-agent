@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from config.constants.billing import ORGANIZATION_ID_ENV
 from gateway.runtime.credential_hydration import (
     CredentialHydrationConfig,
     GatewayCredentialHydrator,
@@ -105,7 +106,7 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
 def test_partial_environment_configuration_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("ORGANIZATION_ID", "org-a")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-a")
     monkeypatch.delenv("OPENSRE_CREDENTIALS_API_URL", raising=False)
     monkeypatch.delenv("OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN", raising=False)
 
