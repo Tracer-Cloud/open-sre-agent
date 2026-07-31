@@ -18,6 +18,12 @@ _RUNTIME_FACT_KEYS = ", ".join((*STATIC_FACT_KEYS, *LIVE_FACT_KEYS))
 _NEVER_RUN = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTION_COMMANDS)
 
 
+_RUNTIME_FACTS_ANTI_EXAMPLE = (
+    "Calling this tool only to read inputs['opensre_runtime'] — runtime facts "
+    "(version, PID, host, cloud, disk, memory, tools) are already in the environment block"
+)
+
+
 class PythonExecutionTool(BaseTool):
     """Run generated Python code with structured inputs and approved credentials."""
 
@@ -31,8 +37,11 @@ class PythonExecutionTool(BaseTool):
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "
         "exceptions, and timeout state, and return the result to the agent. Network access is "
         "blocked by default; opt in only for approved API-backed analysis. Subprocess spawning "
-        "is always blocked — for runtime facts read `inputs['opensre_runtime']` (injected "
-        f"automatically with: {_RUNTIME_FACT_KEYS}). For filesystem introspection use pure "
+        "is always blocked. Runtime facts "
+        f"({_RUNTIME_FACT_KEYS}) are already stated in the conversation's environment block — "
+        "answer them from there directly and never call this tool just to re-read them; code "
+        "already running for another reason can reuse them via `inputs['opensre_runtime']` "
+        "(injected automatically). For filesystem introspection use pure "
         "Python: `pathlib.Path(...).iterdir()` to list directories, "
         "`Path('/etc/hostname').read_text()` for the pod name, `psutil.disk_usage('/')` and "
         "`psutil.virtual_memory()` for disk/memory. "
@@ -44,10 +53,11 @@ class PythonExecutionTool(BaseTool):
         "Compute metrics or summaries from structured evidence already in context",
         "Run a small API-backed calculation with approved credentials",
         "Parse logs or JSON payloads when a direct tool result needs post-processing",
-        "Read runtime facts (version, time, uptime, PID, cloud, kubeconfig, tools) via inputs['opensre_runtime']",
+        "Reuse inputs['opensre_runtime'] inside code that is already computing something else",
         "List scratchpad files with pathlib; read disk/memory with psutil (no ls/df/free)",
     ]
     anti_examples = [
+        _RUNTIME_FACTS_ANTI_EXAMPLE,
         "Changing local files or shelling out to other processes",
         f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
         "Probing cloud instance metadata over the network (use the injected cloud facts)",

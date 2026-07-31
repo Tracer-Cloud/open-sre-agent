@@ -12,7 +12,7 @@ from core.agent_harness.session.integration_resolution import (
 )
 from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
-from core.agent_harness.turns.turn_results import ShellTurnResult
+from core.agent_harness.turns.turn_results import TurnResult
 from integrations.sentry.project_scope import (
     apply_sentry_project_scope,
     payload_project_slug,
@@ -59,7 +59,7 @@ def _require_sentry_configured() -> None:
         )
 
 
-def _dispatch_headless_turn(message: str, payload: AgentPayload) -> ShellTurnResult:
+def _dispatch_headless_turn(message: str, payload: AgentPayload) -> TurnResult:
     _require_sentry_configured()
 
     harness = AgentHarness(

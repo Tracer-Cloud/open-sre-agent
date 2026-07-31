@@ -25,7 +25,7 @@ from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.manager import GatewayManager, start_gateway
 from gateway.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
@@ -57,7 +57,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "config.local_env.bootstrap_opensre_env_once",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
     monkeypatch.setattr(
@@ -93,7 +93,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     sink = MagicMock()
     session = MagicMock()
-    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
+    agent_cls.return_value.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=1,
@@ -174,7 +174,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
         "config.local_env.bootstrap_opensre_env_once",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
@@ -233,7 +233,7 @@ def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> 
         "config.local_env.bootstrap_opensre_env_once",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
     monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
     monkeypatch.setattr("gateway.runtime.manager.clear_component_status", lambda: None)
     _patch_non_telegram_components(monkeypatch)

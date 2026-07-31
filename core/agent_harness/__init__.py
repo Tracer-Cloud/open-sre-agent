@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from core.agent_harness.turns.headless_adapters import BufferOutputSink
     from core.agent_harness.turns.headless_dispatch import HeadlessAgent
     from core.agent_harness.turns.orchestrator import run_turn, stream_answer
-    from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
     from core.agent_harness.turns.turn_snapshot import (
         AgentRuntimeRequest,
         TurnSnapshot,
@@ -42,7 +42,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "AgentHarness": ("core.agent_harness.harness", "AgentHarness"),
     "HarnessConfig": ("core.agent_harness.harness", "HarnessConfig"),
     "HarnessStartupResult": ("core.agent_harness.harness", "HarnessStartupResult"),
-    "ShellTurnResult": ("core.agent_harness.turns.turn_results", "ShellTurnResult"),
+    "TurnResult": ("core.agent_harness.turns.turn_results", "TurnResult"),
     "ToolCallingTurnResult": ("core.agent_harness.turns.turn_results", "ToolCallingTurnResult"),
     "AgentRuntimeRequest": ("core.agent_harness.turns.turn_snapshot", "AgentRuntimeRequest"),
     "TurnSnapshot": ("core.agent_harness.turns.turn_snapshot", "TurnSnapshot"),
@@ -90,9 +90,9 @@ __all__ = [
     "HarnessConfig",
     "HarnessStartupResult",
     "HeadlessAgent",
-    "ShellTurnResult",
     "ToolCallingDeps",
     "ToolCallingTurnResult",
+    "TurnResult",
     "TurnSnapshot",
     "TurnSnapshotSource",
     "build_default_headless_agent",

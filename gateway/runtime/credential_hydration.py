@@ -7,11 +7,12 @@ import os
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
+from config.constants.tenancy import (
+    CREDENTIALS_API_URL_ENV,
+    CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
+    TENANT_ORGANIZATION_ID_ENV,
+)
 from integrations.credentials_api import CredentialsApiClient, hydrate_integration_store
-
-_ORGANIZATION_ID = "ORGANIZATION_ID"
-_API_URL = "OPENSRE_CREDENTIALS_API_URL"
-_SECRET_ARN = "OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN"
 
 
 class SecretsManagerClient(Protocol):
@@ -42,10 +43,12 @@ class CredentialHydrationConfig:
     def from_environment(cls) -> CredentialHydrationConfig | None:
         """Return ``None`` when disabled, and reject partial configuration."""
         required_values = {
-            _ORGANIZATION_ID: os.getenv(_ORGANIZATION_ID, "").strip(),
-            _SECRET_ARN: os.getenv(_SECRET_ARN, "").strip(),
+            TENANT_ORGANIZATION_ID_ENV: os.getenv(TENANT_ORGANIZATION_ID_ENV, "").strip(),
+            CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV: os.getenv(
+                CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, ""
+            ).strip(),
         }
-        credentials_api_url = os.getenv(_API_URL, "").strip()
+        credentials_api_url = os.getenv(CREDENTIALS_API_URL_ENV, "").strip()
         if not any(required_values.values()) and not credentials_api_url:
             return None
         missing = [name for name, value in required_values.items() if not value]
@@ -54,9 +57,9 @@ class CredentialHydrationConfig:
         if credentials_api_url and not credentials_api_url.lower().startswith("https://"):
             raise ValueError("Credentials API URL must use HTTPS")
         return cls(
-            organization_id=required_values[_ORGANIZATION_ID],
+            organization_id=required_values[TENANT_ORGANIZATION_ID_ENV],
             credentials_api_url=credentials_api_url or None,
-            bootstrap_secret_arn=required_values[_SECRET_ARN],
+            bootstrap_secret_arn=required_values[CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV],
         )
 
 
