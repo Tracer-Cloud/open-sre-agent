@@ -63,6 +63,22 @@ def _stored_section() -> dict[str, Any]:
         raise RemoteSyncConfigError(str(exc)) from exc
 
 
+def _stored_remote_sync_value(
+    key: str,
+    *,
+    expected_type: type[object],
+) -> str:
+    """Return one stored value with a key-specific type check."""
+    value = _stored_section().get(key)
+    if value is None:
+        return ""
+    if not isinstance(value, expected_type):
+        raise RemoteSyncConfigError(
+            f"invalid remote_sync.{key}: expected a {expected_type.__name__}, got {type(value).__name__}"
+        )
+    return value.strip() if isinstance(value, str) else str(value).strip()
+
+
 def _truthy(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -74,16 +90,13 @@ def _truthy(value: object) -> bool:
 def _env_or_stored(
     env_name: str,
     stored_key: str,
-    stored: Callable[[], dict[str, Any]],
+    stored: Callable[[str], str],
 ) -> str:
     """Environment value, else the stored one. The file is read only if needed."""
     env = os.getenv(env_name, "").strip()
     if env:
         return env
-    value = stored().get(stored_key)
-    if value is None:
-        return ""
-    return str(value).strip()
+    return stored(stored_key)
 
 
 def remote_sync_enabled() -> bool:
@@ -94,22 +107,6 @@ def remote_sync_enabled() -> bool:
     return _truthy(_stored_section().get("enabled"))
 
 
-def _lazy_stored() -> Callable[[], dict[str, Any]]:
-    """Read the settings file at most once, and only if something needs it.
-
-    A run configured entirely through the environment must not fail because an
-    unrelated section of ``config.yml`` is damaged.
-    """
-    cache: dict[str, dict[str, Any]] = {}
-
-    def read() -> dict[str, Any]:
-        if "section" not in cache:
-            cache["section"] = _stored_section()
-        return cache["section"]
-
-    return read
-
-
 def load_remote_sync_config() -> RemoteSyncConfig | None:
     """Settings when sync is on, otherwise ``None``.
 
@@ -118,23 +115,42 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     """
     if not remote_sync_enabled():
         return None
-    stored = _lazy_stored()
-    bucket = _env_or_stored(REMOTE_SYNC_BUCKET_ENV, "bucket", stored)
+    bucket = _env_or_stored(
+        REMOTE_SYNC_BUCKET_ENV,
+        "bucket",
+        lambda key: _stored_remote_sync_value(key, expected_type=str),
+    )
     if not bucket:
         raise RemoteSyncConfigError(
             f"{REMOTE_SYNC_ENV} is on but {REMOTE_SYNC_BUCKET_ENV} names no bucket"
         )
-    prefix = _env_or_stored(REMOTE_SYNC_PREFIX_ENV, "prefix", stored) or DEFAULT_REMOTE_SYNC_PREFIX
+    prefix = _env_or_stored(
+        REMOTE_SYNC_PREFIX_ENV,
+        "prefix",
+        lambda key: _stored_remote_sync_value(key, expected_type=str),
+    ) or DEFAULT_REMOTE_SYNC_PREFIX
     provider = (
-        _env_or_stored(REMOTE_SYNC_PROVIDER_ENV, "provider", stored).lower()
+        _env_or_stored(
+            REMOTE_SYNC_PROVIDER_ENV,
+            "provider",
+            lambda key: _stored_remote_sync_value(key, expected_type=str),
+        ).lower()
         or DEFAULT_REMOTE_SYNC_PROVIDER
     )
     return RemoteSyncConfig(
         bucket=bucket,
         provider=provider,
         prefix=prefix,
-        region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
-        profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
+        region=_env_or_stored(
+            REMOTE_SYNC_REGION_ENV,
+            "region",
+            lambda key: _stored_remote_sync_value(key, expected_type=str),
+        ),
+        profile=_env_or_stored(
+            REMOTE_SYNC_PROFILE_ENV,
+            "profile",
+            lambda key: _stored_remote_sync_value(key, expected_type=str),
+        ),
     )
 
 

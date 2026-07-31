@@ -807,7 +807,28 @@ def test_environment_overrides_the_stored_bucket(
     assert config.bucket == "env-bucket"
 
 
-# ── Org-scoped turns must not sync (keys carry no principal or actor) ────────
+def test_environment_overrides_avoid_bad_stored_bucket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An env-only config must not be blocked by a malformed stored bucket."""
+    # Arrange
+    from config.constants import paths as path_mod
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": True, "bucket": ["stored-bucket"]})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert
+    assert config is not None
+    assert config.bucket == "env-bucket"
+
+
+# ── Org-scoped turns namespace object keys by org/member ────────────────────
 
 
 def test_org_scoped_turn_refuses_to_sync(monkeypatch: pytest.MonkeyPatch) -> None:
