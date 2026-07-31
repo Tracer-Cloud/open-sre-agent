@@ -105,10 +105,11 @@ COMMANDS: tuple[SlashCommand, ...] = (
         usage=(_USAGE,),
         notes=(
             "Off unless OPENSRE_REMOTE_SYNC is set. Default provider is "
-            f"{DEFAULT_REMOTE_SYNC_PROVIDER}; set OPENSRE_REMOTE_SYNC_PROVIDER "
-            "to choose another registered backend. Integration credentials and "
-            "model keys are never uploaded. Same service as "
-            "`opensre remote-sync` (gateway clients share this slash command).",
+            f"{DEFAULT_REMOTE_SYNC_PROVIDER}; built-in backends include aws and "
+            "vercel (BLOB_READ_WRITE_TOKEN). Set OPENSRE_REMOTE_SYNC_PROVIDER "
+            "to choose a registered backend. Integration credentials and model "
+            "keys are never uploaded. Same service as `opensre remote-sync` "
+            "(gateway clients share this slash command).",
         ),
         first_arg_completions=(
             (
@@ -119,6 +120,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
         ),
         use_cases=(
             "sync my conversations to S3",
+            "sync my conversations to Vercel Blob",
             "back up my opensre memory",
             "set up opensre on my second laptop",
         ),
