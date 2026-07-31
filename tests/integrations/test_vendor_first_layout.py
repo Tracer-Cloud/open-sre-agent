@@ -31,6 +31,7 @@ ALLOWED_FLAT_MODULES = frozenset(
         "effective_models.py",
         "harness_adapters.py",
         "mcp_streamable_http_compat.py",
+        "mcp_transport.py",
         "messaging_security.py",
         "models.py",
         "port.py",
