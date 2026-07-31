@@ -27,7 +27,6 @@ from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.manager import GatewayManager
 from integrations import store
 from integrations.credentials_api import IntegrationStoreV2
-from platform.harness_ports import resolve_integrations
 
 
 class _Secrets:
