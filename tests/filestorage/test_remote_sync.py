@@ -21,14 +21,12 @@ from config.constants.filestorage import (
 )
 from platform.filestorage import engine as sync_module
 from platform.filestorage.config import (
-    RemoteSyncConfig,
     load_remote_sync_config,
     remote_sync_enabled,
 )
 from platform.filestorage.engine import content_tag, pull, push, resolve_direction, run_sync
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
-from platform.filestorage.messages import format_status_lines
 from platform.filestorage.operations import get_sync_status
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.syncable import SyncRoot, is_syncable
@@ -359,38 +357,28 @@ def test_second_push_reuploads_nothing(home: Path, roots: tuple[SyncRoot, ...]) 
     assert report.skipped == 2
 
 
-def test_status_reports_public_bucket_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "platform.filestorage.operations.describe_bucket_public_access",
-        lambda _bucket: True,
-    )
-    monkeypatch.setattr(
-        "platform.filestorage.operations.load_remote_sync_config",
-        lambda: RemoteSyncConfig(bucket="public-bucket"),
-    )
+def test_env_only_two_variable_config_ignores_a_corrupt_settings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented two-variable setup must survive a broken config.yml."""
+    # Arrange: sync is enabled entirely through env, while the file is damaged.
+    from config.constants import paths
 
-    status = get_sync_status()
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
 
-    assert status.warnings == ("Warning: public-bucket is publicly readable.",)
-    assert "publicly readable" in "\n".join(format_status_lines(status))
+    # Act
+    config = load_remote_sync_config()
 
-
-def test_status_reports_bucket_policy_status_note(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "platform.filestorage.operations.describe_bucket_public_access",
-        lambda _bucket: None,
-    )
-    monkeypatch.setattr(
-        "platform.filestorage.operations.load_remote_sync_config",
-        lambda: RemoteSyncConfig(bucket="note-bucket"),
-    )
-
-    status = get_sync_status()
-
-    assert status.warnings == (
-        "Bucket visibility note: note-bucket could not be checked because "
-        "s3:GetBucketPolicyStatus is not available for this caller.",
-    )
+    # Assert: unset optionals use defaults instead of consulting the file.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+    assert config.prefix == DEFAULT_REMOTE_SYNC_PREFIX
+    assert config.provider == DEFAULT_REMOTE_SYNC_PROVIDER
+    assert config.region == ""
+    assert config.profile == ""
 
 
 def test_aws_failures_name_their_cause() -> None:
@@ -876,7 +864,6 @@ def test_unbound_laptop_turn_still_syncs(monkeypatch: pytest.MonkeyPatch, tmp_pa
     """The refusal is scoped to organizations, not a blanket disable."""
     # Arrange
     from config.constants import paths
-    from platform.filestorage.operations import get_sync_status
 
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
@@ -950,30 +937,6 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     assert config is not None
     assert config.bucket == "env-bucket"
     assert config.prefix == "env-prefix"
-
-
-def test_env_only_two_variable_config_ignores_a_corrupt_settings_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The documented two-variable setup must survive a broken config.yml."""
-    # Arrange: sync is enabled entirely through env, while the file is damaged.
-    from config.constants import paths
-
-    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
-    (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
-    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
-    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
-
-    # Act
-    config = load_remote_sync_config()
-
-    # Assert: unset optionals use defaults instead of consulting the file.
-    assert config is not None
-    assert config.bucket == "env-bucket"
-    assert config.prefix == DEFAULT_REMOTE_SYNC_PREFIX
-    assert config.provider == DEFAULT_REMOTE_SYNC_PROVIDER
-    assert config.region == ""
-    assert config.profile == ""
 
 
 def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:

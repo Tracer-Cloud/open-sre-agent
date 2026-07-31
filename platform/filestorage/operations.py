@@ -27,7 +27,6 @@ from platform.filestorage.engine import SyncReport, resolve_direction, run_sync
 from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import OrgScopeNotSupportedError
 from platform.filestorage.providers import build_object_store
-from platform.filestorage.providers.aws import describe_bucket_public_access
 from platform.filestorage.syncable import syncable_roots
 
 
@@ -46,7 +45,6 @@ class SyncStatus:
 
     config: RemoteSyncConfig | None
     roots: tuple[SyncRootStatus, ...]
-    warnings: tuple[str, ...] = ()
 
     @property
     def enabled(self) -> bool:
@@ -80,23 +78,6 @@ def _refuse_org_scoped_turn() -> None:
         )
 
 
-def _bucket_warning(config: RemoteSyncConfig) -> tuple[str, ...]:
-    if config.provider != "aws":
-        return ()
-    try:
-        is_public = describe_bucket_public_access(config.bucket)
-    except Exception as exc:  # noqa: BLE001
-        return (f"Bucket visibility check unavailable: {exc}",)
-    if is_public is None:
-        return (
-            f"Bucket visibility note: {config.bucket} could not be checked because "+
-            "s3:GetBucketPolicyStatus is not available for this caller.",
-        )
-    if is_public:
-        return (f"Warning: {config.bucket} is publicly readable.",)
-    return ()
-
-
 def get_sync_status() -> SyncStatus:
     """Load config and resolve scoped roots (no network, no cached state)."""
     _refuse_org_scoped_turn()
@@ -105,8 +86,7 @@ def get_sync_status() -> SyncStatus:
         SyncRootStatus(name=root.name, path=root.path, exists=root.path.is_dir())
         for root in syncable_roots()
     )
-    warnings = _bucket_warning(config) if config is not None else ()
-    return SyncStatus(config=config, roots=roots, warnings=warnings)
+    return SyncStatus(config=config, roots=roots)
 
 
 def run_remote_sync(
