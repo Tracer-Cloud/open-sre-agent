@@ -189,7 +189,6 @@ from config.constants.opensre_infra_aws import (
 from config.constants.pagerduty import PAGERDUTY_API_KEY_ENV, PAGERDUTY_BASE_URL_ENV
 from config.constants.paths import (
     CONTEXT_ROOT_ENV,
-    INTEGRATIONS_STORE_PATH,
     OPENSRE_HOME_DIR,
     OPENSRE_TMP_DIR,
     ORGS_DIR_NAME,
@@ -301,6 +300,8 @@ from config.constants.temporal import (
 from config.constants.tenancy import (
     CREDENTIALS_API_URL_ENV,
     CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
+    INTEGRATIONS_SECRET_ARN_ENV,
+    INTEGRATIONS_STORE_PATH_ENV,
     TENANT_ORGANIZATION_ID_ENV,
 )
 from config.constants.tracer import TRACER_BASE_URL_ENV, TRACER_JWT_TOKEN_ENV
@@ -400,7 +401,6 @@ __all__ = [
     "HONEYCOMB_DATASET_ENV",
     "INCIDENT_IO_API_KEY_ENV",
     "INCIDENT_IO_BASE_URL_ENV",
-    "INTEGRATIONS_STORE_PATH",
     "IS_WINDOWS",
     "JENKINS_API_TOKEN_ENV",
     "JENKINS_BASE_URL_ENV",
@@ -469,6 +469,8 @@ __all__ = [
     "TENANT_ORGANIZATION_ID_ENV",
     "CREDENTIALS_API_URL_ENV",
     "CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV",
+    "INTEGRATIONS_SECRET_ARN_ENV",
+    "INTEGRATIONS_STORE_PATH_ENV",
     "ORGS_DIR_NAME",
     "PAGERDUTY_API_KEY_ENV",
     "PAGERDUTY_BASE_URL_ENV",

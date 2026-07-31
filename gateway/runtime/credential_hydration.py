@@ -10,9 +10,11 @@ from typing import Any, Protocol
 from config.constants.tenancy import (
     CREDENTIALS_API_URL_ENV,
     CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
+    INTEGRATIONS_SECRET_ARN_ENV,
     TENANT_ORGANIZATION_ID_ENV,
 )
 from integrations.credentials_api import CredentialsApiClient, hydrate_integration_store
+from integrations.secrets_vault import hydrate_integration_store_from_secret
 
 
 class SecretsManagerClient(Protocol):
@@ -38,6 +40,7 @@ class CredentialHydrationConfig:
     organization_id: str
     bootstrap_secret_arn: str
     credentials_api_url: str | None = None
+    integrations_secret_arn: str | None = None
 
     @classmethod
     def from_environment(cls) -> CredentialHydrationConfig | None:
@@ -49,7 +52,9 @@ class CredentialHydrationConfig:
             ).strip(),
         }
         credentials_api_url = os.getenv(CREDENTIALS_API_URL_ENV, "").strip()
-        if not any(required_values.values()) and not credentials_api_url:
+        integrations_secret_arn = os.getenv(INTEGRATIONS_SECRET_ARN_ENV, "").strip()
+        optional_values = (credentials_api_url, integrations_secret_arn)
+        if not any(required_values.values()) and not any(optional_values):
             return None
         missing = [name for name, value in required_values.items() if not value]
         if missing:
@@ -60,6 +65,7 @@ class CredentialHydrationConfig:
             organization_id=required_values[TENANT_ORGANIZATION_ID_ENV],
             credentials_api_url=credentials_api_url or None,
             bootstrap_secret_arn=required_values[CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV],
+            integrations_secret_arn=integrations_secret_arn or None,
         )
 
 
@@ -108,15 +114,35 @@ class GatewayCredentialHydrator:
 
     def hydrate(self) -> GatewayBootstrap:
         """Hydrate credentials atomically before any runtime component starts."""
-        response = self._secrets_client.get_secret_value(SecretId=self._config.bootstrap_secret_arn)
+        bootstrap = _parse_bootstrap_secret(
+            self._secret_string(self._config.bootstrap_secret_arn, "Bootstrap")
+        )
+        # The credentials API wins when both are configured: an operator who
+        # sets a URL is deliberately routing this silo away from its secret.
+        if self._config.credentials_api_url is not None:
+            self._hydrate_from_credentials_api(bootstrap)
+            return replace(bootstrap, integrations_hydrated=True)
+        if self._config.integrations_secret_arn is not None:
+            hydrate_integration_store_from_secret(
+                self._secret_string(self._config.integrations_secret_arn, "Integrations")
+            )
+            return replace(bootstrap, integrations_hydrated=True)
+        return bootstrap
+
+    def _secret_string(self, secret_arn: str, label: str) -> str:
+        """Read one pinned secret ARN, rejecting a non-string value."""
+        response = self._secrets_client.get_secret_value(SecretId=secret_arn)
         secret_string = response.get("SecretString")
         if not isinstance(secret_string, str):
-            raise ValueError("Bootstrap secret has no string value")
-        bootstrap = _parse_bootstrap_secret(secret_string)
-        if self._config.credentials_api_url is None:
-            return bootstrap
+            raise ValueError(f"{label} secret has no string value")
+        return secret_string
+
+    def _hydrate_from_credentials_api(self, bootstrap: GatewayBootstrap) -> None:
+        """Pull this tenant's store from the webapp over HTTPS."""
         if bootstrap.credentials_api_token is None:
             raise ValueError("Bootstrap secret has no credentials API token")
+        if self._config.credentials_api_url is None:
+            raise ValueError("Credentials API URL is not configured")
         with CredentialsApiClient(
             base_url=self._config.credentials_api_url,
             bootstrap_credential=bootstrap.credentials_api_token,
@@ -125,7 +151,6 @@ class GatewayCredentialHydrator:
                 client=client,
                 organization_id=self._config.organization_id,
             )
-        return replace(bootstrap, integrations_hydrated=True)
 
 
 __all__ = [

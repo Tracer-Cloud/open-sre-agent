@@ -37,6 +37,10 @@ ALLOWED_FLAT_MODULES = frozenset(
         "probes.py",
         "registry.py",
         "scheduled_agent_bootstrap.py",
+        # Cross-cutting credential-resolution infra (hydrates every vendor's org
+        # creds from the tenant's Secrets Manager blob), not a vendor — the
+        # Secrets Manager peer of webapp_vault.py.
+        "secrets_vault.py",
         "selectors.py",
         "setup_flow.py",
         "store.py",
