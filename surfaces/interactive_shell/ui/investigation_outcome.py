@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from platform.common.errors import OpenSREError
+from tools.interactive_shell.shared.investigation_launch import ForegroundInvestigationStatus
 
-InvestigationStatus = Literal["completed", "failed", "cancelled"]
 FailureCategory = Literal[
     "config",
     "integration",
@@ -46,7 +46,7 @@ _INTEGRATION_KEYWORDS: tuple[tuple[str, str], ...] = (
 class InvestigationOutcome:
     """Facts from one foreground investigation run."""
 
-    status: InvestigationStatus
+    status: ForegroundInvestigationStatus
     target: str = ""
     investigation_id: str = ""
     final_state: dict[str, Any] | None = None
@@ -150,8 +150,8 @@ def user_facing_error_message(exc: BaseException, *, max_lines: int = 3) -> str:
 
 __all__ = [
     "FailureCategory",
+    "ForegroundInvestigationStatus",
     "InvestigationOutcome",
-    "InvestigationStatus",
     "classify_investigation_failure",
     "failure_detail_from_exception",
     "normalize_investigation_target",
