@@ -38,20 +38,34 @@ def _warn_conflicting_names_once(chosen: str) -> None:
     )
 
 
+def declared_organization_ids() -> tuple[str, ...]:
+    """Every distinct organization this deployment declares, best name first.
+
+    Empty when unbound, one entry when the names agree (or only one is set),
+    and two when they disagree — which is a misconfiguration. Callers that must
+    not guess an owner check the length themselves; :func:`organization_id`
+    flattens the disagreement to a warning for callers that can proceed.
+    """
+    ordered: dict[str, None] = {}
+    for name in _ORGANIZATION_ID_ENV_NAMES:
+        value = (os.getenv(name) or "").strip()
+        if value:
+            ordered.setdefault(value, None)
+    return tuple(ordered)
+
+
 def organization_id() -> str:
     """The organization this deployment serves, or "" when unbound.
 
     A laptop sets neither and gets "", which leaves callers unbound rather than
     guessing an owner for a customer's data.
     """
-    values = [(name, (os.getenv(name) or "").strip()) for name in _ORGANIZATION_ID_ENV_NAMES]
-    present = [(name, value) for name, value in values if value]
-    if not present:
+    declared = declared_organization_ids()
+    if not declared:
         return ""
-    chosen = present[0][1]
-    if len({value for _name, value in present}) > 1:
-        _warn_conflicting_names_once(chosen)
-    return chosen
+    if len(declared) > 1:
+        _warn_conflicting_names_once(declared[0])
+    return declared[0]
 
 
-__all__ = ["organization_id"]
+__all__ = ["declared_organization_ids", "organization_id"]

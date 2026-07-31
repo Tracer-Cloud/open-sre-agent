@@ -11,7 +11,11 @@ from __future__ import annotations
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
-from config.constants.organization import _warn_conflicting_names_once, organization_id
+from config.constants.organization import (
+    _warn_conflicting_names_once,
+    declared_organization_ids,
+    organization_id,
+)
 from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 
 # Exactly the organization-related env a Fargate task definition injects.
@@ -58,14 +62,29 @@ def test_unbound_when_neither_is_set() -> None:
     assert organization_id() == ""
 
 
-def test_prefixed_name_wins_when_both_are_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A generic ORGANIZATION_ID must not quietly outrank the product's own."""
+def test_both_names_agreeing_is_one_organization_and_no_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Setting both names to the same id is a valid deployment, not a conflict.
+
+    Precedence is pinned by the conflicting-values test below; what this one
+    guards is that agreement stays silent, so the warning keeps meaning
+    "someone is misconfigured".
+    """
     # Arrange
+    _warn_conflicting_names_once.cache_clear()
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_product")
     monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_product")
 
-    # Act / Assert
-    assert organization_id() == "org_product"
+    # Act
+    with caplog.at_level("WARNING"):
+        resolved = organization_id()
+
+    # Assert
+    assert resolved == "org_product"
+    assert declared_organization_ids() == ("org_product",)
+    assert "different organizations" not in caplog.text
 
 
 def test_conflicting_names_warn_and_do_not_silently_pick(

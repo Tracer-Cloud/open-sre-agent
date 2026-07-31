@@ -203,6 +203,28 @@ def test_the_control_plane_tenant_id_declares_the_mount_owner(
         assert paths.opensre_home() == mount
 
 
+def test_mount_refuses_a_turn_when_the_two_names_disagree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ambiguous ownership fails closed, even for a matching principal.
+
+    Everywhere else a disagreement is a warning and the prefixed name wins.
+    Here it is the exact question being asked — which organization owns this
+    volume — so guessing could write ACME's data into GLOBEX's mount.
+    """
+    # Arrange: both names set, to different organizations.
+    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
+    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, GLOBEX.id)
+
+    # Act / Assert: the principal matches one of them, and it still refuses.
+    with (
+        bound_storage_scope(_member(ACME, ALICE)),
+        pytest.raises(paths.ContextRootOwnerMismatchError),
+    ):
+        paths.opensre_home()
+
+
 def test_mount_still_refuses_a_foreign_org_under_the_control_plane_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
