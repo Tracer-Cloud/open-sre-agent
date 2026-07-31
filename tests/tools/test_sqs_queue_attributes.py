@@ -160,7 +160,6 @@ def test_normal_backlog_is_parsed(mock_call) -> None:
         _attrs_ok(
             ApproximateNumberOfMessages="4821",
             ApproximateNumberOfMessagesNotVisible="12",
-            ApproximateAgeOfOldestMessage="95",
             VisibilityTimeout="300",
             RedrivePolicy='{"deadLetterTargetArn":"arn:aws:sqs:us-east-1:1:dlq","maxReceiveCount":5}',
         ),
@@ -189,7 +188,6 @@ def test_stuck_consumer_poison_pill_shape_is_surfaced(mock_call) -> None:
         _attrs_ok(
             ApproximateNumberOfMessages="0",
             ApproximateNumberOfMessagesNotVisible="3",
-            ApproximateAgeOfOldestMessage="7200",
             VisibilityTimeout="30",
         ),
     ]
@@ -198,7 +196,6 @@ def test_stuck_consumer_poison_pill_shape_is_surfaced(mock_call) -> None:
 
     assert queue["visible_count"] == 0
     assert queue["in_flight_count"] == 3
-    assert queue["oldest_message_age_seconds"] == 7200
     assert queue["visibility_timeout_seconds"] == 30
     assert queue["has_dlq"] is False
     assert queue["redrive_policy"] is None
@@ -213,7 +210,6 @@ def test_missing_numeric_attributes_are_none_not_zero(mock_call) -> None:
 
     assert queue["visible_count"] is None
     assert queue["in_flight_count"] is None
-    assert queue["oldest_message_age_seconds"] is None
 
 
 @patch(_TOOL_PATH)

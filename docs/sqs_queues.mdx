@@ -3,7 +3,7 @@ title: "AWS SQS"
 description: "Inspect SQS queue state — backlog depth, stuck consumers, and dead-letter wiring — during incidents"
 ---
 
-OpenSRE uses AWS SQS queue attributes to answer the first question of every queue-backed incident: **"what state is this queue actually in?"** When a queue alert fires, the planner can read message depth, in-flight count, oldest-message age, visibility timeout, and dead-letter queue wiring — the signals that distinguish a normal backlog from consumers that are stuck.
+OpenSRE uses AWS SQS queue attributes to answer the first question of every queue-backed incident: **"what state is this queue actually in?"** When a queue alert fires, the planner can read message depth, in-flight count, visibility timeout, and dead-letter queue wiring — the signals that distinguish a normal backlog from consumers that are stuck.
 
 Queue inspection is read-only and routed through the shared `aws_sdk_client` allowlist, so the integration cannot send, consume, or delete messages.
 
@@ -11,7 +11,7 @@ Queue inspection is read-only and routed through the shared `aws_sdk_client` all
 
 Queue state lives in queue *attributes*, not in logs or metrics. A consumer that hangs without raising an exception writes no error line anywhere — so log search comes back clean while the queue quietly stops draining.
 
-The specific failure this surfaces: a message that causes a consumer to hang past its `VisibilityTimeout` becomes visible again and is redelivered to the next consumer, which also hangs. Every consumer ends up holding the same message. Nothing errors, so nothing reaches the logs, and without a `RedrivePolicy` there is no receive-count ceiling to break the cycle. Reading three attributes — `in_flight_count` pinned at the consumer count, a climbing `oldest_message_age_seconds`, and `has_dlq: false` — identifies it immediately.
+The specific failure this surfaces: a message that causes a consumer to hang past its `VisibilityTimeout` becomes visible again and is redelivered to the next consumer, which also hangs. Every consumer ends up holding the same message. Nothing errors, so nothing reaches the logs, and without a `RedrivePolicy` there is no receive-count ceiling to break the cycle. Reading two attributes — `in_flight_count` pinned at the consumer count and `has_dlq: false` — identifies it immediately.
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ The tool calls `ListQueues` to discover queues, then `GetQueueAttributes` for ea
 
 | Tool | AWS API calls | What it returns |
 | --- | --- | --- |
-| `get_sqs_queue_attributes` | `sqs:ListQueues`, `sqs:GetQueueAttributes` | Per-queue state — visible depth, in-flight count, oldest-message age, visibility timeout, DLQ wiring, and FIFO flag. |
+| `get_sqs_queue_attributes` | `sqs:ListQueues`, `sqs:GetQueueAttributes` | Per-queue state — visible depth, in-flight count, visibility timeout, DLQ wiring, and FIFO flag. |
 
 ### Parameters
 
@@ -44,7 +44,6 @@ The tool calls `ListQueues` to discover queues, then `GetQueueAttributes` for ea
 | --- | --- |
 | `visible_count` | Messages available for delivery (`ApproximateNumberOfMessages`). |
 | `in_flight_count` | Messages delivered but not yet deleted (`ApproximateNumberOfMessagesNotVisible`). |
-| `oldest_message_age_seconds` | Age of the oldest non-deleted message. |
 | `visibility_timeout_seconds` | How long a message stays hidden after delivery before redelivery. |
 | `has_dlq` / `redrive_policy` | Whether a dead-letter queue is configured, and its target plus `maxReceiveCount`. |
 | `is_fifo` | Whether the queue is FIFO. |
@@ -55,7 +54,6 @@ The tool calls `ListQueues` to discover queues, then `GetQueueAttributes` for ea
 | --- | --- | --- |
 | `visible_count` | High — producers outpacing consumers | Near zero |
 | `in_flight_count` | Low | Pinned at the consumer/pod count |
-| `oldest_message_age_seconds` | Moderate, tracks the backlog | Climbing well past normal processing time |
 | `has_dlq` | Usually `true` | Often `false` — nothing breaks the redelivery cycle |
 
 <Note>

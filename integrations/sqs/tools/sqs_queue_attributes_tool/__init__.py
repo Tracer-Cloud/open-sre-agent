@@ -3,8 +3,8 @@
 Wraps the read-only ``list_queues`` + ``get_queue_attributes`` APIs so the
 planner can distinguish a normal backlog (visible high, in-flight low) from
 stuck consumers (visible near zero, in-flight pinned at the consumer count,
-oldest-message age climbing, no DLQ) — a shape that leaves no trace in logs,
-because a consumer hanging past its visibility timeout never raises.
+no DLQ) — a shape that leaves no trace in logs, because a consumer hanging
+past its visibility timeout never raises.
 
 ``list_queues`` returns URLs only, so attributes are fetched per queue; the
 ``max_queues`` cap bounds that fan-out.
@@ -65,7 +65,6 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
     return {
         "visible_count": _int("ApproximateNumberOfMessages"),
         "in_flight_count": _int("ApproximateNumberOfMessagesNotVisible"),
-        "oldest_message_age_seconds": _int("ApproximateAgeOfOldestMessage"),
         "visibility_timeout_seconds": _int("VisibilityTimeout"),
         "has_dlq": redrive_policy is not None,
         "redrive_policy": redrive_policy,
@@ -79,17 +78,17 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
     source="sqs",
     description=(
         "List AWS SQS queues by name prefix and return per-queue attributes — "
-        "visible message depth, in-flight count, oldest-message age, visibility "
-        "timeout, dead-letter queue wiring, and FIFO flag. Use this to tell a "
-        "normal backlog (visible high, in-flight low) apart from stuck consumers "
-        "(visible near zero, in-flight pinned at the consumer count, old "
-        "messages, no DLQ)."
+        "visible message depth, in-flight count, visibility timeout, "
+        "dead-letter queue wiring, and FIFO flag. Use this to tell a normal "
+        "backlog (visible high, in-flight low) apart from stuck consumers "
+        "(visible near zero, in-flight pinned at the consumer count, no DLQ)."
     ),
     use_cases=[
         "Diagnosing stuck consumers: in-flight count equals the consumer/pod count",
         "Identifying a poison-pill message cycling due to a short VisibilityTimeout",
         "Checking whether a queue has a dead-letter queue configured at all",
-        "Assessing backlog depth when an ApproximateAgeOfOldestMessage alert fires",
+        "Investigating a queue-age or backlog alert — returns depth, in-flight "
+        "count, and DLQ configuration",
         "Confirming whether a queue is draining after a consumer deploy or scale-up",
     ],
     requires=[],
