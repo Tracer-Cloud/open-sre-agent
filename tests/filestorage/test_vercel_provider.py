@@ -247,6 +247,40 @@ def test_malformed_blobs_field_is_remote_sync_unavailable() -> None:
     assert store.list_objects("") == []
 
 
+def test_incomplete_blob_metadata_is_remote_sync_unavailable() -> None:
+    """A blob missing pathname/uploadedAt must not become a phantom or "now" entry.
+
+    Defaulting an absent pathname to "" or an absent/unparseable uploadedAt to
+    "now" would make incomplete metadata look authoritative: an empty-key
+    object masks the real remote key, and a "now" timestamp can make stale
+    remote data outrank a genuinely newer local file.
+    """
+
+    class _Weird(httpx.BaseTransport):
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=self._payload, request=request)
+
+    bad_blobs = (
+        {"uploadedAt": "2024-01-01T00:00:00Z"},  # missing pathname
+        {"pathname": "", "uploadedAt": "2024-01-01T00:00:00Z"},  # blank pathname
+        {"pathname": "opensre/a.jsonl"},  # missing uploadedAt
+        {"pathname": "opensre/a.jsonl", "uploadedAt": None},  # null uploadedAt
+        {"pathname": "opensre/a.jsonl", "uploadedAt": "not-a-timestamp"},  # unparseable
+        {"pathname": "opensre/a.jsonl", "uploadedAt": 12345},  # wrong type
+    )
+    for blob in bad_blobs:
+        store = VercelBlobObjectStore(
+            _config(),
+            token=_TOKEN,
+            client=httpx.Client(transport=_Weird({"blobs": [blob], "hasMore": False})),
+        )
+        with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+            store.list_objects("")
+
+
 def test_engine_push_restore_via_registry(tmp_path_factory: pytest.TempPathFactory) -> None:
     """Registry → Vercel store → push → pull into a second tree (same contract as S3)."""
     from pathlib import Path
