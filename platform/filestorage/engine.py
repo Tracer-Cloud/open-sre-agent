@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from config.principal import StorageScope
+from config.scope_context import current_scope
 from platform.filestorage.enums import SyncDirection
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import ObjectStore, RemoteObject
@@ -92,6 +94,24 @@ def _relative_key(root: SyncRoot, path: Path) -> str:
     return f"{root.name}/{path.relative_to(root.path).as_posix()}"
 
 
+def _scope_key_prefix(scope: StorageScope | None = None) -> str:
+    """Object-store namespace for the current turn.
+
+    Unbound laptop turns keep the historical flat keys. Org-scoped turns name
+    the owning org and actor so two members cannot overlap in the bucket.
+    """
+    scope = current_scope() if scope is None else scope
+    if scope is None or scope.principal.kind != "org":
+        return ""
+    return f"orgs/{scope.principal.id}/users/{scope.actor.id}"
+
+
+def _scoped_key(root: SyncRoot, path: Path, *, scope: StorageScope | None = None) -> str:
+    key = _relative_key(root, path)
+    prefix = _scope_key_prefix(scope)
+    return key if not prefix else f"{prefix}/{key}"
+
+
 def _modified_at(path: Path) -> datetime:
     return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
@@ -119,7 +139,9 @@ def push(
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
-    listing = remote if remote is not None else store.list_objects("")
+    scope = current_scope()
+    prefix = _scope_key_prefix(scope)
+    listing = remote if remote is not None else store.list_objects(prefix)
     by_key = {obj.key: obj for obj in listing}
     # Resolve each root once rather than per file: this loop touches every
     # session and memory file on the machine.
@@ -136,7 +158,7 @@ def push(
             planned.append((root, path))
 
     for root, path in planned:
-        key = _relative_key(root, path)
+        key = _scoped_key(root, path, scope=scope)
         data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
@@ -165,8 +187,10 @@ def pull(
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
     by_name = {root.name: root for root in roots}
+    scope = current_scope()
+    prefix = _scope_key_prefix(scope)
 
-    for obj in remote if remote is not None else store.list_objects(""):
+    for obj in remote if remote is not None else store.list_objects(prefix):
         target = _local_path_for(obj, by_name)
         if target is None:
             continue
@@ -182,7 +206,14 @@ def pull(
 
 def _local_path_for(obj: RemoteObject, by_name: dict[str, SyncRoot]) -> Path | None:
     """Local file for one object key, or None when the key is not ours."""
-    head, _, tail = obj.key.partition("/")
+    key = obj.key
+    scope_prefix = _scope_key_prefix()
+    if scope_prefix:
+        scoped_prefix = f"{scope_prefix}/"
+        if not key.startswith(scoped_prefix):
+            return None
+        key = key[len(scoped_prefix) :]
+    head, _, tail = key.partition("/")
     root = by_name.get(head)
     if root is None or not tail:
         logger.debug("[remote-sync] ignoring unrecognised key %s", obj.key)
@@ -217,7 +248,7 @@ def run_sync(
     the bucket, so the push half can reuse it.
     """
     report = SyncReport()
-    listing = store.list_objects("")
+    listing = store.list_objects(_scope_key_prefix())
     if direction is not SyncDirection.PUSH:
         pull(store, roots=roots, report=report, remote=listing)
     if direction is not SyncDirection.PULL:

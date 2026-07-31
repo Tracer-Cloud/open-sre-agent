@@ -21,11 +21,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from config.scope_context import current_scope
 from platform.filestorage.config import RemoteSyncConfig, load_remote_sync_config
 from platform.filestorage.engine import SyncReport, resolve_direction, run_sync
 from platform.filestorage.enums import SyncDirection, SyncRootName
-from platform.filestorage.errors import OrgScopeNotSupportedError
 from platform.filestorage.providers import build_object_store
 from platform.filestorage.syncable import syncable_roots
 
@@ -63,24 +61,8 @@ def _owned_report(report: SyncReport) -> SyncReport:
     )
 
 
-def _refuse_org_scoped_turn() -> None:
-    """Fail closed when the caller is an organization member, not a laptop user.
-
-    Object keys carry no principal or actor, so every member of an organization
-    would write and read the same keys.
-    """
-    scope = current_scope()
-    if scope is not None and scope.principal.kind == "org":
-        raise OrgScopeNotSupportedError(
-            "Remote sync mirrors a personal machine. This conversation belongs to "
-            "an organization, whose history already persists in the shared context "
-            "root, so nothing is mirrored."
-        )
-
-
 def get_sync_status() -> SyncStatus:
     """Load config and resolve scoped roots (no network, no cached state)."""
-    _refuse_org_scoped_turn()
     config = load_remote_sync_config()
     roots = tuple(
         SyncRootStatus(name=root.name, path=root.path, exists=root.path.is_dir())
@@ -101,7 +83,6 @@ def run_remote_sync(
     Prefer ``direction=`` when the caller already has a :class:`SyncDirection`;
     the boolean flags remain for CLI/slash adapters.
     """
-    _refuse_org_scoped_turn()
     resolved = (
         direction
         if direction is not None

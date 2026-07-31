@@ -766,10 +766,10 @@ def test_settings_come_from_the_file_when_the_environment_is_silent(
 ) -> None:
     """Stored settings drive sync, so setup does not require shell exports."""
     # Arrange: a config.yml with a remote_sync section, and no env vars.
-    from config.constants import paths
+    from config.constants import paths as path_mod
     from config.local_settings import update_section
 
-    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", tmp_path)
     for name in (REMOTE_SYNC_ENV, REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_PREFIX_ENV):
         monkeypatch.delenv(name, raising=False)
     update_section(
@@ -791,10 +791,10 @@ def test_environment_overrides_the_stored_bucket(
 ) -> None:
     """A one-off export must be able to redirect a single run."""
     # Arrange
-    from config.constants import paths
+    from config.constants import paths as path_mod
     from config.local_settings import update_section
 
-    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", tmp_path)
     update_section("remote_sync", {"enabled": True, "bucket": "stored-bucket"})
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
@@ -807,36 +807,65 @@ def test_environment_overrides_the_stored_bucket(
     assert config.bucket == "env-bucket"
 
 
-# ── Org-scoped turns must not sync (keys carry no principal or actor) ────────
+# ── Org-scoped turns namespace object keys by org/member ────────────────────
 
 
-def test_org_scoped_turn_refuses_to_sync(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Two members of one org would otherwise share every object key."""
+def test_org_scoped_turn_uses_namespaced_keys(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two members of one org get distinct bucket namespaces."""
     # Arrange
+    from config.constants import paths as path_mod
     from config.principal import Actor, Principal, StorageScope
     from config.scope_context import bound_storage_scope
-    from platform.filestorage.errors import OrgScopeNotSupportedError
-    from platform.filestorage.operations import get_sync_status, run_remote_sync
+    from platform.filestorage import operations as ops
 
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", home)
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "shared-bucket")
-    scope = StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_ALICE"))
+    store = FakeObjectStore()
+    monkeypatch.setattr(ops, "build_object_store", lambda _config: store)
 
-    # Act / Assert: both entry points fail closed while the scope is bound.
-    with bound_storage_scope(scope):
-        with pytest.raises(OrgScopeNotSupportedError):
-            run_remote_sync()
-        with pytest.raises(OrgScopeNotSupportedError):
-            get_sync_status()
+    alice_root = home / "orgs" / "org_acme" / "users" / "U_ALICE"
+    bob_root = home / "orgs" / "org_acme" / "users" / "U_BOB"
+    (alice_root / "sessions").mkdir(parents=True)
+    (alice_root / "memory").mkdir(parents=True)
+    (alice_root / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8")
+    (alice_root / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8")
+    (bob_root / "sessions").mkdir(parents=True)
+    (bob_root / "memory").mkdir(parents=True)
+    (bob_root / "sessions" / "abc.jsonl").write_text('{"turn": 2}\n', encoding="utf-8")
+    (bob_root / "memory" / "a-fact.md").write_text("remembered-bob\n", encoding="utf-8")
+
+    alice = StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_ALICE"))
+    bob = StorageScope(principal=Principal.org("org_acme"), actor=Actor(id="U_BOB"))
+
+    # Act
+    with bound_storage_scope(alice):
+        status = ops.get_sync_status()
+        assert status.enabled is True
+        alice_report = ops.run_remote_sync()
+
+    with bound_storage_scope(bob):
+        bob_report = ops.run_remote_sync()
+
+    # Assert: both members upload successfully, but their keys live in separate
+    # org/member namespaces.
+    assert alice_report is not None
+    assert bob_report is not None
+    assert sorted(store.objects) == [
+        "orgs/org_acme/users/U_ALICE/memory/a-fact.md",
+        "orgs/org_acme/users/U_ALICE/sessions/abc.jsonl",
+        "orgs/org_acme/users/U_BOB/memory/a-fact.md",
+        "orgs/org_acme/users/U_BOB/sessions/abc.jsonl",
+    ]
 
 
 def test_unbound_laptop_turn_still_syncs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The refusal is scoped to organizations, not a blanket disable."""
     # Arrange
-    from config.constants import paths
+    from config.constants import paths as path_mod
     from platform.filestorage.operations import get_sync_status
 
-    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "my-bucket")
 
@@ -874,9 +903,9 @@ def test_a_corrupt_settings_file_surfaces_as_a_sync_error(
 ) -> None:
     """A damaged config.yml must not escape as an unrelated exception type."""
     # Arrange
-    from config.constants import paths
+    from config.constants import paths as path_mod
 
-    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
     (tmp_path / "config.yml").write_text("just a string, not a mapping", encoding="utf-8")
 
@@ -890,9 +919,9 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
 ) -> None:
     """A damaged config.yml must not break a run configured purely by env."""
     # Arrange: every setting comes from the environment.
-    from config.constants import paths
+    from config.constants import paths as path_mod
 
-    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr(path_mod, "OPENSRE_HOME_DIR", tmp_path)
     (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")

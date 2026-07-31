@@ -58,13 +58,14 @@ All surfaces share one remote-sync engine entry point:
 | CLI | `opensre remote-sync status` / `opensre remote-sync sync` |
 | Interactive shell | `/remote-sync status` / `/remote-sync sync` |
 | Gateway (Telegram, and any unbound chat) | same `/remote-sync` slash command |
+| Organization-bound Slack / Discord turns | same `/remote-sync` slash command, with org/member namespaced keys |
 
 <Warning>
-This mirrors a **personal machine**. Turns that belong to an organization —
-Slack and Discord, which bind an org principal — are refused, because object
-keys carry no organization or member id and every member would otherwise share
-the same keys. Organization history already persists through the mounted
-context root (`OPENSRE_CONTEXT_ROOT`); it does not need this.
+This mirrors a **personal machine** for unbound CLI / Telegram turns. Bound
+organization turns are supported by namespacing object keys with the
+organization and member id, so every member gets a separate bucket namespace.
+Organization history still persists through the mounted context root
+(`OPENSRE_CONTEXT_ROOT`); remote sync does not replace that path.
 </Warning>
 
 Check what would move before moving it:
