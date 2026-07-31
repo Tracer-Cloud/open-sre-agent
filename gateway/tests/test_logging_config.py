@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from gateway.config.configure_gateway_logging import (
+from gateway.config.logging_config import (
     _GatewayLogFormatter,
     _GatewayProcessLogFilter,
     _quiet_noisy_loggers,

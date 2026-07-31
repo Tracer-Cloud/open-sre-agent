@@ -8,12 +8,15 @@ import threading
 import pytest
 
 from config.llm_reasoning_effort import (
+    ReasoningEffort,
     ReasoningEffortChoice,
     apply_reasoning_effort,
     describe_reasoning_effort_default,
     display_reasoning_effort,
     get_active_reasoning_effort,
     infer_reasoning_effort_default,
+    parse_reasoning_effort,
+    runtime_reasoning_effort,
 )
 
 _ENV_KEY = "OPENSRE_REASONING_EFFORT"
@@ -22,6 +25,29 @@ _ENV_KEY = "OPENSRE_REASONING_EFFORT"
 @pytest.fixture(autouse=True)
 def _clear_reasoning_effort_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(_ENV_KEY, raising=False)
+
+
+def test_parse_reasoning_effort_accepts_enum_values() -> None:
+    assert parse_reasoning_effort("low") is ReasoningEffort.LOW
+    assert parse_reasoning_effort(" MAX ") is ReasoningEffort.MAX
+    assert parse_reasoning_effort("invalid") is None
+
+
+def test_runtime_reasoning_effort_maps_max_to_xhigh() -> None:
+    assert runtime_reasoning_effort(ReasoningEffort.MAX) == "xhigh"
+    assert runtime_reasoning_effort(ReasoningEffort.HIGH) == "high"
+
+
+def test_reasoning_effort_members_round_trip_from_string() -> None:
+    assert set(ReasoningEffort) == {
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+        ReasoningEffort.MAX,
+    }
+    assert ReasoningEffort("max") is ReasoningEffort.MAX
+    assert ReasoningEffort.MAX == "max"
 
 
 def test_apply_none_preserves_shell_env_effort(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,7 +63,7 @@ def test_apply_none_preserves_shell_env_effort(monkeypatch: pytest.MonkeyPatch) 
 def test_apply_non_none_overrides_env_until_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(_ENV_KEY, "low")
 
-    with apply_reasoning_effort("high"):
+    with apply_reasoning_effort(ReasoningEffort.HIGH):
         assert get_active_reasoning_effort() == "high"
 
     assert get_active_reasoning_effort() == "low"
@@ -54,8 +80,8 @@ def test_concurrent_threads_do_not_cross_session_overrides() -> None:
             observed[tid] = get_active_reasoning_effort()
 
     threads = (
-        threading.Thread(target=worker, args=(1, "high")),
-        threading.Thread(target=worker, args=(2, "low")),
+        threading.Thread(target=worker, args=(1, ReasoningEffort.HIGH)),
+        threading.Thread(target=worker, args=(2, ReasoningEffort.LOW)),
     )
     for t in threads:
         t.start()
@@ -64,6 +90,14 @@ def test_concurrent_threads_do_not_cross_session_overrides() -> None:
 
     assert observed[1] == "high"
     assert observed[2] == "low"
+
+
+def test_display_reasoning_effort_formats_max_alias() -> None:
+    assert display_reasoning_effort(ReasoningEffort.MAX) == "max (runtime: xhigh)"
+
+
+def test_display_reasoning_effort_accepts_plain_string() -> None:
+    assert display_reasoning_effort("max") == "max (runtime: xhigh)"
 
 
 def test_display_reasoning_effort_formats_default_in_parentheses() -> None:

@@ -30,6 +30,9 @@ def _messages_client() -> LLMClient:
     client._temperature = None
     client._api_key = "test-key"
     client._client = MagicMock()
+    # _build_request_kwargs refreshes credentials; these tests only assert kwargs
+    # shape, so skip env/keychain resolution (see test_cache_marker_degradation).
+    client._ensure_client = lambda: None  # type: ignore[method-assign]
     return client
 
 

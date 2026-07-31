@@ -17,7 +17,7 @@ from rich.console import Console
 from core.agent_harness.ports import OutputSink
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
@@ -50,7 +50,7 @@ def execute_shell_turn(
     answer_agent: AnswerShellQuestion | None = None,
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
-) -> ShellTurnResult:
+) -> TurnResult:
     """Execute one submitted interactive-shell turn.
 
     The action driver, gather pass, and conversational assistant default to the

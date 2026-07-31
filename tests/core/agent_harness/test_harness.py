@@ -32,9 +32,17 @@ class _FakeSessionManager:
         return self.session
 
 
-def test_resolve_env_variables_calls_load_dotenv(monkeypatch: Any) -> None:
+def test_resolve_env_variables_calls_bootstrap_once(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(harness_module, "load_dotenv", lambda **kwargs: calls.append(kwargs))
+
+    def _bootstrap(*, override: bool = False) -> Any:
+        calls.append({"override": override})
+        return None
+
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        _bootstrap,
+    )
     harness = harness_module.AgentHarness()
 
     harness.resolve_env_variables()
@@ -44,7 +52,10 @@ def test_resolve_env_variables_calls_load_dotenv(monkeypatch: Any) -> None:
 
 def test_resolve_env_variables_skipped_when_load_env_false(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(harness_module, "load_dotenv", lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **kwargs: calls.append(kwargs),
+    )
     harness = harness_module.AgentHarness(harness_module.HarnessConfig(load_env=False))
 
     harness.resolve_env_variables()

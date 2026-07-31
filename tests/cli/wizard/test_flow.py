@@ -4917,3 +4917,35 @@ def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
     assert "unverified" not in line.lower(), (
         f"a verified host must not read unverified; got {line!r}"
     )
+
+
+@pytest.mark.parametrize("stale_mode", ["aha", "banana", ""])
+def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale_mode) -> None:
+    """A saved mode that is no longer offered must default to 'focused'.
+
+    Saved defaults outlive the modes they name — a value persisted by an older
+    build, or a mode removed in a refactor, must not be passed to the chooser as
+    a default it cannot render.
+    """
+    # Arrange
+    monkeypatch.setattr(
+        flow,
+        "_local_defaults",
+        lambda: {"provider": None, "model": "", "wizard_mode": stale_mode, "auth_method": None},
+    )
+    seen: dict[str, object] = {}
+
+    def _capture_choose(_prompt, _choices, default=None, **_kwargs):
+        seen["default"] = default
+        raise KeyboardInterrupt  # stop the wizard once the default is known
+
+    monkeypatch.setattr(flow, "_choose", _capture_choose)
+    monkeypatch.setattr(flow, "_render_header", lambda: None)
+    monkeypatch.setattr(flow, "_step_header", lambda *_a, **_k: None)
+
+    # Act
+    with pytest.raises(KeyboardInterrupt):
+        flow.run_wizard()
+
+    # Assert
+    assert seen["default"] == "focused"

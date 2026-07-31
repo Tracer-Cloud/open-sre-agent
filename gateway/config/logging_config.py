@@ -42,7 +42,7 @@ def _quiet_noisy_loggers() -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
-def configure_gateway_logging() -> logging.Logger:
+def configure_logging() -> logging.Logger:
     """Configure root logging for the dedicated Telegram gateway process."""
     gateway_logger = logging.getLogger("gateway")
 
