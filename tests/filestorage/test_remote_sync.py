@@ -1000,3 +1000,47 @@ def test_none_progress_is_ignored(
     store = FakeObjectStore()
     push(store, roots=roots, on_progress=None)
     assert len(store.objects) == 2
+
+
+def test_failing_progress_callback_does_not_abort_push(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A callback that raises must not prevent remaining uploads."""
+    store = FakeObjectStore()
+    call_count = 0
+
+    def exploding_callback(action: str, key: str) -> None:
+        nonlocal call_count
+        call_count += 1
+        raise RuntimeError("callback exploded")
+
+    # Act — must not raise
+    report = push(store, roots=roots, on_progress=exploding_callback)
+
+    # Assert: both files uploaded despite callback failures
+    assert len(store.objects) == 2
+    assert call_count == 2
+
+
+def test_failing_progress_callback_does_not_abort_pull(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    """A callback that raises must not prevent remaining downloads."""
+    store = FakeObjectStore()
+    push(store, roots=roots)
+    second = tmp_path / "machine-two"
+    second_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=second / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=second / "memory"),
+    )
+
+    def exploding_callback(action: str, key: str) -> None:
+        raise RuntimeError("callback exploded")
+
+    # Act — must not raise
+    report = pull(store, roots=second_roots, on_progress=exploding_callback)
+
+    # Assert: both files downloaded despite callback failures
+    assert len(report.downloaded) == 2
+    assert (second / "sessions" / "abc.jsonl").exists()
+    assert (second / "memory" / "a-fact.md").exists()

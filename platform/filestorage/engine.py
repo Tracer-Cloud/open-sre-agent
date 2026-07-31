@@ -173,7 +173,10 @@ def push(
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
         if on_progress is not None:
-            on_progress("uploaded", key)
+            try:
+                on_progress("uploaded", key)
+            except Exception:
+                pass
     return result
 
 
@@ -209,7 +212,10 @@ def pull(
         _write_atomically(target, data)
         result.downloaded.append(obj.key)
         if on_progress is not None:
-            on_progress("downloaded", obj.key)
+            try:
+                on_progress("downloaded", obj.key)
+            except Exception:
+                pass
     return result
 
 
