@@ -80,6 +80,20 @@ def test_tenant_id_does_not_satisfy_the_mount_ownership_check(
     assert declared_owner == ""
 
 
+def test_whitespace_is_not_a_tenant_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A blank-but-present tenant id must not build a config.
+
+    Without trimming it reads as set, and hydration would then request another
+    tenant's credentials under an empty organization id.
+    """
+    # Arrange
+    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "   ")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="incomplete"):
+        CredentialHydrationConfig.from_environment()
+
+
 def test_hydration_stays_disabled_outside_a_silo(monkeypatch: pytest.MonkeyPatch) -> None:
     """A local run with no silo env at all is not a misconfiguration."""
     # Arrange
