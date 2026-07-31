@@ -12,14 +12,14 @@ from rich.console import Console
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     agent = MagicMock()
-    agent.dispatch.return_value = ShellTurnResult(
+    agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=1,
@@ -70,7 +70,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     agent = MagicMock()
-    agent.dispatch.return_value = ShellTurnResult(
+    agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_fallback",
         action_result=ToolCallingTurnResult(0, 0, 0, False, False),
         assistant_response_text="streamed answer",
@@ -107,7 +107,7 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())
@@ -152,7 +152,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())
@@ -194,7 +194,7 @@ def test_run_turn_passes_turn_plan_to_gather(
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())
@@ -235,7 +235,7 @@ def test_run_turn_passes_turn_plan_to_answer(
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())

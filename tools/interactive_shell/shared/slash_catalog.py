@@ -320,10 +320,10 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     ),
     "/remote-sync": _mcp(
         "Mirror this machine's sessions and memory to an object store the user "
-        "owns. Subcommands: status, sync [--pull-only|--push-only]. Off unless "
-        "the user enabled it; integration credentials and model keys are never "
-        "uploaded.",
-        "User asks to sync, back up, or restore their conversations and memory",
+        "owns (built-in: aws/S3, vercel Blob). Subcommands: status, sync, setup. "
+        "Off until setup or env enable; integration credentials and model keys "
+        "are never uploaded.",
+        "User asks to sync, back up, set up remote sync, or restore conversations",
         anti_examples=(
             "User asks to connect an AWS integration for investigations (use /integrations)",
             "User asks what opensre remembers (use /memory)",

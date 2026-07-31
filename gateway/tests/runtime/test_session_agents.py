@@ -11,7 +11,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.live_sink import LiveOutputSink
 from gateway.runtime.session_agents import SessionAgentPool
 from gateway.runtime.turn_handler import GatewayTurnHandler
@@ -30,8 +30,8 @@ def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _empty_result() -> ShellTurnResult:
-    return ShellTurnResult(
+def _empty_result() -> TurnResult:
+    return TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=0,

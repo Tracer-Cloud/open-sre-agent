@@ -6,7 +6,7 @@ import contextlib
 import logging
 from typing import Any
 
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class DefaultTurnAccounting:
     def record_action_result(self, action_result: ToolCallingTurnResult) -> None:
         _ = action_result
 
-    def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+    def finalize(self, result: TurnResult) -> TurnResult:
         response = (result.assistant_response_text or "").strip()
         if response:
             _append_turn_detail(

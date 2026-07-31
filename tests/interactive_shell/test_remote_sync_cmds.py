@@ -91,6 +91,31 @@ def test_sync_disabled_prints_help(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Remote sync is off" in buf.getvalue()
 
 
+def test_setup_requires_bucket_flag() -> None:
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync setup", Session(), console) is True
+    assert "--bucket" in buf.getvalue()
+
+
+def test_setup_writes_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    console, buf = _capture()
+    assert (
+        dispatch_slash(
+            "/remote-sync setup --provider vercel --bucket opensre-remote-sync",
+            Session(),
+            console,
+        )
+        is True
+    )
+    out = buf.getvalue()
+    assert "settings saved" in out
+    assert "vercel" in out
+    assert "BLOB_READ_WRITE_TOKEN" in out
+
+
 def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**_kwargs: object) -> SyncReport:
         raise RemoteSyncConfigError("bad flags")
@@ -102,7 +127,7 @@ def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync --pull-only --push-only", Session(), console) is True
     out = buf.getvalue()
-    assert "Sync failed" in out
+    assert "failed" in out.lower()
     # This handler also serves gateway chat, so provider detail must not appear.
     assert "bad flags" not in out, "error detail reached the chat reply"
 
@@ -135,11 +160,11 @@ def test_slash_command_metadata_for_planner() -> None:
     cmd = SLASH_COMMANDS["/remote-sync"]
     assert cmd.first_arg_completions is not None
     labels = {label for label, _hint in cmd.first_arg_completions}
-    assert labels == {"status", "sync"}
-    assert any("OPENSRE_REMOTE_SYNC" in note for note in (cmd.notes or ()))
+    assert labels == {"status", "sync", "setup"}
+    assert any("setup" in note.lower() for note in (cmd.notes or ()))
     catalog = MCP_BY_COMMAND["/remote-sync"]
     assert "status" in catalog.llm_description
-    assert "sync" in catalog.llm_description
+    assert "setup" in catalog.llm_description
 
 
 def test_sync_shows_kept_remote(monkeypatch: pytest.MonkeyPatch) -> None:

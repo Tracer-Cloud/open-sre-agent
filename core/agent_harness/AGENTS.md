@@ -96,7 +96,7 @@ to it instead of re-implementing bootstrap + persistence:
   `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
-  `gateway/turn_handler.py`'s `GatewayTurnHandler` with
+  `gateway/runtime/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.

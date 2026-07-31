@@ -33,8 +33,9 @@ class RemoteSyncConfig:
     """Where a laptop mirrors its context, under which backend and credentials.
 
     ``bucket`` is the top-level store name for the chosen provider (S3 bucket
-    today; community backends may reuse the field). Provider-specific fields
-    (``profile``, ``region``) are ignored by backends that do not need them.
+    or Vercel Blob store name/id; community backends may reuse the field).
+    Provider-specific fields (``profile``, ``region``) are ignored by backends
+    that do not need them.
     """
 
     bucket: str

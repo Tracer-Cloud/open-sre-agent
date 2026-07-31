@@ -23,6 +23,20 @@
   solely inside `config/config.py` (nothing it imports needs it) may live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
+- Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or
+  nests another lambda) into `monkeypatch.setattr` / `patch`. Extract a named
+  `def` and pass it — `type(...)` inside the helper body is fine:
+
+  ```python
+  def _build_harness() -> Any:
+      return type("H", (), {"resolve_env_variables": lambda _self: None})()
+
+  monkeypatch.setattr(startup, "_build_harness", _build_harness)
+  ```
+
+  Trivial lambdas (`lambda **_kw: None`, `lambda: sentinel`) stay inline.
+  Precedent: `gateway/tests/runtime/test_startup.py` (`_StubHarness`),
+  `tests/cli/test_integrations_setup_github.py` (`_prompt_answering`).
 - Protocol methods you **add or change** use a **docstring-only body** — no
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
@@ -252,6 +266,17 @@ Steps:
   result (`_finished = await task` in `gateway/discord/worker.py`
   `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
   skipping the await.
+- Implicit string concatenation in a list (CodeQL
+  `py/implicit-string-concatenation-in-list`): two adjacent string literals
+  inside a list/tuple display are indistinguishable from a **missing comma**,
+  so a long message split over two lines trips it. Do not silence it with an
+  explicit `+` — extract the text to a module constant and reference that. The
+  same implicit concatenation is fine in a parenthesised assignment, where no
+  comma could have been intended. Precedent:
+  `tools/system/python_execution_tool/__init__.py`
+  (`_RUNTIME_FACTS_ANTI_EXAMPLE`). Bites hardest in `use_cases` /
+  `anti_examples` / `examples` tool metadata, where entries are prose and
+  routinely exceed the 100-char line limit.
 - Mixed import styles (CodeQL `py/import-and-import-from`): importing one
   module with both `import X as alias` and `from X import name` — even when
   the `from` import is function-local — raises an alert. It usually happens

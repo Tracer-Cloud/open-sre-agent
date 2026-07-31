@@ -29,7 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import httpx
@@ -47,11 +47,12 @@ from config.constants.posthog_mcp import (
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_POSTHOG_MCP_URL = "https://mcp.posthog.com/mcp"
-DEFAULT_POSTHOG_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
+DEFAULT_POSTHOG_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 
 # PostHog routes EU accounts automatically, but the dedicated EU host is exposed
 # for users who prefer to pin it explicitly.
@@ -90,7 +91,7 @@ class PostHogMCPConfig(StrictConfigModel):
     """Normalized PostHog MCP connection settings."""
 
     url: str = DEFAULT_POSTHOG_MCP_URL
-    mode: Literal["stdio", "sse", "streamable-http"] = DEFAULT_POSTHOG_MCP_MODE
+    mode: McpTransportMode = DEFAULT_POSTHOG_MCP_MODE
     auth_token: str = ""
     command: str = ""
     args: tuple[str, ...] = ()

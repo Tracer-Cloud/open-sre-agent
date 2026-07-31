@@ -13,9 +13,9 @@ from dataclasses import dataclass
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
 from core.agent_harness.turns.turn_results import (
-    ShellTurnResult,
     ToolCallingAccountingStatus,
     ToolCallingTurnResult,
+    TurnResult,
 )
 from platform.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.session import Session
@@ -41,7 +41,7 @@ class ShellTurnAccounting:
         self._record_action_analytics(action_result)
         self._record_terminal_turn(action_result)
 
-    def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+    def finalize(self, result: TurnResult) -> TurnResult:
         """Flush the recorder, persist the turn, and stamp the session intent."""
         self._flush_prompt_recorder(result)
         if result.llm_run is not None:
@@ -102,7 +102,7 @@ class ShellTurnAccounting:
             session_fallback_rate_percent=snapshot.fallback_rate_percent,
         )
 
-    def _flush_prompt_recorder(self, result: ShellTurnResult) -> None:
+    def _flush_prompt_recorder(self, result: TurnResult) -> None:
         # Pending turn LLM/error state is consumed unconditionally so a turn
         # that stages it can never leak it into a later turn's flush.
         pending_run = self.session.terminal.pop_pending_turn_llm()
@@ -120,7 +120,7 @@ class ShellTurnAccounting:
 
 __all__ = [
     "ShellTurnAccounting",
-    "ShellTurnResult",
+    "TurnResult",
     "ToolCallingAccountingStatus",
     "ToolCallingTurnResult",
 ]
