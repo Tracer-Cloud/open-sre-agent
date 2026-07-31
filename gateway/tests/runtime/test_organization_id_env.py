@@ -1,12 +1,13 @@
-"""Hydration reads the control plane's tenant id, never the billing name.
+"""Hydration gates on the bootstrap secret, not on an organization name.
 
 The control plane's ECS task definition supplies ``ORGANIZATION_ID``; the EC2
-Slack service sets ``OPENSRE_ORGANIZATION_ID``. Serving-side consumers resolve
-either through :func:`config.constants.organization.organization_id` (see
-``tests/config/test_organization_id.py``), but hydration asks a different
-question — "did the control plane provision this silo?" — so it must read the
-injected name alone: resolving across both would make an EC2 deployment look
-like a half-configured silo and fail startup. These tests pin that boundary.
+Slack service sets ``OPENSRE_ORGANIZATION_ID``. The two names are converging,
+so hydration resolves either through
+:func:`config.constants.organization.organization_id` — but only once
+``OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN`` says the control plane provisioned
+this task. Every deployment serves an organization, so gating on the name
+would make an EC2 deployment look like a half-configured silo and fail
+startup. These tests pin that boundary.
 """
 
 from __future__ import annotations

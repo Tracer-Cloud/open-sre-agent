@@ -12,16 +12,17 @@ when both are configured; the API is the staged fallback.
 
 Distinct from :data:`config.constants.billing.ORGANIZATION_ID_ENV`
 (``OPENSRE_ORGANIZATION_ID``), which the EC2 Slack service sets. Both hold a
-Clerk organization id, but they answer different questions, and only one
-substitution is allowed:
+Clerk organization id and the two names are converging on one:
 
-* **Provisioning** ("did the control plane provision this silo?") reads
-  :data:`TENANT_ORGANIZATION_ID_ENV` alone — resolving across both names would
-  make an EC2 deployment look like a half-configured silo and fail startup.
+* **Provisioning** ("did the control plane provision this silo?") is answered
+  by :data:`CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV` — only the control plane
+  creates that secret. The organization name cannot answer it, because every
+  deployment serves an organization.
 * **Serving** ("which organization does this process serve?" — usage
-  attribution, credits, Slack principal, webapp vault, mount ownership) goes
-  through :func:`config.constants.organization.organization_id`, which reads
-  whichever name the deployment sets and warns when they conflict.
+  attribution, credits, Slack principal, webapp vault, mount ownership, and
+  credential hydration once the secret says this is a silo) goes through
+  :func:`config.constants.organization.organization_id`, which reads whichever
+  name the deployment sets and warns when they conflict.
 """
 
 from __future__ import annotations
