@@ -1,18 +1,24 @@
-"""``opensre remote-sync`` — thin Click adapter over :mod:`platform.filestorage.operations`."""
+"""``opensre remote-sync`` — thin Click adapter over :mod:`platform.filestorage`."""
 
 from __future__ import annotations
 
 import click
 
+from config.constants.filestorage import (
+    DEFAULT_REMOTE_SYNC_PREFIX,
+    DEFAULT_REMOTE_SYNC_PROVIDER,
+)
 from platform.common.exit_codes import ERROR, SUCCESS
 from platform.filestorage import RemoteSyncError
 from platform.filestorage.enums import RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
     format_report_lines,
+    format_setup_lines,
     format_status_lines,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -52,6 +58,103 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
     for line in format_report_lines(report):
         click.echo(line)
     raise SystemExit(SUCCESS)
+
+
+@remote_sync_command.command(name=RemoteSyncSubcommand.SETUP.value)
+@click.option(
+    "--provider",
+    default=None,
+    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: aws, vercel).",
+)
+@click.option("--bucket", default=None, help="Store name you own (S3 bucket or Blob store id).")
+@click.option(
+    "--prefix",
+    default=None,
+    help=f"Key prefix (default {DEFAULT_REMOTE_SYNC_PREFIX}).",
+)
+@click.option("--region", default=None, help="Region override when the provider supports it.")
+@click.option("--profile", default=None, help="Named credentials profile (AWS).")
+@click.option(
+    "--enabled/--disabled",
+    default=True,
+    show_default=True,
+    help="Whether remote sync is switched on in stored settings.",
+)
+def setup_command(
+    provider: str | None,
+    bucket: str | None,
+    prefix: str | None,
+    region: str | None,
+    profile: str | None,
+    enabled: bool,
+) -> None:
+    """Write remote_sync settings to ~/.opensre/config.yml (interactive if flags omitted)."""
+    try:
+        request = _collect_setup_request(
+            provider=provider,
+            bucket=bucket,
+            prefix=prefix,
+            region=region,
+            profile=profile,
+            enabled=enabled,
+        )
+        config = save_remote_sync_settings(request)
+    except (RemoteSyncError, click.Abort) as exc:
+        if isinstance(exc, click.Abort):
+            raise SystemExit(ERROR) from exc
+        click.echo(str(exc), err=True)
+        raise SystemExit(ERROR) from exc
+    for line in format_setup_lines(config):
+        click.echo(line)
+    raise SystemExit(SUCCESS)
+
+
+def _collect_setup_request(
+    *,
+    provider: str | None,
+    bucket: str | None,
+    prefix: str | None,
+    region: str | None,
+    profile: str | None,
+    enabled: bool,
+) -> RemoteSyncSetupRequest:
+    """Use flags when complete; otherwise prompt on a TTY."""
+    flags_complete = provider is not None and bucket is not None and str(bucket).strip() != ""
+    if flags_complete:
+        return RemoteSyncSetupRequest(
+            bucket=str(bucket),
+            provider=str(provider),
+            prefix=prefix if prefix is not None else DEFAULT_REMOTE_SYNC_PREFIX,
+            region=region or "",
+            profile=profile or "",
+            enabled=enabled,
+        )
+
+    if not click.get_text_stream("stdin").isatty():
+        raise RemoteSyncError(
+            "pass --provider and --bucket, or run setup in an interactive terminal"
+        )
+
+    return RemoteSyncSetupRequest(
+        bucket=click.prompt("Bucket / store name", default=bucket or "", show_default=bool(bucket)),
+        provider=click.prompt(
+            "Provider (aws, vercel, …)",
+            default=provider or DEFAULT_REMOTE_SYNC_PROVIDER,
+            show_default=True,
+        ),
+        prefix=click.prompt(
+            "Prefix",
+            default=prefix or DEFAULT_REMOTE_SYNC_PREFIX,
+            show_default=True,
+        ),
+        region=click.prompt("Region (blank if unused)", default=region or "", show_default=False),
+        profile=click.prompt(
+            "Credentials profile (blank if unused)",
+            default=profile or "",
+            show_default=False,
+        ),
+        enabled=enabled,
+    )
 
 
 __all__ = ["remote_sync_command"]
