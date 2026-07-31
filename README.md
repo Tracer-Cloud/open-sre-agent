@@ -126,6 +126,8 @@ pipx install opensre
 
 ## Quick Start
 
+Contributors: start at [`main.py`](main.py) for the process entrypoint map.
+
 Configure once, then pick how you want to run investigations:
 
 ```bash

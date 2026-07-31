@@ -26,14 +26,16 @@ _STATIC_GUIDANCE = (
     "When the user asks for the local timezone name, Python version, process "
     "id, parent process id, host/pod name, cloud provider or region, "
     "kubeconfig path, or which tools are installed, answer from the strings "
-    "above — never run "
+    "above directly, WITHOUT any tool call — these facts are authoritative "
+    "and re-reading them through the sandbox wastes a round-trip. Never run "
     f"{_BLOCKED_COMMANDS}, and never probe cloud instance metadata over the "
     "network. To list files in the scratchpad or another directory, "
     "use the Python execution sandbox with `pathlib.Path(...).iterdir()` — "
     "never `ls` or subprocess. Do NOT "
     "invent field names, values, or numbers not present above. Do NOT shell "
     "out or use subprocess — the Python execution sandbox blocks process "
-    "spawning; use `inputs['opensre_runtime']` inside the sandbox instead."
+    "spawning; when Python code you are already running for another reason "
+    "needs these facts, read `inputs['opensre_runtime']` instead."
 )
 
 _LIVE_GUIDANCE = (
@@ -124,6 +126,63 @@ def _tools_line(runtime: Mapping[str, Any]) -> str | None:
     return f"installed tools on PATH are {', '.join(present)}"
 
 
+def _cloud_line(runtime: Mapping[str, Any]) -> str | None:
+    """Cloud identity, or an explicit statement that none was detected.
+
+    Omitting the fact when detection finds nothing leaves a vacuum the model
+    fills with a plausible guess (observed: a confident provider + region on a
+    laptop). Stating the absence gives it something true to quote instead.
+    """
+    if "cloud_provider" not in runtime and "cloud_region" not in runtime:
+        # Detection never ran (no runtime facts supplied) — asserting absence
+        # here would put text in a block that must stay empty.
+        return None
+    provider = _clean_str(runtime, "cloud_provider")
+    region = _clean_str(runtime, "cloud_region")
+    if provider and region:
+        return f"cloud provider is {provider} and cloud region is {region}"
+    if provider:
+        return f"cloud provider is {provider}; cloud region was not detected"
+    if region:
+        return f"cloud region is {region}; cloud provider was not detected"
+    return (
+        "no cloud provider or cloud region was detected, so this process is not "
+        "running in a recognised cloud environment - say that rather than naming "
+        "any provider or region"
+    )
+
+
+def _workspace_line(runtime: Mapping[str, Any]) -> str | None:
+    """Which repo is “ours” — or an explicit unknown.
+
+    Without this, “our GitHub stars” triggers follow-ups instead of resolving to
+    the OpenSRE checkout / configured workspace repo.
+    """
+    if "workspace_repo" not in runtime:
+        return None
+    repo = _clean_str(runtime, "workspace_repo")
+    if repo:
+        return (
+            f"this OpenSRE workspace repo is {repo} — treat “our” / “this repo” "
+            f"as {repo} unless the user names a different repository"
+        )
+    return (
+        "no workspace git/GitHub repo was detected for this process — ask which "
+        "repository the user means rather than assuming Tracer-Cloud/opensre or "
+        "any other default"
+    )
+
+
+def _capability_warnings_line(runtime: Mapping[str, Any]) -> str | None:
+    warnings = runtime.get("capability_warnings")
+    if not isinstance(warnings, list) or not warnings:
+        return None
+    parts = [str(item).strip() for item in warnings if str(item).strip()]
+    if not parts:
+        return None
+    return "capability warnings at boot: " + "; ".join(parts)
+
+
 # Order is part of the prompt contract — keep stable for snapshot/tests.
 _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _version_line,
@@ -132,9 +191,10 @@ _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _str_fact("tz_name", "local timezone is {}"),
     _str_fact("python_version", "Python interpreter version is {}"),
     _pid_line,
-    _str_fact("cloud_provider", "cloud provider is {}"),
-    _str_fact("cloud_region", "cloud region is {}"),
+    _cloud_line,
+    _workspace_line,
     _tools_line,
+    _capability_warnings_line,
     _str_fact("kubeconfig", "kubeconfig path is {}"),
     _str_fact("scratchpad_dir", "scratchpad directory is {}"),
 )

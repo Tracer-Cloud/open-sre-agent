@@ -258,5 +258,17 @@ Steps:
   when appending to an existing file: **use the import style the file already
   established** (an existing `import core.context_budget as budget` means new
   code calls `budget.name`, not `from core.context_budget import name`).
+- Shared client state under concurrent turns: LLM clients are cached per role
+  (`get_llm`) and the gateway runs turns in parallel, so **one client instance
+  serves several in-flight requests**. An instance flag mutated inside an error
+  handler is then read by requests that were already built under the old value.
+  Branch on **what the current request carried**, not on the flag's present
+  value — capture the fact locally where the request is built
+  (`marked = strip_cache_markers(kwargs) != kwargs`) and consult that in the
+  `except`. Precedent: the prompt-cache fallback, where a first 400 cleared
+  `_cache_markers_enabled` and a second already-marked request skipped its
+  uncached retry and failed the turn. Test it by having the fake dependency
+  mutate the shared state *before* raising, which reproduces the race
+  deterministically without threads.
 - CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
 

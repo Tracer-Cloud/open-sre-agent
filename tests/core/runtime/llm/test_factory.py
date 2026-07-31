@@ -6,7 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.llm.factory import LLMRole, LLMRoute, get_llm, reset_llm_clients, resolve_llm_route
+from core.llm.factory import (
+    _MODEL_TYPE_BY_ROLE,
+    LLMRole,
+    LLMRoute,
+    get_llm,
+    reset_llm_clients,
+    resolve_llm_route,
+)
+from core.llm.types import ModelType
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +69,15 @@ def test_get_llm_routes_agent_and_non_agent_roles(monkeypatch: pytest.MonkeyPatc
     assert get_llm(LLMRole.REASONING) == "LLM:reasoning"
     assert get_llm(LLMRole.CLASSIFICATION) == "LLM:classification"
     assert get_llm(LLMRole.TOOLCALL) == "LLM:toolcall"
+
+
+def test_llm_roles_and_model_types_are_string_enums() -> None:
+    """The role-to-tier map keeps typed, round-trippable public values."""
+    assert LLMRole("reasoning") is LLMRole.REASONING
+    assert ModelType("reasoning") is ModelType.REASONING
+    assert _MODEL_TYPE_BY_ROLE[LLMRole.REASONING] is ModelType.REASONING
+    assert _MODEL_TYPE_BY_ROLE[LLMRole.CLASSIFICATION] is ModelType.CLASSIFICATION
+    assert _MODEL_TYPE_BY_ROLE[LLMRole.TOOLCALL] is ModelType.TOOLCALL
 
 
 def test_get_llm_caches_per_role_and_invalidates_on_config_change(monkeypatch: pytest.MonkeyPatch):

@@ -29,6 +29,7 @@ from core.provider import ProviderHooks, ProviderRequest
 from core.types import RuntimeTool
 
 if TYPE_CHECKING:
+    from core.agent.goals import Goal
     from core.agent_harness.turns.turn_snapshot import AgentRuntimeRequest
 
 
@@ -54,17 +55,21 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         tool_hooks: ToolExecutionHooks | None = None,
         tool_resources: dict[str, Any] | None = None,
         provider_hooks: ProviderHooks | None = None,
+        goal: Goal | None = None,
     ) -> None:
         self._llm = llm
         self._system = system
         self._tools: list[RuntimeToolT] | None = list(tools) if tools is not None else None
         self._resolved = resolved_integrations
         self._max_iterations = max_iterations
+        # Set per run from the run input; falls back to the constructed value.
+        self._effective_max_iterations = max_iterations
         self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tool_hooks = tool_hooks or ToolExecutionHooks()
         self._tool_resources = dict(tool_resources or {})
         self._hooks = ProviderHookDelegate(provider_hooks or ProviderHooks())
+        self._goal = goal
         self._steering_messages: deque[str] = deque()
         self._follow_up_messages: deque[str] = deque()
         self._react_iterations_used = 0
@@ -82,6 +87,10 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
         self._react_executed = []
         self._react_hit_iteration_cap = False
         run_input = self._build_run_input(initial_messages, runtime_request)
+        # A runtime_request carries its own budget, which is what ReactLoop
+        # iterates. Goal acceptance must use that, not the construction-time
+        # value, or the ceiling never lands on the real last lap.
+        self._effective_max_iterations = run_input.max_iterations
         return run_react_loop(run_input, self)
 
     def _note_react_run_progress(
@@ -141,15 +150,29 @@ class Agent[RuntimeToolT: RuntimeTool](EventEmitterMixin, ToolFilterMixin, Steer
     def _should_accept_conclusion(
         self,
         *,
-        evidence_count: int,  # noqa: ARG002
-        iteration: int,  # noqa: ARG002
+        evidence_count: int,
+        iteration: int,
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         """Hook: decide what to do when the LLM stops requesting tools.
 
         Return ``(True, None)`` to accept the conclusion and end the loop.
         Return ``(False, nudge_text)`` to inject a user message and continue.
+        When a :class:`~core.agent.goals.Goal` is set, defer to
+        :func:`core.agent.goals.should_accept_with_goal` (budget ceiling
+        still forces accept on the last iteration).
         """
-        return True, None
+        if self._goal is None:
+            return True, None
+        from core.agent.goals import should_accept_with_goal
+
+        return should_accept_with_goal(
+            self._goal,
+            final_text=final_text,
+            evidence_count=evidence_count,
+            iteration=iteration,
+            max_iterations=self._effective_max_iterations,
+        )
 
     # Thin forwarders to ``self._hooks`` (a ProviderHookDelegate). Kept as
     # methods rather than an exposed attribute so LoopHost's contract is
