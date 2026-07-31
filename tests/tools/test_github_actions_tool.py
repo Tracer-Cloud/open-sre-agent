@@ -388,7 +388,7 @@ def test_extract_step_log_ungrouped_only_step_number_reports_full_log() -> None:
     assert "plain log line 2" in result["log_text"]
 
 
-def test_get_step_log_reports_truncated_when_original_length_exceeds_returned() -> None:
+def test_get_step_log_reports_truncated_when_original_lines_exceeds_returned() -> None:
     log_tool = cast(Any, get_github_actions_step_log)
     with (
         patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
@@ -396,10 +396,38 @@ def test_get_step_log_reports_truncated_when_original_length_exceeds_returned() 
     ):
         result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001, github_token="tok")
     assert result["truncated"] is True
-    assert result["original_chars"] == 2000
-    assert result["returned_chars"] < result["original_chars"]
+    assert result["original_lines"] == 2000
+    assert result["returned_lines"] < result["original_lines"]
     assert result["retry_attempted"] is False
     assert result["retry_error"] is None
+
+
+def test_get_step_log_no_retry_when_original_length_field_missing() -> None:
+    """A get_job_logs response without original_length must degrade safely:
+    no truncation signal, no retry attempt."""
+
+    def mcp_response(config: object, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if tool != "get_job_logs":
+            return _mcp_response(config, tool, arguments)
+        return {
+            "tool": tool,
+            "arguments": arguments,
+            "is_error": False,
+            "text": json.dumps({"job_id": 9001, "logs_content": "no group markers here"}),
+            "structured_content": None,
+            "content": [],
+        }
+
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=mcp_response),
+    ):
+        result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001, github_token="tok")
+
+    assert result["original_lines"] is None
+    assert result["truncated"] is False
+    assert result["retry_attempted"] is False
 
 
 def test_get_step_log_retries_with_larger_tail_when_step_missing() -> None:

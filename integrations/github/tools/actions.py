@@ -55,17 +55,20 @@ def _extract_workflow_jobs(result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _extract_log_text(result: dict[str, Any]) -> tuple[str, int | None]:
-    """Extract log text and its original (pre-tail) length from an MCP tool result.
+    """Extract log text and its original (pre-tail) line count from an MCP tool result.
 
-    ``original_length`` is the full log's length before ``tail_lines`` truncated
-    it, in the same units as the returned text's length; ``None`` when the MCP
-    response doesn't report it.
+    ``original_lines`` is the job's total log line count before ``tail_lines``
+    truncated it (github-mcp-server's ``get_job_logs`` reports this as
+    ``original_length``, despite the name it's a line count, not a character
+    count: it's the ring buffer's total line tally, from the same downstream
+    fetch that also produces the tailed ``logs_content``). ``None`` when the
+    MCP response doesn't report it.
     """
     json_result = _extract_json_text(result)
     if isinstance(json_result, dict) and "logs_content" in json_result:
         text = str(json_result["logs_content"] or "").strip()
-        original_length = json_result.get("original_length")
-        return text, original_length if isinstance(original_length, int) else None
+        original_lines = json_result.get("original_length")
+        return text, original_lines if isinstance(original_lines, int) else None
     return str(result.get("text") or "").strip(), None
 
 
@@ -560,7 +563,7 @@ _STEP_LOG_MAX_RETRY_TAIL_LINES = 20000
 def _fetch_job_log(
     config: Any, owner: str, repo: str, job_id: int, tail_lines: int
 ) -> tuple[str, int | None, str | None]:
-    """Fetch job log text via get_job_logs. Returns (text, original_length, error)."""
+    """Fetch job log text via get_job_logs. Returns (text, original_lines, error)."""
     log_result = call_github_mcp_tool(
         config,
         "get_job_logs",
@@ -574,8 +577,8 @@ def _fetch_job_log(
     )
     if log_result.get("is_error"):
         return "", None, str(log_result.get("text") or "unknown error")
-    text, original_length = _extract_log_text(log_result)
-    return text, original_length, None
+    text, original_lines = _extract_log_text(log_result)
+    return text, original_lines, None
 
 
 @tool(
@@ -665,7 +668,7 @@ def get_github_actions_step_log(
         ) | {"error": "Unexpected job metadata format"}
 
     # Fetch job logs
-    log_text, original_length, log_error = _fetch_job_log(config, owner, repo, job_id, tail_lines)
+    log_text, original_lines, log_error = _fetch_job_log(config, owner, repo, job_id, tail_lines)
     if log_error is not None:
         return code_host_unavailable_payload(
             source="github",
@@ -698,37 +701,35 @@ def get_github_actions_step_log(
     # A requested step that missed because the tail cut off its ##[group] block
     # looks identical to "no such step" (both fall back to match_strategy
     # "full-log"). Re-fetch a bigger tail, sized from the log's own reported
-    # length, once before accepting that fallback.
+    # total line count, once before accepting that fallback.
     wants_step = bool(step_name or failed_step or step_number is not None)
-    truncated = original_length is not None and original_length > len(log_text)
+    returned_lines = len(log_text.splitlines())
+    truncated = original_lines is not None and original_lines > returned_lines
     retry_attempted = False
     retry_error: str | None = None
     if (
-        original_length is not None
+        original_lines is not None
         and truncated
         and wants_step
         and extracted["match_strategy"] == "full-log"
     ):
-        # original_length is characters (same units as len(log_text)); tail_lines
-        # is a line count. Estimate total lines from the tail's own chars-per-line.
-        chars_per_line = max(len(log_text) // max(log_text.count("\n"), 1), 1)
-        estimated_lines = max(original_length // chars_per_line, 1)
         retry_tail_lines = min(
-            max(estimated_lines, _STEP_LOG_RETRY_TAIL_LINES), _STEP_LOG_MAX_RETRY_TAIL_LINES
+            max(original_lines, _STEP_LOG_RETRY_TAIL_LINES), _STEP_LOG_MAX_RETRY_TAIL_LINES
         )
         if retry_tail_lines > tail_lines:
             retry_attempted = True
-            retry_text, retry_original_length, retry_error = _fetch_job_log(
+            retry_text, retry_original_lines, retry_error = _fetch_job_log(
                 config, owner, repo, job_id, retry_tail_lines
             )
             if retry_error is None:
-                log_text, original_length = retry_text, retry_original_length
+                log_text, original_lines = retry_text, retry_original_lines
                 extracted = extract_step_log(
                     log_text,
                     step_name=step_name or failed_step,
                     step_number=step_number,
                 )
-                truncated = original_length is not None and original_length > len(log_text)
+                returned_lines = len(log_text.splitlines())
+                truncated = original_lines is not None and original_lines > returned_lines
 
     extracted.update(
         {
@@ -740,8 +741,8 @@ def get_github_actions_step_log(
             "job_conclusion": job.get("conclusion", ""),
             "job_steps": normalized_steps,
             "truncated": truncated,
-            "returned_chars": len(log_text),
-            "original_chars": original_length,
+            "returned_lines": returned_lines,
+            "original_lines": original_lines,
             "retry_attempted": retry_attempted,
             "retry_error": retry_error,
         }
