@@ -86,6 +86,29 @@ def _env_or_stored(
     return str(value).strip()
 
 
+def _env_or_default(
+    env_name: str,
+    default: str,
+    *,
+    allow_stored: bool,
+    stored: Callable[[], dict[str, Any]],
+    stored_key: str,
+) -> str:
+    """Environment value, else the stored one, else the documented default.
+
+    Optional settings should not force a config-file read when sync is already
+    fully configured via environment variables.
+    """
+    env = os.getenv(env_name, "").strip()
+    if env:
+        return env
+    if allow_stored:
+        value = stored().get(stored_key)
+        if value is not None:
+            return str(value).strip()
+    return default
+
+
 def remote_sync_enabled() -> bool:
     """Whether sync is on in the environment or the stored settings file."""
     env = os.getenv(REMOTE_SYNC_ENV)
@@ -124,17 +147,41 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
         raise RemoteSyncConfigError(
             f"{REMOTE_SYNC_ENV} is on but {REMOTE_SYNC_BUCKET_ENV} names no bucket"
         )
-    prefix = _env_or_stored(REMOTE_SYNC_PREFIX_ENV, "prefix", stored) or DEFAULT_REMOTE_SYNC_PREFIX
-    provider = (
-        _env_or_stored(REMOTE_SYNC_PROVIDER_ENV, "provider", stored).lower()
-        or DEFAULT_REMOTE_SYNC_PROVIDER
+    allow_stored_optional = not (
+        os.getenv(REMOTE_SYNC_ENV, "").strip() and os.getenv(REMOTE_SYNC_BUCKET_ENV, "").strip()
     )
+    prefix = _env_or_default(
+        REMOTE_SYNC_PREFIX_ENV,
+        DEFAULT_REMOTE_SYNC_PREFIX,
+        allow_stored=allow_stored_optional,
+        stored=stored,
+        stored_key="prefix",
+    )
+    provider = _env_or_default(
+        REMOTE_SYNC_PROVIDER_ENV,
+        DEFAULT_REMOTE_SYNC_PROVIDER,
+        allow_stored=allow_stored_optional,
+        stored=stored,
+        stored_key="provider",
+    ).lower()
     return RemoteSyncConfig(
         bucket=bucket,
         provider=provider,
         prefix=prefix,
-        region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
-        profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
+        region=_env_or_default(
+            REMOTE_SYNC_REGION_ENV,
+            "",
+            allow_stored=allow_stored_optional,
+            stored=stored,
+            stored_key="region",
+        ),
+        profile=_env_or_default(
+            REMOTE_SYNC_PROFILE_ENV,
+            "",
+            allow_stored=allow_stored_optional,
+            stored=stored,
+            stored_key="profile",
+        ),
     )
 
 

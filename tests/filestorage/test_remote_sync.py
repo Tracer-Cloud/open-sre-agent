@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from config.constants.filestorage import (
+    DEFAULT_REMOTE_SYNC_PREFIX,
+    DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PREFIX_ENV,
@@ -948,6 +950,30 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     assert config is not None
     assert config.bucket == "env-bucket"
     assert config.prefix == "env-prefix"
+
+
+def test_env_only_two_variable_config_ignores_a_corrupt_settings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented two-variable setup must survive a broken config.yml."""
+    # Arrange: sync is enabled entirely through env, while the file is damaged.
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert: unset optionals use defaults instead of consulting the file.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+    assert config.prefix == DEFAULT_REMOTE_SYNC_PREFIX
+    assert config.provider == DEFAULT_REMOTE_SYNC_PROVIDER
+    assert config.region == ""
+    assert config.profile == ""
 
 
 def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:
