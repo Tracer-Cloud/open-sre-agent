@@ -6,7 +6,7 @@ import json
 import logging
 import stat
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -290,9 +290,11 @@ def test_manager_fails_closed_with_generic_error() -> None:
         def hydrate(self) -> None:
             raise RuntimeError("secret value must not escape")
 
-    manager = GatewayManager(
-        credential_hydrator_factory=lambda: BrokenHydrator(),  # type: ignore[arg-type]
-    )
+    def _broken_hydrator() -> GatewayCredentialHydrator:
+        # The fake only needs hydrate(); cast keeps the factory signature honest.
+        return cast(GatewayCredentialHydrator, BrokenHydrator())
+
+    manager = GatewayManager(credential_hydrator_factory=_broken_hydrator)
 
     with pytest.raises(GatewayConfigurationError, match="hydration failed"):
         manager._load_credentials(logging.getLogger("test"))
