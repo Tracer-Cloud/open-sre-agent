@@ -51,10 +51,10 @@ def test_the_two_organization_ids_never_collapse() -> None:
 
 def test_both_organization_ids_are_re_exported() -> None:
     """Callers may import either from the package root."""
-    # Arrange / Act
-    import config.constants as constants
+    # Arrange
+    from config import constants
 
-    # Assert
+    # Act / Assert
     assert constants.TENANT_ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
     assert constants.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
     for name in (

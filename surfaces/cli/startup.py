@@ -22,15 +22,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from config.local_env import bootstrap_opensre_env_once
-from platform.observability.errors.sentry import init_sentry
-from platform.terminal.prompt_support import (
-    install_questionary_ctrl_c_double_exit,
-    install_questionary_escape_cancel,
-)
 from surfaces.cli.invocation import resolve_command_parts
-from surfaces.cli.signals import install_sigint_handler
-from surfaces.interactive_shell.ui.output.boundary import install_product_adapters
+
+# Everything else is imported inside run(). Importing this module must stay
+# cheap: the entry point imports it at module scope, and ``opensre --version``
+# answers before run() is ever called. Pulling questionary/prompt_toolkit up
+# here puts the whole terminal stack in front of that fast path.
 
 
 def _first_command(group: Any, argv: list[str]) -> str:
@@ -55,6 +52,8 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
     briefly absent mid-upgrade. Anywhere else its absence is a broken install and
     must surface.
     """
+    from platform.observability.errors.sentry import init_sentry
+
     try:
         init_sentry(entrypoint=sentry_entrypoint_for(group, argv))
     except ModuleNotFoundError as exc:
@@ -64,6 +63,14 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
 
 def run(group: Any, argv: list[str]) -> None:
     """Prepare this process for ``argv``. Safe to call once, before the group."""
+    from config.local_env import bootstrap_opensre_env_once
+    from platform.terminal.prompt_support import (
+        install_questionary_ctrl_c_double_exit,
+        install_questionary_escape_cancel,
+    )
+    from surfaces.cli.signals import install_sigint_handler
+    from surfaces.interactive_shell.ui.output.boundary import install_product_adapters
+
     command = _first_command(group, argv)
     bootstrap_opensre_env_once(override=False)
 

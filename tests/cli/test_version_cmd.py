@@ -25,7 +25,7 @@ def test_version_flag_uses_fast_path(monkeypatch, capsys) -> None:
     def fail_bootstrap(*_args, **_kwargs) -> None:
         raise AssertionError("--version should not bootstrap the full CLI")
 
-    monkeypatch.setattr("surfaces.cli.startup.init_sentry", fail_bootstrap)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", fail_bootstrap)
     monkeypatch.setattr("surfaces.cli.startup.sentry_entrypoint_for", fail_bootstrap)
 
     rc = main(["--version"])
