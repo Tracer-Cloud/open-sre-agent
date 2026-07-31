@@ -42,6 +42,7 @@ class SyncReport:
     skipped: int = 0
     uploaded_bytes: int = 0
     downloaded_bytes: int = 0
+    previewed_downloads: dict[str, bytes] = field(default_factory=dict, repr=False)
 
     @property
     def changed(self) -> int:
@@ -116,6 +117,7 @@ def push(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     dry_run: bool = False,
+    previewed_downloads: dict[str, bytes] | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
@@ -138,7 +140,9 @@ def push(
 
     for root, path in planned:
         key = _relative_key(root, path)
-        data = path.read_bytes()
+        data = previewed_downloads.get(key) if previewed_downloads is not None else None
+        if data is None:
+            data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
             if comparable_etag(existing) == content_tag(data):
@@ -163,6 +167,7 @@ def pull(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     dry_run: bool = False,
+    previewed_downloads: dict[str, bytes] | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy."""
     roots = roots if roots is not None else syncable_roots()
@@ -177,6 +182,7 @@ def pull(
             result.skipped += 1
             continue
         if dry_run:
+            result.previewed_downloads[obj.key] = store.get_object(obj.key)
             result.downloaded_bytes += obj.size
             result.downloaded.append(obj.key)
             continue
@@ -229,7 +235,14 @@ def run_sync(
     if direction is not SyncDirection.PUSH:
         pull(store, roots=roots, report=report, remote=listing, dry_run=dry_run)
     if direction is not SyncDirection.PULL:
-        push(store, roots=roots, report=report, remote=listing, dry_run=dry_run)
+        push(
+            store,
+            roots=roots,
+            report=report,
+            remote=listing,
+            dry_run=dry_run,
+            previewed_downloads=report.previewed_downloads if dry_run else None,
+        )
     return report
 
 

@@ -207,6 +207,25 @@ def test_unchanged_files_are_skipped_not_reuploaded(
     assert report.skipped == 2
 
 
+def test_dry_run_keeps_the_newer_remote_preview_consistent(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    # Arrange: remote has a newer version of the same file that exists locally.
+    store = FakeObjectStore()
+    newer = b'{"turn": 2}\n'
+    store.put_object("sessions/abc.jsonl", newer)
+    store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) + timedelta(hours=1)
+
+    # Act
+    report = run_sync(store, roots=roots, dry_run=True)
+
+    # Assert: the preview mirrors a real full sync instead of contradicting itself.
+    assert report.downloaded == ["sessions/abc.jsonl"]
+    assert "sessions/abc.jsonl" not in report.uploaded
+    assert "sessions/abc.jsonl" not in report.kept_remote
+    assert (home / "sessions" / "abc.jsonl").read_bytes() == b'{"turn": 1}\n'
+
+
 def test_newer_remote_wins_over_older_local(home: Path, roots: tuple[SyncRoot, ...]) -> None:
     # Arrange: remote holds a newer edit of a file that also exists locally.
     store = FakeObjectStore()
