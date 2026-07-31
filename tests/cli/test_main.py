@@ -9,6 +9,7 @@ from unittest.mock import patch
 import click
 import pytest
 
+from config.constants.product import RELEASE_STAGE
 from config.repl_config import ReplConfig
 from platform.analytics import provider
 from platform.analytics.events import Event
@@ -356,7 +357,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
     exit_code = main(["--no-interactive"])
 
     assert exit_code == 0
-    assert "OpenSRE is in Public Beta" in capsys.readouterr().err
+    assert RELEASE_STAGE in capsys.readouterr().err
     # CLI exit is non-blocking; wait for the daemon worker to finish posts.
     analytics = provider._instance
     if analytics is not None and analytics._worker is not None:

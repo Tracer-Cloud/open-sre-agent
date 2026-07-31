@@ -21,8 +21,10 @@ if TYPE_CHECKING:
     from core.agent_harness.turns.action_driver import (
         run_action_agent_turn as execute_action_agent_turn,
     )
+    from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence as gather_evidence
+    from core.agent_harness.turns.headless_adapters import BufferOutputSink
     from core.agent_harness.turns.headless_dispatch import HeadlessAgent
     from core.agent_harness.turns.orchestrator import run_turn, stream_answer
     from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
@@ -56,6 +58,14 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "core.agent_harness.turns.headless_dispatch",
         "HeadlessAgent",
     ),
+    "build_default_headless_agent": (
+        "core.agent_harness.turns.default_headless_agent",
+        "build_default_headless_agent",
+    ),
+    "BufferOutputSink": (
+        "core.agent_harness.turns.headless_adapters",
+        "BufferOutputSink",
+    ),
     "run_turn": ("core.agent_harness.turns.orchestrator", "run_turn"),
     "stream_answer": ("core.agent_harness.turns.orchestrator", "stream_answer"),
 }
@@ -76,6 +86,7 @@ def __dir__() -> list[str]:
 __all__ = [
     "AgentHarness",
     "AgentRuntimeRequest",
+    "BufferOutputSink",
     "HarnessConfig",
     "HarnessStartupResult",
     "HeadlessAgent",
@@ -84,6 +95,7 @@ __all__ = [
     "ToolCallingTurnResult",
     "TurnSnapshot",
     "TurnSnapshotSource",
+    "build_default_headless_agent",
     "execute_action_agent_turn",
     "gather_evidence",
     "gather_tool_evidence",
