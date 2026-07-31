@@ -197,6 +197,7 @@ def launch_investigation(
 
 __all__ = [
     "ForegroundInvestigationResult",
+    "ForegroundInvestigationStatus",
     "InvestigationLaunchPorts",
     "InvestigationSession",
     "launch_investigation",
