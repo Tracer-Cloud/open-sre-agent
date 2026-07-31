@@ -11,24 +11,43 @@ from rich.text import Text
 from platform.terminal.theme import BRAND, DIM, TEXT
 from surfaces.interactive_shell.ui.banner import build_ready_panel
 
+#: First-run actions only. Everything else is discoverable via ``opensre --help``;
+#: a landing page that lists every command reads as "here is everything" rather
+#: than "start here".
 _LANDING_EXAMPLES: tuple[tuple[str, str], ...] = (
-    (
-        'opensre "investigate high latency in checkout-api"',
-        "Start the interactive agent with a prompt",
-    ),
-    ("opensre onboard", "Configure LLM provider and integrations"),
-    ("opensre investigate -i alert.json", "Run RCA against an alert payload"),
-    ("opensre investigate --service <name>", "Run RCA on a deployed remote service"),
-    ("opensre remote --url <ip> health", "Check a remote deployed agent"),
-    ("opensre remote ops status", "Inspect hosted service status (Railway)"),
-    ("opensre tests", "Browse and run inventoried tests"),
-    ("opensre integrations list", "Show configured integrations"),
-    ("opensre guardrails rules", "List configured guardrail rules"),
-    ("opensre health", "Check integration and agent setup status"),
-    ("opensre doctor", "Run a full environment diagnostic"),
-    ("opensre update", "Update to the latest version"),
-    ("opensre version", "Print detailed version, Python and OS info"),
+    ("opensre onboard", "Configure your LLM provider and integrations (start here)"),
+    ('opensre "why is checkout-api slow?"', "Ask the agent a question directly"),
+    ("opensre investigate -i alert.json", "Run a root-cause investigation on an alert"),
+    ("opensre doctor", "Check this machine is set up correctly"),
+    ("opensre --help", "See every command"),
 )
+
+
+#: Commands a new user needs, in the order they need them. Anything not listed
+#: falls through to "More commands", so a newly added command is never hidden.
+_GETTING_STARTED: tuple[str, ...] = ("onboard", "doctor", "health", "investigate")
+
+#: Day-to-day operation once configured.
+_EVERYDAY: tuple[str, ...] = (
+    "auth",
+    "config",
+    "integrations",
+    "gateway",
+    "cron",
+    "update",
+)
+
+
+def _partition_commands(
+    commands: Sequence[tuple[str, str]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+    """Split the command list into getting-started, everyday, and the rest."""
+    by_name = dict(commands)
+    started = [(name, by_name[name]) for name in _GETTING_STARTED if name in by_name]
+    everyday = [(name, by_name[name]) for name in _EVERYDAY if name in by_name]
+    claimed = {name for name, _ in started + everyday}
+    rest = [(name, help_text) for name, help_text in commands if name not in claimed]
+    return started, everyday, rest
 
 
 def _commands_from_group(group: click.Group) -> tuple[tuple[str, str], ...]:
@@ -79,9 +98,10 @@ def _render_rows(
     rows: Sequence[tuple[str, str]],
     width: int | None = None,
 ) -> None:
-    effective_width = (
-        width + 2 if width is not None else max((len(label) for label, _ in rows), default=0) + 2
-    )
+    # ``width`` is the preferred column, not a cap: a label longer than it would
+    # otherwise print unpadded and run straight into its description.
+    longest_label = max((len(label) for label, _ in rows), default=0)
+    effective_width = max(width + 2 if width is not None else 0, longest_label + 2)
     console.print(Text.assemble((f"  {title}:", f"bold {TEXT}")))
     for label, description in rows:
         console.print(
@@ -101,7 +121,12 @@ def render_help(group: click.Group) -> None:
     console.print()
     _render_usage(console)
     console.print()
-    _render_rows(console, title="Commands", rows=commands, width=16)
+    started, everyday, rest = _partition_commands(commands)
+    _render_rows(console, title="Getting started", rows=started, width=16)
+    console.print()
+    _render_rows(console, title="Everyday", rows=everyday, width=16)
+    console.print()
+    _render_rows(console, title="More commands", rows=rest, width=16)
     console.print()
     _render_rows(console, title="Options", rows=options)
     console.print()

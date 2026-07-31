@@ -226,6 +226,7 @@ from config.constants.posthog_mcp import (
     POSTHOG_MCP_PROJECT_ID_ENV,
     POSTHOG_MCP_URL_ENV,
 )
+from config.constants.product import RELEASE_STAGE, RELEASE_STAGE_BANNER
 from config.constants.rds import RDS_DB_INSTANCE_IDENTIFIER_ENV, RDS_REGION_ENV
 from config.constants.redis import (
     REDIS_DATABASE_ENV,
@@ -311,6 +312,8 @@ from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 
 __all__ = [
+    "RELEASE_STAGE",
+    "RELEASE_STAGE_BANNER",
     "ALERT_TEMPLATE_CHOICES",
     "ALERTMANAGER_BEARER_TOKEN_ENV",
     "ALERTMANAGER_PASSWORD_ENV",

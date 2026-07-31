@@ -7,7 +7,10 @@ tool/prompt/reasoning defaults stay aligned.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from io import StringIO
+from typing import TYPE_CHECKING, Any
+
+from rich.console import Console
 
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
@@ -23,15 +26,18 @@ from core.agent_harness.tools.tool_provider import (
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 
+if TYPE_CHECKING:
+    from core.agent_harness.session.session_core import SessionCore
+
 LoggerLike = logging.Logger
 
 
 def build_default_headless_agent(
     *,
-    session: Any,
+    session: SessionCore,
     output: OutputSink,
-    console: Any,
-    logger: LoggerLike,
+    console: Any | None = None,
+    logger: LoggerLike | None = None,
     message: str | None = None,
     accounting: TurnAccounting | None = None,
     surface: str | None = None,
@@ -44,10 +50,17 @@ def build_default_headless_agent(
 ) -> HeadlessAgent:
     """Return a :class:`HeadlessAgent` wired with default harness ports.
 
-    Pass ``message`` (or an explicit ``accounting``) when the agent should
+    ``console`` and ``logger`` default to headless-safe instances (a
+    swallow-everything :class:`rich.console.Console` and the ``"opensre"``
+    logger); pass them only to redirect tool rendering or logging. Pass
+    ``message`` (or an explicit ``accounting``) when the agent should
     account for a single turn at construction time. Gateway reuse binds
     accounting later via :meth:`HeadlessAgent.bind_turn`.
     """
+    if console is None:
+        console = Console(force_terminal=False, file=StringIO())
+    if logger is None:
+        logger = logging.getLogger("opensre")
     error_reporter = DefaultErrorReporter(logger)
     turn_accounting = accounting
     if turn_accounting is None and message is not None:
