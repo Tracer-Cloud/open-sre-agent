@@ -76,6 +76,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         *,
         evidence_count: int,  # noqa: ARG002 — used by overrides
         iteration: int,  # noqa: ARG002 — used by overrides
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         """Decide what to do when the LLM stops requesting tools.
 
@@ -85,7 +86,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         Override in subclasses (e.g. :class:`CLIBackedInvestigationAgent`) to
         nudge the model back into tool calls before accepting a conclusion.
         """
-        last_text = getattr(self, "_last_assistant_text", "") or ""
+        last_text = final_text or getattr(self, "_last_assistant_text", "") or ""
         if (
             last_text.strip()
             and not incident_command_conclusion_complete(last_text)
@@ -428,6 +429,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
         *,
         evidence_count: int,  # noqa: ARG002 — base class signature
         iteration: int,
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         planned = getattr(self, "_planned_actions", [])
         evidence = getattr(self, "_current_evidence", None)
@@ -436,6 +438,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
+                final_text=final_text,
             )
 
         # Leave room for a final text-only iteration after the nudge fires.
@@ -443,6 +446,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
+                final_text=final_text,
             )
 
         uncalled = [name for name in planned if name not in evidence]
@@ -450,6 +454,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
+                final_text=final_text,
             )
 
         tool_list = ", ".join(uncalled)

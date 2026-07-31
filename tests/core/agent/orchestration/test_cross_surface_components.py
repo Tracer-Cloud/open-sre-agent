@@ -12,14 +12,14 @@ from rich.console import Console
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    agent_cls = MagicMock()
-    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
+    agent = MagicMock()
+    agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=1,
@@ -31,36 +31,55 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
         ),
         assistant_response_text="gateway-ok",
     )
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    factory = MagicMock(return_value=agent)
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        factory,
+    )
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
 
-    # The message is dispatched per-turn; the ports are wired once at construction.
-    agent_cls.return_value.dispatch.assert_called_once()
-    assert agent_cls.return_value.dispatch.call_args.args == ("hello gateway",)
-    ctor = agent_cls.call_args
+    # The message is dispatched per-turn; session-stable ports are wired once,
+    # with a live sink proxy rebound to the transport sink each turn.
+    from gateway.runtime.live_sink import LiveOutputSink
+
+    agent.dispatch.assert_called_once()
+    assert agent.dispatch.call_args.args == ("hello gateway",)
+    ctor = factory.call_args
     assert ctor.kwargs["session"] is session
-    assert ctor.kwargs["output"] is sink
+    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert ctor.kwargs["output"].bound is sink
     assert ctor.kwargs["gather_enabled"] is True
-    assert isinstance(ctor.kwargs["tools"], DefaultToolProvider)
-    assert ctor.kwargs["tools"]._precomputed_action_tools is None
+    assert ctor.kwargs["surface"] == "gateway"
+    tool_provider = DefaultToolProvider(
+        ctor.kwargs["session"],
+        ctor.kwargs["console"],
+        tool_action_logger=ctor.kwargs["logger"],
+        observer_factory=ctor.kwargs.get("observer_factory"),
+        subprocess_presenter_factory=ctor.kwargs.get("subprocess_presenter_factory"),
+        slash_ports_factory=ctor.kwargs.get("slash_ports_factory"),
+    )
+    assert tool_provider._precomputed_action_tools is None
     sink.finalize.assert_called_once_with("gateway-ok")
 
 
 def test_gateway_turn_handler_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    agent_cls = MagicMock()
-    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
+    agent = MagicMock()
+    agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_fallback",
         action_result=ToolCallingTurnResult(0, 0, 0, False, False),
         assistant_response_text="streamed answer",
         llm_run=object(),
     )
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        MagicMock(return_value=agent),
+    )
 
     session = Session(storage=InMemorySessionStorage())
     sink = MagicMock()
@@ -88,7 +107,7 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())
@@ -133,7 +152,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())
@@ -175,7 +194,7 @@ def test_run_turn_passes_turn_plan_to_gather(
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())
@@ -216,7 +235,7 @@ def test_run_turn_passes_turn_plan_to_answer(
         def record_action_result(self, _result: ToolCallingTurnResult) -> None:
             return None
 
-        def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+        def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
     session = Session(storage=InMemorySessionStorage())

@@ -29,12 +29,13 @@ from rich.table import Table
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 from platform.terminal.theme import BRAND, DIM, ERROR, HIGHLIGHT
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
-DEFAULT_GITHUB_MCP_MODE = "streamable-http"
+DEFAULT_GITHUB_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 DEFAULT_GITHUB_MCP_TOOLSETS = ("repos", "issues", "pull_requests", "actions", "search")
 
 # Non-transport metadata persisted alongside MCP credentials in the integration store.
@@ -135,7 +136,7 @@ class GitHubMCPConfig(StrictConfigModel):
     """Normalized GitHub MCP connection settings."""
 
     url: str = DEFAULT_GITHUB_MCP_URL
-    mode: Literal["stdio", "sse", "streamable-http"] = "streamable-http"
+    mode: McpTransportMode = DEFAULT_GITHUB_MCP_MODE
     auth_token: str = ""
     command: str = ""
     args: tuple[str, ...] = ()

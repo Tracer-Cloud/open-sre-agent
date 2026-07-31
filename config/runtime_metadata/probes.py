@@ -10,16 +10,33 @@ identity (instance metadata endpoint).
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
 import sys
 import time as _time
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
+from urllib.parse import urlsplit
+
+from config.constants.runtime_metadata import (
+    OPENSRE_ALLOW_NETWORK_ENV,
+    WORKSPACE_REPO_ENV_KEYS,
+)
 
 # Tools the LLM commonly reflex-shells for. Presence-only surfaces so the agent
 # can answer without invoking ``--version``, which the sandbox blocks.
-_TOOLS_TO_PROBE = ("kubectl", "helm", "docker", "git", "python", "python3")
+_TOOLS_TO_PROBE = (
+    "kubectl",
+    "helm",
+    "docker",
+    "git",
+    "python",
+    "python3",
+    "curl",
+    "bash",
+    "sh",
+)
 
 _LOCALTIME_LINK = Path("/etc/localtime")
 
@@ -146,7 +163,122 @@ def kubeconfig_path() -> str:
     return str(default) if default.is_file() else ""
 
 
+#: Hosts whose remotes shorten to a bare ``owner/repo`` identity.
+_GITHUB_HOSTS: Final[frozenset[str]] = frozenset({"github.com", "www.github.com"})
+
+#: scp-style remote: ``[user@]host:path`` (no scheme, so urlsplit cannot parse it).
+_SCP_REMOTE_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:[^@/]+@)?(?P<host>[A-Za-z0-9._-]+):(?P<path>.+)$"
+)
+
+
+def _remote_host_and_path(text: str) -> tuple[str, str]:
+    """Split a git remote into (host, path), or ``("", "")`` when unrecognised."""
+    if "://" in text:
+        parsed = urlsplit(text)
+        return (parsed.hostname or "").lower(), parsed.path
+    match = _SCP_REMOTE_RE.match(text)
+    if match is None:
+        return "", ""
+    return match.group("host").lower(), match.group("path")
+
+
+def _normalize_repo_identity(raw: str) -> str:
+    """Shorten a GitHub remote to ``owner/repo``; leave anything else as-is.
+
+    The host is compared exactly. A substring test would accept
+    ``https://evil.test/github.com/attacker/repo`` and report ``attacker/repo``
+    as this project's repository, and that fact reaches prompts and reports.
+    """
+    text = raw.strip()
+    if not text:
+        return ""
+    if text.endswith(".git"):
+        text = text[:-4]
+    host, path = _remote_host_and_path(text)
+    if host in _GITHUB_HOSTS and path.strip("/"):
+        return path.strip("/")
+    return text
+
+
+def read_git_origin_identity(config_text: str) -> str:
+    """Parse a ``.git/config`` body for ``remote.origin.url`` → ``owner/repo``."""
+    in_origin = False
+    for line in config_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_origin = stripped.lower() == '[remote "origin"]'
+            continue
+        if in_origin and stripped.lower().startswith("url"):
+            _, _, value = stripped.partition("=")
+            return _normalize_repo_identity(value)
+    return ""
+
+
+def _git_origin_from_config(repo_root: Path) -> str:
+    config = repo_root / ".git" / "config"
+    if not config.is_file():
+        # Worktrees point .git at a file; skip deep resolution for the fact.
+        return ""
+    try:
+        return read_git_origin_identity(config.read_text(encoding="utf-8"))
+    except OSError:
+        return ""
+
+
+def workspace_identity_facts() -> dict[str, str]:
+    """Which git/GitHub repo is “ours” for this OpenSRE process.
+
+    Prefer an explicit env override, then the checkout’s ``origin`` remote.
+    Empty string means unknown — prompts must state that rather than invent
+    Tracer-Cloud/opensre or the user’s employer repo.
+    """
+    for key in WORKSPACE_REPO_ENV_KEYS:
+        value = _normalize_repo_identity(os.environ.get(key, ""))
+        if value:
+            return {"workspace_repo": value}
+    # Walk up from cwd for a .git directory (dev checkouts).
+    here = Path.cwd().resolve()
+    for candidate in (here, *here.parents):
+        if (candidate / ".git").exists():
+            origin = _git_origin_from_config(candidate)
+            if origin:
+                return {"workspace_repo": origin}
+            break
+    return {"workspace_repo": ""}
+
+
+def capability_warning_facts(tools: dict[str, str] | None = None) -> dict[str, Any]:
+    """Honest capability gaps the agent should surface at boot, not mid-turn.
+
+    ``network_egress`` is false unless ``OPENSRE_ALLOW_NETWORK=1`` — matching the
+    sandbox default (blocked egress). Shell presence is derived from ``bash``/``sh``.
+    """
+    resolved = tools if tools is not None else installed_tools()
+    missing = sorted(name for name, path in resolved.items() if not path)
+    allow_network = (os.environ.get(OPENSRE_ALLOW_NETWORK_ENV) or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    shell_available = bool(resolved.get("bash") or resolved.get("sh"))
+    warnings: list[str] = []
+    if "curl" in missing:
+        warnings.append("curl is not on PATH")
+    if not shell_available:
+        warnings.append("no interactive shell (bash/sh) on PATH")
+    if not allow_network:
+        warnings.append("network egress is blocked for sandboxed code by default")
+    return {
+        "network_egress": allow_network,
+        "shell_available": shell_available,
+        "capability_warnings": warnings,
+    }
+
+
 __all__ = [
+    "capability_warning_facts",
     "cloud_facts",
     "disk_memory_facts",
     "installed_tools",
@@ -154,4 +286,6 @@ __all__ = [
     "local_tz_name",
     "pod_hostname",
     "python_version_string",
+    "read_git_origin_identity",
+    "workspace_identity_facts",
 ]

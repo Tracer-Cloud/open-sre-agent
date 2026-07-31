@@ -21,7 +21,10 @@ def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
     output = _normalized_output(capsys.readouterr().out)
 
     assert "Usage: opensre [OPTIONS] [COMMAND] [ARGS]..." in output
-    assert "Commands:" in output
+    # Grouped headings; the loop below still proves no command is dropped.
+    assert "Getting started:" in output
+    assert "Everyday:" in output
+    assert "More commands:" in output
     assert "Options:" in output
     assert "Welcome back" not in output
 

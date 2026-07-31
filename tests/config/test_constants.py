@@ -21,13 +21,59 @@ def test_billing_env_var_names_are_the_infra_contract() -> None:
     assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
 
 
-def test_constants_module_stays_a_leaf() -> None:
-    """``config`` sits at the bottom layer, so the billing constants must not
+def test_tenancy_env_var_names_are_the_infra_contract() -> None:
+    """Pin the control plane's env-var names to the strings its ECS task
+    definition injects — a rename here fails gateway startup in a silo."""
+    # Arrange / Act
+    from config.constants import tenancy
+
+    # Assert
+    assert tenancy.TENANT_ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
+    assert tenancy.CREDENTIALS_API_URL_ENV == "OPENSRE_CREDENTIALS_API_URL"
+    assert (
+        tenancy.CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV == "OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN"
+    )
+
+
+def test_the_two_organization_ids_never_collapse() -> None:
+    """They name different things and are set by different systems.
+
+    The control plane injects one to select whose credentials to hydrate; the
+    product declares the other for usage attribution and the fail-closed context
+    mount ownership check. Merging them breaks a deployed silo.
+    """
+    # Arrange / Act
+    from config.constants import billing, tenancy
+
+    # Assert
+    assert tenancy.TENANT_ORGANIZATION_ID_ENV != billing.ORGANIZATION_ID_ENV
+
+
+def test_both_organization_ids_are_re_exported() -> None:
+    """Callers may import either from the package root."""
+    # Arrange
+    from config import constants
+
+    # Act / Assert
+    assert constants.TENANT_ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
+    assert constants.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
+    for name in (
+        "TENANT_ORGANIZATION_ID_ENV",
+        "ORGANIZATION_ID_ENV",
+        "CREDENTIALS_API_URL_ENV",
+        "CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV",
+    ):
+        assert name in constants.__all__
+
+
+@pytest.mark.parametrize("module", ["billing", "tenancy"])
+def test_constants_module_stays_a_leaf(module: str) -> None:
+    """``config`` sits at the bottom layer, so the constants must not
     reach up into another package — that would form an import cycle."""
     # Arrange / Act
     from pathlib import Path as _Path
 
-    source = _Path("config/constants/billing.py").read_text(encoding="utf-8")
+    source = _Path(f"config/constants/{module}.py").read_text(encoding="utf-8")
 
     # Assert: no upward import of a sibling top-level package.
     for package in ("integrations", "gateway", "core", "platform", "tools", "surfaces"):

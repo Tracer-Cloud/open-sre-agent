@@ -68,6 +68,12 @@ _CLEARED_ENV_KEYS = (
     "TELEGRAM_DEFAULT_CHAT_ID",
     "TRACER_API_URL",
     "TRACER_WEB_APP_URL",
+    "X_BEARER_TOKEN",
+    "X_MCP_ARGS",
+    "X_MCP_AUTH_TOKEN",
+    "X_MCP_COMMAND",
+    "X_MCP_MODE",
+    "X_MCP_URL",
 )
 
 
@@ -464,7 +470,9 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Welcome back" not in result.stdout
-    assert "Commands:" in result.stdout
+    # Commands are grouped so the entry point is not buried alphabetically.
+    assert "Getting started:" in result.stdout
+    assert "onboard" in result.stdout
     assert "integrations" in result.stdout
     assert "--interactive / --no-interactive" in result.stdout
     assert "--layout [classic|pinned]" in result.stdout

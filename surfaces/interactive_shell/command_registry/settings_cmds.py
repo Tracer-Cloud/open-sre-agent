@@ -10,6 +10,7 @@ from rich.markup import escape
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
 from config.llm_reasoning_effort import (
     REASONING_EFFORT_OPTIONS,
+    ReasoningEffort,
     describe_reasoning_effort_default,
     display_reasoning_effort,
     parse_reasoning_effort,
@@ -40,12 +41,16 @@ _VERBOSE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("off", "disable verbose logging"),
 )
 
-_EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = (
-    ("low", "favor speed and lower reasoning cost"),
-    ("medium", "balanced reasoning effort"),
-    ("high", "favor more thorough reasoning"),
-    ("xhigh", "favor deepest supported reasoning"),
-    ("max", "alias for xhigh"),
+_EFFORT_HELP: dict[ReasoningEffort, str] = {
+    ReasoningEffort.LOW: "favor speed and lower reasoning cost",
+    ReasoningEffort.MEDIUM: "balanced reasoning effort",
+    ReasoningEffort.HIGH: "favor more thorough reasoning",
+    ReasoningEffort.XHIGH: "favor deepest supported reasoning",
+    ReasoningEffort.MAX: "alias for xhigh",
+}
+
+_EFFORT_FIRST_ARGS: tuple[tuple[str, str], ...] = tuple(
+    (effort.value, _EFFORT_HELP[effort]) for effort in REASONING_EFFORT_OPTIONS
 )
 
 
@@ -81,7 +86,7 @@ def _cmd_effort(session: Session, console: Console, args: list[str]) -> bool:
     reasoning_model = ""
     if settings is not None:
         reasoning_model, _toolcall_model = resolve_provider_models(settings, provider)
-    supported_values = ", ".join(REASONING_EFFORT_OPTIONS)
+    supported_values = ", ".join(option.value for option in REASONING_EFFORT_OPTIONS)
 
     if not args:
         console.print(
@@ -115,7 +120,7 @@ def _cmd_effort(session: Session, console: Console, args: list[str]) -> bool:
             f"[{DIM}]current provider {provider} ignores this setting; "
             "switch to openai or codex to use it.[/]"
         )
-    elif effort in {"xhigh", "max"}:
+    elif effort in {ReasoningEffort.XHIGH, ReasoningEffort.MAX}:
         console.print(
             f"[{DIM}]xhigh/max work best with newer GPT-5 or Codex models; "
             "older reasoning models may reject them.[/]"

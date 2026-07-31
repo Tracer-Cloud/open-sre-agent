@@ -270,10 +270,18 @@ class SessionCore:
         self.integrations.vcs_repo_scopes = value
 
     def refresh_runtime_metadata(self) -> None:
-        """Repopulate :attr:`runtime_metadata` from current process facts."""
+        """Rebuild :attr:`runtime_metadata`, including merged capability warnings."""
         from config.runtime_metadata import build_runtime_metadata
+        from platform.sandbox.capabilities import boot_capability_warnings
 
-        self.runtime_metadata = build_runtime_metadata()
+        meta = build_runtime_metadata()
+        tools = meta.get("tools")
+        installed = tools if isinstance(tools, dict) else None
+        meta["capability_warnings"] = boot_capability_warnings(
+            include_path_facts=True,
+            installed_tools=installed,
+        )
+        self.runtime_metadata = meta
 
     def hydrate_configured_integrations(self) -> None:
         """Load configured integration names (env + local store); metadata-only."""

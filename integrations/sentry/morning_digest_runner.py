@@ -3,25 +3,16 @@
 from __future__ import annotations
 
 import logging
-from io import StringIO
 from typing import Any
 
-from rich.console import Console
-
-from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
-from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session.integration_resolution import (
     merge_resolved_integrations,
     resolve_and_cache_integrations,
 )
-from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
-from core.agent_harness.turns.turn_results import ShellTurnResult
+from core.agent_harness.turns.turn_results import TurnResult
 from integrations.sentry.project_scope import (
     apply_sentry_project_scope,
     payload_project_slug,
@@ -68,7 +59,7 @@ def _require_sentry_configured() -> None:
         )
 
 
-def _dispatch_headless_turn(message: str, payload: AgentPayload) -> ShellTurnResult:
+def _dispatch_headless_turn(message: str, payload: AgentPayload) -> TurnResult:
     _require_sentry_configured()
 
     harness = AgentHarness(
@@ -84,33 +75,23 @@ def _dispatch_headless_turn(message: str, payload: AgentPayload) -> ShellTurnRes
     session = startup.session
     _apply_digest_project_scope(session, payload)
     output = BufferOutputSink()
-    error_reporter = DefaultErrorReporter(logger)
-    console = Console(force_terminal=False, file=StringIO())
-
-    agent = HeadlessAgent(
+    agent = build_default_headless_agent(
         session=session,
         output=output,
-        tools=DefaultToolProvider(session, console, tool_action_logger=logger),
-        prompts=DefaultPromptContextProvider(session),
-        reasoning=DefaultReasoningClientProvider(
-            output=output,
-            error_reporter=error_reporter,
-            session=session,
-        ),
-        run_factory=DefaultRunRecordFactory(session),
-        accounting=DefaultTurnAccounting(session, message),
-        error_reporter=error_reporter,
+        logger=logger,
+        message=message,
         gather_enabled=True,
         is_tty=False,
     )
-    return agent.dispatch(message)
+    harness.attach_agent(agent)
+    return harness.dispatch_message(message)
 
 
 def run_sentry_morning_digest(payload: AgentPayload) -> str:
     """Run one headless sentry-summary turn and return the assistant report."""
     message = build_morning_digest_prompt(payload)
     result = _dispatch_headless_turn(message, payload)
-    report = (result.assistant_response_text or result.action_result.response_text).strip()
+    report = result.primary_response_text
     if not result.answered or not report:
         raise RuntimeError(
             "Sentry morning digest failed: the reasoning client did not produce a response."

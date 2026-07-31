@@ -578,6 +578,7 @@ def test_rejecting_conclusion_without_nudge_raises() -> None:
             *,
             evidence_count: int,  # noqa: ARG002
             iteration: int,  # noqa: ARG002
+            final_text: str = "",  # noqa: ARG002
         ) -> tuple[bool, str | None]:
             return False, None
 
