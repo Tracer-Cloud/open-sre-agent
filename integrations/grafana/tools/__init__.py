@@ -473,6 +473,7 @@ def query_grafana_logs(
     result_data = {
         "source": "grafana_loki",
         "available": True,
+        "truncated": result.get("truncated", False),
         "logs": compacted_logs,
         "error_logs": compacted_error_logs,
         "total_logs": result.get("total_logs", 0),
