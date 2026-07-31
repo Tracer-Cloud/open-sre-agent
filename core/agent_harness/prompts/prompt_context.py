@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
@@ -48,6 +49,10 @@ class DefaultPromptContextProvider:
         self._session = session
         self._surface = surface
 
+    def bind_session(self, session: Any) -> None:
+        """Point this provider at a freshly resolved session (gateway reuse)."""
+        self._session = session
+
     def surface(self) -> str:
         return self._surface
 
@@ -82,7 +87,15 @@ class DefaultPromptContextProvider:
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> Mapping[str, Any]:
+        from config.runtime_metadata import capture_runtime_facts
+
+        cached = getattr(self._session, "runtime_metadata", None)
+        return capture_runtime_facts(
+            metadata=cached if isinstance(cached, dict) and cached else None
+        )
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:
         sid = getattr(self._session, "session_id", None)
         with component_span("runtime_metadata:env_block", session_id=sid):
             settings = load_llm_settings()
@@ -98,12 +111,7 @@ class DefaultPromptContextProvider:
                     )
                 except Exception:
                     llm_settings_available = False
-            from config.runtime_metadata import capture_runtime_facts
-
-            cached = getattr(self._session, "runtime_metadata", None)
-            runtime = capture_runtime_facts(
-                metadata=cached if isinstance(cached, dict) and cached else None
-            )
+            facts = runtime if runtime is not None else self.runtime_facts()
             return build_environment_block(
                 integrations=self._visible_integrations(),
                 known=self._session.configured_integrations_known,
@@ -111,7 +119,7 @@ class DefaultPromptContextProvider:
                 reasoning_model=reasoning_model,
                 toolcall_model=toolcall_model,
                 llm_settings_available=llm_settings_available,
-                runtime=runtime,
+                runtime=facts,
             )
 
     def long_term_memory(self) -> str:

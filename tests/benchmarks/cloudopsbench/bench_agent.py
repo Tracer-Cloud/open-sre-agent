@@ -116,6 +116,7 @@ class BenchInvestigationAgent(ConnectedInvestigationAgent):
         *,
         evidence_count: int,
         iteration: int,  # noqa: ARG002 — base class signature
+        final_text: str = "",  # noqa: ARG002 — base class signature
     ) -> tuple[bool, str | None]:
         if evidence_count >= self.MIN_TOOL_CALLS:
             return True, None

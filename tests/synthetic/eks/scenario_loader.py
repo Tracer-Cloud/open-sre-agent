@@ -55,6 +55,7 @@ class K8sScenarioAnswerKey:
     max_investigation_loops: int = 1
     ruling_out_keywords: list[str] = field(default_factory=list)
     required_queries: list[str] = field(default_factory=list)
+    equivalent_root_cause_categories: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -184,6 +185,9 @@ def _parse_answer_yaml(path: Path) -> K8sScenarioAnswerKey:
         max_investigation_loops=int(validated.get("max_investigation_loops") or 1),
         ruling_out_keywords=list(validated.get("ruling_out_keywords") or []),
         required_queries=list(validated.get("required_queries") or []),
+        equivalent_root_cause_categories=list(
+            validated.get("equivalent_root_cause_categories") or []
+        ),
     )
 
 

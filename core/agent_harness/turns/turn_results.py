@@ -33,7 +33,7 @@ class ToolCallingTurnResult:
 
 
 @dataclass(frozen=True)
-class ShellTurnResult:
+class TurnResult:
     """Outcome of a full turn: the action phase plus the conversational answer."""
 
     final_intent: str
@@ -49,9 +49,14 @@ class ShellTurnResult:
         """A turn is "answered" exactly when the conversational LLM produced a run."""
         return self.llm_run is not None
 
+    @property
+    def primary_response_text(self) -> str:
+        """Assistant text, falling back to the action-phase response when empty."""
+        return (self.assistant_response_text or self.action_result.response_text).strip()
+
 
 __all__ = [
-    "ShellTurnResult",
     "ToolCallingAccountingStatus",
     "ToolCallingTurnResult",
+    "TurnResult",
 ]

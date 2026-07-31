@@ -3,19 +3,10 @@
 from __future__ import annotations
 
 import logging
-from io import StringIO
 
-from rich.console import Console
-
-from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
-from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
-from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from platform.harness_ports import configured_integration_services
 from platform.scheduler.agent_runner import AgentPayload
 
@@ -54,27 +45,17 @@ def run_github_pr_sweep(payload: AgentPayload) -> str:
     startup = harness.startup()
     session = startup.session
     output = BufferOutputSink()
-    error_reporter = DefaultErrorReporter(logger)
-    console = Console(force_terminal=False, file=StringIO())
-
-    agent = HeadlessAgent(
+    agent = build_default_headless_agent(
         session=session,
         output=output,
-        tools=DefaultToolProvider(session, console, tool_action_logger=logger),
-        prompts=DefaultPromptContextProvider(session),
-        reasoning=DefaultReasoningClientProvider(
-            output=output,
-            error_reporter=error_reporter,
-            session=session,
-        ),
-        run_factory=DefaultRunRecordFactory(session),
-        accounting=DefaultTurnAccounting(session, _PR_SWEEP_PROMPT),
-        error_reporter=error_reporter,
+        logger=logger,
+        message=_PR_SWEEP_PROMPT,
         gather_enabled=True,
         is_tty=False,
     )
-    result = agent.dispatch(_PR_SWEEP_PROMPT)
-    report = (result.assistant_response_text or result.action_result.response_text).strip()
+    harness.attach_agent(agent)
+    result = harness.dispatch_message(_PR_SWEEP_PROMPT)
+    report = result.primary_response_text
     if not result.answered or not report:
         raise RuntimeError(
             "GitHub PR sweep failed: the reasoning client did not produce a response."

@@ -14,7 +14,7 @@ from core.domain.alerts.alert_source import (
 from core.llm.types import ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from core.tool_framework.utils.integration_sources import availability_view
-from platform.observability.trace.redaction import redact_sensitive
+from platform.observability.trace.redaction import RedactedToolView, redact_tool_view
 from tools.registry import get_registered_tools
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
@@ -245,14 +245,21 @@ def build_seed_calls(
     return calls
 
 
-def tool_event_payload(tc: ToolCall, *, output: Any | None = None) -> dict[str, Any]:
+def tool_event_payload(
+    tc: ToolCall,
+    *,
+    output: Any | None = None,
+    redacted: RedactedToolView | None = None,
+) -> dict[str, Any]:
+    """Build a tracker/event payload; prefer a shared ``redacted`` view."""
+    view = redacted if redacted is not None else redact_tool_view(tc.input, output)
     payload: dict[str, Any] = {
         "id": tc.id,
         "name": tc.name,
-        "input": redact_sensitive(tc.input),
+        "input": view.tool_input,
     }
-    if output is not None:
-        payload["output"] = redact_sensitive(output)
+    if output is not None or (redacted is not None and redacted.output is not None):
+        payload["output"] = view.output
     return payload
 
 
@@ -261,16 +268,23 @@ def merge_tool_evidence(
     tool_name: str,
     output: Any,
     tool_input: dict[str, Any],
+    *,
+    redacted: RedactedToolView | None = None,
 ) -> None:
-    """Store raw tool output and the legacy report-facing evidence keys."""
+    """Store raw tool output and the legacy report-facing evidence keys.
+
+    Pass ``redacted`` when the caller already built a ``RedactedToolView`` so
+    report rows share that copy instead of walking the payload again.
+    """
     evidence[tool_name] = output
+    view = redacted if redacted is not None else redact_tool_view(tool_input, output)
     tool_outputs = evidence.setdefault("tool_outputs", [])
     if isinstance(tool_outputs, list):
         tool_outputs.append(
             {
                 "tool_name": tool_name,
-                "tool_args": redact_sensitive(tool_input),
-                "data": redact_sensitive(output),
+                "tool_args": view.tool_input,
+                "data": view.output,
             }
         )
 

@@ -133,6 +133,8 @@ def build_environment_block(
             "instead of guessing or telling them to run another command."
         )
 
+    # Live keys (now_iso / uptime / disk / memory) stay out of this block so
+    # the system/env prefix remains cache-stable across turns.
     runtime_fact = render_runtime_facts(runtime or {})
     if runtime_fact:
         facts.append(runtime_fact)

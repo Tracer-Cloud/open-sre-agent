@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from config.constants.investigation import MAX_INVESTIGATION_LOOPS
+from config.constants.investigation import (
+    INVESTIGATION_TOOL_CACHE_MAX_CHARS,
+    INVESTIGATION_TOOL_CACHE_MAX_ENTRIES,
+    MAX_INVESTIGATION_LOOPS,
+)
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import LLMInvokeFailure
 from core.state.evidence import EvidenceEntry
@@ -31,19 +36,76 @@ class CachedToolResult:
     loop_iteration: int
 
 
-class InvestigationToolCallCache:
-    """Per-investigation cache of tool results keyed by ``tool_call_signature``."""
+def _estimate_payload_chars(result: Any) -> int:
+    """Approximate serialized size for cache byte budgeting."""
+    try:
+        return len(json.dumps(result, default=str, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return len(repr(result))
 
-    def __init__(self) -> None:
-        self._entries: dict[str, CachedToolResult] = {}
+
+class InvestigationToolCallCache:
+    """Bounded per-investigation cache of tool results keyed by signature.
+
+    Lookup stays O(1). Eviction is LRU by entry count and approximate payload
+    chars so long investigations cannot retain every full result forever.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_entries: int = INVESTIGATION_TOOL_CACHE_MAX_ENTRIES,
+        max_total_chars: int = INVESTIGATION_TOOL_CACHE_MAX_CHARS,
+    ) -> None:
+        if max_entries < 1:
+            raise ValueError("max_entries must be >= 1")
+        if max_total_chars < 1:
+            raise ValueError("max_total_chars must be >= 1")
+        self._max_entries = max_entries
+        self._max_total_chars = max_total_chars
+        self._entries: OrderedDict[str, CachedToolResult] = OrderedDict()
+        self._entry_chars: dict[str, int] = {}
+        self._total_chars = 0
 
     def store(self, signature: str, result: Any, *, loop_iteration: int) -> None:
         if signature in self._entries:
             return
-        self._entries[signature] = CachedToolResult(result=result, loop_iteration=loop_iteration)
+        stored = result
+        size = _estimate_payload_chars(stored)
+        # Hard-bound pathological payloads: dup replay only needs a preview.
+        # Truncation wrapper keys (~80 chars) must still fit under the budget.
+        if size > self._max_total_chars:
+            preview_budget = max(32, self._max_total_chars - 96)
+            stored = _bounded_cached_result_payload(
+                stored,
+                max_chars=min(_MAX_CACHED_RESULT_CHARS, preview_budget),
+            )
+            size = _estimate_payload_chars(stored)
+            if size > self._max_total_chars:
+                stored = {
+                    "_truncated_for_duplicate_replay": True,
+                    "preview": "",
+                    "note": "omitted: exceeded investigation tool cache char budget",
+                }
+                size = _estimate_payload_chars(stored)
+        while self._entries and (
+            len(self._entries) >= self._max_entries
+            or self._total_chars + size > self._max_total_chars
+        ):
+            self._evict_oldest()
+        self._entries[signature] = CachedToolResult(result=stored, loop_iteration=loop_iteration)
+        self._entry_chars[signature] = size
+        self._total_chars += size
 
     def lookup(self, signature: str) -> CachedToolResult | None:
-        return self._entries.get(signature)
+        cached = self._entries.get(signature)
+        if cached is not None:
+            self._entries.move_to_end(signature)
+        return cached
+
+    def _evict_oldest(self) -> None:
+        oldest_signature, _ = self._entries.popitem(last=False)
+        self._total_chars -= self._entry_chars.pop(oldest_signature)
 
 
 def _bounded_cached_result_payload(result: Any, *, max_chars: int) -> Any:

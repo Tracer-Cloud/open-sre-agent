@@ -5,6 +5,7 @@ from pathlib import Path
 import keyring
 from click.testing import CliRunner
 
+from config.constants.secrets import OPENSRE_USE_KEYRING_ENV
 from config.llm_credentials import resolve_env_credential
 from surfaces.cli.__main__ import cli
 from surfaces.cli.llm_auth.service import AuthSetupResult
@@ -83,7 +84,14 @@ def test_auth_status_provider_reports_metadata_without_keychain_verify(
 
 
 def test_auth_verify_provider_reports_keyring_source(monkeypatch, tmp_path: Path) -> None:
+    """Keyring-backed secrets still report ``keyring`` as their source.
+
+    Keyring writes are opt-in now (env/file first), so this opts in explicitly —
+    otherwise the login below lands in the fallback store and the keyring source
+    path goes untested. The default is covered by ``tests/config/test_secret_store.py``.
+    """
     _patch_auth_env(monkeypatch, tmp_path)
+    monkeypatch.setenv(OPENSRE_USE_KEYRING_ENV, "1")
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
     try:

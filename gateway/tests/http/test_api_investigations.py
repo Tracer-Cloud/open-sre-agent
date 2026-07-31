@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from unittest.mock import AsyncMock
 
 import pytest
@@ -36,7 +37,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def test_create_investigation_requires_auth() -> None:
     client = TestClient(webapp.app)
     resp = client.post("/api/investigations", json={"raw_alert": {"alert_name": "x"}})
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_create_investigation_returns_202_queued(client: TestClient) -> None:
@@ -45,7 +46,7 @@ def test_create_investigation_returns_202_queued(client: TestClient) -> None:
         json={"raw_alert": {"alert_name": "cpu"}, "alert_name": "cpu"},
         headers={"Authorization": "Bearer fake"},
     )
-    assert resp.status_code == 202
+    assert resp.status_code == HTTPStatus.ACCEPTED
     data = resp.json()
     assert data["status"] == "queued"
     assert data["investigation_id"]
@@ -54,7 +55,7 @@ def test_create_investigation_returns_202_queued(client: TestClient) -> None:
 def test_get_investigation_requires_auth() -> None:
     client = TestClient(webapp.app)
     resp = client.get("/api/investigations/any-id")
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_invalid_token_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,7 +73,7 @@ def test_invalid_token_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
         headers={"Authorization": "Bearer forged"},
     )
 
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
     assert resp.headers["WWW-Authenticate"] == "Bearer"
 
 
@@ -83,7 +84,7 @@ def test_empty_bearer_token_is_rejected() -> None:
         json={"raw_alert": {}},
         headers={"Authorization": "Bearer  "},
     )
-    assert resp.status_code == 401
+    assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_other_org_cannot_read_investigation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,7 +105,7 @@ def test_other_org_cannot_read_investigation(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     # Cross-org reads are indistinguishable from missing records.
-    assert resp.status_code == 404
+    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_orgless_token_is_rejected_on_create_and_get(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -119,8 +120,8 @@ def test_orgless_token_is_rejected_on_create_and_get(monkeypatch: pytest.MonkeyP
     fetched = client.get("/api/investigations/any-id", headers=headers)
 
     # Org-less users must never share the empty-string namespace.
-    assert created.status_code == 403
-    assert fetched.status_code == 403
+    assert created.status_code == HTTPStatus.FORBIDDEN
+    assert fetched.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_create_accepts_workspace_id(client: TestClient) -> None:
@@ -129,7 +130,7 @@ def test_create_accepts_workspace_id(client: TestClient) -> None:
         json={"raw_alert": {}, "workspace_id": "ws_analytics"},
         headers={"Authorization": "Bearer fake"},
     )
-    assert resp.status_code == 202
+    assert resp.status_code == HTTPStatus.ACCEPTED
     assert resp.json()["status"] == "queued"
 
 
@@ -145,7 +146,7 @@ def test_get_investigation_scoped_to_org(client: TestClient) -> None:
         f"/api/investigations/{investigation_id}",
         headers={"Authorization": "Bearer fake"},
     )
-    assert ok.status_code == 200
+    assert ok.status_code == HTTPStatus.OK
     assert ok.json()["status"] == "queued"
     assert ok.json()["report_url"] is None
 
@@ -153,4 +154,4 @@ def test_get_investigation_scoped_to_org(client: TestClient) -> None:
         "/api/investigations/does-not-exist",
         headers={"Authorization": "Bearer fake"},
     )
-    assert missing.status_code == 404
+    assert missing.status_code == HTTPStatus.NOT_FOUND

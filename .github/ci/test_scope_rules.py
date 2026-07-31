@@ -24,6 +24,17 @@ class PathRule:
 
 # Matched in list order — more specific prefixes must appear before parents.
 RULES: tuple[PathRule, ...] = (
+    # User-facing quickstart surface
+    PathRule("docs/quickstart.mdx", ("tests/cli/test_quickstart.py",)),
+    # Installer surfaces (curl/bash, PowerShell, docs, Homebrew sync)
+    PathRule("install.sh", ("tests/cli/test_install_matrix.py", "tests/cli/test_install_sh_path.py", "tests/cli/test_install_sh_resolution.py")),
+    PathRule("install.ps1", ("tests/cli/test_install_matrix.py", "tests/cli/test_install_ps1_progress.py")),
+    PathRule("docs/install.mdx", ("tests/cli/test_install_matrix.py",)),
+    PathRule("docs/install-local.mdx", ("tests/cli/test_install_matrix.py",)),
+    PathRule(
+        ".github/scripts/sync-homebrew-tap-formula.sh",
+        ("tests/cli/test_install_matrix.py",),
+    ),
     # Shared core (always escalate)
     PathRule("core/domain/", (), always_escalate=True),
     PathRule("core/", ("tests/core/",)),

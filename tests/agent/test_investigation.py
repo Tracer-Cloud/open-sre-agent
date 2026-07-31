@@ -923,6 +923,7 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
             *,
             evidence_count: int,  # noqa: ARG002 — base signature
             iteration: int,  # noqa: ARG002 — base signature
+            final_text: str = "",  # noqa: ARG002 — base signature
         ) -> tuple[bool, str | None]:
             return False, None  # invalid — rejects without providing context
 
@@ -965,6 +966,7 @@ def test_should_accept_conclusion_subclass_can_force_continuation() -> None:
             *,
             evidence_count: int,
             iteration: int,  # noqa: ARG002 — base signature
+            final_text: str = "",  # noqa: ARG002 — base signature
         ) -> tuple[bool, str | None]:
             if evidence_count >= 5:
                 return True, None
@@ -1194,6 +1196,63 @@ def test_investigation_tool_call_cache_first_write_wins() -> None:
     assert cached is not None
     assert cached.result == {"lines": 3}
     assert cached.loop_iteration == 0
+
+
+def test_investigation_tool_call_cache_evicts_by_entry_count() -> None:
+    cache = InvestigationToolCallCache(max_entries=2, max_total_chars=1_000_000)
+    first = tool_call_signature(ToolCall(id="1", name="a", input={"n": 1}))
+    second = tool_call_signature(ToolCall(id="2", name="b", input={"n": 2}))
+    third = tool_call_signature(ToolCall(id="3", name="c", input={"n": 3}))
+
+    cache.store(first, {"v": 1}, loop_iteration=0)
+    cache.store(second, {"v": 2}, loop_iteration=1)
+    cache.store(third, {"v": 3}, loop_iteration=2)
+
+    assert cache.lookup(first) is None
+    assert cache.lookup(second) is not None
+    assert cache.lookup(third) is not None
+
+
+def test_investigation_tool_call_cache_evicts_by_char_budget() -> None:
+    cache = InvestigationToolCallCache(max_entries=32, max_total_chars=80)
+    small = tool_call_signature(ToolCall(id="1", name="small", input={}))
+    large = tool_call_signature(ToolCall(id="2", name="large", input={}))
+
+    cache.store(small, {"ok": True}, loop_iteration=0)
+    cache.store(large, {"blob": "x" * 200}, loop_iteration=1)
+
+    assert cache.lookup(small) is None
+    cached = cache.lookup(large)
+    assert cached is not None
+    # Oversized payloads are stored as a truncated surrogate (hard char bound).
+    assert isinstance(cached.result, dict)
+    assert cached.result.get("_truncated_for_duplicate_replay") is True
+
+
+def test_investigation_tool_call_cache_hard_bounds_single_oversized_entry() -> None:
+    cache = InvestigationToolCallCache(max_entries=8, max_total_chars=120)
+    signature = tool_call_signature(ToolCall(id="1", name="huge", input={}))
+    cache.store(signature, {"blob": "y" * 10_000}, loop_iteration=0)
+    cached = cache.lookup(signature)
+    assert cached is not None
+    assert cached.result["_truncated_for_duplicate_replay"] is True
+    assert cache._total_chars <= 120
+
+
+def test_investigation_tool_call_cache_lookup_refreshes_lru_order() -> None:
+    cache = InvestigationToolCallCache(max_entries=2, max_total_chars=1_000_000)
+    first = tool_call_signature(ToolCall(id="1", name="a", input={"n": 1}))
+    second = tool_call_signature(ToolCall(id="2", name="b", input={"n": 2}))
+    third = tool_call_signature(ToolCall(id="3", name="c", input={"n": 3}))
+
+    cache.store(first, {"v": 1}, loop_iteration=0)
+    cache.store(second, {"v": 2}, loop_iteration=1)
+    assert cache.lookup(first) is not None  # touch → most-recent
+    cache.store(third, {"v": 3}, loop_iteration=2)
+
+    assert cache.lookup(second) is None
+    assert cache.lookup(first) is not None
+    assert cache.lookup(third) is not None
 
 
 def test_duplicate_call_result_truncates_large_cached_payload() -> None:

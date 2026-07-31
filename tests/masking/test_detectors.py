@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.masking.detectors import find_identifiers
+from platform.masking.detectors import DetectedIdentifier, _resolve_overlaps, find_identifiers
 from platform.masking.policy import ALL_KINDS, MaskingPolicy
 
 
@@ -112,6 +112,28 @@ def test_overlapping_matches_resolved_longest_wins() -> None:
     matches = find_identifiers(text, _policy())
     hostnames = [m for m in matches if m.kind == "hostname"]
     assert len(hostnames) == 1
+
+
+def test_resolve_overlaps_keeps_non_overlapping_gap() -> None:
+    """Gap between kept spans must still accept a middle match (sweep-line)."""
+    a = DetectedIdentifier(kind="a", start=0, end=3, value="aaa")
+    gap = DetectedIdentifier(kind="g", start=5, end=8, value="ggg")
+    b = DetectedIdentifier(kind="b", start=10, end=13, value="bbb")
+    overlap_b = DetectedIdentifier(kind="x", start=11, end=12, value="x")
+    kept = _resolve_overlaps([b, gap, a, overlap_b])
+    assert [(m.kind, m.start, m.end) for m in kept] == [
+        ("a", 0, 3),
+        ("g", 5, 8),
+        ("b", 10, 13),
+    ]
+
+
+def test_resolve_overlaps_longer_at_same_start_wins() -> None:
+    short = DetectedIdentifier(kind="short", start=0, end=3, value="abc")
+    long = DetectedIdentifier(kind="long", start=0, end=10, value="abcdefghij")
+    kept = _resolve_overlaps([short, long])
+    assert len(kept) == 1
+    assert kept[0].kind == "long"
 
 
 def test_hostname_regex_handles_adversarial_input_quickly() -> None:

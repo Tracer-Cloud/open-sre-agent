@@ -1,4 +1,25 @@
-"""Fail-closed startup hydration of tenant integration credentials."""
+"""Load one tenant's integration credentials, once, before the gateway serves.
+
+A silo always reads its **bootstrap secret** from Secrets Manager first. That
+secret carries the tenant's Neon connection string and, for one of the routes
+below, an API token. It never carries integrations.
+
+Integrations then arrive by exactly one of two routes:
+
+* **integrations secret** — read the tenant's IntegrationStore v2 blob from
+  Secrets Manager. This is the route deployed silos run on, and it wins when
+  both are configured.
+* **credentials API** — fetch the store from the webapp over HTTPS. The staged
+  fallback, used only when no integrations secret is configured.
+
+Configuring neither leaves the store as shipped, which is how a laptop runs.
+
+Two failure modes are deliberately different. Nothing configured means the
+feature is off, so :meth:`CredentialHydrationConfig.from_environment` returns
+``None``. Something-but-not-everything configured is a broken deployment, so it
+raises rather than starting a silo that would serve the wrong tenant or no
+tenant at all.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +28,14 @@ import os
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
+from config.constants.tenancy import (
+    CREDENTIALS_API_URL_ENV,
+    CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
+    INTEGRATIONS_SECRET_ARN_ENV,
+    TENANT_ORGANIZATION_ID_ENV,
+)
 from integrations.credentials_api import CredentialsApiClient, hydrate_integration_store
-
-_ORGANIZATION_ID = "ORGANIZATION_ID"
-_API_URL = "OPENSRE_CREDENTIALS_API_URL"
-_SECRET_ARN = "OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN"
+from integrations.secrets_vault import hydrate_integration_store_from_secret
 
 
 class SecretsManagerClient(Protocol):
@@ -25,8 +49,12 @@ class SecretsManagerClient(Protocol):
 class GatewayBootstrap:
     """Decrypted bootstrap values held in memory for this process only."""
 
+    #: Authorizes the credentials-API route. Unused on the secret route.
     credentials_api_token: str | None = None
+    #: Neon connection string; the remote-run worker needs it to poll.
     database_url: str | None = None
+    #: Whether a route ran and replaced the local store, as opposed to the
+    #: store shipping with the image. Drives one status word.
     integrations_hydrated: bool = False
 
 
@@ -37,26 +65,34 @@ class CredentialHydrationConfig:
     organization_id: str
     bootstrap_secret_arn: str
     credentials_api_url: str | None = None
+    integrations_secret_arn: str | None = None
 
     @classmethod
     def from_environment(cls) -> CredentialHydrationConfig | None:
         """Return ``None`` when disabled, and reject partial configuration."""
-        required_values = {
-            _ORGANIZATION_ID: os.getenv(_ORGANIZATION_ID, "").strip(),
-            _SECRET_ARN: os.getenv(_SECRET_ARN, "").strip(),
+        identity = {
+            TENANT_ORGANIZATION_ID_ENV: os.getenv(TENANT_ORGANIZATION_ID_ENV, "").strip(),
+            CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV: os.getenv(
+                CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, ""
+            ).strip(),
         }
-        credentials_api_url = os.getenv(_API_URL, "").strip()
-        if not any(required_values.values()) and not credentials_api_url:
+        credentials_api_url = os.getenv(CREDENTIALS_API_URL_ENV, "").strip()
+        integrations_secret_arn = os.getenv(INTEGRATIONS_SECRET_ARN_ENV, "").strip()
+
+        # Not one variable set anywhere: the feature is off, not misconfigured.
+        if not any(identity.values()) and not (credentials_api_url or integrations_secret_arn):
             return None
-        missing = [name for name, value in required_values.items() if not value]
+        # Anything set means a silo meant to hydrate, so identity must be complete.
+        missing = [name for name, value in identity.items() if not value]
         if missing:
             raise ValueError("Credential hydration configuration is incomplete")
         if credentials_api_url and not credentials_api_url.lower().startswith("https://"):
             raise ValueError("Credentials API URL must use HTTPS")
         return cls(
-            organization_id=required_values[_ORGANIZATION_ID],
+            organization_id=identity[TENANT_ORGANIZATION_ID_ENV],
             credentials_api_url=credentials_api_url or None,
-            bootstrap_secret_arn=required_values[_SECRET_ARN],
+            bootstrap_secret_arn=identity[CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV],
+            integrations_secret_arn=integrations_secret_arn or None,
         )
 
 
@@ -104,16 +140,43 @@ class GatewayCredentialHydrator:
         return cls(config=config, secrets_client=boto3.client("secretsmanager"))
 
     def hydrate(self) -> GatewayBootstrap:
-        """Hydrate credentials atomically before any runtime component starts."""
-        response = self._secrets_client.get_secret_value(SecretId=self._config.bootstrap_secret_arn)
+        """Read the bootstrap secret, then load integrations by one route."""
+        bootstrap = _parse_bootstrap_secret(
+            self._read_secret(self._config.bootstrap_secret_arn, secret_name="Bootstrap")
+        )
+        # The tenant's secret wins when both are configured: it is the route the
+        # webapp maintains through the control plane, and the one deployed silos
+        # run on. The credentials API stays as the staged fallback.
+        if self._config.integrations_secret_arn is not None:
+            self._load_from_integrations_secret()
+        elif self._config.credentials_api_url is not None:
+            self._load_from_credentials_api(bootstrap)
+        else:
+            return bootstrap
+        return replace(bootstrap, integrations_hydrated=True)
+
+    def _read_secret(self, secret_arn: str, *, secret_name: str) -> str:
+        """Read one pinned ARN. ``secret_name`` only names it in the error."""
+        response = self._secrets_client.get_secret_value(SecretId=secret_arn)
         secret_string = response.get("SecretString")
         if not isinstance(secret_string, str):
-            raise ValueError("Bootstrap secret has no string value")
-        bootstrap = _parse_bootstrap_secret(secret_string)
-        if self._config.credentials_api_url is None:
-            return bootstrap
+            raise ValueError(f"{secret_name} secret has no string value")
+        return secret_string
+
+    def _load_from_integrations_secret(self) -> None:
+        """Replace the local store from this tenant's Secrets Manager blob."""
+        if self._config.integrations_secret_arn is None:
+            raise ValueError("Integrations secret ARN is not configured")
+        hydrate_integration_store_from_secret(
+            self._read_secret(self._config.integrations_secret_arn, secret_name="Integrations")
+        )
+
+    def _load_from_credentials_api(self, bootstrap: GatewayBootstrap) -> None:
+        """Replace the local store from the webapp over HTTPS."""
         if bootstrap.credentials_api_token is None:
             raise ValueError("Bootstrap secret has no credentials API token")
+        if self._config.credentials_api_url is None:
+            raise ValueError("Credentials API URL is not configured")
         with CredentialsApiClient(
             base_url=self._config.credentials_api_url,
             bootstrap_credential=bootstrap.credentials_api_token,
@@ -122,7 +185,6 @@ class GatewayCredentialHydrator:
                 client=client,
                 organization_id=self._config.organization_id,
             )
-        return replace(bootstrap, integrations_hydrated=True)
 
 
 __all__ = [

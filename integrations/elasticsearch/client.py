@@ -22,6 +22,7 @@ import base64
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -93,9 +94,9 @@ class ElasticsearchClient:
                 f"{self.config.base_url}/_cluster/health",
                 timeout=_DEFAULT_TIMEOUT,
             )
-            if resp.status_code == 200:
+            if resp.status_code == HTTPStatus.OK:
                 security_enabled = False
-            elif resp.status_code == 401:
+            elif resp.status_code == HTTPStatus.UNAUTHORIZED:
                 security_enabled = True
             else:
                 return {

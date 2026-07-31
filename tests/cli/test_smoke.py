@@ -12,6 +12,7 @@ import subprocess
 import sys
 import sysconfig
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -67,6 +68,12 @@ _CLEARED_ENV_KEYS = (
     "TELEGRAM_DEFAULT_CHAT_ID",
     "TRACER_API_URL",
     "TRACER_WEB_APP_URL",
+    "X_BEARER_TOKEN",
+    "X_MCP_ARGS",
+    "X_MCP_AUTH_TOKEN",
+    "X_MCP_COMMAND",
+    "X_MCP_MODE",
+    "X_MCP_URL",
 )
 
 
@@ -172,7 +179,16 @@ class CliSandbox:
         return self.project_env_path.read_text(encoding="utf-8")
 
     def read_wizard_store(self) -> dict[str, object]:
-        return json.loads(self.wizard_store_path.read_text(encoding="utf-8"))
+        store: dict[str, object] = json.loads(self.wizard_store_path.read_text(encoding="utf-8"))
+        return store
+
+    def wizard_target(self, name: str) -> dict[str, object]:
+        """Return the wizard store's entry for one target (e.g. ``local``)."""
+        targets = self.read_wizard_store()["targets"]
+        assert isinstance(targets, dict), f"wizard store 'targets' is not a mapping: {targets!r}"
+        entry = targets[name]
+        assert isinstance(entry, dict), f"wizard target {name!r} is not a mapping: {entry!r}"
+        return entry
 
 
 def _clean_terminal_output(text: str) -> str:
@@ -423,7 +439,7 @@ class _ReleaseHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture()
-def release_api_url() -> str:
+def release_api_url() -> Iterator[str]:
     try:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _ReleaseHandler)
     except OSError as exc:
@@ -454,7 +470,9 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Welcome back" not in result.stdout
-    assert "Commands:" in result.stdout
+    # Commands are grouped so the entry point is not buried alphabetically.
+    assert "Getting started:" in result.stdout
+    assert "onboard" in result.stdout
     assert "integrations" in result.stdout
     assert "--interactive / --no-interactive" in result.stdout
     assert "--layout [classic|pinned]" in result.stdout
@@ -674,9 +692,9 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     assert "Done." in result.stdout
     assert "next" in result.stdout
 
-    store = cli_sandbox.read_wizard_store()
-    assert store["targets"]["local"]["provider"] == "anthropic"
-    assert "api_key" not in store["targets"]["local"]
+    target = cli_sandbox.wizard_target("local")
+    assert target["provider"] == "anthropic"
+    assert "api_key" not in target
     assert "LLM_PROVIDER=anthropic" in cli_sandbox.read_project_env()
     assert "ANTHROPIC_API_KEY=" not in cli_sandbox.read_project_env()
     assert "ANTHROPIC_REASONING_MODEL=" in cli_sandbox.read_project_env()
@@ -825,9 +843,9 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     assert "Done." in result.stdout
     assert "next" in result.stdout
 
-    store = cli_sandbox.read_wizard_store()
-    assert store["targets"]["local"]["provider"] == "anthropic"
-    assert "api_key" not in store["targets"]["local"]
+    target = cli_sandbox.wizard_target("local")
+    assert target["provider"] == "anthropic"
+    assert "api_key" not in target
     env_body = cli_sandbox.read_project_env()
     assert "LLM_PROVIDER=anthropic\n" in env_body
     assert "ANTHROPIC_API_KEY=" not in env_body

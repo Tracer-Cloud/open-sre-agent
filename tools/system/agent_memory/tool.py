@@ -10,6 +10,7 @@ from typing import Any
 
 from core.domain.memory import (
     MEMORY_TYPES,
+    MemoryType,
     delete_memory,
     list_memories,
     load_memory,
@@ -92,7 +93,10 @@ def memory_remember(name: str, type: str, description: str, content: str) -> dic
         return error
     slug = normalize_name(name)
     assert slug is not None  # validate_remember_args already checked
-    result = save_memory(slug=slug, memory_type=type, description=description, body=content)  # type: ignore[arg-type]
+    # ``type`` was already validated against MEMORY_TYPES by validate_remember_args.
+    result = save_memory(
+        slug=slug, memory_type=MemoryType(type), description=description, body=content
+    )
     if result is None:
         return {"error": "write_failed", "detail": "could not write the memory file to disk"}
     record, created = result

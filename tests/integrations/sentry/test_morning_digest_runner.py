@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from integrations.sentry.morning_digest_runner import (
     build_morning_digest_prompt,
     run_sentry_morning_digest,
@@ -50,7 +50,7 @@ class TestRunSentryMorningDigest:
         )
         monkeypatch.setattr(
             "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
-            lambda _message, _payload: ShellTurnResult(
+            lambda _message, _payload: TurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
                     planned_count=0,
@@ -74,7 +74,7 @@ class TestRunSentryMorningDigest:
         )
         monkeypatch.setattr(
             "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
-            lambda _message, _payload: ShellTurnResult(
+            lambda _message, _payload: TurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
                     planned_count=1,

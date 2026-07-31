@@ -58,6 +58,8 @@ def _owned_report(report: SyncReport) -> SyncReport:
         downloaded=list(report.downloaded),
         kept_remote=list(report.kept_remote),
         skipped=report.skipped,
+        uploaded_bytes=report.uploaded_bytes,
+        downloaded_bytes=report.downloaded_bytes,
     )
 
 

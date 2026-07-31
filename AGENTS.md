@@ -23,6 +23,20 @@
   solely inside `config/config.py` (nothing it imports needs it) may live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
+- Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or
+  nests another lambda) into `monkeypatch.setattr` / `patch`. Extract a named
+  `def` and pass it — `type(...)` inside the helper body is fine:
+
+  ```python
+  def _build_harness() -> Any:
+      return type("H", (), {"resolve_env_variables": lambda _self: None})()
+
+  monkeypatch.setattr(startup, "_build_harness", _build_harness)
+  ```
+
+  Trivial lambdas (`lambda **_kw: None`, `lambda: sentinel`) stay inline.
+  Precedent: `gateway/tests/runtime/test_startup.py` (`_StubHarness`),
+  `tests/cli/test_integrations_setup_github.py` (`_prompt_answering`).
 - Protocol methods you **add or change** use a **docstring-only body** — no
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
@@ -247,9 +261,39 @@ Steps:
   latter remain.
 - `py/ineffectual-statement` does **not** understand `await`: a bare
   `await some_task` reads to CodeQL as a discarded expression. It is not — the
-  await is the side effect. Cancelling a task and then awaiting it is the
-  standard way to reap it (`gateway/discord/worker.py`, where the awaited task
-  still has to run `client.close()`). Dismiss that alert as a false positive;
-  do not delete the await and do not launder it through a throwaway assignment.
+  await is the side effect (e.g. reaping a cancelled task so `client.close()`
+  runs). Do **not** delete the await. Prefer a small helper that binds the
+  result (`_finished = await task` in `gateway/discord/worker.py`
+  `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
+  skipping the await.
+- Implicit string concatenation in a list (CodeQL
+  `py/implicit-string-concatenation-in-list`): two adjacent string literals
+  inside a list/tuple display are indistinguishable from a **missing comma**,
+  so a long message split over two lines trips it. Do not silence it with an
+  explicit `+` — extract the text to a module constant and reference that. The
+  same implicit concatenation is fine in a parenthesised assignment, where no
+  comma could have been intended. Precedent:
+  `tools/system/python_execution_tool/__init__.py`
+  (`_RUNTIME_FACTS_ANTI_EXAMPLE`). Bites hardest in `use_cases` /
+  `anti_examples` / `examples` tool metadata, where entries are prose and
+  routinely exceed the 100-char line limit.
+- Mixed import styles (CodeQL `py/import-and-import-from`): importing one
+  module with both `import X as alias` and `from X import name` — even when
+  the `from` import is function-local — raises an alert. It usually happens
+  when appending to an existing file: **use the import style the file already
+  established** (an existing `import core.context_budget as budget` means new
+  code calls `budget.name`, not `from core.context_budget import name`).
+- Shared client state under concurrent turns: LLM clients are cached per role
+  (`get_llm`) and the gateway runs turns in parallel, so **one client instance
+  serves several in-flight requests**. An instance flag mutated inside an error
+  handler is then read by requests that were already built under the old value.
+  Branch on **what the current request carried**, not on the flag's present
+  value — capture the fact locally where the request is built
+  (`marked = strip_cache_markers(kwargs) != kwargs`) and consult that in the
+  `except`. Precedent: the prompt-cache fallback, where a first 400 cleared
+  `_cache_markers_enabled` and a second already-marked request skipped its
+  uncached retry and failed the turn. Test it by having the fake dependency
+  mutate the shared state *before* raising, which reproduces the race
+  deterministically without threads.
 - CI typecheck does **not** cover `tests/`: `make typecheck` runs mypy over `PYTHON_SOURCE_PATHS` (`config core gateway integrations platform surfaces tools`) only. Type errors in test files never fail CI, so do not assume a clean `make typecheck` means the tests you just wrote are type-clean — run mypy on the test path directly when it matters.
 

@@ -23,19 +23,49 @@ setup again; everything else is already there.
 
 ## Turn it on
 
+### Setup command (recommended)
+
+Writes `remote_sync` into `~/.opensre/config.yml`. Ambient credentials stay in
+the environment — opensre never stores them.
+
 ```bash
+# Interactive
+opensre remote-sync setup
+
+# Non-interactive — AWS/S3
+opensre remote-sync setup --provider aws --bucket my-opensre-bucket
+
+# Non-interactive — Vercel Blob (then set BLOB_READ_WRITE_TOKEN in the env)
+opensre remote-sync setup --provider vercel --bucket opensre-remote-sync
+export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+
+# Same from the shell (flags required; no interactive prompts on chat gateways)
+# /remote-sync setup --provider vercel --bucket opensre-remote-sync
+```
+
+### Environment variables
+
+```bash
+# AWS/S3 (default)
 export OPENSRE_REMOTE_SYNC=1
 export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
+
+# Or Vercel Blob
+# export OPENSRE_REMOTE_SYNC=1
+# export OPENSRE_REMOTE_SYNC_PROVIDER=vercel
+# export OPENSRE_REMOTE_SYNC_BUCKET=opensre-remote-sync
+# export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 ```
 
 | Variable | Description |
 |---|---|
 | `OPENSRE_REMOTE_SYNC` | Set to `1` to enable. Nothing uploads until you do |
-| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws` (S3). Community backends register under the same name |
-| `OPENSRE_REMOTE_SYNC_BUCKET` | Object-store name you own (S3 bucket today). Required |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws` (S3). Built-in: `aws`, `vercel`. Community backends register under the same name |
+| `OPENSRE_REMOTE_SYNC_BUCKET` | Store you own (S3 bucket name, or Vercel Blob store name/id). Required |
 | `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
-| `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it |
-| `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default |
+| `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it (AWS) |
+| `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default (AWS) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read-write token (when `provider=vercel`). Ambient; opensre never stores it |
 
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
@@ -45,19 +75,19 @@ You can also persist settings under `remote_sync` in `~/.opensre/config.yml`
 win for a single run.
 
 <Note>
-Every machine that should share your history needs the **same provider, bucket,
-and prefix**. Change the prefix only when you want a separate, isolated set of
-conversations — a different prefix is a different history, not a backup of the
-same one.
+Every machine that should share your history needs the **same provider, store,
+and prefix** (and for Vercel, a token for that store). Change the prefix only
+when you want a separate, isolated set of conversations — a different prefix is
+a different history, not a backup of the same one.
 </Note>
 
-All surfaces share one entry point, `platform/filestorage/operations.py`, with the wording in `messages.py`:
+All surfaces share one remote-sync engine entry point:
 
 | Surface | How you invoke it |
 |---|---|
-| CLI | `opensre remote-sync status` / `opensre remote-sync sync` |
-| Interactive shell | `/remote-sync status` / `/remote-sync sync` |
-| Gateway (Telegram, and any unbound chat) | same `/remote-sync` slash command |
+| CLI | `opensre remote-sync status` / `sync` / `setup` |
+| Interactive shell | `/remote-sync status` / `sync` / `setup` |
+| Gateway (Telegram, and any unbound chat) | same slash command (`setup` needs flags; use CLI for prompts) |
 
 <Warning>
 This mirrors a **personal machine**. Turns that belong to an organization —
@@ -85,10 +115,16 @@ opensre remote-sync sync --push-only    # back up without pulling
 
 ## Providers
 
-The sync engine talks only to a small object-store interface. Amazon S3 is the
-built-in backend today (`OPENSRE_REMOTE_SYNC_PROVIDER=aws`, the default). Other
-clouds (GCS, Azure, …) are community additions: implement `ObjectStore`, call
-`register_object_store("<name>", factory)`, and set
+The sync engine talks only to a small object-store interface. Built-in
+backends today:
+
+| Provider | `OPENSRE_REMOTE_SYNC_PROVIDER` | Credentials |
+|---|---|---|
+| Amazon S3 (default) | `aws` | Ambient AWS config (`AWS_*`, profile, SSO) |
+| Vercel Blob | `vercel` | Ambient `BLOB_READ_WRITE_TOKEN` |
+
+Other clouds (GCS, Azure, …) are community additions: implement `ObjectStore`,
+call `register_object_store("<name>", factory)`, and set
 `OPENSRE_REMOTE_SYNC_PROVIDER` — the engine, CLI, and REPL do not change.
 
 ### AWS / S3 (default)
@@ -104,11 +140,36 @@ s3:ListBucket, s3:GetObject, s3:PutObject
 
 `s3:DeleteObject` is not needed — sync never deletes anything.
 
+### Vercel Blob
+
+Use a **private** Blob store. Objects are written private (not public URLs).
+`OPENSRE_REMOTE_SYNC_BUCKET` is the store name or id for status output; auth is
+the read-write token, not the bucket string.
+
+```bash
+export OPENSRE_REMOTE_SYNC=1
+export OPENSRE_REMOTE_SYNC_PROVIDER=vercel
+export OPENSRE_REMOTE_SYNC_BUCKET=opensre-remote-sync
+export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+```
+
+Create a private store and token with the Vercel dashboard or CLI
+(`vercel blob create-store my-store --access private`, then connect the store
+to a project so `BLOB_READ_WRITE_TOKEN` is available — or paste the token from
+the store’s settings).
+
+<Note>
+`BLOB_READ_WRITE_TOKEN` is scoped to one store. Point every machine that should
+share history at the same token (or an equivalent token for that store), plus
+the same prefix.
+</Note>
+
 ## The store
 
 <Warning>
 Keep the store private. It holds your incident conversations and everything
-opensre has remembered about your systems.
+opensre has remembered about your systems. Prefer a private S3 bucket or a
+private Vercel Blob store — never a public one.
 </Warning>
 
 ## How conflicts resolve

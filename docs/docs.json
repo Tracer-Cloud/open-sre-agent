@@ -45,6 +45,7 @@
               "interactive-shell-assistant",
               "deployment",
               "api",
+              "python-api",
               "faq",
               "cloudopsbench",
               "bi-weekly-giveaway"
@@ -162,6 +163,7 @@
               "cloudtrail_events",
               "bitbucket",
               "elb",
+              "ec2",
               "github",
               "github-workflow-tools",
               "architecture-audit-tool",

@@ -33,6 +33,7 @@ class BuiltInProvider(StrEnum):
     """
 
     AWS = "aws"
+    VERCEL = "vercel"
 
 
 class RemoteSyncSubcommand(StrEnum):
@@ -40,6 +41,7 @@ class RemoteSyncSubcommand(StrEnum):
 
     STATUS = "status"
     SYNC = "sync"
+    SETUP = "setup"
 
 
 __all__ = [
