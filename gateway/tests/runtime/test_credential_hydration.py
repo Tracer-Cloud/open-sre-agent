@@ -300,3 +300,71 @@ def test_manager_fails_closed_with_generic_error() -> None:
         manager._load_credentials(logging.getLogger("test"))
 
     assert manager.components["credentials"] == "failed"
+
+
+class _SecretsByArn:
+    """Serves a different payload per ARN so the chosen route is observable."""
+
+    def __init__(self, payloads: dict[str, str]) -> None:
+        self.payloads = payloads
+        self.calls: list[str] = []
+
+    def get_secret_value(self, *, SecretId: str) -> dict[str, Any]:
+        self.calls.append(SecretId)
+        return {"SecretString": self.payloads[SecretId]}
+
+
+def test_integrations_secret_wins_when_both_routes_are_configured(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The deployed route is the tenant's secret, not the webapp API.
+
+    Nothing failed when the module docstring described the opposite order, so
+    this pins the precedence the silo actually executes.
+    """
+    # Arrange: both routes configured, each yielding a distinguishable service.
+    monkeypatch.setattr(store, "STORE_PATH", tmp_path / "integrations.json")
+    monkeypatch.setattr(
+        "gateway.runtime.credential_hydration.CredentialsApiClient",
+        _ApiClient,
+    )
+    bootstrap_arn = "arn:aws:secretsmanager:region:account:secret:bootstrap"
+    integrations_arn = "arn:aws:secretsmanager:region:account:secret:integrations"
+    secrets = _SecretsByArn(
+        {
+            bootstrap_arn: json.dumps({"credentials_api_token": "bootstrap-token"}),
+            integrations_arn: json.dumps(
+                {
+                    "version": 2,
+                    "integrations": [
+                        {
+                            "id": "from-secret-1",
+                            "service": "from-secret",
+                            "status": "active",
+                            "instances": [
+                                {"name": "default", "tags": {}, "credentials": {"token": "s"}}
+                            ],
+                        }
+                    ],
+                }
+            ),
+        }
+    )
+    hydrator = GatewayCredentialHydrator(
+        config=CredentialHydrationConfig(
+            organization_id="org-a",
+            credentials_api_url="https://credentials.example.test",
+            bootstrap_secret_arn=bootstrap_arn,
+            integrations_secret_arn=integrations_arn,
+        ),
+        secrets_client=secrets,
+    )
+
+    # Act
+    bootstrap = hydrator.hydrate()
+
+    # Assert: the secret's store landed, and the API was never consulted.
+    assert [record["service"] for record in store.load_integrations()] == ["from-secret"]
+    assert integrations_arn in secrets.calls
+    assert bootstrap.integrations_hydrated is True

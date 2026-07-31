@@ -7,10 +7,10 @@ below, an API token. It never carries integrations.
 Integrations then arrive by exactly one of two routes:
 
 * **integrations secret** — read the tenant's IntegrationStore v2 blob from
-  Secrets Manager. This is the deployed route.
-* **credentials API** — fetch the store from the webapp over HTTPS. An operator
-  who sets a URL is deliberately routing this silo away from its secret, so this
-  route wins when both are configured.
+  Secrets Manager. This is the route deployed silos run on, and it wins when
+  both are configured.
+* **credentials API** — fetch the store from the webapp over HTTPS. The staged
+  fallback, used only when no integrations secret is configured.
 
 Configuring neither leaves the store as shipped, which is how a laptop runs.
 
