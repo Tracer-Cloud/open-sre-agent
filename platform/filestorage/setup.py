@@ -42,24 +42,28 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
         raise RemoteSyncConfigError("bucket (store name) is required")
     provider = request.provider.strip().lower() or DEFAULT_REMOTE_SYNC_PROVIDER
     prefix = request.prefix.strip() or DEFAULT_REMOTE_SYNC_PREFIX
-    values = {
-        "enabled": bool(request.enabled),
-        "provider": provider,
-        "bucket": bucket,
-        "prefix": prefix,
-        "region": request.region.strip(),
-        "profile": request.profile.strip(),
-    }
+    region = request.region.strip()
+    profile = request.profile.strip()
     try:
-        update_section("remote_sync", values)
+        update_section(
+            "remote_sync",
+            {
+                "enabled": bool(request.enabled),
+                "provider": provider,
+                "bucket": bucket,
+                "prefix": prefix,
+                "region": region,
+                "profile": profile,
+            },
+        )
     except LocalSettingsError as exc:
         raise RemoteSyncConfigError(str(exc)) from exc
     return RemoteSyncConfig(
         bucket=bucket,
         provider=provider,
         prefix=prefix,
-        region=values["region"],
-        profile=values["profile"],
+        region=region,
+        profile=profile,
     )
 
 
