@@ -23,6 +23,28 @@ setup again; everything else is already there.
 
 ## Turn it on
 
+### Setup command (recommended)
+
+Writes `remote_sync` into `~/.opensre/config.yml`. Ambient credentials stay in
+the environment — opensre never stores them.
+
+```bash
+# Interactive
+opensre remote-sync setup
+
+# Non-interactive — AWS/S3
+opensre remote-sync setup --provider aws --bucket my-opensre-bucket
+
+# Non-interactive — Vercel Blob (then set BLOB_READ_WRITE_TOKEN in the env)
+opensre remote-sync setup --provider vercel --bucket opensre-remote-sync
+export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+
+# Same from the shell (flags required; no interactive prompts on chat gateways)
+# /remote-sync setup --provider vercel --bucket opensre-remote-sync
+```
+
+### Environment variables
+
 ```bash
 # AWS/S3 (default)
 export OPENSRE_REMOTE_SYNC=1
@@ -63,9 +85,9 @@ All surfaces share one remote-sync engine entry point:
 
 | Surface | How you invoke it |
 |---|---|
-| CLI | `opensre remote-sync status` / `opensre remote-sync sync` |
-| Interactive shell | `/remote-sync status` / `/remote-sync sync` |
-| Gateway (Telegram, and any unbound chat) | same `/remote-sync` slash command |
+| CLI | `opensre remote-sync status` / `sync` / `setup` |
+| Interactive shell | `/remote-sync status` / `sync` / `setup` |
+| Gateway (Telegram, and any unbound chat) | same slash command (`setup` needs flags; use CLI for prompts) |
 
 <Warning>
 This mirrors a **personal machine**. Turns that belong to an organization —

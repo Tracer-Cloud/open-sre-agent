@@ -16,8 +16,10 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_REGION_ENV,
 )
+from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
 from platform.filestorage.operations import SyncStatus
+from platform.filestorage.setup import credential_hint_for_provider
 
 
 def _human_size(n: int) -> str:
@@ -33,14 +35,19 @@ def _human_size(n: int) -> str:
 
 DISABLED_HELP = f"""Remote sync is off.
 
-To turn it on, point opensre at a store you own:
+To turn it on:
+
+    opensre remote-sync setup
+    # or: /remote-sync setup
+
+Or set env vars:
 
     export {REMOTE_SYNC_ENV}=1
     export {REMOTE_SYNC_BUCKET_ENV}=my-opensre-bucket
 
-Optional: {REMOTE_SYNC_PROVIDER_ENV} (default {DEFAULT_REMOTE_SYNC_PROVIDER}), \
-{REMOTE_SYNC_PREFIX_ENV}, {REMOTE_SYNC_REGION_ENV}, {REMOTE_SYNC_PROFILE_ENV}.
-Cloud credentials are read from the usual places; opensre never stores them."""
+Optional: {REMOTE_SYNC_PROVIDER_ENV} (default {DEFAULT_REMOTE_SYNC_PROVIDER}; \
+built-in: aws, vercel), {REMOTE_SYNC_PREFIX_ENV}, {REMOTE_SYNC_REGION_ENV}, \
+{REMOTE_SYNC_PROFILE_ENV}. Cloud credentials stay ambient; opensre never stores them."""
 
 _KEPT_REMOTE_HINT = (
     "Some files were left alone because the store held a newer copy. "
@@ -84,8 +91,19 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def format_setup_lines(config: RemoteSyncConfig) -> tuple[str, ...]:
+    """Confirm settings were written and how to supply ambient credentials."""
+    return (
+        f"Remote sync settings saved → {config.provider} / {config.bucket}/{config.prefix}",
+        "Stored in ~/.opensre/config.yml (env vars still win for a single run).",
+        credential_hint_for_provider(config.provider),
+        "Next: opensre remote-sync status   then   opensre remote-sync sync",
+    )
+
+
 __all__ = [
     "DISABLED_HELP",
     "format_report_lines",
+    "format_setup_lines",
     "format_status_lines",
 ]
