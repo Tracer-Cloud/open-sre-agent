@@ -29,7 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import httpx
 from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
@@ -46,11 +46,12 @@ from config.constants.sentry_mcp import (
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SENTRY_MCP_URL = "https://mcp.sentry.dev/mcp"
-DEFAULT_SENTRY_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
+DEFAULT_SENTRY_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 
 
 class SentryMCPToolDescriptor(TypedDict):
@@ -85,7 +86,7 @@ class SentryMCPConfig(StrictConfigModel):
     """Normalized Sentry MCP connection settings."""
 
     url: str = DEFAULT_SENTRY_MCP_URL
-    mode: Literal["stdio", "sse", "streamable-http"] = DEFAULT_SENTRY_MCP_MODE
+    mode: McpTransportMode = DEFAULT_SENTRY_MCP_MODE
     auth_token: str = ""
     command: str = ""
     args: tuple[str, ...] = ()
