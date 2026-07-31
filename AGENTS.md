@@ -23,6 +23,20 @@
   solely inside `config/config.py` (nothing it imports needs it) may live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
+- Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or
+  nests another lambda) into `monkeypatch.setattr` / `patch`. Extract a named
+  `def` and pass it — `type(...)` inside the helper body is fine:
+
+  ```python
+  def _build_harness() -> Any:
+      return type("H", (), {"resolve_env_variables": lambda _self: None})()
+
+  monkeypatch.setattr(startup, "_build_harness", _build_harness)
+  ```
+
+  Trivial lambdas (`lambda **_kw: None`, `lambda: sentinel`) stay inline.
+  Precedent: `gateway/tests/runtime/test_startup.py` (`_StubHarness`),
+  `tests/cli/test_integrations_setup_github.py` (`_prompt_answering`).
 - Protocol methods you **add or change** use a **docstring-only body** — no
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
