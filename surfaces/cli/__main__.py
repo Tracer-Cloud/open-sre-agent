@@ -10,7 +10,6 @@ Enable shell tab-completion (add to your shell profile for persistence):
 from __future__ import annotations
 
 import os
-import signal
 import sys
 from contextlib import suppress
 from typing import TYPE_CHECKING
@@ -23,6 +22,7 @@ import click  # noqa: E402
 
 from config.constants.product import RELEASE_STAGE_BANNER  # noqa: E402
 from config.version import get_opensre_version  # noqa: E402
+from surfaces.cli import startup  # noqa: E402
 from surfaces.cli.group import LazyRichGroup, ThemeParamType  # noqa: E402
 from surfaces.cli.invocation import (  # noqa: E402
     ensure_utf8_stdio,
@@ -36,7 +36,6 @@ from surfaces.cli.telemetry import (  # noqa: E402
     capture_cli_invoked,
     capture_exception,
     capture_first_run_if_needed,
-    init_sentry,
     load_structured_error_type,
     render_landing,
     render_structured_error,
@@ -190,34 +189,6 @@ def cli(
     ReplConfig.load(cli_theme=theme)
 
 
-def _install_sigint_handler() -> None:
-    """Handle Ctrl+C between prompts (when prompt_toolkit is not active).
-
-    prompt_toolkit intercepts Ctrl+C internally while a prompt is running, so
-    the key binding in prompt_support.py handles that case.  This SIGINT handler
-    covers everything else: long-running operations, streaming output, etc.
-    """
-
-    def _handler(_signum: int, _frame: object) -> None:
-        from platform.terminal.prompt_support import handle_ctrl_c_press
-
-        handle_ctrl_c_press()
-
-    signal.signal(signal.SIGINT, _handler)
-
-
-def _is_update_invocation(argv: list[str]) -> bool:
-    command_parts = resolve_command_parts(cli, argv)
-    return bool(command_parts) and command_parts[0] == "update"
-
-
-def _sentry_entrypoint_for_invocation(argv: list[str]) -> str:
-    command_parts = resolve_command_parts(cli, argv)
-    if command_parts and command_parts[0] == "debug":
-        return "debug"
-    return "cli"
-
-
 def _should_capture_cli_exception(exc: click.ClickException) -> bool:
     """Return whether a Click error represents an unexpected internal failure."""
     return should_report_exception(exc)
@@ -231,31 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         print_fast_version(cli_argv)
         return 0
 
-    from config.local_env import bootstrap_opensre_env_once
-
-    bootstrap_opensre_env_once(override=False)
-    try:
-        init_sentry(entrypoint=_sentry_entrypoint_for_invocation(cli_argv))
-    except ModuleNotFoundError as exc:
-        if exc.name != "sentry_sdk" or not _is_update_invocation(cli_argv):
-            raise
-    # Wire CLI-flavored implementations into the observability ports
-    # (ProgressTracker, debug_print) so any core code under core/domain,
-    # tools/investigation, utils that calls into the abstractions routes
-    # through the Rich-aware adapters during this process.
-    from surfaces.interactive_shell.ui.output.boundary import (
-        install_product_adapters,
-    )
-
-    install_product_adapters()
-    from platform.terminal.prompt_support import (
-        install_questionary_ctrl_c_double_exit,
-        install_questionary_escape_cancel,
-    )
-
-    install_questionary_escape_cancel()
-    install_questionary_ctrl_c_double_exit()
-    _install_sigint_handler()
+    startup.run(cli, cli_argv)
     StructuredError = load_structured_error_type()
 
     try:

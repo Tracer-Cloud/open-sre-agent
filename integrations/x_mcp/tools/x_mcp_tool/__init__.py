@@ -14,6 +14,7 @@ from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.mcp_bridge import unavailable_response
 from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
+from integrations.mcp_transport import McpTransportMode
 from integrations.x_mcp import (
     XMCPConfig,
     XMCPToolCallResult,
@@ -40,7 +41,7 @@ def _unavailable_response(
     return unavailable_response("x_mcp", error, tool_name=tool_name, arguments=arguments)
 
 
-_KNOWN_X_MCP_MODES = frozenset({"stdio", "sse", "streamable-http"})
+_KNOWN_X_MCP_MODES = frozenset(McpTransportMode)
 
 
 def _resolve_config(

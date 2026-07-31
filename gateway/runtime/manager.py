@@ -23,6 +23,7 @@ from typing import Any
 
 from rich.console import Console
 
+from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 from gateway.config.logging_config import configure_logging
 from gateway.discord.background import DiscordGatewayBackground
 from gateway.discord.wiring import start_discord_worker
@@ -258,7 +259,7 @@ class GatewayManager:
         bootstrap: GatewayBootstrap | None,
     ) -> None:
         """Start the Neon run worker when a bootstrap bundle supplies its DSN."""
-        organization_id = os.getenv("ORGANIZATION_ID", "").strip()
+        organization_id = os.getenv(TENANT_ORGANIZATION_ID_ENV, "").strip()
         database_url = bootstrap.database_url if bootstrap is not None else None
         if not organization_id or not database_url:
             self.components["api_runs"] = "not configured"
