@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 _SERVER_SIDE_ENCRYPTION = "AES256"
 PROVIDER_NAME = BuiltInProvider.AWS
 
-_MAX_ATTEMPTS = 3
+_MAX_RETRY_ATTEMPTS = 3
 
 
 #BotoCoreError subclasses that represent transient, connection-level failures
@@ -68,18 +68,18 @@ def _is_transient(exc: BotoCoreError | ClientError) -> bool:
 
 def _retry_transient[T](fn: Callable[[], T], *, label: str) -> T:
     """Retrying transient S3 failures with exponential backoff."""
-    for attempt in range(_MAX_ATTEMPTS):
+    for attempt in range(_MAX_RETRY_ATTEMPTS):
         try:
             return fn()
         except (BotoCoreError, ClientError) as exc:
-            if attempt == _MAX_ATTEMPTS - 1 or not _is_transient(exc):
+            if attempt == _MAX_RETRY_ATTEMPTS - 1 or not _is_transient(exc):
                 raise
             wait_time = 2**attempt  # 1s, 2s, 4s, ...
             logger.warning(
                 "[s3] %s failed (attempt %d/%d), retrying in %ds: %s",
                 label,
                 attempt + 1,
-                _MAX_ATTEMPTS,
+                _MAX_RETRY_ATTEMPTS,
                 wait_time,
                 _reason(exc),
             )
