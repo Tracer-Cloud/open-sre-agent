@@ -97,6 +97,9 @@ class _FakePopen:
         self.stdout = io.StringIO(stdout)
         self.stderr = io.StringIO(stderr)
         self._rc, self._hang = returncode, hang
+        # No real OS process behind the fake: pid=None steers _signal_process_group
+        # away from os.killpg and onto the terminate()/kill() fallback.
+        self.pid: int | None = None
 
     def poll(self) -> int | None:
         return None if self._hang else self._rc
