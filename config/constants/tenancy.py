@@ -4,18 +4,24 @@ A silo is one gateway task serving one tenant. The control plane's ECS task
 definition supplies these so the gateway can say who it is and fetch that
 tenant's credentials at startup.
 
-Credentials reach the silo by exactly one of two routes, never both: the
-webapp's credentials API (:data:`CREDENTIALS_API_URL_ENV`) or this tenant's
+Credentials reach the silo by exactly one of two routes: this tenant's
 IntegrationStore v2 secret (:data:`INTEGRATIONS_SECRET_ARN_ENV`), which the
-webapp maintains through the control plane. The secret is the deployed route.
+webapp maintains through the control plane, or the webapp's credentials API
+(:data:`CREDENTIALS_API_URL_ENV`). The secret is the deployed route and wins
+when both are configured; the API is the staged fallback.
 
 Distinct from :data:`config.constants.billing.ORGANIZATION_ID_ENV`
-(``OPENSRE_ORGANIZATION_ID``), which the product reads to attribute usage and to
-enforce that a mounted context volume belongs to the organization being served.
-Both name an organization, but different systems set them and neither may stand
-in for the other: reading the billing name here fails hydration in a deployed
-silo, and falling back to this one there would weaken a fail-closed ownership
-check.
+(``OPENSRE_ORGANIZATION_ID``), which the EC2 Slack service sets. Both hold a
+Clerk organization id, but they answer different questions, and only one
+substitution is allowed:
+
+* **Provisioning** ("did the control plane provision this silo?") reads
+  :data:`TENANT_ORGANIZATION_ID_ENV` alone — resolving across both names would
+  make an EC2 deployment look like a half-configured silo and fail startup.
+* **Serving** ("which organization does this process serve?" — usage
+  attribution, credits, Slack principal, webapp vault, mount ownership) goes
+  through :func:`config.constants.organization.organization_id`, which reads
+  whichever name the deployment sets and warns when they conflict.
 """
 
 from __future__ import annotations

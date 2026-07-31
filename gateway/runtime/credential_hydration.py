@@ -69,7 +69,15 @@ class CredentialHydrationConfig:
 
     @classmethod
     def from_environment(cls) -> CredentialHydrationConfig | None:
-        """Return ``None`` when disabled, and reject partial configuration."""
+        """Return ``None`` when disabled, and reject partial configuration.
+
+        Reads ``ORGANIZATION_ID`` directly rather than through
+        :func:`config.constants.organization.organization_id`. The question here
+        is "did the control plane provision this silo", not "which organization
+        do we serve" — an EC2 deployment answers the second and not the first, so
+        resolving across both names would read its org as a half-configured silo
+        and raise at startup.
+        """
         identity = {
             TENANT_ORGANIZATION_ID_ENV: os.getenv(TENANT_ORGANIZATION_ID_ENV, "").strip(),
             CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV: os.getenv(

@@ -18,8 +18,8 @@ import re
 import tempfile
 from pathlib import Path
 
-from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
+from config.constants.organization import organization_id
 from config.constants.tenancy import INTEGRATIONS_STORE_PATH_ENV
 from config.scope_context import current_scope
 
@@ -105,15 +105,14 @@ def opensre_home() -> Path:
     mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
     if mounted_root:
         # The mount is chrooted to exactly one org. If this deployment declares
-        # its owner (OPENSRE_ORGANIZATION_ID, set on every silo), refuse a turn
-        # for any other org — otherwise a multi-workspace gateway could write
-        # org B's data into org A's volume. Fail closed.
-        silo_owner = os.getenv(ORGANIZATION_ID_ENV, "").strip()
+        # its owner, refuse a turn for any other org — otherwise a
+        # multi-workspace gateway could write org B's data into org A's volume.
+        # Fail closed.
+        silo_owner = organization_id()
         if not silo_owner:
             raise ContextRootOwnerMismatchError(
-                f"{CONTEXT_ROOT_ENV} is set but {ORGANIZATION_ID_ENV} does not say which "
-                "organization owns the mount; refusing to write a customer's data to an "
-                "unidentified volume"
+                f"{CONTEXT_ROOT_ENV} is set but no organization is configured for this "
+                "deployment; refusing to write a customer's data to an unidentified volume"
             )
         if scope.principal.id != silo_owner:
             raise ContextRootOwnerMismatchError(

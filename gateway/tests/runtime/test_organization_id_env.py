@@ -1,16 +1,15 @@
-"""The tenant id and the billing org id are separate env vars.
+"""Hydration reads the control plane's tenant id, never the billing name.
 
-The control plane's ECS task definition supplies ``ORGANIZATION_ID``; the product
-reads ``OPENSRE_ORGANIZATION_ID`` to attribute usage and to enforce that a
-mounted context volume belongs to the organization being served. Reading the
-billing name during hydration crashed startup in a deployed silo and left the
-remote-run worker unstarted, so these tests pin that the gateway reads the
-injected name and that neither var stands in for the other.
+The control plane's ECS task definition supplies ``ORGANIZATION_ID``; the EC2
+Slack service sets ``OPENSRE_ORGANIZATION_ID``. Serving-side consumers resolve
+either through :func:`config.constants.organization.organization_id` (see
+``tests/config/test_organization_id.py``), but hydration asks a different
+question — "did the control plane provision this silo?" — so it must read the
+injected name alone: resolving across both would make an EC2 deployment look
+like a half-configured silo and fail startup. These tests pin that boundary.
 """
 
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -60,24 +59,6 @@ def test_billing_org_id_does_not_satisfy_hydration(monkeypatch: pytest.MonkeyPat
     # Act / Assert
     with pytest.raises(ValueError, match="incomplete"):
         CredentialHydrationConfig.from_environment()
-
-
-def test_tenant_id_does_not_satisfy_the_mount_ownership_check(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The fail-closed volume check must not see the control plane's value.
-
-    ``config.constants.paths`` refuses a turn when the declared silo owner is
-    absent; accepting the tenant id there would weaken that check.
-    """
-    # Arrange
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-from-control-plane")
-
-    # Act
-    declared_owner = os.getenv(ORGANIZATION_ID_ENV, "")
-
-    # Assert
-    assert declared_owner == ""
 
 
 def test_whitespace_is_not_a_tenant_identity(monkeypatch: pytest.MonkeyPatch) -> None:

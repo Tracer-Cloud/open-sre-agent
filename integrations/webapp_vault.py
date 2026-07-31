@@ -25,11 +25,8 @@ from typing import Any
 
 import httpx
 
-from config.constants.billing import (
-    CREDITS_HTTP_TIMEOUT_SECONDS,
-    ORGANIZATION_ID_ENV,
-    WEBAPP_URL_ENV,
-)
+from config.constants.billing import CREDITS_HTTP_TIMEOUT_SECONDS, WEBAPP_URL_ENV
+from config.constants.organization import organization_id
 from integrations.slack.webapp_auth import webapp_shared_secret
 
 logger = logging.getLogger(__name__)
@@ -41,10 +38,37 @@ def _env(name: str) -> str:
     return (os.getenv(name) or "").strip()
 
 
+def _organization_id() -> str:
+    """The organization this deployment speaks for at the webapp vault.
+
+    Resolved through :func:`config.constants.organization.organization_id`,
+    which reads whichever name this deployment sets: a Fargate silo gets the
+    bare ``ORGANIZATION_ID`` from the control plane, the EC2 Slack service sets
+    ``OPENSRE_ORGANIZATION_ID`` — and the vault has served both. Reading one
+    name directly is what previously left this module silent on every
+    control-plane silo. Only hydration ("did the control plane provision this
+    silo?") reads the tenant name alone; the vault asks "which org do I
+    serve", so it uses the shared resolver.
+    """
+    return organization_id()
+
+
+def _credential_as_text(value: object) -> str:
+    """Convert one credential value to text, which is all the webapp accepts.
+
+    A list becomes comma-separated text because that is what the readers split
+    on. ``str(["a", "b"])`` would send ``"['a', 'b']"``, and each item would
+    come back still carrying its brackets and quotes.
+    """
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return ",".join(str(item).strip() for item in value if str(item).strip())
+    return str(value)
+
+
 def _write_target() -> tuple[str, str, str] | None:
     """Return ``(base_url, organization_id, token)`` when writes can be sent."""
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
-    org = _env(ORGANIZATION_ID_ENV)
+    org = _organization_id()
     token = webapp_shared_secret() if base_url and org else ""
     if not token:
         return None
@@ -62,7 +86,11 @@ def push_webapp_org_integration(service: str, credentials: dict[str, Any]) -> bo
     if target is None or not service.strip():
         return False
     base_url, org, token = target
-    values = {str(key): str(value) for key, value in credentials.items() if value is not None}
+    values = {
+        str(key): _credential_as_text(value)
+        for key, value in credentials.items()
+        if value is not None
+    }
     if not values:
         return False
 
@@ -111,7 +139,7 @@ def webapp_vault_configured() -> bool:
     Requires the shared agent secret, which is what the route accepts, plus
     the URL and the org this silo serves.
     """
-    return bool(_env(WEBAPP_URL_ENV) and webapp_shared_secret() and _env(ORGANIZATION_ID_ENV))
+    return bool(_env(WEBAPP_URL_ENV) and webapp_shared_secret() and _organization_id())
 
 
 @functools.cache
@@ -127,16 +155,18 @@ def _log_credential_unavailable_once() -> None:
     )
 
 
-def fetch_webapp_org_integrations(
-    organization_id: str | None = None,
-) -> list[dict[str, Any]] | None:
+def fetch_webapp_org_integrations() -> list[dict[str, Any]] | None:
     """Return active vault integrations for the silo org, or ``None`` if unavailable.
 
     ``None`` means "do not treat as an empty remote" — caller should fall through
     to local/env. An empty list means the org has no exportable integrations.
+
+    The organization is always this silo's own. The bearer authenticates the
+    fleet rather than one tenant, so a caller-supplied id would let any caller
+    read another organization's credentials.
     """
     base_url = _env(WEBAPP_URL_ENV).rstrip("/")
-    org = (organization_id or _env(ORGANIZATION_ID_ENV)).strip()
+    org = _organization_id()
     if not (base_url and org):
         return None
 
