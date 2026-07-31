@@ -26,7 +26,7 @@ class Principal:
     ``kind="individual"`` is reserved for non-organization contexts.
     """
 
-    kind: str
+    kind: PrincipalKind
     id: str
 
     def __post_init__(self) -> None:
@@ -46,12 +46,12 @@ class Principal:
     @classmethod
     def org(cls, org_id: str) -> Principal:
         """Build an organization principal."""
-        return cls(kind="org", id=org_id)
+        return cls(kind=PrincipalKind.ORG, id=org_id)
 
     @classmethod
     def individual(cls, individual_id: str) -> Principal:
         """Build an individual principal."""
-        return cls(kind="individual", id=individual_id)
+        return cls(kind=PrincipalKind.INDIVIDUAL, id=individual_id)
 
 
 @dataclass(frozen=True)
@@ -61,9 +61,7 @@ class Actor:
     id: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.id, str):
-            raise TypeError("actor id must be a string")
-        actor_id = self.id.strip()
+        actor_id = (self.id or "").strip()
         if not actor_id:
             raise ValueError("actor id must be non-empty")
         object.__setattr__(self, "id", actor_id)
