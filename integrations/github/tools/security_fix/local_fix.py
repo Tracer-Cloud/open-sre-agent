@@ -37,8 +37,13 @@ def try_builtin_local_fix(
     if not target.is_file():
         return _failure(f"Finding file does not exist in the workspace: {ctx.location_path}"), ""
 
+    # Only fall back to the finding's original line number when Ruff did not
+    # rewrite the file. After Ruff removes an F401 import, later imports shift
+    # up — applying the stale line would delete an unrelated import.
+    before = target.read_text(encoding="utf-8")
     _run_ruff_fix(workspace, target, codes)
-    if "F401" in codes:
+    after = target.read_text(encoding="utf-8")
+    if "F401" in codes and after == before:
         _remove_single_import_line(target, ctx.start_line)
 
     changes = capture_worktree_changes(workspace, max_diff_chars=_MAX_DIFF_CHARS)

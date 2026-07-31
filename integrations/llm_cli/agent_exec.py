@@ -18,7 +18,9 @@ It is a leaf: it imports nothing from ``integrations/pi`` or
 from __future__ import annotations
 
 import contextlib
+import os
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -104,15 +106,37 @@ def build_guarded_task_prompt(task: str, *, agent_label: str) -> str:
     )
 
 
-def _terminate(proc: subprocess.Popen[str]) -> None:
-    """Stop a still-running child: SIGTERM, then SIGKILL if it lingers."""
+def _signal_process_group(proc: subprocess.Popen[str], *, forceful: bool) -> None:
+    """Signal the child's process group when available, else the child alone.
+
+    Coding-agent CLIs often spawn tests/linters/sandboxes. With
+    ``start_new_session=True`` the CLI is the session/group leader, so signaling
+    the group reaps descendants that would otherwise keep editing the workspace
+    after we report a timeout. ``os.killpg`` is POSIX-only; fall back to the
+    single-process API on platforms that lack it (and that may also lack
+    ``signal.SIGKILL``).
+    """
+    if proc.poll() is not None:
+        return
+    if proc.pid is not None and hasattr(os, "killpg"):
+        sig = signal.SIGKILL if forceful else signal.SIGTERM
+        with contextlib.suppress(Exception):
+            os.killpg(os.getpgid(proc.pid), sig)
+            return
     with contextlib.suppress(Exception):
-        proc.terminate()
+        if forceful:
+            proc.kill()
+        else:
+            proc.terminate()
+
+
+def _terminate(proc: subprocess.Popen[str]) -> None:
+    """Stop a still-running child (and descendants): SIGTERM, then SIGKILL."""
+    _signal_process_group(proc, forceful=False)
     try:
         proc.wait(timeout=_TERMINATE_GRACE_SEC)
     except subprocess.TimeoutExpired:
-        with contextlib.suppress(Exception):
-            proc.kill()
+        _signal_process_group(proc, forceful=True)
 
 
 def _drain(pipe: IO[str] | None, buffer: list[str]) -> None:
@@ -159,6 +183,8 @@ def poll_agent_process(
             text=True,
             encoding="utf-8",
             errors="replace",
+            # Own process group so timeout cleanup can reap CLI-spawned descendants.
+            start_new_session=True,
         )
     except OSError as exc:
         return AgentProcessOutcome("", "", -1, False, spawn_error=f"failed to run {argv[0]}: {exc}")
