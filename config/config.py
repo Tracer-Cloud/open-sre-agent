@@ -8,7 +8,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from difflib import get_close_matches
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
@@ -50,7 +50,7 @@ class LLMModelConfig(StrictConfigModel):
     max_tokens: int
 
 
-class Environment(Enum):
+class Environment(StrEnum):
     """Application environment."""
 
     DEVELOPMENT = "development"

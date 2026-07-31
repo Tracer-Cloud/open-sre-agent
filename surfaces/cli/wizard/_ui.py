@@ -132,8 +132,11 @@ def _local_defaults() -> dict[str, str | bool | None]:
     )
     if is_oauth_backend:
         auth_method = OAUTH_AUTH_METHOD
+    wizard_mode = _string_value(wizard.get("mode"), "quickstart")
+    if wizard_mode == "aha":
+        wizard_mode = "focused"
     return {
-        "wizard_mode": _string_value(wizard.get("mode"), "quickstart"),
+        "wizard_mode": wizard_mode,
         "provider": provider_value if raw_provider_value else None,
         "auth_method": auth_method,
         "model": _string_value(local.get("model")),
@@ -609,20 +612,8 @@ def _render_integration_result(
             _console.print(detail_text)
 
 
-def _render_next_steps() -> None:
-    """Print the 'What's next' section after successful onboarding.
-
-    Rendered output (colour roles):
-      ─────────────────────────────────────────  [DIM rule]
-      What's next                                [SECONDARY label]
-      ─────────────────────────────────────────  [DIM rule]
-        opensre                                  [BRAND runnable command]
-          Start the interactive agent
-        opensre investigate -i alert.json        [BRAND runnable command]
-          Run root-cause analysis on an alert
-        opensre doctor                           [BRAND runnable command]
-          Verify your environment setup
-    """
+def _render_next_steps(*, focused: bool = False) -> None:
+    """Print suggested commands after onboarding."""
     _console.print(Rule(style=DIM))
 
     section = Text()
@@ -632,17 +623,29 @@ def _render_next_steps() -> None:
     _console.print(Rule(style=DIM))
     _console.print()
 
-    _NEXT: tuple[tuple[str, str], ...] = (
-        ("opensre", "Start the interactive agent"),
-        (
-            "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-            "Run root-cause analysis on a sample alert",
-        ),
-        ("opensre doctor", "Verify your full environment setup"),
-        ("opensre onboard", "Re-run this setup at any time"),
-    )
+    if focused:
+        next_steps: tuple[tuple[str, str], ...] = (
+            (
+                "opensre",
+                'Start the agent and ask: "what OpenSRE version am I running?"',
+            ),
+            (
+                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+                "Run a sample investigation",
+            ),
+        )
+    else:
+        next_steps = (
+            ("opensre", "Start the interactive agent"),
+            (
+                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+                "Run root-cause analysis on a sample alert",
+            ),
+            ("opensre doctor", "Verify your full environment setup"),
+            ("opensre onboard", "Re-run this setup at any time"),
+        )
 
-    for cmd, description in _NEXT:
+    for cmd, description in next_steps:
         cmd_line = Text()
         cmd_line.append(f"  {cmd}", style=f"bold {BRAND}")
         _console.print(cmd_line)

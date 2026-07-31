@@ -652,6 +652,27 @@ is_candidate_dir_writable() {
   [ -d "$parent_dir" ] && [ -w "$parent_dir" ]
 }
 
+is_python_venv_bin_dir() {
+  # Never symlink the release binary into an active virtualenv's bin/.
+  # Contributors often have ``.venv/bin`` first on PATH (``uv run`` / ``make``);
+  # linking there replaces the editable console script and breaks the checkout.
+  local dir="$1"
+  local parent=""
+
+  case "$dir" in
+    */.venv/bin|*/.venv/Scripts|*/venv/bin|*/venv/Scripts|*/.virtualenv/bin)
+      return 0
+      ;;
+  esac
+
+  parent="${dir%/*}"
+  if [ -n "$parent" ] && [ -f "${parent}/pyvenv.cfg" ]; then
+    return 0
+  fi
+
+  return 1
+}
+
 select_writable_path_candidate_from_list() {
   local candidate_list="$1"
   local old_ifs="$IFS"
@@ -663,6 +684,9 @@ select_writable_path_candidate_from_list() {
       /*) ;;
       *) continue ;;
     esac
+    if is_python_venv_bin_dir "$dir"; then
+      continue
+    fi
     if path_has_dir "$dir" && is_candidate_dir_writable "$dir"; then
       printf '%s\n' "$dir"
       IFS="$old_ifs"
@@ -691,7 +715,10 @@ resolve_install_dir() {
     existing_bin="$(command -v opensre || true)"
     existing_dir="${existing_bin%/*}"
 
-    if [ -n "$existing_dir" ] && path_has_dir "$existing_dir" && is_candidate_dir_writable "$existing_dir"; then
+    if [ -n "$existing_dir" ] \
+      && ! is_python_venv_bin_dir "$existing_dir" \
+      && path_has_dir "$existing_dir" \
+      && is_candidate_dir_writable "$existing_dir"; then
       INSTALL_DIR="$existing_dir"
       return
     fi

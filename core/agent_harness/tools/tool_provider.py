@@ -69,6 +69,11 @@ class DefaultToolProvider:
         self._slash_ports_factory = slash_ports_factory
         self._tool_context: ActionToolContext | None = None
 
+    def bind_session(self, session: Any) -> None:
+        """Point this provider at a freshly resolved session (gateway reuse)."""
+        self._session = session
+        self._tool_context = None
+
     def action_tools(
         self,
         *,

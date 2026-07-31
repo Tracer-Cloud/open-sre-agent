@@ -59,13 +59,21 @@ __all__ = [
 ]
 
 
-def _configure_selected_integrations() -> tuple[list[str], str | None]:
+def _configure_selected_integrations(*, mode: str = "quickstart") -> tuple[list[str], str | None]:
+    """Configure one integration, or skip. ``mode`` only changes the prompt text."""
     configured: list[str] = []
     last_env_path: str | None = None
 
-    _console.print(
-        f"[{SECONDARY}]Pick one integration to wire up now, or skip this step and come back later.[/]"
-    )
+    if mode == "focused":
+        _console.print(
+            f"[{SECONDARY}]Choose one integration to configure now "
+            f"(or skip and start the agent).[/]"
+        )
+    else:
+        _console.print(
+            f"[{SECONDARY}]Pick one integration to wire up now, or skip this step "
+            f"and come back later.[/]"
+        )
     integration_choices = list(ONBOARD_INTEGRATION_CHOICES)
     selected_service = _choose(
         "Choose an integration to configure",

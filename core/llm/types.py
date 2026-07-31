@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable
+from enum import StrEnum
+from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 from core.types import RuntimeTool
 
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 
-ModelType: TypeAlias = Literal["reasoning", "classification", "toolcall"]  # noqa: UP040
+
+class ModelType(StrEnum):
+    """Configured model tiers for non-agent LLM clients."""
+
+    REASONING = "reasoning"
+    CLASSIFICATION = "classification"
+    TOOLCALL = "toolcall"
 
 
 @dataclass(frozen=True)

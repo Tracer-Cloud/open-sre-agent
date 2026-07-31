@@ -20,6 +20,7 @@ import os
 import time as time_mod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from typing import Any, Final
 
 import requests
@@ -113,7 +114,7 @@ class GrafanaLogSink:
             resp = requests.post(
                 url, json={"streams": streams}, headers=headers, timeout=10, verify=verify
             )
-            if resp.status_code in (200, 204):
+            if resp.status_code in (HTTPStatus.OK, HTTPStatus.NO_CONTENT):
                 return True
             resp.raise_for_status()
             return True

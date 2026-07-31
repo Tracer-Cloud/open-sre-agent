@@ -19,7 +19,7 @@ def saved_result(record: MemoryRecord, *, created: bool) -> dict[str, Any]:
     return {
         "status": "created" if created else "updated",
         "name": record.slug,
-        "type": record.memory_type,
+        "type": record.memory_type.value,
         "description": record.description,
         "path": str(memory_path(record.slug)),
     }
@@ -43,7 +43,7 @@ def recall_result(records: list[MemoryRecord], *, total_stored: int) -> dict[str
         memories.append(
             {
                 "name": record.slug,
-                "type": record.memory_type,
+                "type": record.memory_type.value,
                 "description": record.description,
                 "updated": record.updated_at,
                 "content": body,
@@ -60,7 +60,7 @@ def index_result(records: list[MemoryRecord]) -> dict[str, Any]:
         "memories": [
             {
                 "name": record.slug,
-                "type": record.memory_type,
+                "type": record.memory_type.value,
                 "description": record.description,
                 "updated": record.updated_at,
             }

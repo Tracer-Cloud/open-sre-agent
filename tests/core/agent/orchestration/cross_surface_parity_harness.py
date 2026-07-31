@@ -338,6 +338,37 @@ def snapshot_headless(message: str, *, integrations: dict[str, Any] | None = Non
     return TurnSnapshot.from_result(result, probe_ran=probe_run_count() > before)
 
 
+def _install_gateway_dispatch_spy(
+    monkeypatch: Any,
+    captured: list[ShellTurnResult],
+) -> None:
+    """Spy on the gateway pool's agent factory (not ``HeadlessAgent`` directly).
+
+    ``SessionAgentPool`` builds agents via ``build_default_headless_agent``; patching
+    the class name on ``session_agents`` no longer intercepts construction.
+    """
+    from core.agent_harness.turns.default_headless_agent import (
+        build_default_headless_agent as real_build,
+    )
+
+    def _spy_build(**kwargs: Any) -> HeadlessAgent:
+        agent = real_build(**kwargs)
+        original_dispatch = type(agent).dispatch
+
+        def dispatch(message: str) -> ShellTurnResult:
+            result = original_dispatch(agent, message)
+            captured.append(result)
+            return result
+
+        agent.dispatch = dispatch  # type: ignore[method-assign]
+        return agent
+
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        _spy_build,
+    )
+
+
 def snapshot_gateway_handler(
     message: str,
     monkeypatch: Any,
@@ -347,14 +378,7 @@ def snapshot_gateway_handler(
     session = fresh_session(integrations=integrations)
     sink = RecordingGatewaySink()
     captured: list[ShellTurnResult] = []
-
-    class _SpyAgent(HeadlessAgent):
-        def dispatch(self, message: str) -> ShellTurnResult:
-            result = super().dispatch(message)
-            captured.append(result)
-            return result
-
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
+    _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
     handler = GatewayTurnHandler(
         console=console(),
@@ -422,14 +446,7 @@ def run_gateway_turn_with_sink(
     session = fresh_session(integrations=integrations)
     sink = RecordingGatewaySink()
     captured: list[ShellTurnResult] = []
-
-    class _SpyAgent(HeadlessAgent):
-        def dispatch(self, message: str) -> ShellTurnResult:
-            result = super().dispatch(message)
-            captured.append(result)
-            return result
-
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
+    _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
     handler = GatewayTurnHandler(
         console=console(),

@@ -17,15 +17,9 @@ _console = Console()
 
 
 def _install_scheduler_runners() -> None:
-    from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
-    from tools.harness_adapters import register_harness_adapters as register_tools
-    from tools.investigation.scheduler_bootstrap import install as install_investigation_runner
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    register_integrations()
-    register_tools()
-    install_investigation_runner()
-    install_scheduled_agent()
+    install_runtime()
 
 
 @click.group(name="sentry")

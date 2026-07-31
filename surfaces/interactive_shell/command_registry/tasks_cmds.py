@@ -1,4 +1,4 @@
-"""Slash commands: /history, /tasks, /cancel."""
+"""Slash commands: /tasks, /cancel, /stop."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from rich.markup import escape
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )
-from surfaces.interactive_shell.prompt_history import load_command_history_entries
 from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.ui import (
     BOLD_BRAND,
@@ -115,22 +114,6 @@ def _task_detail_label(task: TaskRecord) -> str:
     return first_line or "—"
 
 
-def _cmd_history(_session: Session, console: Console, _args: list[str]) -> bool:
-    entries = load_command_history_entries()
-    if not entries:
-        console.print(f"[{DIM}]no history yet.[/]")
-        return True
-
-    table = repl_table(title="Command history\n", title_style=BOLD_BRAND)
-    table.add_column("#", style=DIM, justify="right")
-    table.add_column("text", overflow="fold")
-
-    for i, entry in enumerate(entries, start=1):
-        table.add_row(str(i), escape(entry))
-    print_repl_table(console, table)
-    return True
-
-
 def _cmd_tasks(session: Session, console: Console, _args: list[str]) -> bool:
     tasks = session.task_registry.list_recent(n=50)
     if not tasks:
@@ -218,7 +201,6 @@ def _cmd_cancel(session: Session, console: Console, args: list[str]) -> bool:
 
 
 COMMANDS: list[SlashCommand] = [
-    SlashCommand("/history", "Show persisted command history.", _cmd_history),
     SlashCommand(
         "/tasks",
         "List recent and in-flight shell tasks.",

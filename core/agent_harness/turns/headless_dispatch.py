@@ -114,6 +114,41 @@ class HeadlessAgent:
         self._is_tty = is_tty
         self._tool_hooks = tool_hooks
 
+    def bind_session(self, session: SessionStore) -> None:
+        """Retarget this agent at a freshly resolved session.
+
+        Gateway ``SessionManager.resolve`` returns a new ``SessionCore`` each
+        turn (same id, restored state). Cached agents must follow that object
+        so tools/prompts see current integrations and chat metadata.
+        """
+        self._store = session
+        for port in (self._tools, self._prompts, self._reasoning, self._run_factory):
+            binder = getattr(port, "bind_session", None)
+            if callable(binder):
+                binder(session)
+
+    def bind_turn(
+        self,
+        *,
+        output: OutputSink | None = None,
+        accounting: TurnAccounting | None = None,
+        tool_hooks: ToolExecutionHooks | None = None,
+        session: SessionStore | None = None,
+    ) -> None:
+        """Swap turn-scoped ports so one agent can serve many turns.
+
+        Gateway sinks, per-message accounting, and (when provided) the current
+        session object are rebound each inbound message.
+        """
+        if session is not None:
+            self.bind_session(session)
+        if output is not None:
+            self._output = output
+        if accounting is not None:
+            self._accounting = accounting
+        if tool_hooks is not None:
+            self._tool_hooks = tool_hooks
+
     def _accounting_for(self, message: str) -> TurnAccounting:
         if self._accounting is not None:
             return self._accounting
