@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
-from config.constants.organization import organization_id
+from config.constants.organization import _warn_conflicting_names_once, organization_id
 from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 
 # Exactly the organization-related env a Fargate task definition injects.
@@ -78,9 +78,7 @@ def test_conflicting_names_warn_and_do_not_silently_pick(
     name, the other does not, and turns are attributed to the wrong customer.
     """
     # Arrange
-    import config.constants.organization as organization
-
-    organization._warn_conflicting_names_once.cache_clear()
+    _warn_conflicting_names_once.cache_clear()
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_product")
     monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_other")
 
