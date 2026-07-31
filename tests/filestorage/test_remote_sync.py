@@ -502,6 +502,24 @@ def test_pull_only_does_not_upload(home: Path, roots: tuple[SyncRoot, ...]) -> N
     assert "sessions/abc.jsonl" not in store.objects
 
 
+def test_dry_run_reports_without_mutating_store(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    # Arrange
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    before = dict(store.objects)
+
+    # Act
+    report = run_sync(store, roots=roots, dry_run=True)
+
+    # Assert
+    assert report.downloaded == ["memory/from-remote.md"]
+    assert report.uploaded == ["sessions/abc.jsonl", "memory/a-fact.md"]
+    assert store.objects == before
+    assert report.downloaded_bytes == len(b"hello\n")
+
+
 def test_files_outside_allowlisted_roots_are_not_syncable(
     home: Path, roots: tuple[SyncRoot, ...]
 ) -> None:

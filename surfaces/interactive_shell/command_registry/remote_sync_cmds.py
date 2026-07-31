@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}] "
-    "[--pull-only|--push-only]"
+    "[--pull-only|--push-only|--dry-run]"
 )
 
 
@@ -53,11 +53,12 @@ def _run_sync(console: Console, args: list[str]) -> bool:
         report = run_remote_sync(
             pull_only="--pull-only" in flags,
             push_only="--push-only" in flags,
+            dry_run="--dry-run" in flags,
         )
     if report is None:
         console.print(f"[{DIM}]{DISABLED_HELP}[/]")
         return True
-    lines = format_report_lines(report)
+    lines = format_report_lines(report, dry_run="--dry-run" in flags)
     _print_lines(console, lines, dim_last=bool(report.kept_remote))
     return True
 

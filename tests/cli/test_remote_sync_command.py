@@ -91,9 +91,12 @@ def test_sync_prints_report(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) 
 def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _capture(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _capture(
+        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+    ) -> SyncReport:
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport()
 
     monkeypatch.setattr(
@@ -102,7 +105,7 @@ def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.Monk
     )
     result = runner.invoke(remote_sync_command, ["sync", "--pull-only"])
     assert result.exit_code == 0
-    assert seen == {"pull_only": True, "push_only": False}
+    assert seen == {"pull_only": True, "push_only": False, "dry_run": False}
 
 
 def test_sync_failure_exits_nonzero(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -181,3 +184,9 @@ def test_sync_help_documents_direction_flags(runner: CliRunner) -> None:
     assert result.exit_code == 0
     assert "--pull-only" in result.output
     assert "--push-only" in result.output
+
+
+def test_sync_help_documents_dry_run_flag(runner: CliRunner) -> None:
+    result = runner.invoke(remote_sync_command, ["sync", "--help"])
+    assert result.exit_code == 0
+    assert "--dry-run" in result.output

@@ -39,17 +39,18 @@ def status_command() -> None:
 @remote_sync_command.command(name=RemoteSyncSubcommand.SYNC.value)
 @click.option("--pull-only", is_flag=True, help="Download only; send nothing.")
 @click.option("--push-only", is_flag=True, help="Upload only; fetch nothing.")
-def sync_now_command(pull_only: bool, push_only: bool) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview transfers without changing anything.")
+def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
     try:
-        report = run_remote_sync(pull_only=pull_only, push_only=push_only)
+        report = run_remote_sync(pull_only=pull_only, push_only=push_only, dry_run=dry_run)
     except RemoteSyncError as exc:
         click.echo(f"Sync failed: {exc}", err=True)
         raise SystemExit(ERROR) from exc
     if report is None:
         click.echo(DISABLED_HELP)
         raise SystemExit(SUCCESS)
-    for line in format_report_lines(report):
+    for line in format_report_lines(report, dry_run=dry_run):
         click.echo(line)
     raise SystemExit(SUCCESS)
 

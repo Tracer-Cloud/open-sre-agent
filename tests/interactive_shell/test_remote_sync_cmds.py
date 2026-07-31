@@ -65,9 +65,10 @@ def test_status_enabled_shows_roots(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _run(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _run(*, pull_only: bool = False, push_only: bool = False, dry_run: bool = False) -> SyncReport:
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport(uploaded=["memory/a.md"], skipped=0)
 
     monkeypatch.setattr(
@@ -77,7 +78,7 @@ def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
     # console.status context manager — Rich Console.status works without a real TTY
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync --push-only", Session(), console) is True
-    assert seen == {"pull_only": False, "push_only": True}
+    assert seen == {"pull_only": False, "push_only": True, "dry_run": False}
     assert "1 uploaded" in buf.getvalue()
 
 
@@ -152,6 +153,25 @@ def test_sync_shows_kept_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     out = buf.getvalue()
     assert "sessions/newer.jsonl" in out
     assert "newer copy" in out.lower() or "push-only" in out.lower()
+
+
+def test_sync_dry_run_forwards_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, bool] = {}
+
+    def _run(*, pull_only: bool = False, push_only: bool = False, dry_run: bool = False) -> SyncReport:
+        seen["pull_only"] = pull_only
+        seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
+        return SyncReport(uploaded=["sessions/a.jsonl"], skipped=0)
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.run_remote_sync",
+        _run,
+    )
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync sync --dry-run", Session(), console) is True
+    assert seen == {"pull_only": False, "push_only": False, "dry_run": True}
+    assert "Dry run complete" in buf.getvalue()
 
 
 def test_help_section_includes_remote_sync() -> None:

@@ -93,6 +93,7 @@ def run_remote_sync(
     *,
     pull_only: bool = False,
     push_only: bool = False,
+    dry_run: bool = False,
     direction: SyncDirection | None = None,
 ) -> SyncReport | None:
     """Pull/push for the current scope. ``None`` when sync is disabled.
@@ -112,7 +113,7 @@ def run_remote_sync(
         return None
     roots = syncable_roots()
     store = build_object_store(config)
-    return _owned_report(run_sync(store, direction=resolved, roots=roots))
+    return _owned_report(run_sync(store, direction=resolved, roots=roots, dry_run=dry_run))
 
 
 __all__ = [

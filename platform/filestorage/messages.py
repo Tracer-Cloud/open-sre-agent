@@ -64,7 +64,7 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def format_report_lines(report: SyncReport) -> tuple[str, ...]:
+def format_report_lines(report: SyncReport, *, dry_run: bool = False) -> tuple[str, ...]:
     """Plain-text result lines after a successful run (pure; snapshots lists)."""
     downloaded = list(report.downloaded)
     uploaded = list(report.uploaded)
@@ -73,9 +73,11 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     down_size = f" ({_human_size(report.downloaded_bytes)})" if report.downloaded_bytes else ""
     up_size = f" ({_human_size(report.uploaded_bytes)})" if report.uploaded_bytes else ""
     total_size = f" ({_human_size(report.total_bytes)} total)" if report.total_bytes else ""
+    heading = "Dry run complete" if dry_run else "Sync complete"
+    would = " would" if dry_run else ""
     lines: list[str] = [
-        f"Sync complete — {len(downloaded)} downloaded{down_size}, "
-        f"{len(uploaded)} uploaded{up_size}, {skipped} already current{total_size}."
+        f"{heading} — {len(downloaded)}{would} downloaded{down_size}, "
+        f"{len(uploaded)}{would} uploaded{up_size}, {skipped} already current{total_size}."
     ]
     if kept_remote:
         lines.append(f"{len(kept_remote)} kept the store's newer copy:")

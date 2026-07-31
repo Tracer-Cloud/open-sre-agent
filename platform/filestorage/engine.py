@@ -115,6 +115,7 @@ def push(
     roots: tuple[SyncRoot, ...] | None = None,
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
+    dry_run: bool = False,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
@@ -148,7 +149,8 @@ def push(
                 # destroy it. Same rule pull applies in the other direction.
                 result.kept_remote.append(key)
                 continue
-        store.put_object(key, data)
+        if not dry_run:
+            store.put_object(key, data)
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
     return result
@@ -160,6 +162,7 @@ def pull(
     roots: tuple[SyncRoot, ...] | None = None,
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
+    dry_run: bool = False,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy."""
     roots = roots if roots is not None else syncable_roots()
@@ -172,6 +175,10 @@ def pull(
             continue
         if not _should_download(obj, target):
             result.skipped += 1
+            continue
+        if dry_run:
+            result.downloaded_bytes += obj.size
+            result.downloaded.append(obj.key)
             continue
         data = store.get_object(obj.key)
         result.downloaded_bytes += len(data)
@@ -210,6 +217,7 @@ def run_sync(
     *,
     direction: SyncDirection = SyncDirection.BOTH,
     roots: tuple[SyncRoot, ...] | None = None,
+    dry_run: bool = False,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
@@ -219,9 +227,9 @@ def run_sync(
     report = SyncReport()
     listing = store.list_objects("")
     if direction is not SyncDirection.PUSH:
-        pull(store, roots=roots, report=report, remote=listing)
+        pull(store, roots=roots, report=report, remote=listing, dry_run=dry_run)
     if direction is not SyncDirection.PULL:
-        push(store, roots=roots, report=report, remote=listing)
+        push(store, roots=roots, report=report, remote=listing, dry_run=dry_run)
     return report
 
 
