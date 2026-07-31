@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import (
+    BotoCoreError,
+    ClientError,
+    ConnectTimeoutError,
+    ConnectionError as BotoConnectionError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+    UnknownEndpointError,
+)
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BuiltInProvider
@@ -14,10 +24,67 @@ from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers.registry import register_object_store
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+
+logger = logging.getLogger(__name__)
 
 _SERVER_SIDE_ENCRYPTION = "AES256"
 PROVIDER_NAME = BuiltInProvider.AWS
+
+_MAX_ATTEMPTS = 3
+
+
+#BotoCoreError subclasses that represent transient, connection-level failures
+_RETRYABLE_BOTOCORE_ERRORS: tuple[type[BotoCoreError], ...] = (
+    BotoConnectionError,  
+    ConnectTimeoutError,  
+    ReadTimeoutError,  
+    EndpointConnectionError,  
+    UnknownEndpointError,
+)
+
+# Service-side throttling/limit codes, 5xx http status codes are the ClientError responses worth
+# a retry. Anything else (NoSuchBucket, AccessDenied etc.) is treated as permanent. 
+_RETRYABLE_CLIENT_ERROR_CODES = frozenset(
+    {
+        "SlowDown",#http status code 503
+        "RequestTimeout",#http status code 408
+        "ServiceUnavailable",#http status code 503
+    }
+)
+#This set of error codes is not exhaustive, but it covers the most common transient errors that can be retried.
+
+
+def _is_transient(exc: BotoCoreError | ClientError) -> bool:
+    """Check whether ``exc`` is worth another attempt; anything else is permanent."""
+    if isinstance(exc, ClientError):
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in _RETRYABLE_CLIENT_ERROR_CODES:
+            return True
+        http_status_code = exc.response["ResponseMetadata"]["HTTPStatusCode"]
+        return 500<=http_status_code<=504  # 5xx is usually transient
+    return isinstance(exc, _RETRYABLE_BOTOCORE_ERRORS)
+
+
+def _retry_transient[T](fn: Callable[[], T], *, label: str) -> T:
+    """Retrying transient S3 failures with exponential backoff."""
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            return fn()
+        except (BotoCoreError, ClientError) as exc:
+            if attempt == _MAX_ATTEMPTS - 1 or not _is_transient(exc):
+                raise
+            wait_time = 2**attempt  # 1s, 2s, 4s, ...
+            logger.warning(
+                "[s3] %s failed (attempt %d/%d), retrying in %ds: %s",
+                label,
+                attempt + 1,
+                _MAX_ATTEMPTS,
+                wait_time,
+                _reason(exc),
+            )
+            time.sleep(wait_time)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 class S3ObjectStore:
@@ -57,29 +124,44 @@ class S3ObjectStore:
         return out
 
     def get_object(self, key: str) -> bytes:
-        try:
+        def _fetch() -> bytes:
             response = self._client.get_object(
                 Bucket=self._config.bucket, Key=self._config.key_for(key)
             )
             body: bytes = response["Body"].read()
             return body
+
+        try:
+            return _retry_transient(_fetch, label=f"get_object: {key}")
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
-        try:
+        def _write() -> None:
             self._client.put_object(
                 Bucket=self._config.bucket,
                 Key=self._config.key_for(key),
                 Body=data,
                 ServerSideEncryption=_SERVER_SIDE_ENCRYPTION,
             )
+
+        try:
+            _retry_transient(_write, label=f"put_object: {key}")
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot write {key} — {_reason(exc)}") from exc
 
     def _pages(self, prefix: str) -> Iterator[dict[str, Any]]:
         paginator = self._client.get_paginator("list_objects_v2")
-        yield from paginator.paginate(Bucket=self._config.bucket, Prefix=prefix)
+        page_iter = iter(paginator.paginate(Bucket=self._config.bucket, Prefix=prefix))
+
+        def _next_page() -> dict[str, Any]:
+            return next(page_iter)
+
+        while True:
+            try:
+                yield _retry_transient(_next_page, label="list_objects page")
+            except StopIteration:
+                return
 
     def _strip_prefix(self, full_key: str) -> str:
         prefix = f"{self._config.prefix.rstrip('/')}/"
