@@ -4,7 +4,21 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 
-from surfaces.cli.commands.cron import cron_command
+from platform.scheduler.types import Provider, TaskKind
+from surfaces.cli.commands.cron import _KIND_CHOICES, _PROVIDER_CHOICES, cron_command
+
+
+def test_cron_add_provider_choices_match_full_provider_enum() -> None:
+    """cron delivery genuinely supports every Provider member."""
+    assert set(_PROVIDER_CHOICES) == {p.value for p in Provider}
+
+
+def test_cron_add_kind_choices_exclude_sentry_kinds() -> None:
+    """Sentry-kind tasks go through `opensre sentry`, not generic cron add."""
+    assert set(_KIND_CHOICES) == {k.value for k in TaskKind} - {
+        TaskKind.SENTRY_MORNING_DIGEST.value,
+        TaskKind.SENTRY_UPTIME_WATCH.value,
+    }
 
 
 def test_cron_add_rejects_non_positive_window() -> None:

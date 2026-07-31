@@ -9,6 +9,15 @@ from platform.scheduler.credentials import (
 )
 from platform.scheduler.types import Provider
 
+# Providers Sentry digest delivery actually implements. Discord is a member of
+# Provider (cron delivery supports it) but has no digest readiness/send path
+# here, so it's deliberately excluded rather than exposed as a broken choice.
+SENTRY_DIGEST_SUPPORTED_PROVIDERS: tuple[Provider, ...] = (
+    Provider.TELEGRAM,
+    Provider.SLACK,
+    Provider.ROCKETCHAT,
+)
+
 
 def telegram_delivery_ready() -> bool:
     """Return True when Telegram bot credentials are available."""
@@ -79,6 +88,7 @@ def digest_delivery_setup_hint(provider: Provider | str | None = None) -> str:
 
 
 __all__ = [
+    "SENTRY_DIGEST_SUPPORTED_PROVIDERS",
     "any_digest_delivery_ready",
     "delivery_provider_ready",
     "digest_delivery_setup_hint",

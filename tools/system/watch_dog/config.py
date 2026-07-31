@@ -5,13 +5,17 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from config.strict_config import StrictConfigModel
+from platform.scheduler.types import Provider
 
-AlarmProvider = Literal["telegram", "rocketchat"]
+# Providers the watchdog alarm sender actually implements (see runner.py's
+# dispatch). Provider has two more members (slack, discord) that cron
+# delivery supports but watchdog does not, so this is a deliberate subset,
+# not the full enum.
+WATCHDOG_SUPPORTED_PROVIDERS: tuple[Provider, ...] = (Provider.TELEGRAM, Provider.ROCKETCHAT)
 
 
 class WatchdogThreshold(StrEnum):
@@ -93,7 +97,7 @@ class WatchdogConfig(StrictConfigModel):
     interval: float = Field(default=5.0, gt=0)
     cooldown: float = Field(default=300.0, gt=0)
     once: bool = False
-    provider: AlarmProvider = "telegram"
+    provider: Provider = Provider.TELEGRAM
     chat_id: str | None = None
     verbose: bool = False
 
@@ -113,6 +117,16 @@ class WatchdogConfig(StrictConfigModel):
             return None
         if isinstance(value, str | int | float):
             return parse_byte_size(value)
+        return value
+
+    @field_validator("provider")
+    @classmethod
+    def _validate_provider_supported(cls, value: Provider) -> Provider:
+        if value not in WATCHDOG_SUPPORTED_PROVIDERS:
+            supported = ", ".join(p.value for p in WATCHDOG_SUPPORTED_PROVIDERS)
+            raise ValueError(
+                f"watchdog delivery does not support '{value}'; use one of: {supported}"
+            )
         return value
 
     @model_validator(mode="after")
