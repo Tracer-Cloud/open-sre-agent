@@ -7,6 +7,12 @@ from typing import Final
 # Injected by the org-silo infra (ECS task definition). Metering/vault stay off
 # unless the webapp URL, an auth token, and the org id are all set.
 WEBAPP_URL_ENV: Final[str] = "OPENSRE_WEBAPP_URL"
+
+#: The organization this deployment serves, for usage attribution and for the
+#: fail-closed mount-ownership check in ``config.constants.paths``. Not the
+#: control plane's ``ORGANIZATION_ID``
+#: (``config.constants.tenancy.TENANT_ORGANIZATION_ID_ENV``) — that one selects
+#: which tenant's credentials to hydrate, and the two must not be merged.
 ORGANIZATION_ID_ENV: Final[str] = "OPENSRE_ORGANIZATION_ID"
 
 # Silo → webapp auth. The silo mints a short-lived M2M token (`mt_…`) from its

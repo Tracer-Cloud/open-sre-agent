@@ -15,8 +15,8 @@ from core.agent_harness.ports import (
     ToolEventObserver,
 )
 from core.agent_harness.turns.turn_results import (
-    ShellTurnResult,
     ToolCallingTurnResult,
+    TurnResult,
 )
 
 
@@ -142,7 +142,7 @@ class NoopTurnAccounting:
     def record_action_result(self, action_result: ToolCallingTurnResult) -> None:
         _ = action_result
 
-    def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+    def finalize(self, result: TurnResult) -> TurnResult:
         return result
 
 

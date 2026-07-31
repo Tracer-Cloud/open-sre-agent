@@ -9,7 +9,7 @@ from rich.console import Console
 
 from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
 def test_build_default_headless_agent_sets_gateway_surface() -> None:
@@ -60,7 +60,7 @@ def test_factory_and_sink_are_package_level_exports() -> None:
 
 
 def test_primary_response_text_prefers_assistant() -> None:
-    result = ShellTurnResult(
+    result = TurnResult(
         final_intent="ok",
         action_result=ToolCallingTurnResult(
             planned_count=0,
@@ -74,7 +74,7 @@ def test_primary_response_text_prefers_assistant() -> None:
         llm_run=object(),
     )
     assert result.primary_response_text == "from assistant"
-    empty_assistant = ShellTurnResult(
+    empty_assistant = TurnResult(
         final_intent="ok",
         action_result=ToolCallingTurnResult(
             planned_count=0,

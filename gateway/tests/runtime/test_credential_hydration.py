@@ -10,6 +10,11 @@ from typing import Any
 
 import pytest
 
+from config.constants.tenancy import (
+    CREDENTIALS_API_URL_ENV,
+    CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
+    TENANT_ORGANIZATION_ID_ENV,
+)
 from gateway.runtime.credential_hydration import (
     CredentialHydrationConfig,
     GatewayCredentialHydrator,
@@ -105,9 +110,9 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
 def test_partial_environment_configuration_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("ORGANIZATION_ID", "org-a")
-    monkeypatch.delenv("OPENSRE_CREDENTIALS_API_URL", raising=False)
-    monkeypatch.delenv("OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN", raising=False)
+    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-a")
+    monkeypatch.delenv(CREDENTIALS_API_URL_ENV, raising=False)
+    monkeypatch.delenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, raising=False)
 
     with pytest.raises(ValueError, match="incomplete"):
         CredentialHydrationConfig.from_environment()
@@ -123,6 +128,6 @@ def test_manager_fails_closed_with_generic_error() -> None:
     )
 
     with pytest.raises(GatewayConfigurationError, match="hydration failed"):
-        manager._hydrate_credentials(logging.getLogger("test"))
+        manager._load_credentials(logging.getLogger("test"))
 
     assert manager.components["credentials"] == "failed"

@@ -10,7 +10,7 @@ from core.agent_harness.turns.headless_dispatch import (
     NullToolProvider,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
 class _Echo:
@@ -42,9 +42,9 @@ def test_dispatch_message_reuses_attached_agent(monkeypatch: Any) -> None:
     calls: list[str] = []
 
     class _Agent:
-        def dispatch(self, message: str) -> ShellTurnResult:
+        def dispatch(self, message: str) -> TurnResult:
             calls.append(message)
-            return ShellTurnResult(
+            return TurnResult(
                 final_intent="cli_agent_handled",
                 action_result=_empty_action(),
                 assistant_response_text=f"ok:{message}",

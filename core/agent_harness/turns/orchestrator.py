@@ -42,7 +42,7 @@ from core.agent_harness.session.terminal_access import agent_turn_executed_slash
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
 from platform.observability.trace.spans import component_span, emit_route
@@ -327,7 +327,7 @@ def run_turn(
     accounting: TurnAccounting,
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
-) -> ShellTurnResult:
+) -> TurnResult:
     """Run one full turn through three paths, in order:
 
     1. ``summarize_observation`` — a successful action left discovery output, so
@@ -412,7 +412,7 @@ def run_turn(
                     handoff_contents=handoff_contents,
                     turn_plan=turn_plan,
                 )
-            result = ShellTurnResult(
+            result = TurnResult(
                 final_intent="cli_agent_summarized",
                 action_result=action_result,
                 assistant_response_text=_response_text(run),
@@ -420,7 +420,7 @@ def run_turn(
             )
         elif route.intent == "handled_without_llm":
             _record_action_only_turn(session, text, action_result.response_text)
-            result = ShellTurnResult(
+            result = TurnResult(
                 final_intent="cli_agent_handled",
                 action_result=action_result,
                 assistant_response_text=action_result.response_text,
@@ -436,7 +436,7 @@ def run_turn(
                     handoff_contents=handoff_contents,
                     turn_plan=turn_plan,
                 )
-            result = ShellTurnResult(
+            result = TurnResult(
                 final_intent="cli_agent_fallback",
                 action_result=action_result,
                 assistant_response_text=_response_text(run),
