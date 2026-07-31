@@ -94,7 +94,11 @@ def secret_source(env_var: str) -> SecretTier:
 
 
 def save_secret(env_var: str, value: str) -> SecretSaveResult:
-    """Persist a secret, falling back to the local file when the keyring cannot.
+    """Persist a secret.
+
+    Default (no ``OPENSRE_USE_KEYRING``): write the owner-only fallback file so
+    onboarding does not trigger OS keychain prompts. With keyring opt-in: try
+    the keyring first and fall back to the file when the keyring cannot store.
 
     Raises :class:`KeyringUnavailableError` only when *no* tier accepted the
     write, so a caller that sees no exception knows the credential is durable.
@@ -103,6 +107,27 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
     if not normalized:
         delete_secret(env_var)
         return SecretSaveResult("none", f"{env_var} cleared.")
+
+    if not os_keyring.keyring_writes_enabled():
+        # Env-first / file-first path: skip keyring writes entirely.
+        if os_keyring.keyring_is_disabled():
+            raise KeyringUnavailableError(
+                f"{env_var} not saved: keyring is disabled and no local store "
+                "is allowed. Export the secret in the process environment instead.",
+                reason=KeyringUnavailableReason.DISABLED,
+            )
+        try:
+            local_file.set(env_var, normalized)
+        except OSError as file_exc:
+            raise KeyringUnavailableError(
+                f"Writing {env_var} to {local_file.store_path()} failed.",
+                reason=KeyringUnavailableReason.NO_BACKEND,
+            ) from file_exc
+        return SecretSaveResult(
+            "fallback",
+            f"{env_var} stored in {local_file.store_path()} "
+            "(set OPENSRE_USE_KEYRING=1 to prefer the system keychain).",
+        )
 
     try:
         os_keyring.set(env_var, normalized)
@@ -167,11 +192,17 @@ def keyring_is_disabled() -> bool:
     return os_keyring.keyring_is_disabled()
 
 
+def keyring_writes_enabled() -> bool:
+    """Whether ``OPENSRE_USE_KEYRING`` opts this process into keychain writes."""
+    return os_keyring.keyring_writes_enabled()
+
+
 __all__ = [
     "SecretLookup",
     "SecretSaveResult",
     "delete_secret",
     "keyring_is_disabled",
+    "keyring_writes_enabled",
     "lookup",
     "resolve_secret",
     "save_secret",

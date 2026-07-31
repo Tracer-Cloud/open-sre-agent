@@ -1,17 +1,11 @@
-
-## Architecture Notes By Vincent (June 30th 2026)
-- Target initial support for Telegram and Slack.
-- Issues: Headless agent lacks full integration initialization; current target path may not be optimal.
-- Treat the messaging gateway as a distinct surface area.
-- Goal: Fully decouple the gateway from other packages --> if this is true then it means that the gateway is configurable through dependency injection to call other agents.
-
-**Key Problem Right Now**
-- The critical problem however, right now is that we need to be able to spin up an agent and load integrations from it.
-
 # OpenSRE Messaging Gateway
 
 Standalone inbound messaging gateway for chat platforms: Telegram DM text chat
 via long polling, Slack mentions/DMs via Socket Mode, and Discord via Gateway WebSocket.
+
+The gateway is a separate surface. Transports receive an injected turn handler;
+agent startup and integration loading run through the shared harness, not
+transport-specific code.
 
 ## Entry points
 

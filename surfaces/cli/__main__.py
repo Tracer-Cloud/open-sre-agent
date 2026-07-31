@@ -21,6 +21,7 @@ ensure_project_platform_package()
 
 import click  # noqa: E402
 
+from config.constants.product import RELEASE_STAGE_BANNER  # noqa: E402
 from config.version import get_opensre_version  # noqa: E402
 from surfaces.cli.group import LazyRichGroup, ThemeParamType  # noqa: E402
 from surfaces.cli.invocation import (  # noqa: E402
@@ -181,7 +182,7 @@ def cli(
                         resume_session_id=resume_session_id,
                     )
                 )
-        click.echo("🚧 OpenSRE is in Public Beta — features may change.", err=True)
+        click.echo(RELEASE_STAGE_BANNER, err=True)
         render_landing(cli)
         raise SystemExit(0)
 

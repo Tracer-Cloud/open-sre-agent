@@ -122,11 +122,25 @@ def _check_version_freshness() -> tuple[bool, str]:
         return True, f"{current} (could not check: {exc})"
 
 
+def _check_agent_capabilities() -> tuple[bool, str]:
+    """Warn when the environment withholds something the agent is told it can do."""
+    from platform.sandbox.capabilities import (
+        probe_capabilities,
+        unavailable_capability_warnings,
+    )
+
+    warnings = unavailable_capability_warnings(probe_capabilities())
+    if warnings:
+        return False, "; ".join(warnings)
+    return True, "python, shell, file reading and network are all available"
+
+
 _CHECKS = [
     ("python", _check_python_version),
     ("env_file", _check_env_file),
     ("llm_provider", _check_llm_provider),
     ("integrations", _check_integrations),
+    ("agent_capabilities", _check_agent_capabilities),
     ("version", _check_version_freshness),
 ]
 

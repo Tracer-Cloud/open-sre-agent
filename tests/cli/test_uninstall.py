@@ -70,11 +70,10 @@ def test_run_uninstall_cancelled_by_user(
 
     import questionary as _q
 
-    monkeypatch.setattr(
-        _q,
-        "confirm",
-        lambda *_args, **_kwargs: type("Q", (), {"ask": lambda _self: False})(),
-    )
+    def _confirm_no(*_args: object, **_kwargs: object) -> object:
+        return type("Q", (), {"ask": lambda _self: False})()
+
+    monkeypatch.setattr(_q, "confirm", _confirm_no)
 
     rc = run_uninstall(yes=False)
 

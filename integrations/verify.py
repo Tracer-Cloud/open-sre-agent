@@ -19,12 +19,12 @@ from integrations._verifiers_loader import register_all_verifiers
 from integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
 )
+from integrations.probes import ProbeStatus
 from integrations.registry import (
     CORE_VERIFY_SERVICES,
     INTEGRATION_SPECS_BY_SERVICE,
     SUPPORTED_VERIFY_SERVICES,
 )
-from integrations.probes import ProbeStatus
 from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 from integrations.store import get_integration
 from integrations.verification import VerifierFn, get_verifier, result

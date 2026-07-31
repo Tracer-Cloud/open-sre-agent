@@ -152,17 +152,11 @@ def cron_remove(task_id: str) -> None:
 @click.argument("task_id")
 def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
-    from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
     from platform.scheduler.runner import run_task_now
     from platform.scheduler.store import get_task
-    from tools.harness_adapters import register_harness_adapters as register_tools
-    from tools.investigation.scheduler_bootstrap import install as install_investigation_runner
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    register_integrations()
-    register_tools()
-    install_investigation_runner()
-    install_scheduled_agent()
+    install_runtime()
 
     task = get_task(task_id)
     if task is None:
@@ -231,16 +225,10 @@ def cron_logs(task_id: str, limit: int) -> None:
 @cron_command.command(name="start")
 def cron_start() -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
-    from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
     from platform.scheduler.runner import start_scheduler
-    from tools.harness_adapters import register_harness_adapters as register_tools
-    from tools.investigation.scheduler_bootstrap import install as install_investigation_runner
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    register_integrations()
-    register_tools()
-    install_investigation_runner()
-    install_scheduled_agent()
+    install_runtime()
 
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")

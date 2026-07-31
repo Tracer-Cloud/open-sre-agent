@@ -48,6 +48,8 @@ def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
@@ -92,6 +94,8 @@ def test_configure_api_key_reports_the_fallback_tier_it_actually_used(
     and overwrites the correct record that `save_api_key` just wrote.
     """
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
@@ -127,6 +131,8 @@ def test_configure_api_key_does_not_store_when_validation_fails(
     tmp_path: Path,
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
@@ -187,6 +193,8 @@ def test_configure_cli_subscription_syncs_provider(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
         "surfaces.cli.wizard.store.get_store_path",
@@ -236,6 +244,8 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
         "surfaces.cli.wizard.store.get_store_path",
@@ -324,6 +334,8 @@ def test_resolve_for_request_does_not_stale_verified_record_on_keyring_error(
     the secret itself was untouched.
     """
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected to this same tmp_path
     # by the autouse ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
@@ -359,6 +371,8 @@ def test_resolve_for_request_still_stales_when_credential_is_genuinely_absent(
 ) -> None:
     """A clean (error-free) keychain miss is real evidence and should still stale."""
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+    # Keyring writes are opt-in now; this test exercises the keyring path.
+    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected by the autouse
     # ``_isolate_opensre_home_files`` fixture in tests/conftest.py.

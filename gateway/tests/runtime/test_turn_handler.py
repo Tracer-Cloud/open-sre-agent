@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -11,7 +12,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
@@ -31,16 +32,36 @@ def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _patch_headless_agent(monkeypatch: Any, result: ShellTurnResult) -> MagicMock:
-    """Patch the gateway's ``HeadlessAgent`` so construction is inert and dispatch returns ``result``.
+def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
+    """Patch the gateway agent factory so construction is inert and dispatch returns ``result``.
 
-    Returns the patched class mock; ``mock.call_args.kwargs`` exposes the constructor
-    ports (e.g. ``tools``) the gateway wired for the turn.
+    Returns the factory mock. The built agent is ``factory.return_value``; when the
+    test needs the real tool provider, read ``factory.return_value.tools_for_test``.
     """
-    agent_cls = MagicMock()
-    agent_cls.return_value.dispatch.return_value = result
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
-    return agent_cls
+    from core.agent_harness.tools.tool_provider import DefaultToolProvider
+
+    agent = MagicMock()
+    agent.dispatch.return_value = result
+    factory = MagicMock()
+
+    def _build(**kwargs: Any) -> MagicMock:
+        agent.tools_for_test = DefaultToolProvider(
+            kwargs["session"],
+            kwargs["console"],
+            tool_action_logger=kwargs.get("logger"),
+            observer_factory=kwargs.get("observer_factory"),
+            subprocess_presenter_factory=kwargs.get("subprocess_presenter_factory"),
+            slash_ports_factory=kwargs.get("slash_ports_factory"),
+        )
+        return agent
+
+    factory.side_effect = _build
+    factory.return_value = agent
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        factory,
+    )
+    return factory
 
 
 def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) -> None:
@@ -67,7 +88,7 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
 
     agent_cls = _patch_headless_agent(
         monkeypatch,
-        ShellTurnResult(
+        TurnResult(
             final_intent="cli_agent_handled",
             action_result=ToolCallingTurnResult(
                 planned_count=1,
@@ -86,14 +107,14 @@ def test_turn_handler_resolves_action_tools_from_live_session(monkeypatch: Any) 
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("send slack update", session, MagicMock(), logging.getLogger("test.turn_handler"))
 
-    tool_provider = agent_cls.call_args.kwargs["tools"]
+    tool_provider = agent_cls.return_value.tools_for_test
     tools = tool_provider.action_tools(confirm_fn=None, is_tty=False)
     assert len(tools) == 1
     assert recorded == [chat_integrations]
 
 
-def _empty_turn_result(*, llm_run: Any = None) -> ShellTurnResult:
-    return ShellTurnResult(
+def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
+    return TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=0,
@@ -128,14 +149,15 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
 
 
 def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
-    """A sink carrying tool hooks (Slack's approval gate) wires them into the agent."""
+    """A sink carrying tool hooks (Slack's approval gate) rebinds them each turn."""
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
     hooks = object()
     sink.tool_hooks = hooks
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
-    assert agent_cls.call_args.kwargs["tool_hooks"] is hooks
+    agent = agent_cls.return_value
+    assert agent.bind_turn.call_args.kwargs["tool_hooks"] is hooks
 
 
 def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
@@ -150,7 +172,8 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     handler(
         "hi", SessionCore(storage=InMemorySessionStorage()), _BareSink(), logging.getLogger("test")
     )
-    assert agent_cls.call_args.kwargs["tool_hooks"] is None
+    agent = agent_cls.return_value
+    assert agent.bind_turn.call_args.kwargs["tool_hooks"] is None
 
 
 def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
@@ -238,3 +261,36 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     assert len(completed) == 1
     assert completed[0]["surface"] == SURFACE_SLACK
     assert completed[0]["answered"] is False
+
+
+def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any) -> None:
+    """The handler must take the pool's lock, not the unsynchronised primitive.
+
+    ``session_agent`` holds the per-session lock across dispatch. Calling
+    ``agent_for`` directly returns an unguarded agent, so an overlapping turn
+    for the same session can rebind its session and sink mid-dispatch and route
+    output to the wrong conversation.
+    """
+    # Arrange: record when the lock is held relative to the dispatch.
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
+    events: list[str] = []
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    real_session_agent = handler._pool.session_agent
+
+    @contextmanager
+    def _tracking_session_agent(**kwargs: Any) -> Any:
+        events.append("lock-acquired")
+        with real_session_agent(**kwargs) as agent:
+            yield agent
+        events.append("lock-released")
+
+    monkeypatch.setattr(handler._pool, "session_agent", _tracking_session_agent)
+
+    # Act
+    handler(
+        "hi", SessionCore(storage=InMemorySessionStorage()), MagicMock(), logging.getLogger("test")
+    )
+
+    # Assert: the turn ran inside the lock. Calling agent_for directly would
+    # leave this empty, since session_agent would never be entered.
+    assert events == ["lock-acquired", "lock-released"]

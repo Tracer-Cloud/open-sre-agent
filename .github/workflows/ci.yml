@@ -478,3 +478,31 @@ jobs:
       - name: Run test
         run: uv run ${{ matrix.command }}
         timeout-minutes: 30
+
+  ci-gate:
+    name: CI Gate
+    needs: [quality, test, coverage-report]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # Single required check: branch protection points here instead of at every
+      # matrix leg. `always()` is what lets this run when an upstream job failed
+      # or was skipped — without it the gate would be skipped too, and a skipped
+      # required check reads as passing.
+      - name: Require green upstream jobs
+        run: |
+          set -euo pipefail
+          quality='${{ needs.quality.result }}'
+          test_result='${{ needs.test.result }}'
+          coverage='${{ needs.coverage-report.result }}'
+          echo "quality=$quality test=$test_result coverage-report=$coverage"
+
+          [ "$quality" = success ] || { echo "::error::quality is $quality"; exit 1; }
+          [ "$test_result" = success ] || { echo "::error::test is $test_result"; exit 1; }
+
+          # coverage-report only runs on pushes to main; on pull requests it is
+          # skipped, which is not a failure.
+          case "$coverage" in
+            success|skipped) ;;
+            *) echo "::error::coverage-report is $coverage"; exit 1 ;;
+          esac

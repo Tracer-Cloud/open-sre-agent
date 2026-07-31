@@ -18,6 +18,7 @@ from config.config import get_environment
 from config.runtime_metadata.build_info import detect_build_info
 from config.runtime_metadata.contract import RUNTIME_INPUTS_KEY
 from config.runtime_metadata.probes import (
+    capability_warning_facts,
     cloud_facts,
     disk_memory_facts,
     installed_tools,
@@ -25,6 +26,7 @@ from config.runtime_metadata.probes import (
     local_tz_name,
     pod_hostname,
     python_version_string,
+    workspace_identity_facts,
 )
 from config.version import get_opensre_version
 
@@ -59,6 +61,7 @@ def build_runtime_metadata() -> dict[str, Any]:
     from :func:`capture_runtime_facts` at each render/sandbox call.
     """
     env_override = (os.environ.get("OPENSRE_ENV") or "").strip()
+    tools = installed_tools()
     return {
         "opensre_version": get_opensre_version(),
         "opensre_build": detect_build_info(),
@@ -67,11 +70,13 @@ def build_runtime_metadata() -> dict[str, Any]:
         "python_version": python_version_string(),
         "pid": os.getpid(),
         "ppid": os.getppid(),
-        "tools": installed_tools(),
+        "tools": tools,
         "kubeconfig": kubeconfig_path(),
         "hostname": pod_hostname(),
         "scratchpad_dir": tempfile.gettempdir(),
         **cloud_facts(),
+        **workspace_identity_facts(),
+        **capability_warning_facts(tools),
     }
 
 
