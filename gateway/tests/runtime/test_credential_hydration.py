@@ -277,7 +277,14 @@ def test_environment_configures_the_integrations_secret(
 def test_partial_environment_configuration_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A silo signal without the bootstrap secret is a broken deployment.
+
+    The integrations ARN says the control plane provisioned this task, so a
+    missing bootstrap secret is a misconfiguration rather than the feature
+    being off.
+    """
     monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-a")
+    monkeypatch.setenv(INTEGRATIONS_SECRET_ARN_ENV, "arn:aws:integrations")
     monkeypatch.delenv(CREDENTIALS_API_URL_ENV, raising=False)
     monkeypatch.delenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, raising=False)
 

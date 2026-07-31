@@ -51,14 +51,40 @@ def test_hydration_reads_the_injected_tenant_id(monkeypatch: pytest.MonkeyPatch)
     assert config.organization_id == "org-from-control-plane"
 
 
-def test_billing_org_id_does_not_satisfy_hydration(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Setting only the billing name is incomplete configuration, not a tenant id."""
-    # Arrange: a value distinctive enough to spot if it ever leaks into hydration.
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-billing-must-not-leak")
+def test_either_organization_name_satisfies_a_provisioned_silo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A silo with a bootstrap secret hydrates under either organization name.
 
-    # Act / Assert
-    with pytest.raises(ValueError, match="incomplete"):
-        CredentialHydrationConfig.from_environment()
+    The two names are converging, so a task definition mid-rollout may carry
+    only one of them.
+    """
+    # Arrange: the fixture already set the bootstrap ARN.
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-from-either-name")
+
+    # Act
+    config = CredentialHydrationConfig.from_environment()
+
+    # Assert
+    assert config is not None
+    assert config.organization_id == "org-from-either-name"
+
+
+def test_an_organization_without_a_bootstrap_secret_is_not_a_silo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Serving an organization does not by itself mean the control plane ran.
+
+    Every deployment names an organization. Only a provisioned silo has a
+    bootstrap secret, so keying off the name would make the EC2 service look
+    half-configured and raise at gateway startup.
+    """
+    # Arrange
+    monkeypatch.delenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, raising=False)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-ec2")
+
+    # Act / Assert: disabled, not "incomplete".
+    assert CredentialHydrationConfig.from_environment() is None
 
 
 def test_whitespace_is_not_a_tenant_identity(monkeypatch: pytest.MonkeyPatch) -> None:

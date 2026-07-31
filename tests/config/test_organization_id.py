@@ -154,15 +154,15 @@ def test_credits_and_usage_see_the_fargate_organization(
     assert get_organization_id() == "org_fargate"
 
 
-def test_hydration_still_keys_off_the_control_plane_name_only(
+def test_hydration_gates_on_the_bootstrap_secret_not_the_organization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Hydration asks a different question and must not use the resolver.
+    """Hydration asks a different question than the resolver answers.
 
     "Did the control plane provision this silo" is not "which organization do we
-    serve". An EC2 deployment answers the second and not the first, so resolving
-    across both names would read its org as a half-configured silo and raise at
-    startup.
+    serve". Every deployment answers the second; only a provisioned silo has a
+    bootstrap secret. Gating on the organization would read the EC2 service as a
+    half-configured silo and raise at gateway startup.
     """
     # Arrange
     from gateway.runtime.credential_hydration import CredentialHydrationConfig
