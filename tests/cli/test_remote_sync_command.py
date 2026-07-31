@@ -357,6 +357,25 @@ def test_setup_disabled_without_bucket_switches_off_without_setup_values(
     assert "Remote sync is off." in result.output
 
 
+def test_setup_disabled_with_explicit_flags_is_rejected_not_dropped(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: dict[str, bool] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.disable_remote_sync",
+        lambda: calls.setdefault("disabled", True),
+    )
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings",
+        lambda _request: calls.setdefault("saved", True),
+    )
+    result = runner.invoke(remote_sync_command, ["setup", "--disabled", "--provider", "vercel"])
+    assert result.exit_code != 0
+    assert calls == {}
+    assert "cannot also set --provider" in result.output
+    assert "Pass --bucket" in result.output
+
+
 def test_setup_disabled_with_bucket_saves_enabled_false(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:

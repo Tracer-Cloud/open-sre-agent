@@ -9,7 +9,7 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
 from platform.common.exit_codes import ERROR, SUCCESS
-from platform.filestorage import RemoteSyncError
+from platform.filestorage import RemoteSyncConfigError, RemoteSyncError
 from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
@@ -88,7 +88,7 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
     "--enabled/--disabled",
     default=True,
     show_default=True,
-    help="Whether remote sync is switched on in stored settings.",
+    help="Whether remote sync is switched on in stored settings. --disabled alone only turns it off.",
 )
 def setup_command(
     provider: str | None,
@@ -102,6 +102,9 @@ def setup_command(
     if not enabled and (bucket is None or not bucket.strip()):
         # --disabled with no new settings just switches the stored section off.
         try:
+            _reject_disabled_with_setup_flags(
+                provider=provider, prefix=prefix, region=region, profile=profile
+            )
             disable_remote_sync()
         except RemoteSyncError as exc:
             click.echo(str(exc), err=True)
@@ -126,6 +129,32 @@ def setup_command(
     for line in format_setup_lines(config):
         click.echo(line)
     raise SystemExit(SUCCESS)
+
+
+def _reject_disabled_with_setup_flags(
+    *,
+    provider: str | None,
+    prefix: str | None,
+    region: str | None,
+    profile: str | None,
+) -> None:
+    """``--disabled`` only flips the switch; explicit setup values need a bucket."""
+    given = [
+        name
+        for name, value in (
+            ("provider", provider),
+            ("prefix", prefix),
+            ("region", region),
+            ("profile", profile),
+        )
+        if value is not None and value.strip() != ""
+    ]
+    if given:
+        flags = ", ".join(f"--{name}" for name in given)
+        raise RemoteSyncConfigError(
+            f"--disabled without --bucket only switches sync off; it cannot also set {flags}. "
+            "Pass --bucket to save new settings, or drop the extra flags."
+        )
 
 
 def _collect_setup_request(
