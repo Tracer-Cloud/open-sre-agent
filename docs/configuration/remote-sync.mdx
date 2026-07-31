@@ -23,6 +23,16 @@ setup again; everything else is already there.
 
 ## Turn it on
 
+Guided way — writes the `remote_sync` section of `~/.opensre/config.yml`
+(prompts for provider, bucket, and prefix when you don't pass them as flags;
+`--region` and `--profile` are flags only):
+
+```bash
+opensre remote-sync setup --provider gcs --bucket my-opensre-bucket
+```
+
+Or set environment variables for a single run:
+
 ```bash
 export OPENSRE_REMOTE_SYNC=1
 export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
@@ -31,8 +41,8 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 | Variable | Description |
 |---|---|
 | `OPENSRE_REMOTE_SYNC` | Set to `1` to enable. Nothing uploads until you do |
-| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws` (S3). Community backends register under the same name |
-| `OPENSRE_REMOTE_SYNC_BUCKET` | Object-store name you own (S3 bucket today). Required |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name: `aws` (S3, default) or `gcs` (Google Cloud Storage). Community backends register under their own name |
+| `OPENSRE_REMOTE_SYNC_BUCKET` | Object-store name you own (S3 or GCS bucket today). Required |
 | `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
 | `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it |
 | `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default |
@@ -40,9 +50,10 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
 
-You can also persist settings under `remote_sync` in `~/.opensre/config.yml`
-(`enabled`, `bucket`, `provider`, `prefix`, …). Environment variables still
-win for a single run.
+Settings persist under `remote_sync` in `~/.opensre/config.yml` (`enabled`,
+`bucket`, `provider`, `prefix`, …) — that is what `remote-sync setup` writes.
+Credentials are never written there; they stay in your cloud CLI's usual
+places. Environment variables still win for a single run.
 
 <Note>
 Every machine that should share your history needs the **same provider, bucket,
@@ -85,11 +96,11 @@ opensre remote-sync sync --push-only    # back up without pulling
 
 ## Providers
 
-The sync engine talks only to a small object-store interface. Amazon S3 is the
-built-in backend today (`OPENSRE_REMOTE_SYNC_PROVIDER=aws`, the default). Other
-clouds (GCS, Azure, …) are community additions: implement `ObjectStore`, call
-`register_object_store("<name>", factory)`, and set
-`OPENSRE_REMOTE_SYNC_PROVIDER` — the engine, CLI, and REPL do not change.
+The sync engine talks only to a small object-store interface. Amazon S3
+(`OPENSRE_REMOTE_SYNC_PROVIDER=aws`, the default) and Google Cloud Storage
+(`gcs`) are the built-in backends. Other clouds (Azure, …) are community
+additions: implement `ObjectStore`, call `register_object_store("<name>", factory)`,
+and set `OPENSRE_REMOTE_SYNC_PROVIDER` — the engine, CLI, and REPL do not change.
 
 ### AWS / S3 (default)
 
@@ -103,6 +114,28 @@ s3:ListBucket, s3:GetObject, s3:PutObject
 ```
 
 `s3:DeleteObject` is not needed — sync never deletes anything.
+
+### Google Cloud Storage
+
+Set `OPENSRE_REMOTE_SYNC_PROVIDER=gcs` and point `OPENSRE_REMOTE_SYNC_BUCKET`
+at any private bucket. Credentials come from Application Default Credentials —
+run this once per machine and sign in with the account that owns the bucket:
+
+```bash
+gcloud auth application-default login
+```
+
+Minimum permissions on the bucket (a bucket-scoped `roles/storage.objectUser`
+binding covers all four):
+
+```
+storage.objects.list, storage.objects.get, storage.objects.create, storage.objects.delete
+```
+
+opensre never deletes anything, but GCS still requires `storage.objects.delete`
+to **replace** an existing object — without it the first changed session or
+memory file fails with a 403. Objects are encrypted at rest by default; there
+is nothing to configure.
 
 ## The store
 

@@ -67,6 +67,8 @@ dependencies = [
     # Google APIs
     "google-api-python-client>=2.194.0,<3.0.0",
     "google-auth>=2.0.0,<3.0.0",
+    # Google Cloud Storage (remote-sync provider)
+    "google-cloud-storage>=2.18,<4",
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
     # Redis

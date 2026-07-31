@@ -16,8 +16,10 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_REGION_ENV,
 )
+from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
 from platform.filestorage.operations import SyncStatus
+from platform.filestorage.providers.registry import registered_providers
 
 
 def _human_size(n: int) -> str:
@@ -33,13 +35,18 @@ def _human_size(n: int) -> str:
 
 DISABLED_HELP = f"""Remote sync is off.
 
-To turn it on, point opensre at a store you own:
+To turn it on:
+
+    opensre remote-sync setup
+
+Or set env vars for a single run:
 
     export {REMOTE_SYNC_ENV}=1
     export {REMOTE_SYNC_BUCKET_ENV}=my-opensre-bucket
 
-Optional: {REMOTE_SYNC_PROVIDER_ENV} (default {DEFAULT_REMOTE_SYNC_PROVIDER}), \
-{REMOTE_SYNC_PREFIX_ENV}, {REMOTE_SYNC_REGION_ENV}, {REMOTE_SYNC_PROFILE_ENV}.
+Optional: {REMOTE_SYNC_PROVIDER_ENV} (default {DEFAULT_REMOTE_SYNC_PROVIDER}; \
+built-in: {", ".join(registered_providers())}), {REMOTE_SYNC_PREFIX_ENV}, \
+{REMOTE_SYNC_REGION_ENV}, {REMOTE_SYNC_PROFILE_ENV}.
 Cloud credentials are read from the usual places; opensre never stores them."""
 
 _KEPT_REMOTE_HINT = (
@@ -84,8 +91,37 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def format_setup_lines(
+    config: RemoteSyncConfig, credential_hint: str, *, enabled: bool = True
+) -> tuple[str, ...]:
+    """What ``setup`` wrote, and how the provider expects credentials to appear."""
+    state = "on" if enabled else "off"
+    lines: list[str] = [
+        f"Remote sync is {state}. Settings saved to ~/.opensre/config.yml:",
+        f"  provider   {config.provider}",
+        f"  bucket     {config.bucket}",
+        f"  prefix     {config.prefix}",
+    ]
+    if config.region:
+        lines.append(f"  region     {config.region}")
+    if config.profile:
+        lines.append(f"  profile    {config.profile}")
+    lines.append(credential_hint)
+    if enabled:
+        lines.append(
+            "Run `opensre remote-sync status` to check, `opensre remote-sync sync` to mirror now."
+        )
+    else:
+        lines.append(
+            f"Turn it on later with `opensre remote-sync setup`, or {REMOTE_SYNC_ENV}=1 "
+            "for a single run."
+        )
+    return tuple(lines)
+
+
 __all__ = [
     "DISABLED_HELP",
     "format_report_lines",
+    "format_setup_lines",
     "format_status_lines",
 ]

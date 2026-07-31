@@ -19,6 +19,11 @@ if TYPE_CHECKING:
 _SERVER_SIDE_ENCRYPTION = "AES256"
 PROVIDER_NAME = BuiltInProvider.AWS
 
+CREDENTIAL_HINT = (
+    "AWS credentials stay ambient: your default profile or SSO session works "
+    "(aws sso login); set OPENSRE_REMOTE_SYNC_PROFILE for a named profile."
+)
+
 
 class S3ObjectStore:
     """Reads and writes objects under one bucket and prefix."""
@@ -109,4 +114,4 @@ def _factory(config: RemoteSyncConfig) -> S3ObjectStore:
 
 register_object_store(PROVIDER_NAME, _factory)
 
-__all__ = ["PROVIDER_NAME", "S3ObjectStore"]
+__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "S3ObjectStore"]

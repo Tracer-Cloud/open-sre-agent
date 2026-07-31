@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 
 import click
 import pytest
@@ -14,6 +16,7 @@ from platform.filestorage.engine import SyncReport
 from platform.filestorage.enums import BuiltInProvider, RemoteSyncSubcommand, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
+from platform.filestorage.setup import RemoteSyncSetupRequest
 from surfaces.cli.commands.remote_sync import remote_sync_command
 
 
@@ -181,3 +184,91 @@ def test_sync_help_documents_direction_flags(runner: CliRunner) -> None:
     assert result.exit_code == 0
     assert "--pull-only" in result.output
     assert "--push-only" in result.output
+
+
+def _save_config(
+    saved: dict[str, RemoteSyncSetupRequest],
+) -> Callable[[RemoteSyncSetupRequest], RemoteSyncConfig]:
+    def _save(request: RemoteSyncSetupRequest) -> RemoteSyncConfig:
+        saved["request"] = request
+        return RemoteSyncConfig(
+            bucket=request.bucket, provider=request.provider, prefix=request.prefix
+        )
+
+    return _save
+
+
+def test_setup_with_flags_saves_and_confirms(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    result = runner.invoke(
+        remote_sync_command, ["setup", "--provider", "gcs", "--bucket", "my-bucket"]
+    )
+    assert result.exit_code == 0
+    request = saved["request"]
+    assert request.provider == "gcs"
+    assert request.bucket == "my-bucket"
+    assert "provider   gcs" in result.output
+    assert "bucket     my-bucket" in result.output
+    assert "gcloud auth application-default login" in result.output
+    assert "opensre remote-sync status" in result.output
+
+
+def test_setup_without_bucket_off_tty_fails(runner: CliRunner) -> None:
+    # CliRunner stdin is not a TTY, so no prompt is offered.
+    result = runner.invoke(remote_sync_command, ["setup", "--provider", "gcs"])
+    assert result.exit_code != 0
+    assert "needs a bucket" in result.output
+
+
+def test_setup_unknown_provider_fails_with_known_list(runner: CliRunner) -> None:
+    result = runner.invoke(remote_sync_command, ["setup", "--provider", "gogle", "--bucket", "b"])
+    assert result.exit_code != 0
+    assert "unknown remote-sync provider" in result.output
+    assert "gcs" in result.output
+
+
+def test_setup_prompts_for_missing_flags_on_a_tty(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.sys",
+        SimpleNamespace(stdin=SimpleNamespace(isatty=lambda: True)),
+    )
+    result = runner.invoke(remote_sync_command, ["setup"], input="gcs\nmy-bucket\n\n")
+    assert result.exit_code == 0
+    request = saved["request"]
+    assert request.provider == "gcs"
+    assert request.bucket == "my-bucket"
+    assert request.prefix == "opensre"
+
+
+def test_setup_help_lists_the_flags(runner: CliRunner) -> None:
+    result = runner.invoke(remote_sync_command, ["setup", "--help"])
+    assert result.exit_code == 0
+    assert "--provider" in result.output
+    assert "--bucket" in result.output
+
+
+def test_setup_disabled_reports_off_not_on(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    result = runner.invoke(
+        remote_sync_command, ["setup", "--provider", "gcs", "--bucket", "b", "--disabled"]
+    )
+    assert result.exit_code == 0
+    assert saved["request"].enabled is False
+    assert "Remote sync is off." in result.output
+    assert "Remote sync is on." not in result.output

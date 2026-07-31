@@ -35,6 +35,7 @@ _REGISTRY_LOCK = threading.RLock()
 # register ahead of time instead and never appear here.
 _BUILTIN_MODULES = {
     BuiltInProvider.AWS.value: "platform.filestorage.providers.aws",
+    BuiltInProvider.GCS.value: "platform.filestorage.providers.gcs",
 }
 
 
@@ -67,6 +68,23 @@ def registered_providers() -> tuple[str, ...]:
     return tuple(sorted(names))
 
 
+_DEFAULT_CREDENTIAL_HINT = "Credentials come from the provider's usual ambient configuration."
+
+
+def credential_hint_for_provider(name: str) -> str:
+    """How the user supplies ambient credentials for ``name``, for setup output.
+
+    Built-in providers ship a ``CREDENTIAL_HINT`` constant in their module;
+    community providers get a generic line. No store is built and no network
+    call is made — this only reads module constants.
+    """
+    module_name = _BUILTIN_MODULES.get(name.strip().lower())
+    if module_name is None:
+        return _DEFAULT_CREDENTIAL_HINT
+    hint = getattr(importlib.import_module(module_name), "CREDENTIAL_HINT", None)
+    return str(hint) if hint else _DEFAULT_CREDENTIAL_HINT
+
+
 def build_object_store(config: RemoteSyncConfig) -> ObjectStore:
     """Construct the store for ``config.provider``.
 
@@ -90,6 +108,7 @@ def build_object_store(config: RemoteSyncConfig) -> ObjectStore:
 __all__ = [
     "ObjectStoreFactory",
     "build_object_store",
+    "credential_hint_for_provider",
     "register_object_store",
     "registered_providers",
     "unregister_object_store",
