@@ -12,11 +12,8 @@ from config.constants.filestorage import BLOB_READ_WRITE_TOKEN_ENV, REMOTE_SYNC_
 from platform.filestorage.config import RemoteSyncConfig, load_remote_sync_config
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.messages import format_setup_lines
-from platform.filestorage.setup import (
-    RemoteSyncSetupRequest,
-    credential_hint_for_provider,
-    save_remote_sync_settings,
-)
+from platform.filestorage.providers import credential_hint_for_provider
+from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 
 
 def test_save_writes_remote_sync_section(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

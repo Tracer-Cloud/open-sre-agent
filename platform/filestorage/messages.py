@@ -19,7 +19,7 @@ from config.constants.filestorage import (
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
 from platform.filestorage.operations import SyncStatus
-from platform.filestorage.setup import credential_hint_for_provider
+from platform.filestorage.providers import credential_hint_for_provider
 
 
 def _human_size(n: int) -> str:

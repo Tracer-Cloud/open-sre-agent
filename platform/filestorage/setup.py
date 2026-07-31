@@ -10,13 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from config.constants.filestorage import (
-    BLOB_READ_WRITE_TOKEN_ENV,
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
 from config.local_settings import LocalSettingsError, update_section
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BuiltInProvider
 from platform.filestorage.errors import RemoteSyncConfigError
 
 
@@ -67,18 +65,7 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
     )
 
 
-def credential_hint_for_provider(provider: str) -> str:
-    """One line on ambient credentials for the chosen backend (no secrets)."""
-    key = provider.strip().lower()
-    if key == BuiltInProvider.VERCEL.value:
-        return f"Set {BLOB_READ_WRITE_TOKEN_ENV} in the environment (opensre does not store it)."
-    if key == BuiltInProvider.AWS.value:
-        return "AWS credentials come from the usual places (env, profile, or SSO)."
-    return "Use ambient credentials for this provider; opensre does not store them."
-
-
 __all__ = [
     "RemoteSyncSetupRequest",
-    "credential_hint_for_provider",
     "save_remote_sync_settings",
 ]

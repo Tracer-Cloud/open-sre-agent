@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 PROVIDER_NAME = BuiltInProvider.VERCEL
+CREDENTIAL_HINT = f"Set {BLOB_READ_WRITE_TOKEN_ENV} in the environment (opensre does not store it)."
 
 # Official control-plane URL used by @vercel/blob (list/put).
 _API_BASE = "https://vercel.com/api/blob"
@@ -245,6 +246,6 @@ def _factory(config: RemoteSyncConfig) -> VercelBlobObjectStore:
     return VercelBlobObjectStore(config)
 
 
-register_object_store(PROVIDER_NAME, _factory)
+register_object_store(PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT)
 
-__all__ = ["PROVIDER_NAME", "VercelBlobObjectStore"]
+__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "VercelBlobObjectStore"]

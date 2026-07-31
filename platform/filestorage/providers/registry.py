@@ -28,7 +28,10 @@ if TYPE_CHECKING:
 
 ObjectStoreFactory = Callable[["RemoteSyncConfig"], "ObjectStore"]
 
+_DEFAULT_CREDENTIAL_HINT = "Use ambient credentials for this provider; opensre does not store them."
+
 _REGISTRY: dict[str, ObjectStoreFactory] = {}
+_CREDENTIAL_HINTS: dict[str, str] = {}
 _REGISTRY_LOCK = threading.RLock()
 
 # Built-in backends, imported on first use so this package never imports itself.
@@ -47,19 +50,31 @@ def _load_builtin(key: str) -> None:
         importlib.import_module(module)
 
 
-def register_object_store(name: str, factory: ObjectStoreFactory) -> None:
-    """Bind ``name`` (the value of ``OPENSRE_REMOTE_SYNC_PROVIDER``) to a factory."""
+def register_object_store(
+    name: str, factory: ObjectStoreFactory, *, credential_hint: str | None = None
+) -> None:
+    """Bind ``name`` (the value of ``OPENSRE_REMOTE_SYNC_PROVIDER``) to a factory.
+
+    ``credential_hint`` is the one-line, secret-free sentence shown after
+    ``setup`` about where this provider's ambient credentials come from (see
+    :func:`credential_hint_for_provider`). Omit it to fall back to a generic
+    sentence.
+    """
     key = name.strip().lower()
     if not key:
         raise ValueError("object-store provider name must be non-empty")
     with _REGISTRY_LOCK:
         _REGISTRY[key] = factory
+        if credential_hint is not None:
+            _CREDENTIAL_HINTS[key] = credential_hint
 
 
 def unregister_object_store(name: str) -> None:
     """Drop a registration (tests / experimental backends)."""
     with _REGISTRY_LOCK:
-        _REGISTRY.pop(name.strip().lower(), None)
+        key = name.strip().lower()
+        _REGISTRY.pop(key, None)
+        _CREDENTIAL_HINTS.pop(key, None)
 
 
 def registered_providers() -> tuple[str, ...]:
@@ -89,9 +104,23 @@ def build_object_store(config: RemoteSyncConfig) -> ObjectStore:
     return factory(config)
 
 
+def credential_hint_for_provider(provider: str) -> str:
+    """One line on ambient credentials for ``provider`` (no secrets).
+
+    Loads a not-yet-imported built-in module first, so this works even before
+    any store has been built for ``provider``.
+    """
+    key = provider.strip().lower()
+    with _REGISTRY_LOCK:
+        _load_builtin(key)
+        hint = _CREDENTIAL_HINTS.get(key)
+    return hint if hint is not None else _DEFAULT_CREDENTIAL_HINT
+
+
 __all__ = [
     "ObjectStoreFactory",
     "build_object_store",
+    "credential_hint_for_provider",
     "register_object_store",
     "registered_providers",
     "unregister_object_store",
