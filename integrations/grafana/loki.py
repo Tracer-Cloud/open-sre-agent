@@ -58,10 +58,9 @@ class LokiMixin:
 
         end_ns = int(time.time() * 1e9)
         start_ns = end_ns - (time_range_minutes * 60 * int(1e9))
-        truncated: bool = False
+
         if limit > _MAX_LOKI_LOG_LINES:
-            limit = _MAX_LOKI_LOG_LINES
-            truncated = True
+            limit = _MAX_LOKI_LOG_LINES + 1
 
         params: dict[str, str] = {
             "query": query,
@@ -75,12 +74,17 @@ class LokiMixin:
             result = data.get("data", {}).get("result", [])
 
             logs: list[dict[str, Any]] = []
+            truncated: bool = False
 
             for stream in result:
                 stream_labels = stream.get("stream", {})
                 values = stream.get("values", [])
 
                 for timestamp_ns, log_line in values:
+                    if len(logs) >= _MAX_LOKI_LOG_LINES:
+                        truncated = True
+                        break
+
                     logs.append(
                         {
                             "timestamp": timestamp_ns,
@@ -88,6 +92,9 @@ class LokiMixin:
                             "labels": dict(stream_labels),
                         }
                     )
+
+                if truncated:
+                    break
 
             return {
                 "success": True,
@@ -110,5 +117,5 @@ class LokiMixin:
                 "error": error_msg,
                 "response": response_text,
                 "logs": [],
-                "truncated": truncated,
+                "truncated": False,
             }
