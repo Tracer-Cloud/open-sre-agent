@@ -1,7 +1,7 @@
 """Cloud backends for remote sync.
 
-AWS/S3 is the only built-in backend today — loaded lazily via the registry when
-``provider=aws``. Other clouds (GCS, Azure, …) are community modules that call
+Built-in backends (``aws``, ``vercel``) load lazily via the registry when
+selected. Other clouds (GCS, Azure, …) are community modules that call
 :func:`register_object_store`; the sync engine, CLI, and REPL do not change.
 """
 

@@ -3,8 +3,9 @@
 The engine talks only to :class:`~platform.filestorage.ports.ObjectStore`.
 Each cloud vendor ships a factory here; surfaces call
 :func:`build_object_store` and never import a vendor module directly.
-Adding GCS or Azure is a new module plus one ``register`` call — the
-engine, CLI, and REPL stay closed (open/closed principle).
+Adding GCS, Azure, or another backend is a new module plus one
+``register`` call — the engine, CLI, and REPL stay closed (open/closed
+principle).
 
 The registry dict is process-global (plugin table). Mutations and lookups are
 serialized with an ``RLock`` so concurrent ``build_object_store`` calls from
@@ -35,6 +36,7 @@ _REGISTRY_LOCK = threading.RLock()
 # register ahead of time instead and never appear here.
 _BUILTIN_MODULES = {
     BuiltInProvider.AWS.value: "platform.filestorage.providers.aws",
+    BuiltInProvider.VERCEL.value: "platform.filestorage.providers.vercel",
 }
 
 

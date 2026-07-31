@@ -16,6 +16,7 @@ from platform.filestorage.syncable import syncable_roots
 def test_builtin_provider_matches_env_default() -> None:
     assert DEFAULT_REMOTE_SYNC_PROVIDER == BuiltInProvider.AWS
     assert BuiltInProvider.AWS.value == "aws"
+    assert BuiltInProvider.VERCEL.value == "vercel"
 
 
 def test_syncable_roots_use_root_name_enum() -> None:

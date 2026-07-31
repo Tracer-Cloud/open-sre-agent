@@ -25,11 +25,15 @@ REMOTE_SYNC_PREFIX_ENV = "OPENSRE_REMOTE_SYNC_PREFIX"
 REMOTE_SYNC_REGION_ENV = "OPENSRE_REMOTE_SYNC_REGION"
 # Named credentials profile, for users who keep opensre credentials separate.
 REMOTE_SYNC_PROFILE_ENV = "OPENSRE_REMOTE_SYNC_PROFILE"
+# Vercel Blob read-write token (ambient; never stored by opensre).
+# Same name Vercel documents for @vercel/blob / vercel CLI.
+BLOB_READ_WRITE_TOKEN_ENV = "BLOB_READ_WRITE_TOKEN"
 
 DEFAULT_REMOTE_SYNC_PREFIX = "opensre"
 DEFAULT_REMOTE_SYNC_PROVIDER = "aws"
 
 __all__ = [
+    "BLOB_READ_WRITE_TOKEN_ENV",
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "REMOTE_SYNC_BUCKET_ENV",
