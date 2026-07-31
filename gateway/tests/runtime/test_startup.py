@@ -22,6 +22,17 @@ import logging
 from typing import Any
 
 
+class _StubHarness:
+    """Stands in for :class:`AgentHarness`; records that env resolution ran."""
+
+    def __init__(self, order: list[str] | None = None) -> None:
+        self._order = order
+
+    def resolve_env_variables(self) -> None:
+        if self._order is not None:
+            self._order.append("env")
+
+
 def test_startup_runs_the_steps_in_the_required_order(monkeypatch: Any) -> None:
     # Arrange
     from gateway.runtime import startup
@@ -32,11 +43,7 @@ def test_startup_runs_the_steps_in_the_required_order(monkeypatch: Any) -> None:
     monkeypatch.setattr(startup, "preload_llm_clients", lambda: order.append("preload"))
     monkeypatch.setattr(startup, "boot_capability_warnings", lambda: ["curl missing"])
 
-    class _Harness:
-        def resolve_env_variables(self) -> None:
-            order.append("env")
-
-    monkeypatch.setattr(startup, "_build_harness", lambda: _Harness())
+    monkeypatch.setattr(startup, "_build_harness", lambda: _StubHarness(order))
 
     # Act
     startup.run(logging.getLogger("test.startup"))
@@ -57,11 +64,7 @@ def test_startup_logs_every_capability_warning(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         startup, "boot_capability_warnings", lambda: ["curl is not on PATH", "network blocked"]
     )
-    monkeypatch.setattr(
-        startup,
-        "_build_harness",
-        lambda: type("H", (), {"resolve_env_variables": lambda _self: None})(),
-    )
+    monkeypatch.setattr(startup, "_build_harness", _StubHarness)
 
     logged: list[str] = []
 
@@ -84,7 +87,7 @@ def test_startup_returns_the_harness_for_the_caller(monkeypatch: Any) -> None:
     """The gateway keeps the harness it booted; boot does not hide it."""
     from gateway.runtime import startup
 
-    sentinel = type("H", (), {"resolve_env_variables": lambda _self: None})()
+    sentinel = _StubHarness()
     monkeypatch.setattr(startup, "install_runtime", lambda **_kw: None)
     monkeypatch.setattr(startup, "init_sentry", lambda **_kw: None)
     monkeypatch.setattr(startup, "preload_llm_clients", lambda: None)
