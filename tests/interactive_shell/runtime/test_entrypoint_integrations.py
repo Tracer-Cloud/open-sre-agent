@@ -336,3 +336,144 @@ def test_explicit_bypass_detects_ci_environment(monkeypatch: Any) -> None:
     monkeypatch.delenv("OPENSRE_SKIP_GITHUB_LOGIN", raising=False)
     monkeypatch.setenv("CI", "true")
     assert flg._github_login_explicitly_bypassed() is True
+
+
+def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any) -> None:
+    """An embedding caller can capture the shell's output.
+
+    The module built one forced-terminal Console at import and used it for the
+    splash, the ready box, and the login gate, so nothing could redirect them.
+    """
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from config.repl_config import ReplConfig
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: console.print("SPLASH"))
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda console: console.print("READY"))
+    # Stop before the event loop; the startup renders are what this pins.
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
+
+    # Act
+    exit_code = main_entrypoint.run_repl(
+        config=ReplConfig(enabled=True, layout="classic"),
+        console=captured,
+    )
+
+    # Assert
+    assert exit_code == 0
+    text = captured.file.getvalue()  # type: ignore[attr-defined]
+    assert "SPLASH" in text
+    assert "READY" in text
+
+
+def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
+    """Omitting the console keeps today's behaviour, not a silent no-op."""
+    # Arrange
+    seen: list[object] = []
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: seen.append(console))
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
+
+    from config.repl_config import ReplConfig
+
+    # Act
+    main_entrypoint.run_repl(config=ReplConfig(enabled=True, layout="classic"))
+
+    # Assert
+    assert seen == [main_entrypoint._DEFAULT_CONSOLE]
+
+
+def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_path: Path) -> None:
+    """The async half must use the caller's console too, not the module default.
+
+    ``run_repl`` renders the splash before the event loop; everything after —
+    resume output and the controller — runs inside ``run_repl_async``, so the
+    console has to survive the hand-off.
+    """
+    # Arrange
+    import asyncio
+    from io import StringIO
+
+    from rich.console import Console
+
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("platform.analytics.cli.identify_saved_github_username", lambda: None)
+
+    seen: list[object] = []
+
+    def _resume(_prefix: Any, _session: Any, console: Any, **_kwargs: Any) -> bool:
+        seen.append(console)
+        return False
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
+        _resume,
+    )
+
+    class _PromptSession:
+        history = None
+
+    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime_context",
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+    )
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    exit_code = asyncio.run(
+        main_entrypoint.run_repl_async(resume_session_id="missing", console=captured)
+    )
+
+    # Assert
+    assert exit_code == 1
+    assert seen == [captured]
+
+
+def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
+    """The console must survive the sync-to-async hand-off.
+
+    ``run_repl`` renders the splash itself and then delegates everything else;
+    dropping the argument there would silently return output to the module
+    default while the startup renders still looked correct.
+    """
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from config.repl_config import ReplConfig
+
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: True)
+
+    seen: list[object] = []
+
+    async def _fake_async(**kwargs: Any) -> int:
+        seen.append(kwargs.get("console"))
+        return 0
+
+    monkeypatch.setattr(main_entrypoint, "run_repl_async", _fake_async)
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    exit_code = main_entrypoint.run_repl(
+        config=ReplConfig(enabled=True, layout="classic"), console=captured
+    )
+
+    # Assert
+    assert exit_code == 0
+    assert seen == [captured]

@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 # Each name is patched where it is defined, because ``run()`` imports it at call
 # time; patching an attribute on ``startup`` would miss the real call.
@@ -104,7 +104,7 @@ def test_importing_the_entry_point_does_not_load_the_terminal_stack() -> None:
     """
     # Arrange
     probe = (
-        "import sys; import surfaces.cli.__main__; "
+        "import sys; import surfaces.cli.app; "
         "print(len([n for n in sys.modules "
         "if n.split('.')[0] in {'questionary', 'prompt_toolkit'}]))"
     )
@@ -125,7 +125,7 @@ def test_fast_version_answers_without_the_terminal_stack() -> None:
     """The fast path prints a version and still loads no terminal stack."""
     # Arrange
     probe = (
-        "import sys; from surfaces.cli.__main__ import main; main(['--version']); "
+        "import sys; from surfaces.cli.app import main; main(['--version']); "
         "print('TERMINAL_MODULES', len([n for n in sys.modules "
         "if n.split('.')[0] in {'questionary', 'prompt_toolkit'}]))"
     )

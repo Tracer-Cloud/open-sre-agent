@@ -92,7 +92,7 @@ Issues = "https://github.com/Tracer-Cloud/opensre/issues"
 Changelog = "https://github.com/Tracer-Cloud/opensre/releases"
 
 [project.scripts]
-opensre = "surfaces.cli.__main__:main"
+opensre = "surfaces.cli.app:main"
 
 [project.optional-dependencies]
 dev = [

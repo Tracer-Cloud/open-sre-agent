@@ -11,7 +11,7 @@ from click.testing import CliRunner
 import integrations.setup_flow as setup_flow
 from integrations.cli import _setup_github, cmd_setup
 from integrations.github.mcp import GitHubMCPValidationResult
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 
 def _prompt_answering(answer: object) -> object:

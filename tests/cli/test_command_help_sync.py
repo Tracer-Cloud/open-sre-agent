@@ -7,7 +7,7 @@ that derived help command list (and vice versa).
 
 from __future__ import annotations
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 from surfaces.cli.commands import _COMMANDS
 from surfaces.interactive_shell.ui.layout import _commands_from_group
 

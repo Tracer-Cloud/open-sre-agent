@@ -1,8 +1,8 @@
 """Lazy platform shims for CLI analytics, Sentry, error reporting, and landing UI.
 
 Each function defers its heavy ``platform``/UI import until called, keeping CLI
-startup cheap. ``surfaces.cli.__main__`` imports these names, so tests patch the
-seam there (e.g. ``surfaces.cli.__main__.capture_cli_invoked``) and the
+startup cheap. ``surfaces.cli.app`` imports these names, so tests patch the
+seam there (e.g. ``surfaces.cli.app.capture_cli_invoked``) and the
 entrypoint's own callers pick up the patched global.
 """
 

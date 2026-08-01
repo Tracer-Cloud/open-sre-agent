@@ -13,7 +13,7 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 from surfaces.cli.gateway_entry import gateway_slash_ports_factory
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.help import _help_sections
