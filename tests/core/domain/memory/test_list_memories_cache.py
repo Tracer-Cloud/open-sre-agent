@@ -109,3 +109,47 @@ def test_repeat_listings_do_not_re_parse_the_store(monkeypatch: pytest.MonkeyPat
 
     # Assert
     assert parses == 0, f"re-parsed memory files {parses} times with nothing changed"
+
+
+def test_one_principals_memories_never_reach_another(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two principals with look-alike stores must not share cached records.
+
+    Each Slack user in an org keeps memories under their own directory. The
+    cache is keyed by the parsed *contents* of a directory, so if the key were
+    the file signature alone, two users whose stores happen to match on name,
+    size and mtime would be served each other's memories — a cross-user leak
+    that no amount of correct file permissions would catch.
+    """
+    # Arrange: two stores, same filename, same byte length, same mtime.
+    alice = tmp_path / "users" / "U_ALICE" / "memory"
+    bob = tmp_path / "users" / "U_BOB" / "memory"
+    store._parsed_memories.cache_clear()
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(alice))
+    _save("shared-slug", "alice prod cluster is eks-alice")
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(bob))
+    _save("shared-slug", "bobxx prod cluster is eks-bobxx")
+
+    alice_file = alice / "shared-slug.md"
+    bob_file = bob / "shared-slug.md"
+    assert alice_file.stat().st_size == bob_file.stat().st_size, (
+        "sizes must match to be a real test"
+    )
+    shared_mtime = alice_file.stat().st_mtime_ns
+    import os
+
+    os.utime(bob_file, ns=(shared_mtime, shared_mtime))
+    assert bob_file.stat().st_mtime_ns == alice_file.stat().st_mtime_ns
+
+    # Act: read one store, then the other.
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(alice))
+    alice_bodies = [record.body for record in store.list_memories()]
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(bob))
+    bob_bodies = [record.body for record in store.list_memories()]
+
+    # Assert
+    assert alice_bodies == ["alice prod cluster is eks-alice"]
+    assert bob_bodies == ["bobxx prod cluster is eks-bobxx"]

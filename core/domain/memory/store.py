@@ -47,6 +47,12 @@ from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
 
+#: Distinct memory stores kept parsed at once. Each Slack user in an org has
+#: their own memory directory, so a single entry would make concurrent users
+#: evict each other on every turn. Bounded so the cache cannot grow with the
+#: number of users a gateway has ever served.
+_PARSED_STORE_CACHE_SIZE = 16
+
 _LOCK_FILENAME = ".memory.lock"
 _LOCK_TIMEOUT_SECONDS = 10.0
 
@@ -160,16 +166,17 @@ def _memory_dir_signature(directory: Path) -> tuple[tuple[str, int, int], ...]:
     return tuple(entries)
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=_PARSED_STORE_CACHE_SIZE)
 def _parsed_memories(
     directory_key: str,
     _signature: tuple[tuple[str, int, int], ...],
 ) -> tuple[MemoryRecord, ...]:
     """Parse every memory file under ``directory_key``.
 
-    Keyed by the directory and its file signature, so the result is reused
-    until a memory is added, edited or removed. ``maxsize=1`` keeps only the
-    current state — an older signature can never be served.
+    Keyed by the directory *and* its file signature. The directory is part of
+    the key because memory stores are per-principal — one Slack user must
+    never be served another's memories, however alike the two stores look.
+    The signature is part of the key so an edited memory is re-read.
     """
     directory = Path(directory_key)
     records: list[MemoryRecord] = []
