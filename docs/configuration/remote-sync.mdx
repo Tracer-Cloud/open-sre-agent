@@ -128,9 +128,9 @@ encrypt sessions and memory before upload. Keep
 same value on every machine. The passphrase is never written to
 `~/.opensre/config.yml`.
 
-Missing or incorrect passphrases, changed object paths, tampered ciphertext,
-and plaintext objects all stop the sync with an error. There is no recovery
-without the original passphrase.
+Missing or incorrect passphrases stop the sync with an error. Tampered ciphertext,
+changed object paths, and plaintext objects stop pulls/full syncs (use a full sync
+once to validate an existing prefix). There is no recovery without the original passphrase.
 
 Do not enable encryption on a prefix that already contains plaintext. First
 complete a normal pull, then choose a new prefix:
