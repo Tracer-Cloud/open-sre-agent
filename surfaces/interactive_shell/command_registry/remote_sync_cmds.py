@@ -99,7 +99,13 @@ def _run_setup(console: Console, args: list[str]) -> bool:
     prefix = _flag_value(args, "prefix") or DEFAULT_REMOTE_SYNC_PREFIX
     region = _flag_value(args, "region") or ""
     profile = _flag_value(args, "profile") or ""
-    flags = {a.lower() for a in args}
+    raw_flags = {a.lower() for a in args if a.startswith("--")}
+    flags = {f.split("=", 1)[0] for f in raw_flags}
+    allowed = {"--provider", "--bucket", "--prefix", "--region", "--profile", "--enabled", "--disabled", "--encrypt"}
+    unknown = flags - allowed
+    if unknown:
+        console.print(f"[{ERROR}]unknown flag(s):[/] {', '.join(sorted(unknown))}")
+        return True
     enabled = "--disabled" not in flags
     encryption = "--encrypt" in flags
     config = save_remote_sync_settings(
