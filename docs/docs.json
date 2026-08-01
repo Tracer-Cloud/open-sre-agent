@@ -201,6 +201,7 @@
               "airflow",
               "azure-sql",
               "clickhouse",
+              "cloudwatch",
               "dagster",
               "elasticsearch",
               "kafka",
