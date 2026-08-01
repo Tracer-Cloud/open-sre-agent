@@ -17,6 +17,8 @@ from core.domain.memory import (
     save_memory,
     search_memories,
 )
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from tools.system.agent_memory.results import (
     deleted_result,
@@ -57,8 +59,8 @@ def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
         "An investigation uncovers a lesson worth keeping (known-flaky service)",
     ],
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
-    side_effect_level="mutating",
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_memory_available,
     input_schema={
@@ -112,8 +114,8 @@ def memory_remember(name: str, type: str, description: str, content: str) -> dic
         "user asks to forget something or a stored fact is no longer true."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action",),
-    side_effect_level="mutating",
+    surfaces=(ToolSurface.ACTION,),
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_memory_available,
     input_schema={
@@ -142,8 +144,8 @@ def memory_forget(name: str) -> dict[str, Any]:
         "search names, descriptions, and bodies, or no arguments to list the index."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_memory_available,
     input_schema={
         "type": "object",

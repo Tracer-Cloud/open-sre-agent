@@ -8,15 +8,14 @@ contract in ``ToolMetadata``.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import cast, get_args
+from typing import cast
 
 from pydantic import Field, field_validator
 
 from config.strict_config import StrictConfigModel
 from core.domain.types.tools import ToolSurface
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
-_VALID_SURFACES = set(get_args(ToolSurface))
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
 
 
 def normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...]:
@@ -27,10 +26,13 @@ def normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...
     normalized: list[ToolSurface] = []
     for raw_surface in surfaces:
         surface = str(raw_surface).strip().lower()
-        if surface not in _VALID_SURFACES:
-            valid = ", ".join(sorted(_VALID_SURFACES))
-            raise ValueError(f"Unsupported tool surface '{surface}'. Expected one of: {valid}.")
-        typed_surface = cast(ToolSurface, surface)
+        try:
+            typed_surface = ToolSurface(surface)
+        except ValueError:
+            valid = ", ".join(sorted(ToolSurface))
+            raise ValueError(
+                f"Unsupported tool surface '{surface}'. Expected one of: {valid}."
+            ) from None
         if typed_surface not in normalized:
             normalized.append(typed_surface)
 

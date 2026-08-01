@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.eks.eks_k8s_client import build_k8s_clients
@@ -777,8 +778,8 @@ class ListEKSPodsOutput(BaseModel):
     ],
     requires=["cluster_name"],
     source_id="eks_core_v1",
-    evidence_type="topology",
-    side_effect_level="read_only",
+    evidence_type=EvidenceType.TOPOLOGY,
+    side_effect_level=SideEffectLevel.READ_ONLY,
     examples=[
         "List pods in `payments` namespace to identify CrashLoopBackOff pods.",
         "Use namespace `all` to detect widespread node scheduling issues.",

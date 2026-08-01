@@ -26,7 +26,7 @@ from core.tool_framework.schema import (
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:

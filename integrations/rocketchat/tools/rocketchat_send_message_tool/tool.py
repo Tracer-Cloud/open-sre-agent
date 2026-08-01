@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.rocketchat.tools.rocketchat_send_message_tool.constants import SOURCE
 from integrations.rocketchat.tools.rocketchat_send_message_tool.delivery import (
@@ -38,7 +40,7 @@ class RocketChatSendMessageTool(BaseTool):
         "Following up after an investigation with a short status update",
     ]
     requires = ["rocketchat"]
-    side_effect_level = "external"
+    side_effect_level = SideEffectLevel.EXTERNAL
     requires_approval = True
     approval_reason = "Sends a message via Rocket.Chat on your behalf."
     input_schema = {
@@ -126,5 +128,5 @@ class RocketChatSendMessageTool(BaseTool):
 
 rocketchat_send_message = tool(
     RocketChatSendMessageTool(),
-    surfaces=("investigation", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
 )

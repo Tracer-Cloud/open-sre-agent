@@ -10,6 +10,7 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
     string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 
 
@@ -53,7 +54,7 @@ assistant_handoff_tool = RegisteredTool(
         required=("content",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_assistant_handoff,

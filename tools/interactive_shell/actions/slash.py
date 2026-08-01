@@ -17,6 +17,7 @@ from core.agent_harness.tools.tool_context import (
     capability_available_from_sources,
     execute_with_action_context,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.shared import plan_foreground_tool
 from tools.interactive_shell.shared.slash_catalog import (
@@ -177,7 +178,7 @@ slash_invoke_tool = RegisteredTool(
     description=slash_invoke_tool_description(),
     input_schema=slash_invoke_input_schema(),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_slash,

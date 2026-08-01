@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.github.client import resolve_github_token
 from integrations.github.helpers import (
@@ -41,8 +43,8 @@ def _report_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Summarizing GitHub work status for Slack without changing GitHub",
     ],
     anti_examples=["Creating or updating tasks", "Posting to Slack directly"],
-    surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {

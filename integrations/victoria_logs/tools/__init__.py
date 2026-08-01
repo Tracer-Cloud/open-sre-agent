@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.victoria_logs.client import make_victoria_logs_client
@@ -41,7 +42,7 @@ class VictoriaLogsTool(BaseTool):
     # tools without an explicit ``surfaces`` is investigation-only, which would
     # hide this from chat-mode investigations where log queries are a common
     # follow-up. Mirrors SplunkSearchTool, the closest log-query analog.
-    surfaces = ("investigation", "chat")
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
     requires = ["base_url"]
     injected_params = ["base_url"]
     input_schema = {

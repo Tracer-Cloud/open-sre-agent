@@ -19,6 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from config.constants.paths import REPO_ROOT
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registry_metadata import normalize_surfaces
 from tools.registry_discovery import INTEGRATION_TOOL_PACKAGES
 
@@ -206,9 +207,29 @@ def _string_constant(node: ast.expr | None) -> str | None:
     return None
 
 
-def _string_tuple(node: ast.expr | None) -> tuple[str, ...] | None:
+def _surface_constant(node: ast.expr | None) -> str | None:
+    """Resolve a surface element to its wire string.
+
+    Accepts a plain string literal (``"action"``) or a ``ToolSurface`` member
+    reference (``ToolSurface.ACTION``) — the latter is how tool definitions
+    declare surfaces once ``ToolSurface`` became a ``StrEnum``.
+    """
+    literal = _string_constant(node)
+    if literal is not None:
+        return literal
+    if (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == ToolSurface.__name__
+        and node.attr in ToolSurface.__members__
+    ):
+        return ToolSurface[node.attr].value
+    return None
+
+
+def _surface_tuple(node: ast.expr | None) -> tuple[str, ...] | None:
     if isinstance(node, ast.Tuple | ast.List):
-        values = [_string_constant(el) for el in node.elts]
+        values = [_surface_constant(el) for el in node.elts]
         if all(v is not None for v in values):
             return tuple(v for v in values if v is not None)
     return None
@@ -283,7 +304,7 @@ def _descriptors_in_file(path: Path) -> list[ToolDescriptor]:
                     descriptors.append(
                         ToolDescriptor(
                             name=name,
-                            surfaces=normalize_surfaces(_string_tuple(_keyword(dec, "surfaces"))),
+                            surfaces=normalize_surfaces(_surface_tuple(_keyword(dec, "surfaces"))),
                             source=_string_constant(_keyword(dec, "source")),
                             display_name=_string_constant(_keyword(dec, "display_name")),
                             module=module,
@@ -296,7 +317,7 @@ def _descriptors_in_file(path: Path) -> list[ToolDescriptor]:
             descriptors.append(
                 ToolDescriptor(
                     name=class_name,
-                    surfaces=normalize_surfaces(_string_tuple(_class_attr(node, "surfaces"))),
+                    surfaces=normalize_surfaces(_surface_tuple(_class_attr(node, "surfaces"))),
                     source=_string_constant(_class_attr(node, "source")),
                     display_name=_string_constant(_class_attr(node, "display_name")),
                     module=module,

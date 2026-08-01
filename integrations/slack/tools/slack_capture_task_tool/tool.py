@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import config.constants as const_module
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
 
@@ -54,7 +56,7 @@ class SlackCaptureTaskTool(BaseTool):
         "Creating a GitHub issue (use GitHub tools)",
     ]
     requires = ["slack"]
-    side_effect_level = "external"
+    side_effect_level = SideEffectLevel.EXTERNAL
     requires_approval = False
     input_schema = {
         "type": "object",
@@ -112,5 +114,5 @@ class SlackCaptureTaskTool(BaseTool):
 
 slack_capture_task = tool(
     SlackCaptureTaskTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
 )
