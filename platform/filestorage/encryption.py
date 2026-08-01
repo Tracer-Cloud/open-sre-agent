@@ -52,7 +52,7 @@ class EncryptedContentCodec:
         """Encrypt and authenticate ``data`` for exactly ``key``."""
         key_bytes = key.encode("utf-8")
         payload = len(key_bytes).to_bytes(_KEY_LENGTH_BYTES, "big") + key_bytes + data
-        ciphertext = self._cipher.encrypt(payload, None)
+        ciphertext = self._cipher.encrypt(payload, [])
         return _ENVELOPE_HEADER + ciphertext
 
     def decode(self, key: str, data: bytes) -> bytes:
