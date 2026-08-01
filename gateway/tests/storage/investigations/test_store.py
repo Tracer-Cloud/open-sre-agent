@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gateway.http.investigation_store import InMemoryInvestigationStore, InvestigationStatus
+from gateway.storage.investigations.store import InMemoryInvestigationStore, InvestigationStatus
 
 
 def test_create_persists_workspace_id() -> None:

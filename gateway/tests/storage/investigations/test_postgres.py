@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from gateway.http.investigation_store import InvestigationStatus
-from gateway.http.postgres_store import PostgresInvestigationStore
+from gateway.storage.investigations.postgres import PostgresInvestigationStore
+from gateway.storage.investigations.store import InvestigationStatus
 
 
 def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:

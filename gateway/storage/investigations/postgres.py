@@ -1,4 +1,12 @@
-"""Postgres-backed investigation store (requires the ``postgresql`` extra)."""
+"""Investigation store on Postgres, for deployments running several workers.
+
+``InMemoryInvestigationStore`` is process-local, so two gateway tasks would each
+claim and run the same queued investigation. Here the queue is a table and
+``claim_next_queued`` takes the row with ``FOR UPDATE SKIP LOCKED``, so exactly
+one worker gets it.
+
+Selected when ``DATABASE_URL`` is set; requires the ``postgresql`` extra.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +17,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from gateway.http.investigation_store import InvestigationRecord, InvestigationStatus
+from gateway.storage.investigations.store import InvestigationRecord, InvestigationStatus
 
 _POOL_MIN_CONNECTIONS = 1
 # Bounds concurrent server connections: the worker plus a burst of API threads.
