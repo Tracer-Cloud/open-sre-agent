@@ -8,11 +8,13 @@ entrypoint's own callers pick up the patched global.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import click
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from platform.analytics.provider import Properties
     from platform.common.errors import OpenSREError
 
@@ -67,20 +69,26 @@ def build_cli_invoked_properties(
     )
 
 
-def report_exception(exc: BaseException, *, context: str) -> None:
+def report_exception(
+    exc: BaseException,
+    *,
+    context: str,
+    extra: Mapping[str, Any] | None = None,
+    expected: bool = False,
+) -> bool:
     from surfaces.interactive_shell.utils.error_handling.exception_reporting import (
         report_exception as _report_exception,
     )
 
-    _report_exception(exc, context=context)
+    return _report_exception(exc, context=context, extra=extra, expected=expected)
 
 
-def should_report_exception(exc: click.ClickException) -> bool:
+def should_report_exception(exc: click.ClickException, *, expected: bool = False) -> bool:
     from surfaces.interactive_shell.utils.error_handling.exception_reporting import (
         should_report_exception as _should_report_exception,
     )
 
-    return _should_report_exception(exc)
+    return _should_report_exception(exc, expected=expected)
 
 
 def init_sentry(*, entrypoint: str | None = None) -> None:
@@ -89,10 +97,16 @@ def init_sentry(*, entrypoint: str | None = None) -> None:
     _init_sentry(entrypoint=entrypoint)
 
 
-def capture_exception(exc: BaseException, *, context: str) -> None:
+def capture_exception(
+    exc: BaseException,
+    *,
+    context: str | None = None,
+    extra: Mapping[str, Any] | None = None,
+    tags: Mapping[str, str] | None = None,
+) -> str | None:
     from platform.observability.errors.sentry import capture_exception as _capture_exception
 
-    _capture_exception(exc, context=context)
+    return _capture_exception(exc, context=context, extra=extra, tags=tags)
 
 
 def render_landing(group: click.Group) -> None:

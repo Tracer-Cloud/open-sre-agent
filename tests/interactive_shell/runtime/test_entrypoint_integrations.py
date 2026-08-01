@@ -573,3 +573,89 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
 
     # Assert
     assert "REPLAY-SPLASH" in captured.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_turn_output_and_prompt_echo_reach_the_supplied_console() -> None:
+    """The conversation itself must land in the caller's stream.
+
+    Startup renders honoured the injected console while the controller and turn
+    host built their own force-terminal consoles, so an embedding caller
+    captured the splash and missed every agent response, tool line and prompt
+    echo — the part it actually wanted.
+    """
+    # Arrange
+    import threading
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.turn_host import (
+        AgentTurnRuntime,
+        _streaming_console,
+    )
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+    runtime = AgentTurnRuntime(
+        session=Session(),
+        state=SimpleNamespace(),
+        spinner=SimpleNamespace(streaming=False, bytes_in=0),
+        invalidate_prompt=lambda: None,
+        console=captured,
+    )
+
+    # Act
+    turn_console = _streaming_console(runtime, threading.Event())
+    turn_console.print("AGENT-RESPONSE")
+
+    # Assert
+    assert captured.file.getvalue() == turn_console.file.getvalue()  # type: ignore[attr-defined]
+    assert "AGENT-RESPONSE" in turn_console.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_turn_output_falls_back_to_the_shell_terminal() -> None:
+    """With no console supplied the turn keeps today's forced-terminal output."""
+    # Arrange
+    import threading
+
+    from surfaces.interactive_shell.runtime.turn_host import (
+        AgentTurnRuntime,
+        _streaming_console,
+    )
+
+    runtime = AgentTurnRuntime(
+        session=Session(),
+        state=SimpleNamespace(),
+        spinner=SimpleNamespace(streaming=False, bytes_in=0),
+        invalidate_prompt=lambda: None,
+    )
+
+    # Act
+    turn_console = _streaming_console(runtime, threading.Event())
+
+    # Assert
+    assert turn_console.is_terminal is True
+
+
+def test_controller_routes_its_console_to_echo_and_turns() -> None:
+    """The controller must hand its console to both output paths.
+
+    It builds several consoles; only ``service_console`` honoured injection, so
+    prompt echoes and agent turns still went to the shell's own terminal while
+    the caller captured nothing of the conversation.
+    """
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.controller import InteractiveShellController
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    controller = InteractiveShellController(Session(), console=captured)
+
+    # Assert
+    assert controller.service_console is captured
+    assert controller.echo_console is captured
+    assert controller.turn_runtime.console is captured

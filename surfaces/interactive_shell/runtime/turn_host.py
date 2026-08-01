@@ -64,19 +64,44 @@ class AgentTurnRuntime:
     spinner: SpinnerState
     invalidate_prompt: Callable[[], None]
     request_exit: Callable[[], None] | None = None
+    #: Where this turn's streamed output goes. ``None`` keeps the shell's own
+    #: terminal; an embedding caller passes its console so agent responses and
+    #: tool output land in the same stream as the startup renders.
+    console: Console | None = None
+
+
+def _streaming_console(
+    runtime: AgentTurnRuntime, cancel_event: threading.Event
+) -> StreamingConsole:
+    """Spinner-aware console for one turn, writing where the caller asked.
+
+    The turn needs a :class:`StreamingConsole` for progress and cancellation, so
+    an injected console cannot be used directly — its output target is adopted
+    instead, which is what an embedding caller is actually asking for.
+    """
+    base = runtime.console
+    if base is None:
+        return StreamingConsole(
+            runtime.spinner,
+            cancel_event,
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
+    return StreamingConsole(
+        runtime.spinner,
+        cancel_event,
+        highlight=False,
+        file=base.file,
+        force_terminal=base.is_terminal,
+    )
 
 
 async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     """Set up shell presentation for one turn and drive its lifecycle."""
     dispatch_cancel = threading.Event()
-    console = StreamingConsole(
-        runtime.spinner,
-        dispatch_cancel,
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
+    console = _streaming_console(runtime, dispatch_cancel)
     emit = ConsoleAgentEventSink(
         session=runtime.session,
         spinner=runtime.spinner,
