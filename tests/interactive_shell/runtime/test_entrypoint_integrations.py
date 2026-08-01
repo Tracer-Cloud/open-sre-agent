@@ -259,7 +259,7 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime_context",
-        lambda **_kwargs: SimpleNamespace(session=_Session(), inbox=None),
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
 
     class _PromptSession:
@@ -527,3 +527,49 @@ def test_console_injection_works_through_the_package_facade(monkeypatch: Any) ->
     # Assert
     assert exit_code == 0
     assert "SPLASH" in captured.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> None:
+    """Scripted replay must honour the caller's console too.
+
+    ``run_repl_async`` returns through ``run_initial_input`` before the shell
+    ever starts, and that function built its own forced-terminal Console — so
+    an embedding caller got every replayed line on stdout instead of its own
+    stream, while the interactive path looked correctly wired.
+    """
+    # Arrange
+    import asyncio
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.startup import initial_input as replay
+
+    monkeypatch.setattr("platform.analytics.cli.identify_saved_github_username", lambda: None)
+    monkeypatch.setattr(replay, "render_splash", lambda console: console.print("REPLAY-SPLASH"))
+    monkeypatch.setattr(replay, "render_ready_box", lambda _console: None)
+
+    class _PromptSession:
+        history = None
+
+    # Rendering happens before the first turn; stub the turn so this pins the
+    # console wiring rather than the whole execution stack.
+    monkeypatch.setattr(replay, "render_submitted_prompt", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.shell_turn_execution.execute_shell_turn",
+        lambda *_a, **_kw: None,
+    )
+
+    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime_context",
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+    )
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    asyncio.run(main_entrypoint.run_repl_async(initial_input="/exit", console=captured))
+
+    # Assert
+    assert "REPLAY-SPLASH" in captured.file.getvalue()  # type: ignore[attr-defined]
