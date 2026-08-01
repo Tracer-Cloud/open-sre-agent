@@ -24,6 +24,9 @@ ALLOWED_FLAT_MODULES = frozenset(
         # Cross-vendor alert-source routing/alias catalog data (spans every
         # vendor's alert-source key), not one vendor's own integration.
         "alert_source_catalog.py",
+        # Package entry for ``python -m integrations``: the command surface
+        # itself, launched by the 15-line __main__.py beside it. Not a vendor.
+        "app.py",
         "catalog.py",
         "cli.py",
         "config_models.py",
@@ -31,12 +34,17 @@ ALLOWED_FLAT_MODULES = frozenset(
         "effective_models.py",
         "harness_adapters.py",
         "mcp_streamable_http_compat.py",
+        "mcp_transport.py",
         "messaging_security.py",
         "models.py",
         "port.py",
         "probes.py",
         "registry.py",
         "scheduled_agent_bootstrap.py",
+        # Cross-cutting credential-resolution infra (hydrates every vendor's org
+        # creds from the tenant's Secrets Manager blob), not a vendor — the
+        # Secrets Manager peer of webapp_vault.py.
+        "secrets_vault.py",
         "selectors.py",
         "setup_flow.py",
         "store.py",

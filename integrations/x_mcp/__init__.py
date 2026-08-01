@@ -35,7 +35,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import httpx
 from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
@@ -48,11 +48,12 @@ from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_X_MCP_URL = "http://127.0.0.1:8000/mcp"
-DEFAULT_X_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
+DEFAULT_X_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 
 
 class XMCPToolDescriptor(TypedDict):
@@ -87,7 +88,7 @@ class XMCPConfig(StrictConfigModel):
     """Normalized X MCP connection settings."""
 
     url: str = DEFAULT_X_MCP_URL
-    mode: Literal["stdio", "sse", "streamable-http"] = DEFAULT_X_MCP_MODE
+    mode: McpTransportMode = DEFAULT_X_MCP_MODE
     auth_token: str = ""
     bearer_token: str = ""
     command: str = ""

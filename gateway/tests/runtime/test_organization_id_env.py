@@ -1,16 +1,16 @@
-"""The tenant id and the billing org id are separate env vars.
+"""Hydration gates on the bootstrap secret, not on an organization name.
 
-The control plane's ECS task definition supplies ``ORGANIZATION_ID``; the product
-reads ``OPENSRE_ORGANIZATION_ID`` to attribute usage and to enforce that a
-mounted context volume belongs to the organization being served. Reading the
-billing name during hydration crashed startup in a deployed silo and left the
-remote-run worker unstarted, so these tests pin that the gateway reads the
-injected name and that neither var stands in for the other.
+The control plane's ECS task definition supplies ``ORGANIZATION_ID``; the EC2
+Slack service sets ``OPENSRE_ORGANIZATION_ID``. The two names are converging,
+so hydration resolves either through
+:func:`config.constants.organization.organization_id` — but only once
+``OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN`` says the control plane provisioned
+this task. Every deployment serves an organization, so gating on the name
+would make an EC2 deployment look like a half-configured silo and fail
+startup. These tests pin that boundary.
 """
 
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -52,32 +52,40 @@ def test_hydration_reads_the_injected_tenant_id(monkeypatch: pytest.MonkeyPatch)
     assert config.organization_id == "org-from-control-plane"
 
 
-def test_billing_org_id_does_not_satisfy_hydration(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Setting only the billing name is incomplete configuration, not a tenant id."""
-    # Arrange: a value distinctive enough to spot if it ever leaks into hydration.
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-billing-must-not-leak")
-
-    # Act / Assert
-    with pytest.raises(ValueError, match="incomplete"):
-        CredentialHydrationConfig.from_environment()
-
-
-def test_tenant_id_does_not_satisfy_the_mount_ownership_check(
+def test_either_organization_name_satisfies_a_provisioned_silo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The fail-closed volume check must not see the control plane's value.
+    """A silo with a bootstrap secret hydrates under either organization name.
 
-    ``config.constants.paths`` refuses a turn when the declared silo owner is
-    absent; accepting the tenant id there would weaken that check.
+    The two names are converging, so a task definition mid-rollout may carry
+    only one of them.
     """
-    # Arrange
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-from-control-plane")
+    # Arrange: the fixture already set the bootstrap ARN.
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-from-either-name")
 
     # Act
-    declared_owner = os.getenv(ORGANIZATION_ID_ENV, "")
+    config = CredentialHydrationConfig.from_environment()
 
     # Assert
-    assert declared_owner == ""
+    assert config is not None
+    assert config.organization_id == "org-from-either-name"
+
+
+def test_an_organization_without_a_bootstrap_secret_is_not_a_silo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Serving an organization does not by itself mean the control plane ran.
+
+    Every deployment names an organization. Only a provisioned silo has a
+    bootstrap secret, so keying off the name would make the EC2 service look
+    half-configured and raise at gateway startup.
+    """
+    # Arrange
+    monkeypatch.delenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, raising=False)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-ec2")
+
+    # Act / Assert: disabled, not "incomplete".
+    assert CredentialHydrationConfig.from_environment() is None
 
 
 def test_whitespace_is_not_a_tenant_identity(monkeypatch: pytest.MonkeyPatch) -> None:

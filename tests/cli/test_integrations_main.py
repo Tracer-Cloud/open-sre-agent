@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from integrations import __main__ as integrations_main
+from integrations import app as integrations_main
 
 
 @pytest.fixture(autouse=True)

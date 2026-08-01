@@ -16,6 +16,7 @@ from platform.common.task_types import TaskKind, TaskRecord
 from platform.observability.trace.spans import mark_span_outcome, traced_session
 from platform.terminal.theme import DIM, ERROR, WARNING
 from surfaces.interactive_shell.ui.investigation_outcome import (
+    ForegroundInvestigationStatus,
     InvestigationOutcome,
     classify_investigation_failure,
     failure_detail_from_exception,
@@ -119,7 +120,7 @@ def _run_foreground_investigation_body(
         task.mark_cancelled()
         console.print(f"[{WARNING}]investigation cancelled.[/]")
         return InvestigationOutcome(
-            status="cancelled",
+            status=ForegroundInvestigationStatus.CANCELLED,
             target=normalized_target,
             investigation_id=str(getattr(session, "last_investigation_id", "") or ""),
             failure_category="user_cancelled",
@@ -135,7 +136,7 @@ def _run_foreground_investigation_body(
             console.print(f"[{WARNING}]suggestion:[/] {escape(exc.suggestion)}")
         category, integration, integration_detail = classify_investigation_failure(exc)
         return InvestigationOutcome(
-            status="failed",
+            status=ForegroundInvestigationStatus.FAILED,
             target=normalized_target,
             investigation_id=str(getattr(session, "last_investigation_id", "") or ""),
             error_message=user_facing_error_message(exc),
@@ -153,7 +154,7 @@ def _run_foreground_investigation_body(
         _render_credit_exhausted_recovery_hint(console, message)
         category, integration, integration_detail = classify_investigation_failure(exc)
         return InvestigationOutcome(
-            status="failed",
+            status=ForegroundInvestigationStatus.FAILED,
             target=normalized_target,
             investigation_id=str(getattr(session, "last_investigation_id", "") or ""),
             error_message=user_facing_error_message(exc),
@@ -185,7 +186,7 @@ def _run_foreground_investigation_body(
         restore_stdin_terminal()
         prompt_investigation_feedback(final_state)
     return InvestigationOutcome(
-        status="completed",
+        status=ForegroundInvestigationStatus.COMPLETED,
         target=normalized_target,
         investigation_id=str(getattr(session, "last_investigation_id", "") or ""),
         final_state=final_state,

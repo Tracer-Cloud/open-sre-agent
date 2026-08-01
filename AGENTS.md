@@ -189,6 +189,13 @@ Main packages one level deeper:
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `tools/system/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `integrations/telegram/*`.
 - `gateway/http/webapp.py` — Web-facing health app served by the gateway daemon; the `opensre` CLI is `surfaces/cli/app.py`.
+- **Package entry points**: a package that runs as `python -m <pkg>` keeps a
+  15-line `__main__.py` that imports `main` from a sibling `app.py` and calls
+  it. The definition lives in `app.py`, never in the dunder module — a name
+  meaning "execute me" is a poor home for code other modules import. Applies to
+  `surfaces/cli/`, `surfaces/cli/wizard/`, and `integrations/`. A package entered
+  as a module instead (`python -m gateway.main`) uses `main.py` and keeps its
+  definition beside it (`gateway/runtime/manager.py`).
 
 ## 2. Entry Points
 

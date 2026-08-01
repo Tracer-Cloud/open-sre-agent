@@ -22,7 +22,7 @@ from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 from urllib.parse import urlparse
 
 import httpx
@@ -35,10 +35,11 @@ from typing_extensions import TypedDict
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OPENCLAW_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
+DEFAULT_OPENCLAW_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 _OPENCLAW_CONTROL_UI_HOSTS = frozenset({"127.0.0.1", "localhost", "0.0.0.0"})
 _OPENCLAW_CONTROL_UI_PORT = 18789
 _OPENCLAW_STDIO_COMMAND = "openclaw"
@@ -82,7 +83,7 @@ class OpenClawConfig(StrictConfigModel):
     """Normalized OpenClaw bridge connection settings."""
 
     url: str = ""
-    mode: Literal["stdio", "sse", "streamable-http"] = DEFAULT_OPENCLAW_MCP_MODE
+    mode: McpTransportMode = DEFAULT_OPENCLAW_MCP_MODE
     auth_token: str = ""
     command: str = ""
     args: tuple[str, ...] = ()
