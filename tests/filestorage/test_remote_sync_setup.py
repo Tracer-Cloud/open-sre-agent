@@ -221,3 +221,12 @@ def test_format_setup_lines_confirms_values_hint_and_next_steps() -> None:
     assert lines[0] == "Remote sync settings saved → gcs / b/opensre"
     assert "Stored in ~/.opensre/config.yml" in lines[1]
     assert lines[3].startswith("Next: opensre remote-sync status")
+
+
+def test_format_setup_lines_disabled_says_off_without_a_sync_suggestion() -> None:
+    lines = format_setup_lines(
+        RemoteSyncConfig(bucket="b", provider="gcs", prefix="opensre"), enabled=False
+    )
+    assert lines[0].startswith("Remote sync settings saved")
+    assert "Remote sync is off" in lines[-1]
+    assert "remote-sync sync" not in lines[-1]

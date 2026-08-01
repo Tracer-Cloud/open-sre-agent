@@ -22,7 +22,7 @@ from platform.filestorage.engine import SyncReport
 from platform.filestorage.exclusions import ExclusionRules
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from platform.filestorage.providers import credential_hint_for_provider
-from platform.filestorage.providers.registry import registered_providers
+from platform.filestorage.providers.registry import builtin_providers
 
 
 def _human_size(n: int) -> str:
@@ -49,7 +49,7 @@ Or set env vars:
     export {REMOTE_SYNC_BUCKET_ENV}=my-opensre-bucket
 
 Optional: {REMOTE_SYNC_PROVIDER_ENV} (default {DEFAULT_REMOTE_SYNC_PROVIDER}; \
-built-in: {", ".join(registered_providers())}), {REMOTE_SYNC_PREFIX_ENV}, {REMOTE_SYNC_REGION_ENV}, \
+built-in: {", ".join(builtin_providers())}), {REMOTE_SYNC_PREFIX_ENV}, {REMOTE_SYNC_REGION_ENV}, \
 {REMOTE_SYNC_PROFILE_ENV}. Cloud credentials stay ambient; opensre never stores them."""
 
 _KEPT_REMOTE_HINT = (
@@ -123,14 +123,18 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def format_setup_lines(config: RemoteSyncConfig) -> tuple[str, ...]:
+def format_setup_lines(config: RemoteSyncConfig, *, enabled: bool = True) -> tuple[str, ...]:
     """Confirm settings were written and how to supply ambient credentials."""
-    return (
+    lines = [
         f"Remote sync settings saved → {config.provider} / {config.bucket}/{config.prefix}",
         "Stored in ~/.opensre/config.yml (env vars still win for a single run).",
         credential_hint_for_provider(config.provider),
-        "Next: opensre remote-sync status   then   opensre remote-sync sync",
-    )
+    ]
+    if enabled:
+        lines.append("Next: opensre remote-sync status   then   opensre remote-sync sync")
+    else:
+        lines.append("Remote sync is off; the settings stay for when you turn it back on.")
+    return tuple(lines)
 
 
 SETUP_DISABLED_CONFIRM = (

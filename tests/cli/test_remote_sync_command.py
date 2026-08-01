@@ -388,9 +388,9 @@ def test_setup_disabled_with_bucket_saves_enabled_false(
     )
     assert result.exit_code == 0
     assert saved["request"].enabled is False
-    # The confirmation stays state-neutral; it must not claim sync is now on.
-    assert "Remote sync is on." not in result.output
-    assert "Remote sync is off." not in result.output
+    # Saying it is off must not come with a "now sync" suggestion.
+    assert "Remote sync is off" in result.output
+    assert "remote-sync sync" not in result.output
 
 
 def test_setup_help_lists_the_flags(runner: CliRunner) -> None:

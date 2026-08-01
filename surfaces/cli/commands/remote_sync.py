@@ -19,7 +19,7 @@ from platform.filestorage.messages import (
     format_status_lines,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
-from platform.filestorage.providers.registry import provider_extra_fields
+from platform.filestorage.providers.registry import builtin_providers, provider_extra_fields
 from platform.filestorage.setup import (
     RemoteSyncSetupRequest,
     disable_remote_sync,
@@ -70,7 +70,7 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
 @click.option(
     "--provider",
     default=None,
-    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: aws, gcs, vercel).",
+    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: {', '.join(builtin_providers())}).",
 )
 @click.option(
     "--bucket",
@@ -126,7 +126,7 @@ def setup_command(
             raise SystemExit(ERROR) from exc
         click.echo(str(exc), err=True)
         raise SystemExit(ERROR) from exc
-    for line in format_setup_lines(config):
+    for line in format_setup_lines(config, enabled=request.enabled):
         click.echo(line)
     raise SystemExit(SUCCESS)
 
@@ -187,7 +187,7 @@ def _collect_setup_request(
         "Bucket / store name", default=bucket or "", show_default=bool(bucket)
     )
     provider_value = click.prompt(
-        "Provider (aws, gcs, vercel, …)",
+        f"Provider ({', '.join(builtin_providers())}, …)",
         default=provider or DEFAULT_REMOTE_SYNC_PROVIDER,
         show_default=True,
     )
