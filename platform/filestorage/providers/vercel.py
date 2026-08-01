@@ -71,7 +71,8 @@ class VercelBlobObjectStore:
         out: list[RemoteObject] = []
         try:
             for blob in self._iter_blobs(full_prefix):
-                pathname = str(blob.get("pathname", ""))
+                # _blobs_from_list_payload already guaranteed a non-empty str.
+                pathname = blob["pathname"]
                 out.append(
                     RemoteObject(
                         key=self._strip_prefix(pathname),
@@ -175,17 +176,20 @@ def _private_blob_url(store_id: str, pathname: str) -> str:
 
 
 def _parse_uploaded_at(value: object) -> datetime:
+    """Parse the blob's upload timestamp, or raise if it cannot be trusted.
+
+    A missing or unparseable timestamp must never fall back to "now" — that
+    would make incomplete metadata outrank a genuinely newer local file during
+    sync, silently discarding the local copy.
+    """
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=UTC)
     if isinstance(value, str) and value:
         # API returns ISO-8601 with Z suffix.
         normalized = value.replace("Z", "+00:00")
-        try:
-            parsed = datetime.fromisoformat(normalized)
-        except ValueError:
-            return datetime.now(tz=UTC)
+        parsed = datetime.fromisoformat(normalized)
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
-    return datetime.now(tz=UTC)
+    raise ValueError(f"blob 'uploadedAt' is not a usable timestamp: {value!r}")
 
 
 def _json_object(response: httpx.Response, *, what: str) -> dict[str, Any]:
@@ -205,9 +209,12 @@ def _blobs_from_list_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Return the ``blobs`` list, or raise if the field shape is unusable.
 
     An empty list is valid (nothing under the prefix). Missing, null, non-list,
-    or non-object entries must not look like an authoritative empty listing —
-    that would make the sync engine skip remote-only restores and re-upload
-    over remote data.
+    non-object, or key-less entries must not look like an authoritative empty
+    or partial listing — a blob without a real ``pathname`` would otherwise
+    become an authoritative object under an empty key, and the sync engine
+    would miss the real remote object entirely. ``uploadedAt`` is validated
+    separately by :func:`_parse_uploaded_at`, since a missing value there must
+    raise rather than default to "now" — same reasoning, different field.
     """
     if "blobs" not in payload:
         raise ValueError("list response is missing the 'blobs' field")
@@ -220,6 +227,9 @@ def _blobs_from_list_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
             raise ValueError(
                 f"list response blobs[{index}] must be an object, got {type(item).__name__}"
             )
+        pathname = item.get("pathname")
+        if not isinstance(pathname, str) or not pathname:
+            raise ValueError(f"list response blobs[{index}] is missing a 'pathname'")
         out.append(item)
     return out
 
