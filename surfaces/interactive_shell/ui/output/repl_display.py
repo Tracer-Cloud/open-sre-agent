@@ -48,14 +48,20 @@ class _ReplEventLogDisplay:
     per-stage phase labels via the ``console_state`` registration.
     """
 
-    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
+    def __init__(
+        self,
+        model: str = "",
+        mode: str = "local",
+        t0: float | None = None,
+        console: Console | None = None,
+    ) -> None:
         self._model = model
         self._mode = mode
         self._t0 = t0 if t0 is not None else time.monotonic()
         self._active_steps: dict[str, dict[str, Any]] = {}
         self._current_phase = "LOAD"
         self._lock = threading.Lock()
-        self._console = Console(highlight=False)
+        self._console = console if console is not None else Console(highlight=False)
         self._last_emitted_hint: str | None = None
 
     def stop(self) -> None:

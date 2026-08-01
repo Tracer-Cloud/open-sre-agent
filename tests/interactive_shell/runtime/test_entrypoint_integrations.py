@@ -740,3 +740,29 @@ def test_investigation_rendering_uses_the_supplied_console() -> None:
     # Assert
     assert built[0]._console is captured
     assert "INVESTIGATION-PROGRESS" in captured.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_investigation_progress_display_uses_the_supplied_console(
+    monkeypatch: Any,
+) -> None:
+    """Progress and tool-detail lines must follow the console too.
+
+    The renderer honouring an injected console is not enough: it builds a
+    ``ProgressTracker`` whose event-log display owned a separate ``Console``, so
+    stage progress and every tool-detail line still went to the shell terminal.
+    """
+    # Arrange
+    from surfaces.interactive_shell.ui.output import tracker as tracker_module
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    monkeypatch.setattr(tracker_module, "_repl_progress_active", lambda: True)
+    monkeypatch.setattr(tracker_module, "_is_silent_output", lambda: False)
+    monkeypatch.setattr(tracker_module, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(tracker_module, "register_tool_detail_toggle", lambda _fn: None)
+
+    # Act
+    tracker = tracker_module.ProgressTracker(console=captured)
+
+    # Assert
+    assert tracker._display is not None
+    assert tracker._display._console is captured  # type: ignore[attr-defined]

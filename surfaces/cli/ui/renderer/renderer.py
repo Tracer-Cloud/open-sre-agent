@@ -59,7 +59,7 @@ class StreamRenderer:
         display: bool = True,
         console: Console | None = None,
     ) -> None:
-        self._tracker = ProgressTracker()
+        self._tracker = ProgressTracker(console=console)
         self._active_node: str | None = None
         self._events_received: int = 0
         self._node_names_seen: list[str] = []
