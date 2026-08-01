@@ -66,7 +66,7 @@ _EXPORT_MODULES = {
     "AgentToolContext": "core.types",
     "AgentToolExecutor": "core.types",
     "RuntimeTool": "core.types",
-    "ToolExecutionMode": "core.types",
+    "ToolParallelism": "core.types",
 }
 
 

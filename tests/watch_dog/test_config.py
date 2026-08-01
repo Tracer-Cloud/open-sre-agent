@@ -5,7 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from platform.scheduler.types import Provider
 from tools.system.watch_dog.config import (
+    WATCHDOG_SUPPORTED_PROVIDERS,
     WatchdogConfig,
     WatchdogThreshold,
     parse_byte_size,
@@ -34,6 +36,16 @@ def test_watchdog_threshold_members_are_stable() -> None:
         "max_rss",
     ]
     assert WatchdogThreshold("max_cpu") is WatchdogThreshold.MAX_CPU
+
+
+def test_watchdog_supported_providers_is_telegram_and_rocketchat_only() -> None:
+    """Slack/Discord alarm delivery isn't implemented; the subset must stay narrow."""
+    assert WATCHDOG_SUPPORTED_PROVIDERS == (Provider.TELEGRAM, Provider.ROCKETCHAT)
+
+
+def test_watchdog_config_rejects_unsupported_provider_even_bypassing_click() -> None:
+    with pytest.raises(ValidationError, match="does not support"):
+        WatchdogConfig(pid=123, max_cpu=90, provider=Provider.SLACK)
 
 
 def test_watchdog_config_requires_pid_or_name_xor() -> None:

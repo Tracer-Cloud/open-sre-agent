@@ -72,14 +72,36 @@ def test_worker_starts_with_the_injected_tenant_id(monkeypatch: pytest.MonkeyPat
     assert manager.components["api_runs"] == "polling"
 
 
-def test_billing_org_id_does_not_start_the_worker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The billing var must not stand in for the tenant id.
+def test_either_deployments_organization_name_starts_the_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The worker serves "the org this deployment is for", under either name.
 
-    This is the regression: the manager read ``OPENSRE_ORGANIZATION_ID``, which a
-    silo does not set, so the worker never started and nothing said so.
+    A Fargate silo sets ORGANIZATION_ID and the EC2 service sets
+    OPENSRE_ORGANIZATION_ID. Reading only one meant the worker silently never
+    started on the other, and nothing said so. The bootstrap DSN, not the env
+    name, is what actually gates this path.
     """
-    # Arrange: only the billing name is set, with a value that must not leak.
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-billing-must-not-leak")
+    # Arrange
+    monkeypatch.delenv(TENANT_ORGANIZATION_ID_ENV, raising=False)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-from-ec2")
+    built: list[_RecordingWorker] = []
+    manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
+
+    # Act
+    _start(manager)
+
+    # Assert
+    assert [w.organization_id for w in built] == ["org-from-ec2"]
+    assert manager.components["api_runs"] == "polling"
+
+
+def test_no_organization_configured_leaves_the_worker_unstarted() -> None:
+    """With neither name set there is no org to poll runs for.
+
+    This path fails silently by design, so the guard has to be explicit.
+    """
+    # Arrange: the autouse fixture already cleared both names.
     built: list[_RecordingWorker] = []
     manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
 
