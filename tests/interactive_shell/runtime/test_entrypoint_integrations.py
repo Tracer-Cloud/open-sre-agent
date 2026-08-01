@@ -710,15 +710,15 @@ def test_investigation_rendering_uses_the_supplied_console() -> None:
     the final report — the longest output the shell produces.
     """
     # Arrange
-    from surfaces.cli.ui.renderer import StreamRenderer
+    import surfaces.cli.ui.renderer as renderer_module
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         repl_foreground_renderer,
     )
 
     captured = Console(file=io.StringIO(), force_terminal=False, width=80)
-    built: list[StreamRenderer] = []
+    built: list[renderer_module.StreamRenderer] = []
 
-    class _RecordingRenderer(StreamRenderer):
+    class _RecordingRenderer(renderer_module.StreamRenderer):
         def __init__(self, **kwargs: Any) -> None:
             super().__init__(**kwargs)
             built.append(self)
@@ -728,8 +728,6 @@ def test_investigation_rendering_uses_the_supplied_console() -> None:
             return {}
 
     # Act
-    import surfaces.cli.ui.renderer as renderer_module
-
     original = renderer_module.StreamRenderer
     renderer_module.StreamRenderer = _RecordingRenderer  # type: ignore[misc]
     try:
