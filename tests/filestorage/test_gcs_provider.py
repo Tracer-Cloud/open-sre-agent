@@ -1,4 +1,4 @@
-"""GCS object-store provider: field mapping, etag conversion, error wrapping."""
+"""GCS object-store provider: JSON-API mapping, etag conversion, error wrapping."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ import base64
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
+from urllib.parse import unquote
 
 import pytest
-from google.api_core.exceptions import Forbidden, GoogleAPIError
+import requests
 from google.auth.exceptions import DefaultCredentialsError
 
 from platform.filestorage.config import RemoteSyncConfig
@@ -21,7 +22,8 @@ from platform.filestorage.providers.gcs import GCSObjectStore, _content_etag
 from platform.filestorage.providers.registry import build_object_store, registered_providers
 from platform.filestorage.syncable import SyncRoot
 
-_NOW = datetime(2026, 1, 1, tzinfo=UTC)
+_UPDATED = "2026-01-01T00:00:00.000Z"
+_UPDATED_DT = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def _b64_md5(data: bytes) -> str:
@@ -29,69 +31,77 @@ def _b64_md5(data: bytes) -> str:
     return base64.b64encode(hashlib.md5(data, usedforsecurity=False).digest()).decode()
 
 
-class _FakeBlob:
-    """Stands in for ``google.cloud.storage.Blob`` on the listing/get/put seams."""
-
+class _FakeResponse:
     def __init__(
-        self,
-        store: dict[str, bytes],
-        name: str,
-        *,
-        size: int | None = None,
-        updated: datetime | None = _NOW,
-        md5_hash: str | None = None,
-        etag: str = "",
+        self, *, status_code: int = 200, payload: dict[str, Any] | None = None, content: bytes = b""
     ) -> None:
-        self._store = store
-        self.name = name
-        self.size = size
-        self.updated = updated
-        self.md5_hash = md5_hash
-        self.etag = etag
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+        self.content = content
 
-    def download_as_bytes(self) -> bytes:
-        return self._store[self.name]
+    def json(self) -> dict[str, Any]:
+        return self._payload
 
-    def upload_from_string(self, data: bytes) -> None:
-        self._store[self.name] = data
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} Client Error", response=self)
 
 
-class _FakeBucket:
-    def __init__(self, store: dict[str, bytes]) -> None:
-        self._store = store
+class _FakeSession:
+    """Serves the GCS JSON API from a dict, with control over item metadata."""
 
-    def blob(self, name: str) -> _FakeBlob:
-        return _FakeBlob(self._store, name)
-
-
-class _FakeClient:
-    """Serves listings with full control over per-blob metadata."""
-
-    def __init__(self, *, blobs: list[_FakeBlob] | None = None) -> None:
+    def __init__(self, *, items: list[dict[str, Any]] | None = None) -> None:
         self.objects: dict[str, bytes] = {}
-        self._blobs = blobs
-        self.list_prefixes: list[str] = []
+        self._items = items
+        self.list_params: list[dict[str, Any]] = []
+        self.download_urls: list[str] = []
 
-    def list_blobs(self, _bucket: str, *, prefix: str = "") -> list[_FakeBlob]:
-        self.list_prefixes.append(prefix)
-        if self._blobs is not None:
-            return [b for b in self._blobs if b.name.startswith(prefix)]
-        return [
-            _FakeBlob(self.objects, key, size=len(data), md5_hash=_b64_md5(data))
-            for key, data in sorted(self.objects.items())
-            if key.startswith(prefix)
-        ]
+    def get(
+        self, url: str, *, params: dict[str, Any] | None = None, timeout: float | None = None
+    ) -> _FakeResponse:
+        _ = timeout
+        params = params or {}
+        if params.get("alt") == "media":
+            self.download_urls.append(url)
+            name = unquote(url.rsplit("/o/", 1)[1])
+            return _FakeResponse(content=self.objects[name])
+        self.list_params.append(params)
+        if self._items is not None:
+            items = self._items
+        else:
+            prefix = params.get("prefix", "")
+            items = [
+                {
+                    "name": key,
+                    "size": str(len(data)),
+                    "updated": _UPDATED,
+                    "md5Hash": _b64_md5(data),
+                }
+                for key, data in sorted(self.objects.items())
+                if key.startswith(prefix)
+            ]
+        return _FakeResponse(payload={"items": items})
 
-    def bucket(self, _name: str) -> _FakeBucket:
-        return _FakeBucket(self.objects)
+    def post(
+        self,
+        _url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        data: bytes | None = None,
+        timeout: float | None = None,
+    ) -> _FakeResponse:
+        _ = timeout
+        assert params is not None and data is not None
+        self.objects[str(params["name"])] = data
+        return _FakeResponse(payload={"name": params["name"]})
 
 
 class _Failing:
-    def list_blobs(self, *_args: object, **_kwargs: object) -> list[_FakeBlob]:
-        raise Forbidden("denied")
+    def get(self, *_args: object, **_kwargs: object) -> _FakeResponse:
+        return _FakeResponse(status_code=403)
 
-    def bucket(self, *_args: object) -> _FakeBucket:
-        raise GoogleAPIError("boom")
+    def post(self, *_args: object, **_kwargs: object) -> _FakeResponse:
+        raise requests.ConnectionError("connection dropped")
 
 
 @pytest.fixture
@@ -109,49 +119,55 @@ def roots(tmp_path: Path) -> tuple[SyncRoot, ...]:
 
 
 def test_describe_shows_the_gs_destination() -> None:
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=_FakeClient())
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession())
     assert store.describe() == "gs://b/opensre"
 
 
-def test_list_maps_blob_fields_strips_prefix_and_converts_md5() -> None:
+def test_list_maps_item_fields_strips_prefix_and_converts_md5() -> None:
     data = b'{"turn": 1}\n'
-    client = _FakeClient()
-    client.objects["opensre/sessions/a.jsonl"] = data
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=client)
+    session = _FakeSession()
+    session.objects["opensre/sessions/a.jsonl"] = data
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=session)
 
     (obj,) = store.list_objects("")
 
     assert obj.key == "sessions/a.jsonl"
     assert obj.size == len(data)
-    assert obj.last_modified == _NOW
+    assert obj.last_modified == _UPDATED_DT
     assert obj.etag == content_tag(data)
     # Bare listing scopes under the configured prefix with a trailing slash, so
     # "opensre" cannot also match "opensre-backup/".
-    assert client.list_prefixes == ["opensre/"]
+    assert session.list_params[0]["prefix"] == "opensre/"
 
 
-def test_list_passes_a_relative_prefix_through_key_for() -> None:
-    client = _FakeClient()
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=client)
+def test_list_passes_a_relative_prefix_through() -> None:
+    session = _FakeSession()
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=session)
     store.list_objects("sessions")
-    assert client.list_prefixes == ["opensre/sessions"]
+    assert session.list_params[0]["prefix"] == "opensre/sessions"
 
 
-def test_etag_comes_from_md5_hash_never_from_the_version_etag() -> None:
+def test_etag_comes_from_md5_hash_never_from_the_resource_etag() -> None:
     data = b"payload\n"
-    version_tag = "CJi0kcLQ0okDEAE="
-    blob = _FakeBlob({}, "opensre/sessions/a.jsonl", md5_hash=_b64_md5(data), etag=version_tag)
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=_FakeClient(blobs=[blob]))
+    generation_tag = "COD/+u3o/JUDEAE="
+    item = {
+        "name": "opensre/sessions/a.jsonl",
+        "size": str(len(data)),
+        "updated": _UPDATED,
+        "md5Hash": _b64_md5(data),
+        "etag": generation_tag,
+    }
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
 
     (obj,) = store.list_objects("")
 
     assert obj.etag == content_tag(data)
-    assert obj.etag != version_tag
+    assert obj.etag != generation_tag
 
 
 def test_composite_object_without_md5_hash_gets_no_tag() -> None:
-    blob = _FakeBlob({}, "opensre/sessions/big.jsonl", md5_hash=None)
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=_FakeClient(blobs=[blob]))
+    item = {"name": "opensre/sessions/big.jsonl", "size": "100", "updated": _UPDATED}
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
     (obj,) = store.list_objects("")
     assert obj.etag == ""
 
@@ -164,72 +180,86 @@ def test_malformed_md5_hash_gets_no_tag() -> None:
     assert _content_etag(base64.b64encode(b"short").decode()) == ""
 
 
-def test_get_and_put_route_through_the_configured_prefix() -> None:
-    client = _FakeClient()
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=client)
-
-    store.put_object("sessions/a.jsonl", b"data")
-    assert client.objects["opensre/sessions/a.jsonl"] == b"data"
-    assert store.get_object("sessions/a.jsonl") == b"data"
-
-
-def test_gcs_failures_name_their_cause() -> None:
-    store = GCSObjectStore(RemoteSyncConfig(bucket="missing"), client=_Failing())
-    with pytest.raises(RemoteSyncUnavailableError, match="Forbidden"):
-        store.list_objects("")
-    with pytest.raises(RemoteSyncUnavailableError, match="GoogleAPIError"):
-        store.get_object("k")
-    with pytest.raises(RemoteSyncUnavailableError, match="GoogleAPIError"):
-        store.put_object("k", b"d")
-
-
-def test_transfer_layer_errors_are_wrapped_not_leaked() -> None:
-    """DataCorruption/InvalidResponse/connection errors bypass GoogleAPIError."""
-
-    class _Flaky:
-        def list_blobs(self, *_args: object, **_kwargs: object) -> list[_FakeBlob]:
-            raise ConnectionError("connection dropped")
-
-        def bucket(self, *_args: object) -> _FakeBucket:
-            raise RuntimeError("checksum mismatch")
-
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=_Flaky())
-    with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
-        store.list_objects("")
-    with pytest.raises(RemoteSyncUnavailableError, match="cannot read"):
-        store.get_object("k")
-    with pytest.raises(RemoteSyncUnavailableError, match="cannot write"):
-        store.put_object("k", b"d")
-
-
-def test_missing_blob_metadata_falls_back_safely() -> None:
-    blob = _FakeBlob({}, "opensre/sessions/a.jsonl", size=None, updated=None)
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=_FakeClient(blobs=[blob]))
+def test_missing_item_metadata_falls_back_safely() -> None:
+    item = {"name": "opensre/sessions/a.jsonl"}
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
     (obj,) = store.list_objects("")
     assert obj.size == 0
     assert obj.last_modified == datetime.fromtimestamp(0, tz=UTC)
 
 
+def test_get_and_put_route_through_the_configured_prefix() -> None:
+    session = _FakeSession()
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=session)
+
+    store.put_object("sessions/a.jsonl", b"data")
+    assert session.objects["opensre/sessions/a.jsonl"] == b"data"
+    assert store.get_object("sessions/a.jsonl") == b"data"
+
+
+def test_object_names_are_url_quoted_in_the_download_path() -> None:
+    session = _FakeSession()
+    session.objects["opensre/sessions/a b.jsonl"] = b"x"
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=session)
+
+    assert store.get_object("sessions/a b.jsonl") == b"x"
+    assert "%20" in session.download_urls[0]
+
+
+def test_list_paginates_via_next_page_token() -> None:
+    class _Paged(_FakeSession):
+        def get(
+            self, _url: str, *, params: dict[str, Any] | None = None, timeout: float | None = None
+        ) -> _FakeResponse:
+            _ = timeout
+            params = params or {}
+            self.list_params.append(params)
+            if params.get("pageToken") == "t2":
+                return _FakeResponse(
+                    payload={"items": [{"name": "opensre/sessions/b.jsonl", "size": "3"}]}
+                )
+            return _FakeResponse(
+                payload={
+                    "items": [{"name": "opensre/sessions/a.jsonl", "size": "3"}],
+                    "nextPageToken": "t2",
+                }
+            )
+
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_Paged())
+    keys = [obj.key for obj in store.list_objects("")]
+    assert keys == ["sessions/a.jsonl", "sessions/b.jsonl"]
+
+
+def test_gcs_failures_name_their_cause() -> None:
+    store = GCSObjectStore(RemoteSyncConfig(bucket="missing"), session=_Failing())
+    with pytest.raises(RemoteSyncUnavailableError, match="HTTPError"):
+        store.list_objects("")
+    with pytest.raises(RemoteSyncUnavailableError, match="HTTPError"):
+        store.get_object("k")
+    with pytest.raises(RemoteSyncUnavailableError, match="ConnectionError"):
+        store.put_object("k", b"d")
+
+
 def test_missing_credentials_fail_as_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _raise() -> object:
+    def _raise(*_args: object, **_kwargs: object) -> object:
         raise DefaultCredentialsError("no credentials")
 
-    monkeypatch.setattr(gcs, "storage", SimpleNamespace(Client=_raise))
-    with pytest.raises(RemoteSyncUnavailableError, match="cannot build a GCS client"):
+    monkeypatch.setattr(gcs.google.auth, "default", _raise)
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot build GCS credentials"):
         GCSObjectStore(RemoteSyncConfig(bucket="b"))
 
 
 def test_gcs_is_a_registered_built_in_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "gcs" in registered_providers()
-    fake = _FakeClient()
-    monkeypatch.setattr(gcs, "storage", SimpleNamespace(Client=lambda: fake))
+    fake = _FakeSession()
+    monkeypatch.setattr(gcs, "_build_session", lambda: fake)
     built = build_object_store(RemoteSyncConfig(bucket="b", provider="gcs"))
     assert isinstance(built, GCSObjectStore)
 
 
 def test_second_push_reuploads_nothing(roots: tuple[SyncRoot, ...]) -> None:
     """The md5 conversion must hold through the real engine, not just the mapping."""
-    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), client=_FakeClient())
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession())
 
     first = push(store, roots=roots)
     assert "sessions/a.jsonl" in first.uploaded
