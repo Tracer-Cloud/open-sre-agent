@@ -154,6 +154,31 @@ pytest tests/synthetic/ -k "test_scenario"                      # no live infra 
 
 Follow the PR template (see below). Link the relevant issue and describe what changed and why.
 
+### 6. Keep the Branch Up to Date with `main` (Rebase)
+
+PRs must be current with `main` before merge (branch protection). **Update by rebasing onto `main` — do not merge `main` into your feature branch.**
+
+Merging `main` into the PR branch creates noisy merge commits and trains the GitHub “Update branch” button toward that path. Rebase keeps history linear and surfaces conflicts on your commits, where they belong.
+
+**Preferred (local):**
+
+```bash
+git fetch origin main
+git rebase origin/main
+# resolve any conflicts, then:
+git push --force-with-lease
+```
+
+**On GitHub:** if the PR shows “This branch is out-of-date with the base
+branch”, prefer **Update with rebase** when the UI offers it. Avoid **Update
+branch** when that option merges `main` into the feature branch.
+
+After rebasing, re-run local checks if the conflict resolution touched code:
+
+```bash
+make lint && make format-check && make typecheck && make test-cov
+```
+
 ## Pull Request Guidelines
 
 ### How to Write a Good PR Description

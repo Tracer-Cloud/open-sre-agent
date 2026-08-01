@@ -45,6 +45,11 @@ from core.domain.memory.safety import find_memory_safety_issues
 from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
+
+#: (directory signature, parsed records) from the last full read of the store.
+#: Process-local: a concurrent writer only costs a redundant re-parse, never
+#: a stale answer, because the signature is recomputed on every call.
+_LISTING_CACHE: tuple[tuple[tuple[str, int, int], ...], list[MemoryRecord]] | None = None
 _LOCK_FILENAME = ".memory.lock"
 _LOCK_TIMEOUT_SECONDS = 10.0
 
@@ -139,13 +144,43 @@ def load_memory(slug: str) -> MemoryRecord | None:
     return parse_memory_file(text)
 
 
+def _memory_dir_signature(directory: Path) -> tuple[tuple[str, int, int], ...]:
+    """Name, mtime and size of every memory file — cheap enough to check per turn.
+
+    Directory mtime alone is not enough: editing a memory in place leaves it
+    unchanged, so the cache would serve a stale body. Per-file size and mtime
+    move on any edit.
+    """
+    entries: list[tuple[str, int, int]] = []
+    for path in sorted(directory.glob("*.md")):
+        if path.name == _INDEX_FILENAME:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        entries.append((path.name, stat.st_mtime_ns, stat.st_size))
+    return tuple(entries)
+
+
 def list_memories() -> list[MemoryRecord]:
-    """All parseable memories, most recently updated first."""
+    """All parseable memories, most recently updated first.
+
+    Every action-agent turn renders the memory index, so this would otherwise
+    read and parse the whole store on each turn — a cost that grows with the
+    number of memories a user has accumulated. Parsed records are reused until
+    the files change.
+    """
+    global _LISTING_CACHE
     directory = memory_dir()
     if not directory.is_dir():
         return []
+    signature = _memory_dir_signature(directory)
+    cached = _LISTING_CACHE
+    if cached is not None and cached[0] == signature:
+        return list(cached[1])
     records: list[MemoryRecord] = []
-    for path in directory.glob("*.md"):
+    for path in sorted(directory.glob("*.md")):
         if path.name == _INDEX_FILENAME:
             continue
         try:
@@ -156,7 +191,8 @@ def list_memories() -> list[MemoryRecord]:
         if record is not None:
             records.append(record)
     records.sort(key=lambda r: r.updated_at, reverse=True)
-    return records
+    _LISTING_CACHE = (signature, records)
+    return list(records)
 
 
 def delete_memory(slug: str) -> bool:
