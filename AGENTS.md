@@ -187,7 +187,7 @@ Main packages one level deeper:
 - `platform/sandbox/` — Sandboxed execution helpers for controlled runtime actions.
 - `core/state/` — Shared agent runtime envelope (`AgentState`), chat slice, investigation pipeline slice contracts, `EvidenceEntry`, state-update helpers, and pure defaults.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
-- `tools/system/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `integrations/telegram/*`.
+- `tools/system/watch_dog/` — Watchdog feature: per-threshold alarm dispatch with cooldown (`--provider telegram|rocketchat`), sitting on top of `integrations/telegram/*` and `integrations/rocketchat/*`.
 - `gateway/http/webapp.py` — Web-facing health app served by the gateway daemon; the `opensre` CLI is `surfaces/cli/__main__.py`.
 
 ## 2. Entry Points
