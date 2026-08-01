@@ -291,6 +291,24 @@ def test_naive_timestamp_falls_back_to_epoch() -> None:
     assert obj.last_modified == datetime.fromtimestamp(0, tz=UTC)
 
 
+@pytest.mark.parametrize(
+    ("item", "expected_size", "expected_etag"),
+    [
+        ({"name": "opensre/sessions/a.jsonl", "size": None}, 0, ""),
+        ({"name": "opensre/sessions/a.jsonl", "size": "not-a-number"}, 0, ""),
+        ({"name": "opensre/sessions/a.jsonl", "md5Hash": 42}, 0, ""),
+    ],
+)
+def test_malformed_metadata_fields_fall_back_instead_of_escaping(
+    item: dict[str, Any], expected_size: int, expected_etag: str
+) -> None:
+    """Garbage size/hash metadata degrades like a missing value; it never escapes."""
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
+    (obj,) = store.list_objects("")
+    assert obj.size == expected_size
+    assert obj.etag == expected_etag
+
+
 def test_missing_credentials_fail_as_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(*_args: object, **_kwargs: object) -> object:
         raise DefaultCredentialsError("no credentials")

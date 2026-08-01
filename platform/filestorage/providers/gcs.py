@@ -55,8 +55,21 @@ class GCSObjectStore:
         full_prefix = (
             self._config.key_for(prefix) if prefix else f"{self._config.prefix.rstrip('/')}/"
         )
+        out: list[RemoteObject] = []
         try:
             items = self._list_all(full_prefix)
+            for item in items:
+                out.append(
+                    RemoteObject(
+                        key=self._strip_prefix(str(item["name"])),
+                        size=_parse_size(item.get("size")),
+                        last_modified=_parse_updated(item.get("updated")),
+                        # md5Hash rides the listing, so comparing an object costs no
+                        # extra request. The resource ``etag`` is a generation tag,
+                        # not a content hash, and is never used here.
+                        etag=_content_etag(item.get("md5Hash")),
+                    )
+                )
         except (requests.RequestException, GoogleAuthError, TypeError, ValueError) as exc:
             # Transport failures, credential-refresh failures, and malformed
             # success payloads all map to unavailable, so the operator gets an
@@ -64,19 +77,6 @@ class GCSObjectStore:
             raise RemoteSyncUnavailableError(
                 f"cannot list {self.describe()} — {_reason(exc)}"
             ) from exc
-        out: list[RemoteObject] = []
-        for item in items:
-            out.append(
-                RemoteObject(
-                    key=self._strip_prefix(str(item["name"])),
-                    size=int(item.get("size", "0")),
-                    last_modified=_parse_updated(item.get("updated")),
-                    # md5Hash rides the listing, so comparing an object costs no
-                    # extra request. The resource ``etag`` is a generation tag,
-                    # not a content hash, and is never used here.
-                    etag=_content_etag(item.get("md5Hash")),
-                )
-            )
         return out
 
     def get_object(self, key: str) -> bytes:
@@ -147,7 +147,15 @@ def _parse_updated(value: Any) -> datetime:
     return parsed if parsed.tzinfo is not None else _EPOCH
 
 
-def _content_etag(md5_hash: str | None) -> str:
+def _parse_size(value: Any) -> int:
+    """Object size as int; GCS sends it as a string, and size never drives a sync decision."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _content_etag(md5_hash: object) -> str:
     """Hex MD5 comparable with the engine's content tag, or empty when unknown.
 
     GCS base64-encodes the digest; the engine compares lowercase hex. Composite
@@ -156,7 +164,7 @@ def _content_etag(md5_hash: str | None) -> str:
     the same degradation S3 multipart ETags get. A real digest is exactly 16
     bytes; ``validate=True`` keeps stray characters from silently decoding.
     """
-    if not md5_hash:
+    if not isinstance(md5_hash, str) or not md5_hash:
         return ""
     try:
         digest = base64.b64decode(md5_hash, validate=True)

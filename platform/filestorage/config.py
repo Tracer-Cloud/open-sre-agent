@@ -35,10 +35,10 @@ _TRUTHY = frozenset({"1", "true", "yes", "on"})
 class RemoteSyncConfig:
     """Where a laptop mirrors its context, under which backend and credentials.
 
-    ``bucket`` is the top-level store name for the chosen provider (S3 bucket
-    or Vercel Blob store name/id; community backends may reuse the field).
-    Provider-specific fields (``profile``, ``region``) are ignored by backends
-    that do not need them.
+    ``bucket`` is the top-level store name for the chosen provider (S3 bucket,
+    GCS bucket, or Vercel Blob store name/id; community backends may reuse the
+    field). Provider-specific fields (``profile``, ``region``) are ignored by
+    backends that do not need them.
 
     ``exclude`` narrows what mirrors. It cannot widen it: the credential
     deny-list is enforced separately, in
