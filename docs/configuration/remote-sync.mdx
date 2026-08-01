@@ -70,6 +70,12 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
 
+`--region`/`--profile` are AWS-only today — `opensre remote-sync setup`
+rejects either one for a provider that doesn't use it, rather than saving it
+silently and never reading it back. (Their env-var equivalents,
+`OPENSRE_REMOTE_SYNC_REGION`/`PROFILE`, are read the same way regardless of
+provider and are simply ignored by a provider that has no use for them.)
+
 You can also persist settings under `remote_sync` in `~/.opensre/config.yml`
 (`enabled`, `bucket`, `provider`, `prefix`, …). Environment variables still
 win for a single run.

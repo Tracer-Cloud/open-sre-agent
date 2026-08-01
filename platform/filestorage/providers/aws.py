@@ -8,10 +8,10 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BuiltInProvider
+from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncUnavailableError
 from platform.filestorage.ports import RemoteObject
-from platform.filestorage.providers.registry import register_object_store
+from platform.filestorage.providers.registry import SetupExtraField, register_object_store
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 _SERVER_SIDE_ENCRYPTION = "AES256"
 PROVIDER_NAME = BuiltInProvider.AWS
 CREDENTIAL_HINT = "AWS credentials come from the usual places (env, profile, or SSO)."
+EXTRA_FIELDS = (
+    SetupExtraField(RemoteSyncField.PROFILE, "Credentials profile (blank if unused)"),
+    SetupExtraField(RemoteSyncField.REGION, "Region (blank if unused)"),
+)
 
 
 class S3ObjectStore:
@@ -108,6 +112,8 @@ def _factory(config: RemoteSyncConfig) -> S3ObjectStore:
     return S3ObjectStore(config)
 
 
-register_object_store(PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT)
+register_object_store(
+    PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT, extra_fields=EXTRA_FIELDS
+)
 
-__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "S3ObjectStore"]
+__all__ = ["CREDENTIAL_HINT", "EXTRA_FIELDS", "PROVIDER_NAME", "S3ObjectStore"]

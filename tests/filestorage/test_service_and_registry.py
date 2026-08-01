@@ -14,7 +14,7 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport, content_tag
-from platform.filestorage.enums import SyncRootName
+from platform.filestorage.enums import RemoteSyncField, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.messages import (
     DISABLED_HELP,
@@ -25,7 +25,9 @@ from platform.filestorage.operations import get_sync_status, run_remote_sync
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers import build_object_store as surface_build
 from platform.filestorage.providers.registry import (
+    SetupExtraField,
     build_object_store,
+    provider_extra_fields,
     register_object_store,
     registered_providers,
     unregister_object_store,
@@ -150,6 +152,34 @@ def test_registry_unregister_and_unknown() -> None:
     unregister_object_store("temp-prov")
     with pytest.raises(RemoteSyncConfigError, match="unknown remote-sync provider"):
         build_object_store(RemoteSyncConfig(bucket="b", provider="temp-prov"))
+
+
+def test_aws_declares_region_and_profile() -> None:
+    # Loading the built-in aws module (via provider_extra_fields) must not
+    # require boto3 to have built a client — this only reads the declaration.
+    fields = {extra.field for extra in provider_extra_fields("aws")}
+    assert fields == {RemoteSyncField.REGION, RemoteSyncField.PROFILE}
+
+
+def test_vercel_declares_no_extra_fields() -> None:
+    assert provider_extra_fields("vercel") == ()
+
+
+def test_unknown_provider_declares_no_extra_fields() -> None:
+    assert provider_extra_fields("does-not-exist") == ()
+
+
+def test_provider_extra_fields_registered_and_cleaned_up() -> None:
+    register_object_store(
+        "extra-fields-test",
+        lambda _cfg: _MemStore(),
+        extra_fields=(SetupExtraField(RemoteSyncField.REGION, "Region"),),
+    )
+    assert provider_extra_fields("extra-fields-test") == (
+        SetupExtraField(RemoteSyncField.REGION, "Region"),
+    )
+    unregister_object_store("extra-fields-test")
+    assert provider_extra_fields("extra-fields-test") == ()
 
 
 def test_registry_safe_under_concurrent_register_and_build() -> None:

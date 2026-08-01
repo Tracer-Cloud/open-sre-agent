@@ -10,7 +10,7 @@ from config.constants.filestorage import (
 )
 from platform.common.exit_codes import ERROR, SUCCESS
 from platform.filestorage import RemoteSyncError
-from platform.filestorage.enums import RemoteSyncSubcommand
+from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
     format_report_lines,
@@ -18,6 +18,7 @@ from platform.filestorage.messages import (
     format_status_lines,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.providers.registry import provider_extra_fields
 from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 
 
@@ -135,26 +136,40 @@ def _collect_setup_request(
             "pass --provider and --bucket, or run setup in an interactive terminal"
         )
 
+    bucket_value = click.prompt(
+        "Bucket / store name", default=bucket or "", show_default=bool(bucket)
+    )
+    provider_value = click.prompt(
+        "Provider (aws, vercel, …)",
+        default=provider or DEFAULT_REMOTE_SYNC_PROVIDER,
+        show_default=True,
+    )
+    prefix_value = click.prompt(
+        "Prefix", default=prefix or DEFAULT_REMOTE_SYNC_PREFIX, show_default=True
+    )
     return RemoteSyncSetupRequest(
-        bucket=click.prompt("Bucket / store name", default=bucket or "", show_default=bool(bucket)),
-        provider=click.prompt(
-            "Provider (aws, vercel, …)",
-            default=provider or DEFAULT_REMOTE_SYNC_PROVIDER,
-            show_default=True,
-        ),
-        prefix=click.prompt(
-            "Prefix",
-            default=prefix or DEFAULT_REMOTE_SYNC_PREFIX,
-            show_default=True,
-        ),
-        region=click.prompt("Region (blank if unused)", default=region or "", show_default=False),
-        profile=click.prompt(
-            "Credentials profile (blank if unused)",
-            default=profile or "",
-            show_default=False,
-        ),
+        bucket=bucket_value,
+        provider=provider_value,
+        prefix=prefix_value,
+        region=_prompt_extra_field(RemoteSyncField.REGION, provider_value, region),
+        profile=_prompt_extra_field(RemoteSyncField.PROFILE, provider_value, profile),
         enabled=enabled,
     )
+
+
+def _prompt_extra_field(field: RemoteSyncField, provider: str, current: str | None) -> str:
+    """Prompt for ``field`` only if ``provider`` declared it; otherwise leave it unset.
+
+    The declaration (and its prompt text) lives with the provider — see
+    :func:`platform.filestorage.providers.registry.provider_extra_fields` —
+    so this stays generic across every registered provider, built-in or
+    community, instead of hardcoding which providers use which field.
+    """
+    declared = {extra.field: extra for extra in provider_extra_fields(provider)}
+    extra = declared.get(field)
+    if extra is None:
+        return current or ""
+    return str(click.prompt(extra.prompt, default=current or "", show_default=False))
 
 
 __all__ = ["remote_sync_command"]

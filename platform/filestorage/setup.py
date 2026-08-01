@@ -15,7 +15,9 @@ from config.constants.filestorage import (
 )
 from config.local_settings import LocalSettingsError, update_section
 from platform.filestorage.config import RemoteSyncConfig
+from platform.filestorage.enums import RemoteSyncField
 from platform.filestorage.errors import RemoteSyncConfigError
+from platform.filestorage.providers.registry import provider_extra_fields
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,13 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
     prefix = request.prefix.strip() or DEFAULT_REMOTE_SYNC_PREFIX
     region = request.region.strip()
     profile = request.profile.strip()
+    declared = {extra.field for extra in provider_extra_fields(provider)}
+    for field, value in ((RemoteSyncField.REGION, region), (RemoteSyncField.PROFILE, profile)):
+        if value and field not in declared:
+            raise RemoteSyncConfigError(
+                f"--{field.value} is not used by provider {provider!r}; "
+                "drop the flag or switch providers"
+            )
     try:
         update_section(
             "remote_sync",

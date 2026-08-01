@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import click
 import pytest
+import yaml
 from click.testing import CliRunner
 
 from config.constants.filestorage import REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_ENV
@@ -181,3 +183,92 @@ def test_sync_help_documents_direction_flags(runner: CliRunner) -> None:
     assert result.exit_code == 0
     assert "--pull-only" in result.output
     assert "--push-only" in result.output
+
+
+def test_setup_rejects_flag_provider_does_not_support(runner: CliRunner) -> None:
+    result = runner.invoke(
+        remote_sync_command,
+        ["setup", "--provider", "vercel", "--bucket", "b", "--profile", "dev"],
+    )
+    assert result.exit_code != 0
+    assert "--profile is not used by provider 'vercel'" in result.output
+
+
+def test_setup_writes_settings_with_supported_flags(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    result = runner.invoke(
+        remote_sync_command,
+        [
+            "setup",
+            "--provider",
+            "aws",
+            "--bucket",
+            "b",
+            "--region",
+            "us-east-1",
+            "--profile",
+            "dev",
+        ],
+    )
+    assert result.exit_code == 0
+
+
+def _set_interactive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``_collect_setup_request`` take its prompt branch under CliRunner.
+
+    ``CliRunner``'s simulated stdin reports ``isatty() is False`` by default,
+    which the command reads as "not a terminal" and refuses to prompt.
+    ``click.prompt`` itself reads through ``sys.stdin`` (which CliRunner
+    already feeds from ``input=``), so only the tty check needs faking.
+    """
+    import click
+
+    monkeypatch.setattr(
+        click, "get_text_stream", lambda _name: SimpleNamespace(isatty=lambda: True)
+    )
+
+
+def test_setup_interactive_skips_prompts_for_provider_without_extra_fields(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    _set_interactive(monkeypatch)
+
+    # bucket, provider, prefix — no region/profile prompts for vercel.
+    result = runner.invoke(remote_sync_command, ["setup"], input="my-bucket\nvercel\nopensre\n")
+    assert result.exit_code == 0, result.output
+
+    on_disk = yaml.safe_load((tmp_path / "config.yml").read_text(encoding="utf-8"))
+    assert on_disk["remote_sync"]["provider"] == "vercel"
+    assert on_disk["remote_sync"]["region"] == ""
+    assert on_disk["remote_sync"]["profile"] == ""
+
+
+def test_setup_interactive_prompts_for_provider_extra_fields(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    _set_interactive(monkeypatch)
+
+    # bucket, provider, prefix, region, profile — RemoteSyncSetupRequest's
+    # keyword order, which Python evaluates left to right regardless of the
+    # order EXTRA_FIELDS declares them in.
+    result = runner.invoke(
+        remote_sync_command,
+        ["setup"],
+        input="my-bucket\naws\nopensre\nus-east-1\nmy-profile\n",
+    )
+    assert result.exit_code == 0, result.output
+
+    on_disk = yaml.safe_load((tmp_path / "config.yml").read_text(encoding="utf-8"))
+    assert on_disk["remote_sync"]["provider"] == "aws"
+    assert on_disk["remote_sync"]["profile"] == "my-profile"
+    assert on_disk["remote_sync"]["region"] == "us-east-1"

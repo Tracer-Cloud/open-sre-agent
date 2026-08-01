@@ -83,3 +83,34 @@ def test_vercel_credential_hint_names_token_env() -> None:
     assert BLOB_READ_WRITE_TOKEN_ENV in credential_hint_for_provider("vercel")
     lines = format_setup_lines(RemoteSyncConfig(bucket="b", provider="vercel", prefix="p"))
     assert any(BLOB_READ_WRITE_TOKEN_ENV in line for line in lines)
+
+
+def test_save_rejects_region_for_provider_that_does_not_use_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    with pytest.raises(RemoteSyncConfigError, match="--region is not used by provider 'vercel'"):
+        save_remote_sync_settings(
+            RemoteSyncSetupRequest(bucket="b", provider="vercel", region="us-east-1")
+        )
+
+
+def test_save_rejects_profile_for_provider_that_does_not_use_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    with pytest.raises(RemoteSyncConfigError, match="--profile is not used by provider 'vercel'"):
+        save_remote_sync_settings(
+            RemoteSyncSetupRequest(bucket="b", provider="vercel", profile="dev")
+        )
+
+
+def test_save_allows_region_and_profile_for_aws(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    config = save_remote_sync_settings(
+        RemoteSyncSetupRequest(bucket="b", provider="aws", region="us-east-1", profile="dev")
+    )
+    assert config.region == "us-east-1"
+    assert config.profile == "dev"

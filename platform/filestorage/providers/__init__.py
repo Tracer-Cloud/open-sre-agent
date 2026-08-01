@@ -8,16 +8,20 @@ selected. Other clouds (GCS, Azure, …) are community modules that call
 from __future__ import annotations
 
 from platform.filestorage.providers.registry import (
+    SetupExtraField,
     build_object_store,
     credential_hint_for_provider,
+    provider_extra_fields,
     register_object_store,
     registered_providers,
     unregister_object_store,
 )
 
 __all__ = [
+    "SetupExtraField",
     "build_object_store",
     "credential_hint_for_provider",
+    "provider_extra_fields",
     "register_object_store",
     "registered_providers",
     "unregister_object_store",

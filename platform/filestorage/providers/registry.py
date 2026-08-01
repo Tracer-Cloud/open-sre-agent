@@ -17,9 +17,10 @@ from __future__ import annotations
 import importlib
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from platform.filestorage.enums import BuiltInProvider
+from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncConfigError
 
 if TYPE_CHECKING:
@@ -30,8 +31,30 @@ ObjectStoreFactory = Callable[["RemoteSyncConfig"], "ObjectStore"]
 
 _DEFAULT_CREDENTIAL_HINT = "Use ambient credentials for this provider; opensre does not store them."
 
+
+@dataclass(frozen=True)
+class SetupExtraField:
+    """One provider-specific setup field, declared by the provider itself.
+
+    Mirrors ``integrations.setup_flow.SetupField`` in spirit — a provider
+    declares what it needs, so ``setup.py`` and the CLI act on the
+    declaration instead of branching on the provider's name. Kept minimal on
+    purpose: unlike an integration's arbitrary credentials dict,
+    ``RemoteSyncConfig`` has exactly two optional slots (``region``,
+    ``profile``) and nothing here is ever a secret, so there is no
+    env_var/secret/constant machinery to carry.
+    """
+
+    field: RemoteSyncField
+    """Which of ``RemoteSyncConfig``'s two extension slots this fills."""
+
+    prompt: str
+    """Question text when collecting this field interactively."""
+
+
 _REGISTRY: dict[str, ObjectStoreFactory] = {}
 _CREDENTIAL_HINTS: dict[str, str] = {}
+_EXTRA_FIELDS: dict[str, tuple[SetupExtraField, ...]] = {}
 _REGISTRY_LOCK = threading.RLock()
 
 # Built-in backends, imported on first use so this package never imports itself.
@@ -51,7 +74,11 @@ def _load_builtin(key: str) -> None:
 
 
 def register_object_store(
-    name: str, factory: ObjectStoreFactory, *, credential_hint: str | None = None
+    name: str,
+    factory: ObjectStoreFactory,
+    *,
+    credential_hint: str | None = None,
+    extra_fields: tuple[SetupExtraField, ...] = (),
 ) -> None:
     """Bind ``name`` (the value of ``OPENSRE_REMOTE_SYNC_PROVIDER``) to a factory.
 
@@ -59,6 +86,10 @@ def register_object_store(
     ``setup`` about where this provider's ambient credentials come from (see
     :func:`credential_hint_for_provider`). Omit it to fall back to a generic
     sentence.
+
+    ``extra_fields`` declares which of ``RemoteSyncConfig``'s ``region``/
+    ``profile`` slots this provider consumes (see :func:`provider_extra_fields`).
+    Omit it — as most providers do — when the provider needs neither.
     """
     key = name.strip().lower()
     if not key:
@@ -67,6 +98,8 @@ def register_object_store(
         _REGISTRY[key] = factory
         if credential_hint is not None:
             _CREDENTIAL_HINTS[key] = credential_hint
+        if extra_fields:
+            _EXTRA_FIELDS[key] = extra_fields
 
 
 def unregister_object_store(name: str) -> None:
@@ -75,6 +108,7 @@ def unregister_object_store(name: str) -> None:
         key = name.strip().lower()
         _REGISTRY.pop(key, None)
         _CREDENTIAL_HINTS.pop(key, None)
+        _EXTRA_FIELDS.pop(key, None)
 
 
 def registered_providers() -> tuple[str, ...]:
@@ -117,10 +151,27 @@ def credential_hint_for_provider(provider: str) -> str:
     return hint if hint is not None else _DEFAULT_CREDENTIAL_HINT
 
 
+def provider_extra_fields(provider: str) -> tuple[SetupExtraField, ...]:
+    """``region``/``profile`` fields ``provider`` declared, or ``()`` for neither.
+
+    Loads a not-yet-imported built-in module first, same as
+    :func:`credential_hint_for_provider`, so this is accurate even before any
+    store has been built for ``provider``. An unknown provider name also
+    resolves to ``()`` — callers that need to reject unknown providers do so
+    separately (:func:`registered_providers`).
+    """
+    key = provider.strip().lower()
+    with _REGISTRY_LOCK:
+        _load_builtin(key)
+        return _EXTRA_FIELDS.get(key, ())
+
+
 __all__ = [
     "ObjectStoreFactory",
+    "SetupExtraField",
     "build_object_store",
     "credential_hint_for_provider",
+    "provider_extra_fields",
     "register_object_store",
     "registered_providers",
     "unregister_object_store",
