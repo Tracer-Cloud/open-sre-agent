@@ -64,7 +64,7 @@ class EncryptedContentCodec:
             )
         ciphertext = data[len(_ENVELOPE_HEADER) :]
         try:
-            payload = self._cipher.decrypt(ciphertext, None)
+            payload = self._cipher.decrypt(ciphertext, [])
         except InvalidTag as exc:
             raise RemoteSyncEncryptionError(
                 "Remote content could not be decrypted. Check the remote-sync "
