@@ -24,7 +24,7 @@ def memory_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Isolate the store per test, and start from a cold cache."""
     directory = tmp_path / "memory"
     monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(directory))
-    monkeypatch.setattr(store, "_LISTING_CACHE", None, raising=False)
+    store._parsed_memories.cache_clear()
     return directory
 
 

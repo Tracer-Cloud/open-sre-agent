@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import sys
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from filelock import FileLock, Timeout
@@ -46,10 +47,6 @@ from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
 
-#: (directory signature, parsed records) from the last full read of the store.
-#: Process-local: a concurrent writer only costs a redundant re-parse, never
-#: a stale answer, because the signature is recomputed on every call.
-_LISTING_CACHE: tuple[tuple[tuple[str, int, int], ...], list[MemoryRecord]] | None = None
 _LOCK_FILENAME = ".memory.lock"
 _LOCK_TIMEOUT_SECONDS = 10.0
 
@@ -163,22 +160,18 @@ def _memory_dir_signature(directory: Path) -> tuple[tuple[str, int, int], ...]:
     return tuple(entries)
 
 
-def list_memories() -> list[MemoryRecord]:
-    """All parseable memories, most recently updated first.
+@lru_cache(maxsize=1)
+def _parsed_memories(
+    directory_key: str,
+    _signature: tuple[tuple[str, int, int], ...],
+) -> tuple[MemoryRecord, ...]:
+    """Parse every memory file under ``directory_key``.
 
-    Every action-agent turn renders the memory index, so this would otherwise
-    read and parse the whole store on each turn — a cost that grows with the
-    number of memories a user has accumulated. Parsed records are reused until
-    the files change.
+    Keyed by the directory and its file signature, so the result is reused
+    until a memory is added, edited or removed. ``maxsize=1`` keeps only the
+    current state — an older signature can never be served.
     """
-    global _LISTING_CACHE
-    directory = memory_dir()
-    if not directory.is_dir():
-        return []
-    signature = _memory_dir_signature(directory)
-    cached = _LISTING_CACHE
-    if cached is not None and cached[0] == signature:
-        return list(cached[1])
+    directory = Path(directory_key)
     records: list[MemoryRecord] = []
     for path in sorted(directory.glob("*.md")):
         if path.name == _INDEX_FILENAME:
@@ -191,8 +184,21 @@ def list_memories() -> list[MemoryRecord]:
         if record is not None:
             records.append(record)
     records.sort(key=lambda r: r.updated_at, reverse=True)
-    _LISTING_CACHE = (signature, records)
-    return list(records)
+    return tuple(records)
+
+
+def list_memories() -> list[MemoryRecord]:
+    """All parseable memories, most recently updated first.
+
+    Every action-agent turn renders the memory index, so this would otherwise
+    read and parse the whole store on each turn — a cost that grows with the
+    number of memories a user has accumulated. Parsed records are reused until
+    the files change.
+    """
+    directory = memory_dir()
+    if not directory.is_dir():
+        return []
+    return list(_parsed_memories(str(directory), _memory_dir_signature(directory)))
 
 
 def delete_memory(slug: str) -> bool:
