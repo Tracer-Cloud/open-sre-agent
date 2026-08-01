@@ -118,7 +118,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
             enabled=enabled,
         )
     )
-    _print_lines(console, format_setup_lines(config))
+    _print_lines(console, format_setup_lines(config, enabled=enabled))
     return True
 
 

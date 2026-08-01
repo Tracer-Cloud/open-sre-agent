@@ -11,7 +11,7 @@ from urllib.parse import unquote
 
 import pytest
 import requests
-from google.auth.exceptions import DefaultCredentialsError
+from google.auth.exceptions import DefaultCredentialsError, RefreshError
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import content_tag, push
@@ -33,13 +33,13 @@ def _b64_md5(data: bytes) -> str:
 
 class _FakeResponse:
     def __init__(
-        self, *, status_code: int = 200, payload: dict[str, Any] | None = None, content: bytes = b""
+        self, *, status_code: int = 200, payload: Any = None, content: bytes = b""
     ) -> None:
         self.status_code = status_code
         self._payload = payload if payload is not None else {}
         self.content = content
 
-    def json(self) -> dict[str, Any]:
+    def json(self) -> Any:
         return self._payload
 
     def raise_for_status(self) -> None:
@@ -238,6 +238,57 @@ def test_gcs_failures_name_their_cause() -> None:
         store.get_object("k")
     with pytest.raises(RemoteSyncUnavailableError, match="ConnectionError"):
         store.put_object("k", b"d")
+
+
+def test_credential_refresh_failures_are_wrapped() -> None:
+    """An expired ADC token raises RefreshError mid-request, outside RequestException."""
+
+    class _Expiring:
+        def get(self, *_args: object, **_kwargs: object) -> _FakeResponse:
+            raise RefreshError("token expired")
+
+        def post(self, *_args: object, **_kwargs: object) -> _FakeResponse:
+            raise RefreshError("token expired")
+
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_Expiring())
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+        store.list_objects("")
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot read"):
+        store.get_object("k")
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot write"):
+        store.put_object("k", b"d")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        ["not", "an", "object"],
+        {"items": "not-a-list"},
+        {"items": [{"size": "3"}]},
+        {"items": [{"name": 42}]},
+    ],
+)
+def test_malformed_list_payloads_are_wrapped(payload: dict[str, Any] | list[str]) -> None:
+    """A 200 response with a malformed body must not crash outside the boundary."""
+
+    class _Raw:
+        def get(self, *_args: object, **_kwargs: object) -> _FakeResponse:
+            return _FakeResponse(payload=payload)
+
+        def post(self, *_args: object, **_kwargs: object) -> _FakeResponse:
+            raise AssertionError("not reached")
+
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_Raw())
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+        store.list_objects("")
+
+
+def test_naive_timestamp_falls_back_to_epoch() -> None:
+    """An offset-less timestamp cannot be ordered against aware UTC mtimes."""
+    item = {"name": "opensre/sessions/a.jsonl", "size": "3", "updated": "2026-01-01T00:00:00"}
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
+    (obj,) = store.list_objects("")
+    assert obj.last_modified == datetime.fromtimestamp(0, tz=UTC)
 
 
 def test_missing_credentials_fail_as_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -15,6 +15,7 @@ from urllib.parse import quote
 
 import google.auth
 import requests
+from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import AuthorizedSession
 
 from platform.filestorage.config import RemoteSyncConfig
@@ -56,9 +57,10 @@ class GCSObjectStore:
         )
         try:
             items = self._list_all(full_prefix)
-        except (requests.RequestException, TypeError, ValueError) as exc:
-            # Transport failures and malformed success payloads both map to
-            # unavailable, so the operator gets an actionable error, not a crash.
+        except (requests.RequestException, GoogleAuthError, TypeError, ValueError) as exc:
+            # Transport failures, credential-refresh failures, and malformed
+            # success payloads all map to unavailable, so the operator gets an
+            # actionable error, not a crash.
             raise RemoteSyncUnavailableError(
                 f"cannot list {self.describe()} — {_reason(exc)}"
             ) from exc
@@ -88,7 +90,7 @@ class GCSObjectStore:
             response.raise_for_status()
             body: bytes = response.content
             return body
-        except requests.RequestException as exc:
+        except (requests.RequestException, GoogleAuthError) as exc:
             raise RemoteSyncUnavailableError(f"cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
@@ -100,7 +102,7 @@ class GCSObjectStore:
                 timeout=_TIMEOUT,
             )
             response.raise_for_status()
-        except requests.RequestException as exc:
+        except (requests.RequestException, GoogleAuthError) as exc:
             raise RemoteSyncUnavailableError(f"cannot write {key} — {_reason(exc)}") from exc
 
     def _list_all(self, full_prefix: str) -> list[dict[str, Any]]:
@@ -116,7 +118,14 @@ class GCSObjectStore:
             )
             response.raise_for_status()
             payload = response.json()
-            items.extend(payload.get("items", []))
+            if not isinstance(payload, dict):
+                raise ValueError(f"GCS list returned {type(payload).__name__}, expected an object")
+            page = payload.get("items", [])
+            if not isinstance(page, list) or any(
+                not isinstance(item, dict) or not isinstance(item.get("name"), str) for item in page
+            ):
+                raise ValueError("GCS list items are malformed")
+            items.extend(page)
             page_token = payload.get("nextPageToken", "")
             if not page_token:
                 return items
@@ -127,13 +136,15 @@ class GCSObjectStore:
 
 
 def _parse_updated(value: Any) -> datetime:
-    """RFC 3339 listing timestamp; a malformed or missing one reads as "oldest"."""
+    """RFC 3339 listing timestamp; a malformed or offset-less one reads as "oldest"."""
     if not isinstance(value, str) or not value:
         return _EPOCH
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return _EPOCH
+    # A naive timestamp cannot be ordered against the engine's aware UTC mtimes.
+    return parsed if parsed.tzinfo is not None else _EPOCH
 
 
 def _content_etag(md5_hash: str | None) -> str:
