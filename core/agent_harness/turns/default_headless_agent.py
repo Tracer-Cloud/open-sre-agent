@@ -84,7 +84,9 @@ def build_default_headless_agent(
             subprocess_presenter_factory=subprocess_presenter_factory,
             slash_ports_factory=slash_ports_factory,
         ),
-        prompts=prompts or _default_prompts(session, surface),
+        # ``is not None``, not ``or``: a provider defining __bool__ would be
+        # silently replaced. Matches HeadlessAgent's own selection.
+        prompts=prompts if prompts is not None else _default_prompts(session, surface),
         reasoning=DefaultReasoningClientProvider(
             output=output,
             error_reporter=error_reporter,

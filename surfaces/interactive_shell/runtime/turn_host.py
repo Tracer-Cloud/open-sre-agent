@@ -76,8 +76,9 @@ def _streaming_console(
     """Spinner-aware console for one turn, writing where the caller asked.
 
     The turn needs a :class:`StreamingConsole` for progress and cancellation, so
-    an injected console cannot be used directly — its output target is adopted
-    instead, which is what an embedding caller is actually asking for.
+    an injected console cannot be used directly. It renders *through* that
+    console rather than to a copy of its file, so a caller's ``capture()`` and
+    ``record`` see the turn.
     """
     base = runtime.console
     if base is None:
@@ -92,8 +93,8 @@ def _streaming_console(
     return StreamingConsole(
         runtime.spinner,
         cancel_event,
+        output=base,
         highlight=False,
-        file=base.file,
         force_terminal=base.is_terminal,
     )
 

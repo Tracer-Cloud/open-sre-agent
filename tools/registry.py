@@ -90,11 +90,13 @@ def _load_registry_snapshot() -> tuple[RegisteredTool, ...]:
     ]
     # Integration packages put their tools directly in ``__init__.py`` (one
     # file per vendor), so their own module is a tool source alongside any
-    # submodules they may also expose.
-    integration_module_ids = {id(pkg) for pkg in integration_packages}
+    # submodules they may also expose. Externally registered packages get the
+    # same treatment: a caller who defines a tool in their package root would
+    # otherwise register successfully and never see the tool appear.
+    self_scanning_ids = {id(pkg) for pkg in (*integration_packages, *_external_tool_packages)}
     for package in packages:
         modules_to_scan: list[ModuleType] = []
-        if id(package) in integration_module_ids:
+        if id(package) in self_scanning_ids:
             modules_to_scan.append(package)
         modules_to_scan.extend(iter_discovered_tool_modules(package))
         for module in modules_to_scan:
@@ -141,7 +143,12 @@ def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
                 tools_by_name.setdefault(tool.name, tool)
 
     for package in _external_tool_packages:
-        for module in iter_discovered_tool_modules(package):
+        # Match ``_load_registry_snapshot``: scan the package root too. A tool
+        # declared only in ``__init__.py`` must appear on surface lookups, not
+        # only on the unfiltered snapshot.
+        modules_to_scan: list[ModuleType] = [package]
+        modules_to_scan.extend(iter_discovered_tool_modules(package))
+        for module in modules_to_scan:
             for tool in collect_registered_tools_from_module(module):
                 if surface in tool.surfaces:
                     tools_by_name.setdefault(tool.name, tool)

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 import logging
+import sys
 from collections.abc import Generator
+from pathlib import Path
 from types import ModuleType
 from typing import Any
 
@@ -1053,3 +1056,93 @@ def test_resolve_tool_activity_labels_uses_registry_metadata() -> None:
         "Tools",
         "query grafana mystery",
     )
+
+
+def test_external_package_root_module_is_scanned_for_tools(tmp_path: Path) -> None:
+    """A tool defined in the registered package's own ``__init__.py`` is found.
+
+    Integration packages keep their tools in ``__init__.py`` and are scanned
+    that way; externally registered packages were not, so a caller could
+    register successfully, see no error, and have their tool never appear
+    anywhere. Silent, and indistinguishable from "the agent ignored my tool".
+    """
+    # Arrange: a package whose only tool lives in the package root.
+    package_dir = tmp_path / "root_level_tools"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        "from core.tool_framework.tool_decorator import tool\n"
+        "\n"
+        '@tool(name="root_level_probe", description="declared in the package root",\n'
+        '      source="custom", surfaces=("action",),\n'
+        '      input_schema={"type": "object", "properties": {}})\n'
+        "def root_level_probe() -> str:\n"
+        '    return "ok"\n',
+        encoding="utf-8",
+    )
+    sys.path.insert(0, str(tmp_path))
+    try:
+        package = importlib.import_module("root_level_tools")
+        registry_module.register_external_tool_package(package)
+
+        # Act
+        all_names = {tool.name for tool in registry_module.get_registered_tools()}
+        action_names = {
+            tool.name for tool in registry_module.get_registered_tools(surface="action")
+        }
+    finally:
+        sys.path.remove(str(tmp_path))
+        with registry_module._external_registration_lock:
+            if package in registry_module._external_tool_packages:
+                registry_module._external_tool_packages.remove(package)
+        registry_module.clear_tool_registry_cache()
+        sys.modules.pop("root_level_tools", None)
+
+    # Assert — both the full snapshot and the action-surface path see it.
+    assert "root_level_probe" in all_names
+    assert "root_level_probe" in action_names
+
+
+def test_external_tool_defaults_to_investigation_surface_not_action(tmp_path: Path) -> None:
+    """``@tool`` defaults to ``surfaces=("investigation",)`` — chat will ignore it.
+
+    A developer registering their own tools for the Python API / interactive
+    agent must pass ``surfaces=("action",)`` (or both). Omitting it looks like
+    a successful registration with a silent no-op at dispatch time.
+    """
+    # Arrange
+    package_dir = tmp_path / "default_surface_tools"
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text(
+        "from core.tool_framework.tool_decorator import tool\n"
+        "\n"
+        '@tool(name="default_surface_probe", description="default surfaces only",\n'
+        '      source="custom", input_schema={"type": "object", "properties": {}})\n'
+        "def default_surface_probe() -> str:\n"
+        '    return "ok"\n',
+        encoding="utf-8",
+    )
+    sys.path.insert(0, str(tmp_path))
+    try:
+        package = importlib.import_module("default_surface_tools")
+        registry_module.register_external_tool_package(package)
+
+        # Act
+        tool = next(
+            t for t in registry_module.get_registered_tools() if t.name == "default_surface_probe"
+        )
+        action_names = {t.name for t in registry_module.get_registered_tools(surface="action")}
+        investigation_names = {
+            t.name for t in registry_module.get_registered_tools(surface="investigation")
+        }
+    finally:
+        sys.path.remove(str(tmp_path))
+        with registry_module._external_registration_lock:
+            if package in registry_module._external_tool_packages:
+                registry_module._external_tool_packages.remove(package)
+        registry_module.clear_tool_registry_cache()
+        sys.modules.pop("default_surface_tools", None)
+
+    # Assert
+    assert tool.surfaces == ("investigation",)
+    assert "default_surface_probe" in investigation_names
+    assert "default_surface_probe" not in action_names

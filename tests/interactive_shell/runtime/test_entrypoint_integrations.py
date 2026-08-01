@@ -612,6 +612,47 @@ def test_turn_output_and_prompt_echo_reach_the_supplied_console() -> None:
     assert "AGENT-RESPONSE" in turn_console.file.getvalue()  # type: ignore[attr-defined]
 
 
+def test_turn_output_reaches_capture_and_record_on_the_supplied_console() -> None:
+    """Writing to the caller's *stream* is not the same as writing to its console.
+
+    ``capture()`` and ``record`` buffer inside the ``Console`` object, not at its
+    file, so a turn that renders to a copy of ``console.file`` leaves both empty:
+    a caller wrapping a turn in ``capture()`` gets back nothing, and a recorded
+    transcript silently omits every agent response.
+    """
+    # Arrange
+    import threading
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.turn_host import (
+        AgentTurnRuntime,
+        _streaming_console,
+    )
+
+    def build_runtime(console: Console) -> AgentTurnRuntime:
+        return AgentTurnRuntime(
+            session=Session(),
+            state=SimpleNamespace(),
+            spinner=SimpleNamespace(streaming=False, bytes_in=0),
+            invalidate_prompt=lambda: None,
+            console=console,
+        )
+
+    capturing = Console(file=StringIO(), force_terminal=False, width=80)
+    recording = Console(file=StringIO(), force_terminal=False, width=80, record=True)
+
+    # Act
+    with capturing.capture() as capture:
+        _streaming_console(build_runtime(capturing), threading.Event()).print("CAPTURED-RESPONSE")
+    _streaming_console(build_runtime(recording), threading.Event()).print("RECORDED-RESPONSE")
+
+    # Assert
+    assert "CAPTURED-RESPONSE" in capture.get()
+    assert "RECORDED-RESPONSE" in recording.export_text()
+
+
 def test_turn_output_falls_back_to_the_shell_terminal() -> None:
     """With no console supplied the turn keeps today's forced-terminal output."""
     # Arrange

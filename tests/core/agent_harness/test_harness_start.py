@@ -69,11 +69,12 @@ def _headless_config(**overrides: Any) -> Any:
 
 
 def test_configured_prompts_reach_the_agent() -> None:
-    """``HarnessConfig.prompts`` is documented, so it has to be honoured.
+    """A configured provider has to reach the agent.
 
     ``startup()`` loaded the provider and returned it, but ``start()`` built the
     agent without passing it — so a caller's grounding context was discarded
-    with no error, and the built-in one answered instead.
+    with no error, and the built-in one answered instead. Reaching into
+    ``_prompts`` pins the wiring directly; there is no public accessor yet.
     """
     # Arrange
     from core.agent_harness.harness import AgentHarness
@@ -118,3 +119,26 @@ def test_builder_exposes_the_prompts_port() -> None:
 
     # Act / Assert
     assert "prompts" in inspect.signature(build_default_headless_agent).parameters
+
+
+def test_a_falsy_prompts_provider_is_still_used() -> None:
+    """Selection must be ``is not None``, not truthiness.
+
+    A provider defining ``__bool__`` would be silently swapped for the built-in
+    one — the same quiet substitution this seam already suffered once.
+    """
+    # Arrange
+    from core.agent_harness.harness import AgentHarness
+
+    class _FalsyPrompts:
+        def __bool__(self) -> bool:
+            return False
+
+    supplied = _FalsyPrompts()
+
+    # Act
+    harness = AgentHarness.start(_headless_config(prompts=supplied))
+
+    # Assert
+    assert harness.agent is not None
+    assert harness.agent._prompts is supplied
