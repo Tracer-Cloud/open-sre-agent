@@ -75,6 +75,12 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
 @click.option("--region", default=None, help="Region override when the provider supports it.")
 @click.option("--profile", default=None, help="Named credentials profile (AWS).")
 @click.option(
+    "--encrypt/--no-encrypt",
+    default=False,
+    show_default=True,
+    help="Encrypt content locally before upload; passphrase stays in the environment.",
+)
+@click.option(
     "--enabled/--disabled",
     default=True,
     show_default=True,
@@ -86,6 +92,7 @@ def setup_command(
     prefix: str | None,
     region: str | None,
     profile: str | None,
+    encrypt: bool,
     enabled: bool,
 ) -> None:
     """Write remote_sync settings to ~/.opensre/config.yml (interactive if flags omitted)."""
@@ -96,6 +103,7 @@ def setup_command(
             prefix=prefix,
             region=region,
             profile=profile,
+            encryption=encrypt,
             enabled=enabled,
         )
         config = save_remote_sync_settings(request)
@@ -116,6 +124,7 @@ def _collect_setup_request(
     prefix: str | None,
     region: str | None,
     profile: str | None,
+    encryption: bool,
     enabled: bool,
 ) -> RemoteSyncSetupRequest:
     """Use flags when complete; otherwise prompt on a TTY."""
@@ -127,6 +136,7 @@ def _collect_setup_request(
             prefix=prefix if prefix is not None else DEFAULT_REMOTE_SYNC_PREFIX,
             region=region or "",
             profile=profile or "",
+            encryption=encryption,
             enabled=enabled,
         )
 
@@ -153,6 +163,7 @@ def _collect_setup_request(
             default=profile or "",
             show_default=False,
         ),
+        encryption=encryption,
         enabled=enabled,
     )
 

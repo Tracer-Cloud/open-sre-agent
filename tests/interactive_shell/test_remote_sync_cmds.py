@@ -116,6 +116,25 @@ def test_setup_writes_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert "BLOB_READ_WRITE_TOKEN" in out
 
 
+def test_setup_encrypt_flag_is_persisted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    console, buf = _capture()
+
+    assert (
+        dispatch_slash(
+            "/remote-sync setup --provider aws --bucket private-history --encrypt",
+            Session(),
+            console,
+        )
+        is True
+    )
+
+    assert "Client-side encryption is on" in buf.getvalue()
+    assert "encryption: true" in (tmp_path / "config.yml").read_text(encoding="utf-8")
+
+
 def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**_kwargs: object) -> SyncReport:
         raise RemoteSyncConfigError("bad flags")
@@ -165,6 +184,7 @@ def test_slash_command_metadata_for_planner() -> None:
     catalog = MCP_BY_COMMAND["/remote-sync"]
     assert "status" in catalog.llm_description
     assert "setup" in catalog.llm_description
+    assert "--encrypt" in catalog.llm_description
 
 
 def test_sync_shows_kept_remote(monkeypatch: pytest.MonkeyPatch) -> None:

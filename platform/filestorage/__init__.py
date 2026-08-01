@@ -39,6 +39,7 @@ from platform.filestorage.enums import (
 from platform.filestorage.errors import (
     OrgScopeNotSupportedError,
     RemoteSyncConfigError,
+    RemoteSyncEncryptionError,
     RemoteSyncError,
     RemoteSyncUnavailableError,
     UnsyncablePathError,
@@ -68,6 +69,7 @@ __all__ = [
     "RemoteObject",
     "RemoteSyncConfig",
     "RemoteSyncConfigError",
+    "RemoteSyncEncryptionError",
     "RemoteSyncError",
     "RemoteSyncSubcommand",
     "RemoteSyncUnavailableError",

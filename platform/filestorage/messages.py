@@ -10,7 +10,9 @@ from __future__ import annotations
 from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENCRYPTION_ENV,
     REMOTE_SYNC_ENV,
+    REMOTE_SYNC_PASSPHRASE_ENV,
     REMOTE_SYNC_PREFIX_ENV,
     REMOTE_SYNC_PROFILE_ENV,
     REMOTE_SYNC_PROVIDER_ENV,
@@ -47,7 +49,8 @@ Or set env vars:
 
 Optional: {REMOTE_SYNC_PROVIDER_ENV} (default {DEFAULT_REMOTE_SYNC_PROVIDER}; \
 built-in: aws, vercel), {REMOTE_SYNC_PREFIX_ENV}, {REMOTE_SYNC_REGION_ENV}, \
-{REMOTE_SYNC_PROFILE_ENV}. Cloud credentials stay ambient; opensre never stores them."""
+{REMOTE_SYNC_PROFILE_ENV}, {REMOTE_SYNC_ENCRYPTION_ENV}. Cloud credentials and \
+{REMOTE_SYNC_PASSPHRASE_ENV} stay ambient; opensre never stores them."""
 
 _KEPT_REMOTE_HINT = (
     "Some files were left alone because the store held a newer copy. "
@@ -67,6 +70,8 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     for root in status.roots:
         state = "exists" if root.exists else "not created yet"
         lines.append(f"  {root.name:<10} {root.path} ({state})")
+    if cfg.encryption:
+        lines.append("Client-side encryption: on (passphrase stays ambient).")
     lines.append("Never uploaded: integration credentials and model keys.")
     return tuple(lines)
 
@@ -93,12 +98,18 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
 
 def format_setup_lines(config: RemoteSyncConfig) -> tuple[str, ...]:
     """Confirm settings were written and how to supply ambient credentials."""
-    return (
+    lines = [
         f"Remote sync settings saved → {config.provider} / {config.bucket}/{config.prefix}",
         "Stored in ~/.opensre/config.yml (env vars still win for a single run).",
         credential_hint_for_provider(config.provider),
-        "Next: opensre remote-sync status   then   opensre remote-sync sync",
-    )
+    ]
+    if config.encryption:
+        lines.append(
+            f"Client-side encryption is on. Set {REMOTE_SYNC_PASSPHRASE_ENV} "
+            "to the same passphrase on every machine; opensre never stores it."
+        )
+    lines.append("Next: opensre remote-sync status   then   opensre remote-sync sync")
+    return tuple(lines)
 
 
 __all__ = [

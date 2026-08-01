@@ -137,6 +137,21 @@ def test_format_report_lines_handles_megabyte_boundary() -> None:
     assert "2.4 MiB total" in lines[0]
 
 
+def test_status_reports_client_side_encryption_without_exposing_a_key() -> None:
+    from platform.filestorage.messages import format_status_lines
+    from platform.filestorage.operations import SyncStatus
+
+    lines = format_status_lines(
+        SyncStatus(
+            config=RemoteSyncConfig(bucket="private", encryption=True),
+            roots=(),
+        )
+    )
+
+    assert any("Client-side encryption: on" in line for line in lines)
+    assert all("passphrase=" not in line for line in lines)
+
+
 def test_factory_delegates_to_registry() -> None:
     store = _MemStore()
     register_object_store("factory-test", lambda _cfg: store)

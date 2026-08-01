@@ -15,6 +15,10 @@ class RemoteSyncUnavailableError(RemoteSyncError):
     """The bucket could not be reached or the credentials were rejected."""
 
 
+class RemoteSyncEncryptionError(RemoteSyncError):
+    """Remote content failed client-side encryption validation."""
+
+
 class OrgScopeNotSupportedError(RemoteSyncError):
     """Raised when an organization-scoped turn asks for remote sync.
 
@@ -36,6 +40,7 @@ class UnsyncablePathError(RemoteSyncError):
 __all__ = [
     "OrgScopeNotSupportedError",
     "RemoteSyncConfigError",
+    "RemoteSyncEncryptionError",
     "RemoteSyncError",
     "RemoteSyncUnavailableError",
     "UnsyncablePathError",

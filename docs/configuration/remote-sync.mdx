@@ -35,6 +35,10 @@ opensre remote-sync setup
 # Non-interactive — AWS/S3
 opensre remote-sync setup --provider aws --bucket my-opensre-bucket
 
+# Encrypt content before it reaches the provider
+export OPENSRE_REMOTE_SYNC_PASSPHRASE='use-a-long-unique-passphrase'
+opensre remote-sync setup --provider aws --bucket my-opensre-bucket --encrypt
+
 # Non-interactive — Vercel Blob (then set BLOB_READ_WRITE_TOKEN in the env)
 opensre remote-sync setup --provider vercel --bucket opensre-remote-sync
 export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
@@ -65,6 +69,8 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 | `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
 | `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it (AWS) |
 | `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default (AWS) |
+| `OPENSRE_REMOTE_SYNC_ENCRYPTION` | Set to `1` to encrypt content locally before upload |
+| `OPENSRE_REMOTE_SYNC_PASSPHRASE` | Passphrase for client-side encryption. Ambient; opensre never stores it |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob read-write token (when `provider=vercel`). Ambient; opensre never stores it |
 
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
@@ -76,9 +82,10 @@ win for a single run.
 
 <Note>
 Every machine that should share your history needs the **same provider, store,
-and prefix** (and for Vercel, a token for that store). Change the prefix only
-when you want a separate, isolated set of conversations — a different prefix is
-a different history, not a backup of the same one.
+and prefix** (and for Vercel, a token for that store). Encrypted sync also
+requires the same passphrase. Change the prefix only when you want a separate,
+isolated set of conversations — a different prefix is a different history, not
+a backup of the same one.
 </Note>
 
 All surfaces share one remote-sync engine entry point:
@@ -112,6 +119,40 @@ opensre remote-sync sync
 opensre remote-sync sync --pull-only    # new machine, fetch only
 opensre remote-sync sync --push-only    # back up without pulling
 ```
+
+## Client-side encryption
+
+Add `--encrypt` during setup, or set `OPENSRE_REMOTE_SYNC_ENCRYPTION=1`, to
+encrypt sessions and memory before upload. Keep
+`OPENSRE_REMOTE_SYNC_PASSPHRASE` in your shell secret manager and provide the
+same value on every machine. The passphrase is never written to
+`~/.opensre/config.yml`.
+
+Missing or incorrect passphrases, changed object paths, tampered ciphertext,
+and plaintext objects all stop the sync with an error. There is no recovery
+without the original passphrase.
+
+Do not enable encryption on a prefix that already contains plaintext. First
+complete a normal pull, then choose a new prefix:
+
+```bash
+opensre remote-sync sync
+export OPENSRE_REMOTE_SYNC_PASSPHRASE='use-a-long-unique-passphrase'
+opensre remote-sync setup --provider aws --bucket my-opensre-bucket \
+  --prefix opensre-encrypted --encrypt
+opensre remote-sync sync --push-only
+```
+
+Verify a pull on another machine before deleting the old plaintext prefix.
+
+To rotate the passphrase, pull everything with the old passphrase, choose
+another new prefix, set the new passphrase, and push again. Keep the old prefix
+until the new one has been restored successfully.
+
+<Note>
+Encryption hides object contents. The provider can still observe object paths,
+sizes, update times, and whether the same path changed. Keep the store private.
+</Note>
 
 ## Providers
 

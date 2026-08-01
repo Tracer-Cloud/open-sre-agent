@@ -1,8 +1,9 @@
 """Persist remote-sync settings (shared by CLI and slash ``setup``).
 
 Writes the ``remote_sync`` section of ``~/.opensre/config.yml``. Ambient cloud
-credentials (AWS profile session, ``BLOB_READ_WRITE_TOKEN``, …) stay outside
-this file — opensre never stores them.
+credentials (AWS profile session, ``BLOB_READ_WRITE_TOKEN``, …) and the
+client-side encryption passphrase stay outside this file — opensre never stores
+them.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ class RemoteSyncSetupRequest:
     region: str = ""
     profile: str = ""
     enabled: bool = True
+    encryption: bool = False
 
 
 def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConfig:
@@ -52,6 +54,7 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
                 "prefix": prefix,
                 "region": region,
                 "profile": profile,
+                "encryption": bool(request.encryption),
             },
         )
     except LocalSettingsError as exc:
@@ -62,6 +65,7 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
         prefix=prefix,
         region=region,
         profile=profile,
+        encryption=bool(request.encryption),
     )
 
 

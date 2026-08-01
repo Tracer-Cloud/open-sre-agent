@@ -116,3 +116,27 @@ def test_top_level_cli_remote_sync_setup_writes_settings(
     assert "vercel" in result.output
     assert "BLOB_READ_WRITE_TOKEN" in result.output
     assert (tmp_path / "config.yml").is_file()
+
+
+def test_top_level_cli_remote_sync_setup_enables_client_encryption(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    result = CliRunner().invoke(
+        cli,
+        [
+            "remote-sync",
+            "setup",
+            "--provider",
+            "aws",
+            "--bucket",
+            "private-history",
+            "--encrypt",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Client-side encryption is on" in result.output
+    assert "encryption: true" in (tmp_path / "config.yml").read_text(encoding="utf-8")

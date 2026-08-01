@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}|"
     f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only] "
-    f"[--provider … --bucket …]"
+    f"[--provider … --bucket …] [--encrypt]"
 )
 
 
@@ -52,6 +52,8 @@ def _print_status(console: Console) -> bool:
     for root in status.roots:
         state = "exists" if root.exists else "not created yet"
         console.print(f"  {root.name:<10} {root.path} [{DIM}]({state})[/]")
+    if cfg.encryption:
+        console.print(f"[{DIM}]Client-side encryption: on (passphrase stays ambient).[/]")
     console.print(f"[{DIM}]Never uploaded: integration credentials and model keys.[/]")
     return True
 
@@ -97,7 +99,9 @@ def _run_setup(console: Console, args: list[str]) -> bool:
     prefix = _flag_value(args, "prefix") or DEFAULT_REMOTE_SYNC_PREFIX
     region = _flag_value(args, "region") or ""
     profile = _flag_value(args, "profile") or ""
-    enabled = "--disabled" not in {a.lower() for a in args}
+    flags = {a.lower() for a in args}
+    enabled = "--disabled" not in flags
+    encryption = "--encrypt" in flags
     config = save_remote_sync_settings(
         RemoteSyncSetupRequest(
             bucket=bucket,
@@ -105,6 +109,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
             prefix=prefix,
             region=region,
             profile=profile,
+            encryption=encryption,
             enabled=enabled,
         )
     )

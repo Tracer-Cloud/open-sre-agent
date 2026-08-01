@@ -22,6 +22,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from platform.filestorage.content_codec import (
+    PLAINTEXT_CONTENT_CODEC,
+    ContentCodec,
+)
 from platform.filestorage.enums import SyncDirection
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import ObjectStore, RemoteObject
@@ -115,9 +119,11 @@ def push(
     roots: tuple[SyncRoot, ...] | None = None,
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
+    codec: ContentCodec | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
+    resolved_codec = codec if codec is not None else PLAINTEXT_CONTENT_CODEC
     result = report if report is not None else SyncReport()
     listing = remote if remote is not None else store.list_objects("")
     by_key = {obj.key: obj for obj in listing}
@@ -138,9 +144,10 @@ def push(
     for root, path in planned:
         key = _relative_key(root, path)
         data = path.read_bytes()
+        encoded = resolved_codec.encode(key, data)
         existing = by_key.get(key)
         if existing is not None:
-            if comparable_etag(existing) == content_tag(data):
+            if comparable_etag(existing) == content_tag(encoded):
                 result.skipped += 1
                 continue
             if existing.last_modified > _modified_at(path):
@@ -148,9 +155,9 @@ def push(
                 # destroy it. Same rule pull applies in the other direction.
                 result.kept_remote.append(key)
                 continue
-        store.put_object(key, data)
+        store.put_object(key, encoded)
         result.uploaded.append(key)
-        result.uploaded_bytes += len(data)
+        result.uploaded_bytes += len(encoded)
     return result
 
 
@@ -160,9 +167,11 @@ def pull(
     roots: tuple[SyncRoot, ...] | None = None,
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
+    codec: ContentCodec | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy."""
     roots = roots if roots is not None else syncable_roots()
+    resolved_codec = codec if codec is not None else PLAINTEXT_CONTENT_CODEC
     result = report if report is not None else SyncReport()
     by_name = {root.name: root for root in roots}
 
@@ -170,12 +179,12 @@ def pull(
         target = _local_path_for(obj, by_name)
         if target is None:
             continue
-        if not _should_download(obj, target):
+        if not _should_download(obj, target, resolved_codec):
             result.skipped += 1
             continue
         data = store.get_object(obj.key)
         result.downloaded_bytes += len(data)
-        _write_atomically(target, data)
+        _write_atomically(target, resolved_codec.decode(obj.key, data))
         result.downloaded.append(obj.key)
     return result
 
@@ -195,11 +204,15 @@ def _local_path_for(obj: RemoteObject, by_name: dict[str, SyncRoot]) -> Path | N
     return candidate
 
 
-def _should_download(obj: RemoteObject, target: Path) -> bool:
+def _should_download(
+    obj: RemoteObject,
+    target: Path,
+    codec: ContentCodec,
+) -> bool:
     if not target.exists():
         return True
     tag = comparable_etag(obj)
-    if tag and tag == content_tag(target.read_bytes()):
+    if tag and tag == content_tag(codec.encode(obj.key, target.read_bytes())):
         return False
     # Both sides changed: the more recent write wins.
     return obj.last_modified > _modified_at(target)
@@ -210,6 +223,7 @@ def run_sync(
     *,
     direction: SyncDirection = SyncDirection.BOTH,
     roots: tuple[SyncRoot, ...] | None = None,
+    codec: ContentCodec | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
@@ -217,11 +231,24 @@ def run_sync(
     the bucket, so the push half can reuse it.
     """
     report = SyncReport()
+    resolved_codec = codec if codec is not None else PLAINTEXT_CONTENT_CODEC
     listing = store.list_objects("")
     if direction is not SyncDirection.PUSH:
-        pull(store, roots=roots, report=report, remote=listing)
+        pull(
+            store,
+            roots=roots,
+            report=report,
+            remote=listing,
+            codec=resolved_codec,
+        )
     if direction is not SyncDirection.PULL:
-        push(store, roots=roots, report=report, remote=listing)
+        push(
+            store,
+            roots=roots,
+            report=report,
+            remote=listing,
+            codec=resolved_codec,
+        )
     return report
 
 

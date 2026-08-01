@@ -321,6 +321,7 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/remote-sync": _mcp(
         "Mirror this machine's sessions and memory to an object store the user "
         "owns (built-in: aws/S3, vercel Blob). Subcommands: status, sync, setup. "
+        "Setup accepts --encrypt for ambient-passphrase client-side encryption. "
         "Off until setup or env enable; integration credentials and model keys "
         "are never uploaded.",
         "User asks to sync, back up, set up remote sync, or restore conversations",

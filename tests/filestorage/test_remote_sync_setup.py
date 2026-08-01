@@ -11,7 +11,9 @@ from config.constants import paths as paths_mod
 from config.constants.filestorage import (
     BLOB_READ_WRITE_TOKEN_ENV,
     REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENCRYPTION_ENV,
     REMOTE_SYNC_ENV,
+    REMOTE_SYNC_PASSPHRASE_ENV,
     REMOTE_SYNC_PREFIX_ENV,
     REMOTE_SYNC_PROFILE_ENV,
     REMOTE_SYNC_PROVIDER_ENV,
@@ -27,6 +29,8 @@ from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_
 # these left set reaches the assertions instead of the fixture's value.
 _REMOTE_SYNC_ENV_NAMES = (
     REMOTE_SYNC_ENV,
+    REMOTE_SYNC_ENCRYPTION_ENV,
+    REMOTE_SYNC_PASSPHRASE_ENV,
     REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_PREFIX_ENV,
@@ -77,6 +81,35 @@ def test_save_requires_bucket(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
     with pytest.raises(RemoteSyncConfigError, match="bucket"):
         save_remote_sync_settings(RemoteSyncSetupRequest(bucket="  "))
+
+
+def test_save_persists_encryption_setting_but_never_the_passphrase(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, "must-not-be-persisted")
+
+    saved = save_remote_sync_settings(
+        RemoteSyncSetupRequest(bucket="private-store", encryption=True)
+    )
+
+    on_disk = (tmp_path / "config.yml").read_text(encoding="utf-8")
+    assert saved.encryption is True
+    assert "encryption: true" in on_disk
+    assert "must-not-be-persisted" not in on_disk
+    assert load_remote_sync_config() == saved
+
+
+def test_environment_can_enable_encryption(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "private-store")
+    monkeypatch.setenv(REMOTE_SYNC_ENCRYPTION_ENV, "true")
+
+    config = load_remote_sync_config()
+
+    assert config is not None
+    assert config.encryption is True
 
 
 def test_vercel_credential_hint_names_token_env() -> None:

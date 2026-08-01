@@ -14,7 +14,9 @@ import pytest
 
 from config.constants.filestorage import (
     REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENCRYPTION_ENV,
     REMOTE_SYNC_ENV,
+    REMOTE_SYNC_PASSPHRASE_ENV,
     REMOTE_SYNC_PREFIX_ENV,
 )
 from platform.filestorage import engine as sync_module
@@ -28,6 +30,13 @@ from platform.filestorage.syncable import SyncRoot, is_syncable
 # Planted in the credential files. If sync ever widens, this string shows up in
 # an uploaded object and the assertion below fails loudly.
 LEAKED_SECRET = "sk-live-CANARY-must-never-reach-the-bucket"
+
+
+@pytest.fixture(autouse=True)
+def _clear_remote_sync_encryption_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep plaintext behavior tests independent of developer encryption settings."""
+    monkeypatch.delenv(REMOTE_SYNC_ENCRYPTION_ENV, raising=False)
+    monkeypatch.delenv(REMOTE_SYNC_PASSPHRASE_ENV, raising=False)
 
 
 class FakeObjectStore:
@@ -190,6 +199,20 @@ def test_push_then_pull_restores_a_second_machine(
     assert sorted(report.downloaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
     assert (second / "sessions" / "abc.jsonl").read_text(encoding="utf-8") == '{"turn": 1}\n'
     assert (second / "memory" / "a-fact.md").read_text(encoding="utf-8") == "remembered\n"
+
+
+def test_default_sync_keeps_provider_bytes_unchanged(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """Encryption must remain opt-in for existing remote-sync configurations."""
+    store = FakeObjectStore()
+    session_bytes = (home / "sessions" / "abc.jsonl").read_bytes()
+    memory_bytes = (home / "memory" / "a-fact.md").read_bytes()
+
+    push(store, roots=roots)
+
+    assert store.objects["sessions/abc.jsonl"] == session_bytes
+    assert store.objects["memory/a-fact.md"] == memory_bytes
 
 
 def test_unchanged_files_are_skipped_not_reuploaded(
