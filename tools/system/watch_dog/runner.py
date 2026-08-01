@@ -20,7 +20,8 @@ from integrations.rocketchat.credentials import (
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from platform.common.exit_codes import ERROR, SUCCESS
-from tools.system.watch_dog.config import AlarmProvider, WatchdogConfig, WatchdogThreshold
+from platform.scheduler.types import Provider
+from tools.system.watch_dog.config import WatchdogConfig, WatchdogThreshold
 from tools.system.watch_dog.process_monitor import ProcessMonitor, ProcessSample, Sampler
 
 
@@ -94,7 +95,7 @@ def run_watchdog(
 
 
 def _build_dispatcher(config: WatchdogConfig) -> Dispatcher:
-    if config.provider == "rocketchat":
+    if config.provider == Provider.ROCKETCHAT:
         rc_creds = load_rocketchat_credentials_from_env(channel_override=config.chat_id)
         return RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=config.cooldown)
     creds = load_credentials_from_env(chat_id_override=config.chat_id)
@@ -183,7 +184,7 @@ def _alarm_started_and_command(sample: ProcessSample) -> tuple[str, str]:
 
 
 def _format_alarm_message(
-    sample: ProcessSample, breach: ThresholdBreach, *, provider: AlarmProvider
+    sample: ProcessSample, breach: ThresholdBreach, *, provider: Provider
 ) -> str:
     """Format the alarm body for the delivering provider.
 
@@ -192,7 +193,7 @@ def _format_alarm_message(
     provider gets its own markup around the same fields rather than sending
     one format to both.
     """
-    if provider == "rocketchat":
+    if provider == Provider.ROCKETCHAT:
         return _format_alarm_message_markdown(sample, breach)
     return _format_alarm_message_html(sample, breach)
 

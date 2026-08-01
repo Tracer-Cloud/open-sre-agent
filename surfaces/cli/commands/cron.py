@@ -11,7 +11,22 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from platform.scheduler.types import Provider, TaskKind
+
 _console = Console()
+
+# Sentry-kind tasks are created and listed only through `opensre sentry
+# digest`/`opensre sentry uptime watch` (dedicated Sentry-integration setup,
+# project_slug handling), not through this generic command group, so they
+# are deliberately excluded from --kind here rather than a hand-typed list
+# that happens to match.
+_CRON_ADD_SUPPORTED_KINDS: tuple[TaskKind, ...] = tuple(
+    kind
+    for kind in TaskKind
+    if kind not in (TaskKind.SENTRY_MORNING_DIGEST, TaskKind.SENTRY_UPTIME_WATCH)
+)
+_KIND_CHOICES = [k.value for k in _CRON_ADD_SUPPORTED_KINDS]
+_PROVIDER_CHOICES = [p.value for p in Provider]
 
 
 @click.group(name="cron")
@@ -22,17 +37,7 @@ def cron_command() -> None:
 @cron_command.command(name="add")
 @click.option(
     "--kind",
-    type=click.Choice(
-        [
-            "daily_summary",
-            "weekly_audit",
-            "incident_window_replay",
-            "synthetic_run",
-            "custom_investigation",
-            "github_pr_sweep",
-        ],
-        case_sensitive=False,
-    ),
+    type=click.Choice(_KIND_CHOICES, case_sensitive=False),
     required=True,
     help="The kind of scheduled task.",
 )
@@ -53,7 +58,7 @@ def cron_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack", "discord", "rocketchat"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )
@@ -80,7 +85,7 @@ def cron_add(
     window_hours: int,
 ) -> None:
     """Add a new scheduled delivery task."""
-    from platform.scheduler.types import Provider, ScheduledTask, TaskKind
+    from platform.scheduler.types import ScheduledTask
 
     # Validate cron expression by constructing the APScheduler trigger
     _validate_cron_and_timezone(cron_expr, timezone)

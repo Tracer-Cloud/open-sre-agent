@@ -10,7 +10,11 @@ import pytest
 from botocore.exceptions import ClientError
 from botocore.validate import validate_parameters
 
+import config.constants.tenancy as tenancy_constants
+from config.constants.billing import MACHINE_SECRET_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
+from config.constants.billing import ORGANIZATION_ID_ENV as BILLING_ORGANIZATION_ID_ENV
 from platform.deployment_multi_tenant.lambda_control_plane.aws.ecs import (
+    _ALLOWED_ENVIRONMENT,
     FargateServiceSpec,
     GatewayTaskDefinitionSpec,
     TenantEcsAdapter,
@@ -593,3 +597,56 @@ def test_secret_adapter_disables_reads_with_reversible_resource_policy() -> None
 
     secrets_client.delete_resource_policy.assert_called_once_with(SecretId=BOOTSTRAP_SECRET_ARN)
     secrets_client.put_resource_policy.assert_not_called()
+
+
+# The env a silo needs, but from the product's side: names it reads at runtime
+# rather than names the control plane happens to set. Every silent failure this
+# guards has the same shape — the product reads a name infra never injects, so
+# the feature returns "not configured" and the silo looks healthy.
+#
+# Wiring a name means adding it to _ALLOWED_ENVIRONMENT *and* setting it in
+# register_gateway_task_definition; the allow-list alone is what this pins,
+# because an optional value (OPENSRE_CREDENTIALS_API_URL) is legitimately
+# absent from any one task definition.
+_WEBAPP_CONNECTION_ENV = frozenset(
+    {WEBAPP_URL_ENV, USAGE_SECRET_ENV, MACHINE_SECRET_ENV, BILLING_ORGANIZATION_ID_ENV}
+)
+
+# Known gap, asserted exactly so it can only shrink: the control plane cannot
+# set any of these, so on a control-plane silo credits metering reports
+# UNCONFIGURED and the webapp vault resolves nothing. Delete a name here when
+# infra starts injecting it — a stale entry fails this test.
+_UNWIRED_WEBAPP_CONNECTION_ENV = frozenset(
+    {WEBAPP_URL_ENV, USAGE_SECRET_ENV, MACHINE_SECRET_ENV, BILLING_ORGANIZATION_ID_ENV}
+)
+
+
+def test_every_silo_env_name_the_product_reads_can_be_set_by_the_control_plane() -> None:
+    """The product's silo env contract is a subset of what infra may inject.
+
+    Two lists describe one contract — ``config.constants.tenancy`` on the
+    product side, ``_ALLOWED_ENVIRONMENT`` on the infra side — and nothing
+    compared them, so a reader could be added against a name no deployment
+    sets. That is how the integrations secret went unread and metering went
+    silently unconfigured.
+    """
+    # Arrange: the names tenancy declares, which is exactly "env the control
+    # plane injects into a gateway silo". Reading __all__ keeps this honest —
+    # a new constant there is covered without touching this test.
+    declared = {
+        getattr(tenancy_constants, name)
+        for name in tenancy_constants.__all__
+        if name.endswith("_ENV")
+    }
+
+    # Act / Assert
+    assert declared <= _ALLOWED_ENVIRONMENT, (
+        "these env names are read by the product but the control plane cannot set them: "
+        f"{sorted(declared - _ALLOWED_ENVIRONMENT)}"
+    )
+
+
+def test_the_unwired_webapp_connection_env_is_exactly_the_known_gap() -> None:
+    """Pin the outstanding gap so it can shrink but never silently grow."""
+    # Act / Assert
+    assert _WEBAPP_CONNECTION_ENV - _ALLOWED_ENVIRONMENT == _UNWIRED_WEBAPP_CONNECTION_ENV
