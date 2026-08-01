@@ -86,7 +86,7 @@ Example **Telegram** output when replaying that fixture (critical exit, tracebac
 
 **Why you might see no Telegram:** `warning_burst` needs **five** warnings from the same logger within **60 seconds** (`IncidentClassifier` defaults). Several synthetic scenarios set a lower threshold in `scenario.yml` for **pytest only**; the CLI watcher ignores that file. For example `000-telegram-polling-conflict` expects bursts of **three** warnings — the suite passes, but **`hermes watch` on that file emits no `warning_burst` incidents**, so nothing is sent. Use a log with hard errors (like `002-*`) or your real `errors.log` once Hermes is writing enough warnings.
 
-Correlator **dedup** can also reduce multiple Telegram sends for the same fingerprint; check shutdown line `hermes-watch: correlator metrics delivered=…` — if `delivered=0`, the classifier did not emit any routable incidents for that run.
+Correlator **dedup** can also reduce multiple deliveries (either provider) for the same fingerprint; check shutdown line `hermes-watch: correlator metrics delivered=…` — if `delivered=0`, the classifier did not emit any routable incidents for that run.
 
 ### Common options
 
@@ -97,7 +97,7 @@ Correlator **dedup** can also reduce multiple Telegram sends for the same finger
 | `--chat-id ID` | Overrides the provider's default destination (`TELEGRAM_DEFAULT_CHAT_ID` or `ROCKETCHAT_DEFAULT_CHANNEL`) for this run |
 | `--cooldown-seconds N` | Per-fingerprint cooldown before the same incident is sent again (default `300`) |
 | `--from-start` | Replay the file from the beginning, then tail |
-| `--investigate` / `--no-investigate` | Run an OpenSRE RCA for `HIGH` / `CRITICAL` incidents and append the summary to Telegram |
+| `--investigate` / `--no-investigate` | Run an OpenSRE RCA for `HIGH` / `CRITICAL` incidents and append the summary to the delivered message |
 | `--correlate` / `--no-correlate` | Route through the correlator (dedup, escalation, routing). Default: **on** |
 | `--dedup-window-seconds` | Correlator dedup window when `--correlate` is on |
 | `--escalation-threshold` / `--escalation-window-seconds` | Repeat-hit escalation knobs when `--correlate` is on |
@@ -123,7 +123,7 @@ For production on-call, you normally run **one long-lived watcher** with the RCA
 uv run opensre hermes watch --investigate
 ```
 
-Configure **LLM + integrations** as for any OpenSRE investigation ([quickstart](/quickstart)). When the classifier emits **HIGH** or **CRITICAL** incidents, each qualifying incident triggers **`run_investigation`** via the Telegram sink. Work runs on a **bounded thread pool** with a **timeout** so log tailing stays responsive; **MEDIUM** and lower stay on a lighter notification path by default.
+Configure **LLM + integrations** as for any OpenSRE investigation ([quickstart](/quickstart)). When the classifier emits **HIGH** or **CRITICAL** incidents, each qualifying incident triggers **`run_investigation`** via the sink, regardless of `--provider`. Work runs on a **bounded thread pool** with a **timeout** so log tailing stays responsive; **MEDIUM** and lower stay on a lighter notification path by default.
 
 For **ad hoc** Hermes log context during **another** investigation (for example Grafana-driven RCA), use **`get_hermes_logs`** below — it samples the log and does not replace a long-running **`opensre hermes watch`** for continuous classification.
 
