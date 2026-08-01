@@ -78,9 +78,9 @@ def status_from_tool_start(tool_name: str, tool_input: Any = None) -> str:
 @lru_cache(maxsize=256)
 def _tool_label(tool_name: str) -> str:
     """First clause of the tool's display name or description, else its humanized name."""
-    from tools.registry import get_registered_tools
+    from tools.registry import get_registered_tool
 
-    tool = next((t for t in get_registered_tools() if t.name == tool_name), None)
+    tool = get_registered_tool(tool_name)
     candidates = (tool.display_name or "", tool.description) if tool else ()
     for text in (*candidates, tool_name.replace("_", " ")):
         clause = re.split(r"\.\s| — | - |; ", " ".join(text.split()), maxsplit=1)[0]

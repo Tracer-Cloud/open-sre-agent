@@ -287,6 +287,11 @@ class JsonlSessionStorage:
             if not self._has_turns(records):
                 path.unlink(missing_ok=True)
                 return
+            # ``records`` is not re-read after the appends below. The counts in
+            # the leaf entry only match ``custom_message``/``turn_stub`` records,
+            # and the guard below only looks for ``message`` records — neither
+            # append can produce either, so a re-parse would return the same
+            # answers for the cost of a full pass over the whole transcript.
             if session.accumulated_context:
                 self.append_custom_message(
                     session.session_id,
@@ -294,7 +299,6 @@ class JsonlSessionStorage:
                     content=dict(session.accumulated_context),
                     display=False,
                 )
-                records = self._read_records(path)
             if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
                 for role, content in session.agent.messages:
                     self.append_message(
@@ -303,7 +307,6 @@ class JsonlSessionStorage:
                         content=content,
                         metadata={"kind": "chat"},
                     )
-                records = self._read_records(path)
             duration_secs = max(
                 0,
                 int(

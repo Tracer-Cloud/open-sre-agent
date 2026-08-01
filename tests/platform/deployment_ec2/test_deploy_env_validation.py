@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from platform.deployment_multi_tenant.utils import prep_ec2_deployment as prep
+from platform.deployment_ec2 import prep_ec2_deployment as prep
 
 
 def test_validate_deploy_env_passes_with_telegram(

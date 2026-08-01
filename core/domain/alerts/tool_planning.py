@@ -20,31 +20,31 @@ class PlannableTool(Protocol):
 
     @property
     def name(self) -> str:
-        raise NotImplementedError
+        """Stable tool name used in plans and evidence keys."""
 
     @property
     def source(self) -> str:
-        raise NotImplementedError
+        """Integration / capability source the tool belongs to."""
 
     @property
     def description(self) -> str:
-        raise NotImplementedError
+        """Short description scored against alert text."""
 
     @property
     def use_cases(self) -> Sequence[str]:
-        raise NotImplementedError
+        """When this tool should be considered."""
 
     @property
     def examples(self) -> Sequence[str]:
-        raise NotImplementedError
+        """Example prompts or payloads for metadata matching."""
 
     @property
     def tags(self) -> Sequence[str]:
-        raise NotImplementedError
+        """Planning tags (e.g. fallback)."""
 
     @property
     def evidence_type(self) -> Any:
-        raise NotImplementedError
+        """Evidence kind this tool produces, if any."""
 
 
 def score_tools(
@@ -57,6 +57,7 @@ def score_tools(
     alert_text = collect_alert_text(state)
     existing_evidence = state.get("evidence")
     evidence_keys = set(existing_evidence) if isinstance(existing_evidence, dict) else set()
+    secondary_sources = secondary_tool_sources()
 
     scored = [
         score_tool(
@@ -65,13 +66,13 @@ def score_tools(
             primary_sources=primary_sources,
             relevant_sources=relevant_sources,
             evidence_keys=evidence_keys,
+            secondary_sources=secondary_sources,
         )
         for tool in tools
     ]
     if scored and max(action.score for action in scored) <= 0:
         scored = [score_fallback_tool(action) for action in scored]
 
-    secondary_sources = secondary_tool_sources()
     return sorted(
         scored, key=lambda item: (-item.score, item.source in secondary_sources, item.name)
     )
@@ -84,10 +85,12 @@ def score_tool(
     primary_sources: set[str],
     relevant_sources: set[str],
     evidence_keys: set[str],
+    secondary_sources: frozenset[str] | set[str] | None = None,
 ) -> PlannedInvestigationAction:
     source = str(tool.source)
     score = 0
     reasons: list[str] = []
+    secondary = secondary_sources if secondary_sources is not None else secondary_tool_sources()
 
     if source in primary_sources:
         score += 100
@@ -95,7 +98,7 @@ def score_tool(
     if source in relevant_sources:
         score += 70
         reasons.append(f"source '{source}' matches alert context")
-    if source in secondary_tool_sources():
+    if source in secondary:
         score -= 10
         reasons.append("secondary source, used after integration-specific tools")
 
