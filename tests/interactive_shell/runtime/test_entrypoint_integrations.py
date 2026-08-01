@@ -477,3 +477,53 @@ def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
     # Assert
     assert exit_code == 0
     assert seen == [captured]
+
+
+def test_package_facade_exposes_every_runtime_parameter() -> None:
+    """``surfaces.interactive_shell.run_repl`` is the seam embedders import.
+
+    It repeats the runtime signature rather than erasing it to ``*args``, which
+    keeps type checking but means a parameter added to the runtime and not here
+    is unreachable — ``console=`` was, so redirecting shell output raised
+    TypeError through the public import.
+    """
+    # Arrange
+    import inspect
+
+    from surfaces.interactive_shell import run_repl as facade
+    from surfaces.interactive_shell.main import run_repl as runtime
+
+    # Act
+    facade_params = inspect.signature(facade).parameters
+    runtime_params = inspect.signature(runtime).parameters
+
+    # Assert
+    assert set(runtime_params) <= set(facade_params), (
+        "runtime parameters missing from the package facade: "
+        f"{sorted(set(runtime_params) - set(facade_params))}"
+    )
+
+
+def test_console_injection_works_through_the_package_facade(monkeypatch: Any) -> None:
+    """Capturing shell output must work via the documented import path."""
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from config.repl_config import ReplConfig
+    from surfaces.interactive_shell import run_repl as facade
+
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: console.print("SPLASH"))
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    exit_code = facade(config=ReplConfig(enabled=True, layout="classic"), console=captured)
+
+    # Assert
+    assert exit_code == 0
+    assert "SPLASH" in captured.file.getvalue()  # type: ignore[attr-defined]
