@@ -98,8 +98,7 @@ def register_object_store(
         _REGISTRY[key] = factory
         if credential_hint is not None:
             _CREDENTIAL_HINTS[key] = credential_hint
-        if extra_fields:
-            _EXTRA_FIELDS[key] = extra_fields
+        _EXTRA_FIELDS[key] = extra_fields
 
 
 def unregister_object_store(name: str) -> None:
