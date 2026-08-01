@@ -764,3 +764,56 @@ def test_investigation_progress_display_uses_the_supplied_console(
     # Assert
     assert tracker._display is not None
     assert tracker._display._console is captured  # type: ignore[attr-defined]
+
+
+def test_action_investigation_ports_forward_the_supplied_console(
+    monkeypatch: Any,
+) -> None:
+    """``investigation_start`` / ``alert_sample`` must keep the turn console.
+
+    Slash ``/investigate`` already threaded ``console=`` into the session runner.
+    Action-tool ports called the same adapters without it, so an embedding
+    caller that captured the conversation still lost investigation progress.
+    """
+    # Arrange
+    import surfaces.interactive_shell.runtime.investigation_adapter as adapter
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    seen_text: list[Console | None] = []
+    seen_sample: list[Console | None] = []
+
+    def _fake_text(**kwargs: Any) -> dict[str, Any]:
+        seen_text.append(kwargs.get("console"))
+        return {}
+
+    def _fake_sample(**kwargs: Any) -> dict[str, Any]:
+        seen_sample.append(kwargs.get("console"))
+        return {}
+
+    def _unused_background(**_kwargs: Any) -> str:
+        raise AssertionError("background launcher should not run")
+
+    monkeypatch.setattr(adapter, "run_investigation_for_session", _fake_text)
+    monkeypatch.setattr(adapter, "run_sample_alert_for_session", _fake_sample)
+    ports = adapter.repl_investigation_launch_ports(
+        start_background_text=_unused_background,
+        start_background_sample=_unused_background,
+    )
+
+    # Act
+    ports.run_text_investigation(
+        alert_text="cpu high",
+        context_overrides=None,
+        cancel_requested=None,
+        console=captured,
+    )
+    ports.run_sample_alert(
+        template_name="generic",
+        context_overrides=None,
+        cancel_requested=None,
+        console=captured,
+    )
+
+    # Assert
+    assert seen_text == [captured]
+    assert seen_sample == [captured]

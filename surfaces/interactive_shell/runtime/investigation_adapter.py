@@ -182,11 +182,13 @@ class ReplInvestigationLaunchPorts:
         alert_text: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
         return run_investigation_for_session(
             alert_text=alert_text,
             context_overrides=context_overrides,
             cancel_requested=cancel_requested,
+            console=console,
         )
 
     def run_sample_alert(
@@ -195,11 +197,13 @@ class ReplInvestigationLaunchPorts:
         template_name: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
         return run_sample_alert_for_session(
             template_name=template_name,
             context_overrides=context_overrides,
             cancel_requested=cancel_requested,
+            console=console,
         )
 
     def start_background_text(

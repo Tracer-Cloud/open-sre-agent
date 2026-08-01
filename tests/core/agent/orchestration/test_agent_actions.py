@@ -686,15 +686,19 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
 
 def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     calls: list[str] = []
+    session = Session()
+    console, buf = _capture()
 
     def _fake_run_sample_alert_for_session(
         *,
         template_name: str = "generic",
         context_overrides: dict[str, object] | None = None,
         cancel_requested: object | None = None,
+        console: Console | None = None,
     ) -> dict[str, object]:
         calls.append(template_name)
         assert context_overrides is None
+        assert console is turn_console
         return {
             "root_cause": "sample failure",
             "problem_md": "sample",
@@ -703,14 +707,12 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 
     import surfaces.interactive_shell.runtime.investigation_adapter as investigation_adapter
 
+    turn_console = console
     monkeypatch.setattr(
         investigation_adapter,
         "run_sample_alert_for_session",
         _fake_run_sample_alert_for_session,
     )
-
-    session = Session()
-    console, buf = _capture()
 
     assert (
         action_turn.run_action_tool_turn("okay launch a simple alert", session, console).handled
@@ -744,7 +746,9 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
         template_name: str = "generic",
         context_overrides: dict[str, object] | None = None,
         cancel_requested: object | None = None,
+        console: Console | None = None,
     ) -> dict[str, object]:
+        _ = console
         raise OpenSREError("sample pipeline blocked")
 
     import surfaces.interactive_shell.runtime.investigation_adapter as investigation_adapter

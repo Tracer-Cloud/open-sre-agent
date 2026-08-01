@@ -91,6 +91,7 @@ class InvestigationLaunchPorts(Protocol):
         alert_text: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
         raise NotImplementedError
 
@@ -100,6 +101,7 @@ class InvestigationLaunchPorts(Protocol):
         template_name: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
         raise NotImplementedError
 
