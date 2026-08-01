@@ -180,12 +180,24 @@ def test_malformed_md5_hash_gets_no_tag() -> None:
     assert _content_etag(base64.b64encode(b"short").decode()) == ""
 
 
-def test_missing_item_metadata_falls_back_safely() -> None:
-    item = {"name": "opensre/sessions/a.jsonl"}
+def test_missing_updated_timestamp_fails_closed() -> None:
+    """An object without a trustworthy timestamp must stop the sync, not be overwritten."""
+    item = {"name": "opensre/sessions/a.jsonl", "size": "3"}
     store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
-    (obj,) = store.list_objects("")
-    assert obj.size == 0
-    assert obj.last_modified == datetime.fromtimestamp(0, tz=UTC)
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+        store.list_objects("")
+
+
+def test_push_never_uploads_over_an_unknown_remote_timestamp(roots: tuple[SyncRoot, ...]) -> None:
+    item = {"name": "opensre/sessions/a.jsonl", "size": "3"}  # no updated field
+    session = _FakeSession(items=[item])
+    store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=session)
+
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+        push(store, roots=roots)
+
+    # The sync stopped at the listing: nothing local was sent over the wire.
+    assert session.objects == {}
 
 
 def test_get_and_put_route_through_the_configured_prefix() -> None:
@@ -216,11 +228,17 @@ def test_list_paginates_via_next_page_token() -> None:
             self.list_params.append(params)
             if params.get("pageToken") == "t2":
                 return _FakeResponse(
-                    payload={"items": [{"name": "opensre/sessions/b.jsonl", "size": "3"}]}
+                    payload={
+                        "items": [
+                            {"name": "opensre/sessions/b.jsonl", "size": "3", "updated": _UPDATED}
+                        ]
+                    }
                 )
             return _FakeResponse(
                 payload={
-                    "items": [{"name": "opensre/sessions/a.jsonl", "size": "3"}],
+                    "items": [
+                        {"name": "opensre/sessions/a.jsonl", "size": "3", "updated": _UPDATED}
+                    ],
                     "nextPageToken": "t2",
                 }
             )
@@ -283,20 +301,20 @@ def test_malformed_list_payloads_are_wrapped(payload: dict[str, Any] | list[str]
         store.list_objects("")
 
 
-def test_naive_timestamp_falls_back_to_epoch() -> None:
+def test_naive_timestamp_fails_closed() -> None:
     """An offset-less timestamp cannot be ordered against aware UTC mtimes."""
     item = {"name": "opensre/sessions/a.jsonl", "size": "3", "updated": "2026-01-01T00:00:00"}
     store = GCSObjectStore(RemoteSyncConfig(bucket="b"), session=_FakeSession(items=[item]))
-    (obj,) = store.list_objects("")
-    assert obj.last_modified == datetime.fromtimestamp(0, tz=UTC)
+    with pytest.raises(RemoteSyncUnavailableError, match="cannot list"):
+        store.list_objects("")
 
 
 @pytest.mark.parametrize(
     ("item", "expected_size", "expected_etag"),
     [
-        ({"name": "opensre/sessions/a.jsonl", "size": None}, 0, ""),
-        ({"name": "opensre/sessions/a.jsonl", "size": "not-a-number"}, 0, ""),
-        ({"name": "opensre/sessions/a.jsonl", "md5Hash": 42}, 0, ""),
+        ({"name": "opensre/sessions/a.jsonl", "updated": _UPDATED, "size": None}, 0, ""),
+        ({"name": "opensre/sessions/a.jsonl", "updated": _UPDATED, "size": "not-a-number"}, 0, ""),
+        ({"name": "opensre/sessions/a.jsonl", "updated": _UPDATED, "md5Hash": 42}, 0, ""),
     ],
 )
 def test_malformed_metadata_fields_fall_back_instead_of_escaping(

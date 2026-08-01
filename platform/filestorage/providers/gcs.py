@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -36,8 +36,6 @@ _UPLOAD_BASE = "https://storage.googleapis.com/upload/storage/v1"
 _SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
 _LIST_FIELDS = "items(name,size,updated,md5Hash),nextPageToken"
 _TIMEOUT = 30.0
-
-_EPOCH = datetime.fromtimestamp(0, tz=UTC)
 
 
 class GCSObjectStore:
@@ -136,15 +134,19 @@ class GCSObjectStore:
 
 
 def _parse_updated(value: Any) -> datetime:
-    """RFC 3339 listing timestamp; a malformed or offset-less one reads as "oldest"."""
+    """RFC 3339 listing timestamp, or raise if it cannot be trusted.
+
+    A missing, malformed, or offset-less timestamp must never be guessed at:
+    inventing an ordering (epoch) makes the remote object look older than it
+    may be, and ``push`` would upload over it. The ValueError lands in the
+    caller's boundary as RemoteSyncUnavailableError, so the sync stops instead.
+    """
     if not isinstance(value, str) or not value:
-        return _EPOCH
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return _EPOCH
-    # A naive timestamp cannot be ordered against the engine's aware UTC mtimes.
-    return parsed if parsed.tzinfo is not None else _EPOCH
+        raise ValueError("GCS object is missing its updated timestamp")
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        raise ValueError(f"GCS object timestamp has no offset: {value!r}")
+    return parsed
 
 
 def _parse_size(value: Any) -> int:
