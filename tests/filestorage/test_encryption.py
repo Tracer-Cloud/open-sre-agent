@@ -14,6 +14,7 @@ from platform.filestorage.engine import content_tag, pull, push
 from platform.filestorage.errors import (
     RemoteSyncConfigError,
     RemoteSyncEncryptionError,
+    UnsyncablePathError,
 )
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.syncable import SyncRoot
@@ -230,6 +231,28 @@ def test_shared_service_rejects_a_nonempty_unverified_prefix_before_upload(
         operations.run_remote_sync(push_only=True)
 
     assert store.objects == original_objects
+
+
+def test_shared_service_preflights_local_files_before_initializing_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from platform.filestorage import operations
+
+    monkeypatch.setenv(REMOTE_SYNC_PASSPHRASE_ENV, _PASSPHRASE)
+    source = tmp_path / "sessions"
+    source.mkdir()
+    (source / "config.yml").write_text("must stay local", encoding="utf-8")
+    roots = (SyncRoot(name="sessions", path=source),)
+    store = _MemoryStore()
+    monkeypatch.setattr(operations, "load_remote_sync_config", _encrypted_config)
+    monkeypatch.setattr(operations, "syncable_roots", lambda: roots)
+    monkeypatch.setattr(operations, "build_object_store", lambda _config: store)
+
+    with pytest.raises(UnsyncablePathError):
+        operations.run_remote_sync(push_only=True)
+
+    assert store.objects == {}
 
 
 def test_shared_service_refuses_to_disable_encryption_on_an_initialized_prefix(

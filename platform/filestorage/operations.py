@@ -27,7 +27,7 @@ from platform.filestorage.encryption import (
     content_codec_for,
     prepare_remote_content,
 )
-from platform.filestorage.engine import SyncReport, resolve_direction, run_sync
+from platform.filestorage.engine import SyncReport, plan_push, resolve_direction, run_sync
 from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import OrgScopeNotSupportedError
 from platform.filestorage.providers import build_object_store
@@ -117,6 +117,7 @@ def run_remote_sync(
     roots = syncable_roots()
     codec = content_codec_for(config)
     store = build_object_store(config)
+    push_plan = plan_push(roots) if resolved is not SyncDirection.PULL else None
     remote = prepare_remote_content(
         store,
         codec,
@@ -130,6 +131,7 @@ def run_remote_sync(
             roots=roots,
             codec=codec,
             remote=remote,
+            push_plan=push_plan,
         )
     )
 

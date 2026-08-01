@@ -127,6 +127,14 @@ def _strict_flag(value: object, *, source: str) -> bool:
     raise RemoteSyncConfigError(f"{source} must be one of: 1, 0, true, false, yes, no, on, off")
 
 
+def load_stored_encryption_setting() -> bool:
+    """Return the persisted encryption mode, failing closed on invalid data."""
+    value = _stored_section().get("encryption")
+    if value is None:
+        return False
+    return _strict_flag(value, source="remote_sync.encryption")
+
+
 def remote_sync_enabled() -> bool:
     """Whether sync is on in the environment or the stored settings file."""
     env = os.getenv(REMOTE_SYNC_ENV)
@@ -184,4 +192,9 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     )
 
 
-__all__ = ["RemoteSyncConfig", "load_remote_sync_config", "remote_sync_enabled"]
+__all__ = [
+    "RemoteSyncConfig",
+    "load_remote_sync_config",
+    "load_stored_encryption_setting",
+    "remote_sync_enabled",
+]

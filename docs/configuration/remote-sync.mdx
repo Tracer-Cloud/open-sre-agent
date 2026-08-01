@@ -128,6 +128,11 @@ encrypt sessions and memory before upload. Keep
 same value on every machine. The passphrase is never written to
 `~/.opensre/config.yml`.
 
+Later setup runs preserve the stored encryption mode when neither encryption
+flag is given. Use `--no-encrypt` only when you intentionally want plaintext,
+and choose a new empty prefix because plaintext sync refuses a prefix already
+initialized for encryption.
+
 The first encrypted upload adds a small encrypted verification object to the
 prefix. Later syncs validate it before uploading anything, so a missing or
 incorrect passphrase fails before remote content can be changed. An empty

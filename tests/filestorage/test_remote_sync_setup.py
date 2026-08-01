@@ -100,6 +100,35 @@ def test_save_persists_encryption_setting_but_never_the_passphrase(
     assert load_remote_sync_config() == saved
 
 
+def test_setup_preserves_stored_encryption_when_mode_is_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    save_remote_sync_settings(RemoteSyncSetupRequest(bucket="private-store", encryption=True))
+
+    saved = save_remote_sync_settings(RemoteSyncSetupRequest(bucket="renamed-store"))
+
+    assert saved.bucket == "renamed-store"
+    assert saved.encryption is True
+    assert load_remote_sync_config() == saved
+
+
+def test_setup_can_explicitly_disable_stored_encryption(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    save_remote_sync_settings(RemoteSyncSetupRequest(bucket="private-store", encryption=True))
+
+    saved = save_remote_sync_settings(
+        RemoteSyncSetupRequest(bucket="private-store", encryption=False)
+    )
+
+    assert saved.encryption is False
+    assert load_remote_sync_config() == saved
+
+
 def test_environment_can_enable_encryption(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")

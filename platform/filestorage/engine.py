@@ -113,6 +113,18 @@ def _write_atomically(target: Path, data: bytes) -> None:
         raise
 
 
+def plan_push(roots: tuple[SyncRoot, ...]) -> list[tuple[SyncRoot, Path]]:
+    """Collect and validate every local file before remote state can change."""
+    allowed = resolved_roots(roots)
+    planned: list[tuple[SyncRoot, Path]] = []
+    for root in roots:
+        for path in _local_files(root):
+            if not allowed.contains(path):
+                raise UnsyncablePathError(f"refusing to upload {path}")
+            planned.append((root, path))
+    return planned
+
+
 def push(
     store: ObjectStore,
     *,
@@ -120,6 +132,7 @@ def push(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     codec: ContentCodec | None = None,
+    planned: list[tuple[SyncRoot, Path]] | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket."""
     roots = roots if roots is not None else syncable_roots()
@@ -127,21 +140,8 @@ def push(
     result = report if report is not None else SyncReport()
     listing = remote if remote is not None else store.list_objects("")
     by_key = {obj.key: obj for obj in listing}
-    # Resolve each root once rather than per file: this loop touches every
-    # session and memory file on the machine.
-    allowed = resolved_roots(roots)
-
-    # Check every candidate before uploading any of them. A denied file found
-    # halfway through must not leave earlier files already in the store.
-    planned: list[tuple[SyncRoot, Path]] = []
-    for root in roots:
-        for path in _local_files(root):
-            if not allowed.contains(path):
-                # Reaching here means a root pointed somewhere it should not.
-                raise UnsyncablePathError(f"refusing to upload {path}")
-            planned.append((root, path))
-
-    for root, path in planned:
+    candidates = planned if planned is not None else plan_push(roots)
+    for root, path in candidates:
         key = _relative_key(root, path)
         data = path.read_bytes()
         encoded = resolved_codec.encode(key, data)
@@ -225,6 +225,7 @@ def run_sync(
     roots: tuple[SyncRoot, ...] | None = None,
     codec: ContentCodec | None = None,
     remote: list[RemoteObject] | None = None,
+    push_plan: list[tuple[SyncRoot, Path]] | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
@@ -249,6 +250,7 @@ def run_sync(
             report=report,
             remote=listing,
             codec=resolved_codec,
+            planned=push_plan,
         )
     return report
 
@@ -258,6 +260,7 @@ __all__ = [
     "SyncReport",
     "comparable_etag",
     "content_tag",
+    "plan_push",
     "pull",
     "push",
     "resolve_direction",

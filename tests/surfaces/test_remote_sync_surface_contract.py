@@ -140,3 +140,42 @@ def test_top_level_cli_remote_sync_setup_enables_client_encryption(
     assert result.exit_code == 0, result.output
     assert "Client-side encryption is on" in result.output
     assert "encryption: true" in (tmp_path / "config.yml").read_text(encoding="utf-8")
+
+
+def test_top_level_cli_remote_sync_setup_preserves_encryption_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    runner = CliRunner()
+    first = runner.invoke(
+        cli,
+        [
+            "remote-sync",
+            "setup",
+            "--provider",
+            "aws",
+            "--bucket",
+            "private-history",
+            "--encrypt",
+        ],
+    )
+    assert first.exit_code == 0, first.output
+
+    second = runner.invoke(
+        cli,
+        [
+            "remote-sync",
+            "setup",
+            "--provider",
+            "aws",
+            "--bucket",
+            "renamed-history",
+        ],
+    )
+
+    assert second.exit_code == 0, second.output
+    assert "Client-side encryption is on" in second.output
+    assert "encryption: true" in (tmp_path / "config.yml").read_text(encoding="utf-8")

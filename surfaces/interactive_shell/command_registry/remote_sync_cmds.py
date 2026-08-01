@@ -28,7 +28,20 @@ logger = logging.getLogger(__name__)
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}|"
     f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only] "
-    f"[--provider … --bucket …] [--encrypt]"
+    f"[--provider … --bucket …] [--encrypt|--no-encrypt]"
+)
+_SETUP_FLAGS = frozenset(
+    {
+        "--provider",
+        "--bucket",
+        "--prefix",
+        "--region",
+        "--profile",
+        "--enabled",
+        "--disabled",
+        "--encrypt",
+        "--no-encrypt",
+    }
 )
 
 
@@ -77,7 +90,7 @@ def _flag_value(args: list[str], name: str) -> str | None:
     """Return ``--name value`` from ``args``, or None."""
     token = f"--{name}"
     for index, arg in enumerate(args):
-        if arg == token and index + 1 < len(args):
+        if arg == token and index + 1 < len(args) and not args[index + 1].startswith("--"):
             return args[index + 1]
         if arg.startswith(f"{token}="):
             return arg.split("=", 1)[1]
@@ -86,6 +99,16 @@ def _flag_value(args: list[str], name: str) -> str | None:
 
 def _run_setup(console: Console, args: list[str]) -> bool:
     """Write stored settings from flags (gateway-safe: no interactive prompts)."""
+    raw_flags = {arg.lower() for arg in args if arg.startswith("--")}
+    flags = {flag.split("=", 1)[0] for flag in raw_flags}
+    unknown = flags - _SETUP_FLAGS
+    if unknown:
+        console.print(f"[{ERROR}]unknown flag(s):[/] {', '.join(sorted(unknown))}")
+        return True
+    if {"--encrypt", "--no-encrypt"} <= flags:
+        console.print(f"[{ERROR}]choose one of --encrypt or --no-encrypt, not both[/]")
+        return True
+
     provider = _flag_value(args, "provider") or DEFAULT_REMOTE_SYNC_PROVIDER
     bucket = _flag_value(args, "bucket")
     if not bucket or not bucket.strip():
@@ -99,15 +122,12 @@ def _run_setup(console: Console, args: list[str]) -> bool:
     prefix = _flag_value(args, "prefix") or DEFAULT_REMOTE_SYNC_PREFIX
     region = _flag_value(args, "region") or ""
     profile = _flag_value(args, "profile") or ""
-    raw_flags = {a.lower() for a in args if a.startswith("--")}
-    flags = {f.split("=", 1)[0] for f in raw_flags}
-    allowed = {"--provider", "--bucket", "--prefix", "--region", "--profile", "--enabled", "--disabled", "--encrypt"}
-    unknown = flags - allowed
-    if unknown:
-        console.print(f"[{ERROR}]unknown flag(s):[/] {', '.join(sorted(unknown))}")
-        return True
     enabled = "--disabled" not in flags
-    encryption = "--encrypt" in flags
+    encryption: bool | None = None
+    if "--encrypt" in flags:
+        encryption = True
+    elif "--no-encrypt" in flags:
+        encryption = False
     config = save_remote_sync_settings(
         RemoteSyncSetupRequest(
             bucket=bucket,
