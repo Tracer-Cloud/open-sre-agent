@@ -52,7 +52,13 @@ class StreamRenderer:
     in real time with tool calls, LLM reasoning, and other decisions.
     """
 
-    def __init__(self, *, local: bool = False, display: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        local: bool = False,
+        display: bool = True,
+        console: Console | None = None,
+    ) -> None:
         self._tracker = ProgressTracker()
         self._active_node: str | None = None
         self._events_received: int = 0
@@ -65,7 +71,9 @@ class StreamRenderer:
         # instead of into the compact spinner subtext. The helper owns the
         # buffer + Live region + throttle state; the renderer only
         # orchestrates lifecycle (active_node tracking, finish-on-end).
-        self._console = Console(highlight=False)
+        # An embedding caller's console keeps investigation progress and tool
+        # detail in the same stream as the rest of the turn.
+        self._console = console if console is not None else Console(highlight=False)
         self._diagnose = _DiagnoseStreamRenderer(
             self._console,
             self._tracker,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import re
+import sys
 import threading
 
 import pytest
@@ -13,6 +14,7 @@ from surfaces.interactive_shell.runtime.core.state import SpinnerState
 from surfaces.interactive_shell.ui.components.rendering import (
     _repl_write_buffer,
     print_repl_json,
+    print_repl_table,
     refresh_welcome_poster,
     repl_print,
     repl_render_launch_poster,
@@ -285,3 +287,33 @@ def test_render_mcp_table_renders_content(
     )
 
     assert "github" in capsys.readouterr().out
+
+
+def test_recording_stdout_console_still_sees_table_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A recording console targeting the terminal must not be written around.
+
+    The TTY path renders into a buffer and writes it with a single
+    ``sys.stdout.write`` to avoid the diagonal-row artifact under
+    prompt_toolkit. ``record`` and ``capture()`` buffer inside the ``Console``
+    object, not at its file, so that direct write leaves an embedding caller's
+    transcript missing every table it printed.
+    """
+
+    # Arrange
+    class _TtyStdout(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setattr("sys.stdout", _TtyStdout())
+    console = Console(file=sys.stdout, force_terminal=True, width=80, record=True)
+    table = repl_table(title="T")
+    table.add_column("col")
+    table.add_row("RECORDED-CELL")
+
+    # Act
+    print_repl_table(console, table, width=80)
+
+    # Assert
+    assert "RECORDED-CELL" in console.export_text()

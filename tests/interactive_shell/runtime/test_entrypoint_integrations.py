@@ -700,3 +700,43 @@ def test_controller_routes_its_console_to_echo_and_turns() -> None:
     assert controller.service_console is captured
     assert controller.echo_console is captured
     assert controller.turn_runtime.console is captured
+
+
+def test_investigation_rendering_uses_the_supplied_console() -> None:
+    """``/investigate`` output must land in the caller's console too.
+
+    The stream renderer built its own ``Console``, so an embedding caller that
+    captured the conversation still lost investigation progress, tool detail and
+    the final report — the longest output the shell produces.
+    """
+    # Arrange
+    from surfaces.cli.ui.renderer import StreamRenderer
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        repl_foreground_renderer,
+    )
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    built: list[StreamRenderer] = []
+
+    class _RecordingRenderer(StreamRenderer):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            built.append(self)
+
+        def render_stream(self, _events: Any) -> dict[str, Any]:
+            self._console.print("INVESTIGATION-PROGRESS")
+            return {}
+
+    # Act
+    import surfaces.cli.ui.renderer as renderer_module
+
+    original = renderer_module.StreamRenderer
+    renderer_module.StreamRenderer = _RecordingRenderer  # type: ignore[misc]
+    try:
+        repl_foreground_renderer(captured)(iter(()))
+    finally:
+        renderer_module.StreamRenderer = original  # type: ignore[misc]
+
+    # Assert
+    assert built[0]._console is captured
+    assert "INVESTIGATION-PROGRESS" in captured.file.getvalue()  # type: ignore[attr-defined]
