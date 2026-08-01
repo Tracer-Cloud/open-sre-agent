@@ -27,6 +27,7 @@ from config.constants.filestorage import (
 from platform.filestorage.errors import RemoteSyncConfigError
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSY = frozenset({"0", "false", "no", "off"})
 
 
 @dataclass(frozen=True)
@@ -90,22 +91,40 @@ def _env_or_stored(
     return str(value).strip()
 
 
-def _env_or_loaded_flag(
+def _env_or_stored_flag(
     env_name: str,
     stored_key: str,
-    loaded: dict[str, Any] | None,
+    stored: Callable[[], dict[str, Any]],
 ) -> bool:
-    """Environment boolean, then an already-loaded setting, else false.
+    """Environment boolean, then a valid stored setting, else false.
 
-    When every other setting came from the environment, this must not read
-    ``config.yml`` merely to discover the optional encryption default.
+    A run configured entirely through the environment remains usable when its
+    unrelated settings file is damaged. A valid stored encryption opt-in is
+    still honored when the other fields happen to come from the environment.
     """
     env = os.getenv(env_name)
     if env is not None and env.strip() != "":
-        return _truthy(env)
-    if loaded is None:
+        return _strict_flag(env, source=env_name)
+    try:
+        value = stored().get(stored_key)
+    except RemoteSyncConfigError:
         return False
-    return _truthy(loaded.get(stored_key))
+    if value is None:
+        return False
+    return _strict_flag(value, source=f"remote_sync.{stored_key}")
+
+
+def _strict_flag(value: object, *, source: str) -> bool:
+    """Parse a security-sensitive boolean without turning typos into false."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _TRUTHY:
+            return True
+        if normalized in _FALSY:
+            return False
+    raise RemoteSyncConfigError(f"{source} must be one of: 1, 0, true, false, yes, no, on, off")
 
 
 def remote_sync_enabled() -> bool:
@@ -116,7 +135,7 @@ def remote_sync_enabled() -> bool:
     return _truthy(_stored_section().get("enabled"))
 
 
-def _lazy_stored() -> tuple[Callable[[], dict[str, Any]], dict[str, dict[str, Any]]]:
+def _lazy_stored() -> Callable[[], dict[str, Any]]:
     """Read the settings file at most once, and only if something needs it.
 
     A run configured entirely through the environment must not fail because an
@@ -129,7 +148,7 @@ def _lazy_stored() -> tuple[Callable[[], dict[str, Any]], dict[str, dict[str, An
             cache["section"] = _stored_section()
         return cache["section"]
 
-    return read, cache
+    return read
 
 
 def load_remote_sync_config() -> RemoteSyncConfig | None:
@@ -140,7 +159,7 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     """
     if not remote_sync_enabled():
         return None
-    stored, stored_cache = _lazy_stored()
+    stored = _lazy_stored()
     bucket = _env_or_stored(REMOTE_SYNC_BUCKET_ENV, "bucket", stored)
     if not bucket:
         raise RemoteSyncConfigError(
@@ -157,10 +176,10 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
         prefix=prefix,
         region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
         profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
-        encryption=_env_or_loaded_flag(
+        encryption=_env_or_stored_flag(
             REMOTE_SYNC_ENCRYPTION_ENV,
             "encryption",
-            stored_cache.get("section"),
+            stored,
         ),
     )
 

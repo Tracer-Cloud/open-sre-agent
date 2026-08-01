@@ -23,7 +23,10 @@ from pathlib import Path
 
 from config.scope_context import current_scope
 from platform.filestorage.config import RemoteSyncConfig, load_remote_sync_config
-from platform.filestorage.encryption import content_codec_for
+from platform.filestorage.encryption import (
+    content_codec_for,
+    prepare_remote_content,
+)
 from platform.filestorage.engine import SyncReport, resolve_direction, run_sync
 from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import OrgScopeNotSupportedError
@@ -114,12 +117,19 @@ def run_remote_sync(
     roots = syncable_roots()
     codec = content_codec_for(config)
     store = build_object_store(config)
+    remote = prepare_remote_content(
+        store,
+        codec,
+        encryption_enabled=config.encryption,
+        initialize_if_empty=resolved is not SyncDirection.PULL,
+    )
     return _owned_report(
         run_sync(
             store,
             direction=resolved,
             roots=roots,
             codec=codec,
+            remote=remote,
         )
     )
 

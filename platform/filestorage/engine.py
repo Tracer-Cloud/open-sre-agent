@@ -224,6 +224,7 @@ def run_sync(
     direction: SyncDirection = SyncDirection.BOTH,
     roots: tuple[SyncRoot, ...] | None = None,
     codec: ContentCodec | None = None,
+    remote: list[RemoteObject] | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
@@ -232,7 +233,7 @@ def run_sync(
     """
     report = SyncReport()
     resolved_codec = codec if codec is not None else PLAINTEXT_CONTENT_CODEC
-    listing = store.list_objects("")
+    listing = remote if remote is not None else store.list_objects("")
     if direction is not SyncDirection.PUSH:
         pull(
             store,

@@ -112,6 +112,59 @@ def test_environment_can_enable_encryption(monkeypatch: pytest.MonkeyPatch, tmp_
     assert config.encryption is True
 
 
+def test_invalid_encryption_environment_value_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "private-store")
+    monkeypatch.setenv(REMOTE_SYNC_ENCRYPTION_ENV, "tru")
+
+    with pytest.raises(RemoteSyncConfigError, match=REMOTE_SYNC_ENCRYPTION_ENV):
+        load_remote_sync_config()
+
+
+def test_invalid_stored_encryption_value_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    update_section(
+        "remote_sync",
+        {
+            "enabled": True,
+            "bucket": "private-store",
+            "encryption": "tru",
+        },
+    )
+
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.encryption"):
+        load_remote_sync_config()
+
+
+def test_stored_encryption_stays_enabled_when_other_values_come_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    save_remote_sync_settings(RemoteSyncSetupRequest(bucket="stored-store", encryption=True))
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "environment-store")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "aws")
+    monkeypatch.setenv(REMOTE_SYNC_PREFIX_ENV, "environment-prefix")
+    monkeypatch.setenv(REMOTE_SYNC_REGION_ENV, "eu-west-1")
+    monkeypatch.setenv(REMOTE_SYNC_PROFILE_ENV, "environment-profile")
+
+    config = load_remote_sync_config()
+
+    assert config is not None
+    assert config.bucket == "environment-store"
+    assert config.encryption is True
+
+
 def test_vercel_credential_hint_names_token_env() -> None:
     assert BLOB_READ_WRITE_TOKEN_ENV in credential_hint_for_provider("vercel")
     lines = format_setup_lines(RemoteSyncConfig(bucket="b", provider="vercel", prefix="p"))

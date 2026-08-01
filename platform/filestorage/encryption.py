@@ -19,6 +19,7 @@ from platform.filestorage.errors import (
     RemoteSyncConfigError,
     RemoteSyncEncryptionError,
 )
+from platform.filestorage.ports import ObjectStore, RemoteObject
 
 _ENVELOPE_MAGIC = b"opensre-remote-sync\x00"
 _ENVELOPE_VERSION = b"\x01"
@@ -30,6 +31,8 @@ _KDF_R = 8
 _KDF_P = 1
 _KDF_SALT_BYTES = 16
 _KEY_LENGTH_BYTES = 4
+_VERIFICATION_KEY = ".opensre-encryption/verification.v1"
+_VERIFICATION_PAYLOAD = b"opensre remote-sync encryption verification v1"
 
 
 class EncryptedContentCodec:
@@ -103,14 +106,66 @@ def content_codec_for(config: RemoteSyncConfig) -> ContentCodec:
     if not config.encryption:
         return PLAINTEXT_CONTENT_CODEC
     passphrase = os.getenv(REMOTE_SYNC_PASSPHRASE_ENV, "")
-    if not passphrase:
+    if not passphrase.strip():
         raise RemoteSyncConfigError(
             f"Client-side encryption is enabled but {REMOTE_SYNC_PASSPHRASE_ENV} is not set."
         )
     return EncryptedContentCodec(_derive_key(config, passphrase))
 
 
+def prepare_remote_content(
+    store: ObjectStore,
+    codec: ContentCodec,
+    *,
+    encryption_enabled: bool,
+    initialize_if_empty: bool,
+) -> list[RemoteObject]:
+    """Keep encrypted and plaintext sync modes from crossing.
+
+    A new encrypted prefix receives one small authenticated marker. Later
+    syncs decrypt that marker before the engine can write anything. A nonempty
+    prefix without the marker is rejected in encryption mode because it may
+    contain plaintext or content encrypted by an unknown key. Plaintext mode
+    refuses a prefix that has the marker, preventing accidental downgrade.
+    """
+    listing = store.list_objects("")
+    marker = next((obj for obj in listing if obj.key == _VERIFICATION_KEY), None)
+    if not encryption_enabled:
+        if marker is not None:
+            raise RemoteSyncEncryptionError(
+                "The remote prefix uses client-side encryption. Enable encryption "
+                "and provide its passphrase, or choose a different prefix."
+            )
+        return listing
+
+    if marker is None:
+        if listing:
+            raise RemoteSyncEncryptionError(
+                "The remote prefix contains content but has no encryption "
+                "verification marker. Restore its previous sync settings or "
+                "use a new prefix."
+            )
+        if not initialize_if_empty:
+            return listing
+        store.put_object(
+            _VERIFICATION_KEY,
+            codec.encode(_VERIFICATION_KEY, _VERIFICATION_PAYLOAD),
+        )
+        return listing
+
+    recovered = codec.decode(
+        _VERIFICATION_KEY,
+        store.get_object(_VERIFICATION_KEY),
+    )
+    if recovered != _VERIFICATION_PAYLOAD:
+        raise RemoteSyncEncryptionError(
+            "The remote encryption verification marker has invalid content."
+        )
+    return listing
+
+
 __all__ = [
     "EncryptedContentCodec",
     "content_codec_for",
+    "prepare_remote_content",
 ]
