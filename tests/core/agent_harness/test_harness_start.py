@@ -53,3 +53,68 @@ def test_started_harness_dispatches_without_extra_wiring(monkeypatch: Any) -> No
 
     # Assert
     assert captured == ["why is checkout-api slow?"]
+
+
+def _headless_config(**overrides: Any) -> Any:
+    """A config that touches no env, no storage, no integrations."""
+    from core.agent_harness.harness import HarnessConfig
+
+    return HarnessConfig(
+        load_env=False,
+        hydrate_integrations=False,
+        persistent_tasks=False,
+        open_storage=False,
+        **overrides,
+    )
+
+
+def test_configured_prompts_reach_the_agent() -> None:
+    """``HarnessConfig.prompts`` is documented, so it has to be honoured.
+
+    ``startup()`` loaded the provider and returned it, but ``start()`` built the
+    agent without passing it — so a caller's grounding context was discarded
+    with no error, and the built-in one answered instead.
+    """
+    # Arrange
+    from core.agent_harness.harness import AgentHarness
+
+    class _CallerPrompts:
+        """Stands in for a caller's own grounding-context provider."""
+
+    supplied = _CallerPrompts()
+
+    # Act
+    harness = AgentHarness.start(_headless_config(prompts=supplied))
+
+    # Assert
+    assert harness.agent is not None
+    assert harness.agent._prompts is supplied
+
+
+def test_omitting_prompts_keeps_the_built_in_context() -> None:
+    """No provider configured must still ground the agent, not leave it bare."""
+    # Arrange
+    from core.agent_harness.harness import AgentHarness
+
+    # Act
+    harness = AgentHarness.start(_headless_config())
+
+    # Assert
+    assert harness.agent is not None
+    assert type(harness.agent._prompts).__name__ == "DefaultPromptContextProvider"
+
+
+def test_builder_exposes_the_prompts_port() -> None:
+    """The port has to be reachable on the documented second path too.
+
+    The README shows callers building the agent themselves via
+    ``build_default_headless_agent``; a port only ``start()`` can reach is not
+    exposed.
+    """
+    # Arrange
+    import inspect
+
+    from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
+
+    # Act / Assert
+    assert "prompts" in inspect.signature(build_default_headless_agent).parameters
