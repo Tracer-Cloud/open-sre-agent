@@ -19,6 +19,11 @@ from tools.registry import get_registered_tools
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
+#
+# This is *not* OpenAI-style trajectory pause (halt for human/policy review on
+# credit burn or destructive patterns). Stagnation only detects zero-progress
+# duplicate loops; a future trajectory monitor should sit beside this counter
+# and set a separate needs_human / paused flag rather than overloading it.
 MAX_STAGNANT_ITERATIONS = 2
 
 # Upper bound on how many tool schemas we hand the model on a single turn. The

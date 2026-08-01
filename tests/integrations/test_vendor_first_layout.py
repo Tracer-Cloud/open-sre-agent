@@ -27,6 +27,9 @@ ALLOWED_FLAT_MODULES = frozenset(
         "catalog.py",
         "cli.py",
         "config_models.py",
+        # Package entry point: holds ``main`` for ``python -m integrations``,
+        # so ``__main__.py`` stays a launcher. Not a vendor.
+        "app.py",
         "daily_update.py",
         "effective_models.py",
         "harness_adapters.py",

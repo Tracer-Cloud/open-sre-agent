@@ -1165,21 +1165,41 @@ def _pod_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+_EKS_POD_LOGS_ANTI = (
+    "Do not call without exact cluster_name, namespace, and pod_name from list_eks_pods.",
+    "Do not use for non-EKS kubeconfigs — use kubernetes_get_pod_logs instead.",
+    "Do not use to exec, restart, or mutate workloads.",
+)
+
+
 @tool(
     name="get_eks_pod_logs",
     source="eks",
-    description="Fetch logs from a specific EKS pod.",
+    description=(
+        "Fetch recent logs from one EKS pod. Require absolute cluster_name, "
+        "namespace, and pod_name (discover via list_eks_pods first)."
+    ),
     use_cases=[
-        "Fetching crash logs from a specific pod",
+        "Fetching crash logs from a specific EKS pod",
         "Reviewing application output for a known failing pod",
     ],
+    anti_examples=list(_EKS_POD_LOGS_ANTI),
     requires=["cluster_name", "pod_name"],
     input_schema={
         "type": "object",
         "properties": {
-            "cluster_name": {"type": "string"},
-            "namespace": {"type": "string"},
-            "pod_name": {"type": "string"},
+            "cluster_name": {
+                "type": "string",
+                "description": "Exact EKS cluster name",
+            },
+            "namespace": {
+                "type": "string",
+                "description": "Kubernetes namespace of the pod",
+            },
+            "pod_name": {
+                "type": "string",
+                "description": "Exact pod name from list_eks_pods",
+            },
             "role_arn": {"type": "string"},
             "external_id": {"type": "string", "default": ""},
             "region": {"type": "string", "default": "us-east-1"},

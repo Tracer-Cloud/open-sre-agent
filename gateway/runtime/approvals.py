@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from core.execution import BeforeToolCallResult, ToolExecutionHooks, ToolExecutionRequest
+from gateway.runtime.security_audit import audit_security_action
 
 APPROVE_ACTION_ID = "opensre_approval_approve"
 DENY_ACTION_ID = "opensre_approval_deny"
@@ -38,6 +39,8 @@ class _PendingApproval:
     event: threading.Event = field(default_factory=threading.Event)
     approved: bool = False
     decided_by: str = ""
+    platform: str = ""
+    chat_id: str = ""
 
 
 class ApprovalBroker:
@@ -47,10 +50,26 @@ class ApprovalBroker:
         self._pending: dict[str, _PendingApproval] = {}
         self._lock = threading.Lock()
 
-    def create(self) -> str:
+    def create(
+        self,
+        *,
+        platform: str | None = None,
+        chat_id: str | None = None,
+    ) -> str:
         approval_id = uuid.uuid4().hex
         with self._lock:
-            self._pending[approval_id] = _PendingApproval()
+            self._pending[approval_id] = _PendingApproval(
+                platform=platform or "",
+                chat_id=chat_id or "",
+            )
+        audit_security_action(
+            action="approval.create",
+            platform=platform,
+            chat_id=chat_id,
+            resource_type="approval",
+            resource_id=approval_id,
+            outcome="pending",
+        )
         return approval_id
 
     def resolve(self, approval_id: str, *, approved: bool, decided_by: str) -> bool:
@@ -62,7 +81,18 @@ class ApprovalBroker:
             pending.approved = approved
             pending.decided_by = decided_by
             pending.event.set()
-            return True
+            platform = pending.platform
+            chat_id = pending.chat_id
+        audit_security_action(
+            action="approval.resolve",
+            platform=platform or None,
+            chat_id=chat_id or None,
+            actor_id=decided_by,
+            resource_type="approval",
+            resource_id=approval_id,
+            outcome="approved" if approved else "denied",
+        )
+        return True
 
     def wait(self, approval_id: str, *, timeout: float) -> tuple[bool, str]:
         """Block for a decision; expiry counts as deny. Returns (approved, decided_by)."""
@@ -74,6 +104,14 @@ class ApprovalBroker:
         with self._lock:
             self._pending.pop(approval_id, None)
         if not decided:
+            audit_security_action(
+                action="approval.expire",
+                platform=pending.platform or None,
+                chat_id=pending.chat_id or None,
+                resource_type="approval",
+                resource_id=approval_id,
+                outcome="denied",
+            )
             return (False, "")
         return (pending.approved, pending.decided_by)
 

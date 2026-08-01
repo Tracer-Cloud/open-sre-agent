@@ -145,7 +145,13 @@ def _footer(
 class _EventLogDisplay:
     """Rich Live-backed animated event log. One instance per investigation."""
 
-    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
+    def __init__(
+        self,
+        model: str = "",
+        mode: str = "local",
+        t0: float | None = None,
+        console: Console | None = None,
+    ) -> None:
         from rich.live import Live
 
         from surfaces.interactive_shell.ui.output.console_state import (
@@ -162,7 +168,7 @@ class _EventLogDisplay:
         self._tool_detail_records: list[dict[str, Any]] = []
         self._tool_summary = ""
         self._lock = threading.Lock()
-        self._console = Console(highlight=False)
+        self._console = console if console is not None else Console(highlight=False)
         self._live = Live(
             _LiveRenderable(self),
             console=self._console,

@@ -50,7 +50,10 @@ class ThreadApprovalPrompter:
         expiry_seconds: float,
     ) -> tuple[bool, str]:
         """Ask the thread for approval; returns (approved, decided_by user id)."""
-        approval_id = self._broker.create()
+        approval_id = self._broker.create(
+            platform="slack",
+            chat_id=self._channel_id,
+        )
         prompt_text = _prompt_text(tool_name, reason)
         message_ts = self._client.post_message(
             channel=self._channel_id,

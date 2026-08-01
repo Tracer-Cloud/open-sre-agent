@@ -161,13 +161,18 @@ class KubernetesGetPodLogsTool(BaseTool):
     name = "kubernetes_get_pod_logs"
     source = "kubernetes"
     description = (
-        "Fetch recent log lines from a pod container in a Kubernetes cluster. "
-        "Useful for diagnosing application errors, exceptions, and startup failures."
+        "Fetch recent log lines from one Kubernetes pod (optionally one container). "
+        "Require the exact pod_name from kubernetes_list_pods; do not guess names."
     )
     use_cases = [
         "Reading application error logs from a crashing or misbehaving pod",
         "Diagnosing startup failures and misconfigurations via container logs",
         "Collecting evidence of OOM kills, panics, or stack traces",
+    ]
+    anti_examples = [
+        "Do not call before kubernetes_list_pods when the pod name is unknown.",
+        "Do not use for CloudWatch or Datadog log search — wrong backend.",
+        "Do not use to exec into a pod or mutate cluster state.",
     ]
     surfaces = ("investigation", "chat")
     requires = ["pod_name"]
@@ -176,7 +181,10 @@ class KubernetesGetPodLogsTool(BaseTool):
         "type": "object",
         "properties": {
             **_SHARED_KUBECONFIG_PROPS,
-            "pod_name": {"type": "string", "description": "Name of the pod to fetch logs from"},
+            "pod_name": {
+                "type": "string",
+                "description": "Exact pod name (from kubernetes_list_pods)",
+            },
             "container": {
                 "type": "string",
                 "default": "",

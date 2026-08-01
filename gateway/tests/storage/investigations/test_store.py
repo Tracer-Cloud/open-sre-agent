@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gateway.http.investigation_store import InMemoryInvestigationStore, InvestigationStatus
+from gateway.storage.investigations.store import InMemoryInvestigationStore, InvestigationStatus
 
 
 def test_create_persists_workspace_id() -> None:
@@ -53,3 +53,28 @@ def test_finish_sets_artifact_fields() -> None:
     assert done.report_local_path == "/tmp/r.json"
     assert done.report_s3_key == "org/id/report.json"
     assert done.status is InvestigationStatus.COMPLETED
+
+
+def test_cancel_queued_investigation() -> None:
+    store = InMemoryInvestigationStore()
+    record = store.create(clerk_org_id="org", trigger={})
+    cancelled = store.cancel(record.id, clerk_org_id="org")
+    assert cancelled is not None
+    assert cancelled.status is InvestigationStatus.CANCELLED
+    assert store.get(record.id) is not None
+    assert store.get(record.id).status is InvestigationStatus.CANCELLED  # type: ignore[union-attr]
+
+
+def test_cancel_running_investigation_is_rejected() -> None:
+    store = InMemoryInvestigationStore()
+    record = store.create(clerk_org_id="org", trigger={})
+    store.claim_next_queued()
+    assert store.cancel(record.id, clerk_org_id="org") is None
+    assert store.get(record.id).status is InvestigationStatus.RUNNING  # type: ignore[union-attr]
+
+
+def test_cancel_rejects_wrong_org() -> None:
+    store = InMemoryInvestigationStore()
+    record = store.create(clerk_org_id="org_a", trigger={})
+    assert store.cancel(record.id, clerk_org_id="org_b") is None
+    assert store.get(record.id).status is InvestigationStatus.QUEUED  # type: ignore[union-attr]

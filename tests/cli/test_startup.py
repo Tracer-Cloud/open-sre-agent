@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 # Each name is patched where it is defined, because ``run()`` imports it at call
 # time; patching an attribute on ``startup`` would miss the real call.

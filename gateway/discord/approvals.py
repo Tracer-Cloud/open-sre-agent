@@ -47,7 +47,10 @@ class DiscordApprovalPrompter:
         arguments: Mapping[str, Any],
         expiry_seconds: float,
     ) -> tuple[bool, str]:
-        approval_id = self._broker.create()
+        approval_id = self._broker.create(
+            platform="discord",
+            chat_id=self._channel_id,
+        )
         preview = arguments_preview(arguments)
         body = f"**Approval needed — `{tool_name}`**"
         if reason.strip():

@@ -274,6 +274,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                     alert_text=alert_body,
                     context_overrides=session.accumulated_context or None,
                     cancel_requested=task.cancel_requested,
+                    console=console,
                 )
                 tracker.record_loop_metrics_from_state(final_state)
                 return final_state
@@ -337,6 +338,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                     template_name=template_name,
                     context_overrides=session.accumulated_context or None,
                     cancel_requested=task.cancel_requested,
+                    console=console,
                 )
                 tracker.record_loop_metrics_from_state(final_state)
                 return final_state
@@ -401,6 +403,7 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
                 alert_text=text,
                 context_overrides=session.accumulated_context or None,
                 cancel_requested=task.cancel_requested,
+                console=console,
             )
             tracker.record_loop_metrics_from_state(final_state)
             return final_state

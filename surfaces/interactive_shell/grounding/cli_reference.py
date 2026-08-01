@@ -293,7 +293,7 @@ def _slash_commands() -> Mapping[str, object]:
 
 
 def _cli_command_group() -> click.Command | None:
-    from surfaces.cli.__main__ import cli
+    from surfaces.cli.app import cli
 
     return cli
 
