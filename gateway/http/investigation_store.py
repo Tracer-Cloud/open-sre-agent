@@ -15,6 +15,7 @@ class InvestigationStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -59,6 +60,14 @@ class InvestigationStore(Protocol):
         error: str | None = None,
     ) -> None:
         """Record the terminal status and artifact locations for a run."""
+
+    def cancel(
+        self,
+        investigation_id: str,
+        *,
+        clerk_org_id: str,
+    ) -> InvestigationRecord | None:
+        """Cancel a queued investigation for ``clerk_org_id``, or None if not cancellable."""
 
 
 @dataclass
@@ -126,3 +135,21 @@ class InMemoryInvestigationStore:
             record.report_s3_key = report_s3_key
             record.error = error
             record.updated_at = datetime.now(UTC)
+
+    def cancel(
+        self,
+        investigation_id: str,
+        *,
+        clerk_org_id: str,
+    ) -> InvestigationRecord | None:
+        with self._lock:
+            record = self._by_id.get(investigation_id)
+            if (
+                record is None
+                or record.clerk_org_id != clerk_org_id
+                or record.status is not InvestigationStatus.QUEUED
+            ):
+                return None
+            record.status = InvestigationStatus.CANCELLED
+            record.updated_at = datetime.now(UTC)
+            return replace(record)

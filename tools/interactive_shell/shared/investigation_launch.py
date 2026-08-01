@@ -91,8 +91,9 @@ class InvestigationLaunchPorts(Protocol):
         alert_text: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
-        raise NotImplementedError
+        """Run a free-text investigation, rendering progress through ``console``."""
 
     def run_sample_alert(
         self,
@@ -100,8 +101,9 @@ class InvestigationLaunchPorts(Protocol):
         template_name: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
-        raise NotImplementedError
+        """Run a built-in sample alert, rendering progress through ``console``."""
 
     def start_background_text(
         self,

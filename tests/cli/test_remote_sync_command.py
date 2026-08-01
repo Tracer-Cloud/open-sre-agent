@@ -133,14 +133,14 @@ def test_default_invocation_is_status(
 
 
 def test_cli_group_registered_on_main() -> None:
-    from surfaces.cli.__main__ import cli
+    from surfaces.cli.app import cli
 
     ctx = click.Context(cli)
     assert "remote-sync" in cli.list_commands(ctx)
 
 
 def test_top_level_opensre_remote_sync_help(runner: CliRunner) -> None:
-    from surfaces.cli.__main__ import cli
+    from surfaces.cli.app import cli
 
     result = runner.invoke(cli, ["remote-sync", "--help"])
     assert result.exit_code == 0

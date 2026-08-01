@@ -13,7 +13,7 @@ import pytest
 from click.testing import CliRunner
 
 from integrations.cli import _HANDLERS, cmd_setup, cmd_verify
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 
 def test_setup_posthog_dispatches_rest_handler() -> None:

@@ -1514,6 +1514,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
@@ -1537,6 +1538,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(template_name)
@@ -1626,6 +1628,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             calls.append(template_name)
@@ -1658,6 +1661,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(template_name)
@@ -1702,6 +1706,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(alert_text)
@@ -1781,6 +1786,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict:
             return {
                 "root_cause": "disk full",
@@ -1851,6 +1857,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 

@@ -35,6 +35,9 @@ def test_run_returns_error_when_called_with_no_args() -> None:
 def test_run_returns_error_for_invalid_metric_type() -> None:
     result = get_cloudwatch_batch_metrics(job_queue="my-queue", metric_type="invalid")
     assert "error" in result
+    assert "metric_type must be one of" in result["error"]
+    assert "'cpu'" in result["error"]
+    assert "'memory'" in result["error"]
 
 
 def test_run_cpu_metrics_happy_path() -> None:

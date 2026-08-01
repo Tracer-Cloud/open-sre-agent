@@ -66,6 +66,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "core.agent_harness.turns.headless_adapters",
         "BufferOutputSink",
     ),
+    "DefaultPromptContextProvider": (
+        "core.agent_harness.prompts.prompt_context",
+        "DefaultPromptContextProvider",
+    ),
     "run_turn": ("core.agent_harness.turns.orchestrator", "run_turn"),
     "stream_answer": ("core.agent_harness.turns.orchestrator", "stream_answer"),
 }
@@ -87,6 +91,7 @@ __all__ = [
     "AgentHarness",
     "AgentRuntimeRequest",
     "BufferOutputSink",
+    "DefaultPromptContextProvider",
     "HarnessConfig",
     "HarnessStartupResult",
     "HeadlessAgent",

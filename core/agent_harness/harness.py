@@ -150,7 +150,12 @@ class AgentHarness:
         harness = cls(config)
         startup = harness.startup()
         harness.attach_agent(
-            build_default_headless_agent(session=startup.session, output=BufferOutputSink())
+            build_default_headless_agent(
+                session=startup.session,
+                output=BufferOutputSink(),
+                # A caller's HarnessConfig.prompts, else the built-in grounding context.
+                prompts=startup.prompts,
+            )
         )
         return harness
 

@@ -4,7 +4,7 @@ import os
 import textwrap
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from surfaces.interactive_shell.ui.components.time_format import _fmt_timing
 from surfaces.interactive_shell.ui.output.environment import (
@@ -22,6 +22,9 @@ from surfaces.interactive_shell.ui.output.toggles import (
 )
 from surfaces.interactive_shell.ui.output.tool_tracking import ToolTrackingMixin
 
+if TYPE_CHECKING:
+    from rich.console import Console
+
 
 def _EventLogDisplay(*args: Any, **kwargs: Any) -> DisplayProtocol:
     from surfaces.interactive_shell.ui.output.live_display import _EventLogDisplay
@@ -35,8 +38,9 @@ def _ReplEventLogDisplay(*args: Any, **kwargs: Any) -> DisplayProtocol:
     return _ReplEventLogDisplay(*args, **kwargs)
 
 
-def _make_event_log_display(*, t0: float) -> DisplayProtocol:
-    return _ReplEventLogDisplay(t0=t0) if _repl_progress_active() else _EventLogDisplay(t0=t0)
+def _make_event_log_display(*, t0: float, console: Console | None) -> DisplayProtocol:
+    build = _ReplEventLogDisplay if _repl_progress_active() else _EventLogDisplay
+    return build(t0=t0, console=console)
 
 
 def _invoke_registered_tool_detail_toggle() -> None:
@@ -46,7 +50,9 @@ def _invoke_registered_tool_detail_toggle() -> None:
 class ProgressTracker(ToolTrackingMixin):
     """Drives event-log displays from node lifecycle calls."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, console: Console | None = None) -> None:
+        #: Where progress renders; ``None`` builds a display-owned console.
+        self._output_console = console
         self.events: list[ProgressEvent] = []
         self._start_times: dict[str, float] = {}
         self._t0 = time.monotonic()
@@ -64,7 +70,7 @@ class ProgressTracker(ToolTrackingMixin):
         self._toggle_watcher: CtrlOToggleWatcher | None = None
         self._toggle_unregister: Callable[[], None] | None = None
         if self._rich and not self._silent:
-            self._display = _make_event_log_display(t0=self._t0)
+            self._display = _make_event_log_display(t0=self._t0, console=self._output_console)
             self._toggle_unregister = register_tool_detail_toggle(self.toggle_tool_details)
             if not self._repl_append_only:
                 self._toggle_watcher = CtrlOToggleWatcher(_invoke_registered_tool_detail_toggle)
@@ -105,7 +111,7 @@ class ProgressTracker(ToolTrackingMixin):
                 self._display = None
             return
         if self._display is None:
-            self._display = _make_event_log_display(t0=self._t0)
+            self._display = _make_event_log_display(t0=self._t0, console=self._output_console)
         self._display.step_start(node_name)
 
     def complete(
@@ -179,6 +185,19 @@ class ProgressTracker(ToolTrackingMixin):
 
 
 _tracker: ProgressTracker | None = None
+#: Console the process-wide tracker renders through; None means its own.
+_tracker_console: Console | None = None
+
+
+def set_tracker_console(console: Console | None) -> None:
+    """Route the process tracker's progress to ``console``.
+
+    Investigation stages reach the tracker through :func:`get_tracker`, not
+    through the renderer, so an embedding caller's console has to be visible
+    here for stage progress to land in the same stream as the rest of the turn.
+    """
+    global _tracker_console
+    _tracker_console = console
 
 
 def _register_with_observability(tracker: ProgressTracker) -> None:
@@ -203,7 +222,7 @@ def get_tracker(*, reset: bool = False) -> ProgressTracker:
     if _tracker is None or reset:
         if reset and _tracker is not None:
             _tracker.stop()
-        _tracker = ProgressTracker()
+        _tracker = ProgressTracker(console=_tracker_console)
         _register_with_observability(_tracker)
     return _tracker
 

@@ -165,3 +165,27 @@ class PostgresInvestigationStore:
                 """,
                 (status.value, report_local_path, report_s3_key, error, investigation_id),
             )
+
+    def cancel(
+        self,
+        investigation_id: str,
+        *,
+        clerk_org_id: str,
+    ) -> InvestigationRecord | None:
+        with self._connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE investigations
+                SET status = %s, updated_at = now()
+                WHERE id = %s AND clerk_org_id = %s AND status = %s
+                RETURNING {_COLUMNS}
+                """,
+                (
+                    InvestigationStatus.CANCELLED.value,
+                    investigation_id,
+                    clerk_org_id,
+                    InvestigationStatus.QUEUED.value,
+                ),
+            )
+            row = cursor.fetchone()
+            return _row_to_record(row) if row else None

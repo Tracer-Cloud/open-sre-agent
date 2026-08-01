@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from click.testing import CliRunner
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 
 def _patch_config_home(monkeypatch, tmp_path: Path) -> Path:
