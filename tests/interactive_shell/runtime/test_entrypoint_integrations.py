@@ -776,7 +776,9 @@ def test_action_investigation_ports_forward_the_supplied_console(
     caller that captured the conversation still lost investigation progress.
     """
     # Arrange
-    import surfaces.interactive_shell.runtime.investigation_adapter as adapter
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        repl_investigation_launch_ports,
+    )
 
     captured = Console(file=io.StringIO(), force_terminal=False, width=80)
     seen_text: list[Console | None] = []
@@ -793,9 +795,15 @@ def test_action_investigation_ports_forward_the_supplied_console(
     def _unused_background(**_kwargs: Any) -> str:
         raise AssertionError("background launcher should not run")
 
-    monkeypatch.setattr(adapter, "run_investigation_for_session", _fake_text)
-    monkeypatch.setattr(adapter, "run_sample_alert_for_session", _fake_sample)
-    ports = adapter.repl_investigation_launch_ports(
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+        _fake_text,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+        _fake_sample,
+    )
+    ports = repl_investigation_launch_ports(
         start_background_text=_unused_background,
         start_background_sample=_unused_background,
     )

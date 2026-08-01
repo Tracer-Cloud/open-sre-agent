@@ -298,3 +298,41 @@ def test_resume_config_reaches_session_manager() -> None:
     # Assert
     assert startup.session is manager.session
     assert manager.resolve_calls[0]["session_id"] == "abc123"
+
+
+def test_every_exported_name_is_lazily_resolvable_and_type_checked() -> None:
+    """The three export lists in ``core.agent_harness`` must not drift apart.
+
+    A public name lives in three places: ``_LAZY_EXPORTS`` (what ``__getattr__``
+    can resolve), ``__all__`` (what the package advertises), and the
+    ``TYPE_CHECKING`` block (what type checkers and static analysis can see).
+    ``DefaultPromptContextProvider`` was added to the first two but not the
+    third, so it resolved at runtime while reading as undefined to every static
+    tool looking at the package.
+    """
+    # Arrange
+    import ast
+    from pathlib import Path
+
+    import core.agent_harness as harness
+
+    source = Path(harness.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    type_checked: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and getattr(node.test, "id", "") == "TYPE_CHECKING":
+            for stmt in ast.walk(node):
+                if isinstance(stmt, ast.ImportFrom):
+                    type_checked.update(a.asname or a.name for a in stmt.names)
+
+    # Act
+    advertised = set(harness.__all__)
+    resolvable = set(harness.__dir__())
+
+    # Assert
+    assert advertised == resolvable, "__all__ and the lazy registry disagree"
+    assert advertised <= type_checked, (
+        f"advertised but absent from the TYPE_CHECKING block: {sorted(advertised - type_checked)}"
+    )
+    assert all(hasattr(harness, name) for name in advertised)

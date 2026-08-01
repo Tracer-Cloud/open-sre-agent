@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.harness import AgentHarness, HarnessConfig, HarnessStartupResult
+    from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
     from core.agent_harness.turns.action_driver import ToolCallingDeps
     from core.agent_harness.turns.action_driver import (
         run_action_agent_turn as execute_action_agent_turn,
