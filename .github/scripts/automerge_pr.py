@@ -14,6 +14,8 @@ AUTOMERGE_LABEL = "automerge"
 #: agent runtime, the multi-tenant platform and the chat gateway — a bad
 #: change there reaches every user. The last two are the merge machinery
 #: itself, which must not be able to widen its own permissions.
+#: Page size ``gh pr view --json files`` returns; a full page may be cut short.
+FILE_PAGE_SIZE = 100
 PROTECTED_PATH_PREFIXES = (
     "core/",
     "platform/",
@@ -138,10 +140,13 @@ def _file_list_is_complete(pr: dict[str, Any]) -> bool:
     if it were docs. ``changedFiles`` carries the real total, so a mismatch
     means the check cannot see the whole diff and must refuse.
     """
+    files = pr.get("files") or []
     changed = pr.get("changedFiles")
-    if not isinstance(changed, int):
-        return True
-    return changed <= len(pr.get("files") or [])
+    if isinstance(changed, int):
+        return changed <= len(files)
+    # No count to compare against. A short list cannot have been truncated, but
+    # a full page is exactly what truncation looks like, so refuse that.
+    return len(files) < FILE_PAGE_SIZE
 
 
 def _protected_paths(files: list[dict[str, Any]]) -> list[str]:

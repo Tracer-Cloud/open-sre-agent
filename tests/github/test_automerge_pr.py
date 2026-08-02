@@ -465,3 +465,21 @@ def test_a_large_pr_is_not_merged_or_refreshed(monkeypatch) -> None:
 
     # Assert
     assert actions == [("update", "602")]
+
+
+def test_a_full_page_without_a_count_is_refused() -> None:
+    """A missing count plus a full page is indistinguishable from truncation."""
+    # Arrange
+    pr = {"files": [{"path": f"docs/{i}.mdx"} for i in range(automerge_pr.FILE_PAGE_SIZE)]}
+
+    # Act / Assert
+    assert automerge_pr._file_list_is_complete(pr) is False
+
+
+def test_a_short_list_without_a_count_is_accepted() -> None:
+    """Below the page size there is nothing that could have been cut off."""
+    # Arrange
+    pr = {"files": [{"path": "docs/a.mdx"}]}
+
+    # Act / Assert
+    assert automerge_pr._file_list_is_complete(pr) is True
