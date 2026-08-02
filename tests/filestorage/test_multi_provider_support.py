@@ -82,7 +82,7 @@ def roots(tmp_path: Path) -> tuple[SyncRoot, ...]:
     )
 
 
-def test_built_in_providers_include_aws_and_vercel() -> None:
+def test_built_in_providers_include_aws_vercel_and_azure() -> None:
     providers = registered_providers()
     assert "aws" in providers
     assert "vercel" in providers

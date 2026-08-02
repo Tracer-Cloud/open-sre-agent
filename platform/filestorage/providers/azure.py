@@ -52,7 +52,7 @@ class AzureBlobObjectStore:
                 )
         except AzureError as exc:
             raise RemoteSyncUnavailableError(
-                f"Cannot list {self.describe()} - {_reason(exc)}"
+                f"Cannot list {self.describe()} — {_reason(exc)}"
             ) from exc
 
         return out
@@ -65,7 +65,7 @@ class AzureBlobObjectStore:
             data = blob_client.download_blob().readall()
             return cast(bytes, data)
         except AzureError as exc:
-            raise RemoteSyncUnavailableError(f"Cannot read {key} - {_reason(exc)}") from exc
+            raise RemoteSyncUnavailableError(f"Cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
         try:
@@ -74,7 +74,7 @@ class AzureBlobObjectStore:
             )
             blob_client.upload_blob(data, overwrite=True)
         except AzureError as exc:
-            raise RemoteSyncUnavailableError(f"Cannot write {key} - {_reason(exc)}") from exc
+            raise RemoteSyncUnavailableError(f"Cannot write {key} — {_reason(exc)}") from exc
 
     def _strip_prefix(self, full_key: str) -> str:
         prefix = f"{self._config.prefix.rstrip('/')}/"
@@ -97,7 +97,7 @@ def _build_client(config: RemoteSyncConfig) -> Any:
     try:
         return BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
     except Exception as exc:
-        raise RemoteSyncUnavailableError(f"Cannot build Azure client - {_reason(exc)}") from exc
+        raise RemoteSyncUnavailableError(f"Cannot build Azure client — {_reason(exc)}") from exc
 
 
 def _factory(config: RemoteSyncConfig) -> AzureBlobObjectStore:
