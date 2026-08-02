@@ -34,6 +34,7 @@ class BuiltInProvider(StrEnum):
 
     AWS = "aws"
     VERCEL = "vercel"
+    AZURE = "azure"
 
 
 class RemoteSyncSubcommand(StrEnum):

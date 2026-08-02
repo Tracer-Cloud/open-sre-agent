@@ -63,6 +63,7 @@ _REGISTRY_LOCK = threading.RLock()
 _BUILTIN_MODULES = {
     BuiltInProvider.AWS.value: "platform.filestorage.providers.aws",
     BuiltInProvider.VERCEL.value: "platform.filestorage.providers.vercel",
+    BuiltInProvider.AZURE.value: "platform.filestorage.providers.azure",
 }
 
 

@@ -83,11 +83,12 @@ def roots(tmp_path: Path) -> tuple[SyncRoot, ...]:
 
 
 def test_built_in_providers_include_aws_and_vercel() -> None:
-    assert "aws" in registered_providers()
-    assert "vercel" in registered_providers()
+    providers = registered_providers()
+    assert "aws" in providers
+    assert "vercel" in providers
+    assert "azure" in providers
     # Community backends are not shipped — they register from third-party packages.
-    assert "gcs" not in registered_providers()
-    assert "azure" not in registered_providers()
+    assert "gcs" not in providers
 
 
 def test_unknown_provider_fails_closed_listing_known_ones(
