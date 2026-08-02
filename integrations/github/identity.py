@@ -6,6 +6,10 @@ banner can read the saved handle without importing the heavy GitHub MCP stack.
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def saved_github_username() -> str:
     """Return the persisted GitHub login from the integration store, or "".
@@ -21,5 +25,6 @@ def saved_github_username() -> str:
             return ""
         credentials = record.get("credentials") or {}
         return str(credentials.get("username") or "").strip()
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to retrieve saved GitHub username: %s", e, exc_info=True)
         return ""
