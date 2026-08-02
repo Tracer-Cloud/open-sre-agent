@@ -211,7 +211,7 @@ def _process_pr(repo: str, pr_number: str) -> str:
             "--repo",
             repo,
             "--json",
-            "baseRefName,files,isDraft,mergeable,mergeStateStatus,labels,state,statusCheckRollup,title",
+            "baseRefName,changedFiles,files,isDraft,mergeable,mergeStateStatus,labels,state,statusCheckRollup,title",
         ]
     )
 

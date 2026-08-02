@@ -228,6 +228,7 @@ def _pr(**overrides: object) -> dict:
             {"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}
         ],
         "title": "a change",
+        "changedFiles": 1,
         "files": [{"path": "docs/a.mdx"}],
     }
     pr.update(overrides)
@@ -388,6 +389,30 @@ def test_protected_pr_is_neither_merged_nor_refreshed(monkeypatch) -> None:
 
     # Assert
     assert actions == [("update", "502")]
+
+
+def test_process_pr_requests_changed_files_from_github(monkeypatch) -> None:
+    """Without ``changedFiles`` in the view query the truncation guard is dead."""
+    # Arrange
+    seen: list[str] = []
+
+    def _capture(args: list[str]):
+        seen.extend(args)
+        return _pr()
+
+    def _noop_run(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(automerge_pr, "_run_gh", _capture)
+    monkeypatch.setattr(automerge_pr.subprocess, "run", _noop_run)
+
+    # Act
+    automerge_pr._process_pr("o/r", "1")
+
+    # Assert
+    json_fields = seen[seen.index("--json") + 1]
+    assert "changedFiles" in json_fields.split(",")
+    assert "files" in json_fields.split(",")
 
 
 def test_a_truncated_file_list_refuses_the_merge() -> None:
