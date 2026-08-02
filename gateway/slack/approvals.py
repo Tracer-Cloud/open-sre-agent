@@ -104,10 +104,11 @@ def handle_block_actions_payload(
     actions = payload.get("actions")
     if not user_id or not isinstance(actions, list):
         return False
-    if allowed_user_ids and user_id not in allowed_user_ids:
+    allowed_users_set = set(allowed_user_ids) if allowed_user_ids else set()
+    if allowed_users_set and user_id not in allowed_users_set:
         logger.info("[slack-gateway] approval click from unauthorized user=%s ignored", user_id)
         return False
-    if not allowed_user_ids and not allow_open_workspace:
+    if not allowed_users_set and not allow_open_workspace:
         return False
     resolved = False
     for action in actions:
