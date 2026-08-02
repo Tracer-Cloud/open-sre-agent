@@ -141,3 +141,45 @@ def test_shell_action_runner_rebuilds_when_external_output_changes() -> None:
     after = runner._action_runner  # noqa: SLF001
 
     assert after is not before
+
+
+def test_a_sink_without_hooks_clears_the_previous_sinks_hooks() -> None:
+    """A pooled agent must not carry approval hooks between conversations.
+
+    The gateway reuses agents from a pool and binds each turn with
+    ``tool_hooks=getattr(sink, "tool_hooks", None)``. A sink with no hooks
+    therefore passes ``None``. If that were read as "leave them alone", the
+    previous sink's approval callback would stay attached and later tool calls
+    would send approval controls to the wrong conversation — or wait on a reply
+    that can never arrive.
+    """
+    # Arrange
+    agent = HeadlessAgent(tools=NullToolProvider())
+    approval_hooks = MagicMock()
+    agent.bind_turn(tool_hooks=approval_hooks)
+    assert agent._tool_hooks is approval_hooks  # noqa: SLF001
+
+    # Act: the next turn's sink has no hooks.
+    agent.bind_turn(tool_hooks=None)
+
+    # Assert
+    assert agent._tool_hooks is None  # noqa: SLF001
+
+
+def test_omitting_hooks_leaves_them_attached() -> None:
+    """Rebinding only the sink must not silently drop the hooks.
+
+    The mirror of the case above: callers that swap ``output`` alone rely on the
+    hooks surviving, so "not mentioned" and "explicitly cleared" cannot be the
+    same thing.
+    """
+    # Arrange
+    agent = HeadlessAgent(tools=NullToolProvider())
+    approval_hooks = MagicMock()
+    agent.bind_turn(tool_hooks=approval_hooks)
+
+    # Act
+    agent.bind_turn(output=BufferOutputSink())
+
+    # Assert
+    assert agent._tool_hooks is approval_hooks  # noqa: SLF001

@@ -66,6 +66,20 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnRes
 from core.execution import ToolExecutionHooks
 
 
+class _Unmentioned:
+    """Marks a port the caller did not mention, as distinct from one cleared.
+
+    ``bind_turn(output=...)`` must leave the hooks alone, but
+    ``bind_turn(tool_hooks=None)`` must clear them — the gateway passes ``None``
+    for a sink that has no approval hooks, and a pooled agent would otherwise
+    keep the previous sink's callback and send approvals to the wrong
+    conversation.
+    """
+
+
+_UNMENTIONED = _Unmentioned()
+
+
 class HeadlessAgent:
     """Runs full agent turns headlessly from a fixed set of configured ports.
 
@@ -144,7 +158,7 @@ class HeadlessAgent:
         *,
         output: OutputSink | None = None,
         accounting: TurnAccounting | None = None,
-        tool_hooks: ToolExecutionHooks | None = None,
+        tool_hooks: ToolExecutionHooks | None | _Unmentioned = _UNMENTIONED,
         session: SessionStore | None = None,
     ) -> None:
         """Swap turn-scoped ports so one agent can serve many turns.
@@ -160,7 +174,7 @@ class HeadlessAgent:
             runner_changed = True
         if accounting is not None:
             self._accounting = accounting
-        if tool_hooks is not None:
+        if not isinstance(tool_hooks, _Unmentioned):
             self._tool_hooks = tool_hooks
             runner_changed = True
         if runner_changed:
