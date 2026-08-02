@@ -165,6 +165,16 @@ def get_registered_tools(surface: ToolSurface | None = None) -> list[RegisteredT
     return list(_load_surface_snapshot(surface))
 
 
+def get_registered_tool(tool_name: str) -> RegisteredTool | None:
+    """Look up one tool by name.
+
+    Reads the cached name map directly, so a caller after a single tool does not
+    pay for a copy of the whole registry (``get_registered_tool_map``) or a
+    linear scan of it (``get_registered_tools``).
+    """
+    return _load_registry_tool_map().get(tool_name)
+
+
 def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())
