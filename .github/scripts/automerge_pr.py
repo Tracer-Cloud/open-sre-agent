@@ -32,8 +32,6 @@ EXIT_SUCCESS = 0
 #: How many protected paths the refusal names before summarising the rest.
 #: Enough to show the reader why without pasting a whole diff into the log.
 PROTECTED_PATHS_LOGGED = 3
-#: Page size ``gh pr view --json files`` returns; a full page may be cut short.
-FILE_PAGE_SIZE = 100
 #: Paths a machine must never merge on its own. The first three carry the
 #: agent runtime, the multi-tenant platform and the chat gateway — a bad
 #: change there reaches every user. The last two are the merge machinery
@@ -115,13 +113,6 @@ def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
     return _check_run_is_green(check)
 
 
-def _flatten_pages(payload: Any) -> list[dict[str, Any]]:
-    """Flatten ``gh api --paginate --slurp`` output, which is a list of pages."""
-    if isinstance(payload, list) and payload and isinstance(payload[0], list):
-        return [entry for page in payload for entry in page]
-    return list(payload or [])
-
-
 def _changed_paths(repo: str, pr_number: str) -> list[str]:
     """Every path the PR touches, including where a renamed file came from.
 
@@ -130,16 +121,15 @@ def _changed_paths(repo: str, pr_number: str) -> list[str]:
     destination ``path``. A file moved out of ``core/`` would therefore look
     like an ordinary new file. The REST listing paginates and carries
     ``previous_filename``, so both the origin and the full set are visible.
+    ``--paginate`` merges the pages into one array on its own; ``--slurp``
+    would only wrap them in an outer list and needs a newer ``gh``.
     """
-    entries = _flatten_pages(
-        _run_gh(
-            [
-                "api",
-                f"repos/{repo}/pulls/{pr_number}/files",
-                "--paginate",
-                "--slurp",
-            ]
-        )
+    entries = _run_gh(
+        [
+            "api",
+            f"repos/{repo}/pulls/{pr_number}/files",
+            "--paginate",
+        ]
     )
     paths = {str(entry.get("filename") or "") for entry in entries}
     paths |= {str(entry.get("previous_filename") or "") for entry in entries}

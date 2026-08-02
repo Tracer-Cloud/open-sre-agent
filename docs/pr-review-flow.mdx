@@ -91,10 +91,11 @@ the label only after Greptile and human review are finished.
 
 ### When the branch is behind `main`
 
-Branch protection requires PRs to be up to date with `main`. If your PR falls
-behind after someone else merges, automerge refreshes the branch (Update branch)
-and waits for CI again. You do not need to click Update branch for labeled PRs;
-if the PR is not labeled, update it yourself or ask a maintainer.
+Branch protection requires PRs to be up to date with `main`. Automerge only
+merges when GitHub reports the PR as mergeable. A behind branch usually stays
+stalled until someone clicks **Update branch** (or rebases onto `main`) and CI
+goes green again — including for PRs that already have the `automerge` label.
+Automerge does **not** refresh the branch for you today.
 
 ### Paths that never auto-merge
 
@@ -109,8 +110,9 @@ PRs that touch these paths always need a **human** to press merge, even with
 | `.github/workflows/` | CI and merge machinery |
 | `.github/scripts/` | Merge machinery |
 
-Very large PRs (more files than GitHub returns in one file list) are also held
-for a human, so a protected-path change cannot hide past an incomplete file list.
+Automerge lists every changed path via the GitHub API (including rename origins).
+If that listing looks incomplete versus the PR’s file count, it refuses and asks
+for a human — so a protected-path change cannot hide behind a partial list.
 
 Docs, tests, integrations, and most surface changes can still use automerge when
 a maintainer labels them.
@@ -128,7 +130,9 @@ a maintainer labels them.
 
 - Greptile can take several minutes; do not spam `@greptile review`.
 - Automerge only runs for the `automerge` label and green checks.
-- If CI is pending or the PR is behind `main`, wait for the next green run.
+- If CI is pending, wait for the next green run.
+- If the PR is behind `main`, update the branch (or ask a maintainer), then wait
+  for CI again.
 - If a maintainer is actively editing the branch, let them finish before
   pushing competing commits.
 

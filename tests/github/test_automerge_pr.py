@@ -251,7 +251,7 @@ def _run_pr(monkeypatch, payload: dict, files: list[dict]) -> list:
 
     def _fake_gh(args: list[str]) -> object:
         # ``api`` fetches the changed files; ``pr view`` fetches the PR itself.
-        return [files] if args[0] == "api" else payload
+        return files if args[0] == "api" else payload
 
     monkeypatch.setattr(automerge_pr, "_run_gh", _fake_gh)
     monkeypatch.setattr(
