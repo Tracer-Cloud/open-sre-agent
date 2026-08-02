@@ -227,7 +227,6 @@ def gather_tool_evidence(
     on_progress: ToolEventObserver | None = None,
     persist: PersistToolCalls | None = None,
     error_reporter: ErrorReporter | None = None,
-    is_tty: bool | None = None,  # noqa: ARG001 — reserved for parity with answer agents
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
 ) -> str | None:

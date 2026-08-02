@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
-from typing import Any, get_type_hints
+from typing import get_type_hints
 
 from core.agent import Agent
 from core.agent_harness.ports import ExecuteActions, StreamAnswerFn
-from core.agent_harness.turns.action_driver import run_action_agent_turn
+from core.agent_harness.turns.headless_adapters import NullToolProvider
+from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
-from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 
 
 def _accept_answer(answer: StreamAnswerFn) -> StreamAnswerFn:
@@ -22,17 +21,24 @@ def _accept_execute_actions(driver: ExecuteActions) -> ExecuteActions:
 
 
 def test_stream_answer_matches_stream_answer_fn_seam() -> None:
-    assert _accept_answer(stream_answer) is stream_answer
+    # stream_answer takes session/output/prompts first; the bound seam is thinner.
+    # Pin that HeadlessAgent._answer matches the Protocol shape run_turn uses.
+    agent = HeadlessAgent(tools=NullToolProvider())
+    accepted = _accept_answer(agent._answer)
+    assert accepted.__func__ is HeadlessAgent._answer
 
 
-def test_run_action_agent_turn_matches_execute_actions_seam() -> None:
-    assert _accept_execute_actions(run_action_agent_turn) is run_action_agent_turn
+def test_headless_agent_execute_actions_matches_execute_actions_seam() -> None:
+    agent = HeadlessAgent(tools=NullToolProvider())
+    # Bound methods are new objects per access; the seam is the underlying function.
+    accepted = _accept_execute_actions(agent._execute_actions)
+    assert accepted.__func__ is HeadlessAgent._execute_actions
 
 
 def test_run_turn_wires_streaming_and_tool_calling_seams() -> None:
     hints = get_type_hints(run_turn)
-    assert hints["answer"] == Callable[..., Any]
-    assert hints["execute_actions"] == Callable[..., ToolCallingTurnResult]
+    assert hints["answer"] is StreamAnswerFn
+    assert hints["execute_actions"] is ExecuteActions
 
 
 def test_agent_is_tool_calling_shape() -> None:

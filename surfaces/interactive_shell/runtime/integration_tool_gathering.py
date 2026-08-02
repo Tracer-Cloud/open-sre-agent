@@ -152,7 +152,6 @@ def gather_integration_tool_evidence(
     session: Session,
     console: Console,
     *,
-    is_tty: bool | None = None,
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
 ) -> str | None:
@@ -187,7 +186,6 @@ def gather_integration_tool_evidence(
         on_progress=on_progress,
         persist=persist,
         error_reporter=_ShellGatherErrorReporter(),
-        is_tty=is_tty,
         agent_factory=agent_factory,
         resolved_integrations=resolved_integrations,
     )
