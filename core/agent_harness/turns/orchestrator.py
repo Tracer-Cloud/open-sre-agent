@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Literal, assert_never
+from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.ports import (
@@ -274,6 +274,15 @@ def _is_prior_investigation_follow_up_handoff(handoff_contents: tuple[str, ...])
     return is_prior_investigation_follow_up(handoff_contents)
 
 
+@dataclass(frozen=True)
+class _RouteOutcome:
+    """Effects of one routed path, ready to pack into ``TurnResult``."""
+
+    final_intent: str
+    response_text: str
+    llm_run: Any | None = None
+
+
 def _gather_and_answer(
     *,
     text: str,
@@ -395,47 +404,57 @@ def run_turn(
     )
 
     with component_span(f"route:{route.intent}", session_id=sid):
-        match route.intent:
-            case "summarize_observation":
-                with apply_reasoning_effort(turn_snapshot.reasoning_effort):
-                    run = answer(
-                        text,
-                        AnswerRequest(
-                            tool_observation=observation,
-                            handoff_contents=handoff_contents,
-                            turn_plan=turn_plan,
-                        ),
-                    )
-                final_intent, response_text = "cli_agent_summarized", _response_text(run)
-            case "handled_without_llm":
-                # The one route that never calls the model: the action already
-                # produced the text the user sees.
-                _record_action_only_turn(session, text, action_result.response_text)
-                run, final_intent = None, "cli_agent_handled"
-                response_text = action_result.response_text
-            case "gather_and_answer":
-                with apply_reasoning_effort(turn_snapshot.reasoning_effort):
-                    run = _gather_and_answer(
-                        text=text,
-                        answer=answer,
-                        gather=gather,
+        # if/elif + raise (not match/assert_never): CodeQL does not model
+        # ``assert_never`` as noreturn, so locals bound only inside match arms
+        # and read after the match trip py/uninitialized-local-variable.
+        if route.intent == "summarize_observation":
+            with apply_reasoning_effort(turn_snapshot.reasoning_effort):
+                run = answer(
+                    text,
+                    AnswerRequest(
+                        tool_observation=observation,
                         handoff_contents=handoff_contents,
                         turn_plan=turn_plan,
-                    )
-                final_intent, response_text = "cli_agent_fallback", _response_text(run)
-            case _ as unreachable:
-                # ``intent`` is a closed Literal, so a new value fails type-check
-                # here rather than reaching a runtime raise in production.
-                assert_never(unreachable)
+                    ),
+                )
+            outcome = _RouteOutcome(
+                final_intent="cli_agent_summarized",
+                response_text=_response_text(run),
+                llm_run=run,
+            )
+        elif route.intent == "handled_without_llm":
+            # The one route that never calls the model: the action already
+            # produced the text the user sees.
+            _record_action_only_turn(session, text, action_result.response_text)
+            outcome = _RouteOutcome(
+                final_intent="cli_agent_handled",
+                response_text=action_result.response_text,
+            )
+        elif route.intent == "gather_and_answer":
+            with apply_reasoning_effort(turn_snapshot.reasoning_effort):
+                run = _gather_and_answer(
+                    text=text,
+                    answer=answer,
+                    gather=gather,
+                    handoff_contents=handoff_contents,
+                    turn_plan=turn_plan,
+                )
+            outcome = _RouteOutcome(
+                final_intent="cli_agent_fallback",
+                response_text=_response_text(run),
+                llm_run=run,
+            )
+        else:
+            raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
-    return accounting.finalize(
-        TurnResult(
-            final_intent=final_intent,
-            action_result=action_result,
-            assistant_response_text=response_text,
-            llm_run=run,
+        return accounting.finalize(
+            TurnResult(
+                final_intent=outcome.final_intent,
+                action_result=action_result,
+                assistant_response_text=outcome.response_text,
+                llm_run=outcome.llm_run,
+            )
         )
-    )
 
 
 __all__ = [
