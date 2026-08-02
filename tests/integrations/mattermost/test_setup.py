@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -80,6 +81,31 @@ def test_incomplete_pair_without_a_webhook_is_rejected(writes: dict[str, Any]) -
 
     assert outcome.ok is False
     assert "auth_token" in outcome.detail
+    assert writes["store"] == []
+
+
+def test_token_pair_without_a_channel_is_rejected_by_the_real_verifier(
+    monkeypatch: pytest.MonkeyPatch, writes: dict[str, Any]
+) -> None:
+    """Valid token credentials with no default_channel must not pass setup.
+
+    Runs the real verifier (no ``verified`` bypass): every unattended
+    delivery path needs a channel once token credentials are configured, so
+    a channel-less token pair should be caught here, not discovered the
+    first time a report/alarm/notification silently fails to deliver.
+    """
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"username": "bot"}
+    monkeypatch.setattr("integrations.mattermost.verifier.httpx.get", lambda *_a, **_kw: response)
+
+    outcome = setup_flow.apply_setup(
+        MATTERMOST_SETUP,
+        {"server_url": "https://chat.example.com", "auth_token": "tok"},
+    )
+
+    assert outcome.ok is False
+    assert "default_channel" in outcome.detail
     assert writes["store"] == []
 
 

@@ -127,6 +127,7 @@ def test_classify_validation_error_returns_none_and_reports() -> None:
 _VALID_CONFIG = {
     "server_url": "https://chat.example.com",
     "auth_token": "tok",
+    "default_channel": "chan-1",
 }
 
 
@@ -164,6 +165,89 @@ def test_verify_passes_and_reports_username(monkeypatch: pytest.MonkeyPatch) -> 
     assert "@opensre.bot" in result["detail"]
     assert captured["url"] == "https://chat.example.com/api/v4/users/me"
     assert captured["headers"] == {"Authorization": "Bearer tok"}
+
+
+def test_verify_token_without_channel_is_missing_not_passed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auth alone must not report "passed": every unattended delivery path
+
+    (investigation reports, watchdog alarms, background notifications) needs
+    a channel once token credentials are configured, and (per delivery.py's
+    routing rule) a configured webhook does not rescue a channel-less token
+    setup — token credentials refuse delivery rather than silently falling
+    back. Reporting "passed" here would hide that every automatic delivery
+    will fail.
+    """
+    monkeypatch.setattr(
+        "integrations.mattermost.verifier.httpx.get",
+        lambda *_a, **_kw: _mock_response(200, {"username": "opensre.bot"}),
+    )
+    config_without_channel = {
+        "server_url": "https://chat.example.com",
+        "auth_token": "tok",
+    }
+    result = verify_mattermost("local env", config_without_channel)
+
+    assert result["status"] == "missing"
+    assert "@opensre.bot" in result["detail"]
+    assert "default_channel" in result["detail"]
+
+
+def test_verify_token_without_channel_is_missing_when_key_present_but_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: ``default_channel`` present-but-``None`` must be treated
+    the same as absent.
+
+    This is the *real* production shape, not just a hand-built test dict:
+    ``MattermostConfig.default_channel: str | None = None`` means
+    ``MattermostConfig.model_dump()`` — what ``resolve_effective_integrations()``
+    actually returns — always includes the key, set to ``None`` when unconfigured.
+    ``config.get("default_channel", "")`` would silently miss this, since the
+    fallback only applies when the key is *absent*; ``str(None)`` is the
+    truthy string ``"None"``, which would defeat the missing-channel check
+    entirely on every real call through ``opensre integrations verify
+    mattermost`` while still passing on a hand-built dict that omits the key.
+    """
+    monkeypatch.setattr(
+        "integrations.mattermost.verifier.httpx.get",
+        lambda *_a, **_kw: _mock_response(200, {"username": "opensre.bot"}),
+    )
+    config = {
+        "server_url": "https://chat.example.com",
+        "auth_token": "tok",
+        "webhook_url": "",
+        "default_channel": None,
+    }
+    result = verify_mattermost("local env", config)
+
+    assert result["status"] == "missing"
+    assert "default_channel" in result["detail"]
+
+
+def test_verify_token_without_channel_is_missing_even_with_webhook_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A webhook does not rescue a channel-less token setup.
+
+    delivery.py's send_mattermost_report() refuses to fall back to the
+    webhook once token credentials are present — so a dual-mode config with
+    no channel is just as broken for delivery as token-only, and the
+    verifier must flag it the same way.
+    """
+    monkeypatch.setattr(
+        "integrations.mattermost.verifier.httpx.get",
+        lambda *_a, **_kw: _mock_response(200, {"username": "opensre.bot"}),
+    )
+    config = {
+        "server_url": "https://chat.example.com",
+        "auth_token": "tok",
+        "webhook_url": "https://chat.example.com/hooks/abc",
+    }
+    result = verify_mattermost("local env", config)
+
+    assert result["status"] == "missing"
 
 
 def test_verify_reports_invalid_credentials_on_401(monkeypatch: pytest.MonkeyPatch) -> None:

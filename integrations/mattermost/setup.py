@@ -6,8 +6,18 @@ URL and auth token together — which lets delivery target channels
 dynamically. Neither field is individually required; the requirement is that
 *one of the two paths* is complete. Every field is therefore optional here, and
 :func:`integrations.mattermost.verifier.verify_mattermost` enforces the real
-rule — it already rejects an incomplete pair, and keeping the check there means
-setup and health checks agree on what "configured" means.
+rule — it rejects an incomplete pair, and keeping the check there means setup
+and health checks agree on what "configured" means.
+
+Token mode additionally needs ``default_channel``: every unattended delivery
+path (investigation reports, watchdog alarms, background-RCA notifications)
+requires a channel once token credentials are present, and — per the
+token-first routing rule in ``delivery.py``/``credentials.py`` — a configured
+webhook does not rescue a channel-less token setup, since token credentials
+refuse delivery rather than silently falling back to the webhook. The verifier
+downgrades a channel-less token setup to ``missing`` rather than ``passed`` so
+this is caught at setup time, not discovered the first time a delivery
+silently fails.
 
 The token is mirrored to the keyring / ``.env`` so the deploy preflight (which
 reads the environment, not the store) sees a Mattermost that was configured
@@ -60,7 +70,10 @@ MATTERMOST_SETUP = IntegrationSetupSpec(
         SetupField(
             name=DEFAULT_CHANNEL_FIELD,
             label="Default channel",
-            prompt="Default channel id (optional)",
+            prompt=(
+                "Default channel id (required for token mode's automatic deliveries; "
+                "leave blank for webhook-only)"
+            ),
             env_var=MATTERMOST_DEFAULT_CHANNEL_ENV,
             required=False,
         ),
