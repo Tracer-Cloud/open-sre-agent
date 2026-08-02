@@ -110,9 +110,9 @@ PRs that touch these paths always need a **human** to press merge, even with
 | `.github/workflows/` | CI and merge machinery |
 | `.github/scripts/` | Merge machinery |
 
-Automerge lists every changed path via the GitHub API (including rename origins).
-If that listing looks incomplete versus the PR’s file count, it refuses and asks
-for a human — so a protected-path change cannot hide behind a partial list.
+Automerge lists every changed file via the GitHub API (including rename origins).
+If fewer file entries come back than the PR’s changed-file count, it refuses and
+asks for a human — so a protected-path change cannot hide behind a partial list.
 
 Docs, tests, integrations, and most surface changes can still use automerge when
 a maintainer labels them.

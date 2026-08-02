@@ -314,9 +314,39 @@ def test_moving_a_file_out_of_a_protected_directory_is_caught(monkeypatch) -> No
 
 
 def test_a_truncated_listing_refuses_the_merge(monkeypatch) -> None:
-    """Fewer paths than ``changedFiles`` means the check cannot see everything."""
+    """Fewer REST entries than ``changedFiles`` means the check cannot see everything."""
     # Arrange / Act
     commands = _run_pr(monkeypatch, _pr_payload(changedFiles=105), [{"filename": "docs/a.mdx"}])
 
     # Assert
     assert commands == []
+
+
+def test_rename_inflation_cannot_mask_a_truncated_listing(monkeypatch) -> None:
+    """Destination + previous_filename must not satisfy the completeness check.
+
+    A truncated rename-heavy page can expand to more paths than ``changedFiles``
+    even while file entries are still missing. Counting paths would then let an
+    unseen ``core/`` change past the cut reach ``gh pr merge``.
+    """
+    # Arrange — 8 entries (3 renames) against 10 changed files → 11 paths, incomplete
+    files = [
+        {"filename": "docs/a.mdx"},
+        {"filename": "docs/b.mdx"},
+        {"filename": "docs/c.mdx"},
+        {"filename": "docs/d.mdx"},
+        {"filename": "docs/e.mdx"},
+        {"filename": "docs/old_a.py", "previous_filename": "docs/new_a.py"},
+        {"filename": "docs/old_b.py", "previous_filename": "docs/new_b.py"},
+        {"filename": "docs/old_c.py", "previous_filename": "docs/new_c.py"},
+    ]
+    assert len(files) == 8
+    assert len(automerge_pr._paths_from_pr_files(files)) == 11
+
+    # Act
+    commands = _run_pr(monkeypatch, _pr_payload(changedFiles=10), files)
+
+    # Assert
+    assert commands == [], "rename-inflated truncated listing was treated as complete"
+    assert automerge_pr._file_listing_is_complete(10, files) is False
+    assert automerge_pr._file_listing_is_complete(8, files) is True

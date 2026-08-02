@@ -113,27 +113,47 @@ def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
     return _check_run_is_green(check)
 
 
-def _changed_paths(repo: str, pr_number: str) -> list[str]:
-    """Every path the PR touches, including where a renamed file came from.
+def _list_pr_files(repo: str, pr_number: str) -> list[dict[str, Any]]:
+    """REST file listing for a PR (paginated). One entry per changed file.
 
     ``gh pr view --json files`` is unusable for a security check: it caps at 100
     entries with no indication it truncated, and its entries carry only the
-    destination ``path``. A file moved out of ``core/`` would therefore look
-    like an ordinary new file. The REST listing paginates and carries
-    ``previous_filename``, so both the origin and the full set are visible.
-    ``--paginate`` merges the pages into one array on its own; ``--slurp``
+    destination ``path``. The REST listing paginates and carries
+    ``previous_filename``. ``--paginate`` merges pages into one array; ``--slurp``
     would only wrap them in an outer list and needs a newer ``gh``.
     """
-    entries = _run_gh(
+    payload = _run_gh(
         [
             "api",
             f"repos/{repo}/pulls/{pr_number}/files",
             "--paginate",
         ]
     )
+    # Defensive: some ``gh`` versions / flags yield a list of page arrays.
+    if isinstance(payload, list) and payload and isinstance(payload[0], list):
+        return [entry for page in payload for entry in page]
+    return list(payload or [])
+
+
+def _paths_from_pr_files(entries: list[dict[str, Any]]) -> list[str]:
+    """Destination and rename-origin paths from a REST file listing."""
     paths = {str(entry.get("filename") or "") for entry in entries}
     paths |= {str(entry.get("previous_filename") or "") for entry in entries}
     return sorted(path for path in paths if path)
+
+
+def _file_listing_is_complete(changed_files: Any, entries: list[dict[str, Any]]) -> bool:
+    """True when the REST listing covers every changed file in the PR.
+
+    Completeness is ``len(entries)`` vs ``changedFiles``, not the expanded path
+    count. Renames contribute one entry but two paths (destination +
+    ``previous_filename``); comparing the inflated path set to ``changedFiles``
+    would let a truncated rename-heavy response look complete while protected
+    files past the cut stay invisible.
+    """
+    if not isinstance(changed_files, int):
+        return True
+    return len(entries) >= changed_files
 
 
 def _protected_paths(paths: list[str]) -> list[str]:
@@ -206,16 +226,16 @@ def main() -> int:
         print(f"PR #{pr_number} does not have the {AUTOMERGE_LABEL} label; skipping.")
         return EXIT_SUCCESS
 
-    paths = _changed_paths(repo, pr_number)
+    entries = _list_pr_files(repo, pr_number)
     changed = pr.get("changedFiles")
-    if isinstance(changed, int) and len(paths) < changed:
+    if not _file_listing_is_complete(changed, entries):
         print(
-            f"PR #{pr_number} changes {changed} files but only {len(paths)} are "
-            "visible; a human must merge."
+            f"PR #{pr_number} changes {changed} files but only {len(entries)} "
+            "are visible; a human must merge."
         )
         return EXIT_SUCCESS
 
-    protected = _protected_paths(paths)
+    protected = _protected_paths(_paths_from_pr_files(entries))
     if protected:
         shown = ", ".join(protected[:PROTECTED_PATHS_LOGGED])
         hidden = len(protected) - PROTECTED_PATHS_LOGGED
