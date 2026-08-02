@@ -360,26 +360,30 @@ def test_post_webhook_error_body_redacts_url(monkeypatch: pytest.MonkeyPatch) ->
 # ---------------------------------------------------------------------------
 
 
-def test_send_report_prefers_webhook_over_pat(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_send_report_prefers_pat_over_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Token credentials with a channel are preferred over a configured webhook.
+
+    Matches the routing rule everywhere else in this module (alarms, the
+    send-message tool, and the verifier, which probes the token endpoint
+    whenever a token is configured) — preferring the webhook instead would let
+    `opensre integrations verify mattermost` pass on the token while report
+    delivery silently used an untested webhook.
+    """
     captured: dict[str, Any] = {}
 
     def _fake_post(url: str, *, json: dict[str, Any], **_kw: Any) -> MagicMock:
         captured["url"] = url
         captured["json"] = json
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.json.side_effect = ValueError("not json")
-        resp.text = "ok"
-        return resp
+        return _mock_response(201, _ok_body())
 
     monkeypatch.setattr("platform.notifications.delivery_transport.httpx.post", _fake_post)
     ok, error = send_mattermost_report("Report text", {**_CTX, "webhook_url": _WEBHOOK})
 
     assert ok is True
     assert error == ""
-    assert captured["url"] == _WEBHOOK
-    assert "channel_id" not in captured["json"]
-    attachment = captured["json"]["attachments"][0]
+    assert captured["url"] == f"{_SERVER}/api/v4/posts"
+    assert captured["json"]["channel_id"] == "chan-1"
+    attachment = captured["json"]["props"]["attachments"][0]
     assert attachment["title"] == "Investigation Complete"
     assert attachment["text"] == "Report text"
 

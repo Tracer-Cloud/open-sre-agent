@@ -89,27 +89,38 @@ def post_mattermost_webhook(
 
 
 def send_mattermost_report(report: str, mattermost_ctx: dict[str, Any]) -> tuple[bool, str]:
-    """Deliver an investigation report via webhook when configured, else PAT."""
+    """Deliver an investigation report via token credentials when configured, else webhook.
+
+    Token-first, webhook-fallback — the same routing rule as
+    :class:`integrations.mattermost.alarms.MattermostAlarmDispatcher`,
+    :func:`integrations.mattermost.tools.mattermost_send_message_tool.delivery.resolve_target`,
+    and :func:`integrations.mattermost.verifier.verify_mattermost` (which probes
+    the token endpoint whenever a token is configured, regardless of whether a
+    webhook is also set). Preferring the webhook here instead — as an earlier
+    version of this function did — would let ``opensre integrations verify
+    mattermost`` pass by validating the token while report delivery silently
+    used an untested webhook.
+    """
     attachment = {
         "title": "Investigation Complete",
         "text": truncate(report, _ATTACHMENT_TEXT_LIMIT, suffix="…"),
         "color": _REPORT_COLOR,
     }
-    webhook_url: str = str(mattermost_ctx.get("webhook_url") or "")
-    if webhook_url:
-        posted, error = post_mattermost_webhook(
-            webhook_url, "OpenSRE Investigation", attachments=[attachment]
-        )
-        return (True, "") if posted else (False, error)
-
     server_url: str = str(mattermost_ctx.get("server_url") or "")
     channel: str = str(mattermost_ctx.get("channel") or "")
     auth_token: str = str(mattermost_ctx.get("auth_token") or "")
-    posted, error, _ = post_mattermost_message(
-        server_url,
-        channel,
-        "OpenSRE Investigation",
-        auth_token,
-        attachments=[attachment],
+    if server_url and auth_token and channel:
+        posted, error, _ = post_mattermost_message(
+            server_url,
+            channel,
+            "OpenSRE Investigation",
+            auth_token,
+            attachments=[attachment],
+        )
+        return (True, "") if posted else (False, error)
+
+    webhook_url: str = str(mattermost_ctx.get("webhook_url") or "")
+    posted, error = post_mattermost_webhook(
+        webhook_url, "OpenSRE Investigation", attachments=[attachment]
     )
     return (True, "") if posted else (False, error)
