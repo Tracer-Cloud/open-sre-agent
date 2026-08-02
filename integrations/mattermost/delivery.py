@@ -96,10 +96,17 @@ def send_mattermost_report(report: str, mattermost_ctx: dict[str, Any]) -> tuple
     :func:`integrations.mattermost.tools.mattermost_send_message_tool.delivery.resolve_target`,
     and :func:`integrations.mattermost.verifier.verify_mattermost` (which probes
     the token endpoint whenever a token is configured, regardless of whether a
-    webhook is also set). Preferring the webhook here instead — as an earlier
-    version of this function did — would let ``opensre integrations verify
-    mattermost`` pass by validating the token while report delivery silently
-    used an untested webhook.
+    webhook is also set).
+
+    A token without a resolvable channel does **not** fall back to the
+    webhook: like :func:`integrations.mattermost.credentials.load_credentials_from_env`,
+    a channel-less send with token credentials configured is a configuration
+    gap to surface, not license to deliver to a webhook whose destination the
+    caller never chose and ``verify_mattermost`` never probed. Falling back
+    silently here — as an earlier version of this function did — would let
+    ``opensre integrations verify mattermost`` pass (it only checks the token
+    is valid, not that a channel is configured) while report delivery quietly
+    used an unverified path.
     """
     attachment = {
         "title": "Investigation Complete",
@@ -109,7 +116,9 @@ def send_mattermost_report(report: str, mattermost_ctx: dict[str, Any]) -> tuple
     server_url: str = str(mattermost_ctx.get("server_url") or "")
     channel: str = str(mattermost_ctx.get("channel") or "")
     auth_token: str = str(mattermost_ctx.get("auth_token") or "")
-    if server_url and auth_token and channel:
+    if server_url and auth_token:
+        if not channel:
+            return False, "No channel to deliver to: configure a default_channel."
         posted, error, _ = post_mattermost_message(
             server_url,
             channel,

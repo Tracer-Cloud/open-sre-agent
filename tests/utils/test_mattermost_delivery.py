@@ -413,3 +413,34 @@ def test_send_report_webhook_failure_propagates_error(monkeypatch: pytest.Monkey
     ok, error = send_mattermost_report("Report", {"webhook_url": _WEBHOOK})
     assert ok is False
     assert "disabled" in error
+
+
+def test_send_report_token_without_channel_never_falls_back_to_webhook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A token configured without a channel must not silently use the webhook.
+
+    Mixed config: full token credentials + webhook + no channel. Token
+    credentials mean channel-targeting mode, so the missing channel is a
+    configuration gap to surface, not a license to deliver to the webhook's
+    fixed destination — the same rule as
+    ``integrations.mattermost.credentials.load_credentials_from_env`` and the
+    ``mattermost_send_message`` tool. This is also the exact scenario where
+    ``verify_mattermost`` reports the integration healthy (it only checks the
+    token, not whether a channel is configured), so silently falling back
+    here would let a "healthy" integration fail delivery unpredictably.
+    """
+
+    def _explode_webhook(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("webhook must not be used as a fallback when a token is configured")
+
+    monkeypatch.setattr(
+        "platform.notifications.delivery_transport.httpx.post",
+        _explode_webhook,
+    )
+
+    ok, error = send_mattermost_report(
+        "Report", {"server_url": _SERVER, "auth_token": "tok", "webhook_url": _WEBHOOK}
+    )
+    assert ok is False
+    assert "channel" in error.lower()
