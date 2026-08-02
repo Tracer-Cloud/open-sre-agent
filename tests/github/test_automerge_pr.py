@@ -191,18 +191,17 @@ def test_runtime_and_ci_paths_are_never_auto_merged() -> None:
 
     # Act / Assert
     for path in protected:
-        assert automerge_pr._protected_paths([{"path": path}]) == [path], path
+        assert automerge_pr._protected_paths([path]) == [path], path
 
 
 def test_ordinary_paths_stay_eligible() -> None:
     """Docs, tests and integrations keep merging without a human."""
     # Arrange
     files = [
-        {"path": "docs/quickstart.mdx"},
-        {"path": "tests/core/test_thing.py"},
-        {"path": "integrations/datadog/client.py"},
-        {"path": "surfaces/cli/app.py"},
-        {"path": "README.md"},
+        "tests/core/test_thing.py",
+        "integrations/datadog/client.py",
+        "surfaces/cli/app.py",
+        "README.md",
     ]
 
     # Act / Assert
@@ -212,7 +211,7 @@ def test_ordinary_paths_stay_eligible() -> None:
 def test_one_protected_file_taints_the_whole_pr() -> None:
     """A mostly-docs PR that also edits the runtime still needs a human."""
     # Arrange
-    files = [{"path": "docs/a.mdx"}, {"path": "core/agent/agent.py"}, {"path": "docs/b.mdx"}]
+    files = ["docs/a.mdx", "core/agent/agent.py", "docs/b.mdx"]
 
     # Act / Assert
     assert automerge_pr._protected_paths(files) == ["core/agent/agent.py"]
@@ -221,68 +220,15 @@ def test_one_protected_file_taints_the_whole_pr() -> None:
 def test_lookalike_prefixes_are_not_protected() -> None:
     """Only real package roots count, not names that merely start the same."""
     # Arrange
-    files = [{"path": "coreutils/x.py"}, {"path": "platformer/y.py"}, {"path": "gateways.md"}]
+    files = ["coreutils/x.py", "platformer/y.py", "gateways.md"]
 
     # Act / Assert
     assert automerge_pr._protected_paths(files) == []
 
 
-def test_a_truncated_file_list_refuses_the_merge() -> None:
-    """``gh`` pages the file list at 100 and does not say so.
-
-    Observed on a real PR: ``changedFiles`` 105 against a ``files`` length of
-    100 — and that PR touched both ``core/`` and ``gateway/``. Trusting the short
-    list would let the hidden runtime change merge as if the PR were docs.
-    """
-    # Arrange
-    pr = {"changedFiles": 105, "files": [{"path": f"docs/{i}.mdx"} for i in range(100)]}
-
-    # Act / Assert
-    assert automerge_pr._file_list_is_complete(pr) is False
-
-
-def test_a_complete_file_list_is_accepted() -> None:
-    """The common case: every changed path is visible."""
-    # Arrange
-    pr = {"changedFiles": 3, "files": [{"path": "docs/a.mdx"}] * 3}
-
-    # Act / Assert
-    assert automerge_pr._file_list_is_complete(pr) is True
-
-
-def test_a_full_page_without_a_count_is_refused() -> None:
-    """A missing count plus a full page is indistinguishable from truncation."""
-    # Arrange
-    pr = {"files": [{"path": f"docs/{i}.mdx"} for i in range(automerge_pr.FILE_PAGE_SIZE)]}
-
-    # Act / Assert
-    assert automerge_pr._file_list_is_complete(pr) is False
-
-
-def test_a_short_list_without_a_count_is_accepted() -> None:
-    """Below the page size there is nothing that could have been cut off."""
-    # Arrange
-    pr = {"files": [{"path": "docs/a.mdx"}]}
-
-    # Act / Assert
-    assert automerge_pr._file_list_is_complete(pr) is True
-
-
-def test_process_pr_requests_changed_files_from_github() -> None:
-    """The completeness guard is inert unless the query asks for the count."""
-    # Arrange
-    source = _MODULE_PATH.read_text(encoding="utf-8")
-
-    # Act
-    json_fields = source.split('"--json",', 1)[1].split("]", 1)[0]
-
-    # Assert
-    assert "changedFiles" in json_fields
-    assert "files" in json_fields
-
-
-def _protected_pr_payload() -> dict:
-    return {
+def _pr_payload(**overrides: object) -> dict:
+    """A labeled, open, green PR targeting main."""
+    payload = {
         "baseRefName": "main",
         "state": "OPEN",
         "isDraft": False,
@@ -290,54 +236,87 @@ def _protected_pr_payload() -> dict:
         "mergeable": "MERGEABLE",
         "mergeStateStatus": "CLEAN",
         "changedFiles": 2,
-        "files": [{"path": "docs/a.mdx"}, {"path": "core/agent/agent.py"}],
         "statusCheckRollup": [
             {"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}
         ],
         "title": "a change",
     }
+    payload.update(overrides)
+    return payload
+
+
+def _run_pr(monkeypatch, payload: dict, files: list[dict]) -> list:
+    """Drive ``main`` for one PR, returning the gh commands it executed."""
+    commands: list = []
+
+    def _fake_gh(args: list[str]) -> object:
+        # ``api`` fetches the changed files; ``pr view`` fetches the PR itself.
+        return [files] if args[0] == "api" else payload
+
+    monkeypatch.setattr(automerge_pr, "_run_gh", _fake_gh)
+    monkeypatch.setattr(
+        automerge_pr.subprocess, "run", lambda *args, **_kwargs: commands.append(args[0])
+    )
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("PR_NUMBER", "77")
+    automerge_pr.main()
+    return commands
 
 
 def test_a_green_protected_pr_is_not_merged(monkeypatch) -> None:
     """The policy has to hold in ``main``, not only in the helper.
 
-    Every other test here checks ``_protected_paths`` directly, which stays green
-    even if the caller stops consulting it. This pins the refusal on the path
-    that actually merges.
+    Asserting on ``_protected_paths`` alone stays green even if the caller stops
+    consulting it, so this pins the refusal on the path that actually merges.
     """
-    # Arrange
-    merges: list = []
-    monkeypatch.setattr(automerge_pr, "_run_gh", lambda _args: _protected_pr_payload())
-    monkeypatch.setattr(
-        automerge_pr.subprocess, "run", lambda *args, **_kwargs: merges.append(args[0])
+    # Arrange / Act
+    commands = _run_pr(
+        monkeypatch,
+        _pr_payload(),
+        [{"filename": "docs/a.mdx"}, {"filename": "core/agent/agent.py"}],
     )
-    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
-    monkeypatch.setenv("PR_NUMBER", "77")
-
-    # Act
-    exit_code = automerge_pr.main()
 
     # Assert
-    assert exit_code == 0
-    assert merges == [], "a PR touching core/ was auto-merged"
+    assert commands == [], "a PR touching core/ was auto-merged"
 
 
 def test_a_green_ordinary_pr_is_still_merged(monkeypatch) -> None:
     """The guard must not block everything it was not aimed at."""
-    # Arrange
-    merges: list = []
-    payload = _protected_pr_payload()
-    payload["files"] = [{"path": "docs/a.mdx"}, {"path": "docs/b.mdx"}]
-    monkeypatch.setattr(automerge_pr, "_run_gh", lambda _args: payload)
-    monkeypatch.setattr(
-        automerge_pr.subprocess, "run", lambda *args, **_kwargs: merges.append(args[0])
+    # Arrange / Act
+    commands = _run_pr(
+        monkeypatch, _pr_payload(), [{"filename": "docs/a.mdx"}, {"filename": "docs/b.mdx"}]
     )
-    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
-    monkeypatch.setenv("PR_NUMBER", "78")
-
-    # Act
-    automerge_pr.main()
 
     # Assert
-    assert len(merges) == 1
-    assert "merge" in merges[0]
+    assert len(commands) == 1
+    assert "merge" in commands[0]
+
+
+def test_moving_a_file_out_of_a_protected_directory_is_caught(monkeypatch) -> None:
+    """A rename hides the origin unless the pre-rename path is checked.
+
+    ``gh pr view --json files`` reports only the destination, so moving
+    ``core/agent/agent.py`` to ``docs/`` would read as an ordinary new doc and
+    auto-merge — carrying runtime code out of the protected tree. The REST
+    listing carries ``previous_filename``, which is what makes this visible.
+    """
+    # Arrange / Act
+    # ``changedFiles`` must match the listing, or the truncation guard would
+    # refuse first and this would pass without ever testing the rename.
+    commands = _run_pr(
+        monkeypatch,
+        _pr_payload(changedFiles=1),
+        [{"filename": "docs/agent.py", "previous_filename": "core/agent/agent.py"}],
+    )
+
+    # Assert
+    assert commands == [], "a file moved out of core/ was auto-merged"
+
+
+def test_a_truncated_listing_refuses_the_merge(monkeypatch) -> None:
+    """Fewer paths than ``changedFiles`` means the check cannot see everything."""
+    # Arrange / Act
+    commands = _run_pr(monkeypatch, _pr_payload(changedFiles=105), [{"filename": "docs/a.mdx"}])
+
+    # Assert
+    assert commands == []

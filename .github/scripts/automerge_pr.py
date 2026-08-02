@@ -10,6 +10,21 @@ import sys
 from typing import Any
 
 AUTOMERGE_LABEL = "automerge"
+#: Fields ``gh pr view`` must return. Built by joining so the list stays
+#: readable without adjacent string literals, which read as a missing comma.
+PR_VIEW_FIELDS = ",".join(
+    (
+        "baseRefName",
+        "changedFiles",
+        "isDraft",
+        "labels",
+        "mergeable",
+        "mergeStateStatus",
+        "state",
+        "statusCheckRollup",
+        "title",
+    )
+)
 #: Process exit code. Every path through ``main`` reports success — a PR that
 #: is skipped is not an error. Real failures raise ``CalledProcessError`` and
 #: exit with the code ``gh`` returned.
@@ -100,29 +115,40 @@ def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
     return _check_run_is_green(check)
 
 
-def _file_list_is_complete(pr: dict[str, Any]) -> bool:
-    """True when every changed path is visible to the protected-path check.
+def _flatten_pages(payload: Any) -> list[dict[str, Any]]:
+    """Flatten ``gh api --paginate --slurp`` output, which is a list of pages."""
+    if isinstance(payload, list) and payload and isinstance(payload[0], list):
+        return [entry for page in payload for entry in page]
+    return list(payload or [])
 
-    ``gh pr view --json files`` pages at 100 entries and says nothing about it,
-    so a larger PR could hide a ``core/`` change past the cut and be merged as
-    if it were docs. ``changedFiles`` carries the real total; without it, a full
-    page is indistinguishable from a truncated one and must be refused.
+
+def _changed_paths(repo: str, pr_number: str) -> list[str]:
+    """Every path the PR touches, including where a renamed file came from.
+
+    ``gh pr view --json files`` is unusable for a security check: it caps at 100
+    entries with no indication it truncated, and its entries carry only the
+    destination ``path``. A file moved out of ``core/`` would therefore look
+    like an ordinary new file. The REST listing paginates and carries
+    ``previous_filename``, so both the origin and the full set are visible.
     """
-    files = pr.get("files") or []
-    changed = pr.get("changedFiles")
-    if isinstance(changed, int):
-        return changed <= len(files)
-    return len(files) < FILE_PAGE_SIZE
+    entries = _flatten_pages(
+        _run_gh(
+            [
+                "api",
+                f"repos/{repo}/pulls/{pr_number}/files",
+                "--paginate",
+                "--slurp",
+            ]
+        )
+    )
+    paths = {str(entry.get("filename") or "") for entry in entries}
+    paths |= {str(entry.get("previous_filename") or "") for entry in entries}
+    return sorted(path for path in paths if path)
 
 
-def _protected_paths(files: list[dict[str, Any]]) -> list[str]:
-    """Paths in the PR that require a human to press merge, sorted and unique."""
-    hits = {
-        path
-        for entry in files
-        if (path := str(entry.get("path", ""))) and path.startswith(PROTECTED_PATH_PREFIXES)
-    }
-    return sorted(hits)
+def _protected_paths(paths: list[str]) -> list[str]:
+    """Paths that require a human to press merge, sorted and unique."""
+    return sorted({path for path in paths if path.startswith(PROTECTED_PATH_PREFIXES)})
 
 
 def _squash_commit_subject(title: str, pr_number: str) -> str:
@@ -169,8 +195,7 @@ def main() -> int:
             "--repo",
             repo,
             "--json",
-            "baseRefName,changedFiles,files,isDraft,mergeable,mergeStateStatus,labels,state,"
-            "statusCheckRollup,title",
+            PR_VIEW_FIELDS,
         ]
     )
 
@@ -191,15 +216,16 @@ def main() -> int:
         print(f"PR #{pr_number} does not have the {AUTOMERGE_LABEL} label; skipping.")
         return EXIT_SUCCESS
 
-    if not _file_list_is_complete(pr):
-        visible = len(pr.get("files") or [])
+    paths = _changed_paths(repo, pr_number)
+    changed = pr.get("changedFiles")
+    if isinstance(changed, int) and len(paths) < changed:
         print(
-            f"PR #{pr_number} changes {pr.get('changedFiles')} files but only "
-            f"{visible} are visible; a human must merge."
+            f"PR #{pr_number} changes {changed} files but only {len(paths)} are "
+            "visible; a human must merge."
         )
         return EXIT_SUCCESS
 
-    protected = _protected_paths(pr.get("files") or [])
+    protected = _protected_paths(paths)
     if protected:
         shown = ", ".join(protected[:PROTECTED_PATHS_LOGGED])
         hidden = len(protected) - PROTECTED_PATHS_LOGGED
