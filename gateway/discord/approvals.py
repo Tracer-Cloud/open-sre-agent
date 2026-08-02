@@ -8,7 +8,7 @@ message components on the prompt, and click routing back to the broker.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 import discord
@@ -87,7 +87,7 @@ def handle_component_interaction(
     interaction: discord.Interaction,
     *,
     broker: ApprovalBroker,
-    allowed_user_ids: list[str],
+    allowed_user_ids: Collection[str],
 ) -> bool:
     """Resolve Approve/Deny clicks.
 

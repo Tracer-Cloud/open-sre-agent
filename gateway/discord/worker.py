@@ -138,6 +138,7 @@ async def _discord_gateway_main(
 
     session_resolver = SessionResolver(bindings, platform=_PLATFORM_DISCORD)
     approvals = ApprovalBroker()
+    allowed_users_set = set(settings.allowed_user_ids) if settings.allowed_user_ids else set()
     dispatcher = DiscordTurnDispatcher(
         settings=settings,
         bot_token=settings.bot_token,
@@ -180,7 +181,7 @@ async def _discord_gateway_main(
                 if handle_component_interaction(
                     interaction,
                     broker=approvals,
-                    allowed_user_ids=settings.allowed_user_ids,
+                    allowed_user_ids=allowed_users_set,
                 ):
                     with contextlib.suppress(discord.HTTPException):
                         await interaction.response.send_message("Recorded.", ephemeral=True)
