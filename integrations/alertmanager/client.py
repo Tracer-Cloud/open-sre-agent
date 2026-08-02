@@ -235,4 +235,5 @@ def make_alertmanager_client(
             )
         )
     except Exception:
+        logger.warning("Ignoring invalid Alertmanager client configuration", exc_info=True)
         return None
