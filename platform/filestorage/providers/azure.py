@@ -104,6 +104,8 @@ def _factory(config: RemoteSyncConfig) -> AzureBlobObjectStore:
     return AzureBlobObjectStore(config)
 
 
-register_object_store(PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT, extra_fields=EXTRA_FIELDS)
+register_object_store(
+    PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT, extra_fields=EXTRA_FIELDS
+)
 
 __all__ = ["CREDENTIAL_HINT", "EXTRA_FIELDS", "PROVIDER_NAME", "AzureBlobObjectStore"]
