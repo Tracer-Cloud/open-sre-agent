@@ -36,7 +36,7 @@ class _FakeBlobClient:
     def download_blob(self) -> _FakeDownloader:
         return _FakeDownloader(self.data)
 
-    def upload_blob(self, data: bytes, overwrite: bool = True) -> None: # noqa: ARG002
+    def upload_blob(self, data: bytes, overwrite: bool = True) -> None:  # noqa: ARG002
         self.data = data
 
 
@@ -61,10 +61,10 @@ class _FakeBlobServiceClient:
         self.container_client = _FakeContainerClient()
         self.blob_clients: dict[str, _FakeBlobClient] = {}
 
-    def get_container_client(self, container: str) -> _FakeContainerClient: # noqa: ARG002
+    def get_container_client(self, container: str) -> _FakeContainerClient:  # noqa: ARG002
         return self.container_client
 
-    def get_blob_client(self, container: str, blob: str) -> _FakeBlobClient: # noqa: ARG002
+    def get_blob_client(self, container: str, blob: str) -> _FakeBlobClient:  # noqa: ARG002
         if blob not in self.blob_clients:
             self.blob_clients[blob] = _FakeBlobClient()
         return self.blob_clients[blob]
@@ -121,18 +121,18 @@ def test_azure_sdk_errors_are_translated() -> None:
         def download_blob(self) -> None:
             raise AzureError("Simulated SDK failure")
 
-        def upload_blob(self, data: bytes, overwrite: bool = True) -> None: # noqa: ARG002
+        def upload_blob(self, data: bytes, overwrite: bool = True) -> None:  # noqa: ARG002
             raise AzureError("Simulated SDK failure")
 
     class _FailingContainerClient:
-        def list_blobs(self, name_starts_with: str = "") -> None: # noqa: ARG002
+        def list_blobs(self, name_starts_with: str = "") -> None:  # noqa: ARG002
             raise AzureError("Simulated SDK failure")
 
     class _FailingServiceClient:
-        def get_container_client(self, container: str) -> _FailingContainerClient: # noqa: ARG002
+        def get_container_client(self, container: str) -> _FailingContainerClient:  # noqa: ARG002
             return _FailingContainerClient()
 
-        def get_blob_client(self, container: str, blob: str) -> _FailingBlobClient: # noqa: ARG002
+        def get_blob_client(self, container: str, blob: str) -> _FailingBlobClient:  # noqa: ARG002
             return _FailingBlobClient()
 
     store = AzureBlobObjectStore(_config(), client=_FailingServiceClient())
