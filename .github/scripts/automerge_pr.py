@@ -10,12 +10,19 @@ import sys
 from typing import Any
 
 AUTOMERGE_LABEL = "automerge"
+#: Process exit code. Every path through ``main`` reports success — a PR that
+#: is skipped is not an error. Real failures raise ``CalledProcessError`` and
+#: exit with the code ``gh`` returned.
+EXIT_SUCCESS = 0
+#: How many protected paths the refusal names before summarising the rest.
+#: Enough to show the reader why without pasting a whole diff into the log.
+PROTECTED_PATHS_LOGGED = 3
+#: Page size ``gh pr view --json files`` returns; a full page may be cut short.
+FILE_PAGE_SIZE = 100
 #: Paths a machine must never merge on its own. The first three carry the
 #: agent runtime, the multi-tenant platform and the chat gateway — a bad
 #: change there reaches every user. The last two are the merge machinery
 #: itself, which must not be able to widen its own permissions.
-#: Page size ``gh pr view --json files`` returns; a full page may be cut short.
-FILE_PAGE_SIZE = 100
 PROTECTED_PATH_PREFIXES = (
     "core/",
     "platform/",
@@ -23,13 +30,6 @@ PROTECTED_PATH_PREFIXES = (
     ".github/workflows/",
     ".github/scripts/",
 )
-#: ``mergeStateStatus`` when the only thing blocking a PR is that it has not
-#: taken the latest base. Set by "require branches to be up to date".
-MERGE_STATE_BEHIND = "BEHIND"
-#: What a single pass did, so the sweep can stop after one mutation.
-ACTION_NONE = "none"
-ACTION_UPDATED = "updated"
-ACTION_MERGED = "merged"
 AUTOMERGE_WORKFLOW_NAME = "Auto-merge"
 AUTOMERGE_JOB_CHECK_NAME = "Merge when CI is green"
 # External app checks that are not Actions workflow_run triggers. Waiting on them
@@ -100,6 +100,31 @@ def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
     return _check_run_is_green(check)
 
 
+def _file_list_is_complete(pr: dict[str, Any]) -> bool:
+    """True when every changed path is visible to the protected-path check.
+
+    ``gh pr view --json files`` pages at 100 entries and says nothing about it,
+    so a larger PR could hide a ``core/`` change past the cut and be merged as
+    if it were docs. ``changedFiles`` carries the real total; without it, a full
+    page is indistinguishable from a truncated one and must be refused.
+    """
+    files = pr.get("files") or []
+    changed = pr.get("changedFiles")
+    if isinstance(changed, int):
+        return changed <= len(files)
+    return len(files) < FILE_PAGE_SIZE
+
+
+def _protected_paths(files: list[dict[str, Any]]) -> list[str]:
+    """Paths in the PR that require a human to press merge, sorted and unique."""
+    hits = {
+        path
+        for entry in files
+        if (path := str(entry.get("path", ""))) and path.startswith(PROTECTED_PATH_PREFIXES)
+    }
+    return sorted(hits)
+
+
 def _squash_commit_subject(title: str, pr_number: str) -> str:
     suffix = f"(#{pr_number})"
     stripped = title.rstrip()
@@ -132,82 +157,10 @@ def _run_gh(args: list[str]) -> Any:
     return json.loads(result.stdout)
 
 
-def _file_list_is_complete(pr: dict[str, Any]) -> bool:
-    """True when every changed path is visible to the protected-path check.
+def main() -> int:
+    repo = os.environ["GITHUB_REPOSITORY"]
+    pr_number = os.environ["PR_NUMBER"]
 
-    ``gh pr view --json files`` pages at 100 entries and says nothing about it,
-    so a larger PR could hide a ``core/`` change past the cut and be merged as
-    if it were docs. ``changedFiles`` carries the real total, so a mismatch
-    means the check cannot see the whole diff and must refuse.
-    """
-    files = pr.get("files") or []
-    changed = pr.get("changedFiles")
-    if isinstance(changed, int):
-        return changed <= len(files)
-    # No count to compare against. A short list cannot have been truncated, but
-    # a full page is exactly what truncation looks like, so refuse that.
-    return len(files) < FILE_PAGE_SIZE
-
-
-def _protected_paths(files: list[dict[str, Any]]) -> list[str]:
-    """Paths in the PR that require a human to press merge, sorted and unique."""
-    hits = {
-        path
-        for entry in files
-        if (path := str(entry.get("path", ""))) and path.startswith(PROTECTED_PATH_PREFIXES)
-    }
-    return sorted(hits)
-
-
-def _needs_branch_update(pr: dict[str, Any]) -> bool:
-    """True when the PR is blocked only by being behind its base branch.
-
-    A conflicted PR reports ``CONFLICTING`` and needs a human; a behind-but-clean
-    PR just needs the latest base merged in so the required checks re-run against
-    what would actually land.
-    """
-    return pr.get("mergeStateStatus") == MERGE_STATE_BEHIND and pr.get("mergeable") == "MERGEABLE"
-
-
-def _update_branch(repo: str, pr_number: str) -> None:
-    """Merge the base branch into the PR branch and let its checks re-run."""
-    subprocess.run(
-        ["gh", "pr", "update-branch", pr_number, "--repo", repo],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-
-def _labeled_open_pr_numbers(repo: str) -> list[str]:
-    """Open PRs targeting main that opted into auto-merge, oldest first.
-
-    Oldest first makes the sweep a queue: the PR that has waited longest is
-    the one refreshed, so PRs drain in order instead of all competing.
-    """
-    rows = _run_gh(
-        [
-            "pr",
-            "list",
-            "--repo",
-            repo,
-            "--state",
-            "open",
-            "--base",
-            "main",
-            "--label",
-            AUTOMERGE_LABEL,
-            "--json",
-            "number,createdAt",
-            "--limit",
-            "100",
-        ]
-    )
-    rows.sort(key=lambda row: str(row.get("createdAt") or ""))
-    return [str(row["number"]) for row in rows]
-
-
-def _process_pr(repo: str, pr_number: str) -> str:
     pr = _run_gh(
         [
             "pr",
@@ -216,26 +169,27 @@ def _process_pr(repo: str, pr_number: str) -> str:
             "--repo",
             repo,
             "--json",
-            "baseRefName,changedFiles,files,isDraft,mergeable,mergeStateStatus,labels,state,statusCheckRollup,title",
+            "baseRefName,changedFiles,files,isDraft,mergeable,mergeStateStatus,labels,state,"
+            "statusCheckRollup,title",
         ]
     )
 
     if pr.get("baseRefName") != "main":
         print(f"PR #{pr_number} does not target main; skipping.")
-        return ACTION_NONE
+        return EXIT_SUCCESS
 
     if pr.get("state") != "OPEN":
         print(f"PR #{pr_number} is not open; skipping.")
-        return ACTION_NONE
+        return EXIT_SUCCESS
 
     if pr.get("isDraft"):
         print(f"PR #{pr_number} is a draft; skipping.")
-        return ACTION_NONE
+        return EXIT_SUCCESS
 
     label_names = {label["name"] for label in pr.get("labels", [])}
     if AUTOMERGE_LABEL not in label_names:
         print(f"PR #{pr_number} does not have the {AUTOMERGE_LABEL} label; skipping.")
-        return ACTION_NONE
+        return EXIT_SUCCESS
 
     if not _file_list_is_complete(pr):
         visible = len(pr.get("files") or [])
@@ -243,30 +197,24 @@ def _process_pr(repo: str, pr_number: str) -> str:
             f"PR #{pr_number} changes {pr.get('changedFiles')} files but only "
             f"{visible} are visible; a human must merge."
         )
-        return ACTION_NONE
+        return EXIT_SUCCESS
 
     protected = _protected_paths(pr.get("files") or [])
     if protected:
-        shown = ", ".join(protected[:3])
-        more = f" (+{len(protected) - 3} more)" if len(protected) > 3 else ""
+        shown = ", ".join(protected[:PROTECTED_PATHS_LOGGED])
+        hidden = len(protected) - PROTECTED_PATHS_LOGGED
+        more = f" (+{hidden} more)" if hidden > 0 else ""
         print(f"PR #{pr_number} touches protected paths; a human must merge: {shown}{more}")
-        return ACTION_NONE
+        return EXIT_SUCCESS
+
+    if pr.get("mergeable") != "MERGEABLE":
+        print(f"PR #{pr_number} is not mergeable ({pr.get('mergeStateStatus')}); skipping.")
+        return EXIT_SUCCESS
 
     green, reason = _checks_are_green(pr.get("statusCheckRollup") or [])
     if not green:
         print(f"PR #{pr_number} not ready to merge: {reason}")
-        return ACTION_NONE
-
-    # Only a green PR earns a refresh. Updating a red one would re-run the whole
-    # suite on every merge to main and never converge.
-    if _needs_branch_update(pr):
-        print(f"PR #{pr_number} is behind {pr.get('baseRefName')}; updating the branch.")
-        _update_branch(repo, pr_number)
-        return ACTION_UPDATED
-
-    if pr.get("mergeable") != "MERGEABLE":
-        print(f"PR #{pr_number} is not mergeable ({pr.get('mergeStateStatus')}); skipping.")
-        return ACTION_NONE
+        return EXIT_SUCCESS
 
     title = pr["title"]
     print(f"Merging PR #{pr_number}: {title}")
@@ -286,47 +234,7 @@ def _process_pr(repo: str, pr_number: str) -> str:
         check=True,
     )
     print(f"Merged PR #{pr_number}.")
-    return ACTION_MERGED
-
-
-def _sweep(repo: str) -> str:
-    """Advance the queue by one PR and stop.
-
-    Exactly one mutation per sweep. Merging pushes ``main``, which triggers the
-    next sweep, so the queue drains itself one PR at a time instead of
-    refreshing every PR against every merge.
-
-    A PR that cannot be refreshed — a fork that disallows maintainer edits
-    answers ``gh pr update-branch`` with 403 — must not strand the ones behind
-    it, so each PR is attempted independently.
-    """
-    for number in _labeled_open_pr_numbers(repo):
-        try:
-            action = _process_pr(repo, number)
-        except subprocess.CalledProcessError as exc:
-            detail = (exc.stderr or exc.stdout or str(exc)).strip()
-            print(f"PR #{number} could not be processed; continuing. {detail}")
-            continue
-        if action != ACTION_NONE:
-            print(f"Sweep {action} PR #{number}; stopping this pass.")
-            return action
-    return ACTION_NONE
-
-
-def main() -> int:
-    """Process one PR, or advance the queue when no number is given.
-
-    The workflow passes ``PR_NUMBER`` for PR and check events. When ``main``
-    itself moves, every open auto-merge PR falls behind at once and the sweep
-    runs with no number.
-    """
-    repo = os.environ["GITHUB_REPOSITORY"]
-    pr_number = os.environ.get("PR_NUMBER", "").strip()
-    if pr_number:
-        _process_pr(repo, pr_number)
-    else:
-        _sweep(repo)
-    return 0
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":

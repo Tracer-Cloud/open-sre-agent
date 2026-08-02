@@ -7,10 +7,6 @@ on:
   pull_request_target:
     types: [labeled, synchronize, reopened]
     branches: [main]
-  # When main moves, every open auto-merge PR goes out of date at once. The
-  # sweep refreshes them so nobody clicks "Update branch" by hand.
-  push:
-    branches: [main]
   workflow_run:
     workflows:
       - CI
@@ -26,12 +22,8 @@ permissions:
 concurrency:
   # PR number / commit SHA, not branch name: fork branches can share a name,
   # and a branch-name group would let one fork's run cancel another's.
-  # Push sweeps share one group so they queue instead of overlapping; without a
-  # literal fallback they would key on run_id, which is unique per run and would
-  # let several sweeps update the same PRs at once. They must not cancel either:
-  # a cancelled sweep can interrupt an in-flight merge.
-  group: automerge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || 'sweep' }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  group: automerge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   merge:
@@ -42,8 +34,7 @@ jobs:
         github.event.workflow_run.event == 'pull_request' &&
         contains(fromJSON('["success", "neutral"]'), github.event.workflow_run.conclusion)) ||
       (github.event_name == 'pull_request_target' &&
-        (github.event.action != 'labeled' || github.event.label.name == 'automerge')) ||
-      github.event_name == 'push'
+        (github.event.action != 'labeled' || github.event.label.name == 'automerge'))
     steps:
       - uses: actions/checkout@v5
 
@@ -56,11 +47,6 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "push" ]; then
-            # No single PR: the merge step sweeps every labeled PR instead.
-            echo "sweep=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           if [ "$EVENT_NAME" = "pull_request_target" ]; then
             echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
             exit 0
@@ -77,7 +63,7 @@ jobs:
           fi
 
       - name: Merge labeled PR when checks pass
-        if: steps.pr.outputs.number != '' || steps.pr.outputs.sweep == 'true'
+        if: steps.pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
