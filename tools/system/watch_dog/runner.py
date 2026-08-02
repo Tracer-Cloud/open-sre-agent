@@ -13,6 +13,10 @@ from typing import Protocol
 
 import click
 
+from integrations.mattermost.alarms import MattermostAlarmDispatcher
+from integrations.mattermost.credentials import (
+    load_credentials_from_env as load_mattermost_credentials_from_env,
+)
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.rocketchat.credentials import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
@@ -98,6 +102,9 @@ def _build_dispatcher(config: WatchdogConfig) -> Dispatcher:
     if config.provider == Provider.ROCKETCHAT:
         rc_creds = load_rocketchat_credentials_from_env(channel_override=config.chat_id)
         return RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=config.cooldown)
+    if config.provider == Provider.MATTERMOST:
+        mm_creds = load_mattermost_credentials_from_env(channel_override=config.chat_id)
+        return MattermostAlarmDispatcher(mm_creds, cooldown_seconds=config.cooldown)
     creds = load_credentials_from_env(chat_id_override=config.chat_id)
     return AlarmDispatcher(creds, cooldown_seconds=config.cooldown, parse_mode="HTML")
 
@@ -188,12 +195,12 @@ def _format_alarm_message(
 ) -> str:
     """Format the alarm body for the delivering provider.
 
-    Telegram renders HTML (``parse_mode="HTML"``); Rocket.Chat renders
-    Markdown and displays literal ``<b>``/``<code>`` tags as text, so each
-    provider gets its own markup around the same fields rather than sending
-    one format to both.
+    Telegram renders HTML (``parse_mode="HTML"``); Rocket.Chat and Mattermost
+    render Markdown and display literal ``<b>``/``<code>`` tags as text, so
+    each provider gets its own markup around the same fields rather than
+    sending one format to both.
     """
-    if provider == Provider.ROCKETCHAT:
+    if provider in (Provider.ROCKETCHAT, Provider.MATTERMOST):
         return _format_alarm_message_markdown(sample, breach)
     return _format_alarm_message_html(sample, breach)
 

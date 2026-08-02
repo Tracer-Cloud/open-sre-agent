@@ -226,3 +226,69 @@ def validate_rocketchat(
     return IntegrationHealthResult(
         ok=False, detail=f"Rocket.Chat API returned unexpected HTTP {resp.status_code}."
     )
+
+
+def validate_mattermost_webhook(*, webhook_url: str) -> IntegrationHealthResult:
+    """Validate a Mattermost incoming webhook with a non-posting reachability probe."""
+    url = webhook_url.strip()
+    if not url:
+        return IntegrationHealthResult(ok=False, detail="Missing webhook_url.")
+
+    try:
+        resp = httpx.get(url, timeout=10, follow_redirects=False)
+    except httpx.RequestError as err:
+        return IntegrationHealthResult(
+            ok=False, detail=f"Mattermost webhook validation failed: {err}"
+        )
+
+    if resp.status_code == HTTPStatus.NOT_FOUND:
+        return IntegrationHealthResult(
+            ok=False, detail="Mattermost webhook returned 404; the URL looks invalid."
+        )
+    if resp.status_code in {
+        HTTPStatus.OK,
+        HTTPStatus.BAD_REQUEST,
+        HTTPStatus.FORBIDDEN,
+        HTTPStatus.METHOD_NOT_ALLOWED,
+    }:
+        return IntegrationHealthResult(
+            ok=True,
+            detail=f"Mattermost webhook endpoint reachable (HTTP {resp.status_code}) "
+            "using a non-posting probe.",
+        )
+    return IntegrationHealthResult(
+        ok=False,
+        detail=f"Mattermost webhook probe returned unexpected HTTP {resp.status_code}.",
+    )
+
+
+def validate_mattermost(*, server_url: str, auth_token: str) -> IntegrationHealthResult:
+    """Validate Mattermost credentials by calling the /api/v4/users/me endpoint."""
+    base = server_url.strip().rstrip("/")
+    if not base:
+        return IntegrationHealthResult(ok=False, detail="Missing server_url.")
+    if not auth_token.strip():
+        return IntegrationHealthResult(ok=False, detail="Missing auth_token.")
+
+    try:
+        resp = httpx.get(
+            f"{base}/api/v4/users/me",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            timeout=10,
+        )
+    except httpx.RequestError as err:
+        return IntegrationHealthResult(ok=False, detail=f"Mattermost API unreachable: {err}")
+
+    if resp.status_code == HTTPStatus.OK:
+        try:
+            username = resp.json().get("username", "unknown")
+        except Exception:
+            username = "unknown"
+        return IntegrationHealthResult(ok=True, detail=f"Mattermost authenticated as @{username}.")
+    if resp.status_code == HTTPStatus.UNAUTHORIZED:
+        return IntegrationHealthResult(
+            ok=False, detail="Mattermost auth token is invalid or expired."
+        )
+    return IntegrationHealthResult(
+        ok=False, detail=f"Mattermost API returned unexpected HTTP {resp.status_code}."
+    )

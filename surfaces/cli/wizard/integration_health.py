@@ -11,6 +11,8 @@ from surfaces.cli.wizard.integration_validators.aws import validate_aws_integrat
 from surfaces.cli.wizard.integration_validators.http_probe_validators import (
     validate_discord_bot,
     validate_jira_integration,
+    validate_mattermost,
+    validate_mattermost_webhook,
     validate_notion_integration,
     validate_rocketchat,
     validate_rocketchat_webhook,
@@ -43,6 +45,8 @@ __all__ = [
     "validate_google_docs_integration",
     "validate_grafana_integration",
     "validate_jira_integration",
+    "validate_mattermost",
+    "validate_mattermost_webhook",
     "validate_notion_integration",
     "validate_openclaw_integration",
     "validate_opensearch_integration",

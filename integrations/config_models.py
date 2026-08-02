@@ -830,6 +830,56 @@ class RocketChatConfig(StrictConfigModel):
         return self
 
 
+class MattermostConfig(StrictConfigModel):
+    """Mattermost runtime config.
+
+    Two delivery modes, either or both may be configured:
+
+    - Personal Access Token: ``server_url`` + ``auth_token``
+      (REST ``POST /api/v4/posts``, dynamic channel targeting).
+    - Incoming webhook: ``webhook_url`` (fixed destination chosen when the
+      webhook is created in the Mattermost System Console).
+    """
+
+    server_url: str = ""
+    auth_token: str = ""
+    webhook_url: str = ""
+    default_channel: str | None = None
+
+    @field_validator("server_url", mode="before")
+    @classmethod
+    def _normalize_server_url(cls, value: object) -> str:
+        stripped = str(value or "").strip().rstrip("/")
+        if stripped and not stripped.startswith(("http://", "https://")):
+            raise ValueError("server_url must start with http:// or https://")
+        return stripped
+
+    @field_validator("auth_token", mode="before")
+    @classmethod
+    def _strip_credential(cls, value: object) -> str:
+        return str(value or "").strip()
+
+    @field_validator("webhook_url", mode="before")
+    @classmethod
+    def _normalize_webhook_url(cls, value: object) -> str:
+        stripped = str(value or "").strip()
+        if not stripped:
+            return ""
+        parsed = urlparse(stripped)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("webhook_url must be a valid HTTP(S) URL")
+        return stripped
+
+    @model_validator(mode="after")
+    def _require_pat_or_webhook(self) -> MattermostConfig:
+        has_pat = bool(self.server_url and self.auth_token)
+        if not has_pat and not self.webhook_url:
+            raise ValueError(
+                "Mattermost needs either webhook_url or both of server_url and auth_token"
+            )
+        return self
+
+
 class WhatsAppConfig(StrictConfigModel):
     """Twilio WhatsApp runtime config.
 

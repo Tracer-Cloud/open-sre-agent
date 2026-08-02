@@ -29,6 +29,10 @@ def _clear_messaging_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "ROCKETCHAT_USER_ID",
         "ROCKETCHAT_WEBHOOK_URL",
         "ROCKETCHAT_DEFAULT_CHANNEL",
+        "MATTERMOST_AUTH_TOKEN",
+        "MATTERMOST_SERVER_URL",
+        "MATTERMOST_WEBHOOK_URL",
+        "MATTERMOST_DEFAULT_CHANNEL",
         "SLACK_BOT_TOKEN",
         "SLACK_APP_TOKEN",
         "SLACK_WEBHOOK_URL",
@@ -79,6 +83,28 @@ def test_rocketchat_webhook_only_still_loads_without_keyring(
     rocketchat = next(r for r in records if r.get("service") == "rocketchat")
     assert rocketchat["credentials"]["webhook_url"] == "https://chat.example.com/hooks/a/b"
     assert rocketchat["credentials"].get("auth_token", "") in ("", None)
+
+
+def test_mattermost_pat_loads_from_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    monkeypatch.setenv("MATTERMOST_SERVER_URL", "https://chat.example.com")
+    llm_credentials.save_keyring_secret("MATTERMOST_AUTH_TOKEN", "pat-from-keyring")
+    records = load_env_integrations()
+    mattermost = next(r for r in records if r.get("service") == "mattermost")
+    assert mattermost["credentials"]["auth_token"] == "pat-from-keyring"
+
+
+def test_mattermost_webhook_only_still_loads_without_keyring(
+    monkeypatch: pytest.MonkeyPatch, memory_keyring: MemoryKeyring
+) -> None:
+    _clear_messaging_env(monkeypatch)
+    monkeypatch.setenv("MATTERMOST_WEBHOOK_URL", "https://chat.example.com/hooks/a")
+    records = load_env_integrations()
+    mattermost = next(r for r in records if r.get("service") == "mattermost")
+    assert mattermost["credentials"]["webhook_url"] == "https://chat.example.com/hooks/a"
+    assert mattermost["credentials"].get("auth_token", "") in ("", None)
 
 
 def test_slack_bot_token_loads_from_keyring(

@@ -158,6 +158,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Post findings to a Rocket.Chat channel",
     ),
     Choice(
+        value="mattermost",
+        label="Mattermost",
+        group="Incident & Comms",
+        hint="Post findings to a Mattermost channel",
+    ),
+    Choice(
         value="google_docs",
         label="Google Docs",
         group="Incident & Comms",

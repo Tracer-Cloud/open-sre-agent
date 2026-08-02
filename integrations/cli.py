@@ -582,6 +582,12 @@ def _setup_rocketchat() -> None:
     _run_spec_setup(ROCKETCHAT_SETUP)
 
 
+def _setup_mattermost() -> None:
+    from integrations.mattermost.setup import MATTERMOST_SETUP
+
+    _run_spec_setup(MATTERMOST_SETUP)
+
+
 def _setup_smtp() -> None:
     from integrations.smtp.setup import SMTP_SETUP
 
@@ -723,6 +729,7 @@ _HANDLERS: dict[str, Any] = {
     "discord": _setup_discord,
     "telegram": _setup_telegram,
     "rocketchat": _setup_rocketchat,
+    "mattermost": _setup_mattermost,
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,

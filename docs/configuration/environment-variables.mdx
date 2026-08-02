@@ -155,7 +155,8 @@ keyring, then the local fallback store described below. Wizard setup dual-writes
 many of these so a cleared `.env` still works locally.
 
 **Exceptions (never stored):** webhook and other `*_URL` values such as
-`SLACK_WEBHOOK_URL` and `ROCKETCHAT_WEBHOOK_URL` stay store / plain env only.
+`SLACK_WEBHOOK_URL`, `ROCKETCHAT_WEBHOOK_URL`, and `MATTERMOST_WEBHOOK_URL` stay
+store / plain env only.
 They may still embed secret tokens — do not log them unmasked.
 Set `OPENSRE_DISABLE_KEYRING=1` to skip local credential storage entirely; you
 then have to export every credential in your shell.
@@ -288,6 +289,10 @@ not a Mintlify docs-site page).
 | `ROCKETCHAT_USER_ID` | | Rocket.Chat user ID for the token | `integrations/_catalog_impl` |
 | `ROCKETCHAT_DEFAULT_CHANNEL` | | Default Rocket.Chat channel | `integrations/_catalog_impl` |
 | `ROCKETCHAT_WEBHOOK_URL` | | Rocket.Chat incoming webhook URL | `integrations/_catalog_impl` |
+| `MATTERMOST_SERVER_URL` | | Mattermost server base URL | `integrations/_catalog_impl` |
+| `MATTERMOST_AUTH_TOKEN` | | Mattermost personal access token | `integrations/_catalog_impl` |
+| `MATTERMOST_DEFAULT_CHANNEL` | | Default Mattermost channel id | `integrations/_catalog_impl` |
+| `MATTERMOST_WEBHOOK_URL` | | Mattermost incoming webhook URL | `integrations/_catalog_impl` |
 | `TWILIO_ACCOUNT_SID` | | Twilio account SID | `integrations/_catalog_impl` |
 | `TWILIO_AUTH_TOKEN` | | Twilio auth token | `integrations/_catalog_impl` |
 | `TWILIO_WHATSAPP_FROM` | | WhatsApp sender number (Twilio) | `integrations/_catalog_impl` |

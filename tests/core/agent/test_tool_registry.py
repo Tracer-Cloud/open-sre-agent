@@ -202,6 +202,30 @@ def test_rocketchat_send_message_hidden_when_rocketchat_is_not_configured() -> N
     assert "rocketchat_send_message" not in names
 
 
+def test_mattermost_send_message_offered_when_mattermost_is_configured() -> None:
+    session = Session()
+    session.configured_integrations = ("mattermost",)
+    session.configured_integrations_known = True
+    names = {
+        spec["name"]
+        for spec in _tool_specs(
+            session,
+            resolved_integrations={
+                "mattermost": {
+                    "server_url": "https://chat.example.com",
+                    "auth_token": "token",
+                }
+            },
+        )
+    }
+    assert "mattermost_send_message" in names
+
+
+def test_mattermost_send_message_hidden_when_mattermost_is_not_configured() -> None:
+    names = {spec["name"] for spec in _tool_specs(Session())}
+    assert "mattermost_send_message" not in names
+
+
 def test_llm_set_provider_offered_by_default() -> None:
     """With no capability constraints (the production default), the planner is
     still offered the provider-switch tool."""

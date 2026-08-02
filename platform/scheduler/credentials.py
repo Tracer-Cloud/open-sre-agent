@@ -122,6 +122,49 @@ def resolve_rocketchat_credentials(task_params: dict[str, str]) -> dict[str, str
     return resolved
 
 
+def resolve_mattermost_credentials(task_params: dict[str, str]) -> dict[str, str]:
+    """Resolve Mattermost credentials from task params, integration store, or env.
+
+    Priority: task.params > integration store > environment variable (then keyring
+    for the PAT), applied per key. Returns whichever of ``server_url``/``auth_token``
+    (token mode) and ``webhook_url`` (webhook mode) could be resolved; the executor
+    decides whether the combination is usable.
+
+    Webhook URLs stay store/env only — never ``resolve_env_credential`` / keyring
+    (same rule as Slack ``SLACK_WEBHOOK_URL``).
+    """
+    resolved: dict[str, str] = {}
+
+    # Non-secret / non-keyring field: params → store → plain env.
+    value = task_params.get("server_url", "").strip()
+    if not value:
+        value = _get_integration_credential("mattermost", "server_url").strip()
+    if not value:
+        value = os.getenv("MATTERMOST_SERVER_URL", "").strip()
+    if value:
+        resolved["server_url"] = value
+
+    # PAT: params → store → env then keyring.
+    auth = _resolve_credentials(
+        task_params,
+        service="mattermost",
+        credential_key="auth_token",
+        env_vars=("MATTERMOST_AUTH_TOKEN",),
+    )
+    resolved.update(auth)
+
+    # Webhook: params → store → plain env only.
+    webhook_url = task_params.get("webhook_url", "").strip()
+    if not webhook_url:
+        webhook_url = _get_integration_credential("mattermost", "webhook_url").strip()
+    if not webhook_url:
+        webhook_url = os.getenv("MATTERMOST_WEBHOOK_URL", "").strip()
+    if webhook_url:
+        resolved["webhook_url"] = webhook_url
+
+    return resolved
+
+
 def _resolve_credentials(
     task_params: dict[str, str],
     *,
@@ -167,6 +210,7 @@ def _get_integration_credential(service: str, key: str) -> str:
 
 __all__ = [
     "resolve_discord_credentials",
+    "resolve_mattermost_credentials",
     "resolve_rocketchat_credentials",
     "resolve_slack_credentials",
     "resolve_telegram_credentials",

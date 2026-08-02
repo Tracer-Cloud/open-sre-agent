@@ -59,6 +59,7 @@ class TestScheduledTask:
         assert Provider.SLACK == "slack"
         assert Provider.DISCORD == "discord"
         assert Provider.ROCKETCHAT == "rocketchat"
+        assert Provider.MATTERMOST == "mattermost"
 
 
 class TestTaskRun:

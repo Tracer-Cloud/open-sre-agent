@@ -133,6 +133,11 @@ def load_env_integration_services() -> list[str]:
         _all_env("ROCKETCHAT_SERVER_URL", "ROCKETCHAT_AUTH_TOKEN", "ROCKETCHAT_USER_ID")
         or _env_is_set("ROCKETCHAT_WEBHOOK_URL"),
     )
+    add(
+        "mattermost",
+        _all_env("MATTERMOST_SERVER_URL", "MATTERMOST_AUTH_TOKEN")
+        or _env_is_set("MATTERMOST_WEBHOOK_URL"),
+    )
     add("slack", _any_env("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"))
     add("smtp", _env_is_set("SMTP_HOST"))
     add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))

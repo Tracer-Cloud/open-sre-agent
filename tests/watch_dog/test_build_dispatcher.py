@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from integrations.mattermost.alarms import MattermostAlarmDispatcher
+from integrations.mattermost.credentials import MattermostCredentials
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.rocketchat.credentials import RocketChatCredentials
 from integrations.telegram.alarms import AlarmDispatcher
@@ -66,3 +68,45 @@ def test_rocketchat_provider_passes_chat_id_as_channel_override(
     _build_dispatcher(config)
 
     assert captured == {"channel_override": "#ops"}
+
+
+def test_mattermost_provider_builds_mattermost_dispatcher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "tools.system.watch_dog.runner.load_mattermost_credentials_from_env",
+        lambda **_kw: MattermostCredentials(
+            server_url="https://chat.example.com",
+            auth_token="tok",
+            channel="chan-1",
+        ),
+    )
+    config = WatchdogConfig(pid=1, max_cpu=80.0, provider="mattermost", chat_id="chan-1")
+
+    dispatcher = _build_dispatcher(config)
+
+    assert isinstance(dispatcher, MattermostAlarmDispatcher)
+
+
+def test_mattermost_provider_passes_chat_id_as_channel_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_load(**kwargs: object) -> MattermostCredentials:
+        captured.update(kwargs)
+        return MattermostCredentials(
+            server_url="https://chat.example.com",
+            auth_token="tok",
+            channel="chan-ops",
+        )
+
+    monkeypatch.setattr(
+        "tools.system.watch_dog.runner.load_mattermost_credentials_from_env",
+        _fake_load,
+    )
+    config = WatchdogConfig(pid=1, max_cpu=80.0, provider="mattermost", chat_id="chan-ops")
+
+    _build_dispatcher(config)
+
+    assert captured == {"channel_override": "chan-ops"}

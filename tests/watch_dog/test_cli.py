@@ -114,6 +114,25 @@ def test_watchdog_cli_accepts_rocketchat_provider(monkeypatch: pytest.MonkeyPatc
     assert captured["config"].chat_id == "#ops"
 
 
+def test_watchdog_cli_accepts_mattermost_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, WatchdogConfig] = {}
+
+    def _fake_run(config: WatchdogConfig) -> int:
+        captured["config"] = config
+        return 0
+
+    monkeypatch.setattr("surfaces.cli.commands.watchdog.run_watchdog", _fake_run)
+
+    result = CliRunner().invoke(
+        watchdog_command,
+        ["--pid", "123", "--max-cpu", "90", "--provider", "mattermost", "--chat-id", "chan-ops"],
+    )
+
+    assert result.exit_code == 0
+    assert captured["config"].provider == "mattermost"
+    assert captured["config"].chat_id == "chan-ops"
+
+
 def test_watchdog_cli_rejects_unknown_provider() -> None:
     result = CliRunner().invoke(
         watchdog_command,

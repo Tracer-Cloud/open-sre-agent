@@ -47,6 +47,7 @@ def test_action_prompt_fragments_cover_every_registered_vendor() -> None:
     assert "github" in fragments.lower()
     assert "telegram" in fragments.lower()
     assert "rocketchat" in fragments.lower()
+    assert "mattermost" in fragments.lower()
 
 
 def test_assistant_prompt_fragments_cover_every_registered_vendor() -> None:

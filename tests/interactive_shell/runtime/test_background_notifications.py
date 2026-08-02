@@ -717,6 +717,168 @@ def test_notifications_module_does_not_eagerly_import_rocketchat() -> None:
     assert "OK: rocketchat not eagerly imported" in completed.stdout
 
 
+# --- Mattermost --------------------------------------------------------------
+#
+# Same patching rule as the telegram cases: patch the SOURCE modules, because
+# the implementation lazily imports inside the branch.
+
+_MATTERMOST_PAT_ENTRY = {
+    "mattermost": {
+        "source": "local env",
+        "config": {
+            "server_url": "https://chat.example.com",
+            "auth_token": "tok",
+            "default_channel": "chan-incidents",
+            "webhook_url": "",
+        },
+    }
+}
+
+_MATTERMOST_WEBHOOK_ENTRY = {
+    "mattermost": {
+        "source": "local env",
+        "config": {
+            "server_url": "",
+            "auth_token": "",
+            "default_channel": None,
+            "webhook_url": "https://chat.example.com/hooks/abc",
+        },
+    }
+}
+
+
+def test_deliver_background_notifications_sends_mattermost_via_token(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_MATTERMOST_PAT_ENTRY),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_post(
+        server_url: str, channel: str, text: str, auth_token: str
+    ) -> tuple[bool, str, str]:
+        captured.update(server_url=server_url, channel=channel, text=text)
+        return True, "", "m-1"
+
+    monkeypatch.setattr(
+        "integrations.mattermost.delivery.post_mattermost_message",
+        _fake_post,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123",
+        status="completed",
+        command="/investigate checkout-latency",
+        root_cause="ROOTSENTINEL postgres connection pool saturation",
+        top_analysis=("TOPANALYSISSENTINEL rds cpu spike",),
+        next_steps=("NEXTSTEPSENTINEL raise pool size",),
+        stats={"tool_call_count": 4, "investigation_loop_count": 2, "validity_score": 0.8},
+    )
+
+    results = deliver_background_notifications(record=record, channels=("mattermost",))
+
+    assert results == {"mattermost": "sent"}
+    assert captured["server_url"] == "https://chat.example.com"
+    assert captured["channel"] == "chan-incidents"
+    body = str(captured["text"])
+    assert "ROOTSENTINEL" in body
+    assert "NEXTSTEPSENTINEL" in body
+
+
+def test_deliver_background_notifications_sends_mattermost_via_webhook_when_no_pat(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_MATTERMOST_WEBHOOK_ENTRY),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_webhook(webhook_url: str, text: str) -> tuple[bool, str]:
+        captured.update(webhook_url=webhook_url, text=text)
+        return True, ""
+
+    monkeypatch.setattr(
+        "integrations.mattermost.delivery.post_mattermost_webhook",
+        _fake_webhook,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("mattermost",))
+
+    assert results == {"mattermost": "sent"}
+    assert captured["webhook_url"] == "https://chat.example.com/hooks/abc"
+
+
+def test_deliver_background_notifications_marks_missing_mattermost(monkeypatch) -> None:
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", lambda: {})
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text"
+    )
+    results = deliver_background_notifications(record=record, channels=("mattermost",))
+    assert results["mattermost"].startswith("missing mattermost integration: ")
+
+
+def test_deliver_background_notifications_redacts_mattermost_token_from_failure(
+    monkeypatch,
+) -> None:
+    """Failure detail lands in the record and `/background show` — the token must
+    never survive into the result, mirroring the telegram redaction contract."""
+    auth_token = "MM-HAPPYTOKEN"
+    entry = {
+        "mattermost": {
+            "source": "local env",
+            "config": {
+                **_MATTERMOST_PAT_ENTRY["mattermost"]["config"],
+                "auth_token": auth_token,
+            },
+        }
+    }
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: entry,
+    )
+    monkeypatch.setattr(
+        "integrations.mattermost.delivery.post_mattermost_message",
+        lambda *_args, **_kwargs: (False, f"502 Bad Gateway echoing {auth_token}", ""),
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("mattermost",))
+
+    assert auth_token not in results["mattermost"]
+    assert "<redacted>" in results["mattermost"]
+    assert results["mattermost"].startswith("failed: ")
+    assert "502 Bad Gateway" in results["mattermost"]
+
+
+def test_notifications_module_does_not_eagerly_import_mattermost() -> None:
+    """Mattermost loads only when its channel is processed (same rule as telegram)."""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import surfaces.interactive_shell.runtime.background.notifications as n; "
+                + "import sys; "
+                + "assert 'integrations.mattermost.delivery' not in sys.modules; "
+                + "print('OK: mattermost not eagerly imported')"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "OK: mattermost not eagerly imported" in completed.stdout
+
+
 def test_notifications_module_does_not_eagerly_import_telegram() -> None:
     """AC-11 (corrected, dotted-module sys.modules check): telegram loads only when processed.
 

@@ -193,6 +193,7 @@ from integrations.config_models import (
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
     KubernetesIntegrationConfig,
+    MattermostConfig,
     OpsGenieIntegrationConfig,
     PagerDutyIntegrationConfig,
     RailwayIntegrationConfig,
@@ -228,6 +229,7 @@ from integrations.jira import classify as _classify_jira
 from integrations.kubernetes import classify as _classify_kubernetes
 from integrations.mariadb import build_mariadb_config
 from integrations.mariadb import classify as _classify_mariadb
+from integrations.mattermost import classify as _classify_mattermost
 from integrations.mongodb import build_mongodb_config
 from integrations.mongodb import classify as _classify_mongodb
 from integrations.mongodb_atlas import build_mongodb_atlas_config
@@ -427,6 +429,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "discord": _classify_discord,
     "telegram": _classify_telegram,
     "rocketchat": _classify_rocketchat,
+    "mattermost": _classify_mattermost,
     "slack": _classify_slack,
     "whatsapp": _classify_whatsapp,
     "twilio": _classify_twilio,
@@ -1129,6 +1132,24 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _report_env_loader_failure(exc, integration="rocketchat")
         else:
             integrations.append(_active_env_record("rocketchat", rocketchat_config.model_dump()))
+
+    # PAT is keyring-backed via wizard sync_env_secret; webhook URL stays store/env only.
+    mattermost_auth_token = resolve_env_credential("MATTERMOST_AUTH_TOKEN")
+    mattermost_webhook_url = os.getenv("MATTERMOST_WEBHOOK_URL", "").strip()
+    if mattermost_auth_token or mattermost_webhook_url:
+        try:
+            mattermost_config = MattermostConfig.model_validate(
+                {
+                    "server_url": os.getenv("MATTERMOST_SERVER_URL", "").strip(),
+                    "auth_token": mattermost_auth_token,
+                    "webhook_url": mattermost_webhook_url,
+                    "default_channel": os.getenv("MATTERMOST_DEFAULT_CHANNEL", "").strip() or None,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="mattermost")
+        else:
+            integrations.append(_active_env_record("mattermost", mattermost_config.model_dump()))
 
     slack_bot_token = resolve_env_credential(SLACK_BOT_TOKEN_ENV)
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()

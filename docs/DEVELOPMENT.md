@@ -70,7 +70,7 @@ PR reviewers expect a **visible demo** (terminal log or screenshot) in the PR un
 3. `/watch <pid> --max-cpu 80` — expect `task … started.` (use a real PID, e.g. the shell’s Python process).
 4. `/watches` — table columns include id, pid, kind, status, thresholds, last sample.
 5. `/unwatch <task_id>` or `/cancel <task_id>` — then `/watches` again; status should show **cancelled**.
-6. Optional: lower `--max-cpu` so a threshold trips; after delivery, the REPL prints one line: `[task …] alarm fired: … (telegram delivered)`. Add `--provider rocketchat --chat-id "#channel"` to `/watch` to alarm via Rocket.Chat instead (`… (rocketchat delivered)`).
+6. Optional: lower `--max-cpu` so a threshold trips; after delivery, the REPL prints one line: `[task …] alarm fired: … (telegram delivered)`. Add `--provider rocketchat --chat-id "#channel"` to `/watch` to alarm via Rocket.Chat instead (`… (rocketchat delivered)`), or `--provider mattermost --chat-id "<channel-id>"` for Mattermost (`… (mattermost delivered)`).
 
 Automated equivalent (runs in `make test-cov`):  
 `uv run pytest tests/interactive_shell/test_watchdog_repl_e2e_demo.py -v --tb=short`

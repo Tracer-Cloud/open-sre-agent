@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from integrations.discord.setup import DISCORD_SETUP
+from integrations.mattermost.setup import MATTERMOST_SETUP
 from integrations.rocketchat.setup import ROCKETCHAT_SETUP
 from integrations.slack.setup import SLACK_SETUP
 from integrations.telegram.setup import TELEGRAM_SETUP
@@ -46,6 +47,22 @@ def _configure_rocketchat() -> tuple[str, str]:
             "destination). Leave the fields for the path you are not using blank.\n"
             "Personal Access Token: My Account > Personal Access Tokens (the token page also "
             "shows your user ID). Incoming webhook: Administration > Integrations > Incoming.[/]\n"
+        ),
+    )
+
+
+def _configure_mattermost() -> tuple[str, str]:
+    return configure_from_spec(
+        MATTERMOST_SETUP,
+        title="Mattermost",
+        intro=(
+            "\n[bold]Mattermost Integration[/bold]\n"
+            f"[{SECONDARY}]Set it up one of two ways: a personal access token (server URL + "
+            "token, for dynamic channel targeting) or an incoming webhook (a fixed "
+            "destination). Leave the fields for the path you are not using blank.\n"
+            "Personal Access Token: Settings > Security > Personal Access Tokens. Incoming "
+            "webhook: System Console > Integrations > Incoming Webhooks. Token-mode channel "
+            "targeting needs the channel id, not its display name.[/]\n"
         ),
     )
 

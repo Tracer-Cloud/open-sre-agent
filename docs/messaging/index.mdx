@@ -1,9 +1,9 @@
 ---
 title: "Messaging"
-description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, Rocket.Chat, WhatsApp, or Twilio SMS."
+description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, Rocket.Chat, Mattermost, WhatsApp, or Twilio SMS."
 ---
 
-OpenSRE can deliver investigation findings — and accept investigation triggers — through six messaging platforms. Pick the one that matches where your team already responds to incidents.
+OpenSRE can deliver investigation findings — and accept investigation triggers — through seven messaging platforms. Pick the one that matches where your team already responds to incidents.
 
 ## Pick a platform
 
@@ -13,6 +13,7 @@ OpenSRE can deliver investigation findings — and accept investigation triggers
 | [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ Gateway chat + `/investigate` via `opensre gateway start` | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
 | [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ✅ DM text chat via `opensre gateway start` | `opensre onboard` or `opensre integrations setup telegram` | ~5 min |
 | [**Rocket.Chat**](/messaging/rocketchat) | Self-hosted and open-source workspaces | ❌ delivery only | `opensre onboard` or `opensre integrations setup rocketchat` | ~5 min |
+| [**Mattermost**](/messaging/mattermost) | Self-hosted and open-source workspaces | ❌ delivery only | `opensre onboard` or `opensre integrations setup mattermost` | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
 | [**Twilio SMS**](/messaging/twilio-sms) | SMS paging via Twilio (separate from WhatsApp) | ❌ delivery only | `opensre integrations setup twilio` | ~5 min |
 
@@ -61,6 +62,12 @@ ROCKETCHAT_AUTH_TOKEN=
 ROCKETCHAT_USER_ID=
 ROCKETCHAT_DEFAULT_CHANNEL=
 ROCKETCHAT_WEBHOOK_URL=
+
+# Mattermost (token mode and/or webhook mode)
+MATTERMOST_SERVER_URL=
+MATTERMOST_AUTH_TOKEN=
+MATTERMOST_DEFAULT_CHANNEL=
+MATTERMOST_WEBHOOK_URL=
 
 # WhatsApp (Twilio)
 TWILIO_ACCOUNT_SID=

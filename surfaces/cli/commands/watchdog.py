@@ -58,8 +58,8 @@ _PROVIDER_CHOICES = [p.value for p in WATCHDOG_SUPPORTED_PROVIDERS]
     "--chat-id",
     type=str,
     default=None,
-    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID or "
-    "ROCKETCHAT_DEFAULT_CHANNEL).",
+    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID, "
+    "ROCKETCHAT_DEFAULT_CHANNEL, or MATTERMOST_DEFAULT_CHANNEL).",
 )
 @click.option("--verbose", is_flag=True, help="Print one line per sampled process state.")
 def watchdog_command(
@@ -77,7 +77,8 @@ def watchdog_command(
     chat_id: str | None,
     verbose: bool,
 ) -> None:
-    """Monitor a process and send alarms via Telegram or Rocket.Chat when thresholds trip."""
+    """Monitor a process and send alarms via Telegram, Rocket.Chat, or Mattermost when
+    thresholds trip."""
     try:
         config = WatchdogConfig.model_validate(
             {

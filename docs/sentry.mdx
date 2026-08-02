@@ -150,6 +150,18 @@ opensre sentry digest schedule add \
   --chat-id "#alerts"
 ```
 
+Example — same schedule to a Mattermost channel (requires token credentials —
+see [Mattermost](/messaging/mattermost); an incoming webhook alone cannot
+target an explicit `--chat-id`):
+
+```bash
+opensre sentry digest schedule add \
+  --cron "0 8 * * 1-5" \
+  --tz Europe/London \
+  --provider mattermost \
+  --chat-id "<channel-id>"
+```
+
 Optional `--project my-service` scopes the digest to one Sentry project.
 
 When an **uptime watch** schedule is running, the `sentry-summary` skill

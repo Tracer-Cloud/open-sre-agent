@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from rich.console import Console
 from rich.markup import escape
 
+from integrations.mattermost.alarms import MattermostAlarmDispatcher
+from integrations.mattermost.credentials import (
+    load_credentials_from_env as load_mattermost_credentials_from_env,
+)
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.rocketchat.credentials import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
@@ -99,7 +103,8 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
     if not argv:
         return (
             f"[{ERROR}]usage:[/] /watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
-            f"[--cooldown D] [--interval N] [--once] [--provider telegram|rocketchat] [--chat-id ID]"
+            f"[--cooldown D] [--interval N] [--once] "
+            f"[--provider telegram|rocketchat|mattermost] [--chat-id ID]"
         )
     if argv[0].startswith("-"):
         return f"[{ERROR}]usage:[/] /watch <pid> ...  — the process id must come first"
@@ -135,10 +140,10 @@ def parse_watch_argv(argv: list[str]) -> WatchdogStartSpec | str:
         i += 2
         if token == "--provider":
             normalized_provider = value.strip().lower()
-            if normalized_provider not in ("telegram", "rocketchat"):
+            if normalized_provider not in ("telegram", "rocketchat", "mattermost"):
                 return (
                     f"[{ERROR}]invalid --provider:[/] {escape(value)} "
-                    f"[{ERROR}](must be telegram or rocketchat)[/]"
+                    f"[{ERROR}](must be telegram, rocketchat, or mattermost)[/]"
                 )
             provider = normalized_provider
         elif token == "--chat-id":
@@ -226,8 +231,13 @@ def _cmd_watch(session: Session, console: Console, args: list[str]) -> bool:
     try:
         if parsed.provider == "rocketchat":
             rc_creds = load_rocketchat_credentials_from_env(channel_override=parsed.chat_id or None)
-            dispatcher: AlarmDispatcher | RocketChatAlarmDispatcher = RocketChatAlarmDispatcher(
-                rc_creds, cooldown_seconds=parsed.cooldown_seconds
+            dispatcher: AlarmDispatcher | RocketChatAlarmDispatcher | MattermostAlarmDispatcher = (
+                RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=parsed.cooldown_seconds)
+            )
+        elif parsed.provider == "mattermost":
+            mm_creds = load_mattermost_credentials_from_env(channel_override=parsed.chat_id or None)
+            dispatcher = MattermostAlarmDispatcher(
+                mm_creds, cooldown_seconds=parsed.cooldown_seconds
             )
         else:
             creds = load_credentials_from_env(chat_id_override=parsed.chat_id or None)
@@ -349,7 +359,8 @@ def _validate_watch_args(args: list[str]) -> str | None:
     if not args:
         return (
             f"[{ERROR}]usage:[/] /watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
-            f"[--cooldown D] [--interval N] [--once] [--provider telegram|rocketchat] [--chat-id ID]"
+            f"[--cooldown D] [--interval N] [--once] "
+            f"[--provider telegram|rocketchat|mattermost] [--chat-id ID]"
         )
     return None
 
@@ -362,12 +373,12 @@ COMMANDS: list[SlashCommand] = [
         usage=(
             "/watch <pid> [--max-cpu N] [--max-runtime D] [--max-rss S] "
             "[--cooldown D] [--interval N] [--once] "
-            "[--provider telegram|rocketchat] [--chat-id ID]",
+            "[--provider telegram|rocketchat|mattermost] [--chat-id ID]",
         ),
         notes=(
             "Alarms are sent via the configured --provider (telegram by "
-            "default, or rocketchat) when that provider's delivery is "
-            "configured.",
+            "default, or rocketchat/mattermost) when that provider's delivery "
+            "is configured.",
         ),
         validate_args=_validate_watch_args,
     ),

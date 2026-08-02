@@ -225,6 +225,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=55,
     ),
     IntegrationSpec(
+        service="mattermost",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=52,
+        verify_order=100,
+    ),
+    IntegrationSpec(
         service="whatsapp",
         has_verifier=True,
         direct_effective=True,

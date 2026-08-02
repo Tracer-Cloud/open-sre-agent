@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from integrations.mattermost.credentials import MattermostCredentials
 from integrations.rocketchat.credentials import RocketChatCredentials
 from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
@@ -191,6 +192,88 @@ def test_dispatch_watch_reports_rocketchat_configuration_error(
     watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
     assert len(watchdogs) == 0
     assert "Rocket.Chat is not configured" in buf.getvalue()
+
+
+def test_dispatch_watch_creates_mattermost_watchdog_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_mm_load(**kwargs: object) -> MattermostCredentials:
+        captured.update(kwargs)
+        return MattermostCredentials(
+            server_url="https://chat.example.com",
+            auth_token="tok",
+            channel="chan-ops",
+        )
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds."
+        "load_mattermost_credentials_from_env",
+        _fake_mm_load,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
+        lambda _pid: True,
+    )
+
+    def _fake_start(**_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
+        _fake_start,
+    )
+
+    session = Session()
+    session.terminal.trust_mode = True
+    console, buf = _capture()
+    dispatch_slash(
+        f"/watch {__import__('os').getpid()} --max-cpu 80 --provider mattermost --chat-id chan-ops",
+        session,
+        console,
+        is_tty=True,
+    )
+
+    watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
+    assert len(watchdogs) == 1
+    assert watchdogs[0].status == TaskStatus.RUNNING
+    assert "provider=mattermost" in (watchdogs[0].command or "")
+    assert "started" in buf.getvalue()
+    assert captured == {"channel_override": "chan-ops"}
+
+
+def test_dispatch_watch_reports_mattermost_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from platform.common.errors import OpenSREError
+
+    def _raise_missing(**_kw: object) -> MattermostCredentials:
+        raise OpenSREError("Mattermost is not configured.")
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds."
+        "load_mattermost_credentials_from_env",
+        _raise_missing,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
+        lambda _pid: True,
+    )
+
+    session = Session()
+    session.terminal.trust_mode = True
+    console, buf = _capture()
+    dispatch_slash(
+        f"/watch {__import__('os').getpid()} --provider mattermost",
+        session,
+        console,
+        is_tty=True,
+    )
+
+    watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
+    assert len(watchdogs) == 0
+    assert "Mattermost is not configured" in buf.getvalue()
 
 
 def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
