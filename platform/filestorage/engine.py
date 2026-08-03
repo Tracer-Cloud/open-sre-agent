@@ -136,7 +136,10 @@ def push(
     a download (``result.downloaded``, when both share one report) is trusted
     rather than re-compared against the still-unwritten local file — a real
     full sync would have overwritten it first, so re-reading stale bytes here
-    would report it as both downloaded and kept back.
+    would report it as both downloaded and kept back. A previewed key with no
+    local file at all (nothing pulled it before) never reaches the scan below,
+    so it is counted as skipped separately — a real sync would have written it
+    and then found this same scan matching it.
     """
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
@@ -184,6 +187,12 @@ def push(
             store.put_object(key, data)
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
+
+    if previewed_pulls:
+        # Keys pull previewed but that never had a local file to begin with
+        # (a brand-new remote object) never entered the scan above at all.
+        planned_keys = {key for key, _ in planned}
+        result.skipped += len(previewed_pulls - planned_keys)
     return result
 
 

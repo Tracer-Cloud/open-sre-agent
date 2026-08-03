@@ -279,6 +279,37 @@ def test_dry_run_writes_nothing_locally_or_remotely(
     assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
     assert report.downloaded_bytes == len(b"hello\n")
     assert store.objects == objects_before
+    # A real full sync would write this file, then have push's local-file scan
+    # find it and count it skipped — the preview must match that tally even
+    # though the brand-new file was never written and so never entered the scan.
+    assert report.skipped == 1
+
+
+def test_dry_runs_skipped_tally_matches_a_real_sync_for_a_brand_new_remote_file(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    """The preview's counts must agree with what running for real would produce."""
+    # Arrange: two identical starting points, one bucket shared between them.
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    real_home = tmp_path / "real"
+    (real_home / "sessions").mkdir(parents=True)
+    (real_home / "memory").mkdir(parents=True)
+    (real_home / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8")
+    (real_home / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8")
+    real_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=real_home / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=real_home / "memory"),
+    )
+
+    # Act
+    dry = run_sync(store, roots=roots, dry_run=True)
+    real = run_sync(store, roots=real_roots)
+
+    # Assert
+    assert dry.skipped == real.skipped
+    assert sorted(dry.uploaded) == sorted(real.uploaded)
+    assert dry.downloaded == real.downloaded
     assert not (home / "memory" / "from-remote.md").exists()
 
 
