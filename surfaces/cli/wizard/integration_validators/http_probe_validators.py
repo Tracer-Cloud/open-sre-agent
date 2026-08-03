@@ -228,6 +228,9 @@ def validate_rocketchat(
     )
 
 
+_MATTERMOST_INCOMING_WEBHOOK_ERROR_ID_PREFIX = "web.incoming_webhook."
+
+
 def validate_mattermost_webhook(*, webhook_url: str) -> IntegrationHealthResult:
     """Validate a Mattermost incoming webhook with a non-delivering reachability probe.
 
@@ -236,7 +239,11 @@ def validate_mattermost_webhook(*, webhook_url: str) -> IntegrationHealthResult:
     fabricated (confirmed empirically), so a GET-based probe would validate
     nothing. ``POST`` does validate the id — invalid ids 404, valid ids 400
     on the missing ``text`` field — and the empty body never creates a real
-    post (mirrors :func:`integrations.mattermost.verifier._verify_webhook`).
+    post. A bare 400 is not treated as success on its own: a proxy or
+    non-Mattermost endpoint can also return 400 for an empty JSON POST for
+    its own reasons, so the response body must also carry Mattermost's
+    namespaced ``web.incoming_webhook.*`` error id (mirrors
+    :func:`integrations.mattermost.verifier._verify_webhook`).
     """
     url = webhook_url.strip()
     if not url:
@@ -254,10 +261,22 @@ def validate_mattermost_webhook(*, webhook_url: str) -> IntegrationHealthResult:
             ok=False, detail="Mattermost webhook returned 404; the URL looks invalid."
         )
     if resp.status_code == HTTPStatus.BAD_REQUEST:
+        try:
+            error_id = str(resp.json().get("id", ""))
+        except Exception:
+            error_id = ""
+        if error_id.startswith(_MATTERMOST_INCOMING_WEBHOOK_ERROR_ID_PREFIX):
+            return IntegrationHealthResult(
+                ok=True,
+                detail="Mattermost webhook endpoint reachable (HTTP 400 rejecting a "
+                "deliberately empty payload) using a non-delivering probe.",
+            )
         return IntegrationHealthResult(
-            ok=True,
-            detail="Mattermost webhook endpoint reachable (HTTP 400 rejecting a "
-            "deliberately empty payload) using a non-delivering probe.",
+            ok=False,
+            detail="Mattermost webhook probe got HTTP 400, but the response doesn't look "
+            "like a Mattermost incoming webhook (missing the expected "
+            f"'{_MATTERMOST_INCOMING_WEBHOOK_ERROR_ID_PREFIX}*' error id) — the URL may "
+            "point at the wrong server or route.",
         )
     return IntegrationHealthResult(
         ok=False,

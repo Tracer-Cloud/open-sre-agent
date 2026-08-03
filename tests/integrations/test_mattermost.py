@@ -315,7 +315,15 @@ def test_verify_webhook_uses_post_not_get(monkeypatch: pytest.MonkeyPatch) -> No
     def _fake_post(url: str, *, json: dict[str, Any], **_kw: Any) -> MagicMock:
         captured["url"] = url
         captured["json"] = json
-        return _mock_response(400, {"message": "Failed to handle the payload"})
+        return _mock_response(
+            400,
+            {
+                "id": "web.incoming_webhook.general.app_error",
+                "message": "Failed to handle the payload of media type application/json "
+                "for incoming webhook abc.",
+                "status_code": 400,
+            },
+        )
 
     monkeypatch.setattr("integrations.mattermost.verifier.httpx.post", _fake_post)
     result = verify_mattermost("local env", _WEBHOOK_CONFIG)
@@ -334,6 +342,38 @@ def test_verify_webhook_fails_on_404(monkeypatch: pytest.MonkeyPatch) -> None:
     result = verify_mattermost("local env", _WEBHOOK_CONFIG)
     assert result["status"] == "failed"
     assert "404" in result["detail"]
+
+
+def test_verify_webhook_rejects_arbitrary_400_from_a_non_mattermost_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare HTTP 400 must not be enough on its own.
+
+    A proxy, a wrong route, or any non-Mattermost endpoint can return 400 for
+    an empty JSON POST for its own reasons — confirmed by simulating exactly
+    this against a generic HTTP server. Only a body carrying Mattermost's
+    namespaced ``web.incoming_webhook.*`` error id counts as a genuine
+    reachability confirmation.
+    """
+    monkeypatch.setattr(
+        "integrations.mattermost.verifier.httpx.post",
+        lambda *_a, **_kw: _mock_response(400, {"error": "Bad Request", "code": 400}),
+    )
+    result = verify_mattermost("local env", _WEBHOOK_CONFIG)
+    assert result["status"] == "failed"
+    assert "doesn't look like a Mattermost incoming webhook" in result["detail"]
+
+
+def test_verify_webhook_rejects_400_with_non_json_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 400 whose body isn't even JSON (e.g. an HTML error page from a
+    misconfigured proxy) must not be treated as a valid Mattermost response."""
+    response = MagicMock()
+    response.status_code = 400
+    response.json.side_effect = ValueError("not json")
+    monkeypatch.setattr("integrations.mattermost.verifier.httpx.post", lambda *_a, **_kw: response)
+    result = verify_mattermost("local env", _WEBHOOK_CONFIG)
+    assert result["status"] == "failed"
+    assert "doesn't look like a Mattermost incoming webhook" in result["detail"]
 
 
 def test_verify_webhook_fails_on_unexpected_200(monkeypatch: pytest.MonkeyPatch) -> None:

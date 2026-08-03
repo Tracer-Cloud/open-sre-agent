@@ -9,6 +9,8 @@ import httpx
 
 from integrations.verification import register_verifier, result
 
+_INCOMING_WEBHOOK_ERROR_ID_PREFIX = "web.incoming_webhook."
+
 
 def _verify_webhook(source: str, webhook_url: str) -> dict[str, str]:
     """Non-delivering reachability probe for an incoming webhook.
@@ -23,6 +25,16 @@ def _verify_webhook(source: str, webhook_url: str) -> dict[str, str]:
     missing ``text`` field. Neither outcome creates a real post — the empty
     body fails Mattermost's payload validation before a message would be
     created (confirmed by channel post count being unchanged after probing).
+
+    A bare HTTP 400 is not enough on its own: a proxy, a wrong route, or any
+    non-Mattermost endpoint can return 400 for an empty JSON POST for its own
+    reasons, which would report "passed" for a URL that isn't a Mattermost
+    webhook at all — confirmed by simulating exactly that against a generic
+    server. Mattermost's real rejection body always carries a namespaced
+    error id (``web.incoming_webhook.general.app_error`` for a missing
+    ``text`` field, ``web.incoming_webhook.decode.app_error`` for malformed
+    JSON — confirmed against a live server), so the probe also checks for
+    that id prefix rather than trusting the status code alone.
     """
     try:
         response = httpx.post(webhook_url, json={}, timeout=10, follow_redirects=False)
@@ -37,12 +49,26 @@ def _verify_webhook(source: str, webhook_url: str) -> dict[str, str]:
             "Mattermost webhook returned 404; the URL looks invalid.",
         )
     if response.status_code == HTTPStatus.BAD_REQUEST:
+        try:
+            error_id = str(response.json().get("id", ""))
+        except Exception:
+            error_id = ""
+        if error_id.startswith(_INCOMING_WEBHOOK_ERROR_ID_PREFIX):
+            return result(
+                "mattermost",
+                source,
+                "passed",
+                "Mattermost webhook endpoint reachable (HTTP 400 rejecting a "
+                "deliberately empty payload) using a non-delivering probe.",
+            )
         return result(
             "mattermost",
             source,
-            "passed",
-            "Mattermost webhook endpoint reachable (HTTP 400 rejecting a "
-            "deliberately empty payload) using a non-delivering probe.",
+            "failed",
+            "Mattermost webhook probe got HTTP 400, but the response doesn't look "
+            "like a Mattermost incoming webhook (missing the expected "
+            f"'{_INCOMING_WEBHOOK_ERROR_ID_PREFIX}*' error id) — the URL may point at "
+            "the wrong server or route.",
         )
     return result(
         "mattermost",
