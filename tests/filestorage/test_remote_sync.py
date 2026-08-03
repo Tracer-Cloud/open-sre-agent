@@ -237,6 +237,63 @@ def test_older_remote_does_not_clobber_a_newer_local_edit(
     assert (home / "sessions" / "abc.jsonl").read_bytes() == b'{"turn": 1}\n'
 
 
+def test_dry_run_preview_matches_what_a_real_full_sync_would_settle_on(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A full sync pulls the newer remote copy, then push sees it already matches.
+
+    A dry run must land on the same final classification — downloaded, and
+    neither uploaded nor kept back — without ever writing the file, so push
+    cannot be misled by comparing against the still-stale bytes on disk.
+    """
+    # Arrange: remote holds a newer edit of a file that also exists locally.
+    store = FakeObjectStore()
+    newer = b'{"turn": 2}\n'
+    store.put_object("sessions/abc.jsonl", newer)
+    store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) + timedelta(hours=1)
+
+    # Act
+    report = run_sync(store, roots=roots, dry_run=True)
+
+    # Assert
+    assert report.downloaded == ["sessions/abc.jsonl"]
+    assert "sessions/abc.jsonl" not in report.uploaded
+    assert "sessions/abc.jsonl" not in report.kept_remote
+    assert (home / "sessions" / "abc.jsonl").read_bytes() == b'{"turn": 1}\n'
+    assert store.objects["sessions/abc.jsonl"] == newer
+
+
+def test_dry_run_writes_nothing_locally_or_remotely(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    # Arrange: one file only the bucket knows about, one only the laptop knows about.
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    objects_before = dict(store.objects)
+
+    # Act
+    report = run_sync(store, roots=roots, dry_run=True)
+
+    # Assert: reported as it would happen, but nothing actually moved.
+    assert report.downloaded == ["memory/from-remote.md"]
+    assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
+    assert report.downloaded_bytes == len(b"hello\n")
+    assert store.objects == objects_before
+    assert not (home / "memory" / "from-remote.md").exists()
+
+
+def test_push_only_dry_run_does_not_upload(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    # Arrange
+    store = FakeObjectStore()
+
+    # Act
+    report = push(store, roots=roots, dry_run=True)
+
+    # Assert: reported as it would upload, but the store stays empty.
+    assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
+    assert store.objects == {}
+
+
 def test_sync_never_deletes(home: Path, roots: tuple[SyncRoot, ...]) -> None:
     """A file only one side knows about survives on both."""
     # Arrange
