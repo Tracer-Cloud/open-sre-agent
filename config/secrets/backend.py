@@ -8,7 +8,7 @@ acyclic.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 # Where a resolved secret came from. ``fallback`` is the owner-only local file
@@ -16,7 +16,7 @@ from typing import Literal
 SecretTier = Literal["env", "keyring", "fallback", "none"]
 
 
-class KeyringUnavailableReason(Enum):
+class KeyringUnavailableReason(StrEnum):
     """Why the OS keyring could not serve a request.
 
     The distinction drives policy: with ``NO_BACKEND`` there is no secure store

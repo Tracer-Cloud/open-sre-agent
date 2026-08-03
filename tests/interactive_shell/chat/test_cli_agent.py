@@ -18,6 +18,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts import prompt_context as default_prompt_context
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _MARKDOWN_RULE,
@@ -30,6 +31,23 @@ from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvid
 from surfaces.interactive_shell.runtime import answer_turn as cli_agent
 from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
 from surfaces.interactive_shell.session import Session
+from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+
+
+def _answer(
+    message: str,
+    session: Session,
+    console: Console,
+    *,
+    request: AnswerRequest | None = None,
+) -> LlmRunInfo | None:
+    """Call ``answer_shell_question`` with a default ``AnswerRequest``."""
+    return answer_shell_question(
+        message,
+        session,
+        console,
+        request=request if request is not None else AnswerRequest(),
+    )
 
 
 def _build_environment_block(session: Session) -> str:
@@ -190,7 +208,7 @@ class TestSystemPromptInvestigationFlowGrounding:
         )
 
         console, _ = _capture()
-        answer_shell_question("Can you see how investigations are structured?", Session(), console)
+        _answer("Can you see how investigations are structured?", Session(), console)
 
         assert client.last_prompt is not None
         assert "--- Investigation flow reference ---" in client.last_prompt
@@ -258,7 +276,7 @@ class TestEnvironmentIntegrationGrounding:
         session.configured_integrations_known = True
         session.configured_integrations = ("gitlab",)
         console, _ = _capture()
-        answer_shell_question("is sentry installed?", session, console)
+        _answer("is sentry installed?", session, console)
 
         assert client.last_prompt is not None
         assert "--- Environment (current shell state) ---" in client.last_prompt
@@ -279,7 +297,7 @@ class TestEnvironmentIntegrationGrounding:
         )
 
         console, _ = _capture()
-        answer_shell_question("what model am I using now?", Session(), console)
+        _answer("what model am I using now?", Session(), console)
 
         assert client.last_prompt is not None
         assert "Active LLM settings in this session" in client.last_prompt
@@ -312,8 +330,11 @@ class TestObservationSummaryBlock:
         observation = (
             "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
         )
-        answer_shell_question(
-            "is sentry installed?", session, console, tool_observation=observation
+        _answer(
+            "is sentry installed?",
+            session,
+            console,
+            request=AnswerRequest(tool_observation=observation),
         )
 
         assert client.last_prompt is not None
@@ -330,7 +351,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, "Hello **world**")
         session = Session()
         console, buf = _capture()
-        answer_shell_question("hi", session, console)
+        _answer("hi", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "**world**" not in output
         assert "world" in output
@@ -345,7 +366,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, markdown)
         session = Session()
         console, buf = _capture()
-        answer_shell_question("show commands", session, console)
+        _answer("show commands", session, console)
         output = _strip_ansi(buf.getvalue())
         # Rich's Markdown table renderer replaces the ``|---|---|``
         # separator with box-drawing chars — the literal must not leak.
@@ -358,7 +379,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, "Sure thing.")
         session = Session()
         console, _ = _capture()
-        answer_shell_question("hello", session, console)
+        _answer("hello", session, console)
         assert session.cli_agent_messages[-2:] == [
             ("user", "hello"),
             ("assistant", "Sure thing."),
@@ -368,7 +389,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, "Use `opensre investigate` for incidents.")
         session = Session()
         console, buf = _capture()
-        answer_shell_question("what command do I use?", session, console)
+        _answer("what command do I use?", session, console)
         output = _strip_ansi(buf.getvalue()).casefold()
         assert "opensre investigate" in output
         assert session.cli_agent_messages[-2:] == [
@@ -385,7 +406,7 @@ class TestAssistantOutputRendering:
         _patch_llm(monkeypatch, [_Block("First line"), {"text": "Second line"}])
         session = Session()
         console, buf = _capture()
-        answer_shell_question("hello", session, console)
+        _answer("hello", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "First line" in output
         assert "Second line" in output
@@ -406,7 +427,7 @@ class TestAssistantOutputRendering:
         )
         session = Session()
         console, buf = _capture()
-        answer_shell_question("hi", session, console)
+        _answer("hi", session, console)
         output = _strip_ansi(buf.getvalue())
         assert "assistant failed" in output
         assert "upstream 503" in output
@@ -436,7 +457,7 @@ class TestStreamingMigration:
         monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _Recording())
 
         console, _ = _capture()
-        answer_shell_question("hi", Session(), console)
+        _answer("hi", Session(), console)
 
         assert calls == ["invoke_stream"]
 
@@ -448,7 +469,7 @@ class TestStreamingMigration:
 
         session = Session()
         console, buf = _capture()
-        answer_shell_question("switch to anthropic", session, console)
+        _answer("switch to anthropic", session, console)
 
         output = _strip_ansi(buf.getvalue())
         assert '"switch_llm_provider"' in output
@@ -474,7 +495,7 @@ def test_answer_shell_question_injects_synthetic_observation_on_why_failed(
     session.last_synthetic_observation_path = str(obs.resolve())
     console, _buf = _capture()
     client = _patch_llm(monkeypatch, "The synthetic run failed the scoring gate.")
-    answer_shell_question("why did it fail?", session, console)
+    _answer("why did it fail?", session, console)
     assert client.last_prompt is not None
     assert "observation_json" in client.last_prompt
     assert "008-storage-full-missing-metric" in client.last_prompt
@@ -490,7 +511,7 @@ def test_answer_shell_question_skips_observation_without_failure_question(
     session.last_synthetic_observation_path = str(obs.resolve())
     console, _buf = _capture()
     client = _patch_llm(monkeypatch, "hi")
-    answer_shell_question("hello", session, console)
+    _answer("hello", session, console)
     assert client.last_prompt is not None
     assert "observation_json" not in client.last_prompt
 
