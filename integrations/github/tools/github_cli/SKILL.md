@@ -41,10 +41,8 @@ Use `summary` when present. Reply short and chat-like.
 
 Slack propose/execute; workflow digests; investigation code/commit search.
 Multi-source RCA (sentry + github issues + posthog) → investigation_start.
-GitHub PR CI remediation / failing checks fixes / fix-and-push to PR branch →
-fix_github_pr_ci when available.
-GitHub security alert remediation (Dependabot/code scanning) →
-fix_github_security_alert when available.
+PR CI fix-and-push → fix_github_pr_ci. Security/quality alerts →
+fix_github_security_alert.
 
 ## Limitations
 
