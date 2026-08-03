@@ -165,10 +165,6 @@ def test_factory_resolves_bindings_despite_legacy_state_db(
     """
     import gateway.storage.db as db_module
 
-    db_client_module = pytest.importorskip(
-        "platform.deployment_multi_tenant.lambda_control_plane.db.db_client"
-    )
-
     monkeypatch.setattr(db_module, "host_home", lambda: tmp_path / "host")
     monkeypatch.setattr(db_module, "opensre_home", lambda: tmp_path / "host")
     legacy_dir = tmp_path / "host" / "gateway"
@@ -186,11 +182,16 @@ def test_factory_resolves_bindings_despite_legacy_state_db(
     legacy.commit()
     legacy.close()
 
-    class _StubDbClient:
-        def __init__(self, dsn: str, *, initialize_schema: bool = True) -> None:
-            _ = (dsn, initialize_schema)
+    # The repository is not exercised here; the test is about which bindings
+    # database the resolver opens, so a constructor that touches no network is
+    # all the worker needs.
+    class _StubRepository:
+        def __init__(self, dsn: str) -> None:
+            _ = dsn
 
-    monkeypatch.setattr(db_client_module, "ControlPlaneDbClient", _StubDbClient)
+    monkeypatch.setattr(
+        "gateway.storage.agent_runs.postgres.PostgresAgentRunRepository", _StubRepository
+    )
 
     worker = build_remote_run_worker(
         organization_id="org-a",

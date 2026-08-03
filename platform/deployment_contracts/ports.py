@@ -5,24 +5,15 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Protocol
 
-from platform.deployment_contracts.models import AgentRun, AgentRunSource, AgentRunStatus
+from platform.deployment_contracts.models import AgentRun, AgentRunStatus
 
 
 class AgentRunRepository(Protocol):
-    """Durable store for agent runs, one queue per organization."""
+    """What a gateway worker needs from the agent-run queue.
 
-    def enqueue_agent_run(
-        self,
-        *,
-        organization_id: str,
-        source: AgentRunSource,
-        prompt: str,
-        source_event_id: str | None = None,
-    ) -> AgentRun:
-        """Queue a new run for ``organization_id`` and return it."""
-
-    def fetch_agent_run_by_id(self, run_id: str) -> AgentRun | None:
-        """The run with ``run_id``, or None when no such run exists."""
+    Only the three calls a worker makes: take a run, hold it, finish it. Writing
+    runs into the queue is the caller's side of the API and is not modelled here.
+    """
 
     def claim_oldest_available_agent_run(
         self,
