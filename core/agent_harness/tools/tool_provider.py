@@ -74,6 +74,11 @@ class DefaultToolProvider:
         self._session = session
         self._tool_context = None
 
+    def bind_console(self, console: Any) -> None:
+        """Point tool UI (observers, subprocess presenter) at ``console``."""
+        self._console = console
+        self._tool_context = None
+
     def action_tools(
         self,
         *,

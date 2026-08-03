@@ -64,7 +64,7 @@ class AgentStateModel(StrictConfigModel):
 
     model_config = ConfigDict(extra="forbid", protected_namespaces=(), populate_by_name=True)
 
-    mode: AgentMode = "chat"
+    mode: AgentMode = AgentMode.CHAT
     route: str = ""
     org_id: str = ""
     user_id: str = ""
@@ -141,7 +141,9 @@ def model_default_payload(*exclude: str) -> dict[str, Any]:
     """Return default field values from ``AgentStateModel``, omitting ``exclude`` keys."""
     skip = frozenset(exclude)
     model = AgentStateModel()
-    dumped = model.model_dump(mode="python", by_alias=True, exclude_none=True)
+    # ``mode="json"`` so ``AgentMode`` (and any future StrEnums) dump as plain
+    # strings — the runtime ``AgentState`` dict keeps a JSON-stable shape.
+    dumped = model.model_dump(mode="json", by_alias=True, exclude_none=True)
     return {key: value for key, value in dumped.items() if key not in skip}
 
 
@@ -166,7 +168,7 @@ def make_chat_state(
             "context": {},
         }
     )
-    return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
+    return cast(AgentState, state.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 
 __all__ = [

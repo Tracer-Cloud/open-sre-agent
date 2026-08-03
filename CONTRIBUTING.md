@@ -180,13 +180,17 @@ Use the **[PR template](.github/PULL_REQUEST_TEMPLATE.md)** (automatically provi
 
 We use [Greptile](https://greptile.com) for automated code review. Before a PR can be merged it must reach a **5/5 confidence score** with zero unresolved comments.
 
+**How Greptile, human review, CI, and automerge fit together:** see the public
+[Pull request review flow](docs/pr-review-flow.mdx) guide.
+
 **Trigger a review** by posting this comment on your PR:
 
 ```
 @greptile review
 ```
 
-Wait 30–60 seconds for the review to appear, then address each comment and re-trigger until you hit 5/5.
+Give it about **5–10 minutes** (sometimes longer), then address each comment and
+re-trigger until you hit 5/5.
 
 > **Automate the loop** — the [greploop skill](https://skills.sh/greptileai/skills/greploop) handles triggering, waiting, fixing, and re-reviewing automatically until 5/5 is reached.
 
