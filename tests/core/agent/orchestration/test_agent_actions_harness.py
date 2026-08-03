@@ -11,15 +11,16 @@ from rich.console import Console
 
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
+    ActionTurnRunner,
     ToolCallingDeps,
     _build_action_agent,
     _turn_resolved_integrations,
-    run_action_agent_turn,
 )
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
@@ -128,14 +129,11 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
         )
     )
 
-    result = run_action_agent_turn(
-        "send a fake message",
-        Session(),
+    result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
         deps=harness.deps,
-        is_tty=False,
-    )
+    ).run("send a fake message", Session(), is_tty=False)
 
     assert result.handled is True
     assert result.planned_count == 1
@@ -174,14 +172,11 @@ def test_generic_cli_style_stdout_is_printed_for_user() -> None:
         llm=FakeActionLLM([tool_response("fake_gh", {"args": ["issue", "list"]})])
     )
 
-    result = run_action_agent_turn(
-        "list issues",
-        Session(),
+    result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
         deps=harness.deps,
-        is_tty=False,
-    )
+    ).run("list issues", Session(), is_tty=False)
 
     assert result.handled is True
     assert "https://github.com/o/r/issues/1" in result.response_text
@@ -218,14 +213,11 @@ def test_action_final_text_is_streamed_as_user_facing_response() -> None:
     )
     sink = _OutputSink(harness.console)
 
-    result = run_action_agent_turn(
-        "run the scan and report",
-        Session(),
+    result = ActionTurnRunner(
         output=sink,
         tools=_GenericActionToolProvider(tool),
         deps=harness.deps,
-        is_tty=False,
-    )
+    ).run("run the scan and report", Session(), is_tty=False)
 
     assert result.handled is True
     assert result.response_text == report.strip()
@@ -412,8 +404,8 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _answer(*_args: Any, handoff_contents: tuple[str, ...] = (), **_kwargs: Any) -> None:
-        captured.append(handoff_contents)
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        captured.append(request.handoff_contents)
         return None
 
     run_turn(
@@ -491,8 +483,8 @@ def test_run_turn_mixed_action_and_handoff_routes_to_assistant() -> None:
             handoff_contents=("provider:local_llama_connect",),
         )
 
-    def _answer(*_args: Any, handoff_contents: tuple[str, ...] = (), **_kwargs: Any) -> None:
-        captured.append(handoff_contents)
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        captured.append(request.handoff_contents)
         return None
 
     result = run_turn(
@@ -532,8 +524,13 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
         gather_calls.append(text)
         return "Tool: search_sentry_issues\nArguments: {}\nResult: should-not-run"
 
-    def _answer(*_args: Any, **kwargs: Any) -> None:
-        answer_kwargs.append(kwargs)
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        answer_kwargs.append(
+            {
+                "tool_observation": request.tool_observation,
+                "handoff_contents": request.handoff_contents,
+            }
+        )
         return None
 
     result = run_turn(

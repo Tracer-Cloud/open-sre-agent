@@ -32,6 +32,8 @@ Browse issues tagged with the `good first issue` label:
 7. **Open a pull request** — link the issue with `Fixes #123` in your PR description
 
 Full contribution flow is in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+After you open a PR, follow the [PR review flow](../pr-review-flow.mdx)
+(Greptile · human review · automerge).
 
 ## Ask for help
 
