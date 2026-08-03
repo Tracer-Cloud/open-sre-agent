@@ -25,6 +25,11 @@ def test_extract_event_text_returns_empty_string_for_missing_text() -> None:
     assert _extract_event_text({"payload": "abc"}) == ""
 
 
+def test_extract_event_text_returns_empty_string_for_empty_text_values() -> None:
+    assert _extract_event_text({"text": ""}) == ""
+    assert _extract_event_text({"payload": {"text": ""}}) == ""
+
+
 def test_extract_runtime_log_message_prefers_message_field() -> None:
     log = {"message": "runtime error", "payload": {"text": "ignored"}}
 
@@ -48,6 +53,13 @@ def test_extract_runtime_log_message_returns_empty_string_for_missing_message() 
     assert _extract_runtime_log_message({}) == ""
     assert _extract_runtime_log_message({"payload": {}}) == ""
     assert _extract_runtime_log_message({"message": None, "payload": {}}) == ""
+
+
+def test_extract_runtime_log_message_returns_empty_string_for_empty_message_values() -> None:
+    assert _extract_runtime_log_message({"message": ""}) == ""
+    assert _extract_runtime_log_message({"payload": {"text": ""}}) == ""
+    assert _extract_runtime_log_message({"payload": {"message": ""}}) == ""
+    assert _extract_runtime_log_message({"payload": {"body": ""}}) == ""
 
 
 def test_extract_runtime_log_message_prefers_payload_text_over_other_payload_fields() -> None:
