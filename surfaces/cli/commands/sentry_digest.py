@@ -11,9 +11,11 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from integrations.sentry.digest_delivery import SENTRY_DIGEST_SUPPORTED_PROVIDERS
 from surfaces.cli.commands.cron import _validate_cron_and_timezone
 
 _console = Console()
+_PROVIDER_CHOICES = [p.value for p in SENTRY_DIGEST_SUPPORTED_PROVIDERS]
 
 
 def _install_scheduler_runners() -> None:
@@ -107,7 +109,7 @@ def sentry_uptime_watch_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack", "rocketchat"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )
@@ -315,7 +317,7 @@ def sentry_digest_schedule_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack", "rocketchat"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )

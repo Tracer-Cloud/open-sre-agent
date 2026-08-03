@@ -1,7 +1,7 @@
 """Resolve the owning principal for a Discord gateway turn.
 
 Discord guild/DM turns attribute data to the silo organization
-(``OPENSRE_ORGANIZATION_ID``) and key per-actor sessions by Discord user id —
+(``ORGANIZATION_ID``) and key per-actor sessions by Discord user id —
 same border as Slack org + actor. Telegram/CLI stay unbound and must not import
 this module.
 """
@@ -33,7 +33,7 @@ def resolve_discord_principal(*, guild_id: str) -> Principal:
     """Principal for a Discord turn: the organization this deployment serves.
 
     DMs use the sentinel guild id ``dm`` and skip the guild allowlist — they
-    still require ``OPENSRE_ORGANIZATION_ID`` and the messaging allowlist.
+    still require ``ORGANIZATION_ID`` and the messaging allowlist.
     """
     silo_org = organization_id_for_silo()
     if not silo_org:

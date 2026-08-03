@@ -7,6 +7,7 @@ machine cannot crash the dashboard.
 
 from __future__ import annotations
 
+from tools.system.fleet_monitoring.provider_ids import FleetAgentProvider
 from tools.system.fleet_monitoring.token_sources import (
     NullTokenSource,
     TokenSource,
@@ -16,15 +17,15 @@ from tools.system.fleet_monitoring.token_sources.claude_code import ClaudeCodeJs
 from tools.system.fleet_monitoring.token_sources.codex import CodexRolloutSource
 
 TOKEN_SOURCE_REGISTRY: dict[str, TokenSource] = {
-    "claude-code": ClaudeCodeJsonlSource(),
-    "codex": CodexRolloutSource(),
-    "cursor": NullTokenSource(),
-    "aider": NullTokenSource(),
-    "gemini-cli": NullTokenSource(),
-    "antigravity-cli": NullTokenSource(),
-    "opencode": NullTokenSource(),
-    "kimi": NullTokenSource(),
-    "copilot": NullTokenSource(),
+    FleetAgentProvider.CLAUDE_CODE: ClaudeCodeJsonlSource(),
+    FleetAgentProvider.CODEX: CodexRolloutSource(),
+    FleetAgentProvider.CURSOR: NullTokenSource(),
+    FleetAgentProvider.AIDER: NullTokenSource(),
+    FleetAgentProvider.GEMINI_CLI: NullTokenSource(),
+    FleetAgentProvider.ANTIGRAVITY_CLI: NullTokenSource(),
+    FleetAgentProvider.OPENCODE: NullTokenSource(),
+    FleetAgentProvider.KIMI: NullTokenSource(),
+    FleetAgentProvider.COPILOT: NullTokenSource(),
 }
 
 

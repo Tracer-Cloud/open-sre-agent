@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
-from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 from gateway.runtime.credential_hydration import GatewayBootstrap
 from gateway.runtime.manager import GatewayManager
 
@@ -44,7 +43,7 @@ def _recording_factory(built: list[_RecordingWorker]) -> Any:
 @pytest.fixture(autouse=True)
 def _clear_org_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Neither organization env var is set unless a test sets it."""
-    for name in (TENANT_ORGANIZATION_ID_ENV, ORGANIZATION_ID_ENV):
+    for name in (ORGANIZATION_ID_ENV, ORGANIZATION_ID_ENV):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -59,7 +58,7 @@ def _start(manager: GatewayManager) -> None:
 def test_worker_starts_with_the_injected_tenant_id(monkeypatch: pytest.MonkeyPatch) -> None:
     """The tenant id ECS injects reaches the worker, and the worker starts."""
     # Arrange
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-from-control-plane")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-from-control-plane")
     built: list[_RecordingWorker] = []
     manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
 
@@ -72,14 +71,34 @@ def test_worker_starts_with_the_injected_tenant_id(monkeypatch: pytest.MonkeyPat
     assert manager.components["api_runs"] == "polling"
 
 
-def test_billing_org_id_does_not_start_the_worker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The billing var must not stand in for the tenant id.
+def test_the_deployments_organization_starts_the_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The worker serves the org this deployment is for.
 
-    This is the regression: the manager read ``OPENSRE_ORGANIZATION_ID``, which a
-    silo does not set, so the worker never started and nothing said so.
+    Reading a name the deployment does not set meant the worker silently never
+    started, and nothing said so. The bootstrap DSN, not the env name, is what
+    actually gates this path.
     """
-    # Arrange: only the billing name is set, with a value that must not leak.
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-billing-must-not-leak")
+    # Arrange
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-from-ec2")
+    built: list[_RecordingWorker] = []
+    manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
+
+    # Act
+    _start(manager)
+
+    # Assert
+    assert [w.organization_id for w in built] == ["org-from-ec2"]
+    assert manager.components["api_runs"] == "polling"
+
+
+def test_no_organization_configured_leaves_the_worker_unstarted() -> None:
+    """With ORGANIZATION_ID unset there is no org to poll runs for.
+
+    This path fails silently by design, so the guard has to be explicit.
+    """
+    # Arrange: the autouse fixture already cleared ORGANIZATION_ID.
     built: list[_RecordingWorker] = []
     manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
 
@@ -95,7 +114,7 @@ def test_billing_org_id_does_not_start_the_worker(monkeypatch: pytest.MonkeyPatc
 def test_blank_tenant_id_leaves_the_worker_unstarted(monkeypatch: pytest.MonkeyPatch) -> None:
     """Whitespace is not an identity."""
     # Arrange
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "   ")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "   ")
     built: list[_RecordingWorker] = []
     manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
 
@@ -112,7 +131,7 @@ def test_tenant_id_without_a_database_url_is_not_configured(
 ) -> None:
     """Remote runs need both the tenant identity and the bootstrap DSN."""
     # Arrange
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-from-control-plane")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-from-control-plane")
     built: list[_RecordingWorker] = []
     manager = GatewayManager(remote_run_worker_factory=_recording_factory(built))
 

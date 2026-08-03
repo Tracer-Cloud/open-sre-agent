@@ -33,6 +33,20 @@ from tests.shared.keyring_backend import MemoryKeyring
 _ENV_VAR = "OPENSRE_TEST_FALLBACK_TOKEN"
 
 
+def test_keyring_unavailable_reason_values_round_trip() -> None:
+    expected = {
+        "disabled": KeyringUnavailableReason.DISABLED,
+        "no_backend": KeyringUnavailableReason.NO_BACKEND,
+        "backend_error": KeyringUnavailableReason.BACKEND_ERROR,
+    }
+
+    assert {reason.value: reason for reason in KeyringUnavailableReason} == expected
+    for value, reason in expected.items():
+        assert KeyringUnavailableReason(value) == reason
+        assert isinstance(reason, str)
+        assert str(reason) == value
+
+
 class _NoBackendKeyring(MemoryKeyring):
     """Stands in for ``keyring.backends.fail.Keyring`` on a headless box."""
 
@@ -238,7 +252,7 @@ def test_disabling_the_keyring_stays_fail_closed(monkeypatch) -> None:
     with pytest.raises(KeyringUnavailableError) as excinfo:
         save_secret(_ENV_VAR, "sk-disabled")
 
-    assert excinfo.value.reason is KeyringUnavailableReason.DISABLED
+    assert excinfo.value.reason == KeyringUnavailableReason.DISABLED
     assert not Path(local_file.store_path()).exists()
 
 

@@ -44,6 +44,7 @@ from integrations.verify import (
     verification_exit_code,
     verify_integrations,
 )
+from integrations.webapp_vault import delete_webapp_org_integration
 
 _B = ANSI_BOLD
 _R = ANSI_RESET
@@ -860,6 +861,7 @@ def cmd_remove(service: str | None) -> None:
             print("  Cancelled.")
             return
     if remove_integration(service):
+        delete_webapp_org_integration(service)
         print(f"  ✓ Removed '{service}'.")
     else:
         print(f"  No integration found for '{service}'.")

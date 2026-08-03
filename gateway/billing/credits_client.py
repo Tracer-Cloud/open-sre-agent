@@ -25,9 +25,9 @@ import httpx
 
 from config.constants.billing import (
     CREDITS_HTTP_TIMEOUT_SECONDS,
-    ORGANIZATION_ID_ENV,
     WEBAPP_URL_ENV,
 )
+from config.constants.organization import organization_id
 from integrations.slack.webapp_auth import webapp_bearer_token
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def _env(name: str) -> str:
 
 def organization_id_for_silo() -> str:
     """Neon/Clerk organization id for this silo (statically injected by infra)."""
-    return _env(ORGANIZATION_ID_ENV)
+    return organization_id()
 
 
 @functools.cache
@@ -74,7 +74,7 @@ def consume_credits(
 
     Args:
         organization_id: Neon/Clerk org id; defaults to the silo's
-            ``OPENSRE_ORGANIZATION_ID`` env value.
+            ``ORGANIZATION_ID`` env value.
         amount: Credits to consume (webapp requires a positive number).
         reason: Short machine-readable cause, e.g. ``"slack_turn"``.
         metadata: Optional extra JSON fields merged into the request body.

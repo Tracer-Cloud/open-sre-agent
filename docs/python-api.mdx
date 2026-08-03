@@ -59,6 +59,23 @@ from core.agent_harness import AgentHarness, HarnessConfig
 harness = AgentHarness.start(HarnessConfig(session_id="abc123"))
 ```
 
+## Your own grounding context
+
+The agent builds its prompts from the session by default. To ground it your own
+way — a different system prompt, your own retrieved context — pass a provider:
+
+```python
+from core.agent_harness import AgentHarness, HarnessConfig
+
+harness = AgentHarness.start(HarnessConfig(prompts=my_provider))
+```
+
+Omit it and the built-in provider applies
+(`core.agent_harness.DefaultPromptContextProvider`). A custom provider must
+satisfy `core.agent_harness.ports.PromptContextProvider`. The same `prompts=`
+argument is accepted by `build_default_headless_agent` on the custom-ports path
+below.
+
 ## Custom output and ports
 
 `start()` buffers all output. To capture tool progress yourself — stream to a
@@ -76,7 +93,11 @@ from core.agent_harness import (
 harness = AgentHarness(HarnessConfig())
 startup = harness.startup()
 sink = BufferOutputSink()
-agent = build_default_headless_agent(session=startup.session, output=sink)
+agent = build_default_headless_agent(
+    session=startup.session,
+    output=sink,
+    prompts=my_provider,  # optional — same port as HarnessConfig.prompts
+)
 harness.attach_agent(agent)
 
 harness.dispatch_message("summarize open incidents")
@@ -89,3 +110,22 @@ Any object implementing the `OutputSink` protocol
 `render_error`, `stream`) works in place of `BufferOutputSink`.
 `build_default_headless_agent` also accepts a custom logger, prompt surface,
 and tool observers — see its docstring for the full port list.
+
+## Your own tools
+
+Register a package before the first tool lookup:
+
+```python
+from tools.registry import register_external_tool_package
+import my_agent_tools
+
+register_external_tool_package(my_agent_tools)
+```
+
+Two gotchas:
+
+1. Declare tools with `surfaces=("action",)` (or include `"action"`). The
+   `@tool` default is `("investigation",)` only — the chat/Python-API action
+   loop will not see investigation-only tools.
+2. Tools may live in the package's `__init__.py` or in submodules; both are
+   scanned after registration.

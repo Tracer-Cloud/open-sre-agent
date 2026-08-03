@@ -51,13 +51,24 @@ class BackgroundSampleLauncher(Protocol):
         raise NotImplementedError
 
 
-def repl_foreground_renderer() -> session_runner.StreamRendererFn:
+def repl_foreground_renderer(console: Console | None = None) -> session_runner.StreamRendererFn:
     """Return a renderer that streams investigation progress to the REPL terminal."""
     from surfaces.cli.ui.renderer import StreamRenderer
+    from surfaces.interactive_shell.ui.output import reset_tracker, set_tracker_console
 
     def _render(events: Iterator[StreamEvent]) -> dict[str, Any]:
-        renderer = StreamRenderer(local=True)
-        return dict(renderer.render_stream(events))
+        if console is None:
+            return dict(StreamRenderer(local=True).render_stream(events))
+        # Stages reach the tracker through ``get_tracker``, so the caller's
+        # console has to be published before the first stage starts.
+        set_tracker_console(console)
+        reset_tracker()
+        try:
+            renderer = StreamRenderer(local=True, console=console)
+            return dict(renderer.render_stream(events))
+        finally:
+            set_tracker_console(None)
+            reset_tracker()
 
     return _render
 
@@ -83,13 +94,14 @@ def run_investigation_for_session(
     alert_text: str,
     context_overrides: dict[str, Any] | None = None,
     cancel_requested: threading.Event | None = None,
+    console: Console | None = None,
 ) -> dict[str, Any]:
     """Run a foreground streaming investigation in the REPL."""
     return session_runner.run_investigation_for_session(
         alert_text=alert_text,
         context_overrides=context_overrides,
         cancel_requested=cancel_requested,
-        render_stream=repl_foreground_renderer(),
+        render_stream=repl_foreground_renderer(console),
     )
 
 
@@ -98,13 +110,14 @@ def run_sample_alert_for_session(
     template_name: str = "generic",
     context_overrides: dict[str, Any] | None = None,
     cancel_requested: threading.Event | None = None,
+    console: Console | None = None,
 ) -> dict[str, Any]:
     """Run a foreground sample-alert investigation in the REPL."""
     return session_runner.run_sample_alert_for_session(
         template_name=template_name,
         context_overrides=context_overrides,
         cancel_requested=cancel_requested,
-        render_stream=repl_foreground_renderer(),
+        render_stream=repl_foreground_renderer(console),
     )
 
 
@@ -180,11 +193,13 @@ class ReplInvestigationLaunchPorts:
         alert_text: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
         return run_investigation_for_session(
             alert_text=alert_text,
             context_overrides=context_overrides,
             cancel_requested=cancel_requested,
+            console=console,
         )
 
     def run_sample_alert(
@@ -193,11 +208,13 @@ class ReplInvestigationLaunchPorts:
         template_name: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
         return run_sample_alert_for_session(
             template_name=template_name,
             context_overrides=context_overrides,
             cancel_requested=cancel_requested,
+            console=console,
         )
 
     def start_background_text(

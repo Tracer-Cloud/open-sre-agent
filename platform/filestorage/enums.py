@@ -33,6 +33,8 @@ class BuiltInProvider(StrEnum):
     """
 
     AWS = "aws"
+    GCS = "gcs"
+    VERCEL = "vercel"
 
 
 class RemoteSyncSubcommand(StrEnum):
@@ -40,10 +42,26 @@ class RemoteSyncSubcommand(StrEnum):
 
     STATUS = "status"
     SYNC = "sync"
+    SETUP = "setup"
+
+
+class RemoteSyncField(StrEnum):
+    """Provider-specific setup fields ``RemoteSyncConfig`` can hold.
+
+    Fixed at two on purpose — ``RemoteSyncConfig`` is a closed, two-slot
+    contract for the fields a provider may need beyond bucket/prefix. A
+    provider declares which of these it consumes (see
+    :class:`platform.filestorage.providers.registry.SetupExtraField`); it does
+    not gain new attributes of its own.
+    """
+
+    REGION = "region"
+    PROFILE = "profile"
 
 
 __all__ = [
     "BuiltInProvider",
+    "RemoteSyncField",
     "RemoteSyncSubcommand",
     "SyncDirection",
     "SyncRootName",

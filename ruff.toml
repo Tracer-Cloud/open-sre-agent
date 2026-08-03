@@ -42,7 +42,7 @@ ignore = [
 # F401 stays enforced everywhere so unused imports surface in lint (and CI).
 "tests/**/*.py" = ["ARG001", "E402"]
 # CLI entry points
-"surfaces/cli/__main__.py" = ["ARG001"]
+"surfaces/cli/app.py" = ["ARG001"]
 
 # stderr/stdout buffers outlive the function — closed in a watcher thread's `finally`,
 # so a `with` block at the call site would close them before the subprocess runs.

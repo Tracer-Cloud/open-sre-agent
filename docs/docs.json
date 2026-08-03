@@ -48,7 +48,8 @@
               "python-api",
               "faq",
               "cloudopsbench",
-              "bi-weekly-giveaway"
+              "bi-weekly-giveaway",
+              "pr-review-flow"
             ]
           }
         ]

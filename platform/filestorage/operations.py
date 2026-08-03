@@ -23,20 +23,33 @@ from pathlib import Path
 
 from config.scope_context import current_scope
 from platform.filestorage.config import RemoteSyncConfig, load_remote_sync_config
-from platform.filestorage.engine import SyncReport, resolve_direction, run_sync
+from platform.filestorage.engine import (
+    SyncReport,
+    local_files,
+    relative_key,
+    resolve_direction,
+    run_sync,
+)
 from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import OrgScopeNotSupportedError
+from platform.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules
 from platform.filestorage.providers import build_object_store
-from platform.filestorage.syncable import syncable_roots
+from platform.filestorage.syncable import SyncRoot, syncable_roots
 
 
 @dataclass(frozen=True)
 class SyncRootStatus:
-    """One mirrored root as shown to the operator."""
+    """One mirrored root as shown to the operator.
+
+    ``excluded`` is how many files under this root the configured patterns
+    currently hold back. Reported per root because a count is the only way to
+    tell a pattern that matched from one that was mistyped.
+    """
 
     name: SyncRootName | str
     path: Path
     exists: bool
+    excluded: int = 0
 
 
 @dataclass(frozen=True)
@@ -50,6 +63,11 @@ class SyncStatus:
     def enabled(self) -> bool:
         return self.config is not None
 
+    @property
+    def exclusions(self) -> ExclusionRules:
+        """Patterns in force, empty when sync is off or none are configured."""
+        return self.config.exclude if self.config is not None else NO_EXCLUSIONS
+
 
 def _owned_report(report: SyncReport) -> SyncReport:
     """Caller-owned copy so concurrent formatters cannot see later mutation."""
@@ -60,6 +78,7 @@ def _owned_report(report: SyncReport) -> SyncReport:
         skipped=report.skipped,
         uploaded_bytes=report.uploaded_bytes,
         downloaded_bytes=report.downloaded_bytes,
+        excluded=set(report.excluded),
     )
 
 
@@ -78,14 +97,31 @@ def _refuse_org_scoped_turn() -> None:
         )
 
 
+def _root_status(root: SyncRoot, exclusions: ExclusionRules) -> SyncRootStatus:
+    """Describe one root, counting held-back files only when asked to.
+
+    Counting walks the whole root, so an installation with no patterns — the
+    default — pays nothing for a feature it is not using.
+    """
+    excluded = (
+        exclusions.matching(relative_key(root, path) for path in local_files(root))
+        if exclusions
+        else 0
+    )
+    return SyncRootStatus(
+        name=root.name,
+        path=root.path,
+        exists=root.path.is_dir(),
+        excluded=excluded,
+    )
+
+
 def get_sync_status() -> SyncStatus:
     """Load config and resolve scoped roots (no network, no cached state)."""
     _refuse_org_scoped_turn()
     config = load_remote_sync_config()
-    roots = tuple(
-        SyncRootStatus(name=root.name, path=root.path, exists=root.path.is_dir())
-        for root in syncable_roots()
-    )
+    exclusions = config.exclude if config is not None else NO_EXCLUSIONS
+    roots = tuple(_root_status(root, exclusions) for root in syncable_roots())
     return SyncStatus(config=config, roots=roots)
 
 
@@ -94,12 +130,14 @@ def run_remote_sync(
     pull_only: bool = False,
     push_only: bool = False,
     direction: SyncDirection | None = None,
+    dry_run: bool = False,
 ) -> SyncReport | None:
     """Pull/push for the current scope. ``None`` when sync is disabled.
 
     Builds a new ObjectStore per call. Returns a caller-owned report snapshot.
     Prefer ``direction=`` when the caller already has a :class:`SyncDirection`;
-    the boolean flags remain for CLI/slash adapters.
+    the boolean flags remain for CLI/slash adapters. ``dry_run`` previews the
+    plan without uploading, downloading, or writing anything locally.
     """
     _refuse_org_scoped_turn()
     resolved = (
@@ -112,7 +150,9 @@ def run_remote_sync(
         return None
     roots = syncable_roots()
     store = build_object_store(config)
-    return _owned_report(run_sync(store, direction=resolved, roots=roots))
+    return _owned_report(
+        run_sync(store, direction=resolved, roots=roots, exclusions=config.exclude, dry_run=dry_run)
+    )
 
 
 __all__ = [

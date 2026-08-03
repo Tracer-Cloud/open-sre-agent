@@ -17,10 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.harness import AgentHarness, HarnessConfig, HarnessStartupResult
-    from core.agent_harness.turns.action_driver import ToolCallingDeps
-    from core.agent_harness.turns.action_driver import (
-        run_action_agent_turn as execute_action_agent_turn,
-    )
+    from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+    from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
     from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence as gather_evidence
@@ -48,10 +46,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "TurnSnapshot": ("core.agent_harness.turns.turn_snapshot", "TurnSnapshot"),
     "TurnSnapshotSource": ("core.agent_harness.turns.turn_snapshot", "TurnSnapshotSource"),
     "ToolCallingDeps": ("core.agent_harness.turns.action_driver", "ToolCallingDeps"),
-    "execute_action_agent_turn": (
-        "core.agent_harness.turns.action_driver",
-        "run_action_agent_turn",
-    ),
+    "ActionTurnRunner": ("core.agent_harness.turns.action_driver", "ActionTurnRunner"),
     "gather_tool_evidence": ("core.agent_harness.turns.evidence_driver", "gather_tool_evidence"),
     "gather_evidence": ("core.agent_harness.turns.evidence_driver", "gather_tool_evidence"),
     "HeadlessAgent": (
@@ -65,6 +60,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "BufferOutputSink": (
         "core.agent_harness.turns.headless_adapters",
         "BufferOutputSink",
+    ),
+    "DefaultPromptContextProvider": (
+        "core.agent_harness.prompts.prompt_context",
+        "DefaultPromptContextProvider",
     ),
     "run_turn": ("core.agent_harness.turns.orchestrator", "run_turn"),
     "stream_answer": ("core.agent_harness.turns.orchestrator", "stream_answer"),
@@ -87,6 +86,7 @@ __all__ = [
     "AgentHarness",
     "AgentRuntimeRequest",
     "BufferOutputSink",
+    "DefaultPromptContextProvider",
     "HarnessConfig",
     "HarnessStartupResult",
     "HeadlessAgent",
@@ -96,7 +96,7 @@ __all__ = [
     "TurnSnapshot",
     "TurnSnapshotSource",
     "build_default_headless_agent",
-    "execute_action_agent_turn",
+    "ActionTurnRunner",
     "gather_evidence",
     "gather_tool_evidence",
     "run_turn",

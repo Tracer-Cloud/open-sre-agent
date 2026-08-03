@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from integrations.tempo.tools import _tempo_is_available, query_tempo
+from integrations.tempo.tools import _VALID_ACTIONS, _tempo_is_available, query_tempo
 
 
 class _FakeTempoBackend:
@@ -68,6 +68,10 @@ class TestTempoAvailability:
 
 
 class TestTempoToolDispatch:
+    def test_schema_enum_matches_valid_actions(self) -> None:
+        schema = query_tempo.__opensre_registered_tool__.input_schema
+        assert tuple(schema["properties"]["action"]["enum"]) == _VALID_ACTIONS
+
     def test_search_default_action(self) -> None:
         result = query_tempo(service="api", tempo_backend=_FakeTempoBackend())
         assert result["action"] == "search"

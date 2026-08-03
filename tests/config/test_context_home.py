@@ -13,7 +13,6 @@ import pytest
 from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
-from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 
@@ -161,7 +160,7 @@ def test_mounted_volume_is_used_as_the_org_root(
 def test_mount_refuses_a_turn_for_a_different_org(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A mount declares its owner via OPENSRE_ORGANIZATION_ID; a turn for any
+    """A mount declares its owner via ORGANIZATION_ID; a turn for any
     other org must fail closed rather than write into the wrong org's volume."""
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
     monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
@@ -183,25 +182,18 @@ def test_mount_serves_its_declared_owner(tmp_path: Path, monkeypatch: pytest.Mon
         assert paths.opensre_home() == mount
 
 
-def test_the_control_plane_tenant_id_cannot_declare_the_mount_owner(
+def test_mount_refuses_a_turn_when_no_organization_is_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Only OPENSRE_ORGANIZATION_ID declares the owner.
-
-    The control plane injects ORGANIZATION_ID to select which tenant's
-    credentials to hydrate. Honouring it here would let that value authorize a
-    write to a volume it was never checked against, so the mount must still fail
-    closed on an undeclared owner.
-    """
-    # Arrange: the tenant id names this very org, and is still not a declaration.
+    """A mount with no declared owner fails closed rather than guessing."""
+    # Arrange
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, ACME.id)
     monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
 
     # Act / Assert
     with (
         bound_storage_scope(_member(ACME, ALICE)),
-        pytest.raises(paths.ContextRootOwnerMismatchError, match="does not say which"),
+        pytest.raises(paths.ContextRootOwnerMismatchError, match="no organization is configured"),
     ):
         paths.opensre_home()
 

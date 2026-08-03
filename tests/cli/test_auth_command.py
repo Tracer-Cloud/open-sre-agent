@@ -7,7 +7,7 @@ from click.testing import CliRunner
 
 from config.constants.secrets import OPENSRE_USE_KEYRING_ENV
 from config.llm_credentials import resolve_env_credential
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 from surfaces.cli.llm_auth.service import AuthSetupResult
 from tests.shared.keyring_backend import MemoryKeyring
 

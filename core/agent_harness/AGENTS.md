@@ -44,7 +44,7 @@ subpackage. Default port implementations live with the concern they serve, not i
     what the turn knows. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather
     than re-resolving. Do NOT reintroduce per-component integration resolution.
-  - `action_driver.py` — `run_action_agent_turn`: one action tool-calling turn
+  - `action_driver.py` — `ActionTurnRunner`: one action tool-calling turn
     over the ports, via a `_build_action_agent` factory that returns an
     `ActionTurnPlan`.
   - `evidence_driver.py` — bounded evidence-gather loop, via a
@@ -96,7 +96,7 @@ to it instead of re-implementing bootstrap + persistence:
   `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
-  `gateway/turn_handler.py`'s `GatewayTurnHandler` with
+  `gateway/runtime/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.

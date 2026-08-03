@@ -25,7 +25,7 @@ class PromptRenderable(Protocol):
     """Structured prompt object that can render itself into provider text."""
 
     def render(self) -> str:
-        raise NotImplementedError
+        """Return the prompt as provider-ready text."""
 
 
 type SystemPromptInput = str | PromptRenderable
@@ -50,7 +50,7 @@ class TurnSnapshotSource(Protocol):
     # covariantly, so any concrete ``Sequence[str]`` implementation satisfies it.
     @property
     def configured_integrations(self) -> Sequence[str]:
-        raise NotImplementedError
+        """Integration names configured for this session (read-only view)."""
 
 
 @runtime_checkable
@@ -64,13 +64,13 @@ class AgentRuntimeRequest(Protocol):
     max_iterations: int
 
     def render_system_prompt(self) -> str:
-        raise NotImplementedError
+        """Render ``system_prompt`` into provider text."""
 
     def runtime_messages(self) -> list[RuntimeMessage]:
-        raise NotImplementedError
+        """Messages for this turn's LLM invoke."""
 
     def validate_runtime_request(self) -> None:
-        raise NotImplementedError
+        """Raise if the request is not ready to run."""
 
 
 def _render_system_prompt(prompt: SystemPromptInput) -> str:

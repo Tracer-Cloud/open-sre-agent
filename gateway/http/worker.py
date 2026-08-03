@@ -11,7 +11,7 @@ from typing import Any
 
 from gateway.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.http.artifacts import upload_report_to_s3, write_local_report
-from gateway.http.investigation_store import InvestigationStatus, InvestigationStore
+from gateway.storage.investigations.store import InvestigationStatus, InvestigationStore
 
 # The worker is opt-in so API-only processes (and tests) never run the pipeline.
 WORKER_ENABLED_ENV = "OPENSRE_INVESTIGATION_WORKER"

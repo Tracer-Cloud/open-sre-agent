@@ -47,7 +47,15 @@ class RejectionBehavior(StrEnum):
 
 
 class MessagingPlatform(StrEnum):
-    """Supported messaging platforms."""
+    """Inbound-identity platforms: which gateways receive messages and run
+    DM-pairing/allow-list security checks (see ``gateway/telegram``,
+    ``gateway/slack``, ``gateway/discord``, and the ``opensre messaging`` CLI).
+
+    Distinct from ``platform.scheduler.types.Provider``, the canonical
+    *delivery* vocabulary for scheduled outbound messages. Rocket.Chat is a
+    delivery-only provider with no gateway inbound surface, so it is
+    deliberately absent here rather than a gap to fill.
+    """
 
     TELEGRAM = "telegram"
     SLACK = "slack"

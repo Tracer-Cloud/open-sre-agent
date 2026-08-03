@@ -40,6 +40,7 @@ def run_sample_alert(
             template_name=template_name,
             context_overrides=session.accumulated_context or None,
             cancel_requested=task.cancel_requested,
+            console=console,
         )
 
     def _start_background() -> None:

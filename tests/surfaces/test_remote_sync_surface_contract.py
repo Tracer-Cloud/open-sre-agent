@@ -13,7 +13,7 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 from surfaces.cli.gateway_entry import gateway_slash_ports_factory
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.help import _help_sections
@@ -90,3 +90,29 @@ def test_top_level_cli_remote_sync_sync_uses_service(monkeypatch: pytest.MonkeyP
     assert result.exit_code == 0
     assert "1 uploaded" in result.output
     assert "2 already current" in result.output
+
+
+def test_top_level_cli_remote_sync_setup_writes_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    result = CliRunner().invoke(
+        cli,
+        [
+            "remote-sync",
+            "setup",
+            "--provider",
+            "vercel",
+            "--bucket",
+            "opensre-remote-sync",
+            "--prefix",
+            "opensre",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "settings saved" in result.output
+    assert "vercel" in result.output
+    assert "BLOB_READ_WRITE_TOKEN" in result.output
+    assert (tmp_path / "config.yml").is_file()

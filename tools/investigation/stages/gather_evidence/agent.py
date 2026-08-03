@@ -26,7 +26,11 @@ from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.trace.redaction import RedactedToolView, redact_tool_view
+from platform.observability.trace.redaction import (
+    RedactedToolView,
+    redact_sensitive,
+    redact_tool_view,
+)
 from tools.investigation.stages.gather_evidence.incident_command import (
     CONCLUSION_FORMAT_NUDGE,
     POST_TRIAGE_CHECKPOINT,
@@ -106,8 +110,21 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
 
     def _record_tool_start(self, tc: ToolCall) -> None:
         redacted = redact_tool_view(tc.input)
+        self._redacted_inputs[tc.id] = redacted.tool_input
         self._tracker.record_tool_start(tc.name, redacted.tool_input, event_key=tc.id)
         self._emit("tool_start", tool_event_payload(tc, redacted=redacted))
+
+    def _redacted_view(self, tc: ToolCall, output: Any) -> RedactedToolView:
+        """Pair the output with the input redaction already done at tool start.
+
+        Redaction deep-copies the whole payload, and a tool's input is walked
+        once when the call is announced. Re-walking it to attach the output
+        doubles that work on every tool call in the loop.
+        """
+        tool_input = self._redacted_inputs.pop(tc.id, None)
+        if tool_input is None:
+            return redact_tool_view(tc.input, output)
+        return RedactedToolView(tool_input=tool_input, output=redact_sensitive(output))
 
     def _record_tool_end(self, tc: ToolCall, output: Any, *, redacted: RedactedToolView) -> None:
         self._tracker.record_tool_end(
@@ -128,6 +145,8 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
+        #: Redacted tool inputs from tool_start, consumed when the output lands.
+        self._redacted_inputs: dict[str, Any] = {}
         self._tracker.start("investigation_agent", "Running investigation agent loop")
 
         state_dict = cast(dict[str, Any], state)
@@ -193,7 +212,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
 
             for tc, output in zip(seed_calls, seed_results):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=-1)
-                redacted = redact_tool_view(tc.input, output)
+                redacted = self._redacted_view(tc, output)
                 merge_tool_evidence(evidence, tc.name, output, tc.input, redacted=redacted)
                 evidence_entries.append(
                     EvidenceEntry(
@@ -323,7 +342,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 if is_dup:
                     debug_print(f"[{tc.name}] → duplicate call suppressed")
                     continue
-                redacted = redact_tool_view(tc.input, output)
+                redacted = self._redacted_view(tc, output)
                 merge_tool_evidence(evidence, tc.name, output, tc.input, redacted=redacted)
                 evidence_entries.append(
                     EvidenceEntry(
