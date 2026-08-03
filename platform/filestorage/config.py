@@ -80,16 +80,35 @@ def _truthy(value: object) -> bool:
     return False
 
 
+def _validated_scalar(value: Any, key: str) -> Any:
+    """Reject a stored ``remote_sync`` value that cannot be a single setting.
+
+    A YAML sequence or mapping under a scalar key (``bucket: [my-bucket]``)
+    would otherwise stringify to something like ``"['my-bucket']"`` and fail
+    much later against the storage backend. Caught here, at read time, so the
+    error names the key that is actually wrong.
+    """
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    raise RemoteSyncConfigError(
+        f"remote_sync.{key} must be a single value, not a {type(value).__name__}"
+    )
+
+
 def _env_or_stored(
     env_name: str,
     stored_key: str,
     stored: Callable[[], dict[str, Any]],
 ) -> str:
-    """Environment value, else the stored one. The file is read only if needed."""
+    """Environment value, else the stored one. The file is read only if needed.
+
+    Validated only on the fallback path: a malformed stored value must not
+    break a field that the environment already overrides.
+    """
     env = os.getenv(env_name, "").strip()
     if env:
         return env
-    value = stored().get(stored_key)
+    value = _validated_scalar(stored().get(stored_key), stored_key)
     if value is None:
         return ""
     return str(value).strip()
@@ -116,14 +135,6 @@ def _exclusions(stored: Callable[[], dict[str, Any]]) -> ExclusionRules:
     return parse_exclusions(stored().get("exclude"))
 
 
-def remote_sync_enabled() -> bool:
-    """Whether sync is on in the environment or the stored settings file."""
-    env = os.getenv(REMOTE_SYNC_ENV)
-    if env is not None and env.strip() != "":
-        return env.strip().lower() in _TRUTHY
-    return _truthy(_stored_section().get("enabled"))
-
-
 def _lazy_stored() -> Callable[[], dict[str, Any]]:
     """Read the settings file at most once, and only if something needs it.
 
@@ -140,15 +151,27 @@ def _lazy_stored() -> Callable[[], dict[str, Any]]:
     return read
 
 
+def _enabled(stored: Callable[[], dict[str, Any]]) -> bool:
+    env = os.getenv(REMOTE_SYNC_ENV)
+    if env is not None and env.strip() != "":
+        return env.strip().lower() in _TRUTHY
+    return _truthy(_validated_scalar(stored().get("enabled"), "enabled"))
+
+
+def remote_sync_enabled() -> bool:
+    """Whether sync is on in the environment or the stored settings file."""
+    return _enabled(_lazy_stored())
+
+
 def load_remote_sync_config() -> RemoteSyncConfig | None:
     """Settings when sync is on, otherwise ``None``.
 
     Naming a bucket is not enough — the switch has to be on too, so an
     exported bucket left over from another tool never starts uploading.
     """
-    if not remote_sync_enabled():
-        return None
     stored = _lazy_stored()
+    if not _enabled(stored):
+        return None
     bucket = _env_or_stored(REMOTE_SYNC_BUCKET_ENV, "bucket", stored)
     if not bucket:
         raise RemoteSyncConfigError(
