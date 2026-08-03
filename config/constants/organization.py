@@ -5,8 +5,6 @@ multi-tenant control plane injects into each silo. Credits metering, usage
 attribution, Slack principal resolution and the fail-closed mount-ownership
 check all read it through here rather than reaching for the env var, so there
 is one answer to the question.
-
-``ORGANIZATION_ID`` is the only spelling the product reads.
 """
 
 from __future__ import annotations
