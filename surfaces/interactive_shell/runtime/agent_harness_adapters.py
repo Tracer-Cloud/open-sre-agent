@@ -20,9 +20,18 @@ from surfaces.interactive_shell.ui.streaming import render_response_header
 
 
 class ShellOutputSink:
-    """:class:`core.agent_harness.ports.OutputSink` over a Rich console."""
+    """:class:`core.agent_harness.ports.OutputSink` over a Rich console.
+
+    The console may be rebound per turn (spinner-aware streaming console) so a
+    long-lived :class:`~core.agent_harness.turns.action_driver.ActionTurnRunner`
+    can keep the same sink object.
+    """
 
     def __init__(self, console: Console) -> None:
+        self._console = console
+
+    def bind_console(self, console: Console) -> None:
+        """Point subsequent output at ``console`` for the current turn."""
         self._console = console
 
     def print(self, message: str = "") -> None:
