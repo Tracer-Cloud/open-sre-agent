@@ -6,11 +6,7 @@ attribution, Slack principal resolution and the fail-closed mount-ownership
 check all read it through here rather than reaching for the env var, so there
 is one answer to the question.
 
-It briefly took two names. The product read a prefixed ``OPENSRE_ORGANIZATION_ID``
-that the control plane never injected, so a silo resolved an empty string and
-refused every Slack turn. Both were accepted during the migration; the prefixed
-name is gone, and a second spelling should not be reintroduced — two names for
-one fact is what caused the outage.
+``ORGANIZATION_ID`` is the only spelling the product reads.
 """
 
 from __future__ import annotations
