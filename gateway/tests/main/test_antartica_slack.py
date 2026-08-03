@@ -22,7 +22,7 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import action_tool_names
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.action_driver import ToolCallingDeps, run_action_agent_turn
+from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
 from core.llm.types import AgentLLMResponse, ToolCall
 from gateway.runtime.headless_subprocess_presenter import headless_subprocess_presenter_factory
 from tools.registry import clear_tool_registry_cache
@@ -189,14 +189,15 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     )
     llm = _ComputeThenSlackLLM()
 
-    result = run_action_agent_turn(
-        _USER_MESSAGE,
-        session,
+    result = ActionTurnRunner(
         output=MagicMock(),
         tools=provider,
+        deps=ToolCallingDeps(llm_factory=lambda: llm),
+    ).run(
+        _USER_MESSAGE,
+        session,
         confirm_fn=lambda _prompt: "y",
         is_tty=True,
-        deps=ToolCallingDeps(llm_factory=lambda: llm),
     )
 
     # The agent ran the compound request as a sequence of turns: compute, send,

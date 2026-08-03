@@ -16,9 +16,12 @@ import logging
 import threading
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
+
+if TYPE_CHECKING:
+    from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
 
 from platform.analytics.repl_context import bound_repl_turn_context
 from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
@@ -68,6 +71,8 @@ class AgentTurnRuntime:
     #: terminal; an embedding caller passes its console so agent responses and
     #: tool output land in the same stream as the startup renders.
     console: Console | None = None
+    #: Session-scoped action runner; rebound to each turn's streaming console.
+    action_runner: ShellActionRunner | None = None
 
 
 def _streaming_console(
@@ -190,6 +195,7 @@ async def _run_agent_turn_loop(
                 confirm_fn=confirm,
                 is_tty=None,
                 request_exit=runtime.request_exit,
+                action_runner=runtime.action_runner,
             )
     except asyncio.CancelledError:
         await emit(AgentEvent(type="turn_interrupted"))
