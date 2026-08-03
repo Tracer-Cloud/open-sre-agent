@@ -12,6 +12,7 @@ import io
 
 from rich.console import Console
 
+from core.agent_harness.ports import AnswerRequest
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
@@ -48,9 +49,11 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
         text: str,
         session: Session,
         console: Console,
-        **kwargs: object,
+        *,
+        request: AnswerRequest,
+        **_kwargs: object,
     ) -> LlmRunInfo:
-        observed.append(kwargs.get("tool_observation"))  # type: ignore[arg-type]
+        observed.append(request.tool_observation)
         return LlmRunInfo(response_text="No — Sentry is not configured.")
 
     session = Session()
