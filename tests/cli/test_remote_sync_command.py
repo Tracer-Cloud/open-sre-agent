@@ -95,9 +95,12 @@ def test_sync_prints_report(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) 
 def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _capture(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _capture(
+        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+    ) -> SyncReport:
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport()
 
     monkeypatch.setattr(
@@ -106,7 +109,29 @@ def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.Monk
     )
     result = runner.invoke(remote_sync_command, ["sync", "--pull-only"])
     assert result.exit_code == 0
-    assert seen == {"pull_only": True, "push_only": False}
+    assert seen == {"pull_only": True, "push_only": False, "dry_run": False}
+
+
+def test_sync_passes_dry_run_and_labels_the_report(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, bool] = {}
+
+    def _capture(
+        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+    ) -> SyncReport:
+        seen["dry_run"] = dry_run
+        return SyncReport(uploaded=["sessions/a.jsonl"])
+
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.run_remote_sync",
+        _capture,
+    )
+    result = runner.invoke(remote_sync_command, ["sync", "--dry-run"])
+    assert result.exit_code == 0
+    assert seen == {"dry_run": True}
+    assert "Dry run" in result.output
+    assert "would be uploaded" in result.output
 
 
 def test_sync_failure_exits_nonzero(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,6 +210,7 @@ def test_sync_help_documents_direction_flags(runner: CliRunner) -> None:
     assert result.exit_code == 0
     assert "--pull-only" in result.output
     assert "--push-only" in result.output
+    assert "--dry-run" in result.output
 
 
 def test_setup_rejects_flag_provider_does_not_support(runner: CliRunner) -> None:

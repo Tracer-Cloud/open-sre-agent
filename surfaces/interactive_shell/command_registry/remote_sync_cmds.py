@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}|"
-    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only] "
+    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only|--dry-run] "
     f"[--provider … --bucket …]"
 )
 
@@ -68,15 +68,17 @@ def _print_status(console: Console) -> bool:
 
 def _run_sync(console: Console, args: list[str]) -> bool:
     flags = {a.lower() for a in args}
+    dry_run = "--dry-run" in flags
     with console.status("syncing…", spinner="dots"):
         report = run_remote_sync(
             pull_only="--pull-only" in flags,
             push_only="--push-only" in flags,
+            dry_run=dry_run,
         )
     if report is None:
         console.print(f"[{DIM}]{DISABLED_HELP}[/]")
         return True
-    lines = format_report_lines(report)
+    lines = format_report_lines(report, dry_run=dry_run)
     _print_lines(console, lines, dim_last=bool(report.kept_remote))
     return True
 

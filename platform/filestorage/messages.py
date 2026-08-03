@@ -98,8 +98,12 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def format_report_lines(report: SyncReport) -> tuple[str, ...]:
-    """Plain-text result lines after a successful run (pure; snapshots lists)."""
+def format_report_lines(report: SyncReport, *, dry_run: bool = False) -> tuple[str, ...]:
+    """Plain-text result lines after a run (pure; snapshots lists).
+
+    ``dry_run`` only changes the wording — the report already reflects a
+    preview when the caller ran the sync that way.
+    """
     downloaded = list(report.downloaded)
     uploaded = list(report.uploaded)
     kept_remote = list(report.kept_remote)
@@ -108,9 +112,11 @@ def format_report_lines(report: SyncReport) -> tuple[str, ...]:
     up_size = f" ({_human_size(report.uploaded_bytes)})" if report.uploaded_bytes else ""
     total_size = f" ({_human_size(report.total_bytes)} total)" if report.total_bytes else ""
     excluded = len(report.excluded)
+    heading = "Dry run" if dry_run else "Sync complete"
+    would = " would be" if dry_run else ""
     lines: list[str] = [
-        f"Sync complete — {len(downloaded)} downloaded{down_size}, "
-        f"{len(uploaded)} uploaded{up_size}, {skipped} already current{total_size}."
+        f"{heading} — {len(downloaded)}{would} downloaded{down_size}, "
+        f"{len(uploaded)}{would} uploaded{up_size}, {skipped} already current{total_size}."
     ]
     if excluded:
         # Its own line rather than a fourth clause in the summary: a run with no
