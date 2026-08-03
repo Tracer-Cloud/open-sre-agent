@@ -21,6 +21,7 @@ from platform.filestorage.messages import (
     root_state,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.providers.registry import builtin_providers
 from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -117,7 +118,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
             enabled=enabled,
         )
     )
-    _print_lines(console, format_setup_lines(config))
+    _print_lines(console, format_setup_lines(config, enabled=enabled))
     return True
 
 
@@ -167,7 +168,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
         notes=(
             "Off until setup or OPENSRE_REMOTE_SYNC is set. "
             f"Subcommands: status, sync, setup. Default provider is "
-            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: aws, vercel). "
+            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: {', '.join(builtin_providers())}). "
             "Credentials stay ambient; integration keys are never uploaded. "
             "Same service as `opensre remote-sync`.",
         ),

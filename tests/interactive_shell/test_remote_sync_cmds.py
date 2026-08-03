@@ -116,6 +116,24 @@ def test_setup_writes_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     assert "BLOB_READ_WRITE_TOKEN" in out
 
 
+def test_setup_disabled_says_off_without_a_sync_suggestion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    console, buf = _capture()
+    assert (
+        dispatch_slash(
+            "/remote-sync setup --provider gcs --bucket b --disabled", Session(), console
+        )
+        is True
+    )
+    out = buf.getvalue()
+    assert "Remote sync is off" in out
+    assert "remote-sync sync" not in out
+
+
 def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**_kwargs: object) -> SyncReport:
         raise RemoteSyncConfigError("bad flags")

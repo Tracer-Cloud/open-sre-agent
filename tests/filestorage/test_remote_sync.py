@@ -807,6 +807,81 @@ def test_environment_overrides_the_stored_bucket(
     assert config.bucket == "env-bucket"
 
 
+def test_a_malformed_stored_bucket_fails_early_naming_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A YAML list under ``bucket`` must not stringify into a bogus bucket name."""
+    # Arrange: `bucket: [my-bucket]` instead of a string.
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(REMOTE_SYNC_BUCKET_ENV, raising=False)
+    update_section("remote_sync", {"enabled": True, "bucket": ["my-bucket"]})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+
+    # Act / Assert: fails closed, naming the offending key.
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.bucket"):
+        load_remote_sync_config()
+
+
+def test_env_bucket_overrides_a_malformed_stored_bucket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Env precedence must hold even when the stored value it shadows is bad."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": True, "bucket": ["my-bucket"]})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert: the malformed stored bucket is never read, let alone validated.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+
+
+def test_a_malformed_stored_enabled_fails_early_instead_of_silently_disabling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bad ``enabled`` value must be reported, not read as falsy and ignored."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    update_section("remote_sync", {"enabled": ["true"], "bucket": "stored-bucket"})
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.enabled"):
+        remote_sync_enabled()
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.enabled"):
+        load_remote_sync_config()
+
+
+def test_env_enabled_overrides_a_malformed_stored_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``OPENSRE_REMOTE_SYNC`` must still switch sync off without reading the file."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": ["true"], "bucket": "stored-bucket"})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "0")
+
+    # Act / Assert
+    assert remote_sync_enabled() is False
+    assert load_remote_sync_config() is None
+
+
 # ── Org-scoped turns must not sync (keys carry no principal or actor) ────────
 
 
