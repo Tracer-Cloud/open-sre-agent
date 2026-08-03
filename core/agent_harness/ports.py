@@ -11,6 +11,7 @@ Nothing here imports ``interactive_shell``.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -183,17 +184,50 @@ class RunRecordFactory(Protocol):
         raise NotImplementedError
 
 
-# Bound direct-answer callable (no tools):
-# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_plan) -> LLM-run record | None``.
-StreamAnswerFn = Callable[..., Any]
+@dataclass(frozen=True)
+class AnswerRequest:
+    """Per-turn inputs for the direct-answer (no tools) path.
 
-# Bound evidence-gather callable:
-# ``gather(text, *, is_tty, turn_plan) -> str | None``.
-EvidenceGatherer = Callable[..., "str | None"]
+    Surface-bound ports (session, output, prompts, …) live on the caller;
+    only what varies per turn goes here. Confirm/TTY stay on the action path —
+    the direct answer never prompts or branches on them.
+    """
 
-# Bound action tool-calling driver:
-# ``execute_actions(text, *, confirm_fn, is_tty, turn_plan) -> ToolCallingTurnResult``.
-ExecuteActions = Callable[..., ToolCallingTurnResult]
+    tool_observation: str | None = None
+    tool_observation_on_screen: bool = True
+    handoff_contents: tuple[str, ...] = ()
+    # ``Any`` rather than ``TurnPlan``: that type imports ``SessionStore`` from
+    # here, so naming it — even under ``TYPE_CHECKING`` — closes an import cycle
+    # this repo's check rejects.
+    turn_plan: Any = None
+
+
+class StreamAnswerFn(Protocol):
+    """Bound direct-answer callable (no tools) handed to ``run_turn``."""
+
+    def __call__(self, text: str, request: AnswerRequest) -> Any:
+        """Stream one grounded answer; return the LLM-run record or None."""
+
+
+class EvidenceGatherer(Protocol):
+    """Bound evidence-gather callable handed to ``run_turn``."""
+
+    def __call__(self, text: str, *, turn_plan: Any = None) -> str | None:
+        """Gather read-only evidence for ``text``, or return None."""
+
+
+class ExecuteActions(Protocol):
+    """Bound action tool-calling driver handed to ``run_turn``."""
+
+    def __call__(
+        self,
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
+        """Run the action tool-calling turn for ``text``."""
 
 
 @runtime_checkable
@@ -208,6 +242,7 @@ class TurnAccounting(Protocol):
 
 
 __all__ = [
+    "AnswerRequest",
     "StreamAnswerFn",
     "ConfirmFn",
     "ErrorReporter",

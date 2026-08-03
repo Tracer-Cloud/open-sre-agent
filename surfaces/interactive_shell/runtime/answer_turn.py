@@ -6,18 +6,15 @@ and telemetry around core ``stream_answer``.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from rich.console import Console
 
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.ports import OutputSink
+from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.orchestrator import (
     stream_answer as core_stream_answer,
 )
-from core.agent_harness.turns.turn_plan import TurnPlan
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.session import Session
@@ -29,12 +26,7 @@ def answer_shell_question(
     session: Session,
     console: Console,
     *,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
-    tool_observation: str | None = None,
-    tool_observation_on_screen: bool = True,
-    handoff_contents: tuple[str, ...] = (),
-    turn_plan: TurnPlan | None = None,
+    request: AnswerRequest,
     output: OutputSink | None = None,
 ) -> LlmRunInfo | None:
     """Answer one shell question through the grounded conversational assistant."""
@@ -51,12 +43,7 @@ def answer_shell_question(
         ),
         run_factory=DefaultRunRecordFactory(session),
         error_reporter=DefaultErrorReporter(),
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        tool_observation=tool_observation,
-        tool_observation_on_screen=tool_observation_on_screen,
-        handoff_contents=handoff_contents,
-        turn_plan=turn_plan,
+        request=request,
     )
 
 
