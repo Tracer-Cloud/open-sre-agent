@@ -297,27 +297,38 @@ def test_verify_passes_with_non_json_body(monkeypatch: pytest.MonkeyPatch) -> No
 _WEBHOOK_CONFIG = {"webhook_url": "https://chat.example.com/hooks/abc"}
 
 
-@pytest.mark.parametrize("status_code", [200, 400, 403, 405])
-def test_verify_webhook_only_passes_on_reachable_probe(
-    monkeypatch: pytest.MonkeyPatch, status_code: int
-) -> None:
+def test_verify_webhook_uses_post_not_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: Mattermost's ``GET /hooks/<id>`` returns 200 for ANY id,
+
+    real or fabricated (confirmed empirically against a live server) — it
+    never validates the id at all, so a GET-based probe would report every
+    webhook URL "reachable" and catch nothing. The probe must use POST
+    (which does validate the id) and must not call GET at all.
+    """
+
+    def _fail_if_called(*_a: Any, **_kw: Any) -> None:
+        raise AssertionError("verify_mattermost must not GET the webhook URL")
+
+    monkeypatch.setattr("integrations.mattermost.verifier.httpx.get", _fail_if_called)
     captured: dict[str, Any] = {}
 
-    def _fake_get(url: str, **kw: Any) -> MagicMock:
+    def _fake_post(url: str, *, json: dict[str, Any], **_kw: Any) -> MagicMock:
         captured["url"] = url
-        return _mock_response(status_code, {})
+        captured["json"] = json
+        return _mock_response(400, {"message": "Failed to handle the payload"})
 
-    monkeypatch.setattr("integrations.mattermost.verifier.httpx.get", _fake_get)
+    monkeypatch.setattr("integrations.mattermost.verifier.httpx.post", _fake_post)
     result = verify_mattermost("local env", _WEBHOOK_CONFIG)
 
     assert result["status"] == "passed"
-    assert "non-posting probe" in result["detail"]
+    assert "non-delivering probe" in result["detail"]
     assert captured["url"] == _WEBHOOK_CONFIG["webhook_url"]
+    assert captured["json"] == {}
 
 
 def test_verify_webhook_fails_on_404(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "integrations.mattermost.verifier.httpx.get",
+        "integrations.mattermost.verifier.httpx.post",
         lambda *_a, **_kw: _mock_response(404, {}),
     )
     result = verify_mattermost("local env", _WEBHOOK_CONFIG)
@@ -325,11 +336,28 @@ def test_verify_webhook_fails_on_404(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "404" in result["detail"]
 
 
+def test_verify_webhook_fails_on_unexpected_200(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 200 is no longer treated as success.
+
+    Mattermost's webhook route returns 200 on GET unconditionally, but this
+    probe uses POST — an unexpected 200 here (rather than the 400 a valid
+    webhook returns for an empty payload) means the response isn't behaving
+    like the real webhook handler, so it must not be reported as passed.
+    """
+    monkeypatch.setattr(
+        "integrations.mattermost.verifier.httpx.post",
+        lambda *_a, **_kw: _mock_response(200, {}),
+    )
+    result = verify_mattermost("local env", _WEBHOOK_CONFIG)
+    assert result["status"] == "failed"
+    assert "unexpected HTTP 200" in result["detail"]
+
+
 def test_verify_webhook_fails_on_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(*_a: Any, **_kw: Any) -> None:
         raise ConnectionError("connection refused")
 
-    monkeypatch.setattr("integrations.mattermost.verifier.httpx.get", _raise)
+    monkeypatch.setattr("integrations.mattermost.verifier.httpx.post", _raise)
     result = verify_mattermost("local env", _WEBHOOK_CONFIG)
     assert result["status"] == "failed"
     assert "unreachable" in result["detail"]

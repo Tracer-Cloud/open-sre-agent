@@ -229,13 +229,21 @@ def validate_rocketchat(
 
 
 def validate_mattermost_webhook(*, webhook_url: str) -> IntegrationHealthResult:
-    """Validate a Mattermost incoming webhook with a non-posting reachability probe."""
+    """Validate a Mattermost incoming webhook with a non-delivering reachability probe.
+
+    Uses ``POST`` with an empty JSON body, not ``GET``: Mattermost's
+    incoming-webhook route returns 200 on ``GET`` for any id, real or
+    fabricated (confirmed empirically), so a GET-based probe would validate
+    nothing. ``POST`` does validate the id — invalid ids 404, valid ids 400
+    on the missing ``text`` field — and the empty body never creates a real
+    post (mirrors :func:`integrations.mattermost.verifier._verify_webhook`).
+    """
     url = webhook_url.strip()
     if not url:
         return IntegrationHealthResult(ok=False, detail="Missing webhook_url.")
 
     try:
-        resp = httpx.get(url, timeout=10, follow_redirects=False)
+        resp = httpx.post(url, json={}, timeout=10, follow_redirects=False)
     except httpx.RequestError as err:
         return IntegrationHealthResult(
             ok=False, detail=f"Mattermost webhook validation failed: {err}"
@@ -245,16 +253,11 @@ def validate_mattermost_webhook(*, webhook_url: str) -> IntegrationHealthResult:
         return IntegrationHealthResult(
             ok=False, detail="Mattermost webhook returned 404; the URL looks invalid."
         )
-    if resp.status_code in {
-        HTTPStatus.OK,
-        HTTPStatus.BAD_REQUEST,
-        HTTPStatus.FORBIDDEN,
-        HTTPStatus.METHOD_NOT_ALLOWED,
-    }:
+    if resp.status_code == HTTPStatus.BAD_REQUEST:
         return IntegrationHealthResult(
             ok=True,
-            detail=f"Mattermost webhook endpoint reachable (HTTP {resp.status_code}) "
-            "using a non-posting probe.",
+            detail="Mattermost webhook endpoint reachable (HTTP 400 rejecting a "
+            "deliberately empty payload) using a non-delivering probe.",
         )
     return IntegrationHealthResult(
         ok=False,

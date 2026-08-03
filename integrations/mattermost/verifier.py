@@ -11,13 +11,21 @@ from integrations.verification import register_verifier, result
 
 
 def _verify_webhook(source: str, webhook_url: str) -> dict[str, str]:
-    """Non-posting reachability probe for an incoming webhook.
+    """Non-delivering reachability probe for an incoming webhook.
 
-    A GET against a valid webhook endpoint never delivers a message; a 404
-    means the URL (or its embedded token) is wrong.
+    Deliberately uses ``POST`` with an empty JSON body, not ``GET``:
+    Mattermost's incoming-webhook route does not validate the webhook id at
+    all for ``GET`` — it returns 200 for any id, real or fabricated, so a
+    GET-based probe (confirmed empirically against a live server) would
+    report every webhook URL "reachable" regardless of whether it exists,
+    catching nothing. ``POST`` *does* validate the id: an invalid id 404s
+    before the payload is even inspected, while a valid id 400s on the
+    missing ``text`` field. Neither outcome creates a real post — the empty
+    body fails Mattermost's payload validation before a message would be
+    created (confirmed by channel post count being unchanged after probing).
     """
     try:
-        response = httpx.get(webhook_url, timeout=10, follow_redirects=False)
+        response = httpx.post(webhook_url, json={}, timeout=10, follow_redirects=False)
     except Exception as exc:
         return result("mattermost", source, "failed", f"Mattermost webhook unreachable: {exc}")
 
@@ -28,18 +36,13 @@ def _verify_webhook(source: str, webhook_url: str) -> dict[str, str]:
             "failed",
             "Mattermost webhook returned 404; the URL looks invalid.",
         )
-    if response.status_code in {
-        HTTPStatus.OK,
-        HTTPStatus.BAD_REQUEST,
-        HTTPStatus.FORBIDDEN,
-        HTTPStatus.METHOD_NOT_ALLOWED,
-    }:
+    if response.status_code == HTTPStatus.BAD_REQUEST:
         return result(
             "mattermost",
             source,
             "passed",
-            f"Mattermost webhook endpoint reachable (HTTP {response.status_code}) "
-            "using a non-posting probe.",
+            "Mattermost webhook endpoint reachable (HTTP 400 rejecting a "
+            "deliberately empty payload) using a non-delivering probe.",
         )
     return result(
         "mattermost",
