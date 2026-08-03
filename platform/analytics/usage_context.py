@@ -73,7 +73,7 @@ def get_user_id() -> str | None:
 
 
 def get_organization_id() -> str | None:
-    """Return org id from context, else ``OPENSRE_ORGANIZATION_ID`` when set."""
+    """Return org id from context, else ``ORGANIZATION_ID`` when set."""
     bound = _ORGANIZATION_ID.get()
     if bound:
         return bound

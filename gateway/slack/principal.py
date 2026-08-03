@@ -31,7 +31,7 @@ def resolve_slack_principal(*, team_id: str) -> Principal:
     """Principal for a Slack turn: the organization this deployment serves.
 
     There is no local install catalog. Resolution uses
-    ``OPENSRE_ORGANIZATION_ID`` and fails closed when it is missing.
+    ``ORGANIZATION_ID`` and fails closed when it is missing.
 
     Attributing an unknown workspace to that organization is a
     credential-exposure vector on a silo that holds real org credentials: any

@@ -616,9 +616,9 @@ _WEBAPP_CONNECTION_ENV = frozenset(
 # set any of these, so on a control-plane silo credits metering reports
 # UNCONFIGURED and the webapp vault resolves nothing. Delete a name here when
 # infra starts injecting it — a stale entry fails this test.
-_UNWIRED_WEBAPP_CONNECTION_ENV = frozenset(
-    {WEBAPP_URL_ENV, USAGE_SECRET_ENV, MACHINE_SECRET_ENV, BILLING_ORGANIZATION_ID_ENV}
-)
+# ORGANIZATION_ID is already injected by the task definition; the remaining
+# gap is the webapp URL + auth secrets.
+_UNWIRED_WEBAPP_CONNECTION_ENV = frozenset({WEBAPP_URL_ENV, USAGE_SECRET_ENV, MACHINE_SECRET_ENV})
 
 
 def test_every_silo_env_name_the_product_reads_can_be_set_by_the_control_plane() -> None:

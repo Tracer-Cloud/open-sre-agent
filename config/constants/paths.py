@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
-from config.constants.organization import declared_organization_ids
+from config.constants.organization import organization_id
 from config.constants.tenancy import INTEGRATIONS_STORE_PATH_ENV
 from config.scope_context import current_scope
 
@@ -108,19 +108,7 @@ def opensre_home() -> Path:
         # its owner, refuse a turn for any other org — otherwise a
         # multi-workspace gateway could write org B's data into org A's volume.
         # Fail closed.
-        #
-        # Unlike every other caller, this one reads the declarations rather than
-        # the resolved id: two names disagreeing is exactly the "who owns this
-        # volume" ambiguity the check exists to catch, so it raises here instead
-        # of taking the warn-and-continue answer.
-        declared = declared_organization_ids()
-        if len(declared) > 1:
-            raise ContextRootOwnerMismatchError(
-                f"{CONTEXT_ROOT_ENV} is set but this deployment declares more than one "
-                f"organization ({', '.join(repr(value) for value in declared)}); refusing "
-                "to guess which one owns the volume"
-            )
-        silo_owner = declared[0] if declared else ""
+        silo_owner = organization_id()
         if not silo_owner:
             raise ContextRootOwnerMismatchError(
                 f"{CONTEXT_ROOT_ENV} is set but no organization is configured for this "

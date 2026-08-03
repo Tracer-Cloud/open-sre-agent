@@ -17,7 +17,7 @@ def test_billing_env_var_names_are_the_infra_contract() -> None:
     assert billing.WEBAPP_URL_ENV == "OPENSRE_WEBAPP_URL"
     assert billing.MACHINE_SECRET_ENV == "CLERK_MACHINE_SECRET_KEY"
     assert billing.USAGE_SECRET_ENV == "AGENT_USAGE_SECRET"
-    assert billing.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
+    assert billing.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
     assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
 
 
@@ -28,37 +28,20 @@ def test_tenancy_env_var_names_are_the_infra_contract() -> None:
     from config.constants import tenancy
 
     # Assert
-    assert tenancy.TENANT_ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
     assert tenancy.CREDENTIALS_API_URL_ENV == "OPENSRE_CREDENTIALS_API_URL"
     assert (
         tenancy.CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV == "OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN"
     )
 
 
-def test_the_two_organization_ids_never_collapse() -> None:
-    """They name different things and are set by different systems.
-
-    The control plane injects one to select whose credentials to hydrate; the
-    product declares the other for usage attribution and the fail-closed context
-    mount ownership check. Merging them breaks a deployed silo.
-    """
-    # Arrange / Act
-    from config.constants import billing, tenancy
-
-    # Assert
-    assert tenancy.TENANT_ORGANIZATION_ID_ENV != billing.ORGANIZATION_ID_ENV
-
-
-def test_both_organization_ids_are_re_exported() -> None:
-    """Callers may import either from the package root."""
+def test_the_organization_id_is_re_exported() -> None:
+    """Callers may import it from the package root."""
     # Arrange
     from config import constants
 
     # Act / Assert
-    assert constants.TENANT_ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
-    assert constants.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
+    assert constants.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
     for name in (
-        "TENANT_ORGANIZATION_ID_ENV",
         "ORGANIZATION_ID_ENV",
         "CREDENTIALS_API_URL_ENV",
         "CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV",
