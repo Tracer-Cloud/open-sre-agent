@@ -1,4 +1,12 @@
-"""Kubernetes investigation tools — Kubernetes Python SDK backed."""
+"""Kubernetes investigation tools — Kubernetes Python SDK backed.
+
+Multi-cluster: each registered kubernetes instance is one cluster (its own
+kubeconfig/context/namespace — e.g. one GKE cluster in one GCP project). Every
+tool takes an optional ``cluster`` argument naming which registered instance to
+target; omitting it uses the default (first) instance, preserving
+single-cluster behavior. Discover the registered names with
+``kubernetes_list_clusters``.
+"""
 
 from __future__ import annotations
 
@@ -6,10 +14,13 @@ from typing import Any
 
 from core.tool_framework.base import BaseTool
 from core.tool_framework.utils.tool_availability import tool_unavailable
+from integrations import selectors
 from integrations.config_models import KubernetesIntegrationConfig
 from integrations.kubernetes.client import _RESOURCE_DISPATCH, KubernetesClient
 
 _RESOURCE_TYPE_ENUM: list[str] = sorted(_RESOURCE_DISPATCH.keys())
+
+_UNAVAILABLE_MSG = "Kubernetes integration is not configured (missing kubeconfig)."
 
 
 def _make_client(sources: dict[str, Any]) -> KubernetesClient | None:
@@ -37,11 +48,98 @@ def _is_available(sources: dict[str, Any]) -> bool:
     return bool(k8s.get("kubeconfig") or k8s.get("kubeconfig_path"))
 
 
-def _missing_client_error(extra: dict[str, Any]) -> dict[str, Any]:
-    return tool_unavailable(
-        "kubernetes", "Kubernetes integration is not configured (missing kubeconfig).", **extra
-    )
+def _cluster_configs(sources: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Map each registered kubernetes instance name to its connection fields.
 
+    Built from ``selectors.get_instances`` so the map covers every registered
+    cluster, not just the default instance. A single-instance setup yields one
+    ``{"default": {...}}`` entry.
+    """
+    configs: dict[str, dict[str, Any]] = {}
+    for instance in selectors.get_instances(sources, "kubernetes"):
+        name = str(instance.get("name", "")).strip()
+        if not name:
+            continue
+        config = instance.get("config", {}) or {}
+        configs[name] = {
+            "kubeconfig": config.get("kubeconfig", ""),
+            "kubeconfig_path": config.get("kubeconfig_path", ""),
+            "context": config.get("context", ""),
+            "namespace": config.get("namespace", "default"),
+        }
+    return configs
+
+
+def _clusters_list(sources: dict[str, Any]) -> list[dict[str, Any]]:
+    """Registered clusters as ``[{name, tags, is_default}]`` for discovery."""
+    clusters: list[dict[str, Any]] = []
+    for index, instance in enumerate(selectors.get_instances(sources, "kubernetes")):
+        name = str(instance.get("name", "")).strip()
+        if not name:
+            continue
+        tags = instance.get("tags", {})
+        clusters.append(
+            {
+                "name": name,
+                "tags": dict(tags) if isinstance(tags, dict) else {},
+                "is_default": index == 0,
+            }
+        )
+    return clusters
+
+
+def _base_params(sources: dict[str, Any]) -> dict[str, Any]:
+    """Injected default connection fields plus the map of every registered cluster.
+
+    ``cluster_configs`` is a passthrough (never listed in ``injected_params``,
+    so it is not protected and the model never sends it): ``run`` uses it to
+    resolve an LLM-chosen ``cluster`` name to that instance's connection fields.
+    """
+    k8s = sources.get("kubernetes", {})
+    return {
+        "kubeconfig": k8s.get("kubeconfig", ""),
+        "kubeconfig_path": k8s.get("kubeconfig_path", ""),
+        "context": k8s.get("context", ""),
+        "namespace": k8s.get("namespace", "default"),
+        "cluster_configs": _cluster_configs(sources),
+    }
+
+
+def _resolve_client(
+    cluster: str,
+    cluster_configs: dict[str, Any] | None,
+    default_conn: dict[str, Any],
+) -> tuple[KubernetesClient | None, dict[str, Any], str | None]:
+    """Pick the target cluster, then build a client for it.
+
+    Returns ``(client, connection_fields, error)``. ``error`` is ``None`` on
+    success. An empty ``cluster`` uses ``default_conn`` (the injected default
+    instance), preserving single-cluster behavior. A named ``cluster`` is
+    looked up in ``cluster_configs``; an unknown name returns an error listing
+    the valid names rather than silently falling back.
+    """
+    configs = cluster_configs or {}
+    if cluster:
+        conn = configs.get(cluster)
+        if conn is None:
+            available = sorted(configs)
+            return None, {}, f"unknown cluster '{cluster}'; available clusters: {available}"
+    else:
+        conn = default_conn
+    client = _make_client({"kubernetes": conn})
+    if client is None:
+        return None, conn, "Kubernetes integration is not configured (missing kubeconfig)."
+    return client, conn, None
+
+
+_CLUSTER_PROP: dict[str, Any] = {
+    "type": "string",
+    "default": "",
+    "description": (
+        "Registered Kubernetes cluster/instance to target (see "
+        "kubernetes_list_clusters). Omit to use the default cluster."
+    ),
+}
 
 _SHARED_KUBECONFIG_PROPS: dict[str, Any] = {
     "kubeconfig": {"type": "string", "description": "Raw kubeconfig YAML string"},
@@ -56,6 +154,7 @@ _SHARED_KUBECONFIG_PROPS: dict[str, Any] = {
         "default": "default",
         "description": "Kubernetes namespace to target",
     },
+    "cluster": _CLUSTER_PROP,
 }
 
 
@@ -103,15 +202,7 @@ class KubernetesListPodsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "label_selector": "",
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -119,22 +210,25 @@ class KubernetesListPodsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         label_selector: str = "",
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"pods": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, pods=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_pods(
                 namespace=namespace, label_selector=label_selector, limit=limit
@@ -207,16 +301,7 @@ class KubernetesGetPodLogsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "pod_name": k8s.get("pod_name", ""),
-            "container": k8s.get("container", ""),
-            "tail_lines": 100,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -225,6 +310,8 @@ class KubernetesGetPodLogsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         container: str = "",
         tail_lines: int = 100,
         **_kwargs: Any,
@@ -236,18 +323,19 @@ class KubernetesGetPodLogsTool(BaseTool):
                 lines=[],
                 total=0,
             )
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"lines": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, lines=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.get_pod_logs(
                 namespace=namespace, pod_name=pod_name, container=container, tail_lines=tail_lines
@@ -308,14 +396,7 @@ class KubernetesListDeploymentsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -323,21 +404,26 @@ class KubernetesListDeploymentsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"deployments": [], "total": 0})
+            return tool_unavailable(
+                "kubernetes", error or _UNAVAILABLE_MSG, deployments=[], total=0
+            )
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_deployments(namespace=namespace, limit=limit)
             if not result.get("success"):
@@ -404,15 +490,7 @@ class KubernetesGetEventsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "field_selector": "",
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -420,22 +498,25 @@ class KubernetesGetEventsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         field_selector: str = "",
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"events": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, events=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.get_events(
                 namespace=namespace, field_selector=field_selector, limit=limit
@@ -502,14 +583,7 @@ class KubernetesDescribePodTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "pod_name": k8s.get("pod_name", ""),
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -518,20 +592,23 @@ class KubernetesDescribePodTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"spec": {}, "status": {}})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, spec={}, status={})
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.describe_pod(namespace=namespace, pod_name=pod_name)
             if not result.get("success"):
@@ -581,6 +658,7 @@ class KubernetesListNodesTool(BaseTool):
                 "default": "",
                 "description": "Kubeconfig context to use",
             },
+            "cluster": _CLUSTER_PROP,
             "limit": {
                 "type": "integer",
                 "default": 50,
@@ -598,34 +676,30 @@ class KubernetesListNodesTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
         kubeconfig: str = "",
         kubeconfig_path: str = "",
         context: str = "",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, _conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": "default",
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": "default",
+            },
         )
         if client is None:
-            return _missing_client_error({"nodes": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, nodes=[], total=0)
         with client:
             result = client.list_nodes(limit=limit)
             if not result.get("success"):
@@ -688,15 +762,7 @@ class KubernetesListServicesTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "label_selector": "",
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -704,22 +770,25 @@ class KubernetesListServicesTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         label_selector: str = "",
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"services": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, services=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_services(
                 namespace=namespace, label_selector=label_selector, limit=limit
@@ -778,14 +847,7 @@ class KubernetesListStatefulSetsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -793,21 +855,26 @@ class KubernetesListStatefulSetsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"statefulsets": [], "total": 0})
+            return tool_unavailable(
+                "kubernetes", error or _UNAVAILABLE_MSG, statefulsets=[], total=0
+            )
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_statefulsets(namespace=namespace, limit=limit)
             if not result.get("success"):
@@ -865,14 +932,7 @@ class KubernetesListDaemonSetsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -880,21 +940,24 @@ class KubernetesListDaemonSetsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"daemonsets": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, daemonsets=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_daemonsets(namespace=namespace, limit=limit)
             if not result.get("success"):
@@ -953,14 +1016,7 @@ class KubernetesListIngressesTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -968,21 +1024,24 @@ class KubernetesListIngressesTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"ingresses": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, ingresses=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_ingresses(namespace=namespace, limit=limit)
             if not result.get("success"):
@@ -1040,14 +1099,7 @@ class KubernetesListConfigMapsTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "limit": 50,
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -1055,21 +1107,24 @@ class KubernetesListConfigMapsTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         limit: int = 50,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error({"configmaps": [], "total": 0})
+            return tool_unavailable("kubernetes", error or _UNAVAILABLE_MSG, configmaps=[], total=0)
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.list_configmaps(namespace=namespace, limit=limit)
             if not result.get("success"):
@@ -1146,15 +1201,7 @@ class KubernetesGetResourceTool(BaseTool):
         return _is_available(sources)
 
     def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
-        k8s = sources["kubernetes"]
-        return {
-            "kubeconfig": k8s.get("kubeconfig", ""),
-            "kubeconfig_path": k8s.get("kubeconfig_path", ""),
-            "context": k8s.get("context", ""),
-            "namespace": k8s.get("namespace", "default"),
-            "resource_type": k8s.get("resource_type", ""),
-            "name": k8s.get("name", ""),
-        }
+        return _base_params(sources)
 
     def run(
         self,
@@ -1164,22 +1211,29 @@ class KubernetesGetResourceTool(BaseTool):
         kubeconfig_path: str = "",
         context: str = "",
         namespace: str = "default",
+        cluster: str = "",
+        cluster_configs: dict[str, Any] | None = None,
         **_kwargs: Any,
     ) -> dict[str, Any]:
-        client = _make_client(
+        client, conn, error = _resolve_client(
+            cluster,
+            cluster_configs,
             {
-                "kubernetes": {
-                    "kubeconfig": kubeconfig,
-                    "kubeconfig_path": kubeconfig_path,
-                    "context": context,
-                    "namespace": namespace,
-                }
-            }
+                "kubeconfig": kubeconfig,
+                "kubeconfig_path": kubeconfig_path,
+                "context": context,
+                "namespace": namespace,
+            },
         )
         if client is None:
-            return _missing_client_error(
-                {"resource": {}, "resource_type": resource_type, "name": name}
+            return tool_unavailable(
+                "kubernetes",
+                error or _UNAVAILABLE_MSG,
+                resource={},
+                resource_type=resource_type,
+                name=name,
             )
+        namespace = conn.get("namespace", "default") or "default"
         with client:
             result = client.get_resource(
                 resource_type=resource_type, name=name, namespace=namespace
@@ -1202,3 +1256,56 @@ class KubernetesGetResourceTool(BaseTool):
 
 
 kubernetes_get_resource = KubernetesGetResourceTool()
+
+
+class KubernetesListClustersTool(BaseTool):
+    """List the registered Kubernetes clusters that can be targeted by name."""
+
+    name = "kubernetes_list_clusters"
+    source = "kubernetes"
+    description = (
+        "List the registered Kubernetes clusters (instances) you can investigate. "
+        "Returns each cluster's name and tags; pass a returned name as the 'cluster' "
+        "argument to any other kubernetes_* tool to target that specific cluster (for "
+        "example a specific GKE cluster in a specific GCP project). Call this first "
+        "when more than one cluster may be configured."
+    )
+    use_cases = [
+        "Discovering which Kubernetes clusters/projects are configured before investigating",
+        "Choosing the right cluster to target when several are registered",
+        "Confirming a named cluster exists before calling other kubernetes_* tools",
+    ]
+    surfaces = ("investigation", "chat")
+    requires = []
+    injected_params = ["clusters"]
+    input_schema = {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
+    outputs = {
+        "clusters": "List of registered clusters with name, tags, and is_default flag",
+        "total": "Total number of registered clusters",
+    }
+
+    def is_available(self, sources: dict[str, Any]) -> bool:
+        return _is_available(sources)
+
+    def extract_params(self, sources: dict[str, Any]) -> dict[str, Any]:
+        return {"clusters": _clusters_list(sources)}
+
+    def run(
+        self,
+        clusters: list[dict[str, Any]] | None = None,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
+        clusters = clusters or []
+        return {
+            "source": "kubernetes",
+            "available": True,
+            "clusters": clusters,
+            "total": len(clusters),
+        }
+
+
+kubernetes_list_clusters = KubernetesListClustersTool()

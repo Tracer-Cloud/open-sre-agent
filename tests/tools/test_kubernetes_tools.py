@@ -10,6 +10,7 @@ from integrations.kubernetes.tools import (
     KubernetesGetEventsTool,
     KubernetesGetPodLogsTool,
     KubernetesGetResourceTool,
+    KubernetesListClustersTool,
     KubernetesListConfigMapsTool,
     KubernetesListDaemonSetsTool,
     KubernetesListDeploymentsTool,
@@ -862,3 +863,136 @@ def test_get_resource_run_returns_unavailable_when_no_client() -> None:
     tool = KubernetesGetResourceTool()
     result = tool.run(kubeconfig="", resource_type="deployment", name="api")
     assert result["available"] is False
+
+
+# ---------------------------------------------------------------------------
+# Multi-cluster selection
+# ---------------------------------------------------------------------------
+
+
+class TestKubernetesListClustersContract(BaseToolContract):
+    def get_tool_under_test(self) -> Any:
+        return KubernetesListClustersTool()
+
+
+_MULTI_CLUSTER_SOURCES = {
+    "kubernetes": {"kubeconfig": "kc-dev", "context": "ctx-dev", "namespace": "dev"},
+    "_all_kubernetes_instances": [
+        {
+            "name": "gke-dev",
+            "tags": {"env": "dev"},
+            "config": {"kubeconfig": "kc-dev", "context": "ctx-dev", "namespace": "dev"},
+        },
+        {
+            "name": "gke-prod",
+            "tags": {"env": "prod"},
+            "config": {"kubeconfig_path": "/p/prod", "context": "ctx-prod", "namespace": "prod"},
+        },
+    ],
+}
+
+
+def test_extract_params_includes_cluster_configs() -> None:
+    tool = KubernetesListPodsTool()
+    params = tool.extract_params(_MULTI_CLUSTER_SOURCES)
+    # cluster_configs must be a passthrough, never a protected injected param.
+    assert "cluster_configs" not in tool.injected_params
+    assert sorted(params["cluster_configs"]) == ["gke-dev", "gke-prod"]
+    assert params["cluster_configs"]["gke-prod"]["kubeconfig_path"] == "/p/prod"
+
+
+def test_run_targets_named_cluster() -> None:
+    mock_pod_list = MagicMock()
+    mock_pod_list.items = [_make_mock_pod("prod-pod")]
+    mock_core = MagicMock()
+    mock_core.list_namespaced_pod.return_value = mock_pod_list
+
+    cluster_configs = KubernetesListPodsTool().extract_params(_MULTI_CLUSTER_SOURCES)[
+        "cluster_configs"
+    ]
+
+    tool = KubernetesListPodsTool()
+    with patch(
+        "integrations.kubernetes.tools._make_client",
+        return_value=_make_client_with_core(mock_core),
+    ) as mock_make:
+        result = tool.run(
+            kubeconfig="kc-dev",
+            context="ctx-dev",
+            namespace="dev",
+            cluster="gke-prod",
+            cluster_configs=cluster_configs,
+        )
+
+    # Client built from the prod instance's connection fields, not the injected default.
+    assert mock_make.call_args.args[0] == {"kubernetes": cluster_configs["gke-prod"]}
+    # Query scoped to the prod instance's namespace.
+    assert mock_core.list_namespaced_pod.call_args.kwargs["namespace"] == "prod"
+    assert result["available"] is True
+    assert result["namespace"] == "prod"
+    assert result["total"] == 1
+
+
+def test_run_omitting_cluster_uses_default(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    mock_pod_list = MagicMock()
+    mock_pod_list.items = []
+    mock_core = MagicMock()
+    mock_core.list_namespaced_pod.return_value = mock_pod_list
+
+    tool = KubernetesListPodsTool()
+    with patch(
+        "integrations.kubernetes.tools._make_client",
+        return_value=_make_client_with_core(mock_core),
+    ) as mock_make:
+        tool.run(kubeconfig="kc-default", context="ctx-a", namespace="ns-a")
+
+    # No cluster named -> the injected default connection fields are used verbatim.
+    assert mock_make.call_args.args[0] == {
+        "kubernetes": {
+            "kubeconfig": "kc-default",
+            "kubeconfig_path": "",
+            "context": "ctx-a",
+            "namespace": "ns-a",
+        }
+    }
+    assert mock_core.list_namespaced_pod.call_args.kwargs["namespace"] == "ns-a"
+
+
+def test_run_unknown_cluster_errors() -> None:
+    tool = KubernetesListPodsTool()
+    result = tool.run(
+        kubeconfig="kc-default",
+        cluster="ghost",
+        cluster_configs={"gke-dev": {"kubeconfig": "kc-dev"}},
+    )
+    assert result["available"] is False
+    assert "ghost" in result["error"]
+    assert "gke-dev" in result["error"]
+    assert result["total"] == 0
+
+
+def test_list_clusters_is_available() -> None:
+    tool = KubernetesListClustersTool()
+    assert tool.is_available({"kubernetes": _K8S_SOURCE}) is True
+    assert tool.is_available({}) is False
+
+
+def test_list_clusters_run_lists_registered_instances() -> None:
+    tool = KubernetesListClustersTool()
+    params = tool.extract_params(_MULTI_CLUSTER_SOURCES)
+    result = tool.run(**params)
+    assert result["available"] is True
+    assert result["total"] == 2
+    assert [c["name"] for c in result["clusters"]] == ["gke-dev", "gke-prod"]
+    assert result["clusters"][0]["is_default"] is True
+    assert result["clusters"][1]["is_default"] is False
+    assert result["clusters"][1]["tags"] == {"env": "prod"}
+
+
+def test_list_clusters_run_single_default() -> None:
+    tool = KubernetesListClustersTool()
+    params = tool.extract_params({"kubernetes": _K8S_SOURCE})
+    result = tool.run(**params)
+    assert result["total"] == 1
+    assert result["clusters"][0]["name"] == "default"
+    assert result["clusters"][0]["is_default"] is True

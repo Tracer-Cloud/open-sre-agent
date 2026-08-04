@@ -62,6 +62,51 @@ A successful verification lists the namespaces visible to the configured credent
 | `kubernetes_list_ingresses` | List Ingress resources with routing rules, host→service path mappings, and TLS config |
 | `kubernetes_list_configmaps` | List ConfigMaps with their key-value data |
 | `kubernetes_get_resource` | Fetch a single named resource by type and name (pods, deployments, statefulsets, daemonsets, services, ingresses, configmaps, replicasets, pvcs, nodes) |
+| `kubernetes_list_clusters` | List the registered clusters you can target by name (for multi-cluster setups) |
+
+## Targeting multiple clusters
+
+You can register more than one cluster — for example a separate GKE cluster per
+GCP project (`gke-dev`, `gke-prod`) — and let an investigation move between them.
+Each cluster is one named entry with its own kubeconfig context.
+
+Add clusters with the CLI. The connection is verified before it is saved:
+
+```bash
+# Interactive — prompts for name, kubeconfig path, context, and namespace
+opensre integrations add-cluster
+
+# Non-interactive — pass --name to skip the prompts (scripts / CI)
+opensre integrations add-cluster \
+  --name gke-prod \
+  --kubeconfig-path ~/.kube/config \
+  --context gke_my-prod-project_us-central1_prod \
+  --namespace default \
+  --tag env=prod
+
+# Review and remove registered clusters
+opensre integrations list-clusters
+opensre integrations remove-cluster gke-prod
+```
+
+`--kubeconfig` accepts inline YAML instead of `--kubeconfig-path`; `--tag` is
+repeatable; `--no-verify` skips the connectivity probe. Re-running
+`add-cluster` with an existing name updates that cluster in place.
+
+A single cluster still works with no changes — `opensre integrations setup
+kubernetes` and the environment variables above register the default cluster;
+`add-cluster` registers additional ones on top of it.
+
+Every `kubernetes_*` tool takes an optional `cluster` argument. Omit it to use
+the default cluster; pass a registered name to target that cluster:
+
+```
+> Compare pod restart counts between the dev and prod clusters
+```
+
+OpenSRE calls `kubernetes_list_clusters` to see `gke-dev` and `gke-prod`, then
+calls the other tools with `cluster="gke-dev"` and `cluster="gke-prod"` to reach
+each one.
 
 ## Configuration reference
 
