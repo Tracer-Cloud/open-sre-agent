@@ -7,13 +7,22 @@ some auth methods use a provider-specific runtime backend under the hood.
 from __future__ import annotations
 
 import os
-from typing import Literal
+from enum import StrEnum
 
 LLM_AUTH_METHOD_ENV = "LLM_AUTH_METHOD"
-LLMAuthMethod = Literal["api_key", "oauth"]
 
-API_KEY_AUTH_METHOD: LLMAuthMethod = "api_key"
-OAUTH_AUTH_METHOD: LLMAuthMethod = "oauth"
+
+class LLMAuthMethod(StrEnum):
+    """How the user authenticates to their LLM provider."""
+
+    API_KEY = "api_key"
+    OAUTH = "oauth"
+
+
+#: Backwards-compatible aliases: callers import these names, and comparing an
+#: ``LLMAuthMethod`` against them stays true because the members equal them.
+API_KEY_AUTH_METHOD = LLMAuthMethod.API_KEY
+OAUTH_AUTH_METHOD = LLMAuthMethod.OAUTH
 
 OAUTH_BACKEND_PROVIDER_BY_PROVIDER: dict[str, str] = {
     "openai": "codex",
