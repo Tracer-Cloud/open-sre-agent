@@ -19,7 +19,7 @@ import logging
 import os
 import tempfile
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -227,9 +227,9 @@ def push(
     # Every candidate has now cleared validation (phase 1). Only here, in
     # phase 2, does anything transfer — validate-then-transfer, never
     # interleaved. Each planned file's outcome is independent, so the uploads
-    # run across a bounded thread pool; the per-file outcomes are then folded
-    # into the report in ``planned`` order, so the result is identical to the
-    # sequential one regardless of which thread finished first.
+    # run across a bounded thread pool. Outcomes are consumed as each upload
+    # finishes (``as_completed``), so progress reports and the report's own
+    # aggregation fire per file rather than deferring to the very end.
     def _transfer(key: str, path: Path) -> _PushOutcome:
         if key in previewed_pulls:
             return _PushOutcome(key=key, skipped=True)
@@ -246,18 +246,31 @@ def push(
             store.put_object(key, data)
         return _PushOutcome(key=key, uploaded=True, uploaded_bytes=len(data))
 
+    # Fail fast like the sequential push did: the first upload to raise stops
+    # the transfer. Work not yet started is cancelled so files after the
+    # failed one are never uploaded, and the exception propagates to the caller
+    # unchanged. In-flight uploads that already began cannot be un-started.
     with ThreadPoolExecutor(max_workers=min(_PUSH_TRANSFER_WORKERS, len(planned) or 1)) as pool:
-        outcomes = list(pool.map(lambda item: _transfer(*item), planned))
-
-    for completed, outcome in enumerate(outcomes, start=1):
-        if outcome.skipped:
-            result.skipped += 1
-        elif outcome.kept_remote:
-            result.kept_remote.append(outcome.key)
-        elif outcome.uploaded:
-            result.uploaded.append(outcome.key)
-            result.uploaded_bytes += outcome.uploaded_bytes
-        _report(outcome.key, completed)
+        futures: dict[Future[_PushOutcome], str] = {
+            pool.submit(_transfer, key, path): key for key, path in planned
+        }
+        completed = 0
+        try:
+            for future in as_completed(futures):
+                outcome = future.result()
+                completed += 1
+                if outcome.skipped:
+                    result.skipped += 1
+                elif outcome.kept_remote:
+                    result.kept_remote.append(outcome.key)
+                elif outcome.uploaded:
+                    result.uploaded.append(outcome.key)
+                    result.uploaded_bytes += outcome.uploaded_bytes
+                _report(outcome.key, completed)
+        except BaseException:
+            for pending in futures:
+                pending.cancel()
+            raise
 
     if previewed_pulls:
         # Keys pull previewed but that never had a local file to begin with
