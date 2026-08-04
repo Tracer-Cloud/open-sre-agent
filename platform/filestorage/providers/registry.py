@@ -108,7 +108,9 @@ def register_object_store(
         if credential_hint is not None:
             _CREDENTIAL_HINTS[key] = credential_hint
         _EXTRA_FIELDS[key] = extra_fields
-        if public_access_checker is not None:
+        if public_access_checker is None:
+            _PUBLIC_ACCESS_CHECKERS.pop(key, None)
+        else:
             _PUBLIC_ACCESS_CHECKERS[key] = public_access_checker
 
 
