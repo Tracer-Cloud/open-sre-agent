@@ -151,6 +151,27 @@ def _lazy_stored() -> Callable[[], dict[str, Any]]:
     return read
 
 
+def _optional_stored(stored: Callable[[], dict[str, Any]]) -> Callable[[], dict[str, Any]]:
+    """A reader for optional fields that treats a damaged file as "no settings".
+
+    The required values (the ``enabled`` switch and the bucket) are read through
+    the strict :func:`_lazy_stored` reader first and still raise
+    ``RemoteSyncConfigError`` when the file has to supply them. Once those are
+    satisfied by the environment, an optional field that falls through to the
+    file must not resurrect that failure: the documented happy path is just the
+    two required env vars, so a corrupt ``config.yml`` leaves the optionals at
+    their defaults instead of blocking sync.
+    """
+
+    def read() -> dict[str, Any]:
+        try:
+            return stored()
+        except RemoteSyncConfigError:
+            return {}
+
+    return read
+
+
 def _enabled(stored: Callable[[], dict[str, Any]]) -> bool:
     env = os.getenv(REMOTE_SYNC_ENV)
     if env is not None and env.strip() != "":
@@ -177,17 +198,26 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
         raise RemoteSyncConfigError(
             f"{REMOTE_SYNC_ENV} is on but {REMOTE_SYNC_BUCKET_ENV} names no bucket"
         )
-    prefix = _env_or_stored(REMOTE_SYNC_PREFIX_ENV, "prefix", stored) or DEFAULT_REMOTE_SYNC_PREFIX
+    # Required values (switch + bucket) are settled above through the strict
+    # reader. The harmless optionals fall back to their defaults when the file is
+    # damaged rather than failing the documented two-env-var path. Exclusions are
+    # deliberately left on the strict reader below: an unset exclude list means
+    # "read the file to learn what to keep local", so a damaged file there must
+    # fail closed instead of silently widening the upload.
+    optional = _optional_stored(stored)
+    prefix = (
+        _env_or_stored(REMOTE_SYNC_PREFIX_ENV, "prefix", optional) or DEFAULT_REMOTE_SYNC_PREFIX
+    )
     provider = (
-        _env_or_stored(REMOTE_SYNC_PROVIDER_ENV, "provider", stored).lower()
+        _env_or_stored(REMOTE_SYNC_PROVIDER_ENV, "provider", optional).lower()
         or DEFAULT_REMOTE_SYNC_PROVIDER
     )
     return RemoteSyncConfig(
         bucket=bucket,
         provider=provider,
         prefix=prefix,
-        region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
-        profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
+        region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", optional),
+        profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", optional),
         exclude=_exclusions(stored),
     )
 

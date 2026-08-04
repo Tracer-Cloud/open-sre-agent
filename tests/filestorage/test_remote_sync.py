@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from config.constants.filestorage import (
+    DEFAULT_REMOTE_SYNC_PREFIX,
+    DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PREFIX_ENV,
@@ -1201,6 +1203,93 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     assert config.bucket == "env-bucket"
     assert config.prefix == "env-prefix"
     assert config.exclude.patterns == ("*.tmp",)
+
+
+def test_documented_two_env_vars_ignore_a_corrupt_settings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The docs enable sync with only the switch and the bucket in env.
+
+    The harmless optionals (prefix, provider, region, profile) are left to fall
+    through to ``config.yml``. A damaged file must not block that path: the
+    required values are fully in env, so those optionals take their defaults.
+
+    Exclusions are the one optional that still fails closed on a damaged file
+    (see ``test_a_corrupt_settings_file_does_not_sync_everything``), so the
+    fully-env-configured run turns them off explicitly rather than leaving the
+    reader to consult the file.
+    """
+    # Arrange: the two documented variables plus the exclude-off switch; every
+    # other optional is unset so it must resolve from defaults, not the file.
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("just a string, not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_EXCLUDE_OFF", "1")
+    for optional_env in (
+        REMOTE_SYNC_PREFIX_ENV,
+        "OPENSRE_REMOTE_SYNC_PROVIDER",
+        "OPENSRE_REMOTE_SYNC_REGION",
+        "OPENSRE_REMOTE_SYNC_PROFILE",
+        "OPENSRE_REMOTE_SYNC_EXCLUDE",
+    ):
+        monkeypatch.delenv(optional_env, raising=False)
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert: sync resolves with defaults for every unset optional.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+    assert config.prefix == DEFAULT_REMOTE_SYNC_PREFIX
+    assert config.provider == DEFAULT_REMOTE_SYNC_PROVIDER
+    assert config.region == ""
+    assert config.profile == ""
+    assert config.exclude.patterns == ()
+
+
+def test_a_corrupt_file_still_fails_when_the_bucket_lives_only_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A required value that only the damaged file can supply must still raise.
+
+    The switch is on in env but the bucket is not, so it has to come from
+    ``config.yml``. Soft-failing here would swallow a real misconfiguration.
+    """
+    # Arrange
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("just a string, not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.delenv(REMOTE_SYNC_BUCKET_ENV, raising=False)
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncConfigError):
+        load_remote_sync_config()
+
+
+def test_a_corrupt_file_still_fails_when_the_switch_lives_only_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the enable switch is not in env, the file decides — and must be read.
+
+    The bucket is in env, but nothing has turned sync on except (potentially)
+    the damaged file, so its corruption must surface rather than be ignored.
+    """
+    # Arrange
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("just a string, not a mapping", encoding="utf-8")
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncConfigError):
+        load_remote_sync_config()
 
 
 def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:
