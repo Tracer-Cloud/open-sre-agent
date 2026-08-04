@@ -19,6 +19,7 @@ import logging
 import os
 import tempfile
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +31,13 @@ from platform.filestorage.ports import ObjectStore, RemoteObject
 from platform.filestorage.syncable import SyncRoot, resolved_roots, syncable_roots
 
 logger = logging.getLogger(__name__)
+
+#: Upload threads for the push transfer phase. The object stores are sync
+#: boto/httpx clients, so file transfers are I/O-bound and parallelise across
+#: threads; the cap keeps a large tree from opening an unbounded number of
+#: concurrent connections. Same ceiling the shared tool runtime uses
+#: (``core.execution._TOOL_EXECUTOR_WORKERS``).
+_PUSH_TRANSFER_WORKERS = 10
 
 
 @dataclass(frozen=True)
@@ -81,6 +89,22 @@ class SyncReport:
     @property
     def total_bytes(self) -> int:
         return self.uploaded_bytes + self.downloaded_bytes
+
+
+@dataclass(frozen=True)
+class _PushOutcome:
+    """One planned file's transfer result, folded into the report in order.
+
+    Computed off the main thread so uploads run concurrently; the report is
+    only mutated back on the caller's thread, in ``planned`` order, so
+    aggregation cannot race and stays deterministic.
+    """
+
+    key: str
+    skipped: bool = False
+    kept_remote: bool = False
+    uploaded: bool = False
+    uploaded_bytes: int = 0
 
 
 def content_tag(data: bytes) -> str:
@@ -200,29 +224,40 @@ def push(
         if on_progress is not None:
             on_progress(SyncProgress(SyncDirection.PUSH, key, completed, total))
 
-    for completed, (key, path) in enumerate(planned, start=1):
+    # Every candidate has now cleared validation (phase 1). Only here, in
+    # phase 2, does anything transfer — validate-then-transfer, never
+    # interleaved. Each planned file's outcome is independent, so the uploads
+    # run across a bounded thread pool; the per-file outcomes are then folded
+    # into the report in ``planned`` order, so the result is identical to the
+    # sequential one regardless of which thread finished first.
+    def _transfer(key: str, path: Path) -> _PushOutcome:
         if key in previewed_pulls:
-            result.skipped += 1
-            _report(key, completed)
-            continue
+            return _PushOutcome(key=key, skipped=True)
         data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
             if comparable_etag(existing) == content_tag(data):
-                result.skipped += 1
-                _report(key, completed)
-                continue
+                return _PushOutcome(key=key, skipped=True)
             if existing.last_modified > _modified_at(path):
                 # The store holds the more recent write, so uploading would
                 # destroy it. Same rule pull applies in the other direction.
-                result.kept_remote.append(key)
-                _report(key, completed)
-                continue
+                return _PushOutcome(key=key, kept_remote=True)
         if not dry_run:
             store.put_object(key, data)
-        result.uploaded.append(key)
-        result.uploaded_bytes += len(data)
-        _report(key, completed)
+        return _PushOutcome(key=key, uploaded=True, uploaded_bytes=len(data))
+
+    with ThreadPoolExecutor(max_workers=min(_PUSH_TRANSFER_WORKERS, len(planned) or 1)) as pool:
+        outcomes = list(pool.map(lambda item: _transfer(*item), planned))
+
+    for completed, outcome in enumerate(outcomes, start=1):
+        if outcome.skipped:
+            result.skipped += 1
+        elif outcome.kept_remote:
+            result.kept_remote.append(outcome.key)
+        elif outcome.uploaded:
+            result.uploaded.append(outcome.key)
+            result.uploaded_bytes += outcome.uploaded_bytes
+        _report(outcome.key, completed)
 
     if previewed_pulls:
         # Keys pull previewed but that never had a local file to begin with
