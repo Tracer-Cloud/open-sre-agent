@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
 import pytest
 import requests
 from botocore.exceptions import ClientError, EndpointConnectionError
 
+from config.constants.vercel import VERCEL_API_TOKEN_ENV
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BucketExposure, SyncRootName
 from platform.filestorage.exposure import PublicAccessStatus
@@ -26,6 +28,7 @@ from platform.filestorage.providers.registry import (
     register_object_store,
     unregister_object_store,
 )
+from platform.filestorage.providers.vercel import check_public_access as vercel_check_public_access
 
 
 class _S3Client:
@@ -216,14 +219,166 @@ def test_gcs_session_build_failure_degrades_to_unknown(monkeypatch: pytest.Monke
     assert result.exposure is BucketExposure.UNKNOWN
 
 
+# ── vercel.check_public_access ──────────────────────────────────────────────
+
+_BLOB_TOKEN = "vercel_blob_rw_TestStoreId_deadbeefsecret"
+
+
+class _VercelResponse:
+    """Fake ``httpx.Response`` exposing only what the checker touches."""
+
+    def __init__(self, *, body: object = None, status_code: int = 200) -> None:
+        self._body = body
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:  # noqa: PLR2004 - mirrors httpx's own threshold
+            request = httpx.Request("GET", "https://api.vercel.com/v1/storage/stores/x")
+            response = httpx.Response(self.status_code, request=request)
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}", request=request, response=response
+            )
+
+    def json(self) -> object:
+        return self._body
+
+
+class _VercelClient:
+    """Fake ``httpx.Client`` exposing only ``get``."""
+
+    def __init__(
+        self, response: _VercelResponse | None = None, *, error: Exception | None = None
+    ) -> None:
+        self._response = response
+        self._error = error
+
+    def get(
+        self,
+        _url: str,
+        headers: dict[str, str] | None = None,  # noqa: ARG002
+        params: dict[str, str] | None = None,  # noqa: ARG002
+    ) -> _VercelResponse:
+        if self._error is not None:
+            raise self._error
+        assert self._response is not None
+        return self._response
+
+    def close(self) -> None:
+        pass
+
+
+def test_missing_vercel_api_token_degrades_to_a_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    """VERCEL_API_TOKEN is optional — BLOB_READ_WRITE_TOKEN cannot authenticate this endpoint at all."""
+    monkeypatch.delenv(VERCEL_API_TOKEN_ENV, raising=False)
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"))
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert VERCEL_API_TOKEN_ENV in result.detail
+
+
+def test_missing_blob_token_degrades_to_a_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The store id comes from BLOB_READ_WRITE_TOKEN — config.bucket is only a label."""
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "a-real-looking-account-token")
+    monkeypatch.delenv("BLOB_READ_WRITE_TOKEN", raising=False)
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"))
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "BLOB_READ_WRITE_TOKEN" in result.detail
+
+
+def test_public_store_is_reported_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(_VercelResponse(body={"store": {"access": "public"}}))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+def test_team_id_is_forwarded_as_a_query_param(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A token spanning several teams needs teamId to resolve the right one."""
+    from config.constants.vercel import VERCEL_TEAM_ID_ENV
+
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    monkeypatch.setenv(VERCEL_TEAM_ID_ENV, "team_abc123")
+    seen_params: list[dict[str, str] | None] = []
+
+    class _RecordingClient(_VercelClient):
+        def get(
+            self,
+            _url: str,
+            headers: dict[str, str] | None = None,
+            params: dict[str, str] | None = None,
+        ) -> _VercelResponse:
+            seen_params.append(params)
+            return super().get(_url, headers=headers, params=params)
+
+    client = _RecordingClient(_VercelResponse(body={"store": {"access": "private"}}))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+    assert seen_params == [{"teamId": "team_abc123"}]
+
+
+def test_private_store_is_reported_private(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(_VercelResponse(body={"store": {"access": "private"}}))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_blob_token_cannot_authenticate_this_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Confirmed live: this endpoint rejects a Blob read-write token outright (403, invalidToken)."""
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, _BLOB_TOKEN)  # the wrong token type, on purpose
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(_VercelResponse(status_code=403))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert VERCEL_API_TOKEN_ENV in result.detail
+
+
+def test_vercel_other_http_error_degrades_without_leaking_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(_VercelResponse(status_code=500))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "HTTPStatusError" in result.detail
+
+
+def test_vercel_transport_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(error=httpx.ConnectError("boom"))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+def test_vercel_malformed_response_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(_VercelResponse(body=["not", "an", "object"]))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+def test_vercel_response_missing_access_field_degrades_to_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(VERCEL_API_TOKEN_ENV, "account-token")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", _BLOB_TOKEN)
+    client = _VercelClient(_VercelResponse(body={"store": {"status": "available"}}))
+    result = vercel_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
 # ── providers.registry.check_bucket_exposure ────────────────────────────────
 
 
 def test_provider_without_a_checker_is_reported_unchecked() -> None:
-    """Vercel Blob has no bucket-level public/private setting to check."""
-    result = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="vercel"))
+    result = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="not-a-real-provider"))
     assert result.exposure is BucketExposure.UNKNOWN
-    assert "vercel" in result.detail
+    assert "not-a-real-provider" in result.detail
 
 
 def _raising_checker(_config: RemoteSyncConfig) -> PublicAccessStatus:
