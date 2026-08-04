@@ -299,3 +299,86 @@ def test_the_skill_forbids_offering_before_the_work() -> None:
 
     # Assert
     assert "never call propose_scheduled_delivery as the first or only tool" in body
+
+
+def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
+    """A rejected /cron add must not burn the user's accepted offer.
+
+    The pending offer was cleared as soon as the affirmative expanded, before
+    the command ran. When ``cron add`` exited non-zero the offer was gone, so a
+    second "yes" expanded nothing and the user had to re-ask for the whole
+    briefing to get another offer.
+    """
+    # Arrange
+    from core.agent_harness.turns.headless_adapters import (
+        InMemorySessionStore,
+        NoopTurnAccounting,
+    )
+    from core.agent_harness.turns.orchestrator import run_turn
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    session = InMemorySessionStore()
+    session.pending_schedule_offer = PendingScheduleOffer(
+        kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
+    )
+
+    def _execute_failing(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=False,
+        )
+
+    # Act
+    run_turn(
+        "yes",
+        session,
+        execute_actions=_execute_failing,
+        answer=lambda *_a, **_k: None,
+        gather=lambda *_a, **_k: "",
+        accounting=NoopTurnAccounting(),
+    )
+
+    # Assert
+    assert session.pending_schedule_offer is not None, "offer burned by a failed add"
+
+
+def test_a_successful_schedule_consumes_the_offer() -> None:
+    """The mirror case: once it lands, a later bare yes must not re-add it."""
+    # Arrange
+    from core.agent_harness.turns.headless_adapters import (
+        InMemorySessionStore,
+        NoopTurnAccounting,
+    )
+    from core.agent_harness.turns.orchestrator import run_turn
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    session = InMemorySessionStore()
+    session.pending_schedule_offer = PendingScheduleOffer(
+        kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
+    )
+
+    def _execute_ok(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="Task abc123 created.",
+        )
+
+    # Act
+    run_turn(
+        "yes",
+        session,
+        execute_actions=_execute_ok,
+        answer=lambda *_a, **_k: None,
+        gather=lambda *_a, **_k: "",
+        accounting=NoopTurnAccounting(),
+    )
+
+    # Assert
+    assert session.pending_schedule_offer is None

@@ -366,12 +366,15 @@ def run_turn(
         prior_messages,
         pending_schedule=pending_schedule,
     )
-    if (
+    # Whether this turn is the confirmation of a pending offer. The offer is
+    # consumed only once the command actually lands — clearing it here would
+    # burn it on a rejected ``cron add``, leaving a second "yes" with nothing
+    # to expand.
+    confirms_schedule = (
         pending_schedule is not None
         and expanded.startswith("/cron ")
         and hasattr(session, "pending_schedule_offer")
-    ):
-        session.pending_schedule_offer = None
+    )
     text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
@@ -396,6 +399,13 @@ def run_turn(
         is_tty=is_tty,
         turn_plan=turn_plan,
     )
+
+    if (
+        confirms_schedule
+        and action_result.executed_success_count > 0
+        and hasattr(session, "pending_schedule_offer")
+    ):
+        session.pending_schedule_offer = None
     accounting.record_action_result(action_result)
 
     handoff_contents = action_result.handoff_contents

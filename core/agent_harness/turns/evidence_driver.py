@@ -27,7 +27,7 @@ from core.agent_harness.prompts.conversation_memory import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
-from core.agent_harness.prompts.gather import build_gather_system_prompt_envelope
+from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
@@ -211,7 +211,7 @@ def _build_evidence_agent(
     """Build the Agent for one evidence-gather turn."""
     config = AgentConfig(
         llm=llm,
-        system=build_gather_system_prompt_envelope(session).render_cached(),
+        system=build_gather_system_prompt(session),
         tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=_MAX_GATHER_ITERATIONS,
