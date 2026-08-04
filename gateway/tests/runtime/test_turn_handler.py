@@ -250,16 +250,16 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     )
     _patch_headless_agent(monkeypatch, _empty_turn_result())
 
-    from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+    from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
     session = SessionCore(storage=InMemorySessionStorage())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
-    with bound_usage_context(surface=SURFACE_SLACK, user_id="U1"):
+    with bound_usage_context(surface=UsageSurface.SLACK, user_id="U1"):
         handler("hi", session, MagicMock(), logging.getLogger("test"))
 
-    assert started == [{"surface": SURFACE_SLACK}]
+    assert started == [{"surface": UsageSurface.SLACK}]
     assert len(completed) == 1
-    assert completed[0]["surface"] == SURFACE_SLACK
+    assert completed[0]["surface"] == UsageSurface.SLACK
     assert completed[0]["answered"] is False
 
 

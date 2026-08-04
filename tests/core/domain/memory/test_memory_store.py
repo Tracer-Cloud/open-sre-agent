@@ -226,9 +226,9 @@ class TestSettings:
     def test_gateway_surfaces_require_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from config.constants import OPENSRE_MEMORY_GATEWAY_ENABLED_ENV
         from core.domain.memory import gateway_memory_enabled, memory_available_here
-        from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+        from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
-        with bound_usage_context(surface=SURFACE_SLACK):
+        with bound_usage_context(surface=UsageSurface.SLACK):
             assert memory_enabled() is True
             assert gateway_memory_enabled() is False
             assert memory_available_here() is False

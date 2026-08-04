@@ -12,8 +12,7 @@ from platform.analytics.events import Event
 from platform.analytics.repl_context import bound_repl_turn_context
 from platform.analytics.usage_context import (
     ORGANIZATION_GROUP_TYPE,
-    SURFACE_CLI,
-    SURFACE_SLACK,
+    UsageSurface,
     bound_usage_context,
     build_usage_enrichment,
     merge_usage_enrichment,
@@ -69,17 +68,31 @@ def _stub_httpx_client(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object
     return posted_payloads
 
 
+def test_usage_surface_members_and_string_round_trip() -> None:
+    from platform.analytics.usage_context import CANONICAL_SURFACES, UsageSurface
+
+    assert set(UsageSurface) == {
+        UsageSurface.CLI,
+        UsageSurface.SLACK,
+        UsageSurface.TELEGRAM,
+        UsageSurface.DISCORD,
+    }
+    assert frozenset(UsageSurface) == CANONICAL_SURFACES
+    assert UsageSurface("slack") is UsageSurface.SLACK
+    assert UsageSurface.SLACK == "slack"
+
+
 def test_build_usage_enrichment_from_context_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_abc")
     with bound_usage_context(
-        surface=SURFACE_SLACK,
+        surface=UsageSurface.SLACK,
         session_id="sess-1",
         user_id="U123",
     ):
         props = build_usage_enrichment()
     assert props["organization_id"] == "org_abc"
     assert props["$groups"] == {ORGANIZATION_GROUP_TYPE: "org_abc"}
-    assert props["surface"] == SURFACE_SLACK
+    assert props["surface"] == UsageSurface.SLACK
     assert props["session_id"] == "sess-1"
     assert props["user_id"] == "U123"
 
@@ -92,7 +105,7 @@ def test_session_id_falls_back_to_cli_session() -> None:
 
 def test_merge_usage_enrichment_caller_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_env")
-    with bound_usage_context(surface=SURFACE_CLI, organization_id="org_ctx"):
+    with bound_usage_context(surface=UsageSurface.CLI, organization_id="org_ctx"):
         merged = merge_usage_enrichment({"organization_id": "org_caller", "surface": "cli"})
     assert merged["organization_id"] == "org_caller"
     assert merged["$groups"] == {ORGANIZATION_GROUP_TYPE: "org_caller"}
@@ -106,7 +119,7 @@ def test_capture_stamps_org_groups_and_emits_groupidentify(
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_prod")
 
     analytics = provider.Analytics()
-    with bound_usage_context(surface=SURFACE_CLI, session_id="s1"):
+    with bound_usage_context(surface=UsageSurface.CLI, session_id="s1"):
         analytics.capture(Event.CLI_INVOKED, {"entrypoint": "opensre"})
     analytics.shutdown(flush=True)
 
@@ -125,7 +138,7 @@ def test_capture_stamps_org_groups_and_emits_groupidentify(
     props = capture_payload["properties"]
     assert props["organization_id"] == "org_prod"
     assert props["$groups"] == {ORGANIZATION_GROUP_TYPE: "org_prod"}
-    assert props["surface"] == SURFACE_CLI
+    assert props["surface"] == UsageSurface.CLI
     assert props["session_id"] == "s1"
 
 
@@ -183,7 +196,7 @@ def test_process_session_id_stamps_cli_investigate_without_repl(
     props = started["properties"]
     assert props["organization_id"] == "org_cli"
     assert props["$groups"] == {ORGANIZATION_GROUP_TYPE: "org_cli"}
-    assert props["surface"] == SURFACE_CLI
+    assert props["surface"] == UsageSurface.CLI
     assert props["session_id"] == process_session
 
 
@@ -198,7 +211,7 @@ def test_track_investigation_binds_session_from_session_object(
     analytics = provider.Analytics()
     monkeypatch.setattr(provider, "_instance", analytics)
     monkeypatch.setattr(analytics_cli, "get_analytics", lambda: analytics)
-    analytics.set_persistent_property("surface", SURFACE_CLI)
+    analytics.set_persistent_property("surface", UsageSurface.CLI)
 
     class _Session:
         session_id = "repl-session-123"
@@ -216,5 +229,5 @@ def test_track_investigation_binds_session_from_session_object(
         p["json"] for p in posted if p["json"]["event"] == Event.INVESTIGATION_STARTED.value
     )
     assert started["properties"]["session_id"] == "repl-session-123"
-    assert started["properties"]["surface"] == SURFACE_CLI
+    assert started["properties"]["surface"] == UsageSurface.CLI
     assert started["properties"]["organization_id"] == "org_repl"

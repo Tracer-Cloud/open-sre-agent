@@ -33,7 +33,7 @@ from gateway.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.runtime.sink_protocol import GatewayAgentCallback
 from gateway.storage import SessionResolver
-from platform.analytics.usage_context import SURFACE_DISCORD, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 _MAX_CONVERSATION_LOCKS = 1024
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
@@ -309,7 +309,7 @@ class DiscordTurnDispatcher:
                     if ctx:
                         agent_text = f"{agent_text}\n\n{ctx}"
                 with bound_usage_context(
-                    surface=SURFACE_DISCORD,
+                    surface=UsageSurface.DISCORD,
                     session_id=session.session_id,
                     user_id=inbound.user_id or None,
                 ):

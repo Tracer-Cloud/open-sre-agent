@@ -9,10 +9,10 @@ from config.constants import (
     OPENSRE_MEMORY_DISABLED_ENV,
     OPENSRE_MEMORY_GATEWAY_ENABLED_ENV,
 )
-from platform.analytics.usage_context import SURFACE_SLACK, SURFACE_TELEGRAM, get_surface
+from platform.analytics.usage_context import UsageSurface, get_surface
 
 _TRUTHY = frozenset({"1", "true", "yes"})
-_GATEWAY_ANALYTICS_SURFACES = frozenset({SURFACE_SLACK, SURFACE_TELEGRAM})
+_GATEWAY_ANALYTICS_SURFACES = frozenset({UsageSurface.SLACK, UsageSurface.TELEGRAM})
 
 
 def _flag_set(name: str) -> bool:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.banner import render_ready_box, render_splash
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
@@ -40,7 +40,7 @@ def run_initial_input(
         recorder = PromptRecorder.start(session=session, text=stripped, turn_kind=_TURN_KIND)
         with (
             bound_usage_context(
-                surface=SURFACE_CLI,
+                surface=UsageSurface.CLI,
                 session_id=session.session_id,
             ),
             bound_repl_turn_context(

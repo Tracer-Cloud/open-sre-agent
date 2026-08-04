@@ -37,7 +37,7 @@ from gateway.slack.thread_history import (
     session_needs_thread_seed,
 )
 from gateway.storage import SessionResolver
-from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
 
@@ -376,7 +376,7 @@ class _SlackTurnDispatcher:
                 ):
                     agent_text = f"{agent_text}\n\n{files_context}"
                 with bound_usage_context(
-                    surface=SURFACE_SLACK,
+                    surface=UsageSurface.SLACK,
                     session_id=session.session_id,
                     user_id=inbound.user_id or None,
                 ):
