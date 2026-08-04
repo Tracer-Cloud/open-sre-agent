@@ -33,7 +33,15 @@ def execute_skill_view_tool(args: dict[str, Any], ctx: ActionToolContext) -> dic
             "error": f"unknown skill {name!r}",
             "available": available,
         }
-    return {"ok": True, "name": name.replace("_", "-").lower(), "content": body}
+    slug = name.replace("_", "-").lower()
+    # ``summary`` is what the user sees; ``content`` is for the model only.
+    # Without it the generic formatter prints the whole playbook on screen.
+    return {
+        "ok": True,
+        "name": slug,
+        "summary": f"loaded the {slug} playbook",
+        "content": body,
+    }
 
 
 def run_skill_view(*, name: str, context: Any) -> dict[str, Any]:
