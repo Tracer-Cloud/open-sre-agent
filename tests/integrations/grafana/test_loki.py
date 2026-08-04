@@ -109,6 +109,7 @@ class TestQueryLokiSuccess:
         assert result["total_streams"] == 2
         assert result["total_logs"] == 3
         assert len(result["logs"]) == 3
+        assert result["truncated"] is False
 
     def test_each_log_row_carries_timestamp_message_and_labels(self) -> None:
         host = _FakeLokiHost()
@@ -143,6 +144,18 @@ class TestQueryLokiSuccess:
         assert host.last_params["start"] == str(expected_start)
         assert host.last_params["end"] == str(expected_end)
 
+    @patch("integrations.grafana.loki._MAX_LOKI_LOG_LINES", 2)
+    def test_truncates_logs_when_cap_is_reached(self) -> None:
+        host = _FakeLokiHost()
+        host.make_request_mock.return_value = _two_stream_response()
+
+        result = host.query_loki(_QUERY)
+
+        assert result["success"] is True
+        assert result["truncated"] is True
+        assert len(result["logs"]) == 2
+        assert result["total_logs"] == 2
+
 
 # ---------------------------------------------------------------------------
 # Not configured short-circuit
@@ -161,6 +174,7 @@ class TestQueryLokiNotConfigured:
             "success": False,
             "error": "Grafana client not configured for account 'missing-acct'",
             "logs": [],
+            "truncated": False,
         }
 
     def test_does_not_invoke_make_request(self) -> None:
@@ -190,6 +204,7 @@ class TestQueryLokiExceptions:
             "error": "connection refused",
             "response": "",
             "logs": [],
+            "truncated": False,
         }
 
     @pytest.mark.parametrize(

@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from integrations.grafana.base import GrafanaClientBase
 
+_MAX_LOKI_LOG_LINES = 5000
+
 
 def _describe_status(status: int) -> str:
     """Human-readable reason for a failed Loki response status."""
@@ -46,6 +48,7 @@ class LokiMixin:
                 "success": False,
                 "error": f"Grafana client not configured for account '{self.account_id}'",
                 "logs": [],
+                "truncated": False,
             }
 
         url = self._build_datasource_url(
@@ -55,6 +58,9 @@ class LokiMixin:
 
         end_ns = int(time.time() * 1e9)
         start_ns = end_ns - (time_range_minutes * 60 * int(1e9))
+
+        if limit > _MAX_LOKI_LOG_LINES:
+            limit = _MAX_LOKI_LOG_LINES + 1
 
         params: dict[str, str] = {
             "query": query,
@@ -67,12 +73,18 @@ class LokiMixin:
             data = self._make_get_request(url, params=params)
             result = data.get("data", {}).get("result", [])
 
-            logs = []
+            logs: list[dict[str, Any]] = []
+            truncated: bool = False
+
             for stream in result:
                 stream_labels = stream.get("stream", {})
                 values = stream.get("values", [])
 
                 for timestamp_ns, log_line in values:
+                    if len(logs) >= _MAX_LOKI_LOG_LINES:
+                        truncated = True
+                        break
+
                     logs.append(
                         {
                             "timestamp": timestamp_ns,
@@ -81,9 +93,13 @@ class LokiMixin:
                         }
                     )
 
+                if truncated:
+                    break
+
             return {
                 "success": True,
                 "logs": logs,
+                "truncated": truncated,
                 "total_streams": len(result),
                 "total_logs": len(logs),
                 "query": query,
@@ -101,4 +117,5 @@ class LokiMixin:
                 "error": error_msg,
                 "response": response_text,
                 "logs": [],
+                "truncated": False,
             }
