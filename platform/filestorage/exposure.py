@@ -19,12 +19,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from platform.filestorage.enums import BucketExposure
-
-if TYPE_CHECKING:
-    from platform.filestorage.config import RemoteSyncConfig
 
 
 @dataclass(frozen=True)
