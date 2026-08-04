@@ -1,63 +1,91 @@
-"""A failing health probe must not dump a stack into the user's terminal.
+"""An unreachable service must not dump a stack into the user's terminal.
 
-An unreachable cluster or a stopped local service is an *expected* outcome of a
-probe, not a fault. Logging it with ``exc_info`` put ~100 lines of urllib3 stack
-into the interactive shell in place of a one-line status, which is what a user
-sees the first time they ask a harmless question with a service stopped.
+A stopped cluster or an unroutable host is an operational fact, not a fault in
+our code — the traceback is 60 lines of HTTP client internals and says nothing
+about the cause. During one investigation with kubernetes down, three tool calls
+produced ~180 lines of urllib3 stack between the progress lines.
 
-Genuine call failures must keep their traceback, so these tests pin the
-distinction rather than "probes are quiet".
+Classification is by exception, not by method name: any call can hit an
+unreachable host, and a genuine bug in any method still needs its stack.
 """
 
 from __future__ import annotations
 
 import io
 import logging
+import socket
+
+import pytest
 
 from platform.observability.errors.service import capture_service_error
 
 
-def _raised_connection_error() -> ConnectionRefusedError:
-    """A real raised exception — one constructed inline carries no traceback."""
+def _raised(exc: BaseException) -> BaseException:
+    """Return a real raised exception — one built inline carries no traceback."""
     try:
-        raise ConnectionRefusedError(61, "Connection refused")
-    except ConnectionRefusedError as exc:
-        return exc
+        raise exc
+    except BaseException as raised:  # noqa: BLE001 - the point is to capture any
+        return raised
 
 
-def _capture(method: str) -> str:
+def _wrapped_connection_error() -> BaseException:
+    """The shape urllib3 produces: MaxRetryError from NewConnectionError from refused."""
+    try:
+        try:
+            raise ConnectionRefusedError(61, "Connection refused")
+        except ConnectionRefusedError as inner:
+            raise RuntimeError("Max retries exceeded with url: /api/v1/pods") from inner
+    except RuntimeError as outer:
+        return outer
+
+
+def _log(exc: BaseException, *, method: str) -> str:
     buffer = io.StringIO()
     handler = logging.StreamHandler(buffer)
     handler.setFormatter(logging.Formatter("%(message)s"))
-    logger = logging.getLogger(f"test.service_error.{method}")
+    logger = logging.getLogger(f"test.service_error.{method}.{id(exc)}")
     logger.handlers = [handler]
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
-    capture_service_error(
-        _raised_connection_error(),
-        logger=logger,
-        integration="kubernetes",
-        method=method,
-    )
+    capture_service_error(exc, logger=logger, integration="kubernetes", method=method)
     return buffer.getvalue()
 
 
-def test_a_failed_probe_logs_one_line_without_a_stack() -> None:
-    """This is what the user reads when their cluster is stopped."""
+@pytest.mark.parametrize("method", ["probe_access", "list_pods", "get_events", "list_nodes"])
+def test_an_unreachable_service_logs_one_line_from_any_method(method: str) -> None:
+    """Every call fails the same way when the cluster is simply not running."""
     # Act
-    output = _capture("probe_access")
+    output = _log(_raised(ConnectionRefusedError(61, "Connection refused")), method=method)
 
     # Assert
-    assert output.strip() == "[kubernetes] probe_access failed"
+    assert output.strip() == f"[kubernetes] {method} failed"
     assert "Traceback" not in output
 
 
-def test_a_real_call_failure_keeps_its_traceback() -> None:
-    """Quieting probes must not quiet everything — that would hide real faults."""
+def test_a_connection_failure_buried_under_wrappers_is_still_recognised() -> None:
+    """urllib3 hides the cause two levels down; only the chain reveals it."""
     # Act
-    output = _capture("list_pods")
+    output = _log(_wrapped_connection_error(), method="list_pods")
+
+    # Assert
+    assert "Traceback" not in output
+
+
+def test_a_dns_failure_counts_as_unreachable() -> None:
+    """An unresolvable host is the same class of fact as a refused connection."""
+    # Act
+    output = _log(_raised(socket.gaierror(8, "nodename nor servname provided")), method="list_pods")
+
+    # Assert
+    assert "Traceback" not in output
+
+
+def test_a_real_bug_keeps_its_traceback() -> None:
+    """Quieting unreachable hosts must not quiet defects — that would hide them."""
+    # Act
+    output = _log(_raised(KeyError("items")), method="list_pods")
 
     # Assert
     assert "Traceback" in output
-    assert "ConnectionRefusedError" in output
+    assert "KeyError" in output
