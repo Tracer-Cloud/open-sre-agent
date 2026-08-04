@@ -405,10 +405,16 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     LLM is unavailable — e.g. a provider with no credit — so users can still run
     ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
 
+    Also accepts schedule affirmatives that ``expand_affirmative_follow_up`` rewrote
+    into a leading ``/cron add …`` (after stripping a vendor context prefix).
+
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
     """
-    stripped = message.strip()
+    from platform.harness_ports import strip_message_context_prefix
+
+    _, remainder = strip_message_context_prefix(message)
+    stripped = remainder.strip()
     if not stripped.startswith("/"):
         return None
     if not any(getattr(tool, "name", None) == "slash_invoke" for tool in agent_tools):

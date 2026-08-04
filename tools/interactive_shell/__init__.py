@@ -18,6 +18,7 @@ TOOL_MODULES = (
     "actions.implementation",
     "actions.investigation",
     "actions.llm_provider",
+    "actions.propose_scheduled_delivery",
     "actions.sample_alert",
     "actions.sentry_fix",
     "actions.shell",

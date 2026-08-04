@@ -66,27 +66,21 @@ Examples:
     → slack_send_message(message="<the FULL composed briefing>")
       + telegram_send_message(message="<the FULL composed briefing>")   [next turn — Slack always + Telegram because the user named it]
 
-5) AFTER delivery succeeds, ALWAYS offer to make mornings recurring — one
-   short question in the same final reply (or the next assistant turn if
-   delivery was the last tool call). Use the canonical closer so a bare
-   "yes" expands to THIS offer (not an older Want-me-to in the session):
-     **Want me to:** schedule this as a recurring daily_summary every
-     weekday at 8am to Slack?
-   Use that Want me to: shape exactly — bare "yes" only expands canonical
-   closers. Name the provider you just delivered to (Slack by default); do
-   not say "the same channel" unless you also printed a concrete #name or
-   id in the Delivered line. Do NOT schedule until they confirm. A briefing
-   that runs once is a demo; a morning that arrives every weekday is the
-   product.
-   On confirmation, create the schedule with slash_invoke /cron add. Default
-   when they accept without overrides: weekdays 08:00 in their timezone if
-   known else UTC, provider matching where you just delivered. The shipping
-   scheduled-morning kind is daily_summary. Example after Slack webhook
-   delivery (omit --chat-id — the webhook is already bound to one channel):
-     → slash_invoke(command="/cron", args=["add", "--kind", "daily_summary",
-       "--cron", "0 8 * * 1-5", "--tz", "UTC", "--provider", "slack"])
-   Only pass --chat-id when you have a concrete destination (Telegram chat
-   id, Discord channel id, or a Slack #name/C… you already reported). Never
-   invent one, and never call /cron add without --provider. Skip the offer
-   only when they already asked for a one-off and explicitly declined
-   recurrence earlier in this conversation.
+5) AFTER delivery succeeds, ALWAYS offer to make mornings recurring. Call
+   propose_scheduled_delivery with the defaults below — that tool records a
+   structured PendingScheduleOffer on the session and returns the canonical
+   closer. End your reply with the tool's `closer` field exactly. Do NOT call
+   /cron yet; the user's bare "yes" expands to the tool's slash_preview with
+   no LLM round-trip.
+   Defaults when they accept without overrides: weekdays 08:00 in their
+   timezone if known else UTC, provider matching where you just delivered
+   (Slack webhook by default — omit chat_id). Kind is daily_summary.
+   Example after Slack webhook delivery:
+     → propose_scheduled_delivery(kind="daily_summary", cron="0 8 * * 1-5",
+         timezone="UTC", provider="slack")
+     → end the reply with the returned closer (Want me to: …)
+   Pass chat_id only when you have a concrete Telegram/Discord/Rocket.Chat
+   destination (or a Slack #name/C… you already reported). Never invent one.
+   Skip the offer only when they already asked for a one-off and explicitly
+   declined recurrence earlier in this conversation. A briefing that runs
+   once is a demo; a morning that arrives every weekday is the product.

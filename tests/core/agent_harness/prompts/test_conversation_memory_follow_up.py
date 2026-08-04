@@ -87,48 +87,18 @@ def test_expands_bare_sure_without_slack_prefix() -> None:
     )
 
 
-def test_a_schedule_offer_expands_to_what_was_actually_offered() -> None:
-    """The expansion must carry the offer's own cadence and channel.
-
-    A hardcoded expansion answered every schedule offer with "weekday at 8am to
-    Slack", so a 9am-to-Telegram offer accepted with "yes" would have scheduled
-    the wrong thing. Reading the canonical closer keeps the user's actual terms.
-    """
-    # Arrange
+def test_schedule_yes_without_pending_offer_does_not_scrape_prose() -> None:
+    """Prose-only schedule closers must not invent /cron — pending offer is required."""
     history = [
-        ("user", "give me a morning report"),
-        (
-            "assistant",
-            "Good morning! Here is your briefing.\nDelivered to Telegram.\n\n"
-            "**Want me to:** schedule this as a daily_summary every Monday at "
-            "9am to Telegram?",
-        ),
-    ]
-
-    # Act
-    expanded = expand_affirmative_follow_up("yes", history)
-
-    # Assert
-    assert "every Monday at 9am" in expanded
-    assert "Telegram" in expanded
-    assert "8am" not in expanded
-
-
-def test_yes_after_canonical_schedule_want_me_to() -> None:
-    history = [
-        (
-            "assistant",
-            "Want me to: fix kubernetes?\n\n",
-        ),
         (
             "assistant",
             "**Want me to:** schedule this as a recurring daily_summary every "
-            "weekday at 8am to the same Slack channel?",
+            "weekday at 8am to Slack?",
         ),
     ]
     expanded = expand_affirmative_follow_up("yes", history)
-    assert "schedule this as a recurring daily_summary" in expanded
-    assert "kubernetes" not in expanded.lower()
+    assert expanded.startswith("Yes — please schedule this")
+    assert not expanded.startswith("/cron")
 
 
 def test_run_turn_expands_yes_before_execute_actions() -> None:

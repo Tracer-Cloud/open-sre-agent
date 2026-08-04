@@ -1242,6 +1242,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_sentry_issues",
         "shell_run",
         "skill_view",
+        "propose_scheduled_delivery",
         "slack_add_reaction",
         "slack_capture_task",
         "slack_join_channel",

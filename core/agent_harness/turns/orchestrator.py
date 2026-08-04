@@ -357,8 +357,22 @@ def run_turn(
 
     # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
     # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
+    # Schedule offers prefer session.pending_schedule_offer (structured) over
+    # scraping prose.
     prior_messages = getattr(session, "cli_agent_messages", None) or ()
-    text = expand_affirmative_follow_up(text, prior_messages)
+    pending_schedule = getattr(session, "pending_schedule_offer", None)
+    expanded = expand_affirmative_follow_up(
+        text,
+        prior_messages,
+        pending_schedule=pending_schedule,
+    )
+    if (
+        pending_schedule is not None
+        and expanded.startswith("/cron ")
+        and hasattr(session, "pending_schedule_offer")
+    ):
+        session.pending_schedule_offer = None
+    text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their

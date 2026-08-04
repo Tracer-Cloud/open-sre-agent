@@ -241,14 +241,12 @@ def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
 
 
 def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
-    """Stable-tier guidance must name /cron so the agent can offer recurrence."""
+    """Stable-tier guidance must teach propose_scheduled_delivery, not prose scrape."""
     prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     assert "scheduled deliveries" in prompt
-    assert 'slash_invoke(command="/cron"' in prompt
+    assert "propose_scheduled_delivery" in prompt
     assert "every morning" in prompt
-    assert "want me to: schedule this as a daily_summary every weekday" in prompt
-    assert "every weekday at 8am" in prompt
-    assert "do not create a schedule until they confirm" in prompt
+    assert "do not call /cron until they confirm" in prompt
 
 
 def test_morning_report_skill_closes_with_schedule_offer() -> None:
@@ -257,11 +255,10 @@ def test_morning_report_skill_closes_with_schedule_offer() -> None:
     body = " ".join(
         (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
     )
-    assert "want me to:** schedule this as a recurring daily_summary" in body
-    assert "want me to: shape exactly" in body
-    assert 'slash_invoke(command="/cron"' in body
+    assert "propose_scheduled_delivery" in body
     assert "daily_summary" in body
-    assert "do not schedule until they confirm" in body
+    assert 'cron="0 8 * * 1-5"' in body or "cron='0 8 * * 1-5'" in body
+    assert "do not call /cron yet" in body
 
 
 def test_connected_integrations_block_renders_state() -> None:
@@ -576,18 +573,18 @@ def test_scheduling_guidance_survives_prompt_assembly() -> None:
 
     # Assert
     assert "scheduled deliveries" in assembled
-    assert 'slash_invoke(command="/cron"' in assembled
+    assert "propose_scheduled_delivery" in assembled
     assert "morning-report" in assembled
     assert "recurring: weekdays 08:00" in assembled
     assert "skill_view" in assembled
-    assert "want me to:** schedule this as a recurring daily_summary" in body
-    assert "want me to:** schedule this" not in assembled
+    assert "propose_scheduled_delivery" in body
+    assert "propose_scheduled_delivery(" not in assembled
 
 
 def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:
     """Guidance naming a command that is not registered would fail at run time.
 
-    The prompt instructs ``slash_invoke(command="/cron", args=["add", ...])``.
+    Pending offers expand to ``/cron add``; list/remove still use slash_invoke.
     Nothing else ties that string to the real command, so a rename of the CLI
     group would leave the agent confidently calling a command that is gone.
     """
@@ -617,9 +614,9 @@ def test_scheduling_is_never_offered_without_asking_first() -> None:
         (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
     )
 
-    # Assert
-    assert "do not create a schedule until they confirm" in base
-    assert "do not schedule until they confirm" in skill
+    # Assert — structured propose tool; creation waits on confirm / yes
+    assert "do not call /cron until they confirm" in base
+    assert "do not call /cron yet" in skill
 
 
 def test_the_active_instruction_survives_context_truncation() -> None:
@@ -646,13 +643,8 @@ def test_the_active_instruction_survives_context_truncation() -> None:
     assert instruction in shrunk
 
 
-def test_the_cron_guidance_teaches_slack_webhook_omits_chat_id() -> None:
-    """Accepted yes after morning Slack delivery must not invent --chat-id.
-
-    Morning report delivers via slack_send_message (webhook-bound channel).
-    Requiring --chat-id with nothing concrete in the turn made the model either
-    drop the flag (exit 2) or invent a channel after the user already said yes.
-    """
+def test_the_cron_guidance_teaches_structured_schedule_offers() -> None:
+    """Morning report must propose via tool, not scrape Want-me-to into /cron."""
     # Arrange
     from core.agent_harness.prompts.skills_loader import skills_dir
 
@@ -661,11 +653,7 @@ def test_the_cron_guidance_teaches_slack_webhook_omits_chat_id() -> None:
         (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
     )
 
-    # Assert — core flags still taught; Slack path may omit --chat-id
-    for flag in ("--kind", "--cron", "--provider"):
-        assert flag in base, f"{flag} missing from stable-tier cron guidance"
-        assert flag in skill, f"{flag} missing from the morning-report recipe"
-    assert "omit --chat-id" in base or "omit --chat-id" in skill
-    assert '"--provider", "slack"' in skill or "'--provider', 'slack'" in skill
-    # Canonical closer names Slack, not a vague "same channel" with no id.
-    assert "weekday at 8am to slack?" in skill
+    assert "propose_scheduled_delivery" in base
+    assert "propose_scheduled_delivery" in skill
+    assert "omit chat_id" in skill
+    assert 'provider="slack"' in skill or "provider='slack'" in skill

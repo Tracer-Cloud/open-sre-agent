@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.state import MAX_CONVERSATION_TURNS
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 from platform.harness_ports import strip_message_context_prefix
@@ -24,43 +25,58 @@ _ACTION_FACT_MARKERS = (
 _VALUE_LINE_RE = re.compile(
     r"(?im)^[A-Z][A-Za-z0-9 ._/-]{1,64}:\s+.*(?:[-+]?\d+(?:\.\d+)?\s*°?\s*[CF]|sent|true|false|\{|\[)"
 )
-_AFFIRMATIVE_RE = re.compile(
-    r"(?is)^\s*(?:yes|y|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that)"
-    r"(?:\s*please)?\s*[.!?]?\s*$"
+_AFFIRMATIVES = frozenset(
+    {
+        "yes",
+        "y",
+        "yeah",
+        "yep",
+        "yup",
+        "sure",
+        "ok",
+        "okay",
+        "please",
+        "go ahead",
+        "do it",
+        "do that",
+    }
 )
-# Slack users often restate the offer instead of a bare yes.
-_AFFIRMATIVE_RESTATED_RE = re.compile(
-    r"(?is)(?:want\s+me\s+to\s*:.*\byes\b|\bi replied yes\b|"
-    r"you asked .*\byes\b|\bas a yes\b)"
-)
-_WANT_ME_TO_RE = re.compile(
-    r"(?is)\*{0,2}Want me to:\*{0,2}\s*(.+?)(?:\n\s*\n|\Z)",
-)
-_OR_SPLIT_RE = re.compile(r"(?i),\s*or\s+|\s+or\s+")
+_WANT_ME_TO_MARKER = "want me to:"
 
 
 def expand_affirmative_follow_up(
     text: str,
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...] | None,
+    *,
+    pending_schedule: PendingScheduleOffer | None = None,
 ) -> str:
     """Rewrite bare affirmatives into the prior actionable offer.
 
     Gateway/Slack turns often arrive as ``yes`` / ``sure`` after the assistant
     offered a next step. Without expansion, the action agent treats that as a
     new vague request and hands off to the investigate-onboarding assistant.
-    Preserves any leading ``[Slack …]`` context line for channel targeting.
 
-    Uses only the newest assistant turn's canonical ``Want me to:`` closer so
-    a morning-report cron offer is not shadowed by an earlier remediation
-    offer in the same session. Non-canonical closers are left unexpanded
-    (the model still sees the conversation).
+    Schedule offers use :class:`PendingScheduleOffer` on the session (set by
+    ``propose_scheduled_delivery``) — never scraped from Want-me-to prose. A
+    confirmed schedule becomes a literal ``/cron add …`` so the shell dispatches
+    without an LLM round-trip.
+
+    Non-schedule Want-me-to closers still expand from the newest assistant turn
+    only, so an older remediation offer cannot shadow a fresher one.
     """
     raw = text if isinstance(text, str) else ""
-    if not raw.strip() or not messages:
+    if not raw.strip():
         return raw
 
     prefix, remainder = strip_message_context_prefix(raw)
-    if not (_AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)):
+    if not (_is_affirmative(remainder) or _is_restated_affirmative(remainder)):
+        return raw
+
+    if pending_schedule is not None:
+        # Literal slash — no vendor context prefix (would hide the leading /).
+        return pending_schedule.to_slash_command()
+
+    if not messages:
         return raw
 
     offer = _latest_actionable_offer(messages)
@@ -69,22 +85,53 @@ def expand_affirmative_follow_up(
     return f"{prefix}Yes — please {_normalize_offer(offer)}."
 
 
+def _is_affirmative(text: str) -> bool:
+    cleaned = text.strip().lower().rstrip(".!?")
+    if cleaned.endswith(" please"):
+        cleaned = cleaned[: -len(" please")].rstrip()
+    return cleaned in _AFFIRMATIVES
+
+
+def _is_restated_affirmative(text: str) -> bool:
+    """Slack users often restate the offer instead of a bare yes."""
+    lowered = text.lower()
+    if "i replied yes" in lowered or "as a yes" in lowered:
+        return True
+    if "want me to" in lowered and "yes" in lowered:
+        return True
+    if "you asked" in lowered and "yes" in lowered:
+        return True
+    return False
+
+
 def _normalize_offer(offer: str) -> str:
     """Collapse dual ``A, or B`` Want-me-to offers into an actionable request."""
-    parts = [p.strip(" .?") for p in _OR_SPLIT_RE.split(offer, maxsplit=1) if p.strip()]
-    if len(parts) == 2:
-        return f"do both — {parts[0]}; and {parts[1]}"
+    lowered = offer.lower()
+    for sep in (", or ", " or "):
+        idx = lowered.find(sep)
+        if idx < 0:
+            continue
+        left = offer[:idx].strip(" .?")
+        right = offer[idx + len(sep) :].strip(" .?")
+        if left and right:
+            return f"do both — {left}; and {right}"
     return offer
 
 
 def _offer_from_assistant_content(content: str) -> str | None:
     """Extract one actionable offer from a single assistant message, if any."""
-    match = _WANT_ME_TO_RE.search(content)
-    if match:
-        offer = match.group(1).strip().rstrip("?").strip()
-        if offer:
-            return offer
-    return None
+    lowered = content.lower()
+    pos = lowered.rfind(_WANT_ME_TO_MARKER)
+    if pos < 0:
+        return None
+    rest = content[pos + len(_WANT_ME_TO_MARKER) :].lstrip()
+    if rest.startswith("**"):
+        rest = rest[2:].lstrip()
+    blank = rest.find("\n\n")
+    if blank >= 0:
+        rest = rest[:blank]
+    offer = rest.strip().rstrip("?").strip()
+    return offer or None
 
 
 def _latest_actionable_offer(

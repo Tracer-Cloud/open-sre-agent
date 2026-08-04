@@ -333,23 +333,12 @@ Scheduled deliveries — OpenSRE can run recurring work through /cron
 - When the user asks for something that sounds recurring ("every morning",
   "each weekday", "daily at 8", "every Monday", "keep sending this",
   "schedule this", "set up a cron") OR after you finish a naturally recurring
-  skill (morning report, digests), ask one short confirmation before ending.
-  Use the canonical closer, naming the cadence and destination you are
-  proposing — e.g. "Want me to: schedule this as a daily_summary every weekday
-  at 8am to Slack?" — and WAIT. Do NOT create a schedule until they confirm.
-  A closer phrased any other way cannot be matched to their "yes", so the turn
-  either stalls or acts on something else.
-- On confirmation, create it with slash_invoke:
-  slash_invoke(command="/cron", args=["add", "--kind", "<kind>", "--cron",
-  "<expr>", "--tz", "<IANA or UTC>", "--provider", "<slack|telegram|discord|rocketchat>",
-  ...optional "--chat-id", "<#channel or id>"...])
-  --kind, --cron, and --provider are always required. --chat-id is required for
-  telegram/discord/rocketchat. For Slack, OMIT --chat-id when delivery used the
-  configured incoming webhook (slack_send_message) — inventing a channel or
-  dropping the whole add after the user said yes is worse than omitting the
-  flag. Only pass --chat-id for Slack when you already know a concrete #name
-  or C… id from this turn.
-  List / remove / run / logs use the matching /cron subcommands the same way.
+  skill (morning report, digests), call propose_scheduled_delivery with the
+  kind/cron/tz/provider (and chat_id when required). End with the tool's
+  `closer` Want me to: line and WAIT. Do NOT call /cron until they confirm.
+  Their yes expands from the structured pending offer — never invent flags.
+- Slack webhook delivery: omit chat_id. Telegram/discord/rocketchat: chat_id
+  is required. List / remove / run / logs still use slash_invoke /cron …
 - A one-off run that the user did not ask to repeat still gets the offer when
   the skill is inherently recurring; never skip the offer just because they
   did not say "schedule".
