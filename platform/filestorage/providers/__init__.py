@@ -10,6 +10,7 @@ from __future__ import annotations
 from platform.filestorage.providers.registry import (
     SetupExtraField,
     build_object_store,
+    check_bucket_exposure,
     credential_hint_for_provider,
     provider_extra_fields,
     register_object_store,
@@ -20,6 +21,7 @@ from platform.filestorage.providers.registry import (
 __all__ = [
     "SetupExtraField",
     "build_object_store",
+    "check_bucket_exposure",
     "credential_hint_for_provider",
     "provider_extra_fields",
     "register_object_store",

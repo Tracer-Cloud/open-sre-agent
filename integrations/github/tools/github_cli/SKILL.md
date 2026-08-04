@@ -2,7 +2,7 @@
 name: github-cli
 description: >
   Default GitHub skill for the action agent. Use github_cli for any GitHub
-  request — create/list/view issues and PRs, assign, labels, repos, releases,
+  request — create/list/view/close issues and PRs, assign, labels, repos, releases,
   checks, github.com/owner/repo URLs, or gh api. Prefer over shell_run/!gh.
   Never assistant_handoff these to gather — github_cli is action-only.
 tools:
@@ -23,7 +23,7 @@ Blocked top-level: `auth`, `extension`, `workflow`, `run`, `secret`,
 | Create issue | `["issue", "create", "--title", "…", "--body", "…"]` |
 | List / view issues | `["issue", "list"]` / `["issue", "view", "42"]` |
 | Close / comment / edit | `["issue", "close", "42"]` / `["issue", "comment", "42", "--body", "…"]` |
-| List / view / merge PRs | `["pr", "list"]` / `["pr", "view", "45"]` / `["pr", "merge", "45"]` |
+| List / view / close / merge PRs | `["pr", "list"]` / `["pr", "view", "45"]` / `["pr", "close", "45"]` / `["pr", "merge", "45"]` |
 | Repos / search | `["repo", "list"]` / `["search", "issues", "crash"]` |
 | Arbitrary API | `["api", "repos/OWNER/REPO/issues"]` |
 
@@ -41,6 +41,8 @@ Use `summary` when present. Reply short and chat-like.
 
 Slack propose/execute; workflow digests; investigation code/commit search.
 Multi-source RCA (sentry + github issues + posthog) → investigation_start.
+PR CI fix-and-push → fix_github_pr_ci. Security/quality alerts →
+fix_github_security_alert.
 
 ## Limitations
 

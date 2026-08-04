@@ -119,6 +119,9 @@ class DefaultToolProvider:
             is_tty=is_tty,
             request_exit=self._request_exit,
             action_already_listed=True,
+            # Built once per turn, before any tool runs — so the current
+            # history length is this turn's starting boundary.
+            history_start=len(getattr(self._session, "history", None) or []),
             subprocess_presenter=subprocess_presenter,
             investigation_ports=investigation_ports,
             llm_provider_ports=llm_provider_ports,

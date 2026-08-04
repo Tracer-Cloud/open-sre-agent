@@ -180,7 +180,7 @@ def _capability_warnings_line(runtime: Mapping[str, Any]) -> str | None:
     parts = [str(item).strip() for item in warnings if str(item).strip()]
     if not parts:
         return None
-    return "capability warnings at boot: " + "; ".join(parts)
+    return "".join(("capability warnings at boot: ", "; ".join(parts)))
 
 
 # Order is part of the prompt contract — keep stable for snapshot/tests.
@@ -225,9 +225,13 @@ def _render_facts(
     lines = _fact_lines(producers, runtime)
     if not lines:
         return ""
-    return (
-        "Runtime facts (quote the strings below EXACTLY when asked; do not "
-        "paraphrase them into other field names): " + "; ".join(lines) + guidance
+    return "".join(
+        (
+            "Runtime facts (quote the strings below EXACTLY when asked; do not "
+            "paraphrase them into other field names): ",
+            "; ".join(lines),
+            guidance,
+        )
     )
 
 

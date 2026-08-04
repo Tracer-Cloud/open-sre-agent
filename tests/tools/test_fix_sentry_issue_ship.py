@@ -18,6 +18,11 @@ from integrations.coding_agent import CodingResult
 from integrations.git import changed_paths, current_branch, file_fingerprints
 from integrations.git.errors import COMMIT_FAILED, PUSH_FAILED, GitCommandError
 from integrations.github.client import GitHubApiError
+from integrations.github.pull_requests import (
+    GitHubPullRequestError,
+    PullRequest,
+    open_pull_request,
+)
 from tools.cross_vendor.fix_sentry_issue import fix_sentry_issue
 from tools.cross_vendor.fix_sentry_issue.context import IssueContext
 from tools.cross_vendor.fix_sentry_issue.errors import (
@@ -27,7 +32,6 @@ from tools.cross_vendor.fix_sentry_issue.errors import (
     ERR_SHIP_DISABLED,
     FixIssueError,
 )
-from tools.cross_vendor.fix_sentry_issue.pr import PullRequest, open_pull_request
 from tools.cross_vendor.fix_sentry_issue.ship import build_branch_name, ship_fix
 
 _URL = "https://acme.sentry.io/issues/12345/"
@@ -70,8 +74,8 @@ def _success_result() -> CodingResult:
 # --------------------------------------------------------------------------- #
 # pr.open_pull_request
 # --------------------------------------------------------------------------- #
-_SCOPE = "tools.cross_vendor.fix_sentry_issue.pr.detect_git_remote_repo_scope"
-_CLIENT = "tools.cross_vendor.fix_sentry_issue.pr.GitHubRestClient"
+_SCOPE = "integrations.github.pull_requests.detect_git_remote_repo_scope"
+_CLIENT = "integrations.github.pull_requests.GitHubRestClient"
 
 
 @patch(_SCOPE, return_value=("acme", "app"))
@@ -96,7 +100,7 @@ def test_open_pull_request_builds_payload(mock_scope: MagicMock) -> None:
 
 
 def test_open_pull_request_requires_token() -> None:
-    with patch.dict("os.environ", {}, clear=True), pytest.raises(FixIssueError) as exc:
+    with patch.dict("os.environ", {}, clear=True), pytest.raises(GitHubPullRequestError) as exc:
         open_pull_request(
             "/ws", head_branch="b", base_branch="main", title="t", body="b", github_token=""
         )
@@ -105,18 +109,18 @@ def test_open_pull_request_requires_token() -> None:
 
 @patch(_SCOPE, return_value=None)
 def test_open_pull_request_unknown_repo_scope(_mock_scope: MagicMock) -> None:
-    with pytest.raises(FixIssueError) as exc:
+    with pytest.raises(GitHubPullRequestError) as exc:
         open_pull_request(
             "/ws", head_branch="b", base_branch="main", title="t", body="b", github_token="tok"
         )
-    assert exc.value.kind == ERR_PR_FAILED
+    assert exc.value.kind == "repo_scope_unresolved"
 
 
 @patch(_SCOPE, return_value=("acme", "app"))
 def test_open_pull_request_maps_api_error(_mock_scope: MagicMock) -> None:
     client = MagicMock()
     client.request.side_effect = GitHubApiError("validation failed", status_code=422)
-    with patch(_CLIENT, return_value=client), pytest.raises(FixIssueError) as exc:
+    with patch(_CLIENT, return_value=client), pytest.raises(GitHubPullRequestError) as exc:
         open_pull_request(
             "/ws", head_branch="b", base_branch="main", title="t", body="b", github_token="tok"
         )

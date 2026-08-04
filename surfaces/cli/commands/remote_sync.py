@@ -25,6 +25,7 @@ from platform.filestorage.setup import (
     disable_remote_sync,
     save_remote_sync_settings,
 )
+from surfaces.cli.commands.remote_sync_progress import CliProgress
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -54,11 +55,19 @@ def status_command() -> None:
 @click.option("--dry-run", is_flag=True, help="Preview transfers without changing anything.")
 def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
+    progress = CliProgress() if click.get_text_stream("stdout").isatty() else None
     try:
-        report = run_remote_sync(pull_only=pull_only, push_only=push_only, dry_run=dry_run)
+        report = run_remote_sync(
+            pull_only=pull_only, push_only=push_only, dry_run=dry_run, on_progress=progress
+        )
     except RemoteSyncError as exc:
+        if progress is not None:
+            progress.close()
         click.echo(f"Sync failed: {exc}", err=True)
         raise SystemExit(ERROR) from exc
+    finally:
+        if progress is not None:
+            progress.close()
     if report is None:
         click.echo(DISABLED_HELP)
         raise SystemExit(SUCCESS)

@@ -210,21 +210,18 @@ def dispatch_slash(
                     record_slash(ok=True)
                     return _cmd_help(session, console, [])
 
-                parts = stripped.split()
+                # Quote-aware split: /cron add --cron '0 8 * * 1-5' must keep the
+                # five-field expression as one argument. Plain str.split fragments
+                # it and Click reports unexpected extra arguments. Fall back when
+                # shlex rejects unbalanced quotes (e.g. /investigate don't …).
+                try:
+                    parts = shlex.split(stripped, posix=True)
+                except ValueError:
+                    parts = stripped.split()
                 if not parts:
                     return True
                 name = parts[0].lower()
-                if name in ("/watch", "/unwatch"):
-                    head = parts[0]
-                    body = stripped[len(head) :].strip()
-                    try:
-                        # Use POSIX mode on all platforms so quoted values are unwrapped
-                        # consistently (e.g., --max-cpu "80" -> 80).
-                        args = shlex.split(body, posix=True)
-                    except ValueError:
-                        args = body.split()
-                else:
-                    args = parts[1:]
+                args = parts[1:]
                 cmd = SLASH_COMMANDS.get(name)
                 if cmd is None:
                     typo_message = format_unknown_slash_message(
