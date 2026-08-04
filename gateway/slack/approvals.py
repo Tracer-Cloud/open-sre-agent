@@ -10,7 +10,7 @@ resulting ``block_actions`` click back to the broker.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from gateway.runtime.approvals import (
@@ -89,7 +89,7 @@ def handle_block_actions_payload(
     payload: Mapping[str, Any],
     *,
     broker: ApprovalBroker,
-    allowed_user_ids: list[str],
+    allowed_user_ids: Sequence[str],
     allow_open_workspace: bool,
 ) -> bool:
     """Route one interactive ``block_actions`` payload to the broker.
@@ -104,10 +104,11 @@ def handle_block_actions_payload(
     actions = payload.get("actions")
     if not user_id or not isinstance(actions, list):
         return False
-    if allowed_user_ids and user_id not in allowed_user_ids:
+    allowed_set = set(allowed_user_ids)
+    if allowed_set and user_id not in allowed_set:
         logger.info("[slack-gateway] approval click from unauthorized user=%s ignored", user_id)
         return False
-    if not allowed_user_ids and not allow_open_workspace:
+    if not allowed_set and not allow_open_workspace:
         return False
     resolved = False
     for action in actions:
