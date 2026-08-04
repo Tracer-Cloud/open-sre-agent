@@ -180,7 +180,7 @@ def _skill_body_with_optional_template(skill_path: Path, body: str) -> str:
     if not template:
         return body
     header = _REPORT_TEMPLATE_HEADER.format(repo_path=_repo_relative_path(template_path))
-    return f"{body}\n\n{header}\n\n{template}"
+    return "".join((body, "\n\n", header, "\n\n", template))
 
 
 def _load_action_skill(skill_path: Path) -> ActionSkill | None:
@@ -242,7 +242,7 @@ def load_skills_index() -> str:
         "",
     ]
     lines.extend(_index_line(skill) for skill in skills)
-    return "\n".join(lines) + "\n\n"
+    return "".join(("\n".join(lines), "\n\n"))
 
 
 def load_skills_block() -> str:

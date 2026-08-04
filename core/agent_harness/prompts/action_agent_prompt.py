@@ -36,7 +36,9 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             id="action-agent-system-base",
             kind=PromptBlockKind.SYSTEM,
             tier=PromptTier.STABLE,
-            content=_SYSTEM_PROMPT_BASE + "\n\n",
+            # Trailing separators stay in the block; avoid ``base + "\n\n"`` which
+            # copies the entire stable prompt body on every turn.
+            content="".join((_SYSTEM_PROMPT_BASE, "\n\n")),
             provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
     ]
@@ -47,7 +49,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 id="action-agent-vendor-fragments",
                 kind=PromptBlockKind.RULE,
                 tier=PromptTier.STABLE,
-                content=vendor_fragments + "\n\n",
+                content="".join((vendor_fragments, "\n\n")),
                 provenance="platform.harness_ports.action_prompt_vendor_fragments",
             )
         )
@@ -189,7 +191,8 @@ def build_action_user_message(text: str, *, prefix: str = "") -> str:
     body = _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
     if not prefix:
         return body
-    return f"{prefix}{body}"
+    # Ephemeral history can be large; join avoids an intermediate f-string copy.
+    return "".join((prefix, body))
 
 
 def sanitize_action_text(text: str) -> str:

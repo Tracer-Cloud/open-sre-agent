@@ -105,11 +105,13 @@ def _assistant_context_blocks(
     tool_observation_on_screen: bool,
     suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
 ) -> str:
-    return (
-        f"{_build_integration_guard(turn_snapshot)}"
-        f"{build_handoff_guidance_block(handoff_contents)}"
-        f"{build_observation_block(tool_observation, on_screen=tool_observation_on_screen)}"
-        f"{synthetic_failure.build_block(turn_snapshot, suggested_prompt=suggested_prompt)}"
+    return "".join(
+        (
+            _build_integration_guard(turn_snapshot),
+            build_handoff_guidance_block(handoff_contents),
+            build_observation_block(tool_observation, on_screen=tool_observation_on_screen),
+            synthetic_failure.build_block(turn_snapshot, suggested_prompt=suggested_prompt),
+        )
     )
 
 
@@ -169,11 +171,22 @@ def build_cli_agent_prompt_from_provider(
     # Live facts (time/uptime/disk/memory) sit immediately before the user
     # message so the system/env prefix stays byte-stable for prompt caching.
     live_block = build_live_runtime_facts_block(facts)
-    return (
-        f"{system}\n"
-        f"{_assistant_context_blocks(turn_snapshot=turn_snapshot, handoff_contents=handoff_contents, tool_observation=tool_observation, tool_observation_on_screen=tool_observation_on_screen, suggested_prompt=prompts.suggested_synthetic_prompt())}"
-        f"{live_block}"
-        f"--- User message ---\n{message}"
+    # Large ``system`` + observation + history: join once (no chained f-string copies).
+    return "".join(
+        (
+            system,
+            "\n",
+            _assistant_context_blocks(
+                turn_snapshot=turn_snapshot,
+                handoff_contents=handoff_contents,
+                tool_observation=tool_observation,
+                tool_observation_on_screen=tool_observation_on_screen,
+                suggested_prompt=prompts.suggested_synthetic_prompt(),
+            ),
+            live_block,
+            "--- User message ---\n",
+            message,
+        )
     )
 
 

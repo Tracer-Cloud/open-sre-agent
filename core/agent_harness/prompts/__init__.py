@@ -21,6 +21,7 @@ from core.agent_harness.prompts.assistant import (
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
+    build_assistant_system_prompt_envelope,
     build_environment_block,
 )
 from core.agent_harness.prompts.envelope import (
@@ -31,6 +32,7 @@ from core.agent_harness.prompts.envelope import (
 )
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
+    build_gather_system_prompt_envelope,
     build_gather_system_prompt_from_turn_snapshot,
 )
 from core.agent_harness.prompts.skills_loader import (
@@ -65,7 +67,9 @@ __all__ = [
     "build_action_system_prompt_envelope",
     "build_action_user_message",
     "build_assistant_system_prompt",
+    "build_assistant_system_prompt_envelope",
     "build_gather_system_prompt",
+    "build_gather_system_prompt_envelope",
     "build_gather_system_prompt_from_turn_snapshot",
     "build_cli_agent_prompt_from_provider",
     "build_environment_block",
