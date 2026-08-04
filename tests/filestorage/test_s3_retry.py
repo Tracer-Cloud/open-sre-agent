@@ -10,7 +10,12 @@ from __future__ import annotations
 import time
 
 import pytest
-from botocore.exceptions import ClientError, EndpointConnectionError
+from botocore.exceptions import (
+    ClientError,
+    EndpointConnectionError,
+    NoCredentialsError,
+    PartialCredentialsError,
+)
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.errors import RemoteSyncUnavailableError
@@ -150,6 +155,36 @@ def test_a_missing_bucket_is_not_retried() -> None:
     assert client.calls == 1
 
 
+def test_missing_credentials_are_not_retried() -> None:
+    """NoCredentialsError is a misconfiguration — fail fast, exactly one call.
+
+    It subclasses BotoCoreError, which is otherwise treated as a transient
+    network blip; without the permanent-botocore guard it would be retried
+    four times with backoff before surfacing the same error.
+    """
+    # Arrange
+    client = _AlwaysRaises(NoCredentialsError())
+    store = _store(client)
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncUnavailableError):
+        store.get_object(_KEY)
+    assert client.calls == 1
+
+
+def test_partial_credentials_are_not_retried() -> None:
+    """PartialCredentialsError (e.g. key id but no secret) is also permanent."""
+    # Arrange
+    incomplete = PartialCredentialsError(provider="env", cred_var="aws_secret_access_key")
+    client = _AlwaysRaises(incomplete)
+    store = _store(client)
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncUnavailableError):
+        store.get_object(_KEY)
+    assert client.calls == 1
+
+
 def test_a_persistent_transient_error_exhausts_attempts_then_raises() -> None:
     """Backoff is bounded: after RETRY_MAX_ATTEMPTS tries it gives up cleanly."""
     from platform.filestorage.providers.aws import RETRY_MAX_ATTEMPTS
@@ -164,23 +199,24 @@ def test_a_persistent_transient_error_exhausts_attempts_then_raises() -> None:
     assert client.calls == RETRY_MAX_ATTEMPTS
 
 
-def test_the_user_facing_message_never_leaks_boto_internals() -> None:
-    """CWE-209: the surfaced error names the key, not the raw boto payload.
+def test_the_user_facing_message_names_the_key_and_operation() -> None:
+    """The surfaced error identifies the failed operation and key.
 
-    Detail is logged server-side; the message a user could see on a chat surface
-    stays generic. The wrapper carries a stable ``cannot read`` phrase and the
-    key, but not the AccessDenied credentials-shaped internals of the response.
+    Sync runs on local surfaces, so :class:`RemoteSyncUnavailableError`
+    intentionally carries the AWS cause for the operator (pinned by
+    ``test_aws_failures_name_their_cause``). CWE-209 redaction of that detail
+    happens at the *external* gateway sink boundary, not in this exception, so
+    the local message legitimately includes the boto reason.
     """
-    # Arrange: an error whose raw text carries something secret-looking.
-    secret_shaped = _client_error("SlowDown")
-    client = _AlwaysRaises(secret_shaped)
+    # Arrange
+    client = _AlwaysRaises(_client_error("SlowDown"))
     store = _store(client)
 
     # Act
     with pytest.raises(RemoteSyncUnavailableError) as caught:
         store.get_object(_KEY)
 
-    # Assert: the message identifies the failed operation and key only.
+    # Assert: the message identifies the failed operation and key.
     message = str(caught.value)
     assert _KEY in message
     assert "cannot read" in message

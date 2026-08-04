@@ -8,7 +8,12 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import (
+    BotoCoreError,
+    ClientError,
+    NoCredentialsError,
+    PartialCredentialsError,
+)
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
@@ -49,6 +54,13 @@ PERMANENT_ERROR_CODES = frozenset(
         "SignatureDoesNotMatch",
     }
 )
+# BotoCoreError subclasses that are a misconfiguration, not a blip: missing or
+# incomplete credentials never resolve by retrying, so they surface at once
+# rather than after four futile attempts and 3.5s of backoff.
+PERMANENT_BOTOCORE_ERRORS: tuple[type[BotoCoreError], ...] = (
+    NoCredentialsError,
+    PartialCredentialsError,
+)
 # Codes that mean "the store was busy or briefly unhealthy" — safe to retry.
 TRANSIENT_ERROR_CODES = frozenset(
     {
@@ -67,11 +79,15 @@ TRANSIENT_ERROR_CODES = frozenset(
 def _is_transient(exc: BotoCoreError | ClientError) -> bool:
     """Whether ``exc`` is a blip worth retrying rather than a permanent fault.
 
-    A :class:`BotoCoreError` is a client-side network/connection failure (no
-    HTTP response reached us), which is always transient. A
-    :class:`ClientError` is a real S3 response: retry only throttling codes and
-    5xx statuses, and never the permanent set (bad bucket, denied, missing key).
+    A :class:`BotoCoreError` is usually a client-side network/connection
+    failure (no HTTP response reached us), which is transient — except the
+    credential-configuration subclasses in :data:`PERMANENT_BOTOCORE_ERRORS`,
+    which never resolve by retrying. A :class:`ClientError` is a real S3
+    response: retry only throttling codes and 5xx statuses, and never the
+    permanent set (bad bucket, denied, missing key).
     """
+    if isinstance(exc, PERMANENT_BOTOCORE_ERRORS):
+        return False
     if isinstance(exc, ClientError):
         error = exc.response.get("Error", {})
         code = str(error.get("Code", ""))
@@ -137,6 +153,10 @@ class S3ObjectStore:
         )
         out: list[RemoteObject] = []
         try:
+            # list() so pagination runs *inside* _with_retry: a transient blip
+            # partway through a multi-page listing is then retried. Returning
+            # the bare generator would defer pagination to the loop below,
+            # outside the retry wrapper, and lose that coverage.
             for page in _with_retry(lambda: list(self._pages(full_prefix))):
                 for item in page.get("Contents", []):
                     key = str(item["Key"])
