@@ -19,10 +19,36 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
+from platform.filestorage.enums import SyncDirection
 from platform.filestorage.exclusions import ExclusionRules
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from platform.filestorage.providers import credential_hint_for_provider
 from platform.filestorage.providers.registry import builtin_providers
+
+#: ASCII C0/DEL and Latin-1 C1 control ranges — where CSI/OSC escape sequences
+#: live. Built once, not per key: a dict is checked by ``str.translate``, not
+#: scanned as a list.
+_CONTROL_CHAR_TABLE = dict.fromkeys((*range(0, 32), 127, *range(128, 160)), "�")
+
+_DIRECTION_LABEL = {SyncDirection.PULL: "Pulling", SyncDirection.PUSH: "Pushing"}
+
+
+def direction_label(direction: SyncDirection) -> str:
+    """Human label for a sync direction, shared so surfaces can't drift apart."""
+    return _DIRECTION_LABEL[direction]
+
+
+def sanitize_terminal_text(text: str) -> str:
+    """Replace control/escape characters so an untrusted key cannot spoof the terminal.
+
+    Object keys come from the local filesystem or a remote listing — either
+    can be attacker-influenced (a crafted local filename, or a compromised or
+    misconfigured remote store) — and are shown directly in a live progress
+    display or a report line. Control and escape characters (CSI, OSC, ...)
+    are replaced with U+FFFD so a key cannot move the cursor, hide text, or
+    fake other terminal output.
+    """
+    return text.translate(_CONTROL_CHAR_TABLE)
 
 
 def _human_size(n: int) -> str:
@@ -124,7 +150,7 @@ def format_report_lines(report: SyncReport, *, dry_run: bool = False) -> tuple[s
         lines.append(f"{excluded} held back by your exclude settings.")
     if kept_remote:
         lines.append(f"{len(kept_remote)} kept the store's newer copy:")
-        lines.extend(f"  {key}" for key in kept_remote)
+        lines.extend(f"  {sanitize_terminal_text(key)}" for key in kept_remote)
         lines.append(_KEPT_REMOTE_HINT)
     return tuple(lines)
 
@@ -153,9 +179,11 @@ __all__ = [
     "DISABLED_HELP",
     "NO_EXCLUSIONS_HELP",
     "SETUP_DISABLED_CONFIRM",
+    "direction_label",
     "format_exclusion_lines",
     "format_report_lines",
     "format_setup_lines",
     "format_status_lines",
     "root_state",
+    "sanitize_terminal_text",
 ]

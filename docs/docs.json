@@ -167,6 +167,8 @@
               "ec2",
               "github",
               "github-workflow-tools",
+              "github-security-fix",
+              "github-ci-fix",
               "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",
