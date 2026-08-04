@@ -644,3 +644,28 @@ def test_the_active_instruction_survives_context_truncation() -> None:
     # Assert
     assert truncated is True
     assert instruction in shrunk
+
+
+def test_the_cron_guidance_names_every_required_flag() -> None:
+    """A schedule the model cannot construct is worse than no offer at all.
+
+    ``/cron add`` rejects a call without ``--chat-id`` (exit 2). The guidance
+    used to show a ``<channel or chat id>`` placeholder with nothing in the turn
+    to resolve it, so the model dropped the flag and the accepted offer failed
+    after the user had already said yes.
+    """
+    # Arrange
+    from core.agent_harness.prompts.skills_loader import skills_dir
+
+    base = " ".join(_SYSTEM_PROMPT_BASE.split())
+    skill = " ".join((skills_dir() / "morning_report.md").read_text(encoding="utf-8").split())
+
+    # Assert — every flag click marks required
+    for flag in ("--kind", "--cron", "--provider", "--chat-id"):
+        assert flag in base, f"{flag} missing from stable-tier cron guidance"
+        assert flag in skill, f"{flag} missing from the morning-report recipe"
+
+    # Assert — the destination must be fillable from the turn, not a placeholder
+    assert "<channel or chat id>" not in skill
+    assert "<id>" not in base
+    assert "required" in base.lower()

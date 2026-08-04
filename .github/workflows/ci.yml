@@ -49,7 +49,9 @@ jobs:
       source: ${{ steps.filter.outputs.source }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4.0.2
+      # Pin to immutable SHA (dorny/paths-filter@v4.0.2). A movable tag here
+      # could repoint and skip quality/standard/thorough while CI Gate still passes.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -398,7 +400,8 @@ jobs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4.0.2
+      # Same pin as Detect relevant changes — see comment there.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |

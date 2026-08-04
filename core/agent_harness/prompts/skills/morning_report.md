@@ -83,7 +83,10 @@ Examples:
    then create it. Example:
      → slash_invoke(command="/cron", args=["add", "--kind", "daily_summary",
        "--cron", "0 8 * * 1-5", "--tz", "UTC", "--provider", "slack",
-       "--chat-id", "<channel or chat id>"])
-   If provider or chat-id is unknown, ask for those two facts only — then
-   schedule. Skip the offer only when they already asked for a one-off and
+       "--chat-id", "#opensre-alerts"])
+   --chat-id is REQUIRED and the command fails without it. Reuse the exact
+   destination the delivery step just used — a "#channel-name" is accepted, so
+   pass the name you reported in the briefing rather than hunting for an id.
+   Only if delivery had no destination either, ask for provider and channel —
+   then schedule. Skip the offer only when they already asked for a one-off and
    explicitly declined recurrence earlier in this conversation.

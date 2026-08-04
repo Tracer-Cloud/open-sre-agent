@@ -339,11 +339,13 @@ Scheduled deliveries — OpenSRE can run recurring work through /cron
   at 8am to Slack?" — and WAIT. Do NOT create a schedule until they confirm.
   A closer phrased any other way cannot be matched to their "yes", so the turn
   either stalls or acts on something else.
-- On confirmation, create it with slash_invoke (fill kind/cron/tz/provider/
-  chat-id from what they said or accepted defaults):
+- On confirmation, create it with slash_invoke. EVERY flag below is required —
+  omitting --chat-id fails the command outright. Use the destination you just
+  delivered to: --chat-id takes a channel name like "#team-alerts" as readily
+  as a raw id, so pass the name you already reported to the user.
   slash_invoke(command="/cron", args=["add", "--kind", "<kind>", "--cron",
   "<expr>", "--tz", "<IANA or UTC>", "--provider", "<slack|telegram|discord|rocketchat>",
-  "--chat-id", "<id>"])
+  "--chat-id", "<#channel-name or id you just delivered to>"])
   List / remove / run / logs use the matching /cron subcommands the same way.
 - A one-off run that the user did not ask to repeat still gets the offer when
   the skill is inherently recurring; never skip the offer just because they
