@@ -749,19 +749,20 @@ def test_llm_failure_on_literal_slash_input_stays_terminal() -> None:
 
 def test_stream_failure_stages_llm_error_and_identity() -> None:
     """A conversational stream failure stages both the error and the attempted LLM."""
+    from core.agent_harness.prompts.assistant import AssistantTurnPrompt
     from core.agent_harness.turns.orchestrator import _stream_response
 
     class _FailingStreamClient:
         _model = "claude-sonnet-4-6"
         _provider_label = "Anthropic"
 
-        def invoke_stream(self, _prompt: str) -> Any:
+        def invoke_stream(self, _prompt: Any) -> Any:
             raise RuntimeError("Anthropic authentication failed.")
 
     session = Session()
     run = _stream_response(
         client=_FailingStreamClient(),
-        prompt="hi",
+        turn_prompt=AssistantTurnPrompt(system="", user="hi"),
         output=_OutputSink(Console(force_terminal=False)),
         run_factory=object(),
         error_reporter=None,

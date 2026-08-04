@@ -236,8 +236,14 @@ def test_driver_system_prefix_is_byte_identical_across_turns() -> None:
     assert first_system  # non-empty cached prefix is what we mark for cache
 
 
-def test_user_message_prefix_keeps_literal_envelope_after_ephemeral() -> None:
-    """Ephemeral text must prefix the user turn without breaking the literal wrap."""
+def test_the_literal_user_message_leads_and_ephemeral_history_follows() -> None:
+    """Order here decides what an over-budget turn loses.
+
+    ``core.context_budget._shrink_text`` keeps the head and drops the tail, so
+    the literal instruction has to come first. With history leading, a turn over
+    budget kept stale chatter and cut the request that started it — the planner
+    then acted on the wrong thing entirely.
+    """
     # Arrange
     envelope = build_action_system_prompt_envelope(_turn([("user", "zzmarker-prefix-envelope")]))
 
@@ -245,9 +251,9 @@ def test_user_message_prefix_keeps_literal_envelope_after_ephemeral() -> None:
     user_message = build_action_user_message("run /health", prefix=envelope.render_ephemeral())
 
     # Assert
-    assert user_message.startswith("RECENT CONVERSATION")
+    assert user_message.startswith("USER MESSAGE (literal): <<<run /health>>>")
     assert "zzmarker-prefix-envelope" in user_message
-    assert user_message.rstrip().endswith("USER MESSAGE (literal): <<<run /health>>>")
+    assert user_message.index("run /health") < user_message.index("RECENT CONVERSATION")
     assert user_message.count("USER MESSAGE (literal):") == 1
 
 

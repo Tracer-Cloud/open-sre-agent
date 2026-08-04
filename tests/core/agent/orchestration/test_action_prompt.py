@@ -618,3 +618,27 @@ def test_scheduling_is_never_offered_without_asking_first() -> None:
     # Assert
     assert "do not create a schedule until they confirm" in base
     assert "do not schedule until they confirm" in skill
+
+
+def test_the_active_instruction_survives_context_truncation() -> None:
+    """An oversized turn must lose stale history, never the current request.
+
+    ``core.context_budget`` shrinks a message with ``text[:keep]`` — it keeps the
+    head and drops the tail. Ephemeral history therefore has to sit *after* the
+    literal user message: with history first, a turn over budget loses the very
+    instruction that started it and the planner acts on stale context instead.
+    """
+    # Arrange
+    from core.agent_harness.prompts import build_action_user_message
+    from core.context_budget import _shrink_text
+
+    instruction = "zzmarker-delete-the-staging-database"
+    history = "--- Recent conversation ---\n" + ("user: earlier chatter\n" * 200)
+    message = build_action_user_message(instruction, prefix=history)
+
+    # Act
+    shrunk, truncated = _shrink_text(message, 500)
+
+    # Assert
+    assert truncated is True
+    assert instruction in shrunk

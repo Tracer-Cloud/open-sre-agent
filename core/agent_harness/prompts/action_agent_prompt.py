@@ -184,15 +184,21 @@ def build_action_user_message(text: str, *, prefix: str = "") -> str:
     """Wrap the user turn; optional ``prefix`` carries ephemeral system halves.
 
     ``prefix`` is where per-turn conversation / prior-action-facts land once the
-    action driver opts into :meth:`PromptEnvelope.render_cached` — same text the
-    model used to see at the end of ``system``, now at the start of the user
-    message so the cached system prefix stays byte-stable across turns.
+    action driver opts into :meth:`PromptEnvelope.render_cached` — the same text
+    the model used to see at the end of ``system``, moved here so the cached
+    system prefix stays byte-stable across turns.
+
+    It is appended *after* the literal user message, not before it.
+    ``core.context_budget`` shrinks an oversized message with ``text[:keep]``,
+    keeping the head and dropping the tail — so history placed first would push
+    the active instruction into the part that gets cut, and the planner would
+    act on stale context instead of the request that started the turn.
     """
     body = _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
     if not prefix:
         return body
     # Ephemeral history can be large; join avoids an intermediate f-string copy.
-    return "".join((prefix, body))
+    return "".join((body, "\n", prefix))
 
 
 def sanitize_action_text(text: str) -> str:
