@@ -239,14 +239,10 @@ def test_driver_system_prefix_is_byte_identical_across_turns() -> None:
 def test_user_message_prefix_keeps_literal_envelope_after_ephemeral() -> None:
     """Ephemeral text must prefix the user turn without breaking the literal wrap."""
     # Arrange
-    envelope = build_action_system_prompt_envelope(
-        _turn([("user", "zzmarker-prefix-envelope")])
-    )
+    envelope = build_action_system_prompt_envelope(_turn([("user", "zzmarker-prefix-envelope")]))
 
     # Act
-    user_message = build_action_user_message(
-        "run /health", prefix=envelope.render_ephemeral()
-    )
+    user_message = build_action_user_message("run /health", prefix=envelope.render_ephemeral())
 
     # Assert
     assert user_message.startswith("RECENT CONVERSATION")

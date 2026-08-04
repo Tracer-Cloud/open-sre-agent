@@ -559,3 +559,66 @@ def test_action_prompt_includes_long_term_memory_bodies(
     assert "LONG-TERM MEMORY" in prompt
     assert "user-profile" in prompt
     assert "platform team" in prompt
+
+
+def test_scheduling_guidance_survives_prompt_assembly() -> None:
+    """The offer must reach the model, not merely exist in a source file.
+
+    The two tests above read ``_SYSTEM_PROMPT_BASE`` and the skill file
+    directly, so they would still pass if the blocks carrying them were dropped
+    from the envelope or re-tiered as ephemeral. This asserts the guidance lands
+    in the cacheable half — the part sent on every turn of a session.
+    """
+    # Arrange
+    from core.agent_harness.prompts import build_action_system_prompt_envelope
+
+    snapshot = _ctx(messages=[("user", "give me a morning report")])
+
+    # Act
+    cached, _ephemeral = build_action_system_prompt_envelope(snapshot).render_split()
+    assembled = " ".join(cached.lower().split())
+
+    # Assert
+    assert "scheduled deliveries" in assembled
+    assert 'slash_invoke(command="/cron"' in assembled
+    assert "want a morning delivery every weekday at 8am?" in assembled
+
+
+def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:
+    """Guidance naming a command that is not registered would fail at run time.
+
+    The prompt instructs ``slash_invoke(command="/cron", args=["add", ...])``.
+    Nothing else ties that string to the real command, so a rename of the CLI
+    group would leave the agent confidently calling a command that is gone.
+    """
+    # Arrange
+    from tools.interactive_shell.shared.slash_catalog import MCP_BY_COMMAND
+
+    # Act
+    entry = MCP_BY_COMMAND.get("/cron")
+
+    # Assert
+    assert entry is not None, "the prompt offers /cron but it is not in the slash catalog"
+    assert "add" in entry.llm_description.lower()
+
+
+def test_scheduling_is_never_offered_without_asking_first() -> None:
+    """Creating a schedule unasked would be a surprise side effect.
+
+    The business goal is an offer the user accepts, not silent automation. Both
+    the stable-tier guidance and the recurring skill must gate creation on
+    confirmation, so this asserts the consent rule in each place a schedule can
+    be created from.
+    """
+    # Arrange
+    from core.agent_harness.prompts.skills_loader import load_skills_block, skills_dir
+
+    load_skills_block.cache_clear()
+    base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    skill = " ".join(
+        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+    )
+
+    # Assert
+    assert "do not create a schedule until they confirm" in base
+    assert "do not schedule until they confirm" in skill

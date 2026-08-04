@@ -865,9 +865,7 @@ def test_build_action_agent_system_identical_across_conversation_growth() -> Non
         )
 
     first = _plan([("user", "hello")])
-    second = _plan(
-        [("user", "hello"), ("assistant", "hi"), ("user", "zzmarker-growth")]
-    )
+    second = _plan([("user", "hello"), ("assistant", "hi"), ("user", "zzmarker-growth")])
     assert first.agent._system == second.agent._system
     assert "zzmarker-growth" not in second.agent._system
     assert "zzmarker-growth" in second.user_message
