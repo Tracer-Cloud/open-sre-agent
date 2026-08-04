@@ -130,6 +130,11 @@ opensre remote-sync sync --pull-only    # new machine, fetch only
 opensre remote-sync sync --push-only    # back up without pulling
 ```
 
+On a terminal, a progress bar (`Pulling`/`Pushing`, a count of how many files
+are done, and the current file) shows a large `sessions/` tree moving instead
+of looking hung; piped or scripted output stays to the final summary line
+only. The interactive shell shows the same thing as a live-updating bar.
+
 ## Exclude paths
 
 By default every session and every memory file mirrors. Patterns hold some of
@@ -227,7 +232,9 @@ Minimum permissions on the prefix you use:
 s3:ListBucket, s3:GetObject, s3:PutObject
 ```
 
-`s3:DeleteObject` is not needed — sync never deletes anything.
+`s3:DeleteObject` is not needed — sync never deletes anything. Add
+`s3:GetBucketPolicyStatus` (bucket-level, not prefix-scoped) so `status` can
+warn you if the bucket is publicly readable — see [The store](#the-store).
 
 ### Google Cloud Storage
 
@@ -250,6 +257,10 @@ opensre never deletes anything, but GCS still requires `storage.objects.delete`
 to **replace** an existing object — without it the first changed session or
 memory file fails with a 403. Objects are encrypted at rest by default; there
 is nothing to configure.
+
+Add `storage.buckets.getIamPolicy` (bucket-level) so `status` can warn you if
+the bucket is publicly readable — see [The store](#the-store). Without it,
+`status` shows "could not confirm it is private" instead of failing.
 
 ### Vercel Blob
 
@@ -282,6 +293,14 @@ Keep the store private. It holds your incident conversations and everything
 opensre has remembered about your systems. Prefer a private S3 bucket or a
 private Vercel Blob store — never a public one.
 </Warning>
+
+On AWS and GCS, `status` checks this for you: if the bucket policy (S3) or
+bucket IAM policy (GCS) makes the bucket publicly readable, `opensre
+remote-sync status` / `/remote-sync status` opens with a warning instead of
+silently mirroring your history into it. Without the permission the check
+needs — or on Vercel, which has no bucket-level public/private setting to
+check — `status` shows "could not confirm it is private" instead of failing;
+it never blocks the rest of the command.
 
 ## How conflicts resolve
 
