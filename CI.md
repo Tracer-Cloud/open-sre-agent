@@ -70,24 +70,18 @@ Run all of these first:
 
 ## 2) Mandatory test harness (scope by touched modules)
 
-**Recommended — run this instead of manually looking up the table below:**
+Pick a focused test command for the modules you changed — do **not** default to
+the full unit suite.
 
-```bash
-make test-scope
-```
+Map changed paths to targets using the `PathRule` entries in
+[`.github/ci/test_scope_rules.py`](.github/ci/test_scope_rules.py):
 
-`make test-scope` reads `git diff` against `main`, maps each changed path to
-its test target(s) using [`.github/ci/test_scope_rules.py`](.github/ci/test_scope_rules.py),
-and runs the minimal `pytest` invocation. It escalates automatically to
-`make test-cov` when shared/core code is touched or 3+ app areas change.
-Pass `ARGS=--dry-run` to preview without running.
+- Rules with `always_escalate=True` map to `make test-cov`
+- All other rules list a `test_targets` tuple — run those with
+  `uv run python -m pytest <targets>`
+- Changed files under `tests/` with no app rule run as-is
 
-### Manual lookup (reference only)
-
-If you prefer to pick the command yourself, or need a focused `-k` filter,
-see the `PathRule` entries in [`.github/ci/test_scope_rules.py`](.github/ci/test_scope_rules.py).
-Rules with `always_escalate=True` map to `make test-cov`; all others list their
-`test_targets` tuple. Changed files under `tests/` with no app rule run as-is.
+Use a focused `-k` filter when you only need a subset of a package.
 
 ## 3) Escalation rules (must run full unit CI suite)
 
