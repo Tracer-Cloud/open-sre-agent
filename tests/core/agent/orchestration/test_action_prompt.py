@@ -348,18 +348,23 @@ def test_skills_loader_bundles_github_security_fix_skill() -> None:
     skill = skills_dir() / "github_security_fix" / "SKILL.md"
     assert skill.is_file()
 
+    # Index carries the one-line catalog; the playbook loads on demand, so the
+    # detailed assertions from #4727 belong against the body, not the block.
     assert "github-security-fix" in load_skills_index()
     body = load_skill_body("github-security-fix")
     assert "GITHUB SECURITY AND QUALITY FIX SKILL" in body
     assert "fix_github_security_alert" in body
+    assert "security and quality issues" in body
+    assert "/security/code-scanning" in body
     assert "Secret-scanning remediation" in body
     assert 'alert_type="auto"' in body
+    assert 'alert_type="code_scanning"' in body
     assert 'alert_type="code_quality"' in body
     assert "auto-detected" in body
     assert "Never add coding-agent advice" in body
     assert "output exactly that text and stop" in body
     assert "reply in one short line" in body
-    assert '"next steps"' in body
+    assert 'Do not say "next steps"' in body
     cached_load_skills_block.cache_clear()
 
 
