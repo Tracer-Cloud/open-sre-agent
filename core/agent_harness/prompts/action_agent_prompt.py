@@ -78,6 +78,16 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.turns.turn_snapshot",
             )
         )
+    memory_block = long_term_memory_block()
+    if memory_block:
+        blocks.append(
+            PromptBlock(
+                id="long-term-memory",
+                kind="context",
+                content=memory_block,
+                provenance="core.domain.memory",
+            )
+        )
     return PromptEnvelope.from_blocks(
         blocks,
         separator="",
@@ -128,6 +138,30 @@ def prior_action_facts_block(turn_snapshot: TurnSnapshot) -> str:
     )
 
 
+def long_term_memory_block() -> str:
+    """Inject stored memory facts into every action-agent turn when available."""
+    from core.domain.memory import (
+        ensure_memory_store,
+        memory_available_here,
+        render_prompt_index,
+    )
+
+    if not memory_available_here():
+        return ""
+    ensure_memory_store()
+    rendered = render_prompt_index()
+    if not rendered:
+        return ""
+    return (
+        "LONG-TERM MEMORY (durable facts from ~/.opensre/memory — injected into "
+        "every turn). Use listed facts when planning; when the USER MESSAGE "
+        "contains a new useful durable fact, call memory_remember in this turn "
+        "even if they never said remember/save — do not wait for special phrasing. "
+        "Prefer updating an existing name over near-duplicates:\n"
+        f"{rendered}\n\n"
+    )
+
+
 def build_action_user_message(text: str) -> str:
     return _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
 
@@ -143,6 +177,7 @@ __all__ = [
     "build_action_system_prompt",
     "build_action_user_message",
     "connected_integrations_block",
+    "long_term_memory_block",
     "prior_action_facts_block",
     "recent_conversation_block",
     "sanitize_action_text",

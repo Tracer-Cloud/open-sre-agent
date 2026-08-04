@@ -212,14 +212,12 @@ def get_server_status(config: PostgreSQLConfig) -> dict[str, Any]:
         try:
             cursor = conn.cursor()
 
-            # Get server version and uptime
             cursor.execute(
                 "SELECT version(), date_trunc('second', current_timestamp - pg_postmaster_start_time()) as uptime"
             )
             version_info, uptime = cursor.fetchone()
             version = version_info.split()[1] if version_info else "unknown"
 
-            # Get connection statistics
             cursor.execute("""
                 SELECT
                     count(*) as total_connections,
@@ -230,7 +228,6 @@ def get_server_status(config: PostgreSQLConfig) -> dict[str, Any]:
             """)
             conn_stats = cursor.fetchone()
 
-            # Get database-specific statistics for current database
             cursor.execute("""
                 SELECT
                     numbackends,
@@ -440,7 +437,6 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
                     }
                 )
 
-            # Get current WAL position on primary
             cursor.execute("SELECT pg_current_wal_lsn()")
             current_wal_lsn = cursor.fetchone()[0]
 
@@ -468,7 +464,6 @@ def get_replication_status(config: PostgreSQLConfig) -> dict[str, Any]:
             conn.close()
     except Exception as err:
         error_str = str(err)
-        # Check if this might be a replica server
         if "recovery" in error_str.lower() or "read-only" in error_str.lower():
             return {
                 "source": "postgresql",
@@ -506,7 +501,6 @@ def get_slow_queries(
         try:
             cursor = conn.cursor()
 
-            # Check if pg_stat_statements extension is available
             cursor.execute("""
                 SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'
             """)
@@ -525,7 +519,6 @@ def get_slow_queries(
                     "queries": [],
                 }
 
-            # Get slow queries by mean execution time
             cursor.execute(
                 """
                 SELECT
@@ -599,7 +592,6 @@ def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
         try:
             cursor = conn.cursor()
 
-            # Get blocked queries and their blockers
             cursor.execute(
                 """
                 SELECT
@@ -657,7 +649,6 @@ def get_lock_status(config: PostgreSQLConfig) -> dict[str, Any]:
                     }
                 )
 
-            # Get total lock count summary
             cursor.execute(
                 """
                 SELECT

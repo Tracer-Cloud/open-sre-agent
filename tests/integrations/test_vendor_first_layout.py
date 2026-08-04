@@ -27,16 +27,24 @@ ALLOWED_FLAT_MODULES = frozenset(
         "catalog.py",
         "cli.py",
         "config_models.py",
+        # Package entry point: holds ``main`` for ``python -m integrations``,
+        # so ``__main__.py`` stays a launcher. Not a vendor.
+        "app.py",
         "daily_update.py",
         "effective_models.py",
         "harness_adapters.py",
         "mcp_streamable_http_compat.py",
+        "mcp_transport.py",
         "messaging_security.py",
         "models.py",
         "port.py",
         "probes.py",
         "registry.py",
         "scheduled_agent_bootstrap.py",
+        # Cross-cutting credential-resolution infra (hydrates every vendor's org
+        # creds from the tenant's Secrets Manager blob), not a vendor — the
+        # Secrets Manager peer of webapp_vault.py.
+        "secrets_vault.py",
         "selectors.py",
         "setup_flow.py",
         "store.py",

@@ -293,7 +293,7 @@ def _slash_commands() -> Mapping[str, object]:
 
 
 def _cli_command_group() -> click.Command | None:
-    from surfaces.cli.__main__ import cli
+    from surfaces.cli.app import cli
 
     return cli
 
@@ -345,8 +345,14 @@ class ShellPromptContextProvider:
     def investigation_flow(self) -> str:
         return self._base.investigation_flow()
 
-    def environment_block(self) -> str:
-        return self._base.environment_block()
+    def runtime_facts(self) -> Mapping[str, Any]:
+        return self._base.runtime_facts()
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:
+        return self._base.environment_block(runtime)
+
+    def long_term_memory(self) -> str:
+        return self._base.long_term_memory()
 
     def suggested_synthetic_prompt(self) -> str:
         return self._base.suggested_synthetic_prompt()

@@ -66,8 +66,54 @@ def _cleaned_bullets(section: str, strip: str = "*-• ") -> Iterator[str]:
             yield line
 
 
+#: Label / markdown / confidence fluff around a sole category on a verdict line
+#: (``category -> name``, ``- **name**``, ``name (high confidence)``).
+#: Stripped before the whole-line taxonomy check — never used to dig a name out
+#: of a mid-sentence mention.
+_CATEGORY_LINE_DECORATION = re.compile(
+    r"(?:"
+    r"root_cause_category|category|cause|"
+    r"high|medium|low|confidence|likely|probable|"
+    # Affirmative qualifiers. Unlike the rejection cues, omissions here only
+    # cost recall (the line yields no verdict), never correctness.
+    r"confirmed|verified|certain|definite|definitive|primary|conclusion|"
+    r"[\s*_#\-•.:→>,;()\[\]\"'`]+"
+    r")+",
+    re.IGNORECASE,
+)
+
+
+def _whole_line_category_form(line: str) -> str:
+    """Collapse punctuation/spacing on the whole line to an underscored form."""
+    return re.sub(r"[^a-z0-9]+", "_", line).strip("_")
+
+
+def _category_from_verdict_line(line: str) -> str | None:
+    """Return a taxonomy category only when the *whole line* is that verdict.
+
+    Mid-sentence matches are never trusted. ``pod_oomkilled is incorrect`` and
+    ``cannot be resource_exhaustion`` keep residual English after decoration is
+    stripped, so they cannot resolve to a category — regardless of wording.
+    """
+    if line in VALID_ROOT_CAUSE_CATEGORIES:
+        return line
+    whole = _whole_line_category_form(line)
+    if whole in VALID_ROOT_CAUSE_CATEGORIES:
+        return whole
+    stripped = _CATEGORY_LINE_DECORATION.sub(" ", line).strip()
+    if not stripped or stripped == line:
+        return None
+    form = _whole_line_category_form(stripped)
+    if form in VALID_ROOT_CAUSE_CATEGORIES:
+        return form
+    return None
+
+
 def _extract_category(response: str) -> str:
-    """First valid category found on any line after ``ROOT_CAUSE_CATEGORY:``."""
+    """First whole-line category verdict after ``ROOT_CAUSE_CATEGORY:``.
+
+    Never selects a taxonomy name merely mentioned inside a sentence.
+    """
     section = _text_between(response, "ROOT_CAUSE_CATEGORY:", ())
     if section is None:
         return "unknown"
@@ -75,11 +121,9 @@ def _extract_category(response: str) -> str:
         candidate = raw.strip().lower()
         if not candidate:
             continue
-        if candidate in VALID_ROOT_CAUSE_CATEGORIES:
-            return candidate
-        for token in re.findall(r"[a-z_][a-z0-9_]*", candidate):
-            if token in VALID_ROOT_CAUSE_CATEGORIES:
-                return str(token)
+        category = _category_from_verdict_line(candidate)
+        if category is not None:
+            return category
     return "unknown"
 
 

@@ -13,22 +13,14 @@ if TYPE_CHECKING:
 # lazy module attributes resolved by `__getattr__` below; ruff's F822 check
 # can't see them.
 __all__ = (
-    "ALERT_TEMPLATE_CHOICES",
     "MANAGED_INTEGRATION_SERVICES",
     "SAMPLE_ALERT_OPTIONS",
     "SETUP_SERVICES",
     "VERIFY_SERVICES",
 )
 
-ALERT_TEMPLATE_CHOICES: tuple[str, ...] = (
-    "generic",
-    "datadog",
-    "grafana",
-    "honeycomb",
-    "coralogix",
-    "splunk",
-)
-
+# Template names for these options are the shared ALERT_TEMPLATE_CHOICES in
+# config/constants/investigation.py; the labels here are CLI-only.
 SAMPLE_ALERT_OPTIONS: tuple[tuple[str, str], ...] = (
     ("generic", "Generic - High error rate in payments ETL"),
     ("datadog", "Datadog - payments-etl error rate high"),
@@ -45,8 +37,8 @@ def __getattr__(name: str) -> tuple[str, ...]:
     # `click.Choice` validators stay in sync with what cmd_setup / cmd_verify
     # can actually dispatch. Eagerly importing `integrations.registry` here
     # creates a circular import (registry -> verifiers -> integrations.github.mcp ->
-    # cli.*). Deferring to first access lets `cli` finish
-    # bootstrapping. See #1973 (verify) and #2537 (setup).
+    # cli.*). Deferring the import until first access allows the CLI to finish
+    # bootstrapping before the integration registry is loaded.
     if name == "SETUP_SERVICES":
         from integrations.registry import SUPPORTED_SETUP_SERVICES
 

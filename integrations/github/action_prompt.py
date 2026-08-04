@@ -22,6 +22,9 @@ Do NOT use github_cli when the user is diagnosing a crash/failure/outage and
 names GitHub among other sources to query (e.g. sentry + github issues +
 posthog) — emit investigation_start instead; the investigation gathers those
 sources. github_cli is for GitHub-only product operations, not multi-source RCA.
+Do NOT use github_cli (or shell_run / gh api stargazers) for star history,
+day-by-day stars, stars gained, or star velocity — emit assistant_handoff so
+gather can call get_github_star_history (paginated gh scans routinely undercount).
 Pass args after the `gh` binary; optional repo as owner/name for -R.
 Examples:
 * "create an issue titled X with body Y"

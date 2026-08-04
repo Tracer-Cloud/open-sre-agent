@@ -21,6 +21,7 @@ import logging
 import os
 import urllib.parse
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_RABBITMQ_MANAGEMENT_PORT = 15672
 DEFAULT_RABBITMQ_VHOST = "/"
-DEFAULT_RABBITMQ_TIMEOUT_S = 10
+DEFAULT_RABBITMQ_TIMEOUT_SECONDS = 10
 DEFAULT_RABBITMQ_MAX_RESULTS = 50
 
 
@@ -49,7 +50,7 @@ class RabbitMQConfig(StrictConfigModel):
     vhost: str = DEFAULT_RABBITMQ_VHOST
     ssl: bool = False
     verify_ssl: bool = True
-    timeout_seconds: int = Field(default=DEFAULT_RABBITMQ_TIMEOUT_S, gt=0)
+    timeout_seconds: int = Field(default=DEFAULT_RABBITMQ_TIMEOUT_SECONDS, gt=0)
     max_results: int = Field(default=DEFAULT_RABBITMQ_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 
@@ -153,9 +154,9 @@ def _http_get(client: httpx.Client, path: str) -> tuple[Any | None, str | None]:
     except httpx.RequestError as err:
         return None, f"RabbitMQ request failed: {err}"
 
-    if response.status_code == 401:
+    if response.status_code == HTTPStatus.UNAUTHORIZED:
         return None, "RabbitMQ authentication failed (check username/password)."
-    if response.status_code == 404:
+    if response.status_code == HTTPStatus.NOT_FOUND:
         if path == "/api/overview":
             return None, (
                 "RabbitMQ Management API not found — enable the "
@@ -163,7 +164,7 @@ def _http_get(client: httpx.Client, path: str) -> tuple[Any | None, str | None]:
                 "`rabbitmq-plugins enable rabbitmq_management`."
             )
         return None, f"RabbitMQ endpoint not found: {path}"
-    if response.status_code >= 400:
+    if response.status_code >= HTTPStatus.BAD_REQUEST:
         return None, (
             f"RabbitMQ management API returned HTTP {response.status_code}: {response.text[:200]}"
         )
@@ -375,14 +376,14 @@ def get_broker_overview(config: RabbitMQConfig) -> dict[str, Any]:
             except httpx.RequestError as exc:
                 alarm_payload = {"ok": False, "detail": str(exc)}
             else:
-                if alarm_resp.status_code == 200:
+                if alarm_resp.status_code == HTTPStatus.OK:
                     alarm_payload = {"ok": True, "detail": "ok"}
-                elif alarm_resp.status_code in (401, 403):
+                elif alarm_resp.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
                     alarm_payload = {
                         "ok": None,
                         "detail": "alarm status unknown (insufficient permissions)",
                     }
-                elif alarm_resp.status_code == 404:
+                elif alarm_resp.status_code == HTTPStatus.NOT_FOUND:
                     alarm_payload = {
                         "ok": None,
                         "detail": "alarm endpoint not available on this broker version",

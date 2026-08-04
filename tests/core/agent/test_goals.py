@@ -1,0 +1,214 @@
+"""Unit tests for goal definition and verification of ReAct stop decisions."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import Any, cast
+
+from core.agent.agent import Agent
+from core.agent.goals import Goal, GoalObservation, goal_met, should_accept_with_goal
+from core.llm.types import AgentLLMResponse, ToolCall
+from core.tool_framework.registered_tool import RegisteredTool
+
+
+class _FakeLLM:
+    def __init__(self, responses: Iterator[AgentLLMResponse]) -> None:
+        self._responses = responses
+        self.model_id: str | None = None
+
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+        return [{"name": t.name} for t in tools]
+
+    def invoke(
+        self,
+        messages: list[dict[str, Any]],  # noqa: ARG002
+        *,
+        system: str | None = None,  # noqa: ARG002
+        tools: list[dict[str, Any]] | None = None,  # noqa: ARG002
+    ) -> AgentLLMResponse:
+        return next(self._responses)
+
+    def build_assistant_message(self, content: str, tool_calls: list[ToolCall]) -> dict[str, Any]:
+        return {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": [{"id": tc.id, "name": tc.name} for tc in tool_calls],
+        }
+
+    def build_tool_result_message(
+        self, tool_calls: list[ToolCall], results: list[Any]
+    ) -> dict[str, Any]:
+        return {
+            "role": "tool",
+            "results": [{"id": tc.id, "output": output} for tc, output in zip(tool_calls, results)],
+        }
+
+
+class _FakeTool:
+    def __init__(self, name: str = "query_logs") -> None:
+        self.name = name
+
+    def validate_public_input(self, value: dict[str, Any]) -> str | None:  # noqa: ARG002
+        return None
+
+    def extract_params(self, resolved: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {}
+
+    def run(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {"ok": True}
+
+
+def _text(content: str) -> AgentLLMResponse:
+    return AgentLLMResponse(content=content, tool_calls=[], raw_content=None)
+
+
+def test_default_goal_requires_text_and_evidence() -> None:
+    goal = Goal(description="count stars", success_criteria="numeric velocity")
+    assert not goal_met(
+        goal,
+        GoalObservation(final_text="", evidence_count=2, iteration=0, max_iterations=5),
+    )
+    assert not goal_met(
+        goal,
+        GoalObservation(final_text="done", evidence_count=0, iteration=0, max_iterations=5),
+    )
+    assert goal_met(
+        goal,
+        GoalObservation(final_text="12 stars/day", evidence_count=1, iteration=0, max_iterations=5),
+    )
+
+
+def test_custom_verify_predicate() -> None:
+    goal = Goal(
+        description="stars",
+        success_criteria="mentions velocity",
+        verify=lambda obs: "velocity" in obs.final_text.lower(),
+    )
+    assert not goal_met(
+        goal,
+        GoalObservation(final_text="12 stars", evidence_count=3, iteration=0, max_iterations=5),
+    )
+    assert goal_met(
+        goal,
+        GoalObservation(
+            final_text="star velocity is 12/day",
+            evidence_count=0,
+            iteration=0,
+            max_iterations=5,
+        ),
+    )
+
+
+def test_should_accept_nudges_until_ceiling() -> None:
+    goal = Goal(description="investigate", success_criteria="root cause named")
+    accept, nudge = should_accept_with_goal(
+        goal,
+        final_text="",
+        evidence_count=0,
+        iteration=0,
+        max_iterations=3,
+    )
+    assert accept is False
+    assert nudge is not None
+    assert "Goal not yet met" in nudge
+
+    accept, nudge = should_accept_with_goal(
+        goal,
+        final_text="",
+        evidence_count=0,
+        iteration=2,
+        max_iterations=3,
+    )
+    assert accept is True
+    assert nudge is None
+
+
+def test_no_goal_always_accepts() -> None:
+    assert should_accept_with_goal(
+        None,
+        final_text="",
+        evidence_count=0,
+        iteration=0,
+        max_iterations=5,
+    ) == (True, None)
+
+
+def test_missing_max_iterations_is_not_a_ceiling() -> None:
+    """Unset budget must not make every request-driven turn look finished."""
+    goal = Goal(description="investigate", success_criteria="root cause named")
+    accept, nudge = should_accept_with_goal(
+        goal,
+        final_text="",
+        evidence_count=0,
+        iteration=0,
+        max_iterations=None,
+    )
+    assert accept is False
+    assert nudge is not None
+
+
+def test_agent_goal_nudges_then_accepts_at_ceiling() -> None:
+    """Wired path: Agent._should_accept_conclusion consults goals until budget."""
+    goal = Goal(description="count stars", success_criteria="numeric velocity")
+    llm = _FakeLLM(iter([_text("not yet"), _text("still not")]))
+    tools = cast("list[RegisteredTool]", [_FakeTool()])
+    agent: Agent[RegisteredTool] = Agent(
+        llm=llm,
+        system="sys",
+        tools=tools,
+        resolved_integrations={},
+        max_iterations=2,
+        goal=goal,
+    )
+    result = agent.run([{"role": "user", "content": "stars?"}])
+    assert result.final_text == "still not"
+
+
+def test_agent_without_goal_accepts_first_conclusion() -> None:
+    llm = _FakeLLM(iter([_text("done")]))
+    tools = cast("list[RegisteredTool]", [_FakeTool()])
+    agent: Agent[RegisteredTool] = Agent(
+        llm=llm,
+        system="sys",
+        tools=tools,
+        resolved_integrations={},
+        max_iterations=3,
+    )
+    result = agent.run([{"role": "user", "content": "hi"}])
+    assert result.final_text == "done"
+
+
+def test_goal_ceiling_uses_the_runtime_requests_budget() -> None:
+    """The ceiling must match the budget the loop is actually running.
+
+    ``ReactLoop`` iterates ``run_input.max_iterations``. A ``runtime_request``
+    carries its own budget, so reading the construction-time value means the
+    goal never yields on the real last lap — the loop exhausts with the goal
+    still refusing to accept, and the ceiling escape hatch never fires.
+    """
+    # Arrange: constructed for 10 laps, this run is budgeted 3.
+    from unittest.mock import MagicMock
+
+    from core.agent.agent import Agent
+    from core.agent.goals import Goal
+
+    agent = Agent(
+        llm=MagicMock(),
+        system="s",
+        tools=[],
+        max_iterations=10,
+        goal=Goal(
+            description="never satisfied",
+            success_criteria="impossible",
+            verify=lambda _observation: False,
+        ),
+    )
+    agent._effective_max_iterations = 3
+
+    # Act: the last lap of the *run* budget is iteration 2 (0-based).
+    accept, _nudge = agent._should_accept_conclusion(
+        evidence_count=0, iteration=2, final_text="done"
+    )
+
+    # Assert
+    assert accept is True

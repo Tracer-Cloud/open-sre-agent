@@ -61,6 +61,7 @@ _DEFAULT_LOG_RELATIVE: tuple[str, ...] = (".hermes", "logs", "errors.log")
 # token-budget guard for the LLM's context.
 _MAX_RECORDS_PER_CALL: int = 200
 _MAX_INCIDENTS_PER_CALL: int = 50
+_VALID_OPS = ("scan", "tail")
 
 
 def _default_log_path() -> Path:
@@ -192,6 +193,30 @@ def _serialise_poll(
     }
 
 
+def _resolve_cursor(
+    *,
+    op: str,
+    resolved_path: Path,
+    cursor: str | None,
+    tail_lines: int,
+    max_records: int,
+) -> tuple[HermesLogCursor, int]:
+    """Resolve the poller cursor and response cap for ``scan`` / ``tail``."""
+    if op == "scan":
+        # Rewind to the end of the file minus tail_lines worth of bytes
+        # (estimated at 480 bytes/line — aligns with ``_seek_back_n_lines``).
+        bounded_tail = max(1, min(tail_lines, _MAX_RECORDS_PER_CALL))
+        return _seek_back_n_lines(resolved_path, bounded_tail), min(max_records, bounded_tail)
+    if cursor:
+        resolved_cursor = HermesLogCursor.from_token(cursor)
+        # Tokens are LLM-round-tripped; reject crafted paths that do not
+        # match the log file this invocation is configured to read.
+        resolved_cursor.validate_expected_log_path(resolved_path)
+        return resolved_cursor, min(max_records, _MAX_RECORDS_PER_CALL)
+    # First ``tail`` call: anchor at EOF so we do not replay the backlog.
+    return HermesLogCursor.at_end(resolved_path), min(max_records, _MAX_RECORDS_PER_CALL)
+
+
 @tool(
     name="get_hermes_logs",
     display_name="Hermes log poll",
@@ -219,7 +244,7 @@ def _serialise_poll(
         "properties": {
             "op": {
                 "type": "string",
-                "enum": ["scan", "tail"],
+                "enum": list(_VALID_OPS),
                 "default": "scan",
                 "description": (
                     "'scan' for a one-shot read; 'tail' for cursor-driven incremental polling."
@@ -285,9 +310,10 @@ def get_hermes_logs(
     levels: list[str] | None = None,
 ) -> dict[str, Any]:
     """Read Hermes log activity. See module docstring for op semantics."""
-    if op not in {"scan", "tail"}:
+    if op not in _VALID_OPS:
+        known = ", ".join(repr(name) for name in _VALID_OPS)
         return {
-            "error": f"unknown op {op!r}; expected 'scan' or 'tail'",
+            "error": f"unknown op {op!r}; expected {known}",
             "records": [],
             "incidents": [],
         }
@@ -304,30 +330,16 @@ def get_hermes_logs(
     except ValueError as exc:
         return {"error": str(exc), "records": [], "incidents": []}
 
-    resolved_cursor: HermesLogCursor | None
-    if op == "scan":
-        # 'scan' always rewinds to the end of the file minus tail_lines
-        # worth of bytes (estimated at 480 bytes/line — aligns with the
-        # seek-back heuristic in ``_seek_back_n_lines``, below).
-        # The poller then reads forward;
-        # we cap to tail_lines in the response.
-        bounded_tail = max(1, min(tail_lines, _MAX_RECORDS_PER_CALL))
-        resolved_cursor = _seek_back_n_lines(resolved_path, bounded_tail)
-        bounded_max = min(max_records, bounded_tail)
-    elif cursor:
-        try:
-            resolved_cursor = HermesLogCursor.from_token(cursor)
-            # Tokens are LLM-round-tripped; reject crafted paths that
-            # do not match the log file this invocation is configured to read.
-            resolved_cursor.validate_expected_log_path(resolved_path)
-        except ValueError as exc:
-            return {"error": str(exc), "records": [], "incidents": []}
-        bounded_max = min(max_records, _MAX_RECORDS_PER_CALL)
-    else:
-        # op='tail' without a cursor: anchor at end-of-file so the
-        # very first tail call doesn't replay the entire backlog.
-        resolved_cursor = HermesLogCursor.at_end(resolved_path)
-        bounded_max = min(max_records, _MAX_RECORDS_PER_CALL)
+    try:
+        resolved_cursor, bounded_max = _resolve_cursor(
+            op=op,
+            resolved_path=resolved_path,
+            cursor=cursor,
+            tail_lines=tail_lines,
+            max_records=max_records,
+        )
+    except ValueError as exc:
+        return {"error": str(exc), "records": [], "incidents": []}
 
     classifier = IncidentClassifier()
     try:

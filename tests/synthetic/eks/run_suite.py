@@ -227,14 +227,18 @@ def _matches_required_keyword(normalized_output: str, keyword: str) -> bool:
 def _accepted_categories(fixture: K8sScenarioFixture) -> set[str]:
     """Return the set of root-cause categories we consider equivalent.
 
-    Some Kubernetes failure modes naturally straddle adjacent labels when a real
-    LLM summarizes them. In particular, in-cluster DNS/service-discovery outages
-    are often described as either a configuration problem or a dependency
-    failure. Treat both labels as acceptable for that scenario to avoid
-    penalizing semantically correct diagnoses.
+    Sources, in order: the answer key's declared category, any
+    ``equivalent_root_cause_categories`` it lists, and one built-in allowance —
+    in-cluster DNS/service-discovery outages are described as either a
+    configuration problem or a dependency failure, so both labels pass.
+
+    The declared-equivalents field is validated by ``tests/synthetic/schemas.py``
+    and honoured by the RDS scorer; reading it here keeps the two suites
+    consistent instead of silently dropping a documented field.
     """
 
     accepted = {fixture.answer_key.root_cause_category}
+    accepted.update(fixture.answer_key.equivalent_root_cause_categories)
     if fixture.metadata.failure_mode == "dns_resolution_failure":
         accepted.add("dependency_failure")
     return accepted

@@ -51,7 +51,10 @@ def _make_tool(name: str, description: str) -> RegisteredTool:
 
 
 def _register(monkeypatch, tools: list[RegisteredTool]) -> None:
+    """Install a controlled registry behind both accessors the label may use."""
+    by_name = {tool.name: tool for tool in tools}
     monkeypatch.setattr("tools.registry.get_registered_tools", lambda: tools)
+    monkeypatch.setattr("tools.registry.get_registered_tool", by_name.get)
     _tool_label.cache_clear()
 
 
@@ -108,3 +111,31 @@ def test_tool_status_includes_first_input_hint(monkeypatch) -> None:
     )
     assert status.startswith("⏳ Run a registered interactive-shell slash command…")
     assert "/integrations" in status
+
+
+def test_tool_label_miss_does_not_scan_the_whole_registry(monkeypatch) -> None:
+    """A cache miss must resolve by name, not walk every registered tool.
+
+    ``_tool_label`` is LRU-cached, but the gateway sees a long tail of tool
+    names, and every miss used to run ``next(t for t in get_registered_tools()
+    if t.name == …)`` — a linear pass over the full registry while a user waits
+    on a status line.
+    """
+    # Arrange
+    scans = 0
+
+    def _scanning_list(*_args: object, **_kwargs: object) -> list[RegisteredTool]:
+        nonlocal scans
+        scans += 1
+        return []
+
+    monkeypatch.setattr("tools.registry.get_registered_tools", _scanning_list)
+    monkeypatch.setattr("tools.registry.get_registered_tool", lambda _name: None)
+    _tool_label.cache_clear()
+
+    # Act: three distinct names, so every call is a cache miss.
+    for name in ("alpha_tool", "beta_tool", "gamma_tool"):
+        status_from_tool_start(name)
+
+    # Assert
+    assert scans == 0, f"label lookup listed the whole registry {scans} times"

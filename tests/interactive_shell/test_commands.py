@@ -516,6 +516,7 @@ class TestDispatchSlash:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("opensre health")
         history.store_string("/integrations list")
@@ -1513,6 +1514,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
@@ -1536,6 +1538,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(template_name)
@@ -1625,6 +1628,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             calls.append(template_name)
@@ -1657,6 +1661,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(template_name)
@@ -1701,6 +1706,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(alert_text)
@@ -1780,6 +1786,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict:
             return {
                 "root_cause": "disk full",
@@ -1850,6 +1857,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 
@@ -2147,6 +2155,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
         dispatch_slash("/history", Session(), console)
         assert "no history" in buf.getvalue()
@@ -2159,6 +2168,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("pod crash in prod")
         history.store_string("/status")
@@ -2178,6 +2188,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         session = Session()
         session.record("alert", "bad input", ok=False)
         console, buf = _capture()

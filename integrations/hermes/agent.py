@@ -25,7 +25,7 @@ from typing import Final
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident, LogLevel
 from integrations.hermes.parser import parse_log_line
-from integrations.hermes.tailer import DEFAULT_POLL_INTERVAL_S, FileTailer
+from integrations.hermes.tailer import DEFAULT_POLL_INTERVAL_SECONDS, FileTailer
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class HermesAgent:
         sink: IncidentSink,
         log_path: Path | str = DEFAULT_LOG_PATH,
         classifier: IncidentClassifier | None = None,
-        poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+        poll_interval_s: float = DEFAULT_POLL_INTERVAL_SECONDS,
         from_start: bool = False,
     ) -> None:
         self._sink = sink

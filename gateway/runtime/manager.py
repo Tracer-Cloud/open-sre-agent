@@ -8,7 +8,8 @@ process lifecycle (signals, ``stop``/``wait``). Component states are published
 through :func:`gateway.runtime.daemon.write_component_status` so the CLI and the
 interactive shell can report status. It holds no transport or agent-dispatch
 logic itself — those live in :mod:`gateway.runtime.turn_handler`,
-:mod:`gateway.telegram.wiring`, and :mod:`gateway.slack.wiring`.
+:mod:`gateway.telegram.wiring`, and :mod:`gateway.slack.wiring`, and
+:mod:`gateway.discord.wiring`.
 """
 
 from __future__ import annotations
@@ -22,15 +23,24 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.llm.internal.preload import preload_llm_clients
-from gateway.config.configure_gateway_logging import configure_gateway_logging
+from gateway.config.logging_config import configure_logging
+from gateway.discord.background import DiscordGatewayBackground
+from gateway.discord.wiring import start_discord_worker
+from gateway.runtime.concurrency import (
+    ConcurrencyLimitedTurnHandler,
+    TurnConcurrencyGate,
+)
+from gateway.runtime.credential_hydration import (
+    GatewayBootstrap,
+    GatewayCredentialHydrator,
+)
 from gateway.runtime.daemon import (
     GATEWAY_PID_FILE,
     clear_component_status,
     write_component_status,
 )
 from gateway.runtime.errors import GatewayConfigurationError
+from gateway.runtime.readiness import set_ready
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from gateway.slack.socket_mode_worker import SlackGatewayBackground
 from gateway.slack.wiring import start_slack_worker
@@ -39,6 +49,7 @@ from gateway.telegram.settings import GatewaySettings
 from gateway.telegram.wiring import start_telegram_worker
 
 SlashPortsFactory = Callable[[], Any]
+CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
 
 
 class GatewayManager:
@@ -48,37 +59,33 @@ class GatewayManager:
         self,
         *,
         slash_ports_factory: SlashPortsFactory | None = None,
+        credential_hydrator_factory: CredentialHydratorFactory | None = None,
+        turn_gate: TurnConcurrencyGate | None = None,
     ) -> None:
         self.settings: GatewaySettings | None = None
         self.logger: logging.Logger | None = None
         self.telegram_background_worker: TelegramGatewayBackground | None = None
         self.slack_background_worker: SlackGatewayBackground | None = None
+        self.discord_background_worker: DiscordGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
+        self._credential_hydrator_factory = (
+            credential_hydrator_factory or GatewayCredentialHydrator.from_environment
+        )
+        profile = os.getenv("OPENSRE_SIZE_PROFILE", "SMALL").strip().upper()
+        self.turn_gate = turn_gate or TurnConcurrencyGate.for_profile(profile)
         self._stopped = threading.Event()
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start all components, and own the lifecycle."""
-        from integrations.harness_adapters import register_harness_adapters as register_integrations
-        from tools.harness_adapters import register_harness_adapters as register_tools
+        from gateway.runtime import startup
 
-        harness = AgentHarness(HarnessConfig(open_storage=False))
-        harness.resolve_env_variables()
-        # Mirror shell boot: register harness adapters here (gateway cannot import
-        # surfaces.boundary without a surfaces↔gateway peer import).
-        register_integrations()
-        register_tools()
-        # Env-gated (OPENSRE_NO_TELEMETRY / DO_NOT_TRACK / missing DSN) — free when off.
-        from platform.observability.errors.sentry import init_sentry
-
-        init_sentry(entrypoint="gateway")
-        logger = self.logger = configure_gateway_logging()
-
-        # Load the LLM client graph as one snapshot at boot (avoids a stale
-        # mixed-version process after a code change).
-        preload_llm_clients()
+        logger = self.logger = configure_logging()
+        set_ready(False)
+        self._load_credentials(logger)
+        startup.run(logger)
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
@@ -87,15 +94,21 @@ class GatewayManager:
             console=console,
             slash_ports_factory=self._slash_ports_factory,
         )
+        chat_handler = ConcurrencyLimitedTurnHandler(
+            handler=handler,
+            gate=self.turn_gate,
+        )
 
         self._start_web(logger)
-        self._start_telegram(logger, handler)
-        self._start_slack(logger, handler)
+        self._start_telegram(logger, chat_handler)
+        self._start_slack(logger, chat_handler)
+        self._start_discord(logger, chat_handler)
         self._start_scheduler(logger)
         self._publish_status(logger)
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
         # and/or Slack — do not rely on transport-specific log strings alone.
         logger.info("[gateway] ready")
+        set_ready(True)
 
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
@@ -106,20 +119,40 @@ class GatewayManager:
 
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Shut down all components and return whether the chat worker stopped."""
+        set_ready(False)
+        stopped = True
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
         if self.web_server is not None:
             self.web_server.stop()
             self.web_server = None
-        stopped = True
         if self.telegram_background_worker is not None:
-            stopped = self.telegram_background_worker.stop(timeout=timeout)
+            stopped = self.telegram_background_worker.stop(timeout=timeout) and stopped
         if self.slack_background_worker is not None:
             stopped = self.slack_background_worker.stop(timeout=timeout) and stopped
+        if self.discord_background_worker is not None:
+            stopped = self.discord_background_worker.stop(timeout=timeout) and stopped
         clear_component_status()
         self._stopped.set()
         return stopped
+
+    def _load_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
+        """Hydrate before any transport, scheduler, or worker can start."""
+        try:
+            hydrator = self._credential_hydrator_factory()
+            if hydrator is None:
+                self.components["credentials"] = "not configured"
+                return None
+            bootstrap = hydrator.hydrate()
+        except Exception as exc:
+            logger.error("gateway credential hydration failed (%s)", type(exc).__name__)
+            self.components["credentials"] = "failed"
+            raise GatewayConfigurationError("Gateway credential hydration failed") from None
+        self.components["credentials"] = (
+            "hydrated" if bootstrap.integrations_hydrated else "preseeded"
+        )
+        return bootstrap
 
     def wait(self, *, timeout: float | None = None) -> bool:
         """Wait until shutdown is requested and return whether the gateway has stopped."""
@@ -165,14 +198,35 @@ class GatewayManager:
         self.slack_background_worker = worker
         self.components["slack"] = "connected via socket mode"
 
+    def _start_discord(self, logger: logging.Logger, handler: Any) -> None:
+        """Start the Discord chat worker; run without it when not configured."""
+        try:
+            worker, settings = start_discord_worker(logger=logger, handler=handler)
+        except GatewayConfigurationError as exc:
+            logger.warning("Discord chat disabled: %s", exc)
+            self.components["discord"] = f"not configured ({exc})"
+            return
+        if not worker.wait_until_ready(timeout=settings.startup_timeout_seconds):
+            logger.warning(
+                "Discord gateway did not become ready within %.0fs",
+                settings.startup_timeout_seconds,
+            )
+            worker.stop()
+            self.components["discord"] = "failed (startup timeout)"
+            return
+        self.discord_background_worker = worker
+        self.components["discord"] = "connected via gateway"
+
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
-        from integrations.sentry.scheduler_bootstrap import install as install_sentry_runner
+        from gateway.runtime.bootstrap import install_runtime
         from platform.scheduler.runner import start_background_scheduler
-        from tools.investigation.scheduler_bootstrap import install as install_scheduler_runner
 
-        install_scheduler_runner()
-        install_sentry_runner()
+        # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
+        install_runtime(harness_adapters=False, scheduler_runners=True)
+        from gateway.runtime.scheduler_concurrency import gate_registered_scheduler_runners
+
+        gate_registered_scheduler_runners(self.turn_gate)
         scheduler, task_count = start_background_scheduler()
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"

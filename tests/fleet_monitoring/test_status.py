@@ -3,7 +3,17 @@ from datetime import UTC, datetime
 import pytest
 
 from tools.system.fleet_monitoring.probe import ProcessSnapshot
-from tools.system.fleet_monitoring.status import Status, compute_status
+from tools.system.fleet_monitoring.status import FleetProcessStatus, compute_status
+
+
+def test_fleet_process_status_members_round_trip_from_string() -> None:
+    assert set(FleetProcessStatus) == {
+        FleetProcessStatus.ACTIVE,
+        FleetProcessStatus.IDLE,
+        FleetProcessStatus.STUCK,
+    }
+    assert FleetProcessStatus("active") is FleetProcessStatus.ACTIVE
+    assert FleetProcessStatus.ACTIVE == "active"
 
 
 @pytest.mark.parametrize(
@@ -24,7 +34,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 2, 0, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.ACTIVE,
+            FleetProcessStatus.ACTIVE,
         ),
         # Low CPU + recent activity → active
         (
@@ -41,7 +51,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 2, 15, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.ACTIVE,
+            FleetProcessStatus.ACTIVE,
         ),
         # Low CPU + silence >= idle_after_s → idle
         (
@@ -58,7 +68,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 5, 25, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.IDLE,
+            FleetProcessStatus.IDLE,
         ),
         # High CPU + silence >= stuck_after_s → stuck
         (
@@ -75,7 +85,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 5, 25, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.STUCK,
+            FleetProcessStatus.STUCK,
         ),
         # Edge: zero uptime
         (
@@ -92,7 +102,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             None,  # last_output
             120,
             480,
-            Status.ACTIVE,
+            FleetProcessStatus.ACTIVE,
         ),
         # Edge: exactly at threshold (exactly 120s)
         (
@@ -109,7 +119,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 5, 0, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.IDLE,
+            FleetProcessStatus.IDLE,
         ),
         # Edge: exactly at threshold (exactly 480s)
         (
@@ -126,7 +136,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 1, 0, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.STUCK,
+            FleetProcessStatus.STUCK,
         ),
         # Edge: last_output_at is not provided (None)
         (
@@ -143,7 +153,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             None,  # last_output
             120,
             480,
-            Status.STUCK,
+            FleetProcessStatus.STUCK,
         ),
         # Edge: high CPU + silence between idle and stuck thresholds
         (
@@ -160,7 +170,7 @@ from tools.system.fleet_monitoring.status import Status, compute_status
             datetime(2026, 5, 14, 12, 1, 0, tzinfo=UTC),  # last_output
             120,
             480,
-            Status.ACTIVE,
+            FleetProcessStatus.ACTIVE,
         ),
     ],
 )

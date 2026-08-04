@@ -22,10 +22,13 @@ interactive terminal and be invoked headlessly via
 
 ## Layout
 
-Top level holds the package's public surface: `__init__.py` (curated
-re-exports), `ports.py`, `agent_builder.py`, plus small shared helpers
-(`error_reporting.py`, `llm_resolution.py`). Everything else lives in a
-responsibility-scoped subpackage.
+Top level holds the package's public surface — `__init__.py` (the curated
+re-exports), `ports.py`, `agent_builder.py` — plus two small cross-cutting default
+port impls that fit no single subpackage: `error_reporting.py`
+(`DefaultErrorReporter`) and `llm_resolution.py` (`default_llm_factory` /
+`resolve_provider_models`). Everything else lives in a responsibility-scoped
+subpackage. Default port implementations live with the concern they serve, not in a
+`providers/` package.
 
 - `ports.py` — Protocols the engine talks to (output, confirmation, session
   store, tool provider, prompt-context provider, telemetry, error reporter,
@@ -41,35 +44,37 @@ responsibility-scoped subpackage.
     what the turn knows. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather
     than re-resolving. Do NOT reintroduce per-component integration resolution.
-  - `action_driver.py` — `run_action_agent_turn`: one action tool-calling turn
+  - `action_driver.py` — `ActionTurnRunner`: one action tool-calling turn
     over the ports, via a `_build_action_agent` factory that returns an
     `ActionTurnPlan`.
   - `evidence_driver.py` — bounded evidence-gather loop, via a
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
   - `headless_dispatch.py` — headless programmatic entry point
-    (`HeadlessAgent`, constructed with the ports then `.dispatch(message)` per
-    turn) plus in-memory port adapters for API/test runs. `tools` is required
-    — surfaces that want a text-only turn pass `NullToolProvider()` explicitly.
-  - `default_reasoning_client.py` — production
-    `ReasoningClientProvider` default (lazy `LLMRole.REASONING` client).
-  - `turn_snapshot.py`, `turn_results.py` — neutral, surface-agnostic turn
-    data shapes (immutable snapshot + facts-only result models).
+    (`HeadlessAgent`, constructed with the ports then `.dispatch(message)` per turn)
+    plus in-memory port adapters for
+    API / test runs. `tools` is required — surfaces that want a text-only
+    turn pass `NullToolProvider()` explicitly.
+  - `turn_snapshot.py` / `turn_results.py` — the immutable per-turn `TurnSnapshot`
+    (built from any object satisfying `TurnSnapshotSource`, not `Session` directly)
+    and the neutral turn-result models.
+  - `default_reasoning_client.py` — `DefaultReasoningClientProvider`, kept with the
+    reasoning-client family (`stream_answer`, `StaticReasoningClientProvider`).
 - `tools/` — action-tool wiring over the canonical registry (`action_tools.py`,
-  `tool_context.py`, `tool_provider.py` for `ports.ToolProvider`).
-- `accounting/` — session-scoped token accounting, LLM run metadata, and
-  `ports.TurnAccounting` / `ports.RunRecordFactory` defaults.
+  `tool_context.py`) and `tool_provider.py` (`DefaultToolProvider`).
+- `accounting/` — session-scoped token accounting and LLM run metadata, plus the
+  default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
+  (`run_record.py`).
 - `prompts/` — action-agent and conversational-assistant prompt builders (pure
-  string assembly; grounding text is supplied via `PromptContextProvider`).
-  `prompt_context.py` implements the default `PromptContextProvider`;
-  `conversation_memory.py` (recent-conversation rendering shared by prompts)
-  lives here too.
+  string assembly; grounding text is supplied via `PromptContextProvider`), plus
+  `prompt_context.py` (`DefaultPromptContextProvider`).
+  `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
-- `session/` — reusable agent session state (`SessionCore`), JSONL storage,
-  prompt history, task registry, session-scoped background records,
-  integration resolution (`session.integration_resolution`), and
-  `SessionManager` (the lifecycle owner — see "Session lifecycle" below).
+- `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt
+  history, task registry, session-scoped background records, integration resolution
+  (:mod:`session.integration_resolution`), and `SessionManager` (the lifecycle owner).
+  See "Session lifecycle" below.
 
 ## Session lifecycle (owned by SessionManager)
 
@@ -111,10 +116,45 @@ values into an `AgentConfig` dataclass, then call `build_agent(config)`. This is
 the single instantiation site — when `Agent.__init__`'s signature changes,
 `agent_builder.py` is the single edit site for every harness surface.
 
-**Do NOT** reintroduce per-surface `Agent` subclasses that override `build_llm`
-/ `build_system_prompt` / `build_tools` / `resolved_integrations` hooks —
-they were removed because they let each surface hide per-turn configuration on
-`self`, which diverged routing across surfaces.
+1. Assemble surface-specific values (LLM, system prompt, tools, resolved
+   integrations, iteration cap, observer).
+2. Pack them into an `AgentConfig` dataclass.
+3. Hand it to `build_agent(config)`.
+
+```python
+from core.agent_harness.agent_builder import AgentConfig, build_agent
+
+config = AgentConfig(
+    llm=llm_client,  # or None to fall back to get_llm(LLMRole.AGENT)
+    system=system_prompt,
+    tools=tuple(agent_tools),
+    resolved_integrations=resolved,
+    max_iterations=6,
+    tool_resources={},  # optional
+    tool_hooks=None,  # optional
+    on_runtime_event=observer_callback,  # optional
+)
+agent = build_agent(config)
+```
+
+Action (`turns/action_driver.py::_build_action_agent`) and evidence
+(`turns/evidence_driver.py::_build_evidence_agent`) assemble an
+``AgentConfig`` and call ``build_agent``. The gateway turn path does not
+construct a persistent ``Agent`` — it builds a fresh ``HeadlessAgent`` per turn with
+:class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
+from the live chat session. When ``Agent.__init__``'s signature changes,
+``agent_builder.py`` is the single edit site for harness surfaces that call
+``build_agent``.
+
+## Agent context and data stores
+
+Turn assembly starts in ``turns/orchestrator.py`` with
+``TurnSnapshot.from_session``.
+
+**Do NOT** reintroduce per-surface `Agent` subclasses that override
+`build_llm` / `build_system_prompt` / `build_tools` / `resolved_integrations`
+hooks. Those hooks were removed because they let each surface hide per-turn
+configuration on `self`, which diverged routing across surfaces.
 
 ## Two agent shapes (not one pattern with an exception)
 

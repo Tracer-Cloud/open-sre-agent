@@ -31,7 +31,7 @@ from platform.common.truncation import truncate
 logger = logging.getLogger(__name__)
 
 DEFAULT_MARIADB_PORT = 3306
-DEFAULT_MARIADB_TIMEOUT_S = 5
+DEFAULT_MARIADB_TIMEOUT_SECONDS = 5
 DEFAULT_MARIADB_MAX_RESULTS = 50
 _QUERY_TRUNCATE_LEN = 200
 
@@ -45,7 +45,7 @@ class MariaDBConfig(RelationalConfigBase):
     username: str = ""
     password: str = ""
     ssl: bool = True
-    timeout_seconds: int = Field(default=DEFAULT_MARIADB_TIMEOUT_S, gt=0)
+    timeout_seconds: int = Field(default=DEFAULT_MARIADB_TIMEOUT_SECONDS, gt=0)
     max_results: int = Field(default=DEFAULT_MARIADB_MAX_RESULTS, gt=0, le=200)
     integration_id: str = ""
 

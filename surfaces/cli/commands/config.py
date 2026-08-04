@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,6 @@ import click
 from config.constants import OPENSRE_HOME_DIR
 
 _SUPPORTED_LAYOUTS = {"classic", "pinned"}
-_SUPPORTED_KEYS = ("interactive.enabled", "interactive.layout", "interactive.theme")
 
 
 def _supported_themes() -> set[str]:
@@ -131,26 +131,41 @@ def _parse_bool(raw_value: str) -> bool:
     )
 
 
+def _coerce_enabled(raw_value: str) -> bool:
+    return _parse_bool(raw_value)
+
+
+def _coerce_layout(raw_value: str) -> str:
+    layout = raw_value.strip().lower()
+    if layout not in _SUPPORTED_LAYOUTS:
+        raise click.UsageError("Invalid value for interactive.layout. Use 'classic' or 'pinned'.")
+    return layout
+
+
+def _coerce_theme(raw_value: str) -> str:
+    theme = raw_value.strip().lower()
+    supported_themes = _supported_themes()
+    if theme not in supported_themes:
+        supported = ", ".join(sorted(supported_themes))
+        raise click.UsageError(f"Invalid value for interactive.theme. Use one of: {supported}.")
+    return theme
+
+
+_COERCERS: dict[str, Callable[[str], bool | str]] = {
+    "interactive.enabled": _coerce_enabled,
+    "interactive.layout": _coerce_layout,
+    "interactive.theme": _coerce_theme,
+}
+_SUPPORTED_KEYS = tuple(_COERCERS)
+
+
 def _coerce_value(key: str, raw_value: str) -> bool | str:
-    if key == "interactive.enabled":
-        return _parse_bool(raw_value)
-    if key == "interactive.layout":
-        layout = raw_value.strip().lower()
-        if layout not in _SUPPORTED_LAYOUTS:
-            raise click.UsageError(
-                "Invalid value for interactive.layout. Use 'classic' or 'pinned'."
-            )
-        return layout
-    if key == "interactive.theme":
-        theme = raw_value.strip().lower()
-        supported_themes = _supported_themes()
-        if theme not in supported_themes:
-            supported = ", ".join(sorted(supported_themes))
-            raise click.UsageError(f"Invalid value for interactive.theme. Use one of: {supported}.")
-        return theme
-    raise click.UsageError(
-        f"Unknown config key '{key}'. Supported keys: {', '.join(_SUPPORTED_KEYS)}"
-    )
+    coercer = _COERCERS.get(key)
+    if coercer is None:
+        raise click.UsageError(
+            f"Unknown config key '{key}'. Supported keys: {', '.join(_SUPPORTED_KEYS)}"
+        )
+    return coercer(raw_value)
 
 
 def _set_nested_key(data: dict[str, Any], dotted_key: str, value: Any) -> dict[str, Any]:

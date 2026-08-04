@@ -180,7 +180,9 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
     def _handle_conclusion(self, response: Any, assistant_message: Any, iteration: int) -> bool:
         """No tool calls: accept the answer (maybe after a follow-up) or nudge and continue."""
         accept, nudge = self._host._should_accept_conclusion(
-            evidence_count=len(self._executed), iteration=iteration
+            evidence_count=len(self._executed),
+            iteration=iteration,
+            final_text=response.content or "",
         )
         if accept:
             follow_up = self._host._pop_follow_up_message()

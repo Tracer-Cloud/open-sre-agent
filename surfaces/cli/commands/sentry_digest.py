@@ -11,21 +11,17 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from integrations.sentry.digest_delivery import SENTRY_DIGEST_SUPPORTED_PROVIDERS
 from surfaces.cli.commands.cron import _validate_cron_and_timezone
 
 _console = Console()
+_PROVIDER_CHOICES = [p.value for p in SENTRY_DIGEST_SUPPORTED_PROVIDERS]
 
 
 def _install_scheduler_runners() -> None:
-    from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
-    from tools.harness_adapters import register_harness_adapters as register_tools
-    from tools.investigation.scheduler_bootstrap import install as install_investigation_runner
+    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    register_integrations()
-    register_tools()
-    install_investigation_runner()
-    install_scheduled_agent()
+    install_runtime()
 
 
 @click.group(name="sentry")
@@ -91,7 +87,7 @@ def sentry_uptime_check(project_slug: str) -> None:
 
 @sentry_uptime_command.group(name="watch")
 def sentry_uptime_watch_command() -> None:
-    """Schedule polling that pings Slack/Telegram on uptime transitions."""
+    """Schedule polling that pings Slack/Telegram/Rocket.Chat on uptime transitions."""
 
 
 @sentry_uptime_watch_command.command(name="add")
@@ -113,7 +109,7 @@ def sentry_uptime_watch_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )
@@ -321,7 +317,7 @@ def sentry_digest_schedule_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )

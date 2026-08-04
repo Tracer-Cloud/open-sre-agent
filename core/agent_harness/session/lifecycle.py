@@ -178,6 +178,7 @@ class SessionManager:
         old_session_id: str | None = None,
         new_session_id: str | None = None,
         warm_integrations: bool = True,
+        extract_memory: bool = True,
     ) -> SessionCore:
         """Close the outgoing session (if any) and create its replacement."""
         if old_session_id:
@@ -185,7 +186,15 @@ class SessionManager:
             # Reconstructed handle: align its backend with the manager's so the
             # close flush lands on the same storage the manager owns.
             outgoing.storage = self._storage
-            self.close(outgoing)
+            # Restore the persisted transcript so session-end memory extraction
+            # sees the outgoing conversation (not an empty reconstructed handle).
+            self.restore_context(outgoing, self._repo.load_session(old_session_id))
+            # Do not wait for extraction: gateway /new must stay responsive.
+            self.close(
+                outgoing,
+                wait_for_memory_extraction=False,
+                extract_memory=extract_memory,
+            )
         return self.create(session_id=new_session_id, warm_integrations=warm_integrations)
 
     def rotate_in_place(self, session: _S) -> _S:
@@ -198,10 +207,12 @@ class SessionManager:
 
         Flushes but does not release resources: ``clear()`` resets in-memory
         state (and cancels the warm task) while the loop-owned
-        ``prompt_refresh_fn`` is preserved for the continuing REPL.
+        ``prompt_refresh_fn`` is preserved for the continuing REPL. Schedules
+        memory extraction from the outgoing transcript before clearing it.
         """
         session.storage = self._storage
         self._flush(session)
+        self._schedule_memory_extraction(session)
         session.clear()
         self._storage.open_session(session)
         return session
@@ -224,6 +235,7 @@ class SessionManager:
         session.storage = self._storage
         if session.session_id != session_id:
             self._flush(session)
+            self._schedule_memory_extraction(session)
             session.clear(rotate_identity=False)
             session.session_id = session_id
             if isinstance(started_at, str) and started_at:
@@ -262,7 +274,13 @@ class SessionManager:
             session.history = [dict(item) for item in history if isinstance(item, dict)]
         return session
 
-    def close(self, session: SessionCore) -> None:
+    def close(
+        self,
+        session: SessionCore,
+        *,
+        wait_for_memory_extraction: bool = True,
+        extract_memory: bool = True,
+    ) -> None:
         """Finalize a session for good: persist buffered state and release resources.
 
         This is the terminal teardown hook — the session handle is being
@@ -273,13 +291,26 @@ class SessionManager:
 
         Persisting is best-effort (a failed flush must not crash teardown);
         the session releases its own resources (:meth:`SessionCore.release_resources`)
-        to prevent per-session leaks.
+        to prevent per-session leaks. Long-term memory extraction also runs after
+        every recorded turn; this close path runs it again after release when
+        ``extract_memory`` is true. Process exit (default) waits for extraction
+        to finish so durable facts are not dropped; gateway rotation passes
+        ``wait_for_memory_extraction=False`` so inbound handling stays
+        responsive, and skips extraction entirely unless gateway memory is opted in.
         """
         self._flush(session)
+        # Snapshot messages before release/clear; the background extractor must
+        # not retain a reference to the live session object.
+        messages = list(getattr(session, "cli_agent_messages", []) or [])
         from platform.observability.trace.spans import emit_thread_boundary
 
         emit_thread_boundary(session.session_id, name="session_end", phase="session_end")
         session.release_resources()
+        if extract_memory:
+            self._schedule_memory_extraction_from_messages(
+                messages,
+                wait_for_completion=wait_for_memory_extraction,
+            )
 
     @staticmethod
     def _flush(session: SessionCore) -> None:
@@ -293,6 +324,24 @@ class SessionManager:
             session.storage.flush(session)
         except OSError:
             logger.debug("[session] flush failed", exc_info=True)
+
+    @staticmethod
+    def _schedule_memory_extraction(session: SessionCore) -> None:
+        messages = list(getattr(session, "cli_agent_messages", []) or [])
+        SessionManager._schedule_memory_extraction_from_messages(messages)
+
+    @staticmethod
+    def _schedule_memory_extraction_from_messages(
+        messages: list[tuple[str, str]],
+        *,
+        wait_for_completion: bool = False,
+    ) -> None:
+        from core.agent_harness.session.memory_extraction import schedule_memory_extraction
+
+        schedule_memory_extraction(
+            messages,
+            wait_for_completion=wait_for_completion,
+        )
 
 
 __all__ = ["SessionManager"]

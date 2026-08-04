@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.architecture_issue_tool.repo_workspace import (
+from integrations.github.tools.architecture_issue_tool.repo_workspace import (
     WorkspaceError,
     architecture_workspace_dir,
     cleanup_architecture_workspace,
@@ -70,11 +70,11 @@ def test_cleanup_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -
 
     with (
         patch(
-            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
             return_value=workspace,
         ),
         patch(
-            "tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
             side_effect=OSError("Permission denied"),
         ),
         pytest.raises(WorkspaceError, match="could not remove"),
@@ -83,7 +83,9 @@ def test_cleanup_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -
 
 
 def test_prepare_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -> None:
-    from tools.architecture_issue_tool.repo_workspace import prepare_architecture_workspace
+    from integrations.github.tools.architecture_issue_tool.repo_workspace import (
+        prepare_architecture_workspace,
+    )
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -91,11 +93,11 @@ def test_prepare_architecture_workspace_surfaces_rmtree_errors(tmp_path: Path) -
 
     with (
         patch(
-            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
             return_value=workspace,
         ),
         patch(
-            "tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
             side_effect=OSError("Directory not empty"),
         ),
         pytest.raises(WorkspaceError, match="could not remove"),
@@ -112,11 +114,11 @@ def test_cleanup_architecture_workspace_fails_if_path_still_exists(tmp_path: Pat
 
     with (
         patch(
-            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
             return_value=workspace,
         ),
         patch(
-            "tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.shutil.rmtree",
             side_effect=_noop_rmtree,
         ),
         pytest.raises(WorkspaceError, match="still exists"),
@@ -124,9 +126,14 @@ def test_cleanup_architecture_workspace_fails_if_path_still_exists(tmp_path: Pat
         cleanup_architecture_workspace()
 
 
-@patch("tools.architecture_issue_tool.repo_workspace._shallow_clone")
-@patch("tools.architecture_issue_tool.repo_workspace._remote_default_branch", return_value="main")
-@patch("tools.architecture_issue_tool.repo_workspace.prepare_architecture_workspace")
+@patch("integrations.github.tools.architecture_issue_tool.repo_workspace._shallow_clone")
+@patch(
+    "integrations.github.tools.architecture_issue_tool.repo_workspace._remote_default_branch",
+    return_value="main",
+)
+@patch(
+    "integrations.github.tools.architecture_issue_tool.repo_workspace.prepare_architecture_workspace"
+)
 def test_cloned_github_repo_clones_and_cleans_up(
     mock_prepare,
     mock_default_branch,
@@ -147,7 +154,7 @@ def test_cloned_github_repo_clones_and_cleans_up(
 
     with (
         patch(
-            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
             return_value=workspace,
         ),
         cloned_github_repo("Tracer-Cloud", "opensre", token="ghp_test") as result,
@@ -161,8 +168,10 @@ def test_cloned_github_repo_clones_and_cleans_up(
     assert not workspace.exists()
 
 
-@patch("tools.architecture_issue_tool.repo_workspace._shallow_clone")
-@patch("tools.architecture_issue_tool.repo_workspace.prepare_architecture_workspace")
+@patch("integrations.github.tools.architecture_issue_tool.repo_workspace._shallow_clone")
+@patch(
+    "integrations.github.tools.architecture_issue_tool.repo_workspace.prepare_architecture_workspace"
+)
 def test_clone_github_repo_cleans_up_on_clone_failure(
     mock_prepare,
     mock_shallow_clone,
@@ -176,7 +185,7 @@ def test_clone_github_repo_cleans_up_on_clone_failure(
 
     with (
         patch(
-            "tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
+            "integrations.github.tools.architecture_issue_tool.repo_workspace.architecture_workspace_dir",
             return_value=workspace,
         ),
         pytest.raises(WorkspaceError, match="git clone failed"),
@@ -190,7 +199,7 @@ def test_shallow_clone_sha_fetches_commit_directly(tmp_path: Path) -> None:
     """Non-HEAD SHAs must use init+fetch, not clone --depth 1 + checkout."""
     from subprocess import CompletedProcess
 
-    from tools.architecture_issue_tool.repo_workspace import _shallow_clone
+    from integrations.github.tools.architecture_issue_tool.repo_workspace import _shallow_clone
 
     destination = tmp_path / "workspace"
     sha = "abcdef0123456789abcdef0123456789abcdef01"
@@ -201,7 +210,7 @@ def test_shallow_clone_sha_fetches_commit_directly(tmp_path: Path) -> None:
         return CompletedProcess(args=("git", *args), returncode=0, stdout="", stderr="")
 
     with patch(
-        "tools.architecture_issue_tool.repo_workspace._run_git",
+        "integrations.github.tools.architecture_issue_tool.repo_workspace._run_git",
         side_effect=_fake_run_git,
     ):
         _shallow_clone(

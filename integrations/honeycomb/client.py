@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from integrations.config_models import HoneycombIntegrationConfig
+from integrations.honeycomb.config import HoneycombIntegrationConfig
 from integrations.probes import ProbeResult
 from platform.observability.errors.service import capture_service_error
 

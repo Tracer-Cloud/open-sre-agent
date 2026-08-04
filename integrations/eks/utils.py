@@ -1,4 +1,8 @@
-"""Shared utilities for EKS services."""
+"""EKS helper utilities.
+
+Provides shared logic to normalize internal AWS credential structures (which use
+snake_case keys) into botocore-compatible formats (which use PascalCase keys).
+"""
 
 from __future__ import annotations
 
@@ -8,14 +12,16 @@ from typing import Any
 def stored_credentials_to_aws_creds(
     credentials: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """Normalize a stored AWS-integration credential dict into the shape that
-    ``sts.assume_role().Credentials`` returns (``AccessKeyId`` /
-    ``SecretAccessKey`` / ``SessionToken``).
+    """Normalize a stored AWS credential dict for use with botocore.
 
-    Returns ``None`` when either required key is missing or falsy, so callers
-    can fall through to the AssumeRole / ambient path. An empty or missing
-    ``session_token`` is coerced to ``None`` because botocore rejects
-    ``SessionToken=""`` but accepts a missing token for plain IAM user keys.
+    Takes a dict containing ``access_key_id``, ``secret_access_key``, and
+    optionally ``session_token`` (or ``None``). Returns a new dict with
+    guaranteed truthy ``AccessKeyId`` and ``SecretAccessKey`` keys, plus
+    ``SessionToken`` (which preserves truthy tokens but converts empty or
+    missing values to ``None`` because botocore rejects empty strings).
+    Returns ``None`` if the input is falsy or missing required keys,
+    allowing callers to fall back to ambient credentials. The original
+    dictionary is not mutated.
     """
     if not credentials:
         return None

@@ -87,7 +87,7 @@ def _launch_interactive_shell() -> int:
     from config.repl_config import ReplConfig
     from surfaces.interactive_shell import run_repl
 
-    return int(run_repl(config=ReplConfig.load(cli_enabled=True)))
+    return run_repl(config=ReplConfig.load(cli_enabled=True))
 
 
 @click.group(name="onboard", invoke_without_command=True)

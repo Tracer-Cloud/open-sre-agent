@@ -1,73 +1,37 @@
 ## Deployment
 
-OpenSRE has three deployment paths and a general hosted runtime option for
+OpenSRE has two primary AWS EC2 paths and a general hosted runtime option for
 ASGI-compatible platforms:
 
 - **Slack** — deployed and operated separately, not from this repo. The EC2
-  paths below never ship `SLACK_*` variables (Socket Mode is single-consumer —
+  path below never ships `SLACK_*` variables (Socket Mode is single-consumer —
   a second consumer would split events).
-- **Telegram** — the two EC2 paths below.
+- **Telegram** — the EC2 gateway deploy below.
 
 ---
 
-## EC2 Deploy — Docker/ECR (web + gateway)
+## Gateway Deploy — AMI + systemd (Telegram)
 
-Runs `opensre-web` and `opensre-gateway` as Docker containers on a single EC2 instance.
-The image is built once and pushed to ECR; subsequent redeploys reuse the cached image.
+Runs the Telegram gateway directly on EC2 as a systemd service. The gateway is
+baked into a custom AMI once; subsequent deploys launch from that AMI in ~2–3
+minutes.
 
-**Prerequisites:** Docker daemon running locally, AWS credentials with EC2 / ECR / IAM /
-SSM permissions, region defaults to `us-east-1`.
+**Prerequisites:** AWS credentials with EC2 / IAM / SSM permissions. No Docker needed.
 
 Copy [`.env.deploy.example`](.env.deploy.example) and export the required variables:
 
 | Variable | Required | Used by |
 | -------- | -------- | ------- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Yes (or role) | Provisioning |
-| `TELEGRAM_BOT_TOKEN` | Yes | Gateway container |
+| `TELEGRAM_BOT_TOKEN` | Yes | Gateway service |
 | `TELEGRAM_ALLOWED_USERS` | Recommended | Gateway pairing gate |
-| `LLM_PROVIDER` + API key | Yes | Both containers |
+| `LLM_PROVIDER` + API key | Yes | Gateway service |
 
 `SLACK_*` variables are ignored by the EC2 deploy (validation warns) — Slack is deployed and operated separately, not from this repo.
 
 ```bash
-# Step 1 — build and push Docker image to ECR (run once per code change):
-make build-image
-
-# Step 2 — launch EC2 instance using the pre-built image (fast, no Docker build):
-make deploy
-
-# Tear down the stack (keeps ECR image by default):
-make destroy
-
-# Full teardown including ECR repository:
-OPENSRE_DESTROY_PURGE_ECR=1 make destroy
-```
-
-After deploy:
-
-```bash
-curl http://<PublicIpAddress>:8000/health
-```
-
-Outputs (instance ID, public IP, image URI) are written to
-`~/.opensre/deployments/opensre-ec2.json`.
-
-`make deploy` auto-destroys any existing stack before provisioning a fresh one. Set
-`OPENSRE_DEPLOY_ABORT_IF_EXISTS=1` to fail instead of auto-destroying.
-
----
-
-## Gateway Deploy — AMI + systemd (Telegram)
-
-Runs the Telegram gateway directly on EC2 as a systemd service — no Docker or ECR
-required. The gateway is baked into a custom AMI once; subsequent
-deploys launch from that AMI in ~2–3 minutes.
-
-**Prerequisites:** AWS credentials with EC2 / IAM / SSM permissions. No Docker needed.
-
-```bash
 # Step 1 — bake a gateway AMI (run once per code change, takes ~5-10 minutes):
-make bake-gateway
+make build-gateway-image
 
 # Step 2 — launch EC2 instance from the saved AMI (fast):
 make deploy-gateway
@@ -109,23 +73,23 @@ Restrict the allowed source CIDR with `OPENSRE_WEB_API_INGRESS_CIDR` (default `0
 Installs OpenSRE inline on a fresh EC2 instance via SSM — slower but requires no bake step:
 
 ```bash
-make deploy-gateway-direct
-make destroy-gateway-direct
+make install-gateway-on-new-server
+make destroy-gateway-on-new-server
 ```
 
 ---
 
-## Comparison
+## Fargate multi-tenant deployment (Terraform)
 
-|  | Docker/ECR (`make deploy`) | Gateway (`make deploy-gateway`) |
-| - | - | - |
-| What deploys | web + gateway containers | gateway service only |
-| Runtime | Docker inside EC2 | systemd on EC2 host |
-| Shell access | Inside slim container | Full EC2 host |
-| ECR repository | Required | Not needed |
-| Update path | `make build-image && make deploy` | `make bake-gateway && make deploy-gateway` |
+The shared ECS Fargate foundation, the IAM lifecycle API and the public-run API
+are no longer part of this repository. They live with the web application, in
+`opensre-webapp/opensre-infra-aws/`, and are deployed from there.
 
----
+This repository keeps only what the gateway itself needs at runtime: size-profile
+contracts in `platform/deployment_contracts/`, and credential hydration from the
+control-plane bootstrap / integrations secrets
+(`gateway/runtime/credential_hydration.py`). Remote agent-run polling and its
+Postgres store are owned by the webapp stack, not the gateway process.
 
 ## Runtime Environment (Hosted / General)
 

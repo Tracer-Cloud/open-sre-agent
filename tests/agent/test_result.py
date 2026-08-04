@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from core.domain.diagnosis import (
     InvestigationResult,
     build_diagnosis_schema,
@@ -53,6 +56,28 @@ def test_hermes_taxonomy_is_scoped_to_hermes_categories() -> None:
     description = str(schema.model_fields["root_cause_category"].description)
     assert "agent_hang" in description
     assert "connection_exhaustion" not in description
+
+
+def test_diagnosis_schema_emits_closed_enum_for_root_cause_category() -> None:
+    """OpenAI/Anthropic structured outputs need an enum, not an open string."""
+    categories = {"pod_oomkilled", "code_defect"}
+    schema = build_diagnosis_schema(categories)
+    json_schema = schema.model_json_schema()
+    category_schema = json_schema["properties"]["root_cause_category"]
+    assert category_schema.get("type") == "string"
+    assert set(category_schema.get("enum", [])) == {
+        "pod_oomkilled",
+        "code_defect",
+        "unknown",
+    }
+    assert (
+        schema.model_validate(
+            {"root_cause": "oom", "root_cause_category": "pod_oomkilled"}
+        ).root_cause_category
+        == "pod_oomkilled"
+    )
+    with pytest.raises(ValidationError):
+        schema.model_validate({"root_cause": "oom", "root_cause_category": "bogus_label"})
 
 
 def test_result_to_state_strips_internal_markers_from_agent_messages() -> None:

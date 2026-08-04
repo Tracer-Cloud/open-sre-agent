@@ -135,7 +135,10 @@ def format_prior_action_facts(
     command stdout, and value-shaped lines such as weather readings.
     """
     facts: list[str] = []
-    for entry in messages:
+    limit = max_entries if max_entries > 0 else None
+    # Walk newest-first so we can stop as soon as `limit` facts are found,
+    # instead of scanning the full history and trimming afterward.
+    for entry in reversed(messages):
         try:
             role, content = entry
         except (TypeError, ValueError):
@@ -157,13 +160,16 @@ def format_prior_action_facts(
         ) and not _VALUE_LINE_RE.search(text):
             continue
         facts.append(text)
+        if limit is not None and len(facts) >= limit:
+            break
 
     if not facts:
         return ""
 
     rendered: list[str] = []
     remaining = max(max_chars, 0)
-    for idx, fact in enumerate(facts[-max_entries:], start=1):
+    # `facts` was collected newest-first; reverse back to maintain chronological order
+    for idx, fact in enumerate(reversed(facts), start=1):
         if remaining <= 0:
             break
         chunk = f"- Prior assistant/tool output {idx}:\n{fact.strip()}"

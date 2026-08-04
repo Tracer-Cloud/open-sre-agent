@@ -28,6 +28,11 @@ from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState
 from platform.common.task_registry import TaskRegistry
 
+#: How many recent history rows keep their full response body. Sized above
+#: the conversation window so anything a prompt or a ``*_latest_*`` lookup
+#: reads is still intact, while a long session stops holding every reply.
+RESPONSE_TEXT_WINDOW = 20
+
 
 def _default_grounding() -> GroundingContext:
     """Build a fresh per-session grounding cache bundle.
@@ -185,8 +190,23 @@ class SessionCore:
             entry["slash_outcome"] = slash_outcome
 
         self.history.append(entry)
+        self._shed_stale_response_text()
 
         self.storage.append_turn(self, kind, text)
+
+    def _shed_stale_response_text(self) -> None:
+        """Drop the response body from the entry just aged out of the window.
+
+        Entries are never removed — ``len(history)`` is a turn counter and one
+        caller slices by a captured index — so the list itself has to keep
+        growing. The response bodies are the weight: a full agent reply dwarfs
+        the type/text/ok fields beside it, and only the newest rows of a kind
+        are ever read back. Shedding one entry per append keeps this O(1).
+        """
+        aged_out = len(self.history) - RESPONSE_TEXT_WINDOW - 1
+        if aged_out < 0:
+            return
+        self.history[aged_out].pop("response_text", None)
 
     def mark_latest(self, *, ok: bool, kind: str | None = None) -> None:
         """Update the latest history entry, optionally scanning for a matching kind."""
@@ -270,10 +290,18 @@ class SessionCore:
         self.integrations.vcs_repo_scopes = value
 
     def refresh_runtime_metadata(self) -> None:
-        """Repopulate :attr:`runtime_metadata` from current process facts."""
+        """Rebuild :attr:`runtime_metadata`, including merged capability warnings."""
         from config.runtime_metadata import build_runtime_metadata
+        from platform.sandbox.capabilities import boot_capability_warnings
 
-        self.runtime_metadata = build_runtime_metadata()
+        meta = build_runtime_metadata()
+        tools = meta.get("tools")
+        installed = tools if isinstance(tools, dict) else None
+        meta["capability_warnings"] = boot_capability_warnings(
+            include_path_facts=True,
+            installed_tools=installed,
+        )
+        self.runtime_metadata = meta
 
     def hydrate_configured_integrations(self) -> None:
         """Load configured integration names (env + local store); metadata-only."""

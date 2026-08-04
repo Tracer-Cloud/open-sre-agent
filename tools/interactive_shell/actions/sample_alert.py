@@ -35,16 +35,15 @@ def run_sample_alert(
     is_tty: bool | None = None,
     action_already_listed: bool = False,
 ) -> None:
-
     def _run(task: TaskRecord) -> dict[str, object]:
         return ports.run_sample_alert(
             template_name=template_name,
             context_overrides=session.accumulated_context or None,
             cancel_requested=task.cancel_requested,
+            console=console,
         )
 
     def _start_background() -> None:
-
         ports.start_background_sample(
             template_name=template_name,
             session=session,

@@ -14,6 +14,10 @@ from typing import Any
 from platform.masking.detectors import DetectedIdentifier, find_identifiers
 from platform.masking.policy import MaskingPolicy, compile_extra_patterns
 
+# Placeholders are always ``<KIND_N>`` (no nested ``<>``). One scan finds every
+# token; dict lookup restores known ones and leaves unknown angle-brackets alone.
+_PLACEHOLDER_TOKEN_RE = re.compile(r"<[^<>]+>")
+
 
 class MaskingContext:
     """Stable masking state for one investigation."""
@@ -67,10 +71,26 @@ class MaskingContext:
             max_index[key] = max(max_index.get(key, -1), int(index))
         return {key: value + 1 for key, value in max_index.items()}
 
+    @staticmethod
+    def _canonical_label(kind: str) -> str:
+        """Token label for ``kind``, upholding the single-bracket invariant.
+
+        Labels come from user extra_patterns config; the one-pass unmask
+        matches ``<[^<>]+>``, so brackets and spaces must not survive into
+        the token.
+        """
+        return re.sub(r"[^A-Za-z0-9_]", "_", kind.upper()).strip("_") or "EXTRA"
+
     def _new_placeholder(self, kind: str) -> str:
-        index = self._counters.get(kind, 0)
-        self._counters[kind] = index + 1
-        return f"<{kind.upper()}_{index}>"
+        # Counters key on the canonical label, matching what
+        # ``_derive_counters`` reads back out of restored placeholders —
+        # a raw-kind key would reset to index 0 after a state round trip
+        # and overwrite the earlier secret.
+        label = self._canonical_label(kind)
+        key = label.lower()
+        index = self._counters.get(key, 0)
+        self._counters[key] = index + 1
+        return f"<{label}_{index}>"
 
     def _ensure_placeholder(self, kind: str, value: str) -> str:
         if value in self._reverse_map:
@@ -93,25 +113,36 @@ class MaskingContext:
         return self._apply_replacements(text, matches)
 
     def _apply_replacements(self, text: str, matches: list[DetectedIdentifier]) -> str:
-        # Replace in reverse order so earlier positions remain valid.
-        result = text
-        for m in sorted(matches, key=lambda x: x.start, reverse=True):
-            placeholder = self._ensure_placeholder(m.kind, m.value)
-            result = result[: m.start] + placeholder + result[m.end :]
-        return result
+        # One forward pass + join: O(L + N_m). Prefer start order (find_identifiers
+        # already returns it); sort defensively if a caller passes unsorted spans.
+        parts: list[str] = []
+        cursor = 0
+        for m in sorted(matches, key=lambda x: x.start):
+            if m.start < cursor:
+                continue
+            parts.append(text[cursor : m.start])
+            parts.append(self._ensure_placeholder(m.kind, m.value))
+            cursor = m.end
+        parts.append(text[cursor:])
+        return "".join(parts)
 
     def unmask(self, text: str) -> str:
-        """ "Restore any known placeholders in ``text`` to their original values."""
+        """Restore known placeholders in ``text`` (single left-to-right scan).
+
+        Token boundaries are ``<…>``, so ``<NAMESPACE_10>`` is never partially
+        rewritten by a shorter key like ``<NAMESPACE_1>``. Replacement text is
+        not re-scanned — originals that happen to contain angle-brackets stay
+        literal (identifiers from detectors do not look like placeholders).
+        """
         if not text or not self._placeholder_map:
             return text
-        result = text
-        # Sort longest-first to avoid prefix collisions (e.g. <NS_10> before <NS_1>)
-        for placeholder, original in sorted(
-            self._placeholder_map.items(), key=lambda x: len(x[0]), reverse=True
-        ):
-            if placeholder in result:
-                result = result.replace(placeholder, original)
-        return result
+        if "<" not in text:
+            return text
+        mapping = self._placeholder_map
+        return _PLACEHOLDER_TOKEN_RE.sub(
+            lambda match: mapping.get(match.group(0), match.group(0)),
+            text,
+        )
 
     def mask_value(self, value: Any) -> Any:
         """Recursively mask strings inside dicts/lists/tuples."""

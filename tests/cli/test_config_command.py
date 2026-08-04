@@ -5,12 +5,13 @@ from pathlib import Path
 import yaml
 from click.testing import CliRunner
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 
 def _patch_config_home(monkeypatch, tmp_path: Path) -> Path:
     opensre_home = tmp_path / ".opensre"
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", opensre_home)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", opensre_home)
     monkeypatch.setattr("surfaces.cli.commands.config.OPENSRE_HOME_DIR", opensre_home)
     return opensre_home
 

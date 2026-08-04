@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gateway.storage.session.bindings import SessionBindingStore
+from gateway.storage.session.file_bindings import FileBindingStore
 from gateway.storage.session.resolver import SessionResolver
 
-__all__ = ["SessionBindingStore", "SessionResolver"]
+__all__ = ["FileBindingStore", "SessionResolver"]

@@ -58,6 +58,7 @@ def run_text_investigation(
                 alert_text=alert_text,
                 context_overrides=session.accumulated_context or None,
                 cancel_requested=task.cancel_requested,
+                console=console,
             )
             tracker.record_loop_metrics_from_state(final_state)
             return final_state

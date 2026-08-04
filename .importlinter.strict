@@ -27,7 +27,6 @@ ignore_imports =
     # config upward imports (T-4 debt — refactor into lower layers)
     config.config -> core.llm.providers.azure_openai
     config.llm_auth.credentials -> integrations.llm_cli.registry
-    config.llm_keyring -> platform
     config.repl_config -> platform.terminal.theme
     # platform -> integrations (T-4 debt — scheduler / observability)
     platform.analytics.cli -> integrations.github.identity
@@ -44,21 +43,15 @@ ignore_imports =
     surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.runtime.daemon
     surfaces.interactive_shell.controller -> gateway.http.web_server
     # tools -> integrations (T-4 debt — vendor tools / reporting)
-    tools.community_followup_tool -> integrations.github.client
-    tools.community_followup_tool -> integrations.github.helpers
-    tools.community_followup_tool -> integrations.github.tools.workflow
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url
-    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.client
-    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.repo_scope
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.coding_agent
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.git
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.github.client
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.coding_agent
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.client
-    tools.git_deploy_timeline_tool -> integrations.github.helpers
-    tools.git_deploy_timeline_tool -> integrations.github.mcp
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.pull_requests
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
@@ -74,14 +67,9 @@ ignore_imports =
     tools.investigation.reporting.gitlab_writeback -> integrations.gitlab
     tools.investigation.reporting.upstream_correlation.registry -> integrations.datadog.correlation.registration
     tools.investigation.state_factory -> integrations.opensre.hf_remote
-    tools.pi_coding_tool -> integrations.pi
-    tools.pi_coding_tool.runner -> integrations.pi
-    tools.pi_coding_tool.validation -> integrations.pi
     tools.system.python_execution_tool.credentials -> integrations.github.client
     tools.system.python_execution_tool.credentials -> integrations.github.helpers
+    tools.system.watch_dog.runner -> integrations.rocketchat.alarms
+    tools.system.watch_dog.runner -> integrations.rocketchat.credentials
     tools.system.watch_dog.runner -> integrations.telegram.alarms
     tools.system.watch_dog.runner -> integrations.telegram.credentials
-    tools.work_status_report_tool -> integrations.github.client
-    tools.work_status_report_tool -> integrations.github.helpers
-    tools.work_status_report_tool -> integrations.github.tools.work_status
-    tools.work_status_report_tool -> integrations.github.tools.workflow

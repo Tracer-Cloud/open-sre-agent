@@ -21,15 +21,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.runtime.manager import GatewayManager, start_gateway
 from gateway.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
@@ -57,16 +53,22 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
-    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
-    monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
     monkeypatch.setattr(
         "gateway.runtime.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
-    # Patch the agent class the gateway constructs so the turn callback is spyable.
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", agent_cls)
+    # Patch the agent factory the gateway uses so the turn callback is spyable.
+    monkeypatch.setattr(
+        "gateway.runtime.session_agents.build_default_headless_agent",
+        agent_cls,
+    )
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)
@@ -91,7 +93,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     sink = MagicMock()
     session = MagicMock()
-    agent_cls.return_value.dispatch.return_value = ShellTurnResult(
+    agent_cls.return_value.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
             planned_count=1,
@@ -111,9 +113,23 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert agent_cls.return_value.dispatch.call_args.args == ("hello",)
     ctor = agent_cls.call_args
     assert ctor.kwargs["session"] is session
-    assert ctor.kwargs["output"] is sink
-    tool_provider = ctor.kwargs["tools"]
-    assert isinstance(tool_provider, DefaultToolProvider)
+    # Session-scoped agent holds a live sink proxy; the transport sink is bound
+    # each turn (not passed as the constructor ``output`` identity).
+    from gateway.runtime.live_sink import LiveOutputSink
+
+    assert isinstance(ctor.kwargs["output"], LiveOutputSink)
+    assert ctor.kwargs["surface"] == "gateway"
+    assert ctor.kwargs["gather_enabled"] is True
+    assert ctor.kwargs["is_tty"] is False
+    assert ctor.kwargs["observer_factory"] is not None
+    tool_provider = DefaultToolProvider(
+        ctor.kwargs["session"],
+        ctor.kwargs["console"],
+        tool_action_logger=ctor.kwargs["logger"],
+        observer_factory=ctor.kwargs["observer_factory"],
+        subprocess_presenter_factory=ctor.kwargs.get("subprocess_presenter_factory"),
+        slash_ports_factory=ctor.kwargs.get("slash_ports_factory"),
+    )
     assert tool_provider._precomputed_action_tools is None
     with patch.object(logger, "info") as mock_info:
         tool_provider.observer(message="hello")(
@@ -125,12 +141,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "shell_run",
         "{'command': 'pwd'}",
     )
-    assert isinstance(ctor.kwargs["prompts"], DefaultPromptContextProvider)
-    assert isinstance(ctor.kwargs["reasoning"], DefaultReasoningClientProvider)
-    assert isinstance(ctor.kwargs["run_factory"], DefaultRunRecordFactory)
-    assert isinstance(ctor.kwargs["accounting"], DefaultTurnAccounting)
-    assert isinstance(ctor.kwargs["error_reporter"], DefaultErrorReporter)
-    assert ctor.kwargs["gather_enabled"] is True
+    bind_kwargs = agent_cls.return_value.bind_turn.call_args.kwargs
+    assert isinstance(bind_kwargs["accounting"], DefaultTurnAccounting)
 
 
 def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatch) -> None:
@@ -158,8 +170,11 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             assert chat_id == "chat-1"
             return self._session
 
-    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
-    monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
     monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
@@ -214,8 +229,11 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> None:
     """The unified daemon keeps its other components when Telegram is unconfigured."""
     logger = logging.getLogger("gateway.lifecycle.test")
-    monkeypatch.setattr("core.agent_harness.harness.load_dotenv", lambda **_kwargs: None)
-    monkeypatch.setattr("gateway.runtime.manager.configure_gateway_logging", lambda: logger)
+    monkeypatch.setattr(
+        "config.local_env.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
     monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
     monkeypatch.setattr("gateway.runtime.manager.clear_component_status", lambda: None)
     _patch_non_telegram_components(monkeypatch)

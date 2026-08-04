@@ -3,7 +3,7 @@
 This is the CLI/gateway half of org-level product analytics:
 
 - ``organization_id`` + PostHog ``$groups.organization`` when the silo org is known
-- ``surface``: ``cli`` | ``slack`` | ``telegram`` (usage channel, not inventory)
+- ``surface``: ``cli`` | ``slack`` | ``telegram`` | ``discord`` (usage channel, not inventory)
 - ``session_id``: OpenSRE agent session (not PostHog web ``$session_id``)
 - ``user_id``: transport/platform user when known (best-effort)
 
@@ -14,14 +14,13 @@ are not an integration inventory source of truth (that lives in the webapp).
 from __future__ import annotations
 
 import contextlib
-import os
 import threading
 from collections.abc import Iterator
 from contextvars import ContextVar, Token
 from typing import Final
 from uuid import uuid4
 
-from config.constants.billing import ORGANIZATION_ID_ENV
+from config.constants.organization import organization_id
 from platform.analytics.repl_context import get_cli_session_id
 
 type JsonScalar = str | bool | int | float
@@ -31,8 +30,9 @@ type Properties = dict[str, JsonValue]
 SURFACE_CLI: Final[str] = "cli"
 SURFACE_SLACK: Final[str] = "slack"
 SURFACE_TELEGRAM: Final[str] = "telegram"
+SURFACE_DISCORD: Final[str] = "discord"
 CANONICAL_SURFACES: Final[frozenset[str]] = frozenset(
-    {SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM}
+    {SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM, SURFACE_DISCORD}
 )
 ORGANIZATION_GROUP_TYPE: Final[str] = "organization"
 
@@ -73,12 +73,11 @@ def get_user_id() -> str | None:
 
 
 def get_organization_id() -> str | None:
-    """Return org id from context, else ``OPENSRE_ORGANIZATION_ID`` when set."""
+    """Return org id from context, else ``ORGANIZATION_ID`` when set."""
     bound = _ORGANIZATION_ID.get()
     if bound:
         return bound
-    env_value = (os.getenv(ORGANIZATION_ID_ENV) or "").strip()
-    return env_value or None
+    return organization_id() or None
 
 
 def bind_surface(surface: str | None) -> Token[str | None]:

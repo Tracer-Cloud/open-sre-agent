@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from core.agent_harness.prompts import (
     _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
@@ -162,6 +166,17 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
     assert "from this info create an issue on github" in prompt
     assert "github_cli is action-only" in prompt
     assert "exception: github issue/pr/repo" in prompt
+    assert "get_github_star_history" in prompt
+    assert "day-by-day stars" in prompt
+
+
+def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
+    cached_load_skills_block.cache_clear()
+    block = load_skills_block().lower()
+    assert "star history" in block
+    assert "get_github_star_history" in block
+    assert "assistant_handoff" in block
+    assert "undercount" in block or "false zeros" in block
 
 
 def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
@@ -209,6 +224,17 @@ def test_system_prompt_preserves_bare_numeric_synthetic_mapping() -> None:
     assert "run synthetic test 005 now" in prompt
     assert 'scenario="005-failover"' in prompt
     assert "never substitute a different numbered" in prompt
+
+
+def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    assert "memory_remember" in prompt
+    assert "proactively save durable knowledge" in prompt
+    assert "the user does not need to say" in prompt
+    assert "memory_recall" in prompt
+    assert "memory_forget" in prompt
+    assert "do not save transient task state" in prompt
+    assert "never save built-in sample/demo/synthetic/test alert output" in prompt
 
 
 def test_connected_integrations_block_renders_state() -> None:
@@ -302,6 +328,39 @@ def test_skills_loader_bundles_github_cli_skill() -> None:
     cached_load_skills_block.cache_clear()
 
 
+def test_skills_loader_bundles_github_security_fix_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill = skills_dir() / "github_security_fix" / "SKILL.md"
+    assert skill.is_file()
+
+    block = load_skills_block()
+    assert "GITHUB SECURITY AND QUALITY FIX SKILL" in block
+    assert "fix_github_security_alert" in block
+    assert "Secret-scanning remediation" in block
+    assert 'alert_type="auto"' in block
+    assert 'alert_type="code_quality"' in block
+    assert "auto-detected" in block
+    assert "Never add coding-agent advice" in block
+    assert "output exactly that text and stop" in block
+    assert "reply in one short line" in block
+    assert 'Do not say "next steps"' in block
+    cached_load_skills_block.cache_clear()
+
+
+def test_skills_loader_bundles_github_ci_fix_skill() -> None:
+    cached_load_skills_block.cache_clear()
+    skill = skills_dir() / "github_ci_fix" / "SKILL.md"
+    assert skill.is_file()
+
+    block = load_skills_block()
+    assert "GITHUB PR CI FIX SKILL" in block
+    assert "fix_github_pr_ci" in block
+    assert "output exactly that text and stop" in block
+    assert 'Do not say "next steps"' in block
+    assert "pushes to the existing PR head branch" in block
+    cached_load_skills_block.cache_clear()
+
+
 def test_action_system_prompt_includes_context_blocks() -> None:
     prompt = build_action_system_prompt(
         _ctx(
@@ -364,7 +423,16 @@ class _FakePrompts:
     def investigation_flow(self) -> str:
         return ""
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> dict[str, object]:
+
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime=None) -> str:  # noqa: ANN001, ARG002
+        return ""
+
+    def long_term_memory(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:
@@ -447,3 +515,23 @@ def test_docs_grounding_reaches_assistant_prompt() -> None:
     assert "--- Documentation reference (docs/) ---" in prompt
     assert "docs/messaging/telegram.mdx" in prompt
     assert "@BotFather" in prompt
+
+
+def test_action_prompt_includes_long_term_memory_bodies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
+    from core.domain.memory import save_memory
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
+    save_memory(
+        slug="user-profile",
+        memory_type="user",
+        description="Name is Vaibhav",
+        body="The user's name is Vaibhav on the platform team.",
+    )
+    prompt = build_action_system_prompt(_ctx())
+    assert "LONG-TERM MEMORY" in prompt
+    assert "user-profile" in prompt
+    assert "platform team" in prompt

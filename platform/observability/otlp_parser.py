@@ -15,9 +15,9 @@ _OTLP_SCALAR_KINDS = ("stringValue", "intValue", "boolValue", "doubleValue")
 
 #: Nanoseconds → milliseconds for OTLP span duration.
 _NANOSECONDS_PER_MILLISECOND = 1_000_000
-#: Decimal places kept on parsed OTLP durations (ms).
-_OTLP_DURATION_MS_DECIMAL_PLACES = 4
-_EMPTY_DURATION_MS = 0.0
+#: Decimal places kept on parsed OTLP durations (milliseconds).
+_OTLP_DURATION_MILLISECONDS_DECIMAL_PLACES = 4
+_EMPTY_DURATION_MILLISECONDS = 0.0
 _UNKNOWN_SPAN_NAME = "unknown"
 
 
@@ -46,12 +46,12 @@ def _duration_ms(start_unix_nano: Any, end_unix_nano: Any) -> float:
         start = int(start_unix_nano)
         end = int(end_unix_nano)
     except (TypeError, ValueError):
-        return _EMPTY_DURATION_MS
+        return _EMPTY_DURATION_MILLISECONDS
     if end <= start:
-        return _EMPTY_DURATION_MS
+        return _EMPTY_DURATION_MILLISECONDS
     return round(
         (end - start) / _NANOSECONDS_PER_MILLISECOND,
-        _OTLP_DURATION_MS_DECIMAL_PLACES,
+        _OTLP_DURATION_MILLISECONDS_DECIMAL_PLACES,
     )
 
 

@@ -216,6 +216,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to list, connect, or disconnect MCP servers",
         anti_examples=("User asks about remote deployments or remote agents (use /remote)",),
     ),
+    "/memory": _mcp(
+        "List and manage the agent's long-term memory. "
+        "Subcommands: show <name>, forget <name>, path.",
+        "User explicitly asks to list, show, or delete stored memories via /memory",
+        anti_examples=(
+            "User shares a durable fact in normal chat (agent should auto-save via memory_remember)",
+            "User asks what the agent knows about them (use memory_recall)",
+        ),
+    ),
     "/messaging": _mcp(
         "Manage messaging security and Telegram identities. Subcommands: pair, allow, revoke, status.",
         "User asks about Telegram pairing, messaging allowlist, or messaging status",
@@ -308,6 +317,17 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Print guidance for stopping in-flight investigations and background tasks.",
         "User asks how to stop a running investigation or background work",
         anti_examples=("User provides a task id to cancel (use /cancel)",),
+    ),
+    "/remote-sync": _mcp(
+        "Mirror this machine's sessions and memory to an object store the user "
+        "owns (built-in: aws/S3, vercel Blob). Subcommands: status, sync, setup. "
+        "Off until setup or env enable; integration credentials and model keys "
+        "are never uploaded.",
+        "User asks to sync, back up, set up remote sync, or restore conversations",
+        anti_examples=(
+            "User asks to connect an AWS integration for investigations (use /integrations)",
+            "User asks what opensre remembers (use /memory)",
+        ),
     ),
     "/tasks": _mcp(
         "List recent and in-flight shell background tasks with ids and status.",

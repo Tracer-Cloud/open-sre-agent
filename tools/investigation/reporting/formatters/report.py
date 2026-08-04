@@ -678,43 +678,36 @@ def format_whatsapp_message(ctx: ReportContext) -> str:
 
     parts: list[str] = []
 
-    # Severity header
     severity = ctx.get("severity", "")
     if severity:
         parts.append(f"[{severity.upper()}] OpenSRE Investigation")
     else:
         parts.append("OpenSRE Investigation")
 
-    # Root cause + top log
     top_log = _get_top_error_log(ctx.get("evidence") or {})
     if top_log:
         parts.append(f"{root_cause_sentence}\nTop log: {top_log}")
     else:
         parts.append(root_cause_sentence)
 
-    # Findings
     validated_lines, non_validated_lines = _render_claim_lines(ctx)
     if validated_lines:
         parts.append("*Findings*\n" + "\n".join(validated_lines))
     if non_validated_lines:
         parts.append("*Inferred Claims*\n" + "\n".join(non_validated_lines))
 
-    # Provenance
     provenance_lines = _format_provenance_lines(ctx)
     if provenance_lines:
         parts.append("*Provenance*\n" + "\n".join(provenance_lines))
 
-    # Recommended actions
     remediation_steps = ctx.get("remediation_steps", [])
     if remediation_steps:
         parts.append("*Recommended Actions*\n" + "\n".join(f"• {s}" for s in remediation_steps))
 
-    # Investigation trace
     trace_steps = build_investigation_trace(ctx)
     if trace_steps:
         parts.append("*Investigation Trace*\n" + "\n".join(trace_steps))
 
-    # Meta
     meta_bits: list[str] = []
     if duration_seconds is not None:
         meta_bits.append(f"Timing: {duration_seconds}s")

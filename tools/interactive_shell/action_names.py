@@ -2,34 +2,42 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from enum import StrEnum
 
-ToolKind = Literal[
-    "slash",
-    "shell",
-    "investigation",
-    "alert",
-    "sample_alert",
-    "synthetic_test",
-    "task_cancel",
-    "cli_command",
-    "implementation",
-    "llm_provider",
-    "assistant_handoff",
-]
+
+class ToolKind(StrEnum):
+    """Closed set of action-tool kinds.
+
+    Scenario YAML and harness fixtures reference these by plain string
+    (e.g. ``kind: slash``); StrEnum keeps that working (members compare
+    and hash equal to their string value) while making the set explicit.
+    """
+
+    SLASH = "slash"
+    SHELL = "shell"
+    INVESTIGATION = "investigation"
+    ALERT = "alert"
+    SAMPLE_ALERT = "sample_alert"
+    SYNTHETIC_TEST = "synthetic_test"
+    TASK_CANCEL = "task_cancel"
+    CLI_COMMAND = "cli_command"
+    IMPLEMENTATION = "implementation"
+    LLM_PROVIDER = "llm_provider"
+    ASSISTANT_HANDOFF = "assistant_handoff"
+
 
 TOOL_KIND_TO_NAME: dict[ToolKind, str] = {
-    "slash": "slash_invoke",
-    "shell": "shell_run",
-    "investigation": "investigation_start",
-    "alert": "alert_sample",
-    "sample_alert": "alert_sample",
-    "synthetic_test": "synthetic_run",
-    "task_cancel": "task_cancel",
-    "cli_command": "cli_exec",
-    "implementation": "code_implement",
-    "llm_provider": "llm_set_provider",
-    "assistant_handoff": "assistant_handoff",
+    ToolKind.SLASH: "slash_invoke",
+    ToolKind.SHELL: "shell_run",
+    ToolKind.INVESTIGATION: "investigation_start",
+    ToolKind.ALERT: "alert_sample",
+    ToolKind.SAMPLE_ALERT: "alert_sample",
+    ToolKind.SYNTHETIC_TEST: "synthetic_run",
+    ToolKind.TASK_CANCEL: "task_cancel",
+    ToolKind.CLI_COMMAND: "cli_exec",
+    ToolKind.IMPLEMENTATION: "code_implement",
+    ToolKind.LLM_PROVIDER: "llm_set_provider",
+    ToolKind.ASSISTANT_HANDOFF: "assistant_handoff",
 }
 
 __all__ = ["TOOL_KIND_TO_NAME", "ToolKind"]

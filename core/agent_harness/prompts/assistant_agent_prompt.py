@@ -133,6 +133,8 @@ def build_environment_block(
             "instead of guessing or telling them to run another command."
         )
 
+    # Live keys (now_iso / uptime / disk / memory) stay out of this block so
+    # the system/env prefix remains cache-stable across turns.
     runtime_fact = render_runtime_facts(runtime or {})
     if runtime_fact:
         facts.append(runtime_fact)
@@ -182,6 +184,7 @@ def _build_system_prompt(
     prior_investigation: str = "",
     prior_action_facts: str = "",
     environment: str = "",
+    long_term_memory: str = "",
     surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
@@ -226,6 +229,18 @@ def _build_system_prompt(
         if prior_action_facts
         else ""
     )
+    long_term_memory_block = (
+        "--- Long-term memory ---\n"
+        "Durable knowledge stored locally in ~/.opensre/memory (view/edit with "
+        "/memory). Facts below are injected into every chat turn — use them to "
+        "personalize answers and never re-ask for information already listed. "
+        "Treat listed bodies as ground truth; do not invent details beyond them. "
+        "The action planner may save, recall, or delete memories before this "
+        "assistant runs; do not claim a memory was saved, updated, or forgotten "
+        f"unless the current tool results confirm it.\n{long_term_memory}\n\n"
+        if long_term_memory
+        else ""
+    )
     vendor_fragments_text = assistant_prompt_vendor_fragments()
     vendor_fragments = f"{vendor_fragments_text}\n\n" if vendor_fragments_text else ""
     return (
@@ -264,6 +279,7 @@ def _build_system_prompt(
         f"{investigation_flow_block}"
         f"{prior_investigation_block}"
         f"{prior_action_facts_block}"
+        f"{long_term_memory_block}"
         f"{repo_map_block}"
         f"--- Recent CLI conversation ---\n{history}\n"
     )

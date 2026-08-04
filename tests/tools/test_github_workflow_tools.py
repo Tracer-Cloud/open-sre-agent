@@ -20,13 +20,13 @@ from integrations.github.tools.work_status import (
     propose_github_issue_mutation_from_slack,
     summarize_github_pr_status,
 )
+from integrations.github.tools.work_status_report_tool import generate_work_status_report
 from integrations.github.tools.workflow import (
     GitHubApiError,
     GitHubRestClient,
     build_work_status_report,
 )
 from tests.tools.conftest import BaseToolContract
-from tools.work_status_report_tool import generate_work_status_report
 
 
 def _registered_tool(tool: Any) -> Any:
@@ -157,11 +157,11 @@ def test_summarize_github_pr_status_reports_unknown_mergeability() -> None:
 def test_generate_work_status_report_surfaces_fetch_errors() -> None:
     with (
         patch(
-            "tools.work_status_report_tool.list_github_work_items",
+            "integrations.github.tools.work_status_report_tool.list_github_work_items",
             return_value={"available": False, "error": "boom", "items": []},
         ),
         patch(
-            "tools.work_status_report_tool.summarize_github_pr_status",
+            "integrations.github.tools.work_status_report_tool.summarize_github_pr_status",
             return_value={"available": True, "pull_requests": []},
         ),
     ):
@@ -200,7 +200,8 @@ def test_summarize_community_followups_uses_repository_comments_endpoint() -> No
         ],
     ) as paginate:
         result = __import__(
-            "tools.community_followup_tool", fromlist=["summarize_community_followups"]
+            "integrations.github.tools.community_followup_tool",
+            fromlist=["summarize_community_followups"],
         ).summarize_community_followups(owner="o", repo="r", github_token="tok")
 
     paginate.assert_called_once()

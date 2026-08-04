@@ -17,17 +17,46 @@ def test_billing_env_var_names_are_the_infra_contract() -> None:
     assert billing.WEBAPP_URL_ENV == "OPENSRE_WEBAPP_URL"
     assert billing.MACHINE_SECRET_ENV == "CLERK_MACHINE_SECRET_KEY"
     assert billing.USAGE_SECRET_ENV == "AGENT_USAGE_SECRET"
-    assert billing.ORGANIZATION_ID_ENV == "OPENSRE_ORGANIZATION_ID"
+    assert billing.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
     assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
 
 
-def test_constants_module_stays_a_leaf() -> None:
-    """``config`` sits at the bottom layer, so the billing constants must not
+def test_tenancy_env_var_names_are_the_infra_contract() -> None:
+    """Pin the control plane's env-var names to the strings its ECS task
+    definition injects — a rename here fails gateway startup in a silo."""
+    # Arrange / Act
+    from config.constants import tenancy
+
+    # Assert
+    assert tenancy.CREDENTIALS_API_URL_ENV == "OPENSRE_CREDENTIALS_API_URL"
+    assert (
+        tenancy.CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV == "OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN"
+    )
+
+
+def test_the_organization_id_is_re_exported() -> None:
+    """Callers may import it from the package root."""
+    # Arrange
+    from config import constants
+
+    # Act / Assert
+    assert constants.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
+    for name in (
+        "ORGANIZATION_ID_ENV",
+        "CREDENTIALS_API_URL_ENV",
+        "CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV",
+    ):
+        assert name in constants.__all__
+
+
+@pytest.mark.parametrize("module", ["billing", "tenancy"])
+def test_constants_module_stays_a_leaf(module: str) -> None:
+    """``config`` sits at the bottom layer, so the constants must not
     reach up into another package — that would form an import cycle."""
     # Arrange / Act
     from pathlib import Path as _Path
 
-    source = _Path("config/constants/billing.py").read_text(encoding="utf-8")
+    source = _Path(f"config/constants/{module}.py").read_text(encoding="utf-8")
 
     # Assert: no upward import of a sibling top-level package.
     for package in ("integrations", "gateway", "core", "platform", "tools", "surfaces"):

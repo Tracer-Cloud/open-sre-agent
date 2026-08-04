@@ -33,7 +33,16 @@ class TaskStatus(StrEnum):
 
 
 class Provider(StrEnum):
-    """Supported messaging providers for delivery."""
+    """The canonical delivery-provider vocabulary: where a scheduled outbound
+    message (cron digest, watchdog alarm, ...) can be sent.
+
+    Distinct from ``integrations.messaging_security.MessagingPlatform``,
+    which tracks gateway *inbound* identity, not delivery. Not every consumer
+    supports every member here (e.g. Sentry digest delivery has no Discord
+    path, watchdog alarms only support Telegram/Rocket.Chat) -- those
+    consumers define their own documented subset rather than exposing a
+    choice that would silently fail.
+    """
 
     TELEGRAM = "telegram"
     SLACK = "slack"

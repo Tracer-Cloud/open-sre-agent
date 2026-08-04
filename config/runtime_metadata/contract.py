@@ -27,6 +27,10 @@ STATIC_FACT_KEYS: tuple[str, ...] = (
     "scratchpad_dir",
     "cloud_provider",
     "cloud_region",
+    "workspace_repo",
+    "network_egress",
+    "shell_available",
+    "capability_warnings",
 )
 
 # Captured fresh per prompt render / sandbox call; never cached at bootstrap.

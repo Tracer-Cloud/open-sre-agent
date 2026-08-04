@@ -15,7 +15,7 @@ def _reference_with_cli() -> cli_reference_module.CliReference:
     CLI catalog assembly lives in ``surfaces/`` (T-05 — see issue #3538); tests
     inject the group the same way ``ShellPromptContextProvider`` does.
     """
-    from surfaces.cli.__main__ import cli
+    from surfaces.cli.app import cli
 
     ref = cli_reference_module.CliReference()
     ref.set_command_group_provider(lambda: cli)
@@ -33,7 +33,7 @@ def test_second_build_is_cache_hit() -> None:
 
 
 def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
-    from surfaces.cli.__main__ import cli
+    from surfaces.cli.app import cli
 
     text = _reference_with_cli().build_text()
     captured = capsys.readouterr()

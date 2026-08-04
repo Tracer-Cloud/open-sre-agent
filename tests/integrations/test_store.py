@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import os
 import stat
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from integrations.store import _save
+from integrations.store import _save, replace_integrations
 
 
 def _assert_private_permissions(store_file) -> None:
@@ -61,3 +62,50 @@ class TestSavePermissions:
 
         _assert_private_permissions(store_file)
         assert json.loads(store_file.read_text())["updated"] is True
+
+
+class TestReplaceIntegrations:
+    def test_replace_writes_v2_store_and_private_directory(self, tmp_path: Path) -> None:
+        store_file = tmp_path / "home" / ".opensre" / "integrations.json"
+        records = [
+            {
+                "id": "grafana-1",
+                "service": "grafana",
+                "status": "active",
+                "instances": [],
+            }
+        ]
+
+        with patch("integrations.store.STORE_PATH", store_file):
+            replace_integrations(records)
+
+        assert json.loads(store_file.read_text(encoding="utf-8")) == {
+            "version": 2,
+            "integrations": records,
+        }
+        _assert_private_permissions(store_file)
+        if os.name != "nt":
+            assert stat.S_IMODE(store_file.parent.stat().st_mode) == 0o700
+
+    def test_failed_replace_preserves_previous_store(self, tmp_path: Path) -> None:
+        store_file = tmp_path / "integrations.json"
+        original = {"version": 2, "integrations": []}
+        store_file.write_text(json.dumps(original), encoding="utf-8")
+
+        with (
+            patch("integrations.store.STORE_PATH", store_file),
+            pytest.raises(TypeError),
+        ):
+            replace_integrations(
+                [
+                    {
+                        "id": "bad",
+                        "service": "bad",
+                        "status": "active",
+                        "instances": [],
+                        "not_json": {object()},
+                    }
+                ]
+            )
+
+        assert json.loads(store_file.read_text(encoding="utf-8")) == original

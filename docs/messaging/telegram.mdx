@@ -427,12 +427,12 @@ Investigation delivery, background RCA completion notifications, watchdog alerts
 
 ### Deploying the gateway to a remote host
 
-Running the gateway on a server with `make deploy` (EC2) is different from local
+Running the gateway on a server with `make deploy-gateway` (EC2) is different from local
 use in one important way: **the remote host cannot read your local machine's
 keychain**. Guided setup stores the bot token (and your LLM API key) in the system
 keyring, which is perfect locally but does not travel to the deployed instance.
 
-So `make deploy` validates that the required secrets are present as **plaintext
+So `make deploy-gateway` validates that the required secrets are present as **plaintext
 env vars** in `.env`, and aborts if they are only in the keychain:
 
 ```bash
@@ -441,7 +441,7 @@ TELEGRAM_ALLOWED_USERS=123456789        # numeric user id(s), comma-separated
 ANTHROPIC_API_KEY=...                    # or your provider's key env
 ```
 
-If `make deploy` reports `MISSING: TELEGRAM_BOT_TOKEN — API key not set` or
+If `make deploy-gateway` reports `MISSING: TELEGRAM_BOT_TOKEN — API key not set` or
 `MISSING: OPENAI_API_KEY — API key not set` (or your provider's key env) even
 though local setup succeeded, this is
 why — copy the values into `.env` (or `.env.deploy.example`) for the deploy. A

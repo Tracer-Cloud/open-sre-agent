@@ -28,8 +28,10 @@ def gateway_slash_ports_factory() -> SlashPorts:
 
 def start_gateway(*, wait: bool = True) -> GatewayManager:
     """Start the gateway with headless slash ports wired for chat turns."""
+    from config.local_env import bootstrap_opensre_env_once
     from gateway.runtime.manager import GatewayManager
 
+    bootstrap_opensre_env_once(override=False)
     return GatewayManager(
         slash_ports_factory=gateway_slash_ports_factory,
     ).start_gateway(wait=wait)

@@ -9,6 +9,7 @@ import time
 import click
 
 import platform
+from config.constants.investigation import ALERT_TEMPLATE_CHOICES
 from config.version import get_opensre_version
 from platform.analytics.cli import (
     capture_update_completed,
@@ -19,7 +20,6 @@ from platform.analytics.cli import (
 from platform.analytics.source import EntrypointSource, TriggerMode
 from platform.common.exit_codes import ERROR, SUCCESS
 from platform.common.runtime_flags import is_json_output, is_yes
-from surfaces.cli.constants import ALERT_TEMPLATE_CHOICES
 
 
 @click.command(name="uninstall")
@@ -85,7 +85,7 @@ def version_command() -> None:
 def health_command(watch: bool, rate: int) -> None:
     """Show a quick health summary of the local agent setup."""
     from config.config import get_environment
-    from integrations.store import STORE_PATH
+    from config.constants.paths import integrations_store_path
     from integrations.verify import verify_integrations
     from surfaces.interactive_shell.ui.health import render_health_json, render_health_report
 
@@ -96,7 +96,7 @@ def health_command(watch: bool, rate: int) -> None:
         if is_json_output():
             render_health_json(
                 environment=environment,
-                integration_store_path=STORE_PATH,
+                integration_store_path=integrations_store_path(),
                 results=results,
             )
         else:
@@ -105,7 +105,7 @@ def health_command(watch: bool, rate: int) -> None:
             render_health_report(
                 console=Console(highlight=False),
                 environment=environment,
-                integration_store_path=STORE_PATH,
+                integration_store_path=integrations_store_path(),
                 results=results,
             )
 

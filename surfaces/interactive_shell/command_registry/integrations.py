@@ -93,6 +93,7 @@ def _handle_remove(session: Session, console: Console, service: str | None) -> b
     """Remove an integration with a native inline-picker confirmation (no subprocess)."""
     from integrations.registry import resolve_management_service
     from integrations.store import remove_integration
+    from integrations.webapp_vault import delete_webapp_org_integration
     from platform.analytics.cli import capture_integration_removed
 
     svc = resolve_management_service(service) if service else service
@@ -143,6 +144,7 @@ def _handle_remove(session: Session, console: Console, service: str | None) -> b
             return True
 
     if remove_integration(svc):
+        delete_webapp_org_integration(svc)
         repl_print(console, f"[{HIGHLIGHT}]removed '{escape(svc)}'.[/]")
         capture_integration_removed(svc)
         if svc == "github":

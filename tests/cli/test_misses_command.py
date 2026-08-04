@@ -10,7 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from core.domain.feedback import MissTaxonomy, record_miss
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 # Seed misses a couple of days in the past: comfortably inside the ``--since 30d``
 # export window regardless of the current date. A hardcoded date here drifts to
@@ -22,6 +22,7 @@ _SEED_TIMESTAMP = (datetime.now(UTC) - timedelta(days=2)).isoformat()
 def opensre_home(monkeypatch, tmp_path: Path) -> Path:
     home = tmp_path / ".opensre"
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", home)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", home)
     return home
 
 

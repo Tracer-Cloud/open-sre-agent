@@ -26,7 +26,11 @@ from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
-from platform.observability.trace.redaction import redact_sensitive
+from platform.observability.trace.redaction import (
+    RedactedToolView,
+    redact_sensitive,
+    redact_tool_view,
+)
 from tools.investigation.stages.gather_evidence.incident_command import (
     CONCLUSION_FORMAT_NUDGE,
     POST_TRIAGE_CHECKPOINT,
@@ -76,6 +80,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         *,
         evidence_count: int,  # noqa: ARG002 — used by overrides
         iteration: int,  # noqa: ARG002 — used by overrides
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         """Decide what to do when the LLM stops requesting tools.
 
@@ -85,7 +90,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         Override in subclasses (e.g. :class:`CLIBackedInvestigationAgent`) to
         nudge the model back into tool calls before accepting a conclusion.
         """
-        last_text = getattr(self, "_last_assistant_text", "") or ""
+        last_text = final_text or getattr(self, "_last_assistant_text", "") or ""
         if (
             last_text.strip()
             and not incident_command_conclusion_complete(last_text)
@@ -104,17 +109,31 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         return build_investigation_system_prompt(state)
 
     def _record_tool_start(self, tc: ToolCall) -> None:
-        self._tracker.record_tool_start(tc.name, redact_sensitive(tc.input), event_key=tc.id)
-        self._emit("tool_start", tool_event_payload(tc))
+        redacted = redact_tool_view(tc.input)
+        self._redacted_inputs[tc.id] = redacted.tool_input
+        self._tracker.record_tool_start(tc.name, redacted.tool_input, event_key=tc.id)
+        self._emit("tool_start", tool_event_payload(tc, redacted=redacted))
 
-    def _record_tool_end(self, tc: ToolCall, output: Any) -> None:
+    def _redacted_view(self, tc: ToolCall, output: Any) -> RedactedToolView:
+        """Pair the output with the input redaction already done at tool start.
+
+        Redaction deep-copies the whole payload, and a tool's input is walked
+        once when the call is announced. Re-walking it to attach the output
+        doubles that work on every tool call in the loop.
+        """
+        tool_input = self._redacted_inputs.pop(tc.id, None)
+        if tool_input is None:
+            return redact_tool_view(tc.input, output)
+        return RedactedToolView(tool_input=tool_input, output=redact_sensitive(output))
+
+    def _record_tool_end(self, tc: ToolCall, output: Any, *, redacted: RedactedToolView) -> None:
         self._tracker.record_tool_end(
             tc.name,
-            redact_sensitive(output),
+            redacted.output,
             event_key=tc.id,
-            tool_input=redact_sensitive(tc.input),
+            tool_input=redacted.tool_input,
         )
-        self._emit("tool_end", tool_event_payload(tc, output=output))
+        self._emit("tool_end", tool_event_payload(tc, output=output, redacted=redacted))
 
     def run(
         self,
@@ -126,6 +145,8 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
+        #: Redacted tool inputs from tool_start, consumed when the output lands.
+        self._redacted_inputs: dict[str, Any] = {}
         self._tracker.start("investigation_agent", "Running investigation agent loop")
 
         state_dict = cast(dict[str, Any], state)
@@ -191,18 +212,19 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
 
             for tc, output in zip(seed_calls, seed_results):
                 tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=-1)
-                merge_tool_evidence(evidence, tc.name, output, tc.input)
+                redacted = self._redacted_view(tc, output)
+                merge_tool_evidence(evidence, tc.name, output, tc.input, redacted=redacted)
                 evidence_entries.append(
                     EvidenceEntry(
                         key=tc.name,
-                        data=redact_sensitive(output),
+                        data=redacted.output,
                         tool_name=tc.name,
-                        tool_args=redact_sensitive(tc.input),
+                        tool_args=redacted.tool_input,
                         source=tool_source(tool_by_name, tc.name),
                         loop_iteration=-1,
                     )
                 )
-                self._record_tool_end(tc, output)
+                self._record_tool_end(tc, output, redacted=redacted)
                 debug_print(f"[seed:{tc.name}] → {summarise(output)}")
 
         # Expose planned tools and live evidence to _should_accept_conclusion overrides.
@@ -320,18 +342,19 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 if is_dup:
                     debug_print(f"[{tc.name}] → duplicate call suppressed")
                     continue
-                merge_tool_evidence(evidence, tc.name, output, tc.input)
+                redacted = self._redacted_view(tc, output)
+                merge_tool_evidence(evidence, tc.name, output, tc.input, redacted=redacted)
                 evidence_entries.append(
                     EvidenceEntry(
                         key=tc.name,
-                        data=redact_sensitive(output),
+                        data=redacted.output,
                         tool_name=tc.name,
-                        tool_args=redact_sensitive(tc.input),
+                        tool_args=redacted.tool_input,
                         source=tool_source(tool_by_name, tc.name),
                         loop_iteration=iteration,
                     )
                 )
-                self._record_tool_end(tc, output)
+                self._record_tool_end(tc, output, redacted=redacted)
                 debug_print(f"[{tc.name}] → {summarise(output)}")
 
             if iteration == 0 and fresh_calls and not self._post_triage_checkpoint_sent:
@@ -425,6 +448,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
         *,
         evidence_count: int,  # noqa: ARG002 — base class signature
         iteration: int,
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         planned = getattr(self, "_planned_actions", [])
         evidence = getattr(self, "_current_evidence", None)
@@ -433,6 +457,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
+                final_text=final_text,
             )
 
         # Leave room for a final text-only iteration after the nudge fires.
@@ -440,6 +465,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
+                final_text=final_text,
             )
 
         uncalled = [name for name in planned if name not in evidence]
@@ -447,6 +473,7 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
+                final_text=final_text,
             )
 
         tool_list = ", ".join(uncalled)

@@ -16,7 +16,7 @@ from tools.investigation.session_runner import InvestigationPumpCancelled, check
 
 _logger = logging.getLogger(__name__)
 
-_SESSION_EVENT_POLL_S = 0.25
+_SESSION_EVENT_POLL_SECONDS = 0.25
 
 if TYPE_CHECKING:
     from platform.analytics.cli import InvestigationTracker
@@ -122,7 +122,7 @@ def stream_investigation_cli(
     try:
         while True:
             try:
-                item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+                item = event_queue.get(timeout=_SESSION_EVENT_POLL_SECONDS)
             except queue.Empty:
                 continue
             if isinstance(item, BaseException):

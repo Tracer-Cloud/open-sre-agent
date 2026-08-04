@@ -23,7 +23,7 @@ _TRACE_REFRESH_PER_SECOND = 10
 # excess just creates a Renderable Rich will discard at the next paint.
 # Throttling the *call* to ``Live`` to one period bounds CPU under burst
 # writers without affecting how fast the screen updates.
-_TRACE_RENDER_PERIOD_S = 1.0 / _TRACE_REFRESH_PER_SECOND
+_TRACE_RENDER_PERIOD_SECONDS = 1.0 / _TRACE_REFRESH_PER_SECOND
 # Cap the on-screen render to the most recent slice of the 4 MiB buffer
 # so we don't reparse a 4 MiB string through Rich at 10 fps under burst
 # writers. A few screens of context is plenty for "what is the agent
@@ -98,7 +98,7 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
             pending = False
             for _ in sess:
                 now = time.monotonic()
-                if now - last_render >= _TRACE_RENDER_PERIOD_S:
+                if now - last_render >= _TRACE_RENDER_PERIOD_SECONDS:
                     _render_trace_snapshot(live, sess)
                     last_render = now
                     pending = False

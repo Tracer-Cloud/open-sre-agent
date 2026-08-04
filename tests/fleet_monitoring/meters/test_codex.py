@@ -210,12 +210,12 @@ def test_sample_chunk_surfaces_latest_turn_snapshot_model(meter: CodexMeter) -> 
             '{"type":"turn_context","payload":{"turn_id":"t_1","model":"gpt-5"}}',
             (
                 '{"type":"event_msg","payload":{"type":"token_count","info":'
-                '{"last_token_usage":{"input_tokens":10,"output_tokens":5}}}}'
+                + '{"last_token_usage":{"input_tokens":10,"output_tokens":5}}}}'
             ),
             '{"type":"turn_context","payload":{"turn_id":"t_2","model":"gpt-5-codex"}}',
             (
                 '{"type":"event_msg","payload":{"type":"token_count","info":'
-                '{"last_token_usage":{"input_tokens":20,"output_tokens":10}}}}'
+                + '{"last_token_usage":{"input_tokens":20,"output_tokens":10}}}}'
             ),
         ]
     )

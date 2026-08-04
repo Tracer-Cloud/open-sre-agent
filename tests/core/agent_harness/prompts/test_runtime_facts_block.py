@@ -17,40 +17,43 @@ def test_environment_block_includes_version_without_subprocess_hint() -> None:
     assert "subprocess" in block.lower()
 
 
-def test_environment_block_renders_current_time_and_timezone() -> None:
-    """Time slot must land in the prompt as a quotable string with an anti-
-    guessing instruction — the same shape that stopped the version being
-    hallucinated from training data."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "now_iso": "2026-07-11T14:30:12+02:00",
-            "tz_name": "Europe/Berlin",
-        }
-    )
-    assert "current time is 2026-07-11T14:30:12+02:00" in block
+def test_environment_block_renders_timezone_but_not_live_clock() -> None:
+    """Timezone is session-static (env prefix); ``now_iso`` is live (late block)."""
+    from core.agent_harness.prompts.runtime_facts import render_live_runtime_facts
+
+    runtime = {
+        "opensre_version": "0.1",
+        "now_iso": "2026-07-11T14:30:12+02:00",
+        "tz_name": "Europe/Berlin",
+    }
+    block = _env_block(runtime)
     assert "local timezone is Europe/Berlin" in block
-    assert "do NOT guess a date/time" in block.replace("Do NOT", "do NOT")
+    assert "current time is" not in block
+
+    live = render_live_runtime_facts(runtime)
+    assert "current time is 2026-07-11T14:30:12+02:00" in live
+    assert "do NOT guess a date/time" in live.replace("Do NOT", "do NOT")
 
 
 def test_environment_block_renders_python_process_and_tools_facts() -> None:
     """The process/tooling facts must land in the block as verbatim-quotable
     strings, each with a corresponding "do not shell out" instruction that
     names the reflex command the LLM would otherwise reach for."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "python_version": "3.12.4",
-            "pid": 12345,
-            "ppid": 6789,
-            "uptime_seconds": 42.5,
-            "tools": {"kubectl": "/usr/local/bin/kubectl", "helm": "", "git": "/usr/bin/git"},
-            "kubeconfig": "/home/me/.kube/config",
-        }
-    )
+    from core.agent_harness.prompts.runtime_facts import render_live_runtime_facts
+
+    runtime = {
+        "opensre_version": "0.1",
+        "python_version": "3.12.4",
+        "pid": 12345,
+        "ppid": 6789,
+        "uptime_seconds": 42.5,
+        "tools": {"kubectl": "/usr/local/bin/kubectl", "helm": "", "git": "/usr/bin/git"},
+        "kubeconfig": "/home/me/.kube/config",
+    }
+    block = _env_block(runtime)
     assert "Python interpreter version is 3.12.4" in block
     assert "process id is 12345, parent 6789" in block
-    assert "process uptime is 42.5 seconds" in block
+    assert "process uptime is" not in block  # live — late block
     assert "installed tools on PATH are git, kubectl" in block, block
     assert "helm" not in block  # not-present tools are filtered
     assert "kubeconfig path is /home/me/.kube/config" in block
@@ -60,32 +63,33 @@ def test_environment_block_renders_python_process_and_tools_facts() -> None:
     assert "`kubectl version`" in block
     assert "`which`" in block
     assert "`ps`" in block
+    assert "process uptime is 42.5 seconds" in render_live_runtime_facts(runtime)
 
 
 def test_environment_block_renders_hostname_disk_memory_and_scratchpad() -> None:
-    """The filesystem facts: pod hostname, disk/memory readings, scratchpad dir —
-    each quotable, with anti-shell instructions naming hostname/df/free/top/ls."""
-    block = _env_block(
-        {
-            "opensre_version": "0.1",
-            "hostname": "opensre-pod-7d9f",
-            "disk_used_percent": 63.2,
-            "disk_free_gb": 120.5,
-            "memory_used_percent": 41.0,
-            "memory_available_gb": 9.4,
-            "scratchpad_dir": "/tmp",
-        }
-    )
+    """Hostname/scratchpad stay in the env prefix; disk/memory are live."""
+    from core.agent_harness.prompts.runtime_facts import render_live_runtime_facts
+
+    runtime = {
+        "opensre_version": "0.1",
+        "hostname": "opensre-pod-7d9f",
+        "disk_used_percent": 63.2,
+        "disk_free_gb": 120.5,
+        "memory_used_percent": 41.0,
+        "memory_available_gb": 9.4,
+        "scratchpad_dir": "/tmp",
+    }
+    block = _env_block(runtime)
     assert "host name is opensre-pod-7d9f" in block
-    assert "root disk is 63.2% used with 120.5 GB free" in block
-    assert "memory is 41.0% used with 9.4 GB available" in block
+    assert "root disk is" not in block
+    assert "memory is" not in block
     assert "scratchpad directory is /tmp" in block
     assert "`hostname`" in block
-    assert "`df`" in block
-    assert "`free`" in block
-    assert "`top`" in block
     assert "`ls`" in block
     assert "iterdir" in block  # pathlib guidance for directory listings
+    live = render_live_runtime_facts(runtime)
+    assert "root disk is 63.2% used with 120.5 GB free" in live
+    assert "memory is 41.0% used with 9.4 GB available" in live
 
 
 def test_environment_block_renders_cloud_provider_and_region() -> None:
@@ -107,10 +111,19 @@ def test_environment_block_renders_cloud_provider_and_region() -> None:
     assert "`nslookup`" in block
 
 
-def test_environment_block_omits_cloud_when_not_deployed() -> None:
-    """Local dev: empty cloud facts must not render empty slots the LLM could
-    fill with invented values."""
+def test_environment_block_states_cloud_absence_when_not_deployed() -> None:
+    """Local dev: absence must be stated, not left as a gap.
+
+    Omitting the fact was the earlier approach; a live agent turn still answered
+    with a confident provider and region on a laptop, so the vacuum was being
+    filled by a guess. An explicit "not detected" gives the model a true fact to
+    quote, and the instruction not to name one is attached to it.
+    """
     block = _env_block({"opensre_version": "0.1", "cloud_provider": "", "cloud_region": ""})
+    assert "no cloud provider or cloud region was detected" in block
+    assert "not running in a recognised cloud environment" in block
+    assert "rather than naming" in block
+    # No value slot is rendered, so there is nothing that reads as a detected one.
     assert "cloud provider is" not in block
     assert "cloud region is" not in block
 
@@ -192,3 +205,12 @@ def test_environment_block_instructs_verbatim_quoting_not_field_names() -> None:
     assert "verbatim" in block
     assert "Do NOT invent field names" in block
     assert "build marker" not in block, "the 'build marker' phrase was a hallucination sink"
+
+
+def test_environment_block_stays_empty_without_runtime_facts() -> None:
+    """No facts supplied means detection never ran — the block must stay empty.
+
+    ``_build_environment_block`` returns "" for an unknown session; a cloud
+    'not detected' line rendered from an empty mapping would break that.
+    """
+    assert _env_block({}) == "" or "cloud" not in _env_block({})

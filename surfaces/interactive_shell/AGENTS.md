@@ -172,9 +172,10 @@ owning area rather than adding more logic to the caller.
   (`rich.markup.escape`): alerts, command output, file paths, integration names,
   model/provider labels, errors, docs snippets, and model text that is not
   already intentionally rendered as Markdown.
-- Use semantic tokens from `ui/theme.py`. Do not introduce raw hex colors, Rich
-  named colors, or raw ANSI escapes outside `ui/theme.py` unless a narrow
-  prompt-toolkit compatibility path requires it.
+- Use semantic tokens from `platform/terminal/theme.py`. Do not introduce raw
+  hex colors, Rich named colors, or raw ANSI escapes outside
+  `platform/terminal/theme.py` unless a narrow prompt-toolkit compatibility
+  path requires it.
 - Any raw terminal-mode code must check TTY support and restore terminal state
   in `finally`.
 - Be careful mixing `prompt_toolkit.patch_stdout`, Rich live rendering, and

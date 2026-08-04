@@ -126,6 +126,8 @@ pipx install opensre
 
 ## Quick Start
 
+Contributors: start at [`main.py`](main.py) for the process entrypoint map.
+
 Configure once, then pick how you want to run investigations:
 
 ```bash
@@ -156,6 +158,19 @@ opensre investigate --service api-backend
 opensre hermes watch
 ```
 
+**From Python** — drive the agent in-process from your own code (source checkout required):
+
+```python
+from core.agent_harness import AgentHarness
+
+harness = AgentHarness.start()
+result = harness.dispatch_message("why is checkout-api slow?")
+if result.answered:
+    print(result.primary_response_text)
+```
+
+See **[Python API](https://www.opensre.com/docs/python-api)** for sessions, conversations, and custom output sinks.
+
 Other useful commands:
 
 ```bash
@@ -171,8 +186,7 @@ opensre uninstall   # remove opensre and all local data
 
 Two primary AWS EC2 paths and a general hosted option:
 
-- **EC2 (Docker/ECR):** `make build-image` then `make deploy` — runs `opensre-web` and `opensre-gateway` containers on one instance.
-- **Gateway (AMI + systemd):** `make bake-gateway` then `make deploy-gateway` — Telegram gateway only, no Docker, baked into a custom AMI.
+- **Gateway (AMI + systemd):** `make build-gateway-image` then `make deploy-gateway` — Telegram gateway only, no Docker; the gateway is installed into a server image that new servers start from.
 - **Hosted (Railway / ECS / Vercel):** deploy with the repo `Dockerfile`; set `LLM_PROVIDER` and the matching API key (see [`.env.example`](.env.example)), plus `DATABASE_URI` and `REDIS_URI` if persistence is needed.
 
 **[Full deployment steps and prerequisites → DEPLOYMENT.md](DEPLOYMENT.md)**
