@@ -9,11 +9,11 @@ checked at type-time rather than at runtime. The default adapters
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol, TypedDict
+from typing import Any, Protocol
 
 from rich.console import Console
 
-from core.agent_harness.ports import OutputSink
+from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
@@ -53,25 +53,9 @@ class GatherEvidence(Protocol):
         session: Session,
         console: Console,
         *,
-        is_tty: bool | None = None,
         resolved_integrations: dict[str, Any] | None = None,
     ) -> str | None:
         """Gather evidence for the message, or return None when nothing applies."""
-
-
-class AnswerKwargs(TypedDict, total=False):
-    """Keyword args ``run_turn`` forwards to the answer seam (all optional).
-
-    ``total=False`` mirrors ``run_turn`` omitting ``tool_observation_on_screen``
-    on the plain (no-evidence) path.
-    """
-
-    confirm_fn: Callable[[str], str] | None
-    is_tty: bool | None
-    tool_observation: str | None
-    tool_observation_on_screen: bool
-    handoff_contents: tuple[str, ...]
-    turn_plan: TurnPlan | None
 
 
 class AnswerShellQuestion(Protocol):
@@ -83,19 +67,13 @@ class AnswerShellQuestion(Protocol):
         session: Session,
         console: Console,
         *,
-        confirm_fn: Callable[[str], str] | None = None,
-        is_tty: bool | None = None,
-        tool_observation: str | None = None,
-        tool_observation_on_screen: bool = True,
-        handoff_contents: tuple[str, ...] = (),
-        turn_plan: TurnPlan | None = None,
+        request: AnswerRequest,
         output: OutputSink | None = None,
     ) -> LlmRunInfo | None:
         """Answer the question, returning the LLM run info or None."""
 
 
 __all__ = [
-    "AnswerKwargs",
     "AnswerShellQuestion",
     "GatherEvidence",
     "RunActionToolTurn",

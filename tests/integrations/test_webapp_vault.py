@@ -14,7 +14,6 @@ from config.constants.billing import (
     USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
 )
-from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 
 
 class _FakeResponse:
@@ -32,7 +31,7 @@ def test_unconfigured_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(WEBAPP_URL_ENV, raising=False)
     monkeypatch.delenv(MACHINE_SECRET_ENV, raising=False)
     monkeypatch.delenv(USAGE_SECRET_ENV, raising=False)
-    monkeypatch.delenv(TENANT_ORGANIZATION_ID_ENV, raising=False)
+    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
     assert vault.fetch_webapp_org_integrations() is None
     assert vault.webapp_vault_configured() is False
 
@@ -48,7 +47,7 @@ def test_shared_secret_is_the_credential_sent_to_the_vault(
     """
     # Arrange: a silo holding only the shared secret, as every silo does.
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.setenv(USAGE_SECRET_ENV, "SHARED-SECRET")
     monkeypatch.delenv(MACHINE_SECRET_ENV, raising=False)
     sent: list[dict[str, Any]] = []
@@ -72,7 +71,7 @@ def test_shared_secret_is_the_credential_sent_to_the_vault(
 def test_fetches_and_normalizes_records(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
     monkeypatch.setenv(USAGE_SECRET_ENV, "mt_vault")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
 
     calls: list[dict[str, Any]] = []
 
@@ -115,7 +114,7 @@ def test_fetches_and_normalizes_records(monkeypatch: pytest.MonkeyPatch) -> None
 def test_configured_requires_the_shared_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange / Act / Assert: url + org + shared secret is the real contract.
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.delenv(USAGE_SECRET_ENV, raising=False)
     assert vault.webapp_vault_configured() is False
 
@@ -126,7 +125,7 @@ def test_configured_requires_the_shared_secret(monkeypatch: pytest.MonkeyPatch) 
 def test_http_error_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
     monkeypatch.setenv(USAGE_SECRET_ENV, "mt_vault")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.setattr(
         vault.httpx,
         "get",
@@ -144,7 +143,7 @@ def test_resolve_integrations_merges_webapp_vault(monkeypatch: pytest.MonkeyPatc
     monkeypatch.delenv("JWT_TOKEN", raising=False)
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
     monkeypatch.setenv(USAGE_SECRET_ENV, "sekrit")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.setattr(
         "integrations.webapp_vault.fetch_webapp_org_integrations",
         lambda: [
@@ -174,7 +173,7 @@ def test_resolve_integrations_merges_webapp_vault(monkeypatch: pytest.MonkeyPatc
 
 def _configure_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.setenv(USAGE_SECRET_ENV, "shared")
     monkeypatch.delenv(MACHINE_SECRET_ENV, raising=False)
 
@@ -216,7 +215,7 @@ def test_delete_sends_service_and_org(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_writes_are_skipped_off_a_silo(monkeypatch: pytest.MonkeyPatch) -> None:
     """A laptop has no webapp target, so a connect flow must not call out."""
     monkeypatch.delenv(WEBAPP_URL_ENV, raising=False)
-    monkeypatch.delenv(TENANT_ORGANIZATION_ID_ENV, raising=False)
+    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
     monkeypatch.delenv(USAGE_SECRET_ENV, raising=False)
     monkeypatch.delenv(MACHINE_SECRET_ENV, raising=False)
     called: list[str] = []
@@ -260,7 +259,7 @@ def test_list_credentials_survive_the_round_trip(monkeypatch: pytest.MonkeyPatch
     from integrations.github.mcp import DEFAULT_GITHUB_MCP_TOOLSETS, GitHubMCPConfig
 
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_1")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_1")
     monkeypatch.setenv(USAGE_SECRET_ENV, "shared")
     sent: list[dict[str, Any]] = []
 
@@ -293,7 +292,7 @@ def test_read_is_bound_to_this_silos_own_organization(monkeypatch: pytest.Monkey
     import inspect
 
     monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_mine")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_mine")
     monkeypatch.setenv(USAGE_SECRET_ENV, "shared")
     sent: list[dict[str, Any]] = []
 
@@ -309,40 +308,3 @@ def test_read_is_bound_to_this_silos_own_organization(monkeypatch: pytest.Monkey
     # Assert: no caller-supplied organization, and the env one is used.
     assert inspect.signature(vault.fetch_webapp_org_integrations).parameters == {}
     assert sent[0]["params"]["organizationId"] == "org_mine"
-
-
-def test_vault_serves_both_deployments_via_the_shared_resolver(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Each deployment sets a different org env name; the vault reads either.
-
-    The EC2 Slack service sets only ``OPENSRE_ORGANIZATION_ID`` and has fetched
-    vault integrations with it since before silos existed; a Fargate silo gets
-    only the bare ``ORGANIZATION_ID``. Binding the vault to a single name is
-    what silenced it on the other deployment. Hydration is different — it asks
-    "did the control plane provision this silo?" and keeps reading the tenant
-    name alone (see ``tests/config/test_organization_id.py``).
-    """
-    monkeypatch.setenv(WEBAPP_URL_ENV, "https://app.example.com")
-    monkeypatch.setenv(USAGE_SECRET_ENV, "shared")
-    sent: list[dict[str, Any]] = []
-
-    def _get(url: str, **kwargs: Any) -> _FakeResponse:
-        sent.append({"url": url, **kwargs})
-        return _FakeResponse(200, {"success": True, "data": []})
-
-    monkeypatch.setattr(vault.httpx, "get", _get)
-
-    # EC2 Slack service: only the billing name is set.
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_ec2")
-    monkeypatch.delenv(TENANT_ORGANIZATION_ID_ENV, raising=False)
-    assert vault.webapp_vault_configured() is True
-    assert vault.fetch_webapp_org_integrations() == []
-    assert sent[0]["params"]["organizationId"] == "org_ec2"
-
-    # Fargate silo: only the control plane's bare name is set.
-    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org_fargate")
-    assert vault.webapp_vault_configured() is True
-    assert vault.fetch_webapp_org_integrations() == []
-    assert sent[1]["params"]["organizationId"] == "org_fargate"

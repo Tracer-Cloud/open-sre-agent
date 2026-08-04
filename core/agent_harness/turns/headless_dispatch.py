@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
+    AnswerRequest,
     ConfirmFn,
     ErrorReporter,
     OutputSink,
@@ -44,7 +45,9 @@ from core.agent_harness.prompts.prompt_context import (
     DefaultPromptContextProvider,
     supports_default_prompt_context,
 )
-from core.agent_harness.turns.action_driver import run_action_agent_turn
+from core.agent_harness.turns.action_driver import (
+    ActionTurnRunner,
+)
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
@@ -61,6 +64,20 @@ from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
+
+
+class _Unmentioned:
+    """Marks a port the caller did not mention, as distinct from one cleared.
+
+    ``bind_turn(output=...)`` must leave the hooks alone, but
+    ``bind_turn(tool_hooks=None)`` must clear them — the gateway passes ``None``
+    for a sink that has no approval hooks, and a pooled agent would otherwise
+    keep the previous sink's callback and send approvals to the wrong
+    conversation.
+    """
+
+
+_UNMENTIONED = _Unmentioned()
 
 
 class HeadlessAgent:
@@ -113,6 +130,15 @@ class HeadlessAgent:
         self._confirm_fn = confirm_fn
         self._is_tty = is_tty
         self._tool_hooks = tool_hooks
+        self._action_runner = self._new_action_runner()
+
+    def _new_action_runner(self) -> ActionTurnRunner:
+        return ActionTurnRunner(
+            output=self._output,
+            tools=self._tools,
+            error_reporter=self._error_reporter,
+            tool_hooks=self._tool_hooks,
+        )
 
     def bind_session(self, session: SessionStore) -> None:
         """Retarget this agent at a freshly resolved session.
@@ -132,7 +158,7 @@ class HeadlessAgent:
         *,
         output: OutputSink | None = None,
         accounting: TurnAccounting | None = None,
-        tool_hooks: ToolExecutionHooks | None = None,
+        tool_hooks: ToolExecutionHooks | None | _Unmentioned = _UNMENTIONED,
         session: SessionStore | None = None,
     ) -> None:
         """Swap turn-scoped ports so one agent can serve many turns.
@@ -142,12 +168,17 @@ class HeadlessAgent:
         """
         if session is not None:
             self.bind_session(session)
+        runner_changed = False
         if output is not None:
             self._output = output
+            runner_changed = True
         if accounting is not None:
             self._accounting = accounting
-        if tool_hooks is not None:
+        if not isinstance(tool_hooks, _Unmentioned):
             self._tool_hooks = tool_hooks
+            runner_changed = True
+        if runner_changed:
+            self._action_runner = self._new_action_runner()
 
     def _accounting_for(self, message: str) -> TurnAccounting:
         if self._accounting is not None:
@@ -156,65 +187,54 @@ class HeadlessAgent:
             return DefaultTurnAccounting(self._store, message)
         return NoopTurnAccounting()
 
+    def _execute_actions(
+        self,
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: TurnPlan | None = None,
+    ) -> ToolCallingTurnResult:
+        return self._action_runner.run(
+            text,
+            self._store,
+            turn_plan=turn_plan,
+            is_tty=is_tty,
+            confirm_fn=confirm_fn,
+        )
+
+    def _answer(self, text: str, request: AnswerRequest) -> object:
+        return stream_answer(
+            text,
+            self._store,
+            self._output,
+            prompts=self._prompts,
+            reasoning=self._reasoning,
+            run_factory=self._run_factory,
+            error_reporter=self._error_reporter,
+            request=request,
+        )
+
+    def _gather(self, text: str, *, turn_plan: TurnPlan | None = None) -> str | None:
+        if not self._gather_enabled:
+            return None
+        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
+        return gather_tool_evidence(
+            text,
+            self._store,
+            error_reporter=self._error_reporter,
+            resolved_integrations=resolved,
+        )
+
     def dispatch(self, message: str) -> TurnResult:
         """Run one full turn for ``message`` and return the :class:`TurnResult`."""
-        accounting = self._accounting_for(message)
-
-        def execute_actions(
-            text: str,
-            *,
-            confirm_fn: ConfirmFn | None = None,
-            is_tty: bool | None = None,
-            turn_plan: TurnPlan | None = None,
-        ) -> ToolCallingTurnResult:
-            return run_action_agent_turn(
-                text,
-                self._store,
-                output=self._output,
-                tools=self._tools,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                turn_plan=turn_plan,
-                error_reporter=self._error_reporter,
-                tool_hooks=self._tool_hooks,
-            )
-
-        def answer(text: str, **kwargs: object) -> object:
-            return stream_answer(
-                text,
-                self._store,
-                self._output,
-                prompts=self._prompts,
-                reasoning=self._reasoning,
-                run_factory=self._run_factory,
-                error_reporter=self._error_reporter,
-                **kwargs,  # type: ignore[arg-type]
-            )
-
-        def gather(
-            text: str,
-            *,
-            is_tty: bool | None = None,
-            turn_plan: TurnPlan | None = None,
-        ) -> str | None:
-            if not self._gather_enabled:
-                return None
-            resolved = turn_plan.resolved_integrations if turn_plan is not None else None
-            return gather_tool_evidence(
-                text,
-                self._store,
-                error_reporter=self._error_reporter,
-                is_tty=is_tty,
-                resolved_integrations=resolved,
-            )
-
         return run_turn(
             message,
             self._store,
-            execute_actions=execute_actions,
-            answer=answer,
-            gather=gather,
-            accounting=accounting,
+            execute_actions=self._execute_actions,
+            answer=self._answer,
+            gather=self._gather,
+            accounting=self._accounting_for(message),
             confirm_fn=self._confirm_fn,
             is_tty=self._is_tty,
         )

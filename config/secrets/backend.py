@@ -9,6 +9,8 @@ acyclic.
 from __future__ import annotations
 
 from enum import Enum, StrEnum
+from enum import StrEnum
+from typing import Literal
 
 
 class SecretTier(StrEnum):
@@ -24,7 +26,7 @@ class SecretTier(StrEnum):
     NONE = "none"
 
 
-class KeyringUnavailableReason(Enum):
+class KeyringUnavailableReason(StrEnum):
     """Why the OS keyring could not serve a request.
 
     The distinction drives policy: with ``NO_BACKEND`` there is no secure store

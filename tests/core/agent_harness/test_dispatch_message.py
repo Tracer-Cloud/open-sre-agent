@@ -71,5 +71,8 @@ def test_headless_bind_turn_swaps_output() -> None:
         output=first,
         reasoning=StaticReasoningClientProvider(client=_Echo()),
     )
+    before_runner = agent._action_runner  # noqa: SLF001
     agent.bind_turn(output=second)
     assert agent._output is second  # noqa: SLF001
+    assert agent._action_runner is not before_runner  # noqa: SLF001
+    assert agent._action_runner.output is second  # noqa: SLF001

@@ -1,10 +1,10 @@
 """Read access to the persisted remote-agent config — usable from layers below ``surfaces/``.
 
 The wizard JSON file lives at the path returned by
-:func:`config.constants.get_store_path`. Several layers below ``surfaces/`` —
-notably ``platform/deployment_multi_tenant/`` — need to *read* the persisted remote URLs and
-the remote ops scope. They cannot import from ``surfaces.cli.wizard.store``
-without violating the layering contract in ``surfaces/__init__.py``.
+:func:`config.constants.get_store_path`. Layers below ``surfaces/`` need to
+*read* the persisted remote URLs and the remote ops scope, and cannot import
+from ``surfaces.cli.wizard.store`` without violating the layering contract in
+``surfaces/__init__.py``.
 
 This module hosts the read-side functions in ``config/`` so the layering
 holds. ``surfaces.cli.wizard.store`` re-exports them under their original

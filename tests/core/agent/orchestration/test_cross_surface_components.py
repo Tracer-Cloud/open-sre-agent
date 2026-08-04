@@ -96,7 +96,7 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
     def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
         return action
 
-    def answer(text: str, **_kwargs: object) -> object:
+    def answer(text: str, _request: object = None, **_kwargs: object) -> object:
         answer_calls.append(text)
         return type("Run", (), {"response_text": "answered"})()
 
@@ -142,7 +142,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
         captured.append(turn_plan)
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, **_kwargs: object) -> object:
+    def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
         return type("Run", (), {"response_text": "answered"})()
 
     def gather(_text: str, **_kwargs: object) -> None:
@@ -183,7 +183,7 @@ def test_run_turn_passes_turn_plan_to_gather(
     def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, **_kwargs: object) -> object:
+    def answer(_text: str, _request: object = None, **_kwargs: object) -> object:
         return type("Run", (), {"response_text": "answered"})()
 
     def gather(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> None:
@@ -224,8 +224,8 @@ def test_run_turn_passes_turn_plan_to_answer(
     def execute_actions(_text: str, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(0, 0, 0, False, False)
 
-    def answer(_text: str, *, turn_plan: Any = None, **_kwargs: object) -> object:
-        answer_plans.append(turn_plan)
+    def answer(_text: str, request: Any = None, **_kwargs: object) -> object:
+        answer_plans.append(getattr(request, "turn_plan", None))
         return type("Run", (), {"response_text": "answered"})()
 
     def gather(_text: str, **_kwargs: object) -> None:

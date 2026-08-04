@@ -13,7 +13,6 @@ import pytest
 from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
-from config.constants.tenancy import TENANT_ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 
@@ -161,7 +160,7 @@ def test_mounted_volume_is_used_as_the_org_root(
 def test_mount_refuses_a_turn_for_a_different_org(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A mount declares its owner via OPENSRE_ORGANIZATION_ID; a turn for any
+    """A mount declares its owner via ORGANIZATION_ID; a turn for any
     other org must fail closed rather than write into the wrong org's volume."""
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
     monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
@@ -183,73 +182,13 @@ def test_mount_serves_its_declared_owner(tmp_path: Path, monkeypatch: pytest.Mon
         assert paths.opensre_home() == mount
 
 
-def test_the_control_plane_tenant_id_declares_the_mount_owner(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A Fargate silo names its org only as ORGANIZATION_ID.
-
-    The same control plane provisions the volume and injects the id, so it is
-    authoritative for ownership there. Reading only the prefixed name left the
-    owner undeclared and refused every turn on a correctly-provisioned silo.
-    """
-    # Arrange
-    mount = tmp_path / "memories"
-    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, ACME.id)
-    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
-
-    # Act / Assert
-    with bound_storage_scope(_member(ACME, ALICE)):
-        assert paths.opensre_home() == mount
-
-
-def test_mount_refuses_a_turn_when_the_two_names_disagree(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Ambiguous ownership fails closed, even for a matching principal.
-
-    Everywhere else a disagreement is a warning and the prefixed name wins.
-    Here it is the exact question being asked — which organization owns this
-    volume — so guessing could write ACME's data into GLOBEX's mount.
-    """
-    # Arrange: both names set, to different organizations.
-    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
-    monkeypatch.setenv(ORGANIZATION_ID_ENV, ACME.id)
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, GLOBEX.id)
-
-    # Act / Assert: the principal matches one of them, and it still refuses.
-    with (
-        bound_storage_scope(_member(ACME, ALICE)),
-        pytest.raises(paths.ContextRootOwnerMismatchError),
-    ):
-        paths.opensre_home()
-
-
-def test_mount_still_refuses_a_foreign_org_under_the_control_plane_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Resolving from either name must not weaken the cross-org refusal."""
-    # Arrange
-    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, ACME.id)
-    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
-
-    # Act / Assert
-    with (
-        bound_storage_scope(_member(GLOBEX, ALICE)),
-        pytest.raises(paths.ContextRootOwnerMismatchError),
-    ):
-        paths.opensre_home()
-
-
 def test_mount_refuses_a_turn_when_no_organization_is_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An undeclared owner still fails closed under both names."""
+    """A mount with no declared owner fails closed rather than guessing."""
     # Arrange
     monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(tmp_path / "memories"))
     monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
-    monkeypatch.delenv(TENANT_ORGANIZATION_ID_ENV, raising=False)
 
     # Act / Assert
     with (

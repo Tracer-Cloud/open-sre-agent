@@ -35,6 +35,9 @@ opensre remote-sync setup
 # Non-interactive — AWS/S3
 opensre remote-sync setup --provider aws --bucket my-opensre-bucket
 
+# Non-interactive — Google Cloud Storage (uses Application Default Credentials)
+opensre remote-sync setup --provider gcs --bucket my-opensre-bucket
+
 # Non-interactive — Vercel Blob (then set BLOB_READ_WRITE_TOKEN in the env)
 opensre remote-sync setup --provider vercel --bucket opensre-remote-sync
 export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
@@ -50,6 +53,11 @@ export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 export OPENSRE_REMOTE_SYNC=1
 export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 
+# Or Google Cloud Storage
+# export OPENSRE_REMOTE_SYNC=1
+# export OPENSRE_REMOTE_SYNC_PROVIDER=gcs
+# export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
+
 # Or Vercel Blob
 # export OPENSRE_REMOTE_SYNC=1
 # export OPENSRE_REMOTE_SYNC_PROVIDER=vercel
@@ -60,8 +68,8 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 | Variable | Description |
 |---|---|
 | `OPENSRE_REMOTE_SYNC` | Set to `1` to enable. Nothing uploads until you do |
-| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws` (S3). Built-in: `aws`, `vercel`. Community backends register under the same name |
-| `OPENSRE_REMOTE_SYNC_BUCKET` | Store you own (S3 bucket name, or Vercel Blob store name/id). Required |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws` (S3). Built-in: `aws`, `gcs`, `vercel`. Community backends register under the same name |
+| `OPENSRE_REMOTE_SYNC_BUCKET` | Store you own (S3 bucket name, GCS bucket name, or Vercel Blob store name/id). Required |
 | `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
 | `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it (AWS) |
 | `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default (AWS) |
@@ -72,15 +80,16 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
 
-`--region`/`--profile` are AWS-only today — `opensre remote-sync setup`
+`--region`/`--profile` are AWS-only today - `opensre remote-sync setup`
 rejects either one for a provider that doesn't use it, rather than saving it
 silently and never reading it back. (Their env-var equivalents,
 `OPENSRE_REMOTE_SYNC_REGION`/`PROFILE`, are read the same way regardless of
 provider and are simply ignored by a provider that has no use for them.)
 
 You can also persist settings under `remote_sync` in `~/.opensre/config.yml`
-(`enabled`, `bucket`, `provider`, `prefix`, …). Environment variables still
-win for a single run.
+(`enabled`, `bucket`, `provider`, `prefix`, …) — that is what `remote-sync setup`
+writes. Credentials are never written there; they stay in your cloud CLI's usual
+places. Environment variables still win for a single run.
 
 <Note>
 Every machine that should share your history needs the **same provider, store,
@@ -120,6 +129,11 @@ opensre remote-sync sync
 opensre remote-sync sync --pull-only    # new machine, fetch only
 opensre remote-sync sync --push-only    # back up without pulling
 ```
+
+On a terminal, a progress bar (`Pulling`/`Pushing`, a count of how many files
+are done, and the current file) shows a large `sessions/` tree moving instead
+of looking hung; piped or scripted output stays to the final summary line
+only. The interactive shell shows the same thing as a live-updating bar.
 
 ## Exclude paths
 
@@ -200,9 +214,10 @@ backends today:
 | Provider | `OPENSRE_REMOTE_SYNC_PROVIDER` | Credentials |
 |---|---|---|
 | Amazon S3 (default) | `aws` | Ambient AWS config (`AWS_*`, profile, SSO) |
+| Google Cloud Storage | `gcs` | Application Default Credentials (`gcloud auth application-default login`) |
 | Vercel Blob | `vercel` | Ambient `BLOB_READ_WRITE_TOKEN` |
 
-Other clouds (GCS, Azure, …) are community additions: implement `ObjectStore`,
+Other clouds (Azure, …) are community additions: implement `ObjectStore`,
 call `register_object_store("<name>", factory)`, and set
 `OPENSRE_REMOTE_SYNC_PROVIDER` — the engine, CLI, and REPL do not change.
 
@@ -217,7 +232,35 @@ Minimum permissions on the prefix you use:
 s3:ListBucket, s3:GetObject, s3:PutObject
 ```
 
-`s3:DeleteObject` is not needed — sync never deletes anything.
+`s3:DeleteObject` is not needed — sync never deletes anything. Add
+`s3:GetBucketPolicyStatus` (bucket-level, not prefix-scoped) so `status` can
+warn you if the bucket is publicly readable — see [The store](#the-store).
+
+### Google Cloud Storage
+
+Set `OPENSRE_REMOTE_SYNC_PROVIDER=gcs` and point `OPENSRE_REMOTE_SYNC_BUCKET`
+at any private bucket. Credentials come from Application Default Credentials —
+run this once per machine and sign in with the account that owns the bucket:
+
+```bash
+gcloud auth application-default login
+```
+
+Minimum permissions on the bucket (a bucket-scoped `roles/storage.objectUser`
+binding covers all four):
+
+```
+storage.objects.list, storage.objects.get, storage.objects.create, storage.objects.delete
+```
+
+opensre never deletes anything, but GCS still requires `storage.objects.delete`
+to **replace** an existing object — without it the first changed session or
+memory file fails with a 403. Objects are encrypted at rest by default; there
+is nothing to configure.
+
+Add `storage.buckets.getIamPolicy` (bucket-level) so `status` can warn you if
+the bucket is publicly readable — see [The store](#the-store). Without it,
+`status` shows "could not confirm it is private" instead of failing.
 
 ### Vercel Blob
 
@@ -250,6 +293,14 @@ Keep the store private. It holds your incident conversations and everything
 opensre has remembered about your systems. Prefer a private S3 bucket or a
 private Vercel Blob store — never a public one.
 </Warning>
+
+On AWS and GCS, `status` checks this for you: if the bucket policy (S3) or
+bucket IAM policy (GCS) makes the bucket publicly readable, `opensre
+remote-sync status` / `/remote-sync status` opens with a warning instead of
+silently mirroring your history into it. Without the permission the check
+needs — or on Vercel, which has no bucket-level public/private setting to
+check — `status` shows "could not confirm it is private" instead of failing;
+it never blocks the rest of the command.
 
 ## How conflicts resolve
 
