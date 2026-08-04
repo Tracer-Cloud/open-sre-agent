@@ -186,13 +186,17 @@ propose_scheduled_delivery_tool = RegisteredTool(
         "/cron add until the user confirms; their yes becomes the slash command."
     ),
     use_cases=[
-        "A recurring briefing was just composed (and preferably delivered), and "
-        "the user has not said whether they want it to repeat",
+        (
+            "A recurring briefing was just composed (and preferably delivered), and "
+            "the user has not said whether they want it to repeat"
+        ),
         "The user asked outright to schedule something that already ran this turn",
     ],
     anti_examples=[
-        "User asks for a report/briefing/digest — produce and deliver it first; "
-        "this tool is the LAST step, never the only response",
+        (
+            "User asks for a report/briefing/digest — produce and deliver it first; "
+            "this tool is the LAST step, never the only response"
+        ),
         "User already confirmed — use slash_invoke /cron add instead",
         "Nothing has been fetched or composed yet this turn",
     ],
