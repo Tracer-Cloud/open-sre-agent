@@ -97,11 +97,8 @@ def _is_restated_affirmative(text: str) -> bool:
     lowered = text.lower()
     if "i replied yes" in lowered or "as a yes" in lowered:
         return True
-    if "want me to" in lowered and "yes" in lowered:
-        return True
-    if "you asked" in lowered and "yes" in lowered:
-        return True
-    return False
+    quotes_an_offer = "want me to" in lowered or "you asked" in lowered
+    return quotes_an_offer and "yes" in lowered
 
 
 def _normalize_offer(offer: str) -> str:
@@ -166,11 +163,16 @@ def format_recent_conversation(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
     *,
     max_turns: int = MAX_CONVERSATION_TURNS,
+    newest_first: bool = False,
 ) -> str:
     """Render recent CLI-agent turns as ``User:``/``Assistant:`` lines.
 
-    Accepts a list or tuple of ``(role, content)`` pairs (oldest first).
-    Returns at most ``max_turns`` turns (oldest first, most recent last).
+    Accepts a list or tuple of ``(role, content)`` pairs (oldest first on input).
+    Returns at most ``max_turns`` turns. Default order is chronological (oldest
+    first). Pass ``newest_first=True`` for action-agent ephemeral context: the
+    user message leads and head-preserving truncation (``text[:keep]``) must
+    drop stale turns at the tail, not the latest ones.
+
     Returns :data:`NO_HISTORY_PLACEHOLDER` when empty so prompt builders
     always have a stable, non-empty block. Never raises.
     """
@@ -178,15 +180,45 @@ def format_recent_conversation(
     if not cap:
         return NO_HISTORY_PLACEHOLDER
 
-    lines: list[str] = []
+    window: list[tuple[str, str]] = []
     for entry in messages[-cap:]:
         try:
             role, content = entry
         except (TypeError, ValueError):
             continue
-        label = "User" if role == "user" else "Assistant"
-        lines.append(f"{label}: {content}")
-    return "\n".join(lines) if lines else NO_HISTORY_PLACEHOLDER
+        if not isinstance(content, str):
+            continue
+        window.append((str(role), content))
+    if not window:
+        return NO_HISTORY_PLACEHOLDER
+
+    if newest_first:
+        window = _newest_turn_first(window)
+
+    return "\n".join(
+        f"{'User' if role == 'user' else 'Assistant'}: {content}" for role, content in window
+    )
+
+
+def _newest_turn_first(
+    window: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """Reverse by user/assistant turn pairs; keep order inside each turn."""
+    pairs: list[list[tuple[str, str]]] = []
+    idx = 0
+    while idx < len(window):
+        role, _content = window[idx]
+        if role == "user" and idx + 1 < len(window) and window[idx + 1][0] == "assistant":
+            pairs.append([window[idx], window[idx + 1]])
+            idx += 2
+            continue
+        pairs.append([window[idx]])
+        idx += 1
+    pairs.reverse()
+    ordered: list[tuple[str, str]] = []
+    for pair in pairs:
+        ordered.extend(pair)
+    return ordered
 
 
 def format_prior_action_facts(
@@ -235,8 +267,10 @@ def format_prior_action_facts(
 
     rendered: list[str] = []
     remaining = max(max_chars, 0)
-    # `facts` was collected newest-first; reverse back to maintain chronological order
-    for idx, fact in enumerate(reversed(facts), start=1):
+    # Newest-first: this block sits after the user message in the action
+    # ephemeral half, and context_budget keeps the head. Chronological order
+    # would put the freshest facts at the truncated tail.
+    for idx, fact in enumerate(facts, start=1):
         if remaining <= 0:
             break
         chunk = f"- Prior assistant/tool output {idx}:\n{fact.strip()}"

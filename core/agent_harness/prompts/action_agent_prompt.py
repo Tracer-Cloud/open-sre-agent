@@ -134,11 +134,18 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
 
 
 def recent_conversation_block(turn_snapshot: TurnSnapshot) -> str:
-    history = format_recent_conversation(list(turn_snapshot.conversation_messages))
+    # Newest-first: this block rides after the literal user message, and
+    # context_budget shrinks with text[:keep]. Chronological (oldest-first)
+    # order put the latest turns at the truncated tail — follow-ups then saw
+    # only stale chatter. Newest-first drops the oldest turns under pressure.
+    history = format_recent_conversation(
+        list(turn_snapshot.conversation_messages),
+        newest_first=True,
+    )
     return (
-        "RECENT CONVERSATION (context only, oldest first; previous assistant messages "
+        "RECENT CONVERSATION (context only, newest first; previous assistant messages "
         "may contain shell stdout, computed values, and prior tool inputs/results. Use "
-        "these as facts when resolving follow-up references in the USER MESSAGE below "
+        "these as facts when resolving follow-up references in the USER MESSAGE above "
         "and when composing later tool inputs. Do NOT re-run turns that already "
         f"completed):\n{history}\n\n"
     )
@@ -149,10 +156,11 @@ def prior_action_facts_block(turn_snapshot: TurnSnapshot) -> str:
     if not facts:
         return ""
     return (
-        "PRIOR ACTION FACTS (extracted from earlier persisted assistant/tool "
-        "outputs; use these values when the USER MESSAGE refers to previous "
-        "results, sent messages, comparisons, or 'both/that/them'. Do NOT ask "
-        f"the user to paste values already listed here):\n{facts}\n\n"
+        "PRIOR ACTION FACTS (newest first; extracted from earlier persisted "
+        "assistant/tool outputs; use these values when the USER MESSAGE refers "
+        "to previous results, sent messages, comparisons, or 'both/that/them'. "
+        "Do NOT ask the user to paste values already listed here):\n"
+        f"{facts}\n\n"
     )
 
 
@@ -188,11 +196,12 @@ def build_action_user_message(text: str, *, prefix: str = "") -> str:
     the model used to see at the end of ``system``, moved here so the cached
     system prefix stays byte-stable across turns.
 
-    It is appended *after* the literal user message, not before it.
-    ``core.context_budget`` shrinks an oversized message with ``text[:keep]``,
-    keeping the head and dropping the tail — so history placed first would push
-    the active instruction into the part that gets cut, and the planner would
-    act on stale context instead of the request that started the turn.
+    Layout (required by head-preserving truncation ``text[:keep]``):
+
+    1. Literal user message first — never drop the active request.
+    2. Ephemeral history next, newest-first — when the combined turn is over
+       budget, the tail cut removes the oldest chatter, not the latest turns
+       the follow-up is referring to.
     """
     body = _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
     if not prefix:

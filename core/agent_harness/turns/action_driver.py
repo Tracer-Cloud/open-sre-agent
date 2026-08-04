@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -395,6 +396,23 @@ def _bang_shell_command(message: str) -> str | None:
     return f"!{cmd}" if cmd else None
 
 
+def _slash_tokens(stripped: str) -> tuple[str, list[str]]:
+    """Split slash text into a command and arguments, keeping quoted spans whole.
+
+    A quoted argument such as a five-field cron expression must survive as one
+    token or the target command sees five stray positionals. Ordinary prose
+    after a slash can contain an unbalanced apostrophe that ``shlex`` refuses,
+    so fall back to a plain split rather than failing the dispatch.
+    """
+    try:
+        parts = shlex.split(stripped, posix=True)
+    except ValueError:
+        parts = stripped.split()
+    if not parts:
+        return stripped, []
+    return parts[0], parts[1:]
+
+
 def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall | None:
     """Deterministic ``slash_invoke`` for input the user typed as a literal ``/command``.
 
@@ -420,10 +438,9 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     if not any(getattr(tool, "name", None) == "slash_invoke" for tool in agent_tools):
         return None
     if stripped == "/":
-        command, args = "/", []
+        command, args = "/", list[str]()
     else:
-        parts = stripped.split()
-        command, args = parts[0], parts[1:]
+        command, args = _slash_tokens(stripped)
     return ToolCall(
         id="direct_slash_0",
         name="slash_invoke",

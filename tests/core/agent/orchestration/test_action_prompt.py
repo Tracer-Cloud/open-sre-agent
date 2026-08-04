@@ -52,11 +52,15 @@ def test_recent_conversation_block_contains_history_lines() -> None:
         messages=[
             ("user", "how can I remove github integration"),
             ("assistant", "Use /integrations remove github or /integrations list."),
+            ("user", "yes schedule it"),
+            ("assistant", "Queued via /cron."),
         ]
     )
     block = recent_conversation_block(ctx)
     assert "RECENT CONVERSATION" in block
-    assert "User: how can I remove github integration" in block
+    assert "newest first" in block
+    # Newest turn leads so head-preserving truncation keeps follow-up context.
+    assert block.index("yes schedule it") < block.index("how can I remove github")
     assert "Assistant: Use /integrations remove github or /integrations list." in block
 
 

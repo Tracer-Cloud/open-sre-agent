@@ -257,6 +257,35 @@ def test_the_literal_user_message_leads_and_ephemeral_history_follows() -> None:
     assert user_message.count("USER MESSAGE (literal):") == 1
 
 
+def test_newest_conversation_survives_head_preserving_truncation() -> None:
+    """Ephemeral history is newest-first so the tail cut drops stale turns."""
+    from core.context_budget import _shrink_text
+
+    envelope = build_action_system_prompt_envelope(
+        _turn(
+            [
+                ("user", "zzmarker-oldest-turn"),
+                ("assistant", "old reply " + ("x" * 2000)),
+                ("user", "zzmarker-newest-turn"),
+                ("assistant", "fresh reply"),
+            ]
+        )
+    )
+    message = build_action_user_message(
+        "follow up on that",
+        prefix=envelope.render_ephemeral(),
+    )
+    # Cut just after the newest turn pair; head-preserving shrink must keep
+    # that pair and drop the older turn that now sits at the tail.
+    end_newest = message.index("Assistant: fresh reply") + len("Assistant: fresh reply")
+    shrunk, truncated = _shrink_text(message, end_newest + 40)
+
+    assert truncated
+    assert "follow up on that" in shrunk
+    assert "zzmarker-newest-turn" in shrunk
+    assert "zzmarker-oldest-turn" not in shrunk
+
+
 def test_split_reassembles_when_long_term_memory_is_present(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

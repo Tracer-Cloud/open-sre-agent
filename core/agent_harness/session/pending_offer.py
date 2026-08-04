@@ -7,6 +7,7 @@ reads that object and becomes a literal ``/cron add …`` with no regex.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 
 # Common morning-report defaults → human cadence labels (exact cron match only).
@@ -43,7 +44,9 @@ class PendingScheduleOffer:
         chat = self.chat_id.strip()
         if chat:
             args.extend(["--chat-id", chat])
-        return "/cron " + " ".join(args)
+        # shlex.quote the parts: the five-field cron expression is one argument,
+        # and the dispatcher tokenises this text before the CLI ever sees it.
+        return "/cron " + " ".join(shlex.quote(arg) for arg in args)
 
     def want_me_to_body(self) -> str:
         """Canonical closer body (no leading Want me to:) for the assistant to show."""
