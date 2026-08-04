@@ -1,103 +1,196 @@
 from __future__ import annotations
 
+import contextlib
+import json
 import os
-from typing import Any, cast
+import subprocess
+import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
 
-from azure.core.exceptions import AzureError
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient
+import httpx
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncUnavailableError
 from platform.filestorage.ports import RemoteObject
-from platform.filestorage.providers import SetupExtraField
-from platform.filestorage.providers.registry import register_object_store
+from platform.filestorage.providers.registry import SetupExtraField, register_object_store
 
 PROVIDER_NAME = BuiltInProvider.AZURE
-CREDENTIAL_HINT = "Azure credentials come from the ambient environment (e.g., Azure CLI, managed identity, or env vars)."
+CREDENTIAL_HINT = (
+    "Azure credentials come from the ambient environment (e.g., Azure CLI or env vars)."
+)
 EXTRA_FIELDS = (
     SetupExtraField(RemoteSyncField.PROFILE, "Azure Storage Account Name (e.g., opensre)"),
 )
 
 
 class AzureBlobObjectStore:
-    """Reads and writes objects under an Azure Storage Container and prefix."""
+    """Reads and writes objects under an Azure Storage Container via the REST API."""
 
-    def __init__(self, config: RemoteSyncConfig, *, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        config: RemoteSyncConfig,
+        *,
+        token: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> None:
         self._config = config
-        self._client = client if client is not None else _build_client(config)
+        self._account_name = config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
+
+        if not self._account_name:
+            raise RemoteSyncUnavailableError(
+                "Azure storage account name is missing. Set it during setup or via AZURE_STORAGE_ACCOUNT_NAME."
+            )
+
+        self._token = token if token is not None else _get_azure_access_token()
+        self._client = client if client is not None else httpx.Client(timeout=30.0)
 
     def describe(self) -> str:
-        account_name = self._config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "unknown")
-        return f"azure-blob://{account_name}/{self._config.bucket}/{self._config.prefix}"
+        return f"azure-blob://{self._account_name}/{self._config.bucket}/{self._config.prefix}"
 
     def list_objects(self, prefix: str) -> list[RemoteObject]:
-        # Append trailing slash to avoid matching "opensre-backup/" when prefix is "opensre"
         full_prefix = (
             self._config.key_for(prefix) if prefix else f"{self._config.prefix.rstrip('/')}/"
         )
         out: list[RemoteObject] = []
 
-        try:
-            container_client = self._client.get_container_client(self._config.bucket)
-            for blob in container_client.list_blobs(name_starts_with=full_prefix):
-                out.append(
-                    RemoteObject(
-                        key=self._strip_prefix(blob.name),
-                        size=blob.size or 0,
-                        last_modified=blob.last_modified,
-                        etag=str(blob.etag).strip('"') if blob.etag else "",
-                    )
-                )
-        except AzureError as exc:
-            raise RemoteSyncUnavailableError(
-                f"Cannot list {self.describe()} — {_reason(exc)}"
-            ) from exc
+        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}"
+        headers = self._auth_headers()
+        marker = None
+
+        while True:
+            params = {"restype": "container", "comp": "list", "prefix": full_prefix}
+            if marker:
+                params["marker"] = marker
+
+            try:
+                resp = self._client.get(url, params=params, headers=headers)
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise RemoteSyncUnavailableError(
+                    f"Cannot list {self.describe()} — {_reason(exc)}"
+                ) from exc
+
+            try:
+                root = ET.fromstring(resp.content)
+                blobs = root.find("Blobs")
+                if blobs is not None:
+                    for blob in blobs.findall("Blob"):
+                        name = blob.findtext("Name")
+                        if not name:
+                            continue
+
+                        props = blob.find("Properties")
+                        size = 0
+                        last_modified = datetime.now(UTC)
+                        etag = ""
+
+                        if props is not None:
+                            size_str = props.findtext("Content-Length")
+                            size = int(size_str) if size_str else 0
+
+                            lm_str = props.findtext("Last-Modified")
+                            if lm_str:
+                                with contextlib.suppress(ValueError):
+                                    last_modified = datetime.strptime(
+                                        lm_str[:-4], "%a, %d %b %Y %H:%M:%S"
+                                    ).replace(tzinfo=UTC)
+
+                            etag = (props.findtext("Etag") or "").strip('"')
+
+                        out.append(
+                            RemoteObject(
+                                key=self._strip_prefix(name),
+                                size=size,
+                                last_modified=last_modified,
+                                etag=etag,
+                            )
+                        )
+
+                next_marker = root.findtext("NextMarker")
+                if not next_marker:
+                    break
+                marker = next_marker
+            except ET.ParseError as exc:
+                raise RemoteSyncUnavailableError(
+                    f"Failed to parse Azure XML response: {exc}"
+                ) from exc
 
         return out
 
     def get_object(self, key: str) -> bytes:
+        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._config.key_for(key)}"
         try:
-            blob_client = self._client.get_blob_client(
-                container=self._config.bucket, blob=self._config.key_for(key)
-            )
-            data = blob_client.download_blob().readall()
-            return cast(bytes, data)
-        except AzureError as exc:
+            resp = self._client.get(url, headers=self._auth_headers())
+            resp.raise_for_status()
+            return resp.content
+        except httpx.HTTPError as exc:
             raise RemoteSyncUnavailableError(f"Cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
+        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._config.key_for(key)}"
+        headers = {
+            **self._auth_headers(),
+            "x-ms-blob-type": "BlockBlob",
+            "Content-Length": str(len(data)),
+        }
         try:
-            blob_client = self._client.get_blob_client(
-                container=self._config.bucket, blob=self._config.key_for(key)
-            )
-            blob_client.upload_blob(data, overwrite=True)
-        except AzureError as exc:
+            resp = self._client.put(url, headers=headers, content=data)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
             raise RemoteSyncUnavailableError(f"Cannot write {key} — {_reason(exc)}") from exc
+
+    def _auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._token}", "x-ms-version": "2026-04-06"}
 
     def _strip_prefix(self, full_key: str) -> str:
         prefix = f"{self._config.prefix.rstrip('/')}/"
         return full_key[len(prefix) :] if full_key.startswith(prefix) else full_key
 
 
-def _reason(exc: Exception) -> str:
-    """The Azure-side cause, formatted safely for a local operator to act on."""
-    return f"{type(exc).__name__}: {exc}"
+def _get_azure_access_token() -> str:
+    """Resolve a Bearer token via Service Principal env vars or the Azure CLI."""
+    tenant_id = os.getenv("AZURE_TENANT_ID")
+    client_id = os.getenv("AZURE_CLIENT_ID")
+    client_secret = os.getenv("AZURE_CLIENT_SECRET")
 
+    if tenant_id and client_id and client_secret:
+        url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "client_credentials",
+            "scope": "https://storage.azure.com/.default",
+        }
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.post(url, data=data)
+                resp.raise_for_status()
+                return str(resp.json()["access_token"])
+        except Exception as exc:
+            raise RemoteSyncUnavailableError(
+                f"Failed to authenticate with Azure Entra ID: {exc}"
+            ) from exc
 
-def _build_client(config: RemoteSyncConfig) -> Any:
-    account_name = config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
-    if not account_name:
-        raise RemoteSyncUnavailableError(
-            "Azure storage account name is missing. Set it during setup or via AZURE_STORAGE_ACCOUNT_NAME."
-        )
-
-    account_url = f"https://{account_name}.blob.core.windows.net"
     try:
-        return BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
+        result = subprocess.run(
+            ["az", "account", "get-access-token", "--resource", "https://storage.azure.com/"],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        return str(json.loads(result.stdout)["accessToken"])
     except Exception as exc:
-        raise RemoteSyncUnavailableError(f"Cannot build Azure client — {_reason(exc)}") from exc
+        raise RemoteSyncUnavailableError(
+            "Could not resolve Azure credentials. Set AZURE_TENANT_ID, AZURE_CLIENT_ID, "
+            "and AZURE_CLIENT_SECRET, or log in with the Azure CLI (`az login`)."
+        ) from exc
+
+
+def _reason(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code}"
+    return f"{type(exc).__name__}: {exc}"
 
 
 def _factory(config: RemoteSyncConfig) -> AzureBlobObjectStore:

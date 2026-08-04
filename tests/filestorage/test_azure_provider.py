@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
+import httpx
 import pytest
-from azure.core.exceptions import AzureError
 
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.errors import RemoteSyncUnavailableError
@@ -21,131 +19,98 @@ def _config(**overrides: object) -> RemoteSyncConfig:
     return RemoteSyncConfig(**base)  # type: ignore[arg-type]
 
 
-class _FakeDownloader:
-    def __init__(self, data: bytes):
-        self._data = data
-
-    def readall(self) -> bytes:
-        return self._data
-
-
-class _FakeBlobClient:
-    def __init__(self, data: bytes = b""):
-        self.data = data
-
-    def download_blob(self) -> _FakeDownloader:
-        return _FakeDownloader(self.data)
-
-    def upload_blob(self, data: bytes, overwrite: bool = True) -> None:  # noqa: ARG002
-        self.data = data
-
-
-class _FakeBlobProperties:
-    def __init__(self, name: str, size: int):
-        self.name = name
-        self.size = size
-        self.last_modified = datetime.now(UTC)
-        self.etag = '"fake-etag-123"'
-
-
-class _FakeContainerClient:
+class _FakeTransport(httpx.BaseTransport):
     def __init__(self) -> None:
-        self.blobs: list[_FakeBlobProperties] = []
+        self.objects: dict[str, bytes] = {}
 
-    def list_blobs(self, name_starts_with: str = "") -> list[_FakeBlobProperties]:
-        return [b for b in self.blobs if b.name.startswith(name_starts_with)]
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        parts = path.lstrip("/").split("/", 1)
+        blob_key = parts[1] if len(parts) > 1 else ""
+        query = request.url.query.decode("utf-8")
 
+        if request.method == "GET" and "comp=list" in query:
+            prefix = request.url.params.get("prefix", "")
+            blobs_xml = []
+            for k, v in self.objects.items():
+                if k.startswith(prefix):
+                    blobs_xml.append(f"""
+                        <Blob>
+                            <Name>{k}</Name>
+                            <Properties>
+                                <Content-Length>{len(v)}</Content-Length>
+                                <Last-Modified>Sun, 27 Sep 2009 18:41:57 GMT</Last-Modified>
+                                <Etag>"fake-etag"</Etag>
+                            </Properties>
+                        </Blob>
+                    """)
 
-class _FakeBlobServiceClient:
-    def __init__(self) -> None:
-        self.container_client = _FakeContainerClient()
-        self.blob_clients: dict[str, _FakeBlobClient] = {}
+            xml = f"""<?xml version="1.0" encoding="utf-8"?>
+            <EnumerationResults>
+                <Blobs>
+                    {"".join(blobs_xml)}
+                </Blobs>
+            </EnumerationResults>"""
+            return httpx.Response(200, content=xml.encode("utf-8"), request=request)
 
-    def get_container_client(self, container: str) -> _FakeContainerClient:  # noqa: ARG002
-        return self.container_client
+        if request.method == "GET":
+            if blob_key in self.objects:
+                return httpx.Response(200, content=self.objects[blob_key], request=request)
+            return httpx.Response(404, request=request)
 
-    def get_blob_client(self, container: str, blob: str) -> _FakeBlobClient:  # noqa: ARG002
-        if blob not in self.blob_clients:
-            self.blob_clients[blob] = _FakeBlobClient()
-        return self.blob_clients[blob]
+        if request.method == "PUT":
+            self.objects[blob_key] = request.content
+            return httpx.Response(201, request=request)
 
-
-# --- Tests ---
+        return httpx.Response(400, request=request)
 
 
 def test_azure_missing_account_name_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Client construction must fail if the storage account name cannot be determined."""
     monkeypatch.delenv("AZURE_STORAGE_ACCOUNT_NAME", raising=False)
-    # Using a config without the `profile` set
     cfg = RemoteSyncConfig(bucket="b", provider="azure", prefix="p")
 
     with pytest.raises(RemoteSyncUnavailableError, match="Azure storage account name is missing"):
-        AzureBlobObjectStore(cfg)
+        AzureBlobObjectStore(cfg, token="fake")
 
 
 def test_describe_names_account_bucket_and_prefix() -> None:
-    """The describe method accurately reflects the Azure hierarchy."""
-    store = AzureBlobObjectStore(_config(), client=_FakeBlobServiceClient())
+    store = AzureBlobObjectStore(
+        _config(), token="fake", client=httpx.Client(transport=_FakeTransport())
+    )
     assert store.describe() == "azure-blob://testaccount/opensre-remote-sync/opensre"
 
 
 def test_put_list_get_round_trip() -> None:
-    """The provider fulfills the ObjectStore contract using the Azure SDK."""
-    fake_service = _FakeBlobServiceClient()
-    store = AzureBlobObjectStore(_config(), client=fake_service)
+    transport = _FakeTransport()
+    store = AzureBlobObjectStore(_config(), token="fake", client=httpx.Client(transport=transport))
 
-    # Put
     payload = b'{"turn": 1}\n'
     store.put_object("sessions/a.jsonl", payload)
 
-    # Manually register the fake blob property so `list_blobs` can find it
-    fake_service.container_client.blobs.append(
-        _FakeBlobProperties(name="opensre/sessions/a.jsonl", size=len(payload))
-    )
-
-    # List (Testing Prefix Handling)
     listing = store.list_objects("")
     assert len(listing) == 1
-    assert listing[0].key == "sessions/a.jsonl"  # Provider strips the "opensre/" prefix internally
+    assert listing[0].key == "sessions/a.jsonl"
     assert listing[0].size == len(payload)
-    assert listing[0].etag == "fake-etag-123"
+    assert listing[0].etag == "fake-etag"
 
-    # Get
     assert store.get_object("sessions/a.jsonl") == payload
 
 
 def test_azure_sdk_errors_are_translated() -> None:
-    """SDK errors are wrapped in RemoteSyncUnavailableError to prevent raw stack traces from leaking."""
+    class _Failing(httpx.BaseTransport):
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(403, request=request)
 
-    class _FailingBlobClient:
-        def download_blob(self) -> None:
-            raise AzureError("Simulated SDK failure")
-
-        def upload_blob(self, data: bytes, overwrite: bool = True) -> None:  # noqa: ARG002
-            raise AzureError("Simulated SDK failure")
-
-    class _FailingContainerClient:
-        def list_blobs(self, name_starts_with: str = "") -> None:  # noqa: ARG002
-            raise AzureError("Simulated SDK failure")
-
-    class _FailingServiceClient:
-        def get_container_client(self, container: str) -> _FailingContainerClient:  # noqa: ARG002
-            return _FailingContainerClient()
-
-        def get_blob_client(self, container: str, blob: str) -> _FailingBlobClient:  # noqa: ARG002
-            return _FailingBlobClient()
-
-    store = AzureBlobObjectStore(_config(), client=_FailingServiceClient())
+    store = AzureBlobObjectStore(_config(), token="fake", client=httpx.Client(transport=_Failing()))
 
     with pytest.raises(RemoteSyncUnavailableError) as caught_list:
         store.list_objects("")
-    assert "Simulated SDK failure" in str(caught_list.value)
-    assert "AzureError" in str(caught_list.value)
+    assert "403" in str(caught_list.value)
 
     with pytest.raises(RemoteSyncUnavailableError) as caught_get:
         store.get_object("test.json")
-    assert "Simulated SDK failure" in str(caught_get.value)
+    assert "403" in str(caught_get.value)
 
     with pytest.raises(RemoteSyncUnavailableError) as caught_put:
         store.put_object("test.json", b"data")
-    assert "Simulated SDK failure" in str(caught_put.value)
+    assert "403" in str(caught_put.value)
