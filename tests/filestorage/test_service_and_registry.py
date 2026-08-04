@@ -14,13 +14,13 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport, content_tag
-from platform.filestorage.enums import RemoteSyncField, SyncDirection, SyncRootName
+from platform.filestorage.enums import RemoteSyncField, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.messages import (
     DISABLED_HELP,
-    format_progress_line,
     format_report_lines,
     format_status_lines,
+    sanitize_terminal_text,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
 from platform.filestorage.ports import RemoteObject
@@ -146,12 +146,26 @@ def test_format_report_lines_handles_megabyte_boundary() -> None:
     assert "2.4 MiB total" in lines[0]
 
 
-def test_format_progress_line_marks_direction_with_a_distinct_symbol() -> None:
-    up = format_progress_line("sessions/a.jsonl", SyncDirection.PUSH)
-    down = format_progress_line("sessions/a.jsonl", SyncDirection.PULL)
-    assert up != down
-    assert "sessions/a.jsonl" in up
-    assert "sessions/a.jsonl" in down
+def test_sanitize_terminal_text_leaves_ordinary_paths_untouched() -> None:
+    assert sanitize_terminal_text("sessions/a.jsonl") == "sessions/a.jsonl"
+    assert sanitize_terminal_text("sessions/日本語.jsonl") == "sessions/日本語.jsonl"
+
+
+def test_sanitize_terminal_text_replaces_escape_and_control_characters() -> None:
+    # ESC (CSI/OSC lead-in), a C0 control char, and a C1 control char.
+    crafted = "sessions/\x1b[2K\x1b]0;pwned\x07\x07\x9bwhoami.jsonl"
+    cleaned = sanitize_terminal_text(crafted)
+    assert "\x1b" not in cleaned
+    assert "\x07" not in cleaned
+    assert "\x9b" not in cleaned
+    assert "sessions/" in cleaned
+    assert "whoami.jsonl" in cleaned
+
+
+def test_format_report_lines_sanitizes_kept_remote_keys() -> None:
+    report = SyncReport(kept_remote=["sessions/\x1b[2Kspoofed.jsonl"])
+    lines = format_report_lines(report)
+    assert not any("\x1b" in line for line in lines)
 
 
 def test_factory_delegates_to_registry() -> None:

@@ -130,10 +130,10 @@ opensre remote-sync sync --pull-only    # new machine, fetch only
 opensre remote-sync sync --push-only    # back up without pulling
 ```
 
-On a terminal, each file prints as it moves (`↑`/`↓` and its path) so a large
-`sessions/` tree doesn't look hung; piped or scripted output stays to the final
-summary line only. The interactive shell shows the same thing as a live-updating
-spinner.
+On a terminal, a progress bar (`Pulling`/`Pushing`, a count of how many files
+are done, and the current file) shows a large `sessions/` tree moving instead
+of looking hung; piped or scripted output stays to the final summary line
+only. The interactive shell shows the same thing as a live-updating bar.
 
 ## Exclude paths
 

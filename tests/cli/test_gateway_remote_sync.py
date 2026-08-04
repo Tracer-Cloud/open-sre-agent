@@ -11,8 +11,8 @@ import pytest
 from rich.console import Console
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncReport
-from platform.filestorage.enums import SyncDirection, SyncRootName
+from platform.filestorage.engine import SyncProgress, SyncReport
+from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from surfaces.cli.gateway_entry import gateway_slash_ports_factory, start_gateway
@@ -103,7 +103,7 @@ def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> No
         pull_only: bool = False,
         push_only: bool = False,
         dry_run: bool = False,
-        on_progress: Callable[[str, SyncDirection], None] | None = None,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
         del on_progress
         seen["pull_only"] = pull_only

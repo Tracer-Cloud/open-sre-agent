@@ -10,7 +10,7 @@ import pytest
 from rich.console import Console
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncReport
+from platform.filestorage.engine import SyncProgress, SyncReport
 from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
@@ -71,7 +71,7 @@ def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
         pull_only: bool = False,
         push_only: bool = False,
         dry_run: bool = False,
-        on_progress: Callable[[str, SyncDirection], None] | None = None,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
         del on_progress
         seen["pull_only"] = pull_only
@@ -98,7 +98,7 @@ def test_sync_dry_run_forwards_flag_and_labels_the_report(monkeypatch: pytest.Mo
         pull_only: bool = False,
         push_only: bool = False,
         dry_run: bool = False,
-        on_progress: Callable[[str, SyncDirection], None] | None = None,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
         del on_progress
         seen["dry_run"] = dry_run
@@ -116,21 +116,26 @@ def test_sync_dry_run_forwards_flag_and_labels_the_report(monkeypatch: pytest.Mo
     assert "would be uploaded" in out
 
 
-def test_sync_progress_callback_is_wired_and_tallies_by_direction(
+def test_sync_progress_callback_is_wired_through_a_direction_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The service-supplied on_progress must work through a real console.status()."""
+    """The service-supplied on_progress must work through a real Progress bar.
+
+    Exercises both add_task (first PULL event) and reset (the PULL→PUSH
+    direction change) without raising, against a non-terminal console —
+    the same rendering path the gateway uses.
+    """
 
     def _run(
         *,
         pull_only: bool = False,
         push_only: bool = False,
         dry_run: bool = False,
-        on_progress: Callable[[str, SyncDirection], None] | None = None,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
         assert on_progress is not None
-        on_progress("memory/a.md", SyncDirection.PULL)
-        on_progress("sessions/b.jsonl", SyncDirection.PUSH)
+        on_progress(SyncProgress(SyncDirection.PULL, "memory/a.md", 1, 1))
+        on_progress(SyncProgress(SyncDirection.PUSH, "sessions/b.jsonl", 1, 1))
         return SyncReport(downloaded=["memory/a.md"], uploaded=["sessions/b.jsonl"])
 
     monkeypatch.setattr(
@@ -140,8 +145,9 @@ def test_sync_progress_callback_is_wired_and_tallies_by_direction(
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync", Session(), console) is True
     # A non-terminal console (as used here and by the gateway) renders no live
-    # status output — only the final report reaches buf. Wiring correctness is
-    # verified above by on_progress firing without raising.
+    # progress output — only the final report reaches buf. Wiring correctness
+    # is verified above by on_progress firing through both branches without
+    # raising.
     assert "1 downloaded" in buf.getvalue()
     assert "1 uploaded" in buf.getvalue()
 

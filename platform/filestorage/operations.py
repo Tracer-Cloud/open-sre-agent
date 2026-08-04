@@ -140,9 +140,9 @@ def run_remote_sync(
     Prefer ``direction=`` when the caller already has a :class:`SyncDirection`;
     the boolean flags remain for CLI/slash adapters. ``dry_run`` previews the
     plan without uploading, downloading, or writing anything locally.
-    ``on_progress``, when given, is called once per key as it moves — the
+    ``on_progress``, when given, is called once per key evaluated — the
     single place CLI and slash both get live progress from, so neither
-    re-derives it. See :data:`platform.filestorage.engine.ProgressCallback`.
+    re-derives it. See :class:`platform.filestorage.engine.SyncProgress`.
     """
     _refuse_org_scoped_turn()
     resolved = (
