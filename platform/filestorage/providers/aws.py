@@ -151,16 +151,19 @@ class S3ObjectStore:
         full_prefix = (
             self._config.key_for(prefix) if prefix else f"{self._config.prefix.rstrip('/')}/"
         )
-        out: list[RemoteObject] = []
-        try:
-            # list() so pagination runs *inside* _with_retry: a transient blip
-            # partway through a multi-page listing is then retried. Returning
-            # the bare generator would defer pagination to the loop below,
-            # outside the retry wrapper, and lose that coverage.
-            for page in _with_retry(lambda: list(self._pages(full_prefix))):
+
+        def _collect() -> list[RemoteObject]:
+            # Consume pages one at a time and keep only the parsed objects, so a
+            # prefix spanning many S3 pages never retains every raw page at once
+            # (peak memory stays O(objects), not O(objects + raw pages)). Runs
+            # *inside* _with_retry, so a transient blip partway through a
+            # multi-page listing retries the whole listing rather than escaping
+            # the retry wrapper.
+            objects: list[RemoteObject] = []
+            for page in self._pages(full_prefix):
                 for item in page.get("Contents", []):
                     key = str(item["Key"])
-                    out.append(
+                    objects.append(
                         RemoteObject(
                             key=self._strip_prefix(key),
                             size=int(item.get("Size", 0)),
@@ -170,11 +173,14 @@ class S3ObjectStore:
                             etag=str(item.get("ETag", "")).strip('"'),
                         )
                     )
+            return objects
+
+        try:
+            return _with_retry(_collect)
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(
                 f"cannot list {self.describe()} — {_reason(exc)}"
             ) from exc
-        return out
 
     def get_object(self, key: str) -> bytes:
         def _read() -> bytes:
