@@ -19,8 +19,16 @@ from config.constants.filestorage import (
 )
 from platform.filestorage import engine as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
-from platform.filestorage.engine import content_tag, pull, push, resolve_direction, run_sync
-from platform.filestorage.enums import SyncRootName
+from platform.filestorage.engine import (
+    ProgressCallback,
+    SyncProgress,
+    content_tag,
+    pull,
+    push,
+    resolve_direction,
+    run_sync,
+)
+from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.syncable import SyncRoot, is_syncable
@@ -323,6 +331,123 @@ def test_push_only_dry_run_does_not_upload(home: Path, roots: tuple[SyncRoot, ..
     # Assert: reported as it would upload, but the store stays empty.
     assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
     assert store.objects == {}
+
+
+# ── Progress ─────────────────────────────────────────────────────────────
+
+
+def _progress_recorder() -> tuple[list[SyncProgress], ProgressCallback]:
+    events: list[SyncProgress] = []
+    return events, events.append
+
+
+def test_push_reports_progress_for_every_candidate_with_a_known_total(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    store = FakeObjectStore()
+    events, on_progress = _progress_recorder()
+
+    push(store, roots=roots, on_progress=on_progress)
+
+    assert sorted((e.key, e.direction) for e in events) == [
+        ("memory/a-fact.md", SyncDirection.PUSH),
+        ("sessions/abc.jsonl", SyncDirection.PUSH),
+    ]
+    # Both candidates share one total, and completed counts up to it.
+    assert {e.total for e in events} == {2}
+    assert sorted(e.completed for e in events) == [1, 2]
+
+
+def test_pull_reports_progress_for_every_candidate_with_a_known_total(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    store = FakeObjectStore()
+    push(store, roots=roots)
+    second_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=tmp_path / "two" / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=tmp_path / "two" / "memory"),
+    )
+    events, on_progress = _progress_recorder()
+
+    pull(store, roots=second_roots, on_progress=on_progress)
+
+    assert sorted((e.key, e.direction) for e in events) == [
+        ("memory/a-fact.md", SyncDirection.PULL),
+        ("sessions/abc.jsonl", SyncDirection.PULL),
+    ]
+    assert {e.total for e in events} == {2}
+    assert sorted(e.completed for e in events) == [1, 2]
+
+
+def test_progress_still_fires_for_files_already_in_sync(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A second push with nothing changed still reports — the tree was still scanned.
+
+    Reporting only actual transfers would make a bar barely move on a tree
+    that is mostly already in sync, which is the exact "looks hung" symptom
+    progress reporting exists to fix.
+    """
+    store = FakeObjectStore()
+    push(store, roots=roots)
+    events, on_progress = _progress_recorder()
+
+    report = push(store, roots=roots, on_progress=on_progress)
+
+    assert report.uploaded == []
+    assert sorted(e.key for e in events) == ["memory/a-fact.md", "sessions/abc.jsonl"]
+
+
+def test_dry_run_still_reports_progress_for_the_preview(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A dry run previews what would move, so progress fires the same as a real run."""
+    store = FakeObjectStore()
+    events, on_progress = _progress_recorder()
+
+    push(store, roots=roots, dry_run=True, on_progress=on_progress)
+
+    assert sorted((e.key, e.direction) for e in events) == [
+        ("memory/a-fact.md", SyncDirection.PUSH),
+        ("sessions/abc.jsonl", SyncDirection.PUSH),
+    ]
+    # Preview only: nothing actually reached the store.
+    assert store.objects == {}
+
+
+def test_run_sync_progress_covers_pull_then_push(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    """A full sync reports the pull half before the push half, matching run order."""
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    events, on_progress = _progress_recorder()
+
+    run_sync(store, roots=roots, on_progress=on_progress)
+
+    directions_in_order = [e.direction for e in events]
+    assert directions_in_order[0] is SyncDirection.PULL
+    assert SyncDirection.PUSH in directions_in_order
+    assert any(
+        e.key == "memory/from-remote.md" and e.direction is SyncDirection.PULL for e in events
+    )
+    # Each direction's own pass starts its own count at 1, restarting after
+    # the pull pass hands off to the push pass.
+    pull_completed = [e.completed for e in events if e.direction is SyncDirection.PULL]
+    push_completed = [e.completed for e in events if e.direction is SyncDirection.PUSH]
+    assert pull_completed[0] == 1
+    assert push_completed[0] == 1
+
+
+def test_progress_reports_a_key_pull_skips_as_outside_any_root(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """An unrecognised remote key is still one of the candidates pull looked at."""
+    store = FakeObjectStore()
+    store.put_object("not-a-known-root/whatever.txt", b"data")
+    events, on_progress = _progress_recorder()
+
+    pull(store, roots=roots, on_progress=on_progress)
+
+    assert "not-a-known-root/whatever.txt" in {e.key for e in events}
 
 
 def test_sync_never_deletes(home: Path, roots: tuple[SyncRoot, ...]) -> None:

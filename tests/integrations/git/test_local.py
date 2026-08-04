@@ -15,12 +15,23 @@ from unittest.mock import patch
 
 import pytest
 
+from config.constants.git import OPENSRE_COMMIT_COAUTHOR_TRAILER
 from integrations.git import local as gitlocal
 from integrations.git.errors import BRANCH_FAILED, NOT_A_GIT_REPO, PROTECTED_BRANCH, GitCommandError
 
 
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+
+def _last_commit_message(cwd: Path) -> str:
+    return subprocess.run(
+        ["git", "log", "-1", "--pretty=%B"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -164,6 +175,29 @@ def test_branch_commit_push_roundtrip(tmp_path: Path) -> None:
         ["git", "branch", "-r"], cwd=work, capture_output=True, text=True
     ).stdout
     assert f"origin/{branch}" in remote_branches
+
+
+def test_commit_paths_adds_opensre_coauthor_trailer(tmp_path: Path) -> None:
+    work = _init_repo(tmp_path)
+    (work / "app").mkdir()
+    (work / "app" / "handlers.py").write_text("x = 1\n")
+
+    gitlocal.commit_paths(str(work), ["app/handlers.py"], "fix: something")
+
+    message = _last_commit_message(work)
+    assert message.splitlines()[0] == "fix: something"
+    assert OPENSRE_COMMIT_COAUTHOR_TRAILER in message
+
+
+def test_commit_paths_does_not_duplicate_opensre_coauthor_trailer(tmp_path: Path) -> None:
+    work = _init_repo(tmp_path)
+    (work / "app").mkdir()
+    (work / "app" / "handlers.py").write_text("x = 1\n")
+    message = f"fix: something\n\n{OPENSRE_COMMIT_COAUTHOR_TRAILER}"
+
+    gitlocal.commit_paths(str(work), ["app/handlers.py"], message)
+
+    assert _last_commit_message(work).count(OPENSRE_COMMIT_COAUTHOR_TRAILER) == 1
 
 
 def test_commit_paths_isolates_to_given_files(tmp_path: Path) -> None:

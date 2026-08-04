@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 from datetime import datetime
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
@@ -19,8 +20,9 @@ from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import AuthorizedSession
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BuiltInProvider
+from platform.filestorage.enums import BucketExposure, BuiltInProvider
 from platform.filestorage.errors import RemoteSyncUnavailableError
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers.registry import register_object_store
 
@@ -36,6 +38,25 @@ _UPLOAD_BASE = "https://storage.googleapis.com/upload/storage/v1"
 _SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
 _LIST_FIELDS = "items(name,size,updated,md5Hash),nextPageToken"
 _TIMEOUT = 30.0
+
+#: Anyone (``allUsers``) or anyone with a Google account (``allAuthenticatedUsers``)
+#: — GCS's two "not actually scoped to you" bucket-IAM members. Mirrors treating an
+#: S3 bucket policy grant to any AWS principal as public, not just literally anyone.
+_PUBLIC_MEMBERS = frozenset({"allUsers", "allAuthenticatedUsers"})
+#: Bucket-IAM roles that can read object contents; a grant of one of these to a
+#: member in ``_PUBLIC_MEMBERS`` is what "publicly readable" means here. Roles
+#: that only grant write (``objectCreator``) or delete are not exposure for a
+#: read warning.
+_READ_CAPABLE_ROLES = frozenset(
+    {
+        "roles/storage.objectViewer",
+        "roles/storage.legacyObjectReader",
+        "roles/storage.legacyBucketReader",
+        "roles/viewer",
+        "roles/editor",
+        "roles/owner",
+    }
+)
 
 
 class GCSObjectStore:
@@ -194,6 +215,63 @@ def _factory(config: RemoteSyncConfig) -> GCSObjectStore:
     return GCSObjectStore(config)
 
 
-register_object_store(PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT)
+def check_public_access(
+    config: RemoteSyncConfig, *, session: Any | None = None
+) -> PublicAccessStatus:
+    """Ask GCS whether ``config.bucket`` is publicly readable.
 
-__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "GCSObjectStore"]
+    Uses ``storage.buckets.getIamPolicy`` to look for a read-capable role
+    (``_READ_CAPABLE_ROLES``) granted to ``allUsers`` or
+    ``allAuthenticatedUsers`` — GCS's bucket-level equivalent of an S3 bucket
+    policy. Object-level ACLs on individual objects are not inspected, the
+    same scope limitation :func:`platform.filestorage.providers.aws.check_public_access`
+    documents for S3 bucket policies.
+
+    Degrades to :class:`~platform.filestorage.enums.BucketExposure.UNKNOWN`
+    rather than raising: a missing permission (or an OAuth scope narrower
+    than IAM policy reads require) must never stand in the way of ``status``
+    or ``setup`` reporting the rest of what they know. ``detail`` never
+    carries the raw GCS error body — this result can be echoed straight into
+    a gateway chat surface (see ``format_status_lines``), and that text is
+    not vetted for that (CWE-209).
+    """
+    try:
+        sess = session if session is not None else _build_session()
+        response = sess.get(f"{_API_BASE}/b/{config.bucket}/iam", timeout=_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+    except requests.HTTPError as exc:
+        code = exc.response.status_code if exc.response is not None else None
+        if code == HTTPStatus.FORBIDDEN:
+            return PublicAccessStatus(
+                BucketExposure.UNKNOWN, "missing permission to read the bucket's IAM policy"
+            )
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    except (
+        requests.RequestException,
+        GoogleAuthError,
+        RemoteSyncUnavailableError,
+        ValueError,
+    ) as exc:
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    if not isinstance(payload, dict):
+        return PublicAccessStatus(BucketExposure.UNKNOWN, "malformed IAM policy response")
+    bindings = payload.get("bindings", [])
+    is_public = isinstance(bindings, list) and any(
+        isinstance(binding, dict)
+        and binding.get("role") in _READ_CAPABLE_ROLES
+        and isinstance(binding.get("members"), list)
+        and not _PUBLIC_MEMBERS.isdisjoint(binding["members"])
+        for binding in bindings
+    )
+    return PublicAccessStatus(BucketExposure.PUBLIC if is_public else BucketExposure.PRIVATE)
+
+
+register_object_store(
+    PROVIDER_NAME,
+    _factory,
+    credential_hint=CREDENTIAL_HINT,
+    public_access_checker=check_public_access,
+)
+
+__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "GCSObjectStore", "check_public_access"]
