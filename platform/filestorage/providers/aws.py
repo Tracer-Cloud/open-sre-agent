@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import boto3
@@ -15,7 +18,9 @@ from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers.registry import SetupExtraField, register_object_store
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+
+logger = logging.getLogger(__name__)
 
 _SERVER_SIDE_ENCRYPTION = "AES256"
 PROVIDER_NAME = BuiltInProvider.AWS
@@ -24,6 +29,95 @@ EXTRA_FIELDS = (
     SetupExtraField(RemoteSyncField.PROFILE, "Credentials profile (blank if unused)"),
     SetupExtraField(RemoteSyncField.REGION, "Region (blank if unused)"),
 )
+
+# Transient-failure retry policy for S3 calls. A dropped connection or a
+# throttling response should not fail the whole run, so retryable errors back
+# off and retry; permanent errors (see PERMANENT_ERROR_CODES) never do.
+RETRY_MAX_ATTEMPTS = 4
+RETRY_BASE_DELAY_SECONDS = 0.5
+RETRY_BACKOFF_FACTOR = 2.0
+
+# Error codes S3 returns that are the caller's fault, not a blip: retrying only
+# burns time and quota, so these surface immediately.
+PERMANENT_ERROR_CODES = frozenset(
+    {
+        "NoSuchBucket",
+        "AccessDenied",
+        "NoSuchKey",
+        "NoSuchBucketPolicy",
+        "InvalidAccessKeyId",
+        "SignatureDoesNotMatch",
+    }
+)
+# Codes that mean "the store was busy or briefly unhealthy" — safe to retry.
+TRANSIENT_ERROR_CODES = frozenset(
+    {
+        "SlowDown",
+        "RequestTimeout",
+        "RequestTimeoutException",
+        "Throttling",
+        "ThrottlingException",
+        "RequestLimitExceeded",
+        "ServiceUnavailable",
+        "InternalError",
+    }
+)
+
+
+def _is_transient(exc: BotoCoreError | ClientError) -> bool:
+    """Whether ``exc`` is a blip worth retrying rather than a permanent fault.
+
+    A :class:`BotoCoreError` is a client-side network/connection failure (no
+    HTTP response reached us), which is always transient. A
+    :class:`ClientError` is a real S3 response: retry only throttling codes and
+    5xx statuses, and never the permanent set (bad bucket, denied, missing key).
+    """
+    if isinstance(exc, ClientError):
+        error = exc.response.get("Error", {})
+        code = str(error.get("Code", ""))
+        if code in PERMANENT_ERROR_CODES:
+            return False
+        if code in TRANSIENT_ERROR_CODES:
+            return True
+        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0)
+        return int(status or 0) >= HTTPStatus.INTERNAL_SERVER_ERROR
+    # BotoCoreError: a connection dropped, timed out, or never resolved.
+    return True
+
+
+def _with_retry[T](call: Callable[[], T], *, sleep: Callable[[float], None] | None = None) -> T:
+    """Run ``call``, retrying transient S3 failures with exponential backoff.
+
+    Permanent failures (and any non-boto exception) propagate on the first hit.
+    Transient failures back off up to ``RETRY_MAX_ATTEMPTS`` times; the last
+    failure is re-raised so the caller can wrap it in
+    :class:`RemoteSyncUnavailableError`. ``sleep`` defaults to
+    :func:`time.sleep`, resolved lazily so a test patching ``aws.time.sleep``
+    takes effect without threading an argument through every call site.
+    """
+    if sleep is None:
+        sleep = time.sleep
+    delay = RETRY_BASE_DELAY_SECONDS
+    for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
+        try:
+            return call()
+        except (BotoCoreError, ClientError) as exc:
+            if not _is_transient(exc) or attempt == RETRY_MAX_ATTEMPTS:
+                raise
+            # Detail stays server-side only (CWE-209): callers map the final
+            # raise to a generic RemoteSyncUnavailableError.
+            logger.warning(
+                "[remote-sync] transient S3 failure (attempt %d/%d), retrying in %.1fs: %s",
+                attempt,
+                RETRY_MAX_ATTEMPTS,
+                delay,
+                _reason(exc),
+            )
+            sleep(delay)
+            delay *= RETRY_BACKOFF_FACTOR
+    # Unreachable: the loop either returns or raises on every path, but a bare
+    # fall-through would silently return None, so fail loudly instead.
+    raise AssertionError("retry loop exited without returning or raising")
 
 
 class S3ObjectStore:
@@ -43,7 +137,7 @@ class S3ObjectStore:
         )
         out: list[RemoteObject] = []
         try:
-            for page in self._pages(full_prefix):
+            for page in _with_retry(lambda: list(self._pages(full_prefix))):
                 for item in page.get("Contents", []):
                     key = str(item["Key"])
                     out.append(
@@ -63,23 +157,29 @@ class S3ObjectStore:
         return out
 
     def get_object(self, key: str) -> bytes:
-        try:
+        def _read() -> bytes:
             response = self._client.get_object(
                 Bucket=self._config.bucket, Key=self._config.key_for(key)
             )
             body: bytes = response["Body"].read()
             return body
+
+        try:
+            return _with_retry(_read)
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
-        try:
+        def _write() -> None:
             self._client.put_object(
                 Bucket=self._config.bucket,
                 Key=self._config.key_for(key),
                 Body=data,
                 ServerSideEncryption=_SERVER_SIDE_ENCRYPTION,
             )
+
+        try:
+            _with_retry(_write)
         except (BotoCoreError, ClientError) as exc:
             raise RemoteSyncUnavailableError(f"cannot write {key} — {_reason(exc)}") from exc
 
