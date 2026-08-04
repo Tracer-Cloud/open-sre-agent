@@ -10,7 +10,12 @@ from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
     format_recent_conversation,
 )
-from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.prompts.envelope import (
+    PromptBlock,
+    PromptBlockKind,
+    PromptEnvelope,
+    PromptTier,
+)
 from core.agent_harness.prompts.skills_loader import load_skills_block
 from platform.harness_ports import action_prompt_vendor_fragments
 
@@ -29,7 +34,8 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
     blocks = [
         PromptBlock(
             id="action-agent-system-base",
-            kind="system",
+            kind=PromptBlockKind.SYSTEM,
+            tier=PromptTier.STABLE,
             content=_SYSTEM_PROMPT_BASE + "\n\n",
             provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
@@ -39,7 +45,8 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
         blocks.append(
             PromptBlock(
                 id="action-agent-vendor-fragments",
-                kind="rule",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
                 content=vendor_fragments + "\n\n",
                 provenance="platform.harness_ports.action_prompt_vendor_fragments",
             )
@@ -49,7 +56,8 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
         blocks.append(
             PromptBlock(
                 id="action-agent-skills",
-                kind="rule",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
                 content=skills + "\n\n",
                 provenance="core.agent_harness.prompts.skills",
             )
@@ -57,13 +65,15 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
     blocks += [
         PromptBlock(
             id="connected-integrations",
-            kind="context",
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.CONTEXT,
             content=connected_integrations_block(turn_snapshot),
             provenance="core.agent_harness.turns.turn_snapshot",
         ),
         PromptBlock(
             id="recent-conversation",
-            kind="conversation",
+            kind=PromptBlockKind.CONVERSATION,
+            tier=PromptTier.EPHEMERAL,
             content=recent_conversation_block(turn_snapshot),
             provenance="core.agent_harness.turns.turn_snapshot",
         ),
@@ -73,7 +83,8 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
         blocks.append(
             PromptBlock(
                 id="prior-action-facts",
-                kind="context",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
                 content=action_facts,
                 provenance="core.agent_harness.turns.turn_snapshot",
             )
@@ -83,7 +94,8 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
         blocks.append(
             PromptBlock(
                 id="long-term-memory",
-                kind="context",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.VOLATILE,
                 content=memory_block,
                 provenance="core.domain.memory",
             )

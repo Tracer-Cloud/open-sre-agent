@@ -23,7 +23,12 @@ from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_system_prompt,
     build_environment_block,
 )
-from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.prompts.envelope import (
+    PromptBlock,
+    PromptBlockKind,
+    PromptEnvelope,
+    PromptTier,
+)
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
@@ -42,7 +47,9 @@ __all__ = [
     "_build_system_prompt",
     "AssistantPromptContextProvider",
     "PromptBlock",
+    "PromptBlockKind",
     "PromptEnvelope",
+    "PromptTier",
     "build_action_system_prompt",
     "build_action_system_prompt_envelope",
     "build_action_user_message",
