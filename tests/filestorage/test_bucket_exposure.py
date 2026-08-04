@@ -206,12 +206,12 @@ def test_gcs_malformed_response_degrades_to_unknown() -> None:
 
 
 def test_gcs_session_build_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
-    import platform.filestorage.providers.gcs as gcs_module
+    from platform.filestorage.providers.gcs import RemoteSyncUnavailableError
 
     def _raise_session() -> object:
-        raise gcs_module.RemoteSyncUnavailableError("cannot build GCS credentials — boom")
+        raise RemoteSyncUnavailableError("cannot build GCS credentials — boom")
 
-    monkeypatch.setattr(gcs_module, "_build_session", _raise_session)
+    monkeypatch.setattr("platform.filestorage.providers.gcs._build_session", _raise_session)
     result = gcs_check_public_access(RemoteSyncConfig(bucket="b"))
     assert result.exposure is BucketExposure.UNKNOWN
 
