@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.tools.tool_context import ActionToolContext
@@ -144,7 +146,9 @@ def test_run_turn_consumes_pending_schedule_on_yes() -> None:
     assert session.pending_schedule_offer is None
 
 
-def test_a_confirmed_schedule_survives_the_literal_slash_dispatcher() -> None:
+def test_a_confirmed_schedule_survives_the_literal_slash_dispatcher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The cron expression must reach the CLI as ONE argument.
 
     ``PendingScheduleOffer`` removes the model from string-building, but the
@@ -168,6 +172,7 @@ def test_a_confirmed_schedule_survives_the_literal_slash_dispatcher() -> None:
     )
 
     # Act
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
     call = _literal_slash_tool_call(offer.to_slash_command(), [_SlashTool()])
 
     # Assert

@@ -19,8 +19,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from rich.markup import escape
-
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
@@ -662,15 +660,14 @@ def _show_response(
     reply; only then is it streamed as the assistant speaking.
     """
     if handled and final_text:
-        output.stream(label="OpenSRE", chunks=iter([escape(final_text)]))
+        output.stream(label="OpenSRE", chunks=iter([final_text]))
         return
     if display_chunks:
         output.print()
         output.render_response_header("assistant")
-        # Tool output and model replies are data, not styling: a skill body or
-        # shell command containing square brackets (``sed 's/\\]\\]>//'``) reads
-        # as an unbalanced markup tag and takes the whole turn down.
-        output.print(escape("\n".join(display_chunks)))
+        # Literal text: the sink decides how to render it safely. The harness
+        # must not reach for terminal-markup helpers (agent_harness/AGENTS.md).
+        output.print("\n".join(display_chunks))
         return
     if handled:
         output.print()

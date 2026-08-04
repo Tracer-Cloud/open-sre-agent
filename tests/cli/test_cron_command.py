@@ -56,11 +56,16 @@ def test_cron_logs_rejects_non_positive_limit() -> None:
 def test_cron_add_allows_slack_without_chat_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Webhook-bound Slack delivery does not need --chat-id (morning-report yes)."""
+    """Webhook-bound Slack delivery does not need --chat-id (morning-report yes).
+
+    The webhook is the destination, so it must actually be configured — without
+    one a bot-token install would store a task that delivers nowhere.
+    """
     from platform.scheduler import store as scheduler_store
 
     store = tmp_path / "scheduler_tasks.json"
     monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
 
     runner = CliRunner()
     result = runner.invoke(

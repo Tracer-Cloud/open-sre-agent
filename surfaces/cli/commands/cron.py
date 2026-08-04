@@ -11,6 +11,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from platform.scheduler.credentials import requires_explicit_chat_id
 from platform.scheduler.types import Provider, TaskKind
 
 _console = Console()
@@ -68,8 +69,8 @@ def cron_command() -> None:
     default="",
     show_default=False,
     help=(
-        "Chat/channel ID for the target provider. Required for telegram, "
-        "discord, and rocketchat. Optional for slack when an incoming webhook "
+        "Chat/channel ID for the target provider. Required unless the "
+        "provider already has a configured destination, such as a webhook "
         "is configured (the webhook's bound channel is the destination)."
     ),
 )
@@ -268,21 +269,16 @@ def _validate_cron_and_timezone(cron_expr: str, timezone: str) -> None:
 
 
 def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:
-    """Require --chat-id for providers that cannot resolve a destination alone.
+    """Reject a task with no destination the scheduler could deliver to.
 
-    Slack incoming webhooks are bound to a single channel, so the scheduler can
-    deliver without an explicit chat id (see ``_deliver_slack``). Telegram,
-    Discord, and Rocket.Chat always need a concrete destination.
+    Which providers can resolve a destination on their own is the scheduler's
+    knowledge, not the CLI's — see
+    :func:`platform.scheduler.credentials.requires_explicit_chat_id`.
     """
-    if chat_id.strip():
-        return
-    if provider.lower() == Provider.SLACK.value:
+    if chat_id.strip() or not requires_explicit_chat_id(provider):
         return
     _console.print(f"[red]Error: --chat-id is required for provider {provider}.[/red]")
-    _console.print(
-        "  Slack may omit --chat-id when an incoming webhook is configured; "
-        "other providers need an explicit chat/channel id."
-    )
+    _console.print("  This provider has no configured destination to fall back on.")
     raise SystemExit(2)
 
 
