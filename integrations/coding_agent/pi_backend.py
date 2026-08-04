@@ -1,8 +1,8 @@
 """Pi coding-agent backend — the one place the seam is coupled to Pi.
 
-Adapts ``integrations/pi`` to the neutral :class:`CodingResult`. Adding another
-backend (codex/claude_code/…) later means adding a sibling module and registering
-it in :mod:`integrations.coding_agent.runner`, with no change to callers.
+Adapts ``integrations/pi`` to the neutral :class:`CodingResult`. Sibling backends
+(``claude_code_backend``, ``codex_backend``) register alongside it in
+:mod:`integrations.coding_agent.runner`, with no change to callers.
 """
 
 from __future__ import annotations

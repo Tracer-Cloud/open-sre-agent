@@ -23,7 +23,6 @@ from typing import Any
 
 from rich.console import Console
 
-from config.constants.organization import organization_id
 from gateway.config.logging_config import configure_logging
 from gateway.discord.background import DiscordGatewayBackground
 from gateway.discord.wiring import start_discord_worker
@@ -42,10 +41,6 @@ from gateway.runtime.daemon import (
 )
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.readiness import set_ready
-from gateway.runtime.remote_run_worker import (
-    RemoteRunWorker,
-    build_remote_run_worker,
-)
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from gateway.slack.socket_mode_worker import SlackGatewayBackground
 from gateway.slack.wiring import start_slack_worker
@@ -55,10 +50,6 @@ from gateway.telegram.wiring import start_telegram_worker
 
 SlashPortsFactory = Callable[[], Any]
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
-RemoteRunWorkerFactory = Callable[
-    [str, str, Any, TurnConcurrencyGate, logging.Logger],
-    RemoteRunWorker,
-]
 
 
 class GatewayManager:
@@ -69,7 +60,6 @@ class GatewayManager:
         *,
         slash_ports_factory: SlashPortsFactory | None = None,
         credential_hydrator_factory: CredentialHydratorFactory | None = None,
-        remote_run_worker_factory: RemoteRunWorkerFactory | None = None,
         turn_gate: TurnConcurrencyGate | None = None,
     ) -> None:
         self.settings: GatewaySettings | None = None
@@ -79,13 +69,11 @@ class GatewayManager:
         self.discord_background_worker: DiscordGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
-        self.remote_run_worker: RemoteRunWorker | None = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
         self._credential_hydrator_factory = (
             credential_hydrator_factory or GatewayCredentialHydrator.from_environment
         )
-        self._remote_run_worker_factory = remote_run_worker_factory
         profile = os.getenv("OPENSRE_SIZE_PROFILE", "SMALL").strip().upper()
         self.turn_gate = turn_gate or TurnConcurrencyGate.for_profile(profile)
         self._stopped = threading.Event()
@@ -96,7 +84,7 @@ class GatewayManager:
 
         logger = self.logger = configure_logging()
         set_ready(False)
-        bootstrap = self._load_credentials(logger)
+        self._load_credentials(logger)
         startup.run(logger)
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
@@ -111,9 +99,6 @@ class GatewayManager:
             gate=self.turn_gate,
         )
 
-        # A configured durable worker is mandatory. Start it before components
-        # with externally visible side effects so a bad Neon bootstrap fails closed.
-        self._start_remote_runs(logger, handler, bootstrap)
         self._start_web(logger)
         self._start_telegram(logger, chat_handler)
         self._start_slack(logger, chat_handler)
@@ -136,9 +121,6 @@ class GatewayManager:
         """Shut down all components and return whether the chat worker stopped."""
         set_ready(False)
         stopped = True
-        if self.remote_run_worker is not None:
-            stopped = self.remote_run_worker.stop(timeout=timeout)
-            self.remote_run_worker = None
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
@@ -251,51 +233,6 @@ class GatewayManager:
             return
         self.scheduler = scheduler
         self.components["scheduler"] = f"running {task_count} scheduled task(s)"
-
-    def _start_remote_runs(
-        self,
-        logger: logging.Logger,
-        handler: Any,
-        bootstrap: GatewayBootstrap | None,
-    ) -> None:
-        """Start the Neon run worker when a bootstrap bundle supplies its DSN."""
-        organization = organization_id()
-        database_url = bootstrap.database_url if bootstrap is not None else None
-        if not organization or not database_url:
-            self.components["api_runs"] = "not configured"
-            return
-        factory = self._remote_run_worker_factory
-        if factory is None:
-
-            def factory(
-                org: str,
-                dsn: str,
-                callback: Any,
-                gate: TurnConcurrencyGate,
-                log: logging.Logger,
-            ) -> RemoteRunWorker:
-                return build_remote_run_worker(
-                    organization_id=org,
-                    database_url=dsn,
-                    handler=callback,
-                    gate=gate,
-                    logger=log,
-                )
-
-        try:
-            worker = factory(
-                organization,
-                database_url,
-                handler,
-                self.turn_gate,
-                logger,
-            )
-            worker.start()
-        except Exception as exc:
-            logger.error("remote run worker startup failed (%s)", type(exc).__name__)
-            raise GatewayConfigurationError("Remote run worker startup failed") from None
-        self.remote_run_worker = worker
-        self.components["api_runs"] = "polling"
 
     def _publish_status(self, logger: logging.Logger) -> None:
         GATEWAY_PID_FILE.parent.mkdir(parents=True, exist_ok=True)

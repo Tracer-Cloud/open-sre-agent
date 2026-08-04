@@ -46,7 +46,6 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment_multi_tenant/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"

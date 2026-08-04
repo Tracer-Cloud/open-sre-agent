@@ -1,1 +1,0 @@
-"""Fargate deployment tests."""

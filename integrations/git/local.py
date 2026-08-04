@@ -19,6 +19,7 @@ import subprocess
 from collections.abc import Sequence
 from urllib.parse import urlsplit
 
+from config.constants.git import OPENSRE_COMMIT_COAUTHOR_TRAILER
 from integrations.git.errors import (
     BRANCH_FAILED,
     COMMIT_FAILED,
@@ -35,6 +36,17 @@ _GIT_TIMEOUT_SEC = 60
 _REMOTE_TIMEOUT_SEC = 15
 # Branch names we refuse to create or push to, on top of the resolved default.
 _PROTECTED_BRANCHES = frozenset({"main", "master", "develop", "trunk"})
+
+
+def _with_opensre_coauthor(message: str) -> str:
+    """Return *message* with OpenSRE's GitHub co-author trailer exactly once."""
+    stripped = message.rstrip()
+    trailer = OPENSRE_COMMIT_COAUTHOR_TRAILER
+    if any(line.strip().lower() == trailer.lower() for line in stripped.splitlines()):
+        return stripped
+    if not stripped:
+        return trailer
+    return f"{stripped}\n\n{trailer}"
 
 
 def _run_git(
@@ -278,7 +290,15 @@ def commit_paths(workspace: str, paths: Sequence[str], message: str) -> None:
         if add.returncode != 0:
             raise GitCommandError(COMMIT_FAILED, f"git add failed: {add.stderr.strip()}")
 
-    commit = _run_git(workspace, "commit", "--only", "-m", message, "--", *paths)
+    commit = _run_git(
+        workspace,
+        "commit",
+        "--only",
+        "-m",
+        _with_opensre_coauthor(message),
+        "--",
+        *paths,
+    )
     if commit.returncode != 0:
         raise GitCommandError(COMMIT_FAILED, f"git commit failed: {commit.stderr.strip()}")
 

@@ -65,9 +65,12 @@ def test_status_enabled_shows_roots(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _run(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _run(
+        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+    ) -> SyncReport:
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport(uploaded=["memory/a.md"], skipped=0)
 
     monkeypatch.setattr(
@@ -77,8 +80,29 @@ def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
     # console.status context manager — Rich Console.status works without a real TTY
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync --push-only", Session(), console) is True
-    assert seen == {"pull_only": False, "push_only": True}
+    assert seen == {"pull_only": False, "push_only": True, "dry_run": False}
     assert "1 uploaded" in buf.getvalue()
+
+
+def test_sync_dry_run_forwards_flag_and_labels_the_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, bool] = {}
+
+    def _run(
+        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+    ) -> SyncReport:
+        seen["dry_run"] = dry_run
+        return SyncReport(uploaded=["sessions/a.jsonl"], skipped=0)
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.run_remote_sync",
+        _run,
+    )
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync sync --dry-run", Session(), console) is True
+    assert seen == {"dry_run": True}
+    out = buf.getvalue()
+    assert "Dry run" in out
+    assert "would be uploaded" in out
 
 
 def test_sync_disabled_prints_help(monkeypatch: pytest.MonkeyPatch) -> None:
