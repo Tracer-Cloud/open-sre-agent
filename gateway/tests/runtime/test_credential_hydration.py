@@ -10,14 +10,13 @@ from typing import Any, cast
 
 import pytest
 
-from config.constants.billing import WEBAPP_URL_ENV
+from config.constants.billing import ORGANIZATION_ID_ENV, WEBAPP_URL_ENV
 from config.constants.paths import integrations_store_path
 from config.constants.tenancy import (
     CREDENTIALS_API_URL_ENV,
     CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
-    TENANT_ORGANIZATION_ID_ENV,
 )
 from gateway.runtime.credential_hydration import (
     CredentialHydrationConfig,
@@ -262,7 +261,7 @@ def test_hydrated_secret_is_visible_to_integration_resolution(
 def test_environment_configures_the_integrations_secret(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-a")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-a")
     monkeypatch.setenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, "arn:bootstrap")
     monkeypatch.setenv(INTEGRATIONS_SECRET_ARN_ENV, "arn:integrations")
     monkeypatch.delenv(CREDENTIALS_API_URL_ENV, raising=False)
@@ -283,7 +282,7 @@ def test_partial_environment_configuration_is_rejected(
     missing bootstrap secret is a misconfiguration rather than the feature
     being off.
     """
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-a")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-a")
     monkeypatch.setenv(INTEGRATIONS_SECRET_ARN_ENV, "arn:aws:integrations")
     monkeypatch.delenv(CREDENTIALS_API_URL_ENV, raising=False)
     monkeypatch.delenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, raising=False)

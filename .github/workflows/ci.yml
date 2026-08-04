@@ -87,7 +87,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
-        run: uv sync --frozen --extra dev --extra cdk
+        run: uv sync --frozen --extra dev
 
       - name: Lint
         run: uv run python -m ruff check $PYTHON_SOURCE_PATHS tests/
@@ -97,9 +97,6 @@ jobs:
 
       - name: Typecheck
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
-
-      - name: Verify Fargate CDK
-        run: make cdk-verify
 
       - name: Verify integration registry (smoke)
         run: make verify-integrations-smoke

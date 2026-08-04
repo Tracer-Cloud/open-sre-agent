@@ -275,12 +275,9 @@ def build_remote_run_worker(
     logger: logging.Logger,
 ) -> RemoteRunWorker:
     """Compose the production Neon repository and API session resolver."""
-    # Private opensre-infra-aws submodule (optional for public/community CI).
-    from platform.deployment_multi_tenant.lambda_control_plane.db.db_client import (  # type: ignore[import-not-found]
-        ControlPlaneDbClient,
-    )
+    from gateway.storage.agent_runs.postgres import PostgresAgentRunRepository
 
-    repository = ControlPlaneDbClient(database_url, initialize_schema=False)
+    repository = PostgresAgentRunRepository(database_url)
     # The bindings database (not the host install catalog): it carries the
     # bindings schema, migrates pre-principal rows, and follows the mounted
     # organization volume so replaced tasks keep their conversations.

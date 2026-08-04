@@ -74,7 +74,7 @@ def consume_credits(
 
     Args:
         organization_id: Neon/Clerk org id; defaults to the silo's
-            ``OPENSRE_ORGANIZATION_ID`` env value.
+            ``ORGANIZATION_ID`` env value.
         amount: Credits to consume (webapp requires a positive number).
         reason: Short machine-readable cause, e.g. ``"slack_turn"``.
         metadata: Optional extra JSON fields merged into the request body.

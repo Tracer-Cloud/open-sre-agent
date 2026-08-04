@@ -97,9 +97,12 @@ def test_gateway_dispatch_status_on(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _run(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _run(
+        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+    ) -> SyncReport:
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport(
             uploaded=["sessions/a.jsonl"],
             downloaded=["memory/b.md"],
@@ -123,7 +126,7 @@ def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> No
         )
         is True
     )
-    assert seen == {"pull_only": True, "push_only": False}
+    assert seen == {"pull_only": True, "push_only": False, "dry_run": False}
     out = buf.getvalue()
     assert "1 downloaded" in out
     assert "1 uploaded" in out

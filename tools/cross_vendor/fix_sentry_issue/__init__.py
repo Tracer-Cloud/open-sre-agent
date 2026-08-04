@@ -14,9 +14,8 @@ Package layout (separation of concerns):
 - ``context.py``   — Sentry URL parse + issue fetch, compacted into a masked task.
 - ``runner.py``    — opt-in gates, coding-agent readiness, the coding run, ship
   orchestration, and result shaping.
-- ``pr.py``        — open the GitHub pull request via ``integrations/github``.
 - ``ship.py``      — sequence branch -> commit -> push -> PR into a :class:`ShipResult`
-  (git primitives live in ``integrations/git``).
+  (git primitives live in ``integrations/git``; PR creation in ``integrations/github``).
 - ``__init__.py``  — this file: the agent-facing :class:`BaseTool` contract. The
   class lives here because the tool registry discovers instances by
   ``__class__.__module__`` and does not recurse into sub-modules.

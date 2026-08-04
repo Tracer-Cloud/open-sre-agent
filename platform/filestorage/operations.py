@@ -130,12 +130,14 @@ def run_remote_sync(
     pull_only: bool = False,
     push_only: bool = False,
     direction: SyncDirection | None = None,
+    dry_run: bool = False,
 ) -> SyncReport | None:
     """Pull/push for the current scope. ``None`` when sync is disabled.
 
     Builds a new ObjectStore per call. Returns a caller-owned report snapshot.
     Prefer ``direction=`` when the caller already has a :class:`SyncDirection`;
-    the boolean flags remain for CLI/slash adapters.
+    the boolean flags remain for CLI/slash adapters. ``dry_run`` previews the
+    plan without uploading, downloading, or writing anything locally.
     """
     _refuse_org_scoped_turn()
     resolved = (
@@ -149,7 +151,7 @@ def run_remote_sync(
     roots = syncable_roots()
     store = build_object_store(config)
     return _owned_report(
-        run_sync(store, direction=resolved, roots=roots, exclusions=config.exclude)
+        run_sync(store, direction=resolved, roots=roots, exclusions=config.exclude, dry_run=dry_run)
     )
 
 

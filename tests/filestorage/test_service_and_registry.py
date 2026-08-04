@@ -90,6 +90,12 @@ def test_formatters_return_immutable_tuples() -> None:
     assert "2 uploaded" in format_report_lines(report)[0]
 
 
+def test_format_report_lines_marks_a_dry_run_as_a_preview() -> None:
+    report = SyncReport(uploaded=["a"], downloaded=["b"], skipped=2)
+    lines = format_report_lines(report, dry_run=True)
+    assert lines[0] == "Dry run — 1 would be downloaded, 1 would be uploaded, 2 already current."
+
+
 def test_format_report_lines_shows_nonzero_byte_sizes() -> None:
     report = SyncReport(
         uploaded=["a"],

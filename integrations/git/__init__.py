@@ -30,6 +30,7 @@ from integrations.git.local import (
     push_branch,
     short_head,
 )
+from integrations.git.worktree_capture import WorktreeChanges, capture_worktree_changes
 
 __all__ = [
     "BRANCH_FAILED",
@@ -39,7 +40,9 @@ __all__ = [
     "PROTECTED_BRANCH",
     "PUSH_FAILED",
     "GitCommandError",
+    "WorktreeChanges",
     "assert_not_protected",
+    "capture_worktree_changes",
     "changed_paths",
     "checkout_branch",
     "commit_paths",

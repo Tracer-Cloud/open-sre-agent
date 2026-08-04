@@ -134,7 +134,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
     except KeyringUnavailableError as exc:
         # A machine that was told not to use its keychain is not asking for a
         # weaker store; it is asking for none.
-        if exc.reason is KeyringUnavailableReason.DISABLED:
+        if exc.reason == KeyringUnavailableReason.DISABLED:
             raise
         try:
             local_file.set(env_var, normalized)
@@ -153,7 +153,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
 
 def _fallback_detail(exc: KeyringUnavailableError) -> str:
     path = local_file.store_path()
-    if exc.reason is KeyringUnavailableReason.NO_BACKEND:
+    if exc.reason == KeyringUnavailableReason.NO_BACKEND:
         return (
             f"No system keychain is available on this machine, so the credential was "
             f"saved to {path} with owner-only permissions."

@@ -237,6 +237,94 @@ def test_older_remote_does_not_clobber_a_newer_local_edit(
     assert (home / "sessions" / "abc.jsonl").read_bytes() == b'{"turn": 1}\n'
 
 
+def test_dry_run_preview_matches_what_a_real_full_sync_would_settle_on(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A full sync pulls the newer remote copy, then push sees it already matches.
+
+    A dry run must land on the same final classification — downloaded, and
+    neither uploaded nor kept back — without ever writing the file, so push
+    cannot be misled by comparing against the still-stale bytes on disk.
+    """
+    # Arrange: remote holds a newer edit of a file that also exists locally.
+    store = FakeObjectStore()
+    newer = b'{"turn": 2}\n'
+    store.put_object("sessions/abc.jsonl", newer)
+    store.modified["sessions/abc.jsonl"] = datetime.now(tz=UTC) + timedelta(hours=1)
+
+    # Act
+    report = run_sync(store, roots=roots, dry_run=True)
+
+    # Assert
+    assert report.downloaded == ["sessions/abc.jsonl"]
+    assert "sessions/abc.jsonl" not in report.uploaded
+    assert "sessions/abc.jsonl" not in report.kept_remote
+    assert (home / "sessions" / "abc.jsonl").read_bytes() == b'{"turn": 1}\n'
+    assert store.objects["sessions/abc.jsonl"] == newer
+
+
+def test_dry_run_writes_nothing_locally_or_remotely(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    # Arrange: one file only the bucket knows about, one only the laptop knows about.
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    objects_before = dict(store.objects)
+
+    # Act
+    report = run_sync(store, roots=roots, dry_run=True)
+
+    # Assert: reported as it would happen, but nothing actually moved.
+    assert report.downloaded == ["memory/from-remote.md"]
+    assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
+    assert report.downloaded_bytes == len(b"hello\n")
+    assert store.objects == objects_before
+    # A real full sync would write this file, then have push's local-file scan
+    # find it and count it skipped — the preview must match that tally even
+    # though the brand-new file was never written and so never entered the scan.
+    assert report.skipped == 1
+
+
+def test_dry_runs_skipped_tally_matches_a_real_sync_for_a_brand_new_remote_file(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    """The preview's counts must agree with what running for real would produce."""
+    # Arrange: two identical starting points, one bucket shared between them.
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    real_home = tmp_path / "real"
+    (real_home / "sessions").mkdir(parents=True)
+    (real_home / "memory").mkdir(parents=True)
+    (real_home / "sessions" / "abc.jsonl").write_text('{"turn": 1}\n', encoding="utf-8")
+    (real_home / "memory" / "a-fact.md").write_text("remembered\n", encoding="utf-8")
+    real_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=real_home / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=real_home / "memory"),
+    )
+
+    # Act
+    dry = run_sync(store, roots=roots, dry_run=True)
+    real = run_sync(store, roots=real_roots)
+
+    # Assert
+    assert dry.skipped == real.skipped
+    assert sorted(dry.uploaded) == sorted(real.uploaded)
+    assert dry.downloaded == real.downloaded
+    assert not (home / "memory" / "from-remote.md").exists()
+
+
+def test_push_only_dry_run_does_not_upload(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    # Arrange
+    store = FakeObjectStore()
+
+    # Act
+    report = push(store, roots=roots, dry_run=True)
+
+    # Assert: reported as it would upload, but the store stays empty.
+    assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
+    assert store.objects == {}
+
+
 def test_sync_never_deletes(home: Path, roots: tuple[SyncRoot, ...]) -> None:
     """A file only one side knows about survives on both."""
     # Arrange
@@ -805,6 +893,81 @@ def test_environment_overrides_the_stored_bucket(
     # Assert
     assert config is not None
     assert config.bucket == "env-bucket"
+
+
+def test_a_malformed_stored_bucket_fails_early_naming_the_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A YAML list under ``bucket`` must not stringify into a bogus bucket name."""
+    # Arrange: `bucket: [my-bucket]` instead of a string.
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(REMOTE_SYNC_BUCKET_ENV, raising=False)
+    update_section("remote_sync", {"enabled": True, "bucket": ["my-bucket"]})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+
+    # Act / Assert: fails closed, naming the offending key.
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.bucket"):
+        load_remote_sync_config()
+
+
+def test_env_bucket_overrides_a_malformed_stored_bucket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Env precedence must hold even when the stored value it shadows is bad."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": True, "bucket": ["my-bucket"]})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert: the malformed stored bucket is never read, let alone validated.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+
+
+def test_a_malformed_stored_enabled_fails_early_instead_of_silently_disabling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bad ``enabled`` value must be reported, not read as falsy and ignored."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    update_section("remote_sync", {"enabled": ["true"], "bucket": "stored-bucket"})
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.enabled"):
+        remote_sync_enabled()
+    with pytest.raises(RemoteSyncConfigError, match="remote_sync.enabled"):
+        load_remote_sync_config()
+
+
+def test_env_enabled_overrides_a_malformed_stored_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``OPENSRE_REMOTE_SYNC`` must still switch sync off without reading the file."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    update_section("remote_sync", {"enabled": ["true"], "bucket": "stored-bucket"})
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "0")
+
+    # Act / Assert
+    assert remote_sync_enabled() is False
+    assert load_remote_sync_config() is None
 
 
 # ── Org-scoped turns must not sync (keys carry no principal or actor) ────────

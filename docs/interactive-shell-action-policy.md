@@ -231,7 +231,7 @@ verbatim. There is no inference. Free-form natural language ("log me in",
 is "explicit typed command" vs "natural language", identical to the line the
 terminal-UI policy (`_literal_slash_command_text`) already draws.
 
-**How it works.** `core/agent_harness/turns/action_driver.run_action_agent_turn` recognizes
+**How it works.** `core/agent_harness/turns/action_driver.ActionTurnRunner` recognizes
 literal `/slash` input and emits a deterministic `slash_invoke` tool call through
 the same static-LLM path as the explicit `!cmd` shell escape
 (`_StaticToolCallLLM`). Execution then flows through the normal `slash_invoke`
