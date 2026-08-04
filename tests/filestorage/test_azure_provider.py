@@ -96,6 +96,25 @@ def test_put_list_get_round_trip() -> None:
     assert store.get_object("sessions/a.jsonl") == payload
 
 
+def test_put_get_round_trip_with_key_needing_percent_encoding() -> None:
+    """A blob name with space/# survives the request path; '/' stays literal.
+
+    '#' would otherwise start a URL fragment and a raw space is invalid in a
+    URL path, so both must be percent-encoded — but the directory-separating
+    '/' must not be, or the request would target a different blob name.
+    """
+    transport = _FakeTransport()
+    store = AzureBlobObjectStore(_config(), token="fake", client=httpx.Client(transport=transport))
+
+    key = "sessions/a b#c.jsonl"
+    payload = b"data"
+    store.put_object(key, payload)
+
+    assert store.get_object(key) == payload
+    listing = store.list_objects("")
+    assert listing[0].key == key
+
+
 def test_azure_sdk_errors_are_translated() -> None:
     class _Failing(httpx.BaseTransport):
         def handle_request(self, request: httpx.Request) -> httpx.Response:

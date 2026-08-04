@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 import httpx
 
@@ -52,74 +52,51 @@ class AzureBlobObjectStore:
         full_prefix = (
             self._config.key_for(prefix) if prefix else f"{self._config.prefix.rstrip('/')}/"
         )
-        out: list[RemoteObject] = []
+        try:
+            blobs = self._list_all(full_prefix)
+            return [
+                RemoteObject(
+                    key=self._strip_prefix(name),
+                    size=_parse_size(props),
+                    last_modified=_parse_last_modified(props),
+                    etag=_parse_etag(props),
+                )
+                for name, props in blobs
+            ]
+        except (httpx.HTTPError, ET.ParseError, ValueError) as exc:
+            raise RemoteSyncUnavailableError(
+                f"Cannot list {self.describe()} — {_reason(exc)}"
+            ) from exc
 
+    def _list_all(self, full_prefix: str) -> list[tuple[str, ET.Element | None]]:
+        """Every ``(name, Properties)`` pair under ``full_prefix``, across pages."""
         url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}"
         headers = self._auth_headers()
-        marker = None
+        marker: str | None = None
+        out: list[tuple[str, ET.Element | None]] = []
 
         while True:
             params = {"restype": "container", "comp": "list", "prefix": full_prefix}
             if marker:
                 params["marker"] = marker
 
-            try:
-                resp = self._client.get(url, params=params, headers=headers)
-                resp.raise_for_status()
-            except httpx.HTTPError as exc:
-                raise RemoteSyncUnavailableError(
-                    f"Cannot list {self.describe()} — {_reason(exc)}"
-                ) from exc
+            resp = self._client.get(url, params=params, headers=headers)
+            resp.raise_for_status()
 
-            try:
-                root = ET.fromstring(resp.content)
-                blobs = root.find("Blobs")
-                if blobs is not None:
-                    for blob in blobs.findall("Blob"):
-                        name = blob.findtext("Name")
-                        if not name:
-                            continue
+            root = ET.fromstring(resp.content)
+            blobs_el = root.find("Blobs")
+            if blobs_el is not None:
+                for blob in blobs_el.findall("Blob"):
+                    name = blob.findtext("Name")
+                    if name:
+                        out.append((name, blob.find("Properties")))
 
-                        props = blob.find("Properties")
-                        size = 0
-                        last_modified = datetime.now(UTC)
-                        etag = ""
-
-                        if props is not None:
-                            size_str = props.findtext("Content-Length")
-                            size = int(size_str) if size_str else 0
-
-                            lm_str = props.findtext("Last-Modified")
-                            if lm_str:
-                                with contextlib.suppress(ValueError):
-                                    last_modified = datetime.strptime(
-                                        lm_str[:-4], "%a, %d %b %Y %H:%M:%S"
-                                    ).replace(tzinfo=UTC)
-
-                            etag = (props.findtext("Etag") or "").strip('"')
-
-                        out.append(
-                            RemoteObject(
-                                key=self._strip_prefix(name),
-                                size=size,
-                                last_modified=last_modified,
-                                etag=etag,
-                            )
-                        )
-
-                next_marker = root.findtext("NextMarker")
-                if not next_marker:
-                    break
-                marker = next_marker
-            except ET.ParseError as exc:
-                raise RemoteSyncUnavailableError(
-                    f"Failed to parse Azure XML response: {exc}"
-                ) from exc
-
-        return out
+            marker = root.findtext("NextMarker")
+            if not marker:
+                return out
 
     def get_object(self, key: str) -> bytes:
-        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._config.key_for(key)}"
+        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._blob_path(key)}"
         try:
             resp = self._client.get(url, headers=self._auth_headers())
             resp.raise_for_status()
@@ -128,7 +105,7 @@ class AzureBlobObjectStore:
             raise RemoteSyncUnavailableError(f"Cannot read {key} — {_reason(exc)}") from exc
 
     def put_object(self, key: str, data: bytes) -> None:
-        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._config.key_for(key)}"
+        url = f"https://{self._account_name}.blob.core.windows.net/{self._config.bucket}/{self._blob_path(key)}"
         headers = {
             **self._auth_headers(),
             "x-ms-blob-type": "BlockBlob",
@@ -140,12 +117,52 @@ class AzureBlobObjectStore:
         except httpx.HTTPError as exc:
             raise RemoteSyncUnavailableError(f"Cannot write {key} — {_reason(exc)}") from exc
 
+    def _blob_path(self, key: str) -> str:
+        """URL path segment(s) for ``key``, percent-encoded but with ``/`` left literal.
+
+        A blob name's ``/`` characters are meaningful virtual-directory
+        separators baked into the URL path — encoding them to ``%2F`` would
+        target a differently-named blob, unlike GCS's opaque single-segment
+        object name (:func:`platform.filestorage.providers.gcs.GCSObjectStore.get_object`).
+        """
+        return quote(self._config.key_for(key), safe="/")
+
     def _auth_headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._token}", "x-ms-version": "2026-04-06"}
 
     def _strip_prefix(self, full_key: str) -> str:
         prefix = f"{self._config.prefix.rstrip('/')}/"
         return full_key[len(prefix) :] if full_key.startswith(prefix) else full_key
+
+
+def _parse_size(props: ET.Element | None) -> int:
+    """Object size as int; a missing or malformed Content-Length is treated as unknown."""
+    size_str = props.findtext("Content-Length") if props is not None else None
+    try:
+        return int(size_str) if size_str else 0
+    except ValueError:
+        return 0
+
+
+def _parse_last_modified(props: ET.Element | None) -> datetime:
+    """RFC 1123 ``Last-Modified``, or raise if it cannot be trusted.
+
+    A missing or malformed timestamp must never be guessed at: defaulting to
+    "now" would make an unparseable remote blob look like the newest version,
+    and push could then skip re-uploading a local file that should win. The
+    ValueError lands in the caller's boundary as RemoteSyncUnavailableError —
+    same contract as ``platform.filestorage.providers.gcs._parse_updated``.
+    """
+    lm_str = props.findtext("Last-Modified") if props is not None else None
+    if not lm_str:
+        raise ValueError("Azure blob is missing its Last-Modified header")
+    return datetime.strptime(lm_str[:-4], "%a, %d %b %Y %H:%M:%S").replace(tzinfo=UTC)
+
+
+def _parse_etag(props: ET.Element | None) -> str:
+    if props is None:
+        return ""
+    return (props.findtext("Etag") or "").strip('"')
 
 
 def _get_azure_access_token() -> str:
