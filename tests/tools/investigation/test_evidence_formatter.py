@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from tools.investigation.reporting.formatters.evidence import _format_tool_calls_line
+
 
 def test_format_tool_calls_line_preserves_first_seen_order_and_dedupes_actions() -> None:
     ctx = {
