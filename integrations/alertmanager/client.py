@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from integrations._validation_helpers import report_validation_failure
 from integrations.config_models import AlertmanagerIntegrationConfig
 from integrations.probes import ProbeResult
 from platform.observability.errors.service import capture_service_error
@@ -235,5 +236,15 @@ def make_alertmanager_client(
             )
         )
     except Exception as exc:
-        logger.warning("Failed to create Alertmanager client: %s", exc, exc_info=True)
+        # The caught exception can be a pydantic ValidationError whose text embeds
+        # the rejected bearer_token/password via ``input_value=``. Route through the
+        # repo's sanitized reporter (fixed one-line local message + scrubbed Sentry
+        # capture) instead of logging the raw exception, so a misconfigured
+        # integration stays diagnosable without leaking credentials into local logs.
+        report_validation_failure(
+            exc,
+            logger=logger,
+            integration="alertmanager",
+            method="make_alertmanager_client",
+        )
         return None

@@ -512,21 +512,29 @@ def test_probe_access_not_configured() -> None:
     assert "Missing base_url" in result.detail
 
 
-def _raise_runtime_error(**_kwargs: Any) -> None:
-    raise RuntimeError("construction failure")
+def _raise_with_secret_input(**kwargs: Any) -> None:
+    # Mimic a pydantic ValidationError, whose rendered text embeds the rejected
+    # input value (a credential here) via `input_value=`.
+    raise RuntimeError(
+        f"1 validation error for AlertmanagerConfig, input_value={kwargs.get('bearer_token')!r}"
+    )
 
 
-def test_make_client_logs_soft_fail_on_construction_error(
+def test_make_client_sanitizes_soft_fail_on_construction_error(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    # Force config construction inside the factory to raise, exercising the
-    # soft-fail `except Exception` path (SM-117). The factory must still return
-    # None, but must no longer swallow the exception silently.
-    monkeypatch.setattr("integrations.alertmanager.client.AlertmanagerConfig", _raise_runtime_error)
-    with caplog.at_level(logging.WARNING, logger="integrations.alertmanager.client"):
-        result = make_alertmanager_client("http://alertmanager.local")
-    assert result is None
-    assert any(
-        record.levelno == logging.WARNING and record.exc_info is not None
-        for record in caplog.records
+    # Soft-fail `except Exception` path (SM-117): the factory must still return
+    # None and stay diagnosable (a WARNING is emitted), but must NOT leak the
+    # caught exception's text — a real pydantic ValidationError embeds the
+    # rejected bearer_token/password via `input_value=`, so it is routed through
+    # the sanitized reporter and must never reach the local logs.
+    secret_token = "s3cr3t-bearer-token"  # noqa: S105 - test fixture, not a real credential
+    monkeypatch.setattr(
+        "integrations.alertmanager.client.AlertmanagerConfig", _raise_with_secret_input
     )
+    with caplog.at_level(logging.WARNING, logger="integrations.alertmanager.client"):
+        result = make_alertmanager_client("http://alertmanager.local", bearer_token=secret_token)
+    assert result is None
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    assert secret_token not in caplog.text
+    assert "input_value" not in caplog.text
