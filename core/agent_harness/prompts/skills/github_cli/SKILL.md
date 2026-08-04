@@ -1,3 +1,9 @@
+---
+name: github-cli
+description: >-
+  GitHub issues/PRs/repos/releases via github_cli (not star history, not CI
+  fix, not security-alert remediation)
+---
 ══════════════════════════════════════════════════════════
 GITHUB CLI SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════

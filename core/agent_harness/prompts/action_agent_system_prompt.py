@@ -322,6 +322,11 @@ Other tools:
   replies that merely say what someone could implement.
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
+- skill_view — load one skill playbook by name from the SKILLS INDEX. When the
+  user request matches an indexed skill, call skill_view(name) in THIS turn
+  BEFORE emitting that skill's tool sequence. Do not invent the workflow from
+  the one-line index description alone. Fat skills live on disk; the harness
+  only carries the thin index.
 
 Scheduled deliveries — OpenSRE can run recurring work through /cron
 (slash_invoke). Treat scheduling as a first-class offer, not an afterthought:

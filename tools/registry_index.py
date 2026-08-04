@@ -100,6 +100,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.shell",
         ),
         ToolDescriptor(
+            "skill_view",
+            ("action",),
+            "interactive_shell",
+            None,
+            "tools.interactive_shell.actions.skill_view",
+        ),
+        ToolDescriptor(
             "slack_add_reaction",
             ("investigation", "chat", "action"),
             "slack",

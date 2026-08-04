@@ -18,7 +18,10 @@ from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guid
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
 from core.agent_harness.prompts.skills_loader import (
     SKILLS_HEADER,
+    list_action_skills,
+    load_skill_body,
     load_skills_block,
+    load_skills_index,
     skills_dir,
 )
 from core.agent_harness.prompts.skills_loader import (
@@ -172,11 +175,11 @@ def test_system_prompt_routes_github_cli_to_action_tools() -> None:
 
 def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
     cached_load_skills_block.cache_clear()
-    block = load_skills_block().lower()
-    assert "star history" in block
-    assert "get_github_star_history" in block
-    assert "assistant_handoff" in block
-    assert "undercount" in block or "false zeros" in block
+    body = load_skill_body("github-cli").lower()
+    assert "star history" in body
+    assert "get_github_star_history" in body
+    assert "assistant_handoff" in body
+    assert "undercount" in body or "false zeros" in body
 
 
 def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
@@ -249,8 +252,6 @@ def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
 
 def test_morning_report_skill_closes_with_schedule_offer() -> None:
     """A run-once morning report without an offer cannot drive repeat usage."""
-    from core.agent_harness.prompts.skills_loader import load_skills_block, skills_dir
-
     load_skills_block.cache_clear()
     body = " ".join(
         (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
@@ -285,18 +286,28 @@ def test_skills_loader_bundles_architecture_audit_skill() -> None:
     assert skill.is_file()
     assert template.is_file()
 
-    block = load_skills_block()
-    assert "SKILLS" in block
-    assert "ARCHITECTURE AUDIT SKILL" in block
-    assert "WHEN TO USE" in block
-    assert "summarize this repo's architecture" in block
-    assert "architecture_clone_repo" in block
-    assert "scan_architecture_imports" not in block
-    assert "scan_module_placement" not in block
-    assert "architecture_cleanup_repo" in block
-    assert "architecture_save_observations" in block
-    assert "shell_run" in block
-    assert "Never end the turn with shell_run" in block
+    index = load_skills_index()
+    assert "architecture-audit" in index
+    assert "SKILLS INDEX" in index
+    # Fat body stays out of the thin harness index.
+    assert "architecture_clone_repo" not in index
+
+    body = load_skill_body("architecture-audit")
+    assert "ARCHITECTURE AUDIT SKILL" in body
+    assert "WHEN TO USE" in body
+    assert "summarize this repo's architecture" in body
+    assert "architecture_clone_repo" in body
+    assert "scan_architecture_imports" not in body
+    assert "scan_module_placement" not in body
+    assert "architecture_cleanup_repo" in body
+    assert "architecture_save_observations" in body
+    assert "shell_run" in body
+    assert "Never end the turn with shell_run" in body
+    report_path = (
+        "core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md"
+    )
+    assert f"REPORT TEMPLATE from `{report_path}`" in body
+    assert "### Findings by severity" in body
 
 
 def test_skills_loader_bundles_github_cli_skill() -> None:
@@ -304,51 +315,20 @@ def test_skills_loader_bundles_github_cli_skill() -> None:
     skill = skills_dir() / "github_cli" / "SKILL.md"
     assert skill.is_file()
 
-    block = load_skills_block()
-    assert "GITHUB CLI SKILL" in block
-    assert "do NOT assistant_handoff" in block
-    assert "github_cli(args=" in block
-    assert "create an issue from that" in block
-    assert "quiet=true" in block
-    assert "four separate shell_run" in block or "Four separate" in block or "IMPORT pass" in block
-    assert "IMPORT pass" in block
-    assert "PLACEMENT pass" in block
-    assert "SIZE pass" in block
-    assert "SHIM pass" in block
-    assert "You write each bash" in block
-    assert "about 15" in block
-    assert "Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup" in block
-    assert "~/.opensre/{session_id}/{repo_name}-architecture-audit-{uuid}.md" in block
-    assert "AGENTS-style docs" in block
-    assert "AGENT SCAN" in block
-    assert "deletion test" in block
-    assert "CONTEXT.md" in block
-    assert "max 3 shell_run" in block
-    assert "BEFORE any" in block or "before heuristics" in block
-    assert 'Decide what "large" means' in block
-    assert "do NOT limit to Python" in block
-    assert "do NOT skip non-Python" in block
-    assert ".java" in block and ".rs" in block
-    assert "find_architecture_violations" not in block
-    report_path = (
-        "core/agent_harness/prompts/skills/architecture_audit/architecture_audit_report.md"
-    )
-    assert f"REPORT TEMPLATE from `{report_path}`" in block
-    assert "### Repository summary" in block
-    assert "### Coverage and limitations" in block
-    assert "### Findings by severity" in block
-    assert "| Severity | Path | Finding |" in block
-    assert "### Recommended sequencing" in block
-    assert "Fill this template VERBATIM" in block
-    assert "Do NOT wrap filled values in backticks" in block
-    assert "contract source" in block
-    assert "calibrate to the repo" in block
-    assert "grounded in AGENT SCAN context" in block
-    assert report_path in block
+    index = load_skills_index()
+    assert "github-cli" in index
+    assert "github_cli(args=" not in index
+
+    body = load_skill_body("github-cli")
+    assert "GITHUB CLI SKILL" in body
+    assert "do NOT assistant_handoff" in body
+    assert "github_cli(args=" in body
+    assert "create an issue from that" in body
 
     prompt = build_action_system_prompt(_ctx(messages=[("user", "audit architecture")]))
-    assert "ARCHITECTURE AUDIT SKILL" in prompt
-    assert "### Findings by severity" in prompt
+    assert "architecture-audit" in prompt
+    assert "ARCHITECTURE AUDIT SKILL" not in prompt
+    assert "### Findings by severity" not in prompt
     cached_load_skills_block.cache_clear()
 
 
@@ -357,17 +337,18 @@ def test_skills_loader_bundles_github_security_fix_skill() -> None:
     skill = skills_dir() / "github_security_fix" / "SKILL.md"
     assert skill.is_file()
 
-    block = load_skills_block()
-    assert "GITHUB SECURITY AND QUALITY FIX SKILL" in block
-    assert "fix_github_security_alert" in block
-    assert "Secret-scanning remediation" in block
-    assert 'alert_type="auto"' in block
-    assert 'alert_type="code_quality"' in block
-    assert "auto-detected" in block
-    assert "Never add coding-agent advice" in block
-    assert "output exactly that text and stop" in block
-    assert "reply in one short line" in block
-    assert 'Do not say "next steps"' in block
+    assert "github-security-fix" in load_skills_index()
+    body = load_skill_body("github-security-fix")
+    assert "GITHUB SECURITY AND QUALITY FIX SKILL" in body
+    assert "fix_github_security_alert" in body
+    assert "Secret-scanning remediation" in body
+    assert 'alert_type="auto"' in body
+    assert 'alert_type="code_quality"' in body
+    assert "auto-detected" in body
+    assert "Never add coding-agent advice" in body
+    assert "output exactly that text and stop" in body
+    assert "reply in one short line" in body
+    assert '"next steps"' in body
     cached_load_skills_block.cache_clear()
 
 
@@ -376,12 +357,13 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
     skill = skills_dir() / "github_ci_fix" / "SKILL.md"
     assert skill.is_file()
 
-    block = load_skills_block()
-    assert "GITHUB PR CI FIX SKILL" in block
-    assert "fix_github_pr_ci" in block
-    assert "output exactly that text and stop" in block
-    assert 'Do not say "next steps"' in block
-    assert "pushes to the existing PR head branch" in block
+    assert "github-ci-fix" in load_skills_index()
+    body = load_skill_body("github-ci-fix")
+    assert "GITHUB PR CI FIX SKILL" in body
+    assert "fix_github_pr_ci" in body
+    assert "output exactly that text and stop" in body
+    assert '"next steps"' in body
+    assert "pushes to the existing PR head branch" in body
     cached_load_skills_block.cache_clear()
 
 
@@ -395,25 +377,36 @@ def test_action_system_prompt_includes_context_blocks() -> None:
     )
     assert "CONNECTED INTEGRATIONS (this install, right now): github" in prompt
     assert "RECENT CONVERSATION" in prompt
-    assert "ARCHITECTURE AUDIT SKILL" in prompt
+    assert "architecture-audit" in prompt
+    assert "skill_view" in prompt
+    assert "ARCHITECTURE AUDIT SKILL" not in prompt
 
 
-def test_skills_loader_bundles_markdown_files() -> None:
-    md_files = list(skills_dir().glob("*.md"))
-    assert md_files, "expected at least one bundled skill markdown file"
-
-    block = load_skills_block()
-    assert block.startswith(SKILLS_HEADER)
-    for path in md_files:
-        body = path.read_text(encoding="utf-8").strip()
-        if body:
-            assert body in block
+def test_skills_index_is_thin_relative_to_full_bodies() -> None:
+    cached_load_skills_block.cache_clear()
+    index = load_skills_index()
+    bodies = "".join(load_skill_body(skill.name) for skill in list_action_skills())
+    assert index.startswith(SKILLS_HEADER)
+    assert "skill_view" in index.lower()
+    assert len(bodies) > 10 * len(index)
+    names = {skill.name for skill in list_action_skills()}
+    assert names >= {
+        "morning-report",
+        "architecture-audit",
+        "github-cli",
+        "github-security-fix",
+        "github-ci-fix",
+    }
+    for skill in list_action_skills():
+        assert skill.name in index
+        assert skill.description.split()[0] in index or skill.name in index
 
 
 def test_action_system_prompt_includes_skills_block() -> None:
     prompt = build_action_system_prompt(_ctx())
     assert SKILLS_HEADER in prompt
-    assert "MORNING REPORT SKILL" in prompt
+    assert "morning-report" in prompt
+    assert "MORNING REPORT SKILL" not in prompt
     # Skills must sit after the base rules so the COMPOUND TURN RULE is set first.
     assert prompt.index("COMPOUND TURN RULE") < prompt.index(SKILLS_HEADER)
     # ...and before the per-turn context blocks that follow.
@@ -562,12 +555,12 @@ def test_action_prompt_includes_long_term_memory_bodies(
 
 
 def test_scheduling_guidance_survives_prompt_assembly() -> None:
-    """The offer must reach the model, not merely exist in a source file.
+    """Stable half carries /cron + index; fat closer lives in the skill body.
 
-    The two tests above read ``_SYSTEM_PROMPT_BASE`` and the skill file
-    directly, so they would still pass if the blocks carrying them were dropped
-    from the envelope or re-tiered as ephemeral. This asserts the guidance lands
-    in the cacheable half — the part sent on every turn of a session.
+    Thin harness: the weekday-8am closer is not inlined into every turn — it
+    loads via skill_view when morning-report matches. The cacheable half must
+    still name /cron and list morning-report as recurring so the agent knows
+    to load and offer.
     """
     # Arrange
     from core.agent_harness.prompts import build_action_system_prompt_envelope
@@ -577,11 +570,16 @@ def test_scheduling_guidance_survives_prompt_assembly() -> None:
     # Act
     cached, _ephemeral = build_action_system_prompt_envelope(snapshot).render_split()
     assembled = " ".join(cached.lower().split())
+    body = " ".join(load_skill_body("morning-report").lower().split())
 
     # Assert
     assert "scheduled deliveries" in assembled
     assert 'slash_invoke(command="/cron"' in assembled
-    assert "want a morning delivery every weekday at 8am?" in assembled
+    assert "morning-report" in assembled
+    assert "recurring: weekdays 08:00" in assembled
+    assert "skill_view" in assembled
+    assert "want a morning delivery every weekday at 8am?" in body
+    assert "want a morning delivery every weekday at 8am?" not in assembled
 
 
 def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:
@@ -611,8 +609,6 @@ def test_scheduling_is_never_offered_without_asking_first() -> None:
     be created from.
     """
     # Arrange
-    from core.agent_harness.prompts.skills_loader import load_skills_block, skills_dir
-
     load_skills_block.cache_clear()
     base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(

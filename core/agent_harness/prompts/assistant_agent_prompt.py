@@ -9,6 +9,7 @@ from core.agent_harness.prompts.rules import (
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.runtime_facts import render_runtime_facts
+from core.agent_harness.prompts.surfaces import profile_for
 from platform.harness_ports import assistant_prompt_vendor_fragments, gateway_persona_fragments
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
@@ -188,18 +189,18 @@ def _build_system_prompt(
     surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
-    is_gateway = surface == "gateway"
-    preamble = _GATEWAY_PREAMBLE if is_gateway else _CLI_PREAMBLE
+    profile = profile_for(surface)
+    preamble = _CLI_PREAMBLE if profile.cli_rules else _GATEWAY_PREAMBLE
     # Gateway (Slack) persona wording is vendor-owned and reached only through
     # the port — see integrations.slack.gateway_persona. The CLI equivalents
     # (terminology/setup/response-shape rules) stay empty for gateway turns
     # and are replaced wholesale by the joined gateway persona block below.
-    gateway_persona_block = f"{gateway_persona_fragments()}\n\n" if is_gateway else ""
+    gateway_persona_block = f"{gateway_persona_fragments()}\n\n" if profile.vendor_persona else ""
     # Separators live inside each block so an empty gateway slot contributes
     # nothing rather than a run of blank lines.
-    terminology_block = "" if is_gateway else f"{_TERMINOLOGY_RULE}\n"
-    setup_block = "" if is_gateway else f"{_SETUP_GUIDANCE_RULE}\n\n"
-    response_shape_block = "" if is_gateway else f"{_RESPONSE_SHAPE_RULE}\n\n"
+    terminology_block = f"{_TERMINOLOGY_RULE}\n" if profile.cli_rules else ""
+    setup_block = f"{_SETUP_GUIDANCE_RULE}\n\n" if profile.cli_rules else ""
+    response_shape_block = f"{_RESPONSE_SHAPE_RULE}\n\n" if profile.cli_rules else ""
     repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
     docs_block = (
         "--- Documentation reference (docs/) ---\n"

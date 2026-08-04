@@ -1,3 +1,10 @@
+---
+name: morning-report
+description: >-
+  Weather + news morning briefing (fetch, compose, deliver); after delivery
+  offer weekday 8am schedule via /cron
+recurring: weekdays 08:00
+---
 ══════════════════════════════════════════════════════════
 MORNING REPORT SKILL #1 — weather + daily news briefing:
 ══════════════════════════════════════════════════════════

@@ -45,6 +45,10 @@ _CACHED_TIERS: frozenset[PromptTier] = frozenset(
     {PromptTier.STABLE, PromptTier.CONTEXT, PromptTier.VOLATILE}
 )
 
+#: Layer order the prompt is emitted in, so the layout is a property of the
+#: envelope rather than of the order a builder happens to append in.
+_TIER_ORDER: dict[PromptTier, int] = {tier: index for index, tier in enumerate(PromptTier)}
+
 
 @dataclass(frozen=True)
 class PromptBlock:
@@ -127,11 +131,13 @@ class PromptEnvelope:
         return block
 
     def _render(self, blocks: Iterable[PromptBlock]) -> str:
-        rendered = [block.render() for block in blocks]
+        """Render ``blocks`` grouped into layers, stable within each layer."""
+        ordered = sorted(blocks, key=lambda block: _TIER_ORDER[block.tier])
+        rendered = [block.render() for block in ordered]
         return self.separator.join(text for text in rendered if text)
 
     def render(self) -> str:
-        """Render all non-empty blocks in order."""
+        """Render every non-empty block, layer by layer."""
         return self._render(self.blocks)
 
     def _partition(self) -> tuple[list[PromptBlock], list[PromptBlock]]:

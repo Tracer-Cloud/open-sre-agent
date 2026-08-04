@@ -35,8 +35,16 @@ from core.agent_harness.prompts.gather import (
 )
 from core.agent_harness.prompts.skills_loader import (
     SKILLS_HEADER,
+    list_action_skills,
+    load_skill_body,
     load_skills_block,
+    load_skills_index,
     skills_dir,
+)
+from core.agent_harness.prompts.surfaces import (
+    PromptSurface,
+    SurfaceProfile,
+    profile_for,
 )
 
 __all__ = [
@@ -49,8 +57,11 @@ __all__ = [
     "PromptBlock",
     "PromptBlockKind",
     "PromptEnvelope",
+    "PromptSurface",
     "PromptTier",
+    "SurfaceProfile",
     "build_action_system_prompt",
+    "profile_for",
     "build_action_system_prompt_envelope",
     "build_action_user_message",
     "build_assistant_system_prompt",
@@ -60,7 +71,10 @@ __all__ = [
     "build_environment_block",
     "build_observation_block",
     "connected_integrations_block",
+    "list_action_skills",
+    "load_skill_body",
     "load_skills_block",
+    "load_skills_index",
     "prior_action_facts_block",
     "recent_conversation_block",
     "sanitize_action_text",

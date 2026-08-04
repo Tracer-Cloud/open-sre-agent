@@ -309,3 +309,49 @@ def test_every_tier_lands_in_exactly_one_half() -> None:
     for tier in PromptTier:
         marker = f"marker-{tier.value}"
         assert (marker in cached) ^ (marker in ephemeral), f"{tier} landed in neither or both"
+
+
+def test_layers_are_emitted_in_tier_order_however_blocks_were_added() -> None:
+    """The three layers must hold by construction, not by authoring discipline.
+
+    Hermes joins the prompt ``stable → context → volatile``. Today that order
+    survives only because the builder happens to append in that sequence — a
+    volatile block added after an ephemeral one would silently break the layer
+    contract and land inside the churn. Rendering sorts by tier so the layout is
+    a property of the envelope, not of the order someone typed.
+    """
+    # Arrange — deliberately scrambled
+    from core.agent_harness.prompts import PromptTier
+
+    scrambled = PromptEnvelope.from_blocks(
+        [
+            PromptBlock(id="e", content="EPH", tier=PromptTier.EPHEMERAL),
+            PromptBlock(id="v", content="VOL", tier=PromptTier.VOLATILE),
+            PromptBlock(id="s", content="STA", tier=PromptTier.STABLE),
+            PromptBlock(id="c", content="CTX", tier=PromptTier.CONTEXT),
+        ],
+        separator="|",
+    )
+
+    # Act
+    rendered = scrambled.render()
+
+    # Assert
+    assert rendered == "STA|CTX|VOL|EPH"
+
+
+def test_blocks_sharing_a_tier_keep_the_order_they_were_added() -> None:
+    """Sorting must be stable, or skills could outrank the base prompt."""
+    # Arrange
+    from core.agent_harness.prompts import PromptTier
+
+    envelope = PromptEnvelope.from_blocks(
+        [
+            PromptBlock(id="base", content="BASE", tier=PromptTier.STABLE),
+            PromptBlock(id="skills", content="SKILLS", tier=PromptTier.STABLE),
+        ],
+        separator="|",
+    )
+
+    # Act / Assert
+    assert envelope.render() == "BASE|SKILLS"

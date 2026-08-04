@@ -16,7 +16,7 @@ from core.agent_harness.prompts.envelope import (
     PromptEnvelope,
     PromptTier,
 )
-from core.agent_harness.prompts.skills_loader import load_skills_block
+from core.agent_harness.prompts.skills_loader import load_skills_index
 from platform.harness_ports import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
@@ -51,14 +51,14 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="platform.harness_ports.action_prompt_vendor_fragments",
             )
         )
-    skills = load_skills_block()
-    if skills:
+    skills_index = load_skills_index()
+    if skills_index:
         blocks.append(
             PromptBlock(
                 id="action-agent-skills",
                 kind=PromptBlockKind.RULE,
                 tier=PromptTier.STABLE,
-                content=skills + "\n\n",
+                content=skills_index,
                 provenance="core.agent_harness.prompts.skills",
             )
         )
