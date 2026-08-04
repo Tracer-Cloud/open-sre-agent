@@ -43,7 +43,7 @@ from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
-from platform.analytics.react_turn import run_react_agent_with_telemetry
+from platform.analytics.react_turn import ReactPhase, run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
@@ -752,7 +752,7 @@ def _run_action_turn(
         result = run_react_agent_with_telemetry(
             built.agent,
             [{"role": "user", "content": built.user_message}],
-            phase="action",
+            phase=ReactPhase.ACTION,
             iteration_cap=built.max_iterations,
             llm=built.llm,
             session=session,

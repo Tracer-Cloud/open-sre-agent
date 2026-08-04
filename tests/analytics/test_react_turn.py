@@ -5,7 +5,12 @@ import pytest
 from core.agent.run_io import AgentRunResult
 from platform.analytics import cli
 from platform.analytics.events import Event
-from platform.analytics.react_turn import emit_react_turn_completed, resolve_react_stop_reason
+from platform.analytics.react_turn import (
+    ReactPhase,
+    ReactStopReason,
+    emit_react_turn_completed,
+    resolve_react_stop_reason,
+)
 
 
 class _StubLLM:
@@ -32,7 +37,25 @@ class _StubAnalytics:
     ],
 )
 def test_resolve_react_stop_reason(kwargs: dict[str, object], expected: str) -> None:
-    assert resolve_react_stop_reason(**kwargs) == expected  # type: ignore[arg-type]
+    result = resolve_react_stop_reason(**kwargs)  # type: ignore[arg-type]
+    assert result == expected
+    # The resolver returns enum members, not bare strings, on every branch.
+    assert isinstance(result, ReactStopReason)
+
+
+def test_react_enums_pin_public_string_values() -> None:
+    # Dashboards key on these exact strings — pin them so a rename is caught.
+    assert [p.value for p in ReactPhase] == ["action", "gather"]
+    assert [r.value for r in ReactStopReason] == [
+        "completed",
+        "iteration_cap",
+        "error",
+        "cancelled",
+        "no_tools_needed",
+    ]
+    # StrEnum members round-trip from their wire strings and compare as str.
+    assert ReactStopReason("iteration_cap") is ReactStopReason.ITERATION_CAP
+    assert ReactPhase("gather") == "gather"
 
 
 def test_capture_react_turn_completed_emits_required_properties(

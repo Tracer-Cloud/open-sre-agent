@@ -32,7 +32,7 @@ from core.agent_harness.session.integration_resolution import resolve_and_cache_
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
 from core.state import MAX_CONVERSATION_MESSAGES
-from platform.analytics.react_turn import run_react_agent_with_telemetry
+from platform.analytics.react_turn import ReactPhase, run_react_agent_with_telemetry
 from platform.harness_ports import enrich_resolved_with_repo_scopes
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
@@ -270,7 +270,7 @@ def gather_tool_evidence(
         result = run_react_agent_with_telemetry(
             agent,
             [{"role": "user", "content": _build_gather_user_message(session, message)}],
-            phase="gather",
+            phase=ReactPhase.GATHER,
             iteration_cap=_MAX_GATHER_ITERATIONS,
             llm=llm,
             session=session,
