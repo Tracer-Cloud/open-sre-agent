@@ -271,6 +271,21 @@ def _has_preferred_tool_response_text(result: Any) -> bool:
     )
 
 
+def _self_recording_tools_only(result: Any) -> bool:
+    """True when every executed tool (except handoff) already printed to the console.
+
+    Those tools return a bare success flag to the model; any closing prose is
+    invented without the command's on-screen output (e.g. claiming ``/health``
+    was all-green after the report already showed failures).
+    """
+    names = [
+        tool_call.name
+        for tool_call, _tool_result in getattr(result, "tool_results", [])
+        if tool_call.name != "assistant_handoff"
+    ]
+    return bool(names) and all(name in SELF_RECORDING_ACTION_TOOL_NAMES for name in names)
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
@@ -579,7 +594,11 @@ def _compose_response(
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
-    final_text_chunk = "" if prefer_tool_response_text else final_text
+    # Self-recording tools (slash/shell/…) already rendered the real output.
+    # Drop model closings so they cannot contradict what the user just saw
+    # (classic failure: inventing "health check passed" after a failed /health).
+    suppress_final = prefer_tool_response_text or _self_recording_tools_only(result)
+    final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
@@ -600,7 +619,7 @@ def _compose_response(
     # single tool call and must not replace tool-derived response_text or get
     # streamed on action-only turns (gateway finalize / cross-surface parity).
     # A tool's explicit ``response_text`` also wins over chatty model closings.
-    use_final_text = _is_user_facing_final_text(final_text) and not prefer_tool_response_text
+    use_final_text = _is_user_facing_final_text(final_text) and not suppress_final
     response_text = final_text if use_final_text else "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
 

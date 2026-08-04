@@ -29,11 +29,16 @@ def capture_service_error(
     integration: str,
     method: str,
     extras: dict[str, Any] | None = None,
+    include_traceback: bool | None = None,
 ) -> None:
     severity = "warning" if _is_transient_vendor_error(exc) else "error"
     merged_extras: dict[str, Any] = dict(extras) if extras else {}
     merged_extras.pop("surface", None)
     merged_extras["method"] = method
+    # Health/verify probes expect connection refused / timeouts; a full
+    # urllib3 stack in the interactive shell drowns the health table.
+    if include_traceback is None:
+        include_traceback = method != "probe_access"
     report_exception(
         exc,
         logger=logger,
@@ -41,4 +46,5 @@ def capture_service_error(
         severity=severity,
         tags={"surface": "service_client", "integration": integration},
         extras=merged_extras,
+        include_traceback=include_traceback,
     )

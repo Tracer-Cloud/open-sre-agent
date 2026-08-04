@@ -148,3 +148,31 @@ class TestCaptureServiceError:
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )
             assert mock_report.call_args.kwargs["severity"] == "warning"
+
+    def test_probe_access_omits_traceback_by_default(self, mock_logger: logging.Logger) -> None:
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="kubernetes", method="probe_access"
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is False
+
+    def test_non_probe_methods_keep_traceback(self, mock_logger: logging.Logger) -> None:
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="kubernetes", method="list_pods"
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is True
+
+    def test_include_traceback_override_wins(self, mock_logger: logging.Logger) -> None:
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc,
+                logger=mock_logger,
+                integration="kubernetes",
+                method="probe_access",
+                include_traceback=True,
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is True

@@ -106,6 +106,47 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
     assert "slash_invoke" in harness.llm.tool_schema_names
 
 
+def test_slash_invoke_suppresses_hallucinated_success_closing(monkeypatch) -> None:
+    """After /health (self-recording), the model must not invent "everything's green".
+
+    slash_invoke already printed the real report; a closing line that claims
+    success without reading that output is shown under ● assistant and misleads.
+    """
+
+    def _fake_dispatch(
+        command: str,
+        session: Session,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        session.record("slash", command, ok=True)
+        console.print("Summary: 3 passed  |  4 failed")
+        return True
+
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
+    lied = "Health check passed — everything's green. ✅"
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response("slash_invoke", {"command": "/health", "args": []}),
+                no_tool_response(lied),
+            ]
+        )
+    )
+
+    result = run_action_tool_turn(
+        "yes do that health check",
+        Session(),
+        harness.console,
+        deps=harness.deps,
+    )
+
+    console_text = harness.console_buffer.getvalue()
+    assert "3 passed" in console_text
+    assert lied not in console_text
+    assert "everything's green" not in result.response_text
+
+
 def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     tool = RegisteredTool(
         name="fake_send_message",
