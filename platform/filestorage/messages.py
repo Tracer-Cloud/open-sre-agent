@@ -19,6 +19,7 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
+from platform.filestorage.enums import SyncDirection
 from platform.filestorage.exclusions import ExclusionRules
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from platform.filestorage.providers import credential_hint_for_provider
@@ -28,6 +29,13 @@ from platform.filestorage.providers.registry import builtin_providers
 #: live. Built once, not per key: a dict is checked by ``str.translate``, not
 #: scanned as a list.
 _CONTROL_CHAR_TABLE = dict.fromkeys((*range(0, 32), 127, *range(128, 160)), "�")
+
+_DIRECTION_LABEL = {SyncDirection.PULL: "Pulling", SyncDirection.PUSH: "Pushing"}
+
+
+def direction_label(direction: SyncDirection) -> str:
+    """Human label for a sync direction, shared so surfaces can't drift apart."""
+    return _DIRECTION_LABEL[direction]
 
 
 def sanitize_terminal_text(text: str) -> str:
@@ -171,6 +179,7 @@ __all__ = [
     "DISABLED_HELP",
     "NO_EXCLUSIONS_HELP",
     "SETUP_DISABLED_CONFIRM",
+    "direction_label",
     "format_exclusion_lines",
     "format_report_lines",
     "format_setup_lines",

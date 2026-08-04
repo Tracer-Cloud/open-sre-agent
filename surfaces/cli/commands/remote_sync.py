@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import click
 
 from config.constants.filestorage import (
@@ -12,15 +10,13 @@ from config.constants.filestorage import (
 )
 from platform.common.exit_codes import ERROR, SUCCESS
 from platform.filestorage import RemoteSyncConfigError, RemoteSyncError
-from platform.filestorage.engine import SyncProgress
-from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand, SyncDirection
+from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
     SETUP_DISABLED_CONFIRM,
     format_report_lines,
     format_setup_lines,
     format_status_lines,
-    sanitize_terminal_text,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
 from platform.filestorage.providers.registry import builtin_providers, provider_extra_fields
@@ -29,40 +25,7 @@ from platform.filestorage.setup import (
     disable_remote_sync,
     save_remote_sync_settings,
 )
-
-_DIRECTION_LABEL = {SyncDirection.PULL: "Pulling", SyncDirection.PUSH: "Pushing"}
-
-
-class _CliProgress:
-    """Renders each direction's :class:`SyncProgress` events as a Click bar.
-
-    ``run_sync`` always finishes pull before starting push, so at most one
-    bar is open at a time; a direction change closes the previous bar (if
-    any) and opens the next with its own known length.
-    """
-
-    def __init__(self) -> None:
-        self._bar: Any = None
-        self._direction: SyncDirection | None = None
-
-    def __call__(self, progress: SyncProgress) -> None:
-        if progress.direction is not self._direction:
-            self.close()
-            self._bar = click.progressbar(
-                length=progress.total,
-                label=_DIRECTION_LABEL[progress.direction],
-                item_show_func=lambda item: item,
-            )
-            self._bar.__enter__()
-            self._direction = progress.direction
-        self._bar.current_item = sanitize_terminal_text(progress.key)
-        self._bar.update(1)
-
-    def close(self) -> None:
-        if self._bar is not None:
-            self._bar.__exit__(None, None, None)
-            self._bar = None
-            self._direction = None
+from surfaces.cli.commands.remote_sync_progress import CliProgress
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -92,7 +55,7 @@ def status_command() -> None:
 @click.option("--dry-run", is_flag=True, help="Preview transfers without changing anything.")
 def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
-    progress = _CliProgress() if click.get_text_stream("stdout").isatty() else None
+    progress = CliProgress() if click.get_text_stream("stdout").isatty() else None
     try:
         report = run_remote_sync(
             pull_only=pull_only, push_only=push_only, dry_run=dry_run, on_progress=progress

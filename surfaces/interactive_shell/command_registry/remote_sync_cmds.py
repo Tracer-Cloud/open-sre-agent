@@ -17,6 +17,7 @@ from platform.filestorage.engine import SyncProgress
 from platform.filestorage.enums import RemoteSyncSubcommand, SyncDirection
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    direction_label,
     format_exclusion_lines,
     format_report_lines,
     format_setup_lines,
@@ -37,8 +38,6 @@ _USAGE = (
     f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only|--dry-run] "
     f"[--provider … --bucket …]"
 )
-
-_DIRECTION_LABEL = {SyncDirection.PULL: "Pulling", SyncDirection.PUSH: "Pushing"}
 
 
 def _print_lines(
@@ -93,7 +92,7 @@ def _run_sync(console: Console, args: list[str]) -> bool:
         key_text = escape(sanitize_terminal_text(progress.key))
         if progress.direction is not current_direction:
             current_direction = progress.direction
-            label = _DIRECTION_LABEL[progress.direction]
+            label = direction_label(progress.direction)
             if task_id is None:
                 task_id = bar.add_task(label, total=progress.total, current=key_text)
             else:

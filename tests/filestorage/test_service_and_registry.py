@@ -14,10 +14,11 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport, content_tag
-from platform.filestorage.enums import RemoteSyncField, SyncRootName
+from platform.filestorage.enums import RemoteSyncField, SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    direction_label,
     format_report_lines,
     format_status_lines,
     sanitize_terminal_text,
@@ -144,6 +145,13 @@ def test_format_report_lines_handles_megabyte_boundary() -> None:
     lines = format_report_lines(report)
     assert "2.4 MiB" in lines[0]
     assert "2.4 MiB total" in lines[0]
+
+
+def test_direction_label_is_distinct_and_shared_by_both_surfaces() -> None:
+    """One source of truth for the label, so CLI and REPL cannot drift apart."""
+    assert direction_label(SyncDirection.PULL) == "Pulling"
+    assert direction_label(SyncDirection.PUSH) == "Pushing"
+    assert direction_label(SyncDirection.PULL) != direction_label(SyncDirection.PUSH)
 
 
 def test_sanitize_terminal_text_leaves_ordinary_paths_untouched() -> None:
