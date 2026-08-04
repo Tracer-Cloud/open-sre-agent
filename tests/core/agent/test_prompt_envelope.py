@@ -271,7 +271,8 @@ def test_split_reassembles_when_long_term_memory_is_present(
         body="The user's name is Smoke for prompt-tier ordering.",
     )
 
-    envelope = build_action_system_prompt_envelope(_turn([("user", "hello")]))
+    marker = "zzmarker-memory-order-utterance"
+    envelope = build_action_system_prompt_envelope(_turn([("user", marker)]))
     ids = [block.id for block in envelope.blocks]
     assert "long-term-memory" in ids
     assert ids.index("long-term-memory") < ids.index("recent-conversation")
@@ -281,8 +282,8 @@ def test_split_reassembles_when_long_term_memory_is_present(
     assert rejoined == envelope.render()
     assert "LONG-TERM MEMORY" in cached
     assert "RECENT CONVERSATION" in ephemeral
-    assert "hello" in ephemeral
-    assert "hello" not in cached
+    assert marker in ephemeral
+    assert marker not in cached
 
 
 def test_every_tier_lands_in_exactly_one_half() -> None:
