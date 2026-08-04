@@ -132,7 +132,7 @@ def _entry_from_tool(tool: RegisteredTool) -> ToolCatalogEntry:
     )
 
 
-def build_tool_catalog(surface: ToolSurface | None = None) -> list[ToolCatalogEntry]:
+def build_tool_catalog(surface: ToolSurface | str | None = None) -> list[ToolCatalogEntry]:
     """Return :class:`ToolCatalogEntry` records for tools registered on ``surface``.
 
     Pass ``surface=None`` (default) to get every registered tool, or
