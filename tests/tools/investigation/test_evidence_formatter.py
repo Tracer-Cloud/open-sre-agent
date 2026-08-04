@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from tools.investigation.reporting.formatters.evidence import _format_tool_calls_line
 
 
@@ -31,6 +30,5 @@ def test_format_tool_calls_line_preserves_first_seen_order_and_dedupes_actions()
     line = _format_tool_calls_line(ctx, link_fn=lambda label, _url: label)
 
     assert line == (
-        "Queries: Datadog Logs (2 logs), cloudwatch logs (2 events), "
-        "Better Stack Logs (1 rows)"
+        "Queries: Datadog Logs (2 logs), cloudwatch logs (2 events), Better Stack Logs (1 rows)"
     )
