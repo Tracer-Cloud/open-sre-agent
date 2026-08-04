@@ -65,8 +65,13 @@ def cron_command() -> None:
 @click.option(
     "--chat-id",
     type=str,
-    required=True,
-    help="Chat/channel ID for the target provider.",
+    default="",
+    show_default=False,
+    help=(
+        "Chat/channel ID for the target provider. Required for telegram, "
+        "discord, and rocketchat. Optional for slack when an incoming webhook "
+        "is configured (the webhook's bound channel is the destination)."
+    ),
 )
 @click.option(
     "--window",
@@ -89,13 +94,14 @@ def cron_add(
 
     # Validate cron expression by constructing the APScheduler trigger
     _validate_cron_and_timezone(cron_expr, timezone)
+    _validate_chat_id_for_provider(provider, chat_id)
 
     task = ScheduledTask(
         kind=TaskKind(kind),
         cron=cron_expr,
         timezone=timezone,
         provider=Provider(provider),
-        chat_id=chat_id,
+        chat_id=chat_id.strip(),
         window_hours=window_hours,
     )
 
@@ -259,6 +265,25 @@ def _validate_cron_and_timezone(cron_expr: str, timezone: str) -> None:
     except (ValueError, TypeError, KeyError) as exc:
         _console.print(f"[red]Error: invalid cron expression or timezone: {exc}[/red]")
         raise SystemExit(1) from exc
+
+
+def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:
+    """Require --chat-id for providers that cannot resolve a destination alone.
+
+    Slack incoming webhooks are bound to a single channel, so the scheduler can
+    deliver without an explicit chat id (see ``_deliver_slack``). Telegram,
+    Discord, and Rocket.Chat always need a concrete destination.
+    """
+    if chat_id.strip():
+        return
+    if provider.lower() == Provider.SLACK.value:
+        return
+    _console.print(f"[red]Error: --chat-id is required for provider {provider}.[/red]")
+    _console.print(
+        "  Slack may omit --chat-id when an incoming webhook is configured; "
+        "other providers need an explicit chat/channel id."
+    )
+    raise SystemExit(2)
 
 
 __all__ = ["cron_command"]

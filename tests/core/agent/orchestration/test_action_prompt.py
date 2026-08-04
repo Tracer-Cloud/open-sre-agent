@@ -646,26 +646,26 @@ def test_the_active_instruction_survives_context_truncation() -> None:
     assert instruction in shrunk
 
 
-def test_the_cron_guidance_names_every_required_flag() -> None:
-    """A schedule the model cannot construct is worse than no offer at all.
+def test_the_cron_guidance_teaches_slack_webhook_omits_chat_id() -> None:
+    """Accepted yes after morning Slack delivery must not invent --chat-id.
 
-    ``/cron add`` rejects a call without ``--chat-id`` (exit 2). The guidance
-    used to show a ``<channel or chat id>`` placeholder with nothing in the turn
-    to resolve it, so the model dropped the flag and the accepted offer failed
-    after the user had already said yes.
+    Morning report delivers via slack_send_message (webhook-bound channel).
+    Requiring --chat-id with nothing concrete in the turn made the model either
+    drop the flag (exit 2) or invent a channel after the user already said yes.
     """
     # Arrange
     from core.agent_harness.prompts.skills_loader import skills_dir
 
-    base = " ".join(_SYSTEM_PROMPT_BASE.split())
-    skill = " ".join((skills_dir() / "morning_report.md").read_text(encoding="utf-8").split())
+    base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    skill = " ".join(
+        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+    )
 
-    # Assert — every flag click marks required
-    for flag in ("--kind", "--cron", "--provider", "--chat-id"):
+    # Assert — core flags still taught; Slack path may omit --chat-id
+    for flag in ("--kind", "--cron", "--provider"):
         assert flag in base, f"{flag} missing from stable-tier cron guidance"
         assert flag in skill, f"{flag} missing from the morning-report recipe"
-
-    # Assert — the destination must be fillable from the turn, not a placeholder
-    assert "<channel or chat id>" not in skill
-    assert "<id>" not in base
-    assert "required" in base.lower()
+    assert "omit --chat-id" in base or "omit --chat-id" in skill
+    assert '"--provider", "slack"' in skill or "'--provider', 'slack'" in skill
+    # Canonical closer names Slack, not a vague "same channel" with no id.
+    assert "weekday at 8am to slack?" in skill

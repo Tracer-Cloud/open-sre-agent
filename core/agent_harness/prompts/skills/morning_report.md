@@ -71,22 +71,22 @@ Examples:
    delivery was the last tool call). Use the canonical closer so a bare
    "yes" expands to THIS offer (not an older Want-me-to in the session):
      **Want me to:** schedule this as a recurring daily_summary every
-     weekday at 8am to the same channel?
+     weekday at 8am to Slack?
    Use that Want me to: shape exactly — bare "yes" only expands canonical
-   closers. Do NOT schedule until they confirm. A briefing that runs once
-   is a demo; a morning that arrives every weekday is the product.
+   closers. Name the provider you just delivered to (Slack by default); do
+   not say "the same channel" unless you also printed a concrete #name or
+   id in the Delivered line. Do NOT schedule until they confirm. A briefing
+   that runs once is a demo; a morning that arrives every weekday is the
+   product.
    On confirmation, create the schedule with slash_invoke /cron add. Default
    when they accept without overrides: weekdays 08:00 in their timezone if
-   known else UTC, provider/chat matching where you just delivered. The
-   shipping scheduled-morning kind is daily_summary (reliability digest to
-   that channel on that cadence) — say so in one clause when you confirm,
-   then create it. Example:
+   known else UTC, provider matching where you just delivered. The shipping
+   scheduled-morning kind is daily_summary. Example after Slack webhook
+   delivery (omit --chat-id — the webhook is already bound to one channel):
      → slash_invoke(command="/cron", args=["add", "--kind", "daily_summary",
-       "--cron", "0 8 * * 1-5", "--tz", "UTC", "--provider", "slack",
-       "--chat-id", "#opensre-alerts"])
-   --chat-id is REQUIRED and the command fails without it. Reuse the exact
-   destination the delivery step just used — a "#channel-name" is accepted, so
-   pass the name you reported in the briefing rather than hunting for an id.
-   Only if delivery had no destination either, ask for provider and channel —
-   then schedule. Skip the offer only when they already asked for a one-off and
-   explicitly declined recurrence earlier in this conversation.
+       "--cron", "0 8 * * 1-5", "--tz", "UTC", "--provider", "slack"])
+   Only pass --chat-id when you have a concrete destination (Telegram chat
+   id, Discord channel id, or a Slack #name/C… you already reported). Never
+   invent one, and never call /cron add without --provider. Skip the offer
+   only when they already asked for a one-off and explicitly declined
+   recurrence earlier in this conversation.
