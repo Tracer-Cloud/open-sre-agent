@@ -1,7 +1,7 @@
 """Prove remote sync supports more than one cloud without shipping every SDK.
 
-Built-in backends (aws, gcs, vercel) register via ``_BUILTIN_MODULES``. Community
-providers (Azure, …) register the same way these fakes do - the engine and
+Built-in backends (aws, gcs, vercel, azure) register via ``_BUILTIN_MODULES``.
+Community providers register the same way these fakes do - the engine and
 factory never change.
 """
 
@@ -102,7 +102,7 @@ def test_unknown_provider_fails_closed_listing_known_ones(
 
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
-    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "azure")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "azure-blob")
 
     config = load_remote_sync_config()
     assert config is not None
