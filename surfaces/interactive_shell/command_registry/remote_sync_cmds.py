@@ -14,11 +14,12 @@ from config.constants.filestorage import (
 )
 from platform.filestorage import OrgScopeNotSupportedError, RemoteSyncError
 from platform.filestorage.engine import SyncProgress
-from platform.filestorage.enums import RemoteSyncSubcommand, SyncDirection
+from platform.filestorage.enums import BucketExposure, RemoteSyncSubcommand, SyncDirection
 from platform.filestorage.messages import (
     DISABLED_HELP,
     direction_label,
     format_exclusion_lines,
+    format_exposure_line,
     format_report_lines,
     format_setup_lines,
     root_state,
@@ -57,6 +58,9 @@ def _print_status(console: Console) -> bool:
         return True
     cfg = status.config
     console.print(f"Remote sync is on ({cfg.provider}) → [{HIGHLIGHT}]{cfg.bucket}/{cfg.prefix}[/]")
+    if status.exposure is not None:
+        style = ERROR if status.exposure.exposure is BucketExposure.PUBLIC else DIM
+        console.print(f"[{style}]{escape(format_exposure_line(status.exposure))}[/]")
     for root in status.roots:
         console.print(f"  {root.name:<10} {root.path} [{DIM}]({root_state(root)})[/]")
     for line in format_exclusion_lines(status.exclusions):

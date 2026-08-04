@@ -19,8 +19,9 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
-from platform.filestorage.enums import SyncDirection
+from platform.filestorage.enums import BucketExposure, SyncDirection
 from platform.filestorage.exclusions import ExclusionRules
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from platform.filestorage.providers import credential_hint_for_provider
 from platform.filestorage.providers.registry import builtin_providers
@@ -108,6 +109,24 @@ def format_exclusion_lines(exclusions: ExclusionRules) -> tuple[str, ...]:
     return ("Excluded by your settings:", *(f"  {pattern}" for pattern in exclusions.patterns))
 
 
+def format_exposure_line(exposure: PublicAccessStatus) -> str:
+    """One line on whether the store is publicly readable.
+
+    Kept a single loud sentence for ``PUBLIC`` — the one exposure state
+    worth an operator stopping to read — and a short, easy-to-skim line
+    otherwise.
+    """
+    if exposure.exposure is BucketExposure.PUBLIC:
+        return (
+            "WARNING: this store is publicly readable. Anyone on the internet can read "
+            "your synced sessions and memory — restrict its access now."
+        )
+    if exposure.exposure is BucketExposure.PRIVATE:
+        return "Bucket access: private."
+    detail = f" ({exposure.detail})" if exposure.detail else ""
+    return f"Bucket access: could not confirm it is private{detail}."
+
+
 def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     """Plain-text status lines for CLI, REPL, or gateway sinks (pure)."""
     if not status.enabled or status.config is None:
@@ -115,8 +134,10 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     cfg = status.config
     lines: list[str] = [
         f"Remote sync is on ({cfg.provider}) → {cfg.bucket}/{cfg.prefix}",
-        "Mirrored:",
     ]
+    if status.exposure is not None:
+        lines.append(format_exposure_line(status.exposure))
+    lines.append("Mirrored:")
     for root in status.roots:
         lines.append(f"  {root.name:<10} {root.path} ({root_state(root)})")
     lines.extend(format_exclusion_lines(status.exclusions))
@@ -181,6 +202,7 @@ __all__ = [
     "SETUP_DISABLED_CONFIRM",
     "direction_label",
     "format_exclusion_lines",
+    "format_exposure_line",
     "format_report_lines",
     "format_setup_lines",
     "format_status_lines",
