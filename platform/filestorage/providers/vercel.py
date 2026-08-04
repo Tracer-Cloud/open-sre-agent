@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import httpx
 
 from config.constants.filestorage import BLOB_READ_WRITE_TOKEN_ENV
-from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
+from config.constants.vercel import VERCEL_API_BASE_URL, VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BucketExposure, BuiltInProvider
 from platform.filestorage.errors import RemoteSyncUnavailableError
@@ -35,14 +35,15 @@ _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 # Store-management API — a *different* host and a *different* token type than
 # _API_BASE: it does not accept BLOB_READ_WRITE_TOKEN at all (confirmed live:
 # that token shape gets a 403 with "invalidToken": true), only a Vercel
-# account/team API token. Reuses VERCEL_API_TOKEN_ENV / VERCEL_TEAM_ID_ENV —
-# the same credential the (unrelated) integrations/vercel/ SRE integration
-# already asks for — rather than inventing a second Vercel token convention;
-# platform/ cannot import integrations/vercel/client.py directly (see
-# docs/ARCHITECTURE.md's tier table: platform must never import integrations),
-# so this call is hand-rolled instead of shared. Used solely by
-# check_public_access — sync itself never calls this host.
-_ACCOUNT_API_BASE = "https://api.vercel.com"
+# account/team API token. Reuses VERCEL_API_BASE_URL / VERCEL_API_TOKEN_ENV /
+# VERCEL_TEAM_ID_ENV — the same host and credential the (unrelated)
+# integrations/vercel/ SRE integration already talks to and asks for — rather
+# than inventing a second Vercel token convention; platform/ cannot import
+# integrations/vercel/client.py directly (see docs/ARCHITECTURE.md's tier
+# table: platform must never import integrations), so this call is
+# hand-rolled instead of shared. Used solely by check_public_access — sync
+# itself never calls this host.
+_ACCOUNT_API_BASE = VERCEL_API_BASE_URL
 
 
 class VercelBlobObjectStore:
