@@ -19,8 +19,15 @@ from config.constants.filestorage import (
 )
 from platform.filestorage import engine as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
-from platform.filestorage.engine import content_tag, pull, push, resolve_direction, run_sync
-from platform.filestorage.enums import SyncRootName
+from platform.filestorage.engine import (
+    ProgressCallback,
+    content_tag,
+    pull,
+    push,
+    resolve_direction,
+    run_sync,
+)
+from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.syncable import SyncRoot, is_syncable
@@ -323,6 +330,95 @@ def test_push_only_dry_run_does_not_upload(home: Path, roots: tuple[SyncRoot, ..
     # Assert: reported as it would upload, but the store stays empty.
     assert sorted(report.uploaded) == ["memory/a-fact.md", "sessions/abc.jsonl"]
     assert store.objects == {}
+
+
+# ── Progress ─────────────────────────────────────────────────────────────
+
+
+def _progress_recorder() -> tuple[list[tuple[str, SyncDirection]], ProgressCallback]:
+    events: list[tuple[str, SyncDirection]] = []
+
+    def _record(key: str, direction: SyncDirection) -> None:
+        events.append((key, direction))
+
+    return events, _record
+
+
+def test_push_reports_progress_once_per_uploaded_key(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    store = FakeObjectStore()
+    events, on_progress = _progress_recorder()
+
+    push(store, roots=roots, on_progress=on_progress)
+
+    assert sorted(events) == [
+        ("memory/a-fact.md", SyncDirection.PUSH),
+        ("sessions/abc.jsonl", SyncDirection.PUSH),
+    ]
+
+
+def test_pull_reports_progress_once_per_downloaded_key(
+    home: Path, roots: tuple[SyncRoot, ...], tmp_path: Path
+) -> None:
+    store = FakeObjectStore()
+    push(store, roots=roots)
+    second_roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=tmp_path / "two" / "sessions"),
+        SyncRoot(name=SyncRootName.MEMORY, path=tmp_path / "two" / "memory"),
+    )
+    events, on_progress = _progress_recorder()
+
+    pull(store, roots=second_roots, on_progress=on_progress)
+
+    assert sorted(events) == [
+        ("memory/a-fact.md", SyncDirection.PULL),
+        ("sessions/abc.jsonl", SyncDirection.PULL),
+    ]
+
+
+def test_progress_is_silent_for_files_already_in_sync(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A second push with nothing changed must not replay progress events."""
+    store = FakeObjectStore()
+    push(store, roots=roots)
+    events, on_progress = _progress_recorder()
+
+    push(store, roots=roots, on_progress=on_progress)
+
+    assert events == []
+
+
+def test_dry_run_still_reports_progress_for_the_preview(
+    home: Path, roots: tuple[SyncRoot, ...]
+) -> None:
+    """A dry run previews what would move, so progress fires the same as a real run."""
+    store = FakeObjectStore()
+    events, on_progress = _progress_recorder()
+
+    push(store, roots=roots, dry_run=True, on_progress=on_progress)
+
+    assert sorted(events) == [
+        ("memory/a-fact.md", SyncDirection.PUSH),
+        ("sessions/abc.jsonl", SyncDirection.PUSH),
+    ]
+    # Preview only: nothing actually reached the store.
+    assert store.objects == {}
+
+
+def test_run_sync_progress_covers_pull_then_push(home: Path, roots: tuple[SyncRoot, ...]) -> None:
+    """A full sync reports the pull half before the push half, matching run order."""
+    store = FakeObjectStore()
+    store.put_object("memory/from-remote.md", b"hello\n")
+    events, on_progress = _progress_recorder()
+
+    run_sync(store, roots=roots, on_progress=on_progress)
+
+    directions_in_order = [direction for _key, direction in events]
+    assert directions_in_order[0] is SyncDirection.PULL
+    assert SyncDirection.PUSH in directions_in_order
+    assert ("memory/from-remote.md", SyncDirection.PULL) in events
 
 
 def test_sync_never_deletes(home: Path, roots: tuple[SyncRoot, ...]) -> None:

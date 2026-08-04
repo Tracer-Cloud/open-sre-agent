@@ -12,10 +12,11 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
 from platform.filestorage import OrgScopeNotSupportedError, RemoteSyncError
-from platform.filestorage.enums import RemoteSyncSubcommand
+from platform.filestorage.enums import RemoteSyncSubcommand, SyncDirection
 from platform.filestorage.messages import (
     DISABLED_HELP,
     format_exclusion_lines,
+    format_progress_line,
     format_report_lines,
     format_setup_lines,
     root_state,
@@ -69,11 +70,24 @@ def _print_status(console: Console) -> bool:
 def _run_sync(console: Console, args: list[str]) -> bool:
     flags = {a.lower() for a in args}
     dry_run = "--dry-run" in flags
-    with console.status("syncing…", spinner="dots"):
+    # Running tally rather than an index/total: the engine streams keys as it
+    # finds them, with no upfront count cheap enough to pull ahead of time.
+    counts = {SyncDirection.PUSH: 0, SyncDirection.PULL: 0}
+
+    def _on_progress(key: str, direction: SyncDirection) -> None:
+        counts[direction] += 1
+        tally = f"↑{counts[SyncDirection.PUSH]} ↓{counts[SyncDirection.PULL]}"
+        # Rich renders status text as markup; a session/memory filename is
+        # attacker-shaped the same way an exclude pattern is, so it gets the
+        # same treatment as _print_status's escape(line) below.
+        status.update(f"{tally}  {escape(format_progress_line(key, direction).lstrip())}")
+
+    with console.status("syncing…", spinner="dots") as status:
         report = run_remote_sync(
             pull_only="--pull-only" in flags,
             push_only="--push-only" in flags,
             dry_run=dry_run,
+            on_progress=_on_progress,
         )
     if report is None:
         console.print(f"[{DIM}]{DISABLED_HELP}[/]")

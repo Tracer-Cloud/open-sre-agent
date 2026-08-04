@@ -14,10 +14,11 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport, content_tag
-from platform.filestorage.enums import RemoteSyncField, SyncRootName
+from platform.filestorage.enums import RemoteSyncField, SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    format_progress_line,
     format_report_lines,
     format_status_lines,
 )
@@ -143,6 +144,14 @@ def test_format_report_lines_handles_megabyte_boundary() -> None:
     lines = format_report_lines(report)
     assert "2.4 MiB" in lines[0]
     assert "2.4 MiB total" in lines[0]
+
+
+def test_format_progress_line_marks_direction_with_a_distinct_symbol() -> None:
+    up = format_progress_line("sessions/a.jsonl", SyncDirection.PUSH)
+    down = format_progress_line("sessions/a.jsonl", SyncDirection.PULL)
+    assert up != down
+    assert "sessions/a.jsonl" in up
+    assert "sessions/a.jsonl" in down
 
 
 def test_factory_delegates_to_registry() -> None:

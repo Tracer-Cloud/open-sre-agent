@@ -18,6 +18,7 @@ import hashlib
 import logging
 import os
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,11 @@ from platform.filestorage.ports import ObjectStore, RemoteObject
 from platform.filestorage.syncable import SyncRoot, resolved_roots, syncable_roots
 
 logger = logging.getLogger(__name__)
+
+#: Called once per key as it moves (or, under ``dry_run``, as it is previewed),
+#: with the direction it moved in. A callback raising propagates to the caller —
+#: same as any other unexpected error during a sync.
+ProgressCallback = Callable[[str, SyncDirection], None]
 
 
 @dataclass
@@ -129,6 +135,7 @@ def push(
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket.
 
@@ -187,6 +194,8 @@ def push(
             store.put_object(key, data)
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
+        if on_progress is not None:
+            on_progress(key, SyncDirection.PUSH)
 
     if previewed_pulls:
         # Keys pull previewed but that never had a local file to begin with
@@ -204,6 +213,7 @@ def pull(
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy.
 
@@ -231,11 +241,15 @@ def pull(
         if dry_run:
             result.downloaded_bytes += obj.size
             result.downloaded.append(obj.key)
+            if on_progress is not None:
+                on_progress(obj.key, SyncDirection.PULL)
             continue
         data = store.get_object(obj.key)
         result.downloaded_bytes += len(data)
         _write_atomically(target, data)
         result.downloaded.append(obj.key)
+        if on_progress is not None:
+            on_progress(obj.key, SyncDirection.PULL)
     return result
 
 
@@ -271,12 +285,15 @@ def run_sync(
     roots: tuple[SyncRoot, ...] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
     The listing is fetched once and shared: a pull changes local files, never
     the bucket, so the push half can reuse it. ``dry_run`` previews the same
-    plan without writing anywhere, local or remote.
+    plan without writing anywhere, local or remote. ``on_progress``, when
+    given, is called once per key as pull and then push move it — see
+    :data:`ProgressCallback`.
     """
     report = SyncReport()
     listing = store.list_objects("")
@@ -288,6 +305,7 @@ def run_sync(
             remote=listing,
             exclusions=exclusions,
             dry_run=dry_run,
+            on_progress=on_progress,
         )
     if direction is not SyncDirection.PULL:
         push(
@@ -297,11 +315,13 @@ def run_sync(
             remote=listing,
             exclusions=exclusions,
             dry_run=dry_run,
+            on_progress=on_progress,
         )
     return report
 
 
 __all__ = [
+    "ProgressCallback",
     "SyncDirection",
     "SyncReport",
     "comparable_etag",

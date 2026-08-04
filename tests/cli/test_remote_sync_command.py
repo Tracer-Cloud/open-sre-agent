@@ -92,12 +92,66 @@ def test_sync_prints_report(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) 
     assert "already current" in result.output
 
 
+def test_sync_prints_progress_lines_on_a_tty(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from platform.filestorage.enums import SyncDirection
+
+    _set_interactive(monkeypatch)
+
+    def _fake_run_remote_sync(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[str, SyncDirection], None] | None = None,
+    ) -> SyncReport:
+        assert on_progress is not None
+        on_progress("sessions/a.jsonl", SyncDirection.PUSH)
+        return SyncReport(uploaded=["sessions/a.jsonl"])
+
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync.run_remote_sync", _fake_run_remote_sync)
+    result = runner.invoke(remote_sync_command, ["sync"])
+    assert result.exit_code == 0
+    assert "sessions/a.jsonl" in result.output
+    assert "↑" in result.output
+
+
+def test_sync_stays_script_clean_off_a_tty(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CliRunner's stdout is not a TTY by default: on_progress must stay None."""
+    from platform.filestorage.enums import SyncDirection
+
+    seen: dict[str, object] = {}
+
+    def _capture(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[str, SyncDirection], None] | None = None,
+    ) -> SyncReport:
+        seen["on_progress"] = on_progress
+        return SyncReport(uploaded=["sessions/a.jsonl"])
+
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync.run_remote_sync", _capture)
+    result = runner.invoke(remote_sync_command, ["sync"])
+    assert result.exit_code == 0
+    assert seen["on_progress"] is None
+
+
 def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
     def _capture(
-        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[str, str], None] | None = None,
     ) -> SyncReport:
+        del on_progress
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
         seen["dry_run"] = dry_run
@@ -118,8 +172,13 @@ def test_sync_passes_dry_run_and_labels_the_report(
     seen: dict[str, bool] = {}
 
     def _capture(
-        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[str, str], None] | None = None,
     ) -> SyncReport:
+        del on_progress
         seen["dry_run"] = dry_run
         return SyncReport(uploaded=["sessions/a.jsonl"])
 

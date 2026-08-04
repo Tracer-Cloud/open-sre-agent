@@ -19,6 +19,7 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport
+from platform.filestorage.enums import SyncDirection
 from platform.filestorage.exclusions import ExclusionRules
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from platform.filestorage.providers import credential_hint_for_provider
@@ -98,6 +99,16 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def format_progress_line(key: str, direction: SyncDirection) -> str:
+    """One line for a single file as it moves, shared by CLI and the shell.
+
+    A TTY-only surface: the caller decides whether to print it at all, so
+    piped output never sees a line per file.
+    """
+    symbol = "↑" if direction is SyncDirection.PUSH else "↓"
+    return f"  {symbol} {key}"
+
+
 def format_report_lines(report: SyncReport, *, dry_run: bool = False) -> tuple[str, ...]:
     """Plain-text result lines after a run (pure; snapshots lists).
 
@@ -154,6 +165,7 @@ __all__ = [
     "NO_EXCLUSIONS_HELP",
     "SETUP_DISABLED_CONFIRM",
     "format_exclusion_lines",
+    "format_progress_line",
     "format_report_lines",
     "format_setup_lines",
     "format_status_lines",
