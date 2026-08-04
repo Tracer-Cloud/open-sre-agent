@@ -49,7 +49,7 @@ jobs:
       source: ${{ steps.filter.outputs.source }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@v4.0.2
         id: filter
         with:
           filters: |
@@ -398,7 +398,7 @@ jobs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@v4.0.2
         id: filter
         with:
           filters: |
