@@ -234,5 +234,6 @@ def make_alertmanager_client(
                 password=password or "",
             )
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to create Alertmanager client: %s", exc, exc_info=True)
         return None

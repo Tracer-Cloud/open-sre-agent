@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -509,3 +510,23 @@ def test_probe_access_not_configured() -> None:
     result = client.probe_access()
     assert result.status == "missing"
     assert "Missing base_url" in result.detail
+
+
+def _raise_runtime_error(**_kwargs: Any) -> None:
+    raise RuntimeError("construction failure")
+
+
+def test_make_client_logs_soft_fail_on_construction_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Force config construction inside the factory to raise, exercising the
+    # soft-fail `except Exception` path (SM-117). The factory must still return
+    # None, but must no longer swallow the exception silently.
+    monkeypatch.setattr("integrations.alertmanager.client.AlertmanagerConfig", _raise_runtime_error)
+    with caplog.at_level(logging.WARNING, logger="integrations.alertmanager.client"):
+        result = make_alertmanager_client("http://alertmanager.local")
+    assert result is None
+    assert any(
+        record.levelno == logging.WARNING and record.exc_info is not None
+        for record in caplog.records
+    )
