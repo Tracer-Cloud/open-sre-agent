@@ -270,6 +270,7 @@ def test_morning_report_skill_closes_with_schedule_offer() -> None:
     # Intermediate curls must be quiet so the user does not see weather/news
     # once as $ stdout and again in the composed OpenSRE briefing.
     assert "quiet=true" in body
+    assert "briefing_text" in body
 
 
 def test_connected_integrations_block_renders_state() -> None:

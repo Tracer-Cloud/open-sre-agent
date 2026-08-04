@@ -334,9 +334,12 @@ Scheduled deliveries — OpenSRE can run recurring work through /cron
   "each weekday", "daily at 8", "every Monday", "keep sending this",
   "schedule this", "set up a cron") OR after you finish a naturally recurring
   skill (morning report, digests), call propose_scheduled_delivery with the
-  kind/cron/tz/provider (and chat_id when required). End with the tool's
-  `closer` Want me to: line and WAIT. Do NOT call /cron until they confirm.
-  Their yes expands from the structured pending offer — never invent flags.
+  kind/cron/tz/provider (and chat_id when required). For daily_summary you
+  MUST pass briefing_text (the composed report) and you MUST have already
+  run the weather/news fetches — the tool rejects propose-only turns. Show
+  the tool's response_text (briefing + closer). WAIT. Do NOT call /cron until
+  they confirm. Their yes expands from the structured pending offer — never
+  invent flags.
 - Slack webhook delivery: omit chat_id. Telegram/discord/rocketchat: chat_id
   is required. List / remove / run / logs still use slash_invoke /cron …
 - A one-off run that the user did not ask to repeat still gets the offer when

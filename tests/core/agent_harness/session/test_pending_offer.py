@@ -51,6 +51,46 @@ def test_yes_uses_pending_schedule_not_prose() -> None:
 
 def test_propose_tool_sets_session_pending_offer() -> None:
     session = InMemorySessionStore()
+    session.record(
+        "shell",
+        "curl -s 'wttr.in/Amsterdam?format=3'",
+        ok=True,
+        response_text="Amsterdam: ☀️ +20°C",
+    )
+    session.record(
+        "shell",
+        "curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | head",
+        ok=True,
+        response_text="Some headline",
+    )
+    ctx = ActionToolContext(session=session, console=object())
+    briefing = (
+        "Good morning! Here is your briefing.\n"
+        "Weather — Amsterdam: ☀️ +20°C\n"
+        "Top headlines:\n"
+        "- Some headline"
+    )
+    result = execute_propose_scheduled_delivery_tool(
+        {
+            "kind": "daily_summary",
+            "cron": "0 8 * * 1-5",
+            "timezone": "UTC",
+            "provider": "slack",
+            "briefing_text": briefing,
+        },
+        ctx,
+    )
+    assert result["ok"] is True
+    assert session.pending_schedule_offer is not None
+    assert session.pending_schedule_offer.kind == "daily_summary"
+    assert result["closer"].startswith("**Want me to:**")
+    assert "Weather — Amsterdam" in result["response_text"]
+    assert result["closer"] in result["response_text"]
+
+
+def test_propose_alone_without_briefing_work_is_rejected() -> None:
+    """User symptom: 'give me a morning report' → only Want me to, no weather."""
+    session = InMemorySessionStore()
     ctx = ActionToolContext(session=session, console=object())
     result = execute_propose_scheduled_delivery_tool(
         {
@@ -61,10 +101,12 @@ def test_propose_tool_sets_session_pending_offer() -> None:
         },
         ctx,
     )
-    assert result["ok"] is True
-    assert session.pending_schedule_offer is not None
-    assert session.pending_schedule_offer.kind == "daily_summary"
-    assert result["closer"].startswith("**Want me to:**")
+    assert result["ok"] is False
+    assert session.pending_schedule_offer is None
+    assert (
+        "fetch" in str(result.get("error", "")).lower()
+        or "briefing" in str(result.get("error", "")).lower()
+    )
 
 
 def test_run_turn_consumes_pending_schedule_on_yes() -> None:
@@ -215,3 +257,45 @@ def test_an_apostrophe_in_a_typed_slash_command_still_dispatches() -> None:
     # Assert
     assert call is not None
     assert call.input["command"] == "/investigate"
+
+
+def test_the_offer_tool_does_not_advertise_itself_as_the_way_to_run_a_report() -> None:
+    """Tool metadata must not attract the request it comes *after*.
+
+    The description used to open "After delivering a recurring briefing (e.g.
+    morning report)…". Asked for a morning report, the model matched that noun
+    and called this tool as the whole turn — the user got an offer to repeat a
+    briefing that was never produced. The precondition has to lead, and the
+    example noun has to go.
+    """
+    # Arrange
+    from tools.interactive_shell.actions.propose_scheduled_delivery import (
+        propose_scheduled_delivery_tool as tool,
+    )
+
+    # Assert
+    assert "morning report" not in tool.description.lower()
+    assert "precondition" in tool.description.lower()
+    assert tool.anti_examples, "no anti-example steers it away from the initial request"
+    # Assert the property, not one phrasing: some anti-example must tie the
+    # request shape to an ordering constraint.
+    steered = [
+        example.lower()
+        for example in tool.anti_examples
+        if ("report" in example.lower() or "briefing" in example.lower())
+        and any(word in example.lower() for word in ("first", "last", "before"))
+    ]
+    assert steered, f"no anti-example orders it after the work: {tool.anti_examples}"
+
+
+def test_the_skill_forbids_offering_before_the_work() -> None:
+    """The recipe must state the ordering, not merely imply it by step number."""
+    # Arrange
+    from core.agent_harness.prompts.skills_loader import skills_dir
+
+    body = " ".join(
+        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+    )
+
+    # Assert
+    assert "never call propose_scheduled_delivery as the first or only tool" in body

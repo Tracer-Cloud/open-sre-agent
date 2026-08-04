@@ -14,6 +14,7 @@ from core.agent_harness.ports import (
     ConfirmFn,
     ToolEventObserver,
 )
+from core.agent_harness.session.history_entry import build_history_entry
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.turns.turn_results import (
     ToolCallingTurnResult,
@@ -39,8 +40,27 @@ class InMemorySessionStore:
     vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     records: list[tuple[str, str, bool]] = field(default_factory=list)
 
-    def record(self, kind: str, text: str, *, ok: bool = True) -> None:
+    def record(
+        self,
+        kind: str,
+        text: str,
+        *,
+        ok: bool = True,
+        response_text: str | None = None,
+        slash_outcome: str | None = None,
+    ) -> None:
         self.records.append((kind, text, ok))
+        # Mirror SessionCore.history so tools that inspect recent shell/slash
+        # rows (e.g. propose_scheduled_delivery's fetch precondition) work
+        # under headless smokes the same way they do in the live shell.
+        entry = build_history_entry(
+            kind,
+            text,
+            ok=ok,
+            response_text=response_text,
+            slash_outcome=slash_outcome,
+        )
+        self.history.append(entry)
 
 
 @dataclass

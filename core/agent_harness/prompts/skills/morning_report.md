@@ -1,8 +1,8 @@
 ---
 name: morning-report
 description: >-
-  Weather + news morning briefing (fetch, compose, deliver); after delivery
-  offer weekday 8am schedule via /cron
+  Weather + news morning briefing: fetch live weather and headlines, compose
+  a plain-text briefing, deliver it. Multi-step; load before acting.
 recurring: weekdays 08:00
 ---
 ══════════════════════════════════════════════════════════
@@ -71,19 +71,23 @@ Examples:
     → slack_send_message(message="<the FULL composed briefing>")
       + telegram_send_message(message="<the FULL composed briefing>")   [next turn — Slack always + Telegram because the user named it]
 
-5) AFTER delivery succeeds, ALWAYS offer to make mornings recurring. Call
-   propose_scheduled_delivery with the defaults below — that tool records a
-   structured PendingScheduleOffer on the session and returns the canonical
-   closer. End your reply with the tool's `closer` field exactly. Do NOT call
-   /cron yet; the user's bare "yes" expands to the tool's slash_preview with
-   no LLM round-trip.
+5) AFTER the briefing exists (steps 1–3 done; step 4 delivery attempted),
+   ALWAYS offer to make mornings recurring. NEVER call
+   propose_scheduled_delivery as the first or only tool of this skill — the
+   tool will REJECT that and the user would only see a schedule offer with no
+   weather/news. Steps 1–3 must have run first. Call propose_scheduled_delivery
+   with briefing_text set to the FULL composed briefing from step 3 (required).
+   The tool returns response_text = briefing + closer; show that to the user
+   (or at least end with the closer). Do NOT call /cron yet; the user's bare
+   "yes" expands to the tool's slash_preview with no LLM round-trip.
    Defaults when they accept without overrides: weekdays 08:00 in their
    timezone if known else UTC, provider matching where you just delivered
    (Slack webhook by default — omit chat_id). Kind is daily_summary.
    Example after Slack webhook delivery:
      → propose_scheduled_delivery(kind="daily_summary", cron="0 8 * * 1-5",
-         timezone="UTC", provider="slack")
-     → end the reply with the returned closer (Want me to: …)
+         timezone="UTC", provider="slack",
+         briefing_text="<FULL composed weather + headlines briefing>")
+     → show the tool's response_text (briefing + Want me to: …)
    Pass chat_id only when you have a concrete Telegram/Discord/Rocket.Chat
    destination (or a Slack #name/C… you already reported). Never invent one.
    Skip the offer only when they already asked for a one-off and explicitly

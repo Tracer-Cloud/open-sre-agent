@@ -14,6 +14,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from core.agent_harness.session.history_entry import build_history_entry
+
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
@@ -187,11 +189,13 @@ class SessionCore:
         ``unknown_command`` or ``invalid_subcommand``) so analytics can
         distinguish them from handler failures.
         """
-        entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
-        if response_text:
-            entry["response_text"] = response_text
-        if slash_outcome:
-            entry["slash_outcome"] = slash_outcome
+        entry = build_history_entry(
+            kind,
+            text,
+            ok=ok,
+            response_text=response_text,
+            slash_outcome=slash_outcome,
+        )
 
         self.history.append(entry)
         self._shed_stale_response_text()
