@@ -1,6 +1,10 @@
 """Base formatting utilities for report generation."""
 
 import html
+import re
+
+# Matches Slack-style links: <url|label> or <url>
+SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
 
 
 def shorten_text(text: str, max_chars: int = 120, suffix: str = "...") -> str:
@@ -30,6 +34,21 @@ def format_slack_link(label: str, url: str | None) -> str:
 
     safe_label = label.replace("|", "¦").strip() or url
     return f"<{url}|{safe_label}>"
+
+
+def slack_links_to_plain_text(text: str) -> str:
+    """Convert Slack ``<url|label>`` links to plain ``label (url)``.
+
+    The inverse of :func:`format_slack_link`, for channels that render no markup.
+    The URL is kept because plain-text clients auto-linkify bare URLs.
+    """
+
+    def _repl(match: re.Match[str]) -> str:
+        url = str(match.group(1))
+        label = match.group(2)
+        return f"{label} ({url})" if label else url
+
+    return SLACK_LINK_RE.sub(_repl, text)
 
 
 def format_html_link(label: str, url: str | None) -> str:
