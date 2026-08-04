@@ -336,8 +336,11 @@ def test_skills_loader_bundles_github_security_fix_skill() -> None:
     block = load_skills_block()
     assert "GITHUB SECURITY AND QUALITY FIX SKILL" in block
     assert "fix_github_security_alert" in block
+    assert "security and quality issues" in block
+    assert "/security/code-scanning" in block
     assert "Secret-scanning remediation" in block
     assert 'alert_type="auto"' in block
+    assert 'alert_type="code_scanning"' in block
     assert 'alert_type="code_quality"' in block
     assert "auto-detected" in block
     assert "Never add coding-agent advice" in block

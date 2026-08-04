@@ -1,6 +1,6 @@
 ---
 name: github-security-fix
-description: Use when the user asks OpenSRE to fix GitHub security or quality issues, Security and quality page findings, Code Quality standard findings, Dependabot alerts, code-scanning or CodeQL alerts, vulnerable dependencies, repo security issues, or to fix findings and optionally open a pull request.
+description: Use when the user asks OpenSRE to fix GitHub security and quality issues, Security and quality page findings, Code Quality standard findings, Dependabot alerts, code-scanning or CodeQL alerts, vulnerable dependencies, repo security issues, or to fix findings and optionally open a pull request.
 tools:
   - fix_github_security_alert
 ---
@@ -20,6 +20,8 @@ Rules:
   the tool selects one open supported security or quality finding by severity.
 - If the user says "hey fix the security issues" without a repo, omit `owner`
   and `repo`; the tool uses the current checkout's GitHub origin.
+- For GitHub `/security/code-scanning` pages or CodeQL/code-scanning backlog
+  requests, pass `alert_type="code_scanning"`.
 - For GitHub `/security/quality` pages or quality backlog requests, pass
   `alert_type="code_quality"`.
 - The tool fixes findings itself: built-in fixers first, then an auto-detected
