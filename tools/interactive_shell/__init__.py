@@ -21,6 +21,7 @@ TOOL_MODULES = (
     "actions.sample_alert",
     "actions.sentry_fix",
     "actions.shell",
+    "actions.skill_view",
     "actions.slash",
     "actions.synthetic",
     "actions.task_cancel",
