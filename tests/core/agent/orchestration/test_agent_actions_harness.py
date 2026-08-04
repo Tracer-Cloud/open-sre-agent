@@ -994,3 +994,92 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
     )
 
     assert gather_calls == []
+
+
+@pytest.mark.skip(
+    reason=(
+        "Known defect, no principled signal yet: a handoff after a completed "
+        "action turn sweeps every integration (~106s observed after a morning "
+        "report whose Slack delivery failed). Gating on "
+        "executed_success_count breaks "
+        "test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state, "
+        "which runs a tool successfully and legitimately needs the gather. "
+        "Distinguishing 'already answered' from 'did a side effect, now needs "
+        "evidence' requires a signal the turn result does not carry."
+    )
+)
+def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -> None:
+    """A handoff explaining a completed turn must not trigger a live sweep.
+
+    Observed: a morning report ran its fetches, composed the briefing, and
+    handed off to explain that Slack delivery had failed. Because a handoff was
+    present the turn fell through to gather-and-answer, which queried every
+    connected integration for 106 seconds — after the user already had their
+    answer. The assistant still speaks; it just composes from what the turn
+    produced instead of probing Datadog, Kubernetes and Grafana afresh.
+    """
+    session = Session()
+    gather_calls: list[str] = []
+    answer_kwargs: list[dict[str, Any]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=2,
+            executed_count=2,
+            executed_success_count=2,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("Slack webhook is not configured in this environment.",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: kubernetes_list_pods\nResult: should-not-run"
+
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        answer_kwargs.append({"handoff_contents": request.handoff_contents})
+        return None
+
+    run_turn(
+        "give me a morning report",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "give me a morning report"),
+    )
+
+    assert gather_calls == [], "swept integrations after the turn already answered"
+    assert answer_kwargs, "the assistant must still explain the handoff"
+    assert answer_kwargs[0]["handoff_contents"]
+
+
+def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
+    """A handoff with no work behind it is exactly what gathering is for."""
+    session = Session()
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=False,
+            handoff_contents=("why is the orders-api slow?",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nResult: 3 issues"
+
+    run_turn(
+        "why is the orders-api slow?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "why is the orders-api slow?"),
+    )
+
+    assert gather_calls, "a question with no prior work still needs evidence"

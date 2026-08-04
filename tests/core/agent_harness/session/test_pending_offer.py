@@ -382,3 +382,66 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
 
     # Assert
     assert session.pending_schedule_offer is None
+
+
+def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
+    """Evidence must come from THIS turn, not anywhere in the session.
+
+    The guard scanned the whole of ``session.history``, so a wttr.in call from
+    any earlier turn satisfied it. A later turn could then offer to schedule a
+    briefing it never produced — the exact failure the guard exists to stop,
+    reached through a different door.
+    """
+    # Arrange
+    from core.agent_harness.tools.tool_context import ActionToolContext
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+    from tools.interactive_shell.actions.propose_scheduled_delivery import (
+        execute_propose_scheduled_delivery_tool,
+    )
+
+    session = InMemorySessionStore()
+    # An earlier turn fetched weather and news.
+    session.record("shell", "curl -s 'wttr.in/Amsterdam?format=3'", ok=True)
+    session.record("shell", "curl -s 'https://feeds.bbci.co.uk/news/rss.xml'", ok=True)
+    # This turn starts here and fetches nothing.
+    ctx = ActionToolContext(session=session, console=object(), history_start=len(session.history))
+
+    # Act
+    result = execute_propose_scheduled_delivery_tool(
+        {
+            "kind": "daily_summary",
+            "cron": "0 8 * * 1-5",
+            "provider": "slack",
+            "briefing_text": "Good morning! Weather — Amsterdam: +20C\nTop headlines:\n- one",
+        },
+        ctx,
+    )
+
+    # Assert
+    assert result["ok"] is False, "a stale fetch unlocked a fresh offer"
+    assert session.pending_schedule_offer is None
+
+
+def test_the_turn_boundary_reaches_the_tool_context_in_production() -> None:
+    """The guard defaults to 0, so a provider that forgets this stays session-wide.
+
+    A silent default is the failure mode here: everything still runs, the guard
+    just quietly reverts to scanning the whole session.
+    """
+    # Arrange
+    from core.agent_harness.tools.tool_provider import DefaultToolProvider
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+
+    session = InMemorySessionStore()
+    session.record("shell", "curl -s 'wttr.in/Amsterdam?format=3'", ok=True)
+    session.record("shell", "curl -s 'https://feeds.bbci.co.uk/news/rss.xml'", ok=True)
+
+    provider = DefaultToolProvider(session, object())
+
+    # Act
+    provider.action_tools(confirm_fn=None, is_tty=False)
+    ctx = provider._tool_context
+
+    # Assert
+    assert ctx is not None
+    assert ctx.history_start == 2, "boundary must exclude rows already in the session"

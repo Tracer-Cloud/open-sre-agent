@@ -41,14 +41,15 @@ _BRIEFING_MARKERS = (
 )
 
 
-def _history_rows(session: Any) -> list[dict[str, Any]]:
+def _history_rows(session: Any, history_start: int = 0) -> list[dict[str, Any]]:
+    """Rows this turn appended. Earlier turns are not evidence for this offer."""
     history = getattr(session, "history", None) or []
-    return [row for row in history if isinstance(row, dict)]
+    return [row for row in history[history_start:] if isinstance(row, dict)]
 
 
-def _has_fetch_evidence(session: Any) -> bool:
-    """True when a recent successful shell fetch looks like weather/news gather."""
-    for item in reversed(_history_rows(session)[-24:]):
+def _has_fetch_evidence(session: Any, history_start: int = 0) -> bool:
+    """True when THIS turn ran a successful shell fetch shaped like weather/news."""
+    for item in reversed(_history_rows(session, history_start)[-24:]):
         if item.get("type") != "shell" or not item.get("ok", True):
             continue
         text = str(item.get("text", "")).lower()
@@ -101,7 +102,7 @@ def execute_propose_scheduled_delivery_tool(
     # Refuse the failure mode where "give me a morning report" becomes ONLY a
     # Want-me-to closer: no weather, no headlines, nothing delivered.
     if kind == TaskKind.DAILY_SUMMARY.value:
-        if not _has_fetch_evidence(ctx.session):
+        if not _has_fetch_evidence(ctx.session, getattr(ctx, "history_start", 0)):
             return {
                 "ok": False,
                 "error": (
