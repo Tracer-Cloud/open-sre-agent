@@ -1,8 +1,9 @@
 """Load one tenant's integration credentials, once, before the gateway serves.
 
 A silo always reads its **bootstrap secret** from Secrets Manager first. That
-secret carries the tenant's Neon connection string and, for one of the routes
-below, an API token. It never carries integrations.
+secret may carry a ``credentials_api_token`` for the credentials-API route
+below. It never carries integrations, and it is not a database DSN — remote
+agent-run polling lives in the webapp stack, not in this process.
 
 Integrations then arrive by exactly one of two routes:
 
@@ -10,7 +11,8 @@ Integrations then arrive by exactly one of two routes:
   Secrets Manager. This is the route deployed silos run on, and it wins when
   both are configured.
 * **credentials API** — fetch the store from the webapp over HTTPS. The staged
-  fallback, used only when no integrations secret is configured.
+  fallback, used only when no integrations secret is configured; requires a
+  token in the bootstrap secret.
 
 Configuring neither leaves the store as shipped, which is how a laptop runs.
 
@@ -51,8 +53,6 @@ class GatewayBootstrap:
 
     #: Authorizes the credentials-API route. Unused on the secret route.
     credentials_api_token: str | None = None
-    #: Neon connection string; the remote-run worker needs it to poll.
-    database_url: str | None = None
     #: Whether a route ran and replaced the local store, as opposed to the
     #: store shipping with the image. Drives one status word.
     integrations_hydrated: bool = False
@@ -111,14 +111,9 @@ def _parse_bootstrap_secret(secret_string: str) -> GatewayBootstrap:
     if not isinstance(value, dict):
         raise ValueError("Bootstrap secret has an invalid shape")
     token = value.get("credentials_api_token")
-    database_url = value.get("database_url")
     if token is not None and (not isinstance(token, str) or not token):
         raise ValueError("Bootstrap secret has an invalid shape")
-    if database_url is not None and (not isinstance(database_url, str) or not database_url):
-        raise ValueError("Bootstrap secret has an invalid shape")
-    if token is None and database_url is None:
-        raise ValueError("Bootstrap secret has an invalid shape")
-    return GatewayBootstrap(credentials_api_token=token, database_url=database_url)
+    return GatewayBootstrap(credentials_api_token=token)
 
 
 class GatewayCredentialHydrator:

@@ -12,14 +12,18 @@ from collections.abc import Mapping
 
 from integrations.llm_cli.timeout_utils import resolve_timeout_from_env
 
-_DEFAULT_PROVIDER = "pi"
+_DEFAULT_PROVIDER = "auto"
 _DEFAULT_TIMEOUT_SEC = 600.0
 _MIN_TIMEOUT_SEC = 60.0
 _MAX_TIMEOUT_SEC = 1800.0
 
 
 def coding_agent_provider(env: Mapping[str, str] | None = None) -> str:
-    """Which coding-agent backend to use (``CODING_AGENT``; defaults to ``pi``)."""
+    """Which coding-agent backend to use (``CODING_AGENT``; defaults to ``auto``).
+
+    ``auto`` lets the runner pick the first installed-and-authenticated backend
+    (Pi, Claude Code, or Codex); a concrete name pins one backend.
+    """
     source = env if env is not None else os.environ
     return (source.get("CODING_AGENT") or _DEFAULT_PROVIDER).strip().lower() or _DEFAULT_PROVIDER
 

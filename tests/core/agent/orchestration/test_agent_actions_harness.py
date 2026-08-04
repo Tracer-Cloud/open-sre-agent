@@ -225,6 +225,53 @@ def test_action_final_text_is_streamed_as_user_facing_response() -> None:
     assert "fake_scan result:" not in result.response_text
 
 
+def test_tool_response_text_overrides_chatty_final_text() -> None:
+    tool = RegisteredTool(
+        name="fake_security_fix",
+        description="Fix a fake security issue.",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        source="github",
+        surfaces=("action",),
+        run=lambda: {
+            "success": False,
+            "error_kind": "alert_not_found",
+            "error": "No open findings found; no PR was created.",
+            "response_text": "No open findings found; no PR was created.",
+        },
+    )
+    chatty = (
+        "The fixer could not produce a patch.\n\n"
+        "Next steps:\n"
+        "1. List alerts.\n"
+        "2. Pick a specific alert."
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response("fake_security_fix", {}),
+                no_tool_response(chatty),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run("fix security issues", Session(), is_tty=False)
+
+    assert result.handled is True
+    assert result.response_text == "No open findings found; no PR was created."
+    printed = harness.console_buffer.getvalue()
+    assert "No open findings found; no PR was created." in printed
+    assert "Next steps" not in printed
+    assert "Pick a specific alert" not in result.response_text
+
+
 def test_literal_slash_command_dispatches_deterministically_without_llm(
     monkeypatch,
 ) -> None:

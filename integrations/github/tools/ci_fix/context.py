@@ -1,0 +1,333 @@
+"""Resolve GitHub PR CI failures into a coding task."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, replace
+from typing import Any
+
+from integrations.github.repo_scope import detect_git_remote_repo_scope
+from integrations.github.tools.ci_fix.errors import (
+    ERR_INVALID_INPUT,
+    ERR_NO_FAILING_CHECKS,
+    ERR_UNSUPPORTED_PR_BRANCH,
+    GitHubCiFixError,
+)
+from integrations.github.tools.ci_fix.gh import run_gh_json, run_gh_text
+from platform.masking import MaskingContext, MaskingPolicy
+
+_PR_URL_RE = re.compile(
+    r"https?://github\.com/"
+    r"(?P<owner>[^/\s]+)/(?P<repo>[^/\s#?]+)/pull/(?P<number>\d+)",
+    re.IGNORECASE,
+)
+_ACTIONS_URL_RE = re.compile(
+    r"/actions/runs/(?P<run_id>\d+)(?:/job/(?P<job_id>\d+))?",
+    re.IGNORECASE,
+)
+# CANCELLED is omitted: cancelled siblings of a real failure are noise, not a
+# second root cause for the coding agent to chase.
+_FAILED_CONCLUSIONS = frozenset({"ACTION_REQUIRED", "FAILURE", "STARTUP_FAILURE", "TIMED_OUT"})
+_FAILED_STATES = frozenset({"ERROR", "FAILURE", "FAILED"})
+_PR_FIELDS = ",".join(
+    [
+        "number",
+        "title",
+        "url",
+        "headRefName",
+        "headRepositoryOwner",
+        "headRepository",
+        "headRefOid",
+        "baseRefName",
+        "isCrossRepository",
+        "state",
+        "statusCheckRollup",
+    ]
+)
+_MAX_LOG_CHARS = 7000
+_MAX_TASK_LOG_CHARS = 18000
+
+
+@dataclass(frozen=True)
+class PullRequestRef:
+    """Repository and PR identity parsed from a GitHub PR URL."""
+
+    owner: str
+    repo: str
+    number: int
+
+
+@dataclass(frozen=True)
+class FailingCheck:
+    """A failing PR check with optional GitHub Actions log context."""
+
+    name: str
+    conclusion: str
+    details_url: str
+    workflow_name: str
+    run_id: str = ""
+    job_id: str = ""
+    log_excerpt: str = ""
+
+
+@dataclass(frozen=True)
+class CiFixContext:
+    """Resolved PR CI failure and coding-agent task."""
+
+    owner: str
+    repo: str
+    number: int
+    title: str
+    url: str
+    base_branch: str
+    head_branch: str
+    head_sha: str
+    failing_checks: tuple[FailingCheck, ...]
+    task: str
+
+
+def parse_pr_url(pr_url: str | None) -> PullRequestRef | None:
+    """Parse a GitHub pull request URL."""
+    if not pr_url:
+        return None
+    match = _PR_URL_RE.search(pr_url.strip())
+    if match is None:
+        return None
+    return PullRequestRef(
+        owner=match.group("owner"),
+        repo=match.group("repo").removesuffix(".git"),
+        number=int(match.group("number")),
+    )
+
+
+def gather_ci_fix_context(
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
+    pr_number: int | None = None,
+    pr_url: str | None = None,
+    workspace: str | None = None,
+    github_token: str | None = None,
+) -> CiFixContext:
+    """Resolve PR metadata, failing checks, and log snippets."""
+    parsed_url = parse_pr_url(pr_url)
+    repo_owner = (parsed_url.owner if parsed_url else owner or "").strip()
+    repo_name = (parsed_url.repo if parsed_url else repo or "").strip().removesuffix(".git")
+    number = parsed_url.number if parsed_url else pr_number
+
+    if not repo_owner or not repo_name:
+        detected = detect_git_remote_repo_scope(workspace)
+        if detected is not None:
+            repo_owner, repo_name = detected
+    if not repo_owner or not repo_name:
+        raise GitHubCiFixError(
+            ERR_INVALID_INPUT,
+            "owner/repo is required unless pr_url or the workspace origin identifies a GitHub repo; no push was made.",
+        )
+
+    repo_full_name = f"{repo_owner}/{repo_name}"
+    pr_selector = str(number) if number is not None else ""
+    args = ["pr", "view"]
+    if pr_selector:
+        args.append(pr_selector)
+    args.extend(["--json", _PR_FIELDS])
+    pr = run_gh_json(args, repo=repo_full_name, github_token=github_token)
+
+    resolved_number = _int_value(pr.get("number"))
+    if resolved_number is None:
+        raise GitHubCiFixError(
+            ERR_INVALID_INPUT,
+            "GitHub PR metadata did not include a PR number; no push was made.",
+        )
+
+    head_repo = _head_repo_full_name(pr)
+    is_cross_repo = bool(pr.get("isCrossRepository"))
+    if is_cross_repo or head_repo.lower() != repo_full_name.lower():
+        head_branch = str(pr.get("headRefName") or "").strip()
+        target = f"{head_repo}:{head_branch}" if head_repo else head_branch
+        raise GitHubCiFixError(
+            ERR_UNSUPPORTED_PR_BRANCH,
+            (
+                f"{repo_full_name}#{resolved_number} uses branch {target or '(unknown)'}; "
+                "OpenSRE only pushes CI fixes to branches in the same repository, so no push was made."
+            ),
+        )
+
+    checks = tuple(
+        _failing_check_from_rollup(repo_full_name, item, github_token=github_token)
+        for item in _list_value(pr.get("statusCheckRollup"))
+        if _is_failing_check(item)
+    )
+    if not checks:
+        raise GitHubCiFixError(
+            ERR_NO_FAILING_CHECKS,
+            f"No failing CI checks found on {repo_full_name}#{resolved_number}; no push was made.",
+        )
+
+    title = str(pr.get("title") or "").strip()
+    url = str(pr.get("url") or f"https://github.com/{repo_full_name}/pull/{resolved_number}")
+    head_branch = str(pr.get("headRefName") or "").strip()
+    ctx = CiFixContext(
+        owner=repo_owner,
+        repo=repo_name,
+        number=resolved_number,
+        title=title,
+        url=url,
+        base_branch=str(pr.get("baseRefName") or "").strip(),
+        head_branch=head_branch,
+        head_sha=str(pr.get("headRefOid") or "").strip(),
+        failing_checks=checks,
+        task="",
+    )
+    return replace(ctx, task=_build_task(ctx))
+
+
+def _failing_check_from_rollup(
+    repo_full_name: str,
+    item: dict[str, Any],
+    *,
+    github_token: str | None,
+) -> FailingCheck:
+    details_url = str(item.get("detailsUrl") or item.get("targetUrl") or "")
+    run_id, job_id = _actions_ids(details_url)
+    log_excerpt = ""
+    if run_id:
+        log_excerpt = _fetch_log_excerpt(
+            repo_full_name,
+            run_id=run_id,
+            job_id=job_id,
+            github_token=github_token,
+        )
+    return FailingCheck(
+        name=str(item.get("name") or item.get("context") or "unnamed check"),
+        conclusion=str(item.get("conclusion") or item.get("state") or "").lower(),
+        details_url=details_url,
+        workflow_name=str(item.get("workflowName") or ""),
+        run_id=run_id,
+        job_id=job_id,
+        log_excerpt=log_excerpt,
+    )
+
+
+def _fetch_log_excerpt(
+    repo_full_name: str,
+    *,
+    run_id: str,
+    job_id: str,
+    github_token: str | None,
+) -> str:
+    args = ["run", "view", run_id, "--log"]
+    if job_id:
+        args.extend(["--job", job_id])
+    try:
+        raw = run_gh_text(args, repo=repo_full_name, github_token=github_token, timeout=180)
+    except GitHubCiFixError as exc:
+        return f"Log unavailable: {exc.message}"
+    return _log_excerpt(raw)
+
+
+def _log_excerpt(raw: str) -> str:
+    lines = raw.splitlines()
+    interesting: list[str] = []
+    for index, line in enumerate(lines):
+        lowered = line.lower()
+        if any(
+            marker in lowered
+            for marker in ("::error", "error:", "failed", "failure", "traceback", "exception")
+        ):
+            start = max(0, index - 3)
+            end = min(len(lines), index + 8)
+            interesting.extend(lines[start:end])
+            interesting.append("")
+    if not interesting:
+        interesting = lines[-80:]
+    excerpt = "\n".join(interesting).strip()
+    return excerpt[-_MAX_LOG_CHARS:]
+
+
+def _build_task(ctx: CiFixContext) -> str:
+    masker = MaskingContext(MaskingPolicy.from_env())
+    lines = [
+        f"Fix the failing GitHub Actions CI checks for {ctx.owner}/{ctx.repo} PR #{ctx.number}.",
+        "",
+        f"PR: {ctx.url}",
+        f"Title: {ctx.title}",
+        f"Base branch: {ctx.base_branch}",
+        f"Head branch to edit and push: {ctx.head_branch}",
+        f"Head SHA: {ctx.head_sha}",
+        "",
+        "Failing checks and log excerpts:",
+    ]
+    log_budget = _MAX_TASK_LOG_CHARS
+    for check in ctx.failing_checks:
+        lines.extend(
+            [
+                "",
+                f"- Check: {check.name}",
+                f"  Workflow: {check.workflow_name}",
+                f"  Conclusion: {check.conclusion}",
+                f"  Details: {check.details_url}",
+            ]
+        )
+        if check.log_excerpt and log_budget > 0:
+            excerpt = check.log_excerpt[:log_budget]
+            log_budget -= len(excerpt)
+            lines.extend(["  Log excerpt:", _indent(excerpt, prefix="    ")])
+    lines.extend(
+        [
+            "",
+            "Make the smallest repository change that addresses the observed CI failure.",
+            "Do not silence CI, skip tests, or weaken checks unless the log proves the check itself is wrong.",
+            "Preserve unrelated user changes. Run the smallest relevant local verification command when practical.",
+            "Finish with a concise summary of files changed and verification performed.",
+        ]
+    )
+    return "\n".join(masker.mask(line) for line in lines)
+
+
+def _actions_ids(details_url: str) -> tuple[str, str]:
+    match = _ACTIONS_URL_RE.search(details_url)
+    if match is None:
+        return "", ""
+    return match.group("run_id"), match.group("job_id") or ""
+
+
+def _head_repo_full_name(pr: dict[str, Any]) -> str:
+    head_repo = pr.get("headRepository")
+    if isinstance(head_repo, dict):
+        name_with_owner = str(head_repo.get("nameWithOwner") or "").strip()
+        if name_with_owner:
+            return name_with_owner
+        name = str(head_repo.get("name") or "").strip()
+    else:
+        name = ""
+    owner = pr.get("headRepositoryOwner")
+    owner_login = str(owner.get("login") or "").strip() if isinstance(owner, dict) else ""
+    return f"{owner_login}/{name}" if owner_login and name else ""
+
+
+def _is_failing_check(item: dict[str, Any]) -> bool:
+    conclusion = str(item.get("conclusion") or "").strip().upper()
+    state = str(item.get("state") or "").strip().upper()
+    return conclusion in _FAILED_CONCLUSIONS or state in _FAILED_STATES
+
+
+def _list_value(value: Any) -> list[dict[str, Any]]:
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _int_value(value: Any) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+def _indent(value: str, *, prefix: str) -> str:
+    return "\n".join(f"{prefix}{line}" if line else "" for line in value.splitlines())
+
+
+__all__ = [
+    "CiFixContext",
+    "FailingCheck",
+    "PullRequestRef",
+    "gather_ci_fix_context",
+    "parse_pr_url",
+]

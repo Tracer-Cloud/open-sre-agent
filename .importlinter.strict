@@ -45,14 +45,13 @@ ignore_imports =
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url
-    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.client
-    tools.cross_vendor.fix_sentry_issue.pr -> integrations.github.repo_scope
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.coding_agent
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.git
     tools.cross_vendor.fix_sentry_issue.runner -> integrations.github.client
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.coding_agent
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.git
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.client
+    tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.pull_requests
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
