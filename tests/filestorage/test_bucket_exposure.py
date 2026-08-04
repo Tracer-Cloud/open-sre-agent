@@ -1,0 +1,323 @@
+"""Public-bucket warning: the AWS checker, the registry seam, and the surfaces.
+
+The security property under test is that a public store is loud (``status``
+warns) and everything short of that is quiet but truthful — a missing
+permission or an unreachable store never fails ``status``, and never echoes
+raw exception text into output that a gateway chat surface could relay.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import requests
+from botocore.exceptions import ClientError, EndpointConnectionError
+
+from platform.filestorage.config import RemoteSyncConfig
+from platform.filestorage.enums import BucketExposure, SyncRootName
+from platform.filestorage.exposure import PublicAccessStatus
+from platform.filestorage.messages import format_exposure_line, format_status_lines
+from platform.filestorage.operations import SyncRootStatus, SyncStatus, get_sync_status
+from platform.filestorage.providers.aws import check_public_access as aws_check_public_access
+from platform.filestorage.providers.gcs import check_public_access as gcs_check_public_access
+from platform.filestorage.providers.registry import (
+    check_bucket_exposure,
+    register_object_store,
+    unregister_object_store,
+)
+
+
+class _S3Client:
+    """Fake boto3 S3 client exposing only ``get_bucket_policy_status``."""
+
+    def __init__(self, *, response: dict | None = None, error: Exception | None = None) -> None:
+        self._response = response
+        self._error = error
+
+    def get_bucket_policy_status(self, Bucket: str) -> dict:  # noqa: N803, ARG002 - boto3 kwarg casing
+        if self._error is not None:
+            raise self._error
+        assert self._response is not None
+        return self._response
+
+
+def _client_error(code: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": "irrelevant"}}, "GetBucketPolicyStatus")
+
+
+# ── aws.check_public_access ─────────────────────────────────────────────────
+
+
+def test_public_policy_status_is_reported_public() -> None:
+    client = _S3Client(response={"PolicyStatus": {"IsPublic": True}})
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+def test_private_policy_status_is_reported_private() -> None:
+    client = _S3Client(response={"PolicyStatus": {"IsPublic": False}})
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_no_bucket_policy_is_reported_private() -> None:
+    client = _S3Client(error=_client_error("NoSuchBucketPolicy"))
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_missing_permission_degrades_to_a_note_not_an_error() -> None:
+    client = _S3Client(error=_client_error("AccessDenied"))
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "s3:GetBucketPolicyStatus" in result.detail
+
+
+def test_other_client_error_degrades_without_leaking_its_message() -> None:
+    """A gateway chat surface can echo ``detail`` verbatim — it must not carry AWS-side text."""
+    client = _S3Client(error=_client_error("InternalError"))
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "irrelevant" not in result.detail
+    assert "ClientError" in result.detail
+
+
+def test_transport_failure_degrades_to_unknown() -> None:
+    client = _S3Client(error=EndpointConnectionError(endpoint_url="https://s3.example"))
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"), client=client)
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+def test_client_build_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Even a totally unreachable AWS session must not raise out of the checker."""
+    import platform.filestorage.providers.aws as aws_module
+
+    def _raise_client(_config: RemoteSyncConfig) -> object:
+        raise aws_module.RemoteSyncUnavailableError("cannot build an S3 client — boom")
+
+    monkeypatch.setattr(aws_module, "_build_client", _raise_client)
+    result = aws_check_public_access(RemoteSyncConfig(bucket="b"))
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+# ── gcs.check_public_access ─────────────────────────────────────────────────
+
+
+class _GCSResponse:
+    """Fake ``requests.Response`` exposing only what the checker touches."""
+
+    def __init__(self, *, body: object = None, status_code: int = 200) -> None:
+        self._body = body
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:  # noqa: PLR2004 - mirrors requests' own threshold
+            raise requests.HTTPError(f"HTTP {self.status_code}", response=self)
+
+    def json(self) -> object:
+        return self._body
+
+
+class _GCSSession:
+    """Fake ``AuthorizedSession`` exposing only ``get``."""
+
+    def __init__(
+        self, response: _GCSResponse | None = None, *, error: Exception | None = None
+    ) -> None:
+        self._response = response
+        self._error = error
+
+    def get(self, _url: str, timeout: float | None = None) -> _GCSResponse:  # noqa: ARG002
+        if self._error is not None:
+            raise self._error
+        assert self._response is not None
+        return self._response
+
+
+def _iam_policy(*bindings: dict) -> dict:
+    return {"bindings": list(bindings)}
+
+
+def test_public_iam_binding_is_reported_public() -> None:
+    body = _iam_policy({"role": "roles/storage.objectViewer", "members": ["allUsers"]})
+    session = _GCSSession(_GCSResponse(body=body))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+def test_authenticated_users_binding_is_also_reported_public() -> None:
+    """Any Google account is not "your bucket owner" — same posture as AWS's AuthenticatedUsers."""
+    body = _iam_policy(
+        {"role": "roles/storage.legacyBucketReader", "members": ["allAuthenticatedUsers"]}
+    )
+    session = _GCSSession(_GCSResponse(body=body))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+def test_write_only_public_binding_is_not_reported_public() -> None:
+    """A public objectCreator grant is a write exposure, not the read exposure this checks."""
+    body = _iam_policy({"role": "roles/storage.objectCreator", "members": ["allUsers"]})
+    session = _GCSSession(_GCSResponse(body=body))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_scoped_binding_is_reported_private() -> None:
+    body = _iam_policy(
+        {"role": "roles/storage.objectViewer", "members": ["serviceAccount:ci@example.iam"]}
+    )
+    session = _GCSSession(_GCSResponse(body=body))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_no_bindings_is_reported_private() -> None:
+    session = _GCSSession(_GCSResponse(body=_iam_policy()))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_forbidden_degrades_to_a_note_not_an_error() -> None:
+    session = _GCSSession(_GCSResponse(status_code=403))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "IAM policy" in result.detail
+
+
+def test_gcs_other_http_error_degrades_without_leaking_body() -> None:
+    session = _GCSSession(_GCSResponse(status_code=500))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "HTTPError" in result.detail
+
+
+def test_gcs_transport_failure_degrades_to_unknown() -> None:
+    session = _GCSSession(error=requests.ConnectionError("boom"))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+def test_gcs_malformed_response_degrades_to_unknown() -> None:
+    session = _GCSSession(_GCSResponse(body=["not", "an", "object"]))
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"), session=session)
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+def test_gcs_session_build_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    import platform.filestorage.providers.gcs as gcs_module
+
+    def _raise_session() -> object:
+        raise gcs_module.RemoteSyncUnavailableError("cannot build GCS credentials — boom")
+
+    monkeypatch.setattr(gcs_module, "_build_session", _raise_session)
+    result = gcs_check_public_access(RemoteSyncConfig(bucket="b"))
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+# ── providers.registry.check_bucket_exposure ────────────────────────────────
+
+
+def test_provider_without_a_checker_is_reported_unchecked() -> None:
+    """Vercel Blob has no bucket-level public/private setting to check."""
+    result = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="vercel"))
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "vercel" in result.detail
+
+
+def _raising_checker(_config: RemoteSyncConfig) -> PublicAccessStatus:
+    raise ValueError("a community checker's own secret-shaped failure")
+
+
+def test_a_checker_that_raises_degrades_without_leaking_its_message() -> None:
+    register_object_store(
+        "exposure-raises", lambda _cfg: object(), public_access_checker=_raising_checker
+    )
+    try:
+        result = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="exposure-raises"))
+    finally:
+        unregister_object_store("exposure-raises")
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "secret-shaped" not in result.detail
+    assert "ValueError" in result.detail
+
+
+def test_unregister_drops_the_checker_too() -> None:
+    def _ok(_config: RemoteSyncConfig) -> PublicAccessStatus:
+        return PublicAccessStatus(BucketExposure.PUBLIC)
+
+    register_object_store("exposure-toggle", lambda _cfg: object(), public_access_checker=_ok)
+    before = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="exposure-toggle"))
+    assert before.exposure is BucketExposure.PUBLIC
+    unregister_object_store("exposure-toggle")
+    result = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="exposure-toggle"))
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+# ── operations.get_sync_status ──────────────────────────────────────────────
+
+
+def test_status_exposure_is_none_when_sync_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from config.constants.filestorage import REMOTE_SYNC_ENV
+
+    monkeypatch.delenv(REMOTE_SYNC_ENV, raising=False)
+    status = get_sync_status()
+    assert status.exposure is None
+
+
+def test_status_calls_the_registered_checker(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths
+    from config.constants.filestorage import REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_ENV
+    from platform.filestorage import operations as sync_service
+
+    def _public(_config: RemoteSyncConfig) -> PublicAccessStatus:
+        return PublicAccessStatus(BucketExposure.PUBLIC)
+
+    register_object_store("exposure-status", lambda _cfg: object(), public_access_checker=_public)
+    try:
+        monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+        monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+        monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROVIDER", "exposure-status")
+        monkeypatch.setattr(sync_service, "syncable_roots", lambda: ())
+        status = get_sync_status()
+    finally:
+        unregister_object_store("exposure-status")
+    assert status.exposure == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+# ── messages.format_status_lines / format_exposure_line ────────────────────
+
+
+def _status(exposure: PublicAccessStatus | None) -> SyncStatus:
+    return SyncStatus(
+        config=RemoteSyncConfig(bucket="b", provider="aws", prefix="p"),
+        roots=(SyncRootStatus(name=SyncRootName.SESSIONS, path=Path("/s"), exists=True),),
+        exposure=exposure,
+    )
+
+
+def test_format_status_lines_warns_loudly_on_a_public_bucket() -> None:
+    lines = format_status_lines(_status(PublicAccessStatus(BucketExposure.PUBLIC)))
+    assert any("WARNING" in line and "publicly readable" in line for line in lines)
+
+
+def test_format_status_lines_is_quiet_for_a_private_bucket() -> None:
+    lines = format_status_lines(_status(PublicAccessStatus(BucketExposure.PRIVATE)))
+    assert not any("WARNING" in line for line in lines)
+    assert any("private" in line for line in lines)
+
+
+def test_format_status_lines_omits_the_line_when_exposure_was_never_computed() -> None:
+    """Backward compatible: callers that build a bare ``SyncStatus`` see no new line."""
+    lines = format_status_lines(_status(None))
+    assert not any("Bucket access" in line or "WARNING" in line for line in lines)
+
+
+def test_format_exposure_line_unknown_includes_the_detail() -> None:
+    line = format_exposure_line(PublicAccessStatus(BucketExposure.UNKNOWN, "missing permission"))
+    assert "missing permission" in line
+    assert "could not confirm" in line

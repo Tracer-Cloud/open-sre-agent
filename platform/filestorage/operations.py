@@ -34,7 +34,8 @@ from platform.filestorage.engine import (
 from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import OrgScopeNotSupportedError
 from platform.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules
-from platform.filestorage.providers import build_object_store
+from platform.filestorage.exposure import PublicAccessStatus
+from platform.filestorage.providers import build_object_store, check_bucket_exposure
 from platform.filestorage.syncable import SyncRoot, syncable_roots
 
 
@@ -55,10 +56,17 @@ class SyncRootStatus:
 
 @dataclass(frozen=True)
 class SyncStatus:
-    """Whether sync is on and what would move — shared across all surfaces."""
+    """Whether sync is on and what would move — shared across all surfaces.
+
+    ``exposure`` is ``None`` when sync is off (nothing to check) and a
+    :class:`~platform.filestorage.exposure.PublicAccessStatus` otherwise —
+    always present, since :func:`~platform.filestorage.providers.check_bucket_exposure`
+    itself degrades to ``UNKNOWN`` instead of raising.
+    """
 
     config: RemoteSyncConfig | None
     roots: tuple[SyncRootStatus, ...]
+    exposure: PublicAccessStatus | None = None
 
     @property
     def enabled(self) -> bool:
@@ -118,12 +126,18 @@ def _root_status(root: SyncRoot, exclusions: ExclusionRules) -> SyncRootStatus:
 
 
 def get_sync_status() -> SyncStatus:
-    """Load config and resolve scoped roots (no network, no cached state)."""
+    """Load config, resolve scoped roots, and check whether the store is public.
+
+    The exposure check is the one network call this makes — only when sync
+    is on, and only if the provider registered a checker; see
+    :func:`~platform.filestorage.providers.check_bucket_exposure`.
+    """
     _refuse_org_scoped_turn()
     config = load_remote_sync_config()
     exclusions = config.exclude if config is not None else NO_EXCLUSIONS
     roots = tuple(_root_status(root, exclusions) for root in syncable_roots())
-    return SyncStatus(config=config, roots=roots)
+    exposure = check_bucket_exposure(config) if config is not None else None
+    return SyncStatus(config=config, roots=roots, exposure=exposure)
 
 
 def run_remote_sync(
