@@ -100,6 +100,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.shell",
         ),
         ToolDescriptor(
+            "propose_scheduled_delivery",
+            ("action",),
+            "interactive_shell",
+            None,
+            "tools.interactive_shell.actions.propose_scheduled_delivery",
+        ),
+        ToolDescriptor(
             "skill_view",
             ("action",),
             "interactive_shell",

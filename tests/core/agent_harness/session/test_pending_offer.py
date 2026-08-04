@@ -136,6 +136,71 @@ def test_a_confirmed_schedule_survives_the_literal_slash_dispatcher() -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_slash_tool_rebuild_keeps_cron_expression_for_dispatch() -> None:
+    """execute_slash_tool must not flatten args into an unquoted command line.
+
+    Real failure mode from the shell: yes → /cron add … printed as
+    ``$ /cron add --cron 0 8 * * 1-5`` then Click saw five extra positionals.
+    The tool call already had the cron as one arg; joining with spaces for
+    dispatch/display was what destroyed it.
+    """
+    import shlex
+
+    from core.agent_harness.session.pending_offer import PendingScheduleOffer
+    from core.agent_harness.turns.action_driver import _literal_slash_tool_call
+    from tools.interactive_shell.actions.slash import execute_slash_tool
+
+    class _SlashTool:
+        name = "slash_invoke"
+
+    class _Ports:
+        def command_exists(self, name: str) -> bool:
+            return name == "/cron"
+
+        def tty_interactive(self) -> bool:
+            return False
+
+        def format_turn_outcome(self, command: str, *, ok: bool) -> str:
+            return f"{command}:{ok}"
+
+        def execution_allowed(self, **_kwargs: object) -> bool:
+            return True
+
+        def dispatch(self, command: str, **_kwargs: object) -> bool:
+            dispatched.append(command)
+            return True
+
+    offer = PendingScheduleOffer(
+        kind="daily_summary",
+        cron="0 8 * * 1-5",
+        timezone="Europe/Amsterdam",
+        provider="slack",
+    )
+    call = _literal_slash_tool_call(offer.to_slash_command(), [_SlashTool()])
+    assert call is not None
+
+    dispatched: list[str] = []
+    from rich.console import Console
+
+    from core.agent_harness.tools.tool_context import ActionToolContext
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+
+    ctx = ActionToolContext(
+        session=InMemorySessionStore(),
+        console=Console(force_terminal=False, highlight=False),
+        slash_ports=_Ports(),
+        is_tty=False,
+    )
+    execute_slash_tool(call.input, ctx)
+
+    assert len(dispatched) == 1
+    line = dispatched[0]
+    tokens = shlex.split(line, posix=True)
+    assert "0 8 * * 1-5" in tokens, f"cron fragmented in dispatched line: {line!r} → {tokens}"
+    # Naive space-join shows up as an unquoted `--cron 0 8`; quoted rebuild keeps one word.
+    assert "'0 8 * * 1-5'" in line or '"0 8 * * 1-5"' in line, line
+
+
 def test_an_apostrophe_in_a_typed_slash_command_still_dispatches() -> None:
     """Tokenising must not start rejecting ordinary prose after a slash."""
     # Arrange

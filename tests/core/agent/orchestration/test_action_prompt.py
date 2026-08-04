@@ -263,6 +263,13 @@ def test_morning_report_skill_closes_with_schedule_offer() -> None:
     assert "daily_summary" in body
     assert 'cron="0 8 * * 1-5"' in body or "cron='0 8 * * 1-5'" in body
     assert "do not call /cron yet" in body
+    # Handing off after the fetches re-triggers gather → a second "morning
+    # report" from K8s/GitHub that clobbers the weather+news briefing UX.
+    assert "do not call assistant_handoff" in body
+    assert "hand the real content to the assistant" not in body
+    # Intermediate curls must be quiet so the user does not see weather/news
+    # once as $ stdout and again in the composed OpenSRE briefing.
+    assert "quiet=true" in body
 
 
 def test_connected_integrations_block_renders_state() -> None:
