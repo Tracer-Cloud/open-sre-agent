@@ -4,7 +4,32 @@ from __future__ import annotations
 
 import pytest
 
-from platform.masking.policy import ALL_KINDS, MaskingPolicy
+from platform.masking.policy import ALL_KINDS, IdentifierKind, MaskingPolicy
+
+
+def test_identifier_kind_is_strenum_and_pins_wire_values() -> None:
+    assert issubclass(IdentifierKind, str)
+    assert [k.value for k in IdentifierKind] == [
+        "pod",
+        "namespace",
+        "cluster",
+        "hostname",
+        "account_id",
+        "ip_address",
+        "email",
+        "service_name",
+    ]
+    # ALL_KINDS is derived from the enum — no drift between the two.
+    assert tuple(IdentifierKind) == ALL_KINDS
+    # Membership works against both wire strings and members (round-trip).
+    assert "email" in ALL_KINDS
+    assert IdentifierKind("email") is IdentifierKind.EMAIL
+
+
+def test_policy_coerces_kind_strings_to_members() -> None:
+    policy = MaskingPolicy.model_validate({"enabled": True, "kinds": ("pod", "email")})
+    assert policy.kinds == (IdentifierKind.POD, IdentifierKind.EMAIL)
+    assert all(isinstance(k, IdentifierKind) for k in policy.kinds)
 
 
 def test_default_policy_is_disabled() -> None:
