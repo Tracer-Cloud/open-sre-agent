@@ -43,7 +43,7 @@ def test_concurrent_callers_discover_datasources_once(
         grafana_client.GrafanaClient, "discover_datasource_uids", _slow_failing_discovery
     )
     results: list[Any] = []
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def _build() -> None:
         try:
@@ -53,7 +53,7 @@ def test_concurrent_callers_discover_datasources_once(
                     endpoint="http://grafana.invalid:3001", api_key="token"
                 )
             )
-        except BaseException as exc:  # noqa: BLE001 - surfaced in the assert below
+        except Exception as exc:  # surfaced in the assert below
             errors.append(exc)
 
     # Act

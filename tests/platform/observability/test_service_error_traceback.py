@@ -20,15 +20,15 @@ import pytest
 from platform.observability.errors.service import capture_service_error
 
 
-def _raised(exc: BaseException) -> BaseException:
+def _raised(exc: Exception) -> Exception:
     """Return a real raised exception — one built inline carries no traceback."""
     try:
         raise exc
-    except BaseException as raised:  # noqa: BLE001 - the point is to capture any
+    except Exception as raised:
         return raised
 
 
-def _wrapped_connection_error() -> BaseException:
+def _wrapped_connection_error() -> Exception:
     """The shape urllib3 produces: MaxRetryError from NewConnectionError from refused."""
     try:
         try:
@@ -39,7 +39,7 @@ def _wrapped_connection_error() -> BaseException:
         return outer
 
 
-def _log(exc: BaseException, *, method: str) -> str:
+def _log(exc: Exception, *, method: str) -> str:
     buffer = io.StringIO()
     handler = logging.StreamHandler(buffer)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -83,8 +83,11 @@ def test_a_dns_failure_counts_as_unreachable() -> None:
 
 def test_a_real_bug_keeps_its_traceback() -> None:
     """Quieting unreachable hosts must not quiet defects — that would hide them."""
-    # Act
-    output = _log(_raised(KeyError("items")), method="list_pods")
+    # Act — capture a real KeyError traceback without a BaseException handler
+    try:
+        raise KeyError("items")
+    except KeyError as bug:
+        output = _log(bug, method="list_pods")
 
     # Assert
     assert "Traceback" in output
