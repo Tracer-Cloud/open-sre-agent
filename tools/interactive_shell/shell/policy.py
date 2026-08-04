@@ -13,6 +13,7 @@ from __future__ import annotations
 import config.constants.platform as _platform
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
+    ExecutionVerdict,
     ToolExecutionMode,
     ToolExecutionPlan,
 )
@@ -32,7 +33,7 @@ def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyRes
     """
     if parsed.parse_error is not None:
         return ExecutionPolicyResult(
-            verdict="deny",
+            verdict=ExecutionVerdict.DENY,
             tool_type="shell",
             reason=parsed.parse_error,
             hint="Enter a command to run.",
@@ -40,7 +41,7 @@ def evaluate_shell_from_parsed(parsed: ParsedShellCommand) -> ExecutionPolicyRes
         )
 
     return ExecutionPolicyResult(
-        verdict="allow",
+        verdict=ExecutionVerdict.ALLOW,
         tool_type="shell",
         reason=None,
         shell_classification="unrestricted",

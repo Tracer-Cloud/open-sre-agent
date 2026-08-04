@@ -18,6 +18,7 @@ from __future__ import annotations
 from tools.interactive_shell.shared import (
     ConfirmationOutcome,
     ExecutionPolicyResult,
+    ExecutionVerdict,
     ToolExecutionMode,
     ToolExecutionPlan,
     allow_tool,
@@ -33,6 +34,29 @@ def _ask_result() -> ExecutionPolicyResult:
         tool_type="slash",
         reason="this command may change configuration or run heavy work",
     )
+
+
+# --- ExecutionVerdict enum contract -----------------------------------------
+
+
+def test_execution_verdict_wire_values_are_stable() -> None:
+    assert [v.value for v in ExecutionVerdict] == ["allow", "ask", "deny"]
+
+
+def test_execution_verdict_is_str_subclass() -> None:
+    assert issubclass(ExecutionVerdict, str)
+
+
+def test_execution_verdict_round_trips_from_wire_value() -> None:
+    assert ExecutionVerdict("allow") is ExecutionVerdict.ALLOW
+    assert ExecutionVerdict("ask") is ExecutionVerdict.ASK
+    assert ExecutionVerdict("deny") is ExecutionVerdict.DENY
+
+
+def test_execution_verdict_compares_equal_to_wire_string() -> None:
+    assert ExecutionVerdict.ALLOW == "allow"
+    assert ExecutionVerdict.ASK == "ask"
+    assert ExecutionVerdict.DENY == "deny"
 
 
 # --- Default-allow policy decisions -----------------------------------------

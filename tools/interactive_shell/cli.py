@@ -12,6 +12,7 @@ from pathlib import Path
 from platform.common.task_types import TaskKind
 from tools.interactive_shell.shared import (
     ExecutionPolicyResult,
+    ExecutionVerdict,
     ToolExecutionMode,
     ToolExecutionPlan,
 )
@@ -199,7 +200,7 @@ def to_tool_execution_plan(plan: OpensreExecutionPlan) -> ToolExecutionPlan:
         mode = ToolExecutionMode.FOREGROUND_STREAMING
     if not plan.requires_confirmation:
         policy = ExecutionPolicyResult(
-            verdict="allow",
+            verdict=ExecutionVerdict.ALLOW,
             tool_type="cli_command",
             reason=None,
             hint=None,
@@ -207,7 +208,7 @@ def to_tool_execution_plan(plan: OpensreExecutionPlan) -> ToolExecutionPlan:
         )
     else:
         policy = ExecutionPolicyResult(
-            verdict="ask",
+            verdict=ExecutionVerdict.ASK,
             tool_type="cli_command",
             reason=plan.confirmation_reason,
             hint="Use a read-only subcommand (health, version, list, status, show)",

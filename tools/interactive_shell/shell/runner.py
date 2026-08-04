@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import config.constants.platform as _platform
+from tools.interactive_shell.shared import ExecutionVerdict
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -75,7 +76,7 @@ def run_shell_command(
             command=command,
             ok=False,
             response_text=plan.policy.reason or "shell command blocked",
-            cancelled=plan.policy.verdict != "deny",
+            cancelled=plan.policy.verdict != ExecutionVerdict.DENY,
         )
 
     if not quiet:
