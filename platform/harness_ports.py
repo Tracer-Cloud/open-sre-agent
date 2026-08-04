@@ -475,11 +475,11 @@ class VcsRepoScopeProvider(Protocol):
         cached: tuple[str, ...] | None,
     ) -> tuple[str, ...] | None:
         """Resolve this vendor's repo scope from message/history/env/git/cache."""
-        raise NotImplementedError
+        ...
 
     def apply(self, resolved: dict[str, Any], scope: tuple[str, ...]) -> dict[str, Any]:
         """Return a copy of *resolved* enriched with this vendor's scope."""
-        raise NotImplementedError
+        ...
 
 
 _vcs_repo_scope_providers: list[VcsRepoScopeProvider] = []
