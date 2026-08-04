@@ -62,6 +62,7 @@ _REGISTRY_LOCK = threading.RLock()
 # register ahead of time instead and never appear here.
 _BUILTIN_MODULES = {
     BuiltInProvider.AWS.value: "platform.filestorage.providers.aws",
+    BuiltInProvider.GCS.value: "platform.filestorage.providers.gcs",
     BuiltInProvider.VERCEL.value: "platform.filestorage.providers.vercel",
 }
 
@@ -117,6 +118,11 @@ def registered_providers() -> tuple[str, ...]:
     return tuple(sorted(names))
 
 
+def builtin_providers() -> tuple[str, ...]:
+    """Sorted names of the shipped built-in backends (community registrations excluded)."""
+    return tuple(sorted(_BUILTIN_MODULES))
+
+
 def build_object_store(config: RemoteSyncConfig) -> ObjectStore:
     """Construct the store for ``config.provider``.
 
@@ -169,6 +175,7 @@ __all__ = [
     "ObjectStoreFactory",
     "SetupExtraField",
     "build_object_store",
+    "builtin_providers",
     "credential_hint_for_provider",
     "provider_extra_fields",
     "register_object_store",

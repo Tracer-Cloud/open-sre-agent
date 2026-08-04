@@ -1,7 +1,7 @@
 """Cloud backends for remote sync.
 
-Built-in backends (``aws``, ``vercel``) load lazily via the registry when
-selected. Other clouds (GCS, Azure, …) are community modules that call
+Built-in backends (``aws``, ``gcs``, ``vercel``) load lazily via the registry
+when selected. Other clouds (Azure, …) are community modules that call
 :func:`register_object_store`; the sync engine, CLI, and REPL do not change.
 """
 

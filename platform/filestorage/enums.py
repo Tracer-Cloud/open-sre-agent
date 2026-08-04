@@ -33,6 +33,7 @@ class BuiltInProvider(StrEnum):
     """
 
     AWS = "aws"
+    GCS = "gcs"
     VERCEL = "vercel"
 
 

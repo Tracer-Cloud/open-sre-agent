@@ -21,6 +21,7 @@ from platform.filestorage.messages import (
     root_state,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.providers.registry import builtin_providers
 from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}|"
-    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only] "
+    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only|--dry-run] "
     f"[--provider … --bucket …]"
 )
 
@@ -67,15 +68,17 @@ def _print_status(console: Console) -> bool:
 
 def _run_sync(console: Console, args: list[str]) -> bool:
     flags = {a.lower() for a in args}
+    dry_run = "--dry-run" in flags
     with console.status("syncing…", spinner="dots"):
         report = run_remote_sync(
             pull_only="--pull-only" in flags,
             push_only="--push-only" in flags,
+            dry_run=dry_run,
         )
     if report is None:
         console.print(f"[{DIM}]{DISABLED_HELP}[/]")
         return True
-    lines = format_report_lines(report)
+    lines = format_report_lines(report, dry_run=dry_run)
     _print_lines(console, lines, dim_last=bool(report.kept_remote))
     return True
 
@@ -117,7 +120,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
             enabled=enabled,
         )
     )
-    _print_lines(console, format_setup_lines(config))
+    _print_lines(console, format_setup_lines(config, enabled=enabled))
     return True
 
 
@@ -167,7 +170,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
         notes=(
             "Off until setup or OPENSRE_REMOTE_SYNC is set. "
             f"Subcommands: status, sync, setup. Default provider is "
-            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: aws, vercel). "
+            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: {', '.join(builtin_providers())}). "
             "Credentials stay ambient; integration keys are never uploaded. "
             "Same service as `opensre remote-sync`.",
         ),

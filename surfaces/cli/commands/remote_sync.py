@@ -9,17 +9,22 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
 from platform.common.exit_codes import ERROR, SUCCESS
-from platform.filestorage import RemoteSyncError
+from platform.filestorage import RemoteSyncConfigError, RemoteSyncError
 from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    SETUP_DISABLED_CONFIRM,
     format_report_lines,
     format_setup_lines,
     format_status_lines,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
-from platform.filestorage.providers.registry import provider_extra_fields
-from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
+from platform.filestorage.providers.registry import builtin_providers, provider_extra_fields
+from platform.filestorage.setup import (
+    RemoteSyncSetupRequest,
+    disable_remote_sync,
+    save_remote_sync_settings,
+)
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -46,17 +51,18 @@ def status_command() -> None:
 @remote_sync_command.command(name=RemoteSyncSubcommand.SYNC.value)
 @click.option("--pull-only", is_flag=True, help="Download only; send nothing.")
 @click.option("--push-only", is_flag=True, help="Upload only; fetch nothing.")
-def sync_now_command(pull_only: bool, push_only: bool) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview transfers without changing anything.")
+def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
     try:
-        report = run_remote_sync(pull_only=pull_only, push_only=push_only)
+        report = run_remote_sync(pull_only=pull_only, push_only=push_only, dry_run=dry_run)
     except RemoteSyncError as exc:
         click.echo(f"Sync failed: {exc}", err=True)
         raise SystemExit(ERROR) from exc
     if report is None:
         click.echo(DISABLED_HELP)
         raise SystemExit(SUCCESS)
-    for line in format_report_lines(report):
+    for line in format_report_lines(report, dry_run=dry_run):
         click.echo(line)
     raise SystemExit(SUCCESS)
 
@@ -65,9 +71,13 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
 @click.option(
     "--provider",
     default=None,
-    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: aws, vercel).",
+    help=f"Backend name (default {DEFAULT_REMOTE_SYNC_PROVIDER}; built-in: {', '.join(builtin_providers())}).",
 )
-@click.option("--bucket", default=None, help="Store name you own (S3 bucket or Blob store id).")
+@click.option(
+    "--bucket",
+    default=None,
+    help="Store name you own (S3 bucket, GCS bucket, or Blob store id).",
+)
 @click.option(
     "--prefix",
     default=None,
@@ -79,7 +89,7 @@ def sync_now_command(pull_only: bool, push_only: bool) -> None:
     "--enabled/--disabled",
     default=True,
     show_default=True,
-    help="Whether remote sync is switched on in stored settings.",
+    help="Whether remote sync is switched on in stored settings. --disabled alone only turns it off.",
 )
 def setup_command(
     provider: str | None,
@@ -90,6 +100,18 @@ def setup_command(
     enabled: bool,
 ) -> None:
     """Write remote_sync settings to ~/.opensre/config.yml (interactive if flags omitted)."""
+    if not enabled and (bucket is None or not bucket.strip()):
+        # --disabled with no new settings just switches the stored section off.
+        try:
+            _reject_disabled_with_setup_flags(
+                provider=provider, prefix=prefix, region=region, profile=profile
+            )
+            disable_remote_sync()
+        except RemoteSyncError as exc:
+            click.echo(str(exc), err=True)
+            raise SystemExit(ERROR) from exc
+        click.echo(SETUP_DISABLED_CONFIRM)
+        raise SystemExit(SUCCESS)
     try:
         request = _collect_setup_request(
             provider=provider,
@@ -105,9 +127,35 @@ def setup_command(
             raise SystemExit(ERROR) from exc
         click.echo(str(exc), err=True)
         raise SystemExit(ERROR) from exc
-    for line in format_setup_lines(config):
+    for line in format_setup_lines(config, enabled=request.enabled):
         click.echo(line)
     raise SystemExit(SUCCESS)
+
+
+def _reject_disabled_with_setup_flags(
+    *,
+    provider: str | None,
+    prefix: str | None,
+    region: str | None,
+    profile: str | None,
+) -> None:
+    """``--disabled`` only flips the switch; explicit setup values need a bucket."""
+    given = [
+        name
+        for name, value in (
+            ("provider", provider),
+            ("prefix", prefix),
+            ("region", region),
+            ("profile", profile),
+        )
+        if value is not None and value.strip() != ""
+    ]
+    if given:
+        flags = ", ".join(f"--{name}" for name in given)
+        raise RemoteSyncConfigError(
+            f"--disabled without --bucket only switches sync off; it cannot also set {flags}. "
+            "Pass --bucket to save new settings, or drop the extra flags."
+        )
 
 
 def _collect_setup_request(
@@ -140,7 +188,7 @@ def _collect_setup_request(
         "Bucket / store name", default=bucket or "", show_default=bool(bucket)
     )
     provider_value = click.prompt(
-        "Provider (aws, vercel, …)",
+        f"Provider ({', '.join(builtin_providers())}, …)",
         default=provider or DEFAULT_REMOTE_SYNC_PROVIDER,
         show_default=True,
     )

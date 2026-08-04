@@ -198,6 +198,9 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
+    preferred_response = _preferred_tool_response_text(tool_result)
+    if preferred_response:
+        return preferred_response
     details = getattr(tool_result, "details", None)
     if isinstance(details, dict):
         summary = details.get("summary")
@@ -220,6 +223,9 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     except (TypeError, ValueError, json.JSONDecodeError):
         parsed = None
     if isinstance(parsed, dict):
+        response_text = parsed.get("response_text")
+        if isinstance(response_text, str) and response_text.strip():
+            return response_text.strip()
         summary = parsed.get("summary")
         if isinstance(summary, str) and summary.strip():
             return summary.strip()
@@ -234,6 +240,32 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
             f"\n{tool_call.name} result: {content}"
         )
     return f"{tool_call.name} result: {content}"
+
+
+def _preferred_tool_response_text(tool_result: Any) -> str:
+    details = getattr(tool_result, "details", None)
+    if isinstance(details, dict):
+        response_text = details.get("response_text")
+        if isinstance(response_text, str) and response_text.strip():
+            return response_text.strip()
+    content = _content_to_text(getattr(tool_result, "content", "")).strip()
+    if not content:
+        return ""
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    response_text = parsed.get("response_text")
+    return response_text.strip() if isinstance(response_text, str) else ""
+
+
+def _has_preferred_tool_response_text(result: Any) -> bool:
+    return any(
+        bool(_preferred_tool_response_text(tool_result))
+        for _tool_call, tool_result in _generic_tool_results(result)
+    )
 
 
 def _response_text_from_generic_results(result: Any) -> str:
@@ -539,21 +571,29 @@ def _compose_response(
     final_text = str(getattr(result, "final_text", "") or "").strip()
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
-    display_chunks = [chunk for chunk in (final_text, generic_text, hint) if chunk]
+    prefer_tool_response_text = _has_preferred_tool_response_text(result)
+    final_text_chunk = "" if prefer_tool_response_text else final_text
+    # History entries are already rendered by self-recording tools (shell/slash/…).
+    # Console display uses final_text + generic results + hints only so users see
+    # github_cli / other registry tools without double-printing shell output.
+    # response_text still includes history for persistence / non-TTY surfaces.
+    display_chunks = [chunk for chunk in (final_text_chunk, generic_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
             _response_text_from_history_entries(counts.executed_entries),
-            final_text,
+            final_text_chunk,
             generic_text,
             hint,
         )
         if chunk
     ]
-    # Prefer the agent's closing prose when it reads like a real reply (a report,
-    # multi-line Markdown). Short one-liners like "done" are common after a single
-    # tool call and must not replace tool-derived text or be streamed on their own.
-    use_final_text = _is_user_facing_final_text(final_text)
+    # Prefer the agent's closing prose when it looks like a real reply (report /
+    # multi-line Markdown). Short one-liners like "done" are common after a
+    # single tool call and must not replace tool-derived response_text or get
+    # streamed on action-only turns (gateway finalize / cross-surface parity).
+    # A tool's explicit ``response_text`` also wins over chatty model closings.
+    use_final_text = _is_user_facing_final_text(final_text) and not prefer_tool_response_text
     response_text = final_text if use_final_text else "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
 

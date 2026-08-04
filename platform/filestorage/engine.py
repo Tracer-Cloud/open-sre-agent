@@ -128,8 +128,19 @@ def push(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
+    dry_run: bool = False,
 ) -> SyncReport:
-    """Upload local files whose contents differ from the bucket."""
+    """Upload local files whose contents differ from the bucket.
+
+    Under ``dry_run`` nothing is sent, and a key ``pull`` already previewed as
+    a download (``result.downloaded``, when both share one report) is trusted
+    rather than re-compared against the still-unwritten local file — a real
+    full sync would have overwritten it first, so re-reading stale bytes here
+    would report it as both downloaded and kept back. A previewed key with no
+    local file at all (nothing pulled it before) never reaches the scan below,
+    so it is counted as skipped separately — a real sync would have written it
+    and then found this same scan matching it.
+    """
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
     listing = remote if remote is not None else store.list_objects("")
@@ -137,6 +148,8 @@ def push(
     # Resolve each root once rather than per file: this loop touches every
     # session and memory file on the machine.
     allowed = resolved_roots(roots)
+    # Built once, not per file: membership in a loop needs a set, not a list.
+    previewed_pulls = set(result.downloaded) if dry_run else frozenset[str]()
 
     # Check every candidate before uploading any of them. A denied file found
     # halfway through must not leave earlier files already in the store.
@@ -156,6 +169,9 @@ def push(
             planned.append((key, path))
 
     for key, path in planned:
+        if key in previewed_pulls:
+            result.skipped += 1
+            continue
         data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
@@ -167,9 +183,16 @@ def push(
                 # destroy it. Same rule pull applies in the other direction.
                 result.kept_remote.append(key)
                 continue
-        store.put_object(key, data)
+        if not dry_run:
+            store.put_object(key, data)
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
+
+    if previewed_pulls:
+        # Keys pull previewed but that never had a local file to begin with
+        # (a brand-new remote object) never entered the scan above at all.
+        planned_keys = {key for key, _ in planned}
+        result.skipped += len(previewed_pulls - planned_keys)
     return result
 
 
@@ -180,8 +203,14 @@ def pull(
     report: SyncReport | None = None,
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
+    dry_run: bool = False,
 ) -> SyncReport:
-    """Download bucket objects missing locally, or newer than the local copy."""
+    """Download bucket objects missing locally, or newer than the local copy.
+
+    Under ``dry_run`` nothing is fetched or written: the listing already has
+    the size needed to report what would move, so previewing costs no request
+    beyond the one listing call.
+    """
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
     by_name = {root.name: root for root in roots}
@@ -198,6 +227,10 @@ def pull(
             continue
         if not _should_download(obj, target):
             result.skipped += 1
+            continue
+        if dry_run:
+            result.downloaded_bytes += obj.size
+            result.downloaded.append(obj.key)
             continue
         data = store.get_object(obj.key)
         result.downloaded_bytes += len(data)
@@ -237,18 +270,34 @@ def run_sync(
     direction: SyncDirection = SyncDirection.BOTH,
     roots: tuple[SyncRoot, ...] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
+    dry_run: bool = False,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
     The listing is fetched once and shared: a pull changes local files, never
-    the bucket, so the push half can reuse it.
+    the bucket, so the push half can reuse it. ``dry_run`` previews the same
+    plan without writing anywhere, local or remote.
     """
     report = SyncReport()
     listing = store.list_objects("")
     if direction is not SyncDirection.PUSH:
-        pull(store, roots=roots, report=report, remote=listing, exclusions=exclusions)
+        pull(
+            store,
+            roots=roots,
+            report=report,
+            remote=listing,
+            exclusions=exclusions,
+            dry_run=dry_run,
+        )
     if direction is not SyncDirection.PULL:
-        push(store, roots=roots, report=report, remote=listing, exclusions=exclusions)
+        push(
+            store,
+            roots=roots,
+            report=report,
+            remote=listing,
+            exclusions=exclusions,
+            dry_run=dry_run,
+        )
     return report
 
 

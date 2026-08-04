@@ -1,9 +1,9 @@
 """Optional mirroring of conversation context to a store the user owns.
 
 Off by default. When switched on, conversation history and memory are copied
-to the user's own object store (built-in: AWS/S3 and Vercel Blob; others
+to the user's own object store (built-in: AWS/S3, GCS, and Vercel Blob; others
 register under :mod:`platform.filestorage.providers`). Credentials never leave
-the machine — see :mod:`platform.filestorage.syncable`.
+the machine - see :mod:`platform.filestorage.syncable`.
 
 Surfaces share one **stateless, thread-safe** service
 (:mod:`platform.filestorage.operations`): ``opensre remote-sync``, REPL
