@@ -107,3 +107,66 @@ def test_changed_ca_bundle_builds_new_client() -> None:
 
     assert first is not second
     assert second._config.ca_bundle == "/etc/ssl/custom.pem"
+
+
+def test_surrounding_whitespace_shares_cache_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Inputs differing only by surrounding whitespace reuse one client (one discovery).
+
+    ``GrafanaAccountConfig`` strips the endpoint and the credentials are used
+    verbatim, so ``" old-token "`` and ``"old-token"`` are the same effective
+    config. Fingerprinting the raw strings would build two clients and run
+    discovery twice; normalizing before hashing collapses them to one.
+    """
+    discoveries = 0
+
+    def _count_discovery(_self: Any) -> dict[str, str]:
+        nonlocal discoveries
+        discoveries += 1
+        return {}
+
+    monkeypatch.setattr(grafana_client.GrafanaClient, "discover_datasource_uids", _count_discovery)
+
+    first = grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT,
+        api_key=_OLD_TOKEN,
+        account_id=_ACCOUNT_ID,
+        ca_bundle="/etc/ssl/custom.pem",
+    )
+    second = grafana_client.get_grafana_client_from_credentials(
+        endpoint="  " + _ENDPOINT + "  ",
+        api_key="  " + _OLD_TOKEN + "  ",
+        account_id=_ACCOUNT_ID,
+        ca_bundle="  /etc/ssl/custom.pem  ",
+    )
+
+    assert first is second
+    assert discoveries == 1
+
+
+def test_rotation_evicts_superseded_entry() -> None:
+    """Rotating the token twice leaves exactly one entry for (account, endpoint) — the newest.
+
+    Without eviction each fingerprint would pin a permanent entry retaining an
+    old secret, growing the cache on every rotation.
+    """
+    grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT, api_key=_OLD_TOKEN, account_id=_ACCOUNT_ID
+    )
+    grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT, api_key=_NEW_TOKEN, account_id=_ACCOUNT_ID
+    )
+    newest_token = "newest-token"
+    grafana_client.get_grafana_client_from_credentials(
+        endpoint=_ENDPOINT, api_key=newest_token, account_id=_ACCOUNT_ID
+    )
+
+    # Count every cached client for this account+endpoint, independent of the
+    # fingerprint helper, so the assertion pins eviction behavior directly.
+    entries = [
+        cached
+        for key, cached in grafana_client._grafana_client_cache.items()
+        if _ACCOUNT_ID in key and _ENDPOINT in key
+    ]
+
+    assert len(entries) == 1
+    assert entries[0].read_token == newest_token

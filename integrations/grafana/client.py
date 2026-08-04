@@ -28,6 +28,21 @@ _grafana_client_lock = threading.Lock()
 #: this hash is.
 _FINGERPRINT_HEX_LEN = 16
 _CACHE_KEY_PREFIX = "creds"
+#: Separator between the ``(prefix, account, endpoint)`` identity of a cache key
+#: and its trailing credential/TLS fingerprint. Sharing this identity prefix but
+#: differing in the fingerprint marks a superseded credential version to evict.
+_FINGERPRINT_SEP = "#"
+
+
+def _cache_key_prefix(*, account_id: str, endpoint: str) -> str:
+    """Identity prefix shared by every credential version of one (account, endpoint).
+
+    The endpoint is normalized the same way ``GrafanaAccountConfig`` normalizes
+    it (``strip().rstrip("/")``) so trivially-different-but-equivalent inputs map
+    to the same identity.
+    """
+    normalized_endpoint = endpoint.strip().rstrip("/")
+    return f"{_CACHE_KEY_PREFIX}_{account_id}_{normalized_endpoint}"
 
 
 def _cache_key(
@@ -42,17 +57,22 @@ def _cache_key(
 ) -> str:
     """Build a cache key that changes when any auth or TLS input changes.
 
-    The endpoint is normalized the same way the client normalizes it
-    (``rstrip("/")``) so trivially-different-but-equivalent inputs still share a
-    cache entry. The sensitive tuple is hashed — never embedded in plaintext —
-    so a rotated token or changed TLS config yields a fresh key without leaking
-    the secret into the key string.
+    Every string component is normalized before hashing (``strip()`` on
+    credentials/CA bundle, ``strip().rstrip("/")`` on the endpoint) so inputs
+    that differ only by surrounding whitespace share one cache entry instead of
+    triggering duplicate datasource discovery. The sensitive tuple is hashed —
+    never embedded in plaintext — so a rotated token or changed TLS config
+    yields a fresh key without leaking the secret into the key string.
     """
-    normalized_endpoint = endpoint.rstrip("/")
     fingerprint = hashlib.sha256(
-        repr((api_key, username, password, verify_ssl, ca_bundle)).encode()
+        repr(
+            (api_key.strip(), username.strip(), password.strip(), verify_ssl, ca_bundle.strip())
+        ).encode()
     ).hexdigest()[:_FINGERPRINT_HEX_LEN]
-    return f"{_CACHE_KEY_PREFIX}_{account_id}_{normalized_endpoint}_{fingerprint}"
+    return (
+        f"{_cache_key_prefix(account_id=account_id, endpoint=endpoint)}"
+        f"{_FINGERPRINT_SEP}{fingerprint}"
+    )
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
@@ -166,6 +186,15 @@ def _build_and_cache_client(
             "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
             account_id,
         )
+
+    # Evict superseded credential versions of the same (account, endpoint): on
+    # rotation a fresh fingerprint would otherwise leave the old token/password
+    # cached forever. Runs under _grafana_client_lock (held by the sole caller).
+    identity = f"{_cache_key_prefix(account_id=account_id, endpoint=endpoint)}{_FINGERPRINT_SEP}"
+    for stale_key in [
+        key for key in _grafana_client_cache if key != cache_key and key.startswith(identity)
+    ]:
+        del _grafana_client_cache[stale_key]
 
     _grafana_client_cache[cache_key] = client
     return client
