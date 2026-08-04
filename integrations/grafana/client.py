@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 
@@ -19,6 +20,39 @@ _grafana_client_cache: dict[str, GrafanaClient] = {}
 #: first callers all miss the empty cache and each runs its own discovery — and
 #: against an unreachable Grafana each one waits out the full connect timeout.
 _grafana_client_lock = threading.Lock()
+
+#: Length of the hex slice of the credential/TLS fingerprint folded into the
+#: cache key. 16 hex chars = 64 bits of SHA-256 — collision-safe for the handful
+#: of live (account, endpoint) configs while keeping the key short. The raw
+#: secrets are never placed in the key (they can leak into logs/reprs); only
+#: this hash is.
+_FINGERPRINT_HEX_LEN = 16
+_CACHE_KEY_PREFIX = "creds"
+
+
+def _cache_key(
+    *,
+    endpoint: str,
+    api_key: str,
+    account_id: str,
+    username: str,
+    password: str,
+    verify_ssl: bool,
+    ca_bundle: str,
+) -> str:
+    """Build a cache key that changes when any auth or TLS input changes.
+
+    The endpoint is normalized the same way the client normalizes it
+    (``rstrip("/")``) so trivially-different-but-equivalent inputs still share a
+    cache entry. The sensitive tuple is hashed — never embedded in plaintext —
+    so a rotated token or changed TLS config yields a fresh key without leaking
+    the secret into the key string.
+    """
+    normalized_endpoint = endpoint.rstrip("/")
+    fingerprint = hashlib.sha256(
+        repr((api_key, username, password, verify_ssl, ca_bundle)).encode()
+    ).hexdigest()[:_FINGERPRINT_HEX_LEN]
+    return f"{_CACHE_KEY_PREFIX}_{account_id}_{normalized_endpoint}_{fingerprint}"
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
@@ -52,7 +86,15 @@ def get_grafana_client_from_credentials(
     ca_bundle: str = "",
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials."""
-    cache_key = f"creds_{account_id}_{endpoint}"
+    cache_key = _cache_key(
+        endpoint=endpoint,
+        api_key=api_key,
+        account_id=account_id,
+        username=username,
+        password=password,
+        verify_ssl=verify_ssl,
+        ca_bundle=ca_bundle,
+    )
     cached = _grafana_client_cache.get(cache_key)
     if cached is not None:
         return cached
