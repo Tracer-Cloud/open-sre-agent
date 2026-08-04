@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BucketExposure
 
 
@@ -36,7 +37,13 @@ class PublicAccessStatus:
     detail: str = ""
 
 
-PublicAccessChecker = Callable[["RemoteSyncConfig"], PublicAccessStatus]
+# A plain (non-``TYPE_CHECKING``, unquoted) import: ``RemoteSyncConfig`` is only
+# ever referenced here, inside a runtime expression, not an annotation position
+# — a quoted forward reference under ``TYPE_CHECKING`` type-checks fine but
+# reads as an unused import to a linter that doesn't parse type strings inside
+# a bare ``Callable[[...]]`` subscript. ``config.py`` doesn't import this
+# module, so there is no cycle to guard against.
+PublicAccessChecker = Callable[[RemoteSyncConfig], PublicAccessStatus]
 
 
 def not_checked(provider: str) -> PublicAccessStatus:

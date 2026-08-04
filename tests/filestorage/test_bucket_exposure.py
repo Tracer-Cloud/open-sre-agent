@@ -91,12 +91,12 @@ def test_transport_failure_degrades_to_unknown() -> None:
 
 def test_client_build_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
     """Even a totally unreachable AWS session must not raise out of the checker."""
-    import platform.filestorage.providers.aws as aws_module
+    from platform.filestorage.providers.aws import RemoteSyncUnavailableError
 
     def _raise_client(_config: RemoteSyncConfig) -> object:
-        raise aws_module.RemoteSyncUnavailableError("cannot build an S3 client — boom")
+        raise RemoteSyncUnavailableError("cannot build an S3 client — boom")
 
-    monkeypatch.setattr(aws_module, "_build_client", _raise_client)
+    monkeypatch.setattr("platform.filestorage.providers.aws._build_client", _raise_client)
     result = aws_check_public_access(RemoteSyncConfig(bucket="b"))
     assert result.exposure is BucketExposure.UNKNOWN
 
@@ -253,6 +253,30 @@ def test_unregister_drops_the_checker_too() -> None:
     unregister_object_store("exposure-toggle")
     result = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="exposure-toggle"))
     assert result.exposure is BucketExposure.UNKNOWN
+
+
+def test_replacing_a_provider_without_a_checker_clears_the_old_one() -> None:
+    """A stale checker must never survive a factory swap under the same name.
+
+    If it did, ``status`` would query a completely unrelated cloud API (the
+    old provider's) and label the *new* backend with the old one's answer.
+    """
+
+    def _public(_config: RemoteSyncConfig) -> PublicAccessStatus:
+        return PublicAccessStatus(BucketExposure.PUBLIC)
+
+    register_object_store("exposure-swap", lambda _cfg: object(), public_access_checker=_public)
+    try:
+        before = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="exposure-swap"))
+        assert before.exposure is BucketExposure.PUBLIC
+
+        # Re-register the same name with a different factory and no checker.
+        register_object_store("exposure-swap", lambda _cfg: object())
+        after = check_bucket_exposure(RemoteSyncConfig(bucket="b", provider="exposure-swap"))
+        assert after.exposure is BucketExposure.UNKNOWN
+        assert "exposure-swap" in after.detail
+    finally:
+        unregister_object_store("exposure-swap")
 
 
 # ── operations.get_sync_status ──────────────────────────────────────────────
