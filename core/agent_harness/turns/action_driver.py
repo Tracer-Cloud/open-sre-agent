@@ -28,7 +28,10 @@ from core.agent_harness.ports import (
     SessionStore,
     ToolProvider,
 )
-from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
+from core.agent_harness.prompts import (
+    build_action_system_prompt_envelope,
+    build_action_user_message,
+)
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
@@ -454,10 +457,14 @@ def _build_action_agent(
     else:
         factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
-        system = build_action_system_prompt(
+        envelope = build_action_system_prompt_envelope(
             turn_snapshot or TurnSnapshot.from_session(message, session)
         )
-        user_message = build_action_user_message(message)
+        # Cached half stays byte-identical across turns; ephemeral (conversation,
+        # prior-action-facts) rides with the user message so Anthropic's system
+        # cache_control breakpoint is not invalidated every turn.
+        system = envelope.render_cached()
+        user_message = build_action_user_message(message, prefix=envelope.render_ephemeral())
 
     config = AgentConfig(
         llm=llm,

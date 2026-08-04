@@ -134,6 +134,20 @@ class PromptEnvelope:
         """Render all non-empty blocks in order."""
         return self._render(self.blocks)
 
+    def _partition(self) -> tuple[list[PromptBlock], list[PromptBlock]]:
+        """Split the blocks into ``(cached, ephemeral)``, losing none.
+
+        Anything not in :data:`_CACHED_TIERS` is ephemeral, so a tier added
+        later stays out of the cached prefix instead of vanishing from both
+        halves.
+        """
+        cached: list[PromptBlock] = []
+        ephemeral: list[PromptBlock] = []
+        for block in self.blocks:
+            target = cached if block.tier in _CACHED_TIERS else ephemeral
+            target.append(block)
+        return cached, ephemeral
+
     def render_split(self) -> tuple[str, str]:
         """Return ``(cached, ephemeral)``.
 
@@ -142,18 +156,16 @@ class PromptEnvelope:
         where it sits. The cached half is what a provider marks as a cache
         breakpoint; the ephemeral half belongs with the user turn.
         """
-        return (
-            self._render(b for b in self.blocks if b.tier in _CACHED_TIERS),
-            self._render(b for b in self.blocks if b.tier == "ephemeral"),
-        )
+        cached, ephemeral = self._partition()
+        return self._render(cached), self._render(ephemeral)
 
     def render_cached(self) -> str:
         """Render the blocks that are stable enough to sit behind a cache marker."""
-        return self.render_split()[0]
+        return self._render(self._partition()[0])
 
     def render_ephemeral(self) -> str:
         """Render the per-turn blocks that must stay out of the cached prefix."""
-        return self.render_split()[1]
+        return self._render(self._partition()[1])
 
 
-__all__ = ["PromptBlock", "PromptEnvelope", "PromptTier"]
+__all__ = ["PromptBlock", "PromptBlockKind", "PromptEnvelope", "PromptTier"]

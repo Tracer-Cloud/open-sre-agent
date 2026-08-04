@@ -62,33 +62,17 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.prompts.skills",
             )
         )
-    blocks += [
+    blocks.append(
         PromptBlock(
             id="connected-integrations",
             kind=PromptBlockKind.CONTEXT,
             tier=PromptTier.CONTEXT,
             content=connected_integrations_block(turn_snapshot),
             provenance="core.agent_harness.turns.turn_snapshot",
-        ),
-        PromptBlock(
-            id="recent-conversation",
-            kind=PromptBlockKind.CONVERSATION,
-            tier=PromptTier.EPHEMERAL,
-            content=recent_conversation_block(turn_snapshot),
-            provenance="core.agent_harness.turns.turn_snapshot",
-        ),
-    ]
-    action_facts = prior_action_facts_block(turn_snapshot)
-    if action_facts:
-        blocks.append(
-            PromptBlock(
-                id="prior-action-facts",
-                kind=PromptBlockKind.CONTEXT,
-                tier=PromptTier.EPHEMERAL,
-                content=action_facts,
-                provenance="core.agent_harness.turns.turn_snapshot",
-            )
         )
+    )
+    # Volatile before ephemeral so render_cached + render_ephemeral reassemble
+    # into render() and the cache breakpoint can sit after memory.
     memory_block = long_term_memory_block()
     if memory_block:
         blocks.append(
@@ -98,6 +82,26 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 tier=PromptTier.VOLATILE,
                 content=memory_block,
                 provenance="core.domain.memory",
+            )
+        )
+    blocks.append(
+        PromptBlock(
+            id="recent-conversation",
+            kind=PromptBlockKind.CONVERSATION,
+            tier=PromptTier.EPHEMERAL,
+            content=recent_conversation_block(turn_snapshot),
+            provenance="core.agent_harness.turns.turn_snapshot",
+        )
+    )
+    action_facts = prior_action_facts_block(turn_snapshot)
+    if action_facts:
+        blocks.append(
+            PromptBlock(
+                id="prior-action-facts",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
+                content=action_facts,
+                provenance="core.agent_harness.turns.turn_snapshot",
             )
         )
     return PromptEnvelope.from_blocks(
@@ -174,8 +178,18 @@ def long_term_memory_block() -> str:
     )
 
 
-def build_action_user_message(text: str) -> str:
-    return _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
+def build_action_user_message(text: str, *, prefix: str = "") -> str:
+    """Wrap the user turn; optional ``prefix`` carries ephemeral system halves.
+
+    ``prefix`` is where per-turn conversation / prior-action-facts land once the
+    action driver opts into :meth:`PromptEnvelope.render_cached` — same text the
+    model used to see at the end of ``system``, now at the start of the user
+    message so the cached system prefix stays byte-stable across turns.
+    """
+    body = _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
+    if not prefix:
+        return body
+    return f"{prefix}{body}"
 
 
 def sanitize_action_text(text: str) -> str:

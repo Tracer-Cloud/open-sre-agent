@@ -237,6 +237,30 @@ def test_system_prompt_routes_durable_memory_requests_to_memory_tools() -> None:
     assert "never save built-in sample/demo/synthetic/test alert output" in prompt
 
 
+def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
+    """Stable-tier guidance must name /cron so the agent can offer recurrence."""
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    assert "scheduled deliveries" in prompt
+    assert 'slash_invoke(command="/cron"' in prompt
+    assert "every morning" in prompt
+    assert "want this every weekday at 8am?" in prompt
+    assert "do not create a schedule until they confirm" in prompt
+
+
+def test_morning_report_skill_closes_with_schedule_offer() -> None:
+    """A run-once morning report without an offer cannot drive repeat usage."""
+    from core.agent_harness.prompts.skills_loader import load_skills_block, skills_dir
+
+    load_skills_block.cache_clear()
+    body = " ".join(
+        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+    )
+    assert "want a morning delivery every weekday at 8am?" in body
+    assert 'slash_invoke(command="/cron"' in body
+    assert "daily_summary" in body
+    assert "do not schedule until they confirm" in body
+
+
 def test_connected_integrations_block_renders_state() -> None:
     assert "unknown" in connected_integrations_block(_ctx())
 

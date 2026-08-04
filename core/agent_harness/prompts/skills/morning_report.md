@@ -58,3 +58,21 @@ Examples:
     → (observe both results)
     → slack_send_message(message="<the FULL composed briefing>")
       + telegram_send_message(message="<the FULL composed briefing>")   [next turn — Slack always + Telegram because the user named it]
+
+5) AFTER delivery succeeds, ALWAYS offer to make mornings recurring — one
+   short question in the same final reply (or the next assistant turn if
+   delivery was the last tool call), e.g. "Want a morning delivery every
+   weekday at 8am?" Do NOT schedule until they confirm. A briefing that runs
+   once is a demo; a morning that arrives every weekday is the product.
+   On confirmation, create the schedule with slash_invoke /cron add. Default
+   when they accept without overrides: weekdays 08:00 in their timezone if
+   known else UTC, provider/chat matching where you just delivered. The
+   shipping scheduled-morning kind is daily_summary (reliability digest to
+   that channel on that cadence) — say so in one clause when you confirm,
+   then create it. Example:
+     → slash_invoke(command="/cron", args=["add", "--kind", "daily_summary",
+       "--cron", "0 8 * * 1-5", "--tz", "UTC", "--provider", "slack",
+       "--chat-id", "<channel or chat id>"])
+   If provider or chat-id is unknown, ask for those two facts only — then
+   schedule. Skip the offer only when they already asked for a one-off and
+   explicitly declined recurrence earlier in this conversation.

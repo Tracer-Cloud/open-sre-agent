@@ -801,6 +801,97 @@ def test_build_action_agent_returns_action_turn_plan() -> None:
     assert plan.agent is not None
 
 
+def test_build_action_agent_keeps_conversation_out_of_system() -> None:
+    """Ephemeral history prefixes the user turn so the system cache can stick."""
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+
+    marker = "zzmarker-harness-conversation-must-not-be-system"
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    snapshot = TurnSnapshot(
+        text="follow up",
+        conversation_messages=(("user", marker),),
+        configured_integrations=("github",),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+
+    plan = _build_action_agent(
+        message="follow up",
+        session=Session(),
+        agent_tools=[],
+        turn_snapshot=snapshot,
+        resolved_integrations={},
+        deps=deps,
+        tool_hooks=None,
+        tool_resources={},
+        observer=lambda *_args, **_kwargs: None,
+    )
+
+    system = plan.agent._system
+    assert marker not in system
+    assert marker in plan.user_message
+    assert "USER MESSAGE (literal): <<<follow up>>>" in plan.user_message
+
+
+def test_build_action_agent_system_identical_across_conversation_growth() -> None:
+    """Regression: growing history must not rewrite the cached system string."""
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+
+    def _plan(messages: list[tuple[str, str]]) -> ActionTurnPlan:
+        return _build_action_agent(
+            message="follow up",
+            session=Session(),
+            agent_tools=[],
+            turn_snapshot=TurnSnapshot(
+                text="follow up",
+                conversation_messages=tuple(messages),
+                configured_integrations=("github",),
+                configured_integrations_known=True,
+                last_state=None,
+                last_synthetic_observation_path=None,
+                reasoning_effort=None,
+            ),
+            resolved_integrations={},
+            deps=deps,
+            tool_hooks=None,
+            tool_resources={},
+            observer=lambda *_args, **_kwargs: None,
+        )
+
+    first = _plan([("user", "hello")])
+    second = _plan(
+        [("user", "hello"), ("assistant", "hi"), ("user", "zzmarker-growth")]
+    )
+    assert first.agent._system == second.agent._system
+    assert "zzmarker-growth" not in second.agent._system
+    assert "zzmarker-growth" in second.user_message
+
+
+def test_bang_shell_bypass_does_not_use_action_envelope() -> None:
+    """Explicit !shell must keep the short static system, not the action envelope."""
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    plan = _build_action_agent(
+        message="!echo hello",
+        session=Session(),
+        agent_tools=[],
+        turn_snapshot=None,
+        resolved_integrations={},
+        deps=deps,
+        tool_hooks=None,
+        tool_resources={},
+        observer=lambda *_args, **_kwargs: None,
+    )
+    assert plan.agent._system == "Execute the explicit shell_run tool call."
+    assert plan.user_message == "!echo hello"
+
+
 def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -7,6 +7,7 @@ from core.agent_harness.prompts import (
     PromptEnvelope,
     build_action_system_prompt,
     build_action_system_prompt_envelope,
+    build_action_user_message,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
@@ -131,7 +132,8 @@ def test_the_split_halves_reassemble_into_the_unchanged_render() -> None:
 
     Stated as the general contract — join the non-empty halves with the
     envelope's own separator — so the assertion holds for any envelope, not
-    only one that happens to separate with the empty string.
+    only one that happens to separate with the empty string. Requires every
+    ephemeral block to follow every cached block in declaration order.
     """
     # Arrange
     envelope = build_action_system_prompt_envelope(_turn([("user", "hello")]))
@@ -165,10 +167,9 @@ def test_every_block_declares_which_tier_it_belongs_to() -> None:
 def test_the_action_envelope_exposes_a_stable_half_the_provider_can_cache() -> None:
     """The split is what a provider needs to place a cache breakpoint.
 
-    The driver still sends ``render()`` as one string, so nothing is cached yet.
-    This pins the half that a second ``cache_control`` block will mark once the
-    split reaches the provider boundary, and proves it is worth marking: it is
-    the overwhelming majority of the prompt and identical between turns.
+    Pins the half the action driver sends as ``system`` (with
+    ``cache_control`` at the provider boundary): it is the overwhelming
+    majority of the prompt and identical between turns.
     """
     # Arrange
     first = _turn([("user", "hello")])
@@ -184,10 +185,10 @@ def test_the_action_envelope_exposes_a_stable_half_the_provider_can_cache() -> N
 
 
 def test_the_rendered_prompt_is_unchanged_by_the_split() -> None:
-    """The driver's output must be byte-identical to before tiers existed.
+    """``render()`` must stay the join of the two halves.
 
-    Tiers are metadata until a caller opts in. If this drifts, the split has
-    silently changed what every model reads.
+    Callers that have not opted into the split still see one string; the
+    driver's opt-in only relocates the ephemeral half into the user turn.
     """
     # Arrange
     snapshot = _turn([("user", "hello")])
@@ -197,3 +198,117 @@ def test_the_rendered_prompt_is_unchanged_by_the_split() -> None:
 
     # Assert
     assert rendered == build_action_system_prompt(snapshot)
+
+
+def test_driver_puts_conversation_on_the_user_turn_not_system() -> None:
+    """Phase D: per-turn text must leave ``system`` so the cache can stick.
+
+    Same words the model used to read at the end of the system prompt now
+    prefix the user message. A distinctive utterance must appear only there.
+    """
+    # Arrange
+    marker = "zzmarker-utterance-that-must-leave-system"
+    snapshot = _turn([("user", marker)])
+    envelope = build_action_system_prompt_envelope(snapshot)
+
+    # Act — same split the action driver uses
+    system = envelope.render_cached()
+    user_message = build_action_user_message("follow up", prefix=envelope.render_ephemeral())
+
+    # Assert
+    assert marker not in system
+    assert marker in user_message
+    assert "USER MESSAGE (literal): <<<follow up>>>" in user_message
+
+
+def test_driver_system_prefix_is_byte_identical_across_turns() -> None:
+    """Phase D proof: the defect from phase A is gone at the driver seam."""
+    # Arrange
+    first = _turn([("user", "hello")])
+    second = _turn([("user", "hello"), ("assistant", "hi"), ("user", "and again")])
+
+    # Act
+    first_system = build_action_system_prompt_envelope(first).render_cached()
+    second_system = build_action_system_prompt_envelope(second).render_cached()
+
+    # Assert
+    assert first_system == second_system
+    assert first_system  # non-empty cached prefix is what we mark for cache
+
+
+def test_user_message_prefix_keeps_literal_envelope_after_ephemeral() -> None:
+    """Ephemeral text must prefix the user turn without breaking the literal wrap."""
+    # Arrange
+    envelope = build_action_system_prompt_envelope(
+        _turn([("user", "zzmarker-prefix-envelope")])
+    )
+
+    # Act
+    user_message = build_action_user_message(
+        "run /health", prefix=envelope.render_ephemeral()
+    )
+
+    # Assert
+    assert user_message.startswith("RECENT CONVERSATION")
+    assert "zzmarker-prefix-envelope" in user_message
+    assert user_message.rstrip().endswith("USER MESSAGE (literal): <<<run /health>>>")
+    assert user_message.count("USER MESSAGE (literal):") == 1
+
+
+def test_split_reassembles_when_long_term_memory_is_present(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Volatile memory must sit before ephemeral so join(cached, eph) == render()."""
+    from config.constants import OPENSRE_MEMORY_DIR_ENV, OPENSRE_MEMORY_DISABLED_ENV
+    from core.domain.memory import save_memory
+
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
+    save_memory(
+        slug="smoke-profile",
+        memory_type="user",
+        description="Name is Smoke",
+        body="The user's name is Smoke for prompt-tier ordering.",
+    )
+
+    envelope = build_action_system_prompt_envelope(_turn([("user", "hello")]))
+    ids = [block.id for block in envelope.blocks]
+    assert "long-term-memory" in ids
+    assert ids.index("long-term-memory") < ids.index("recent-conversation")
+
+    cached, ephemeral = envelope.render_split()
+    rejoined = envelope.separator.join(half for half in (cached, ephemeral) if half)
+    assert rejoined == envelope.render()
+    assert "LONG-TERM MEMORY" in cached
+    assert "RECENT CONVERSATION" in ephemeral
+    assert "hello" in ephemeral
+    assert "hello" not in cached
+
+
+def test_every_tier_lands_in_exactly_one_half() -> None:
+    """The halves must partition the blocks whatever tiers exist.
+
+    Selecting the cached half by set membership and the ephemeral half by
+    equality partitions only while the enum has exactly today's members. A tier
+    added later would fall in neither half and vanish from the prompt with
+    nothing failing, so the invariant is asserted over every enum member rather
+    than over the four blocks the action prompt happens to build.
+    """
+    # Arrange
+    from core.agent_harness.prompts import PromptTier
+
+    envelope = PromptEnvelope.from_blocks(
+        [
+            PromptBlock(id=tier.value, content=f"marker-{tier.value}", tier=tier)
+            for tier in PromptTier
+        ],
+        separator="\n",
+    )
+
+    # Act
+    cached, ephemeral = envelope.render_split()
+
+    # Assert
+    for tier in PromptTier:
+        marker = f"marker-{tier.value}"
+        assert (marker in cached) ^ (marker in ephemeral), f"{tier} landed in neither or both"
