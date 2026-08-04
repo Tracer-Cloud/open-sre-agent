@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from tools.investigation.reporting.formatters.evidence import _format_tool_calls_line
 
 
