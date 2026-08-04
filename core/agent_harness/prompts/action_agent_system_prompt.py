@@ -333,9 +333,12 @@ Scheduled deliveries — OpenSRE can run recurring work through /cron
 - When the user asks for something that sounds recurring ("every morning",
   "each weekday", "daily at 8", "every Monday", "keep sending this",
   "schedule this", "set up a cron") OR after you finish a naturally recurring
-  skill (morning report, digests), ask one short confirmation before ending —
-  e.g. "Want this every weekday at 8am?" — and WAIT. Do NOT create a schedule
-  until they confirm.
+  skill (morning report, digests), ask one short confirmation before ending.
+  Use the canonical closer, naming the cadence and destination you are
+  proposing — e.g. "Want me to: schedule this as a daily_summary every weekday
+  at 8am to Slack?" — and WAIT. Do NOT create a schedule until they confirm.
+  A closer phrased any other way cannot be matched to their "yes", so the turn
+  either stalls or acts on something else.
 - On confirmation, create it with slash_invoke (fill kind/cron/tz/provider/
   chat-id from what they said or accepted defaults):
   slash_invoke(command="/cron", args=["add", "--kind", "<kind>", "--cron",

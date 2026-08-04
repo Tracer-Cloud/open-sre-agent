@@ -246,7 +246,8 @@ def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
     assert "scheduled deliveries" in prompt
     assert 'slash_invoke(command="/cron"' in prompt
     assert "every morning" in prompt
-    assert "want this every weekday at 8am?" in prompt
+    assert "want me to: schedule this as a daily_summary every weekday" in prompt
+    assert "every weekday at 8am" in prompt
     assert "do not create a schedule until they confirm" in prompt
 
 
@@ -256,7 +257,8 @@ def test_morning_report_skill_closes_with_schedule_offer() -> None:
     body = " ".join(
         (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
     )
-    assert "want a morning delivery every weekday at 8am?" in body
+    assert "want me to:** schedule this as a recurring daily_summary" in body
+    assert "want me to: shape exactly" in body
     assert 'slash_invoke(command="/cron"' in body
     assert "daily_summary" in body
     assert "do not schedule until they confirm" in body
@@ -578,8 +580,8 @@ def test_scheduling_guidance_survives_prompt_assembly() -> None:
     assert "morning-report" in assembled
     assert "recurring: weekdays 08:00" in assembled
     assert "skill_view" in assembled
-    assert "want a morning delivery every weekday at 8am?" in body
-    assert "want a morning delivery every weekday at 8am?" not in assembled
+    assert "want me to:** schedule this as a recurring daily_summary" in body
+    assert "want me to:** schedule this" not in assembled
 
 
 def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:

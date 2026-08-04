@@ -68,9 +68,13 @@ Examples:
 
 5) AFTER delivery succeeds, ALWAYS offer to make mornings recurring — one
    short question in the same final reply (or the next assistant turn if
-   delivery was the last tool call), e.g. "Want a morning delivery every
-   weekday at 8am?" Do NOT schedule until they confirm. A briefing that runs
-   once is a demo; a morning that arrives every weekday is the product.
+   delivery was the last tool call). Use the canonical closer so a bare
+   "yes" expands to THIS offer (not an older Want-me-to in the session):
+     **Want me to:** schedule this as a recurring daily_summary every
+     weekday at 8am to the same channel?
+   Use that Want me to: shape exactly — bare "yes" only expands canonical
+   closers. Do NOT schedule until they confirm. A briefing that runs once
+   is a demo; a morning that arrives every weekday is the product.
    On confirmation, create the schedule with slash_invoke /cron add. Default
    when they accept without overrides: weekdays 08:00 in their timezone if
    known else UTC, provider/chat matching where you just delivered. The

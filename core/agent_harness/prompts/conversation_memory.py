@@ -43,12 +43,17 @@ def expand_affirmative_follow_up(
     text: str,
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...] | None,
 ) -> str:
-    """Rewrite bare affirmatives into the prior ``Want me to:`` offer.
+    """Rewrite bare affirmatives into the prior actionable offer.
 
     Gateway/Slack turns often arrive as ``yes`` / ``sure`` after the assistant
     offered a next step. Without expansion, the action agent treats that as a
     new vague request and hands off to the investigate-onboarding assistant.
     Preserves any leading ``[Slack …]`` context line for channel targeting.
+
+    Uses only the newest assistant turn's canonical ``Want me to:`` closer so
+    a morning-report cron offer is not shadowed by an earlier remediation
+    offer in the same session. Non-canonical closers are left unexpanded
+    (the model still sees the conversation).
     """
     raw = text if isinstance(text, str) else ""
     if not raw.strip() or not messages:
@@ -58,7 +63,7 @@ def expand_affirmative_follow_up(
     if not (_AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)):
         return raw
 
-    offer = _latest_want_me_to_offer(messages)
+    offer = _latest_actionable_offer(messages)
     if not offer:
         return raw
     return f"{prefix}Yes — please {_normalize_offer(offer)}."
@@ -72,7 +77,17 @@ def _normalize_offer(offer: str) -> str:
     return offer
 
 
-def _latest_want_me_to_offer(
+def _offer_from_assistant_content(content: str) -> str | None:
+    """Extract one actionable offer from a single assistant message, if any."""
+    match = _WANT_ME_TO_RE.search(content)
+    if match:
+        offer = match.group(1).strip().rstrip("?").strip()
+        if offer:
+            return offer
+    return None
+
+
+def _latest_actionable_offer(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
 ) -> str | None:
     for entry in reversed(messages):
@@ -82,17 +97,22 @@ def _latest_want_me_to_offer(
             continue
         if role != "assistant" or not isinstance(content, str):
             continue
-        # A compacted session summary can quote an old offer; only live
-        # assistant messages carry an actionable "Want me to:".
+        # Only the newest assistant turn. Searching further back is what turned
+        # a "yes" to a scheduling offer into an unrelated `nvm install 22` from
+        # two turns earlier: not expanding is harmless, since the model still
+        # reads the conversation, but expanding to a stale offer runs something
+        # nobody agreed to.
         if content.startswith(SESSION_SUMMARY_PREFIX):
-            continue
-        match = _WANT_ME_TO_RE.search(content)
-        if not match:
-            continue
-        offer = match.group(1).strip().rstrip("?").strip()
-        if offer:
-            return offer
+            return None
+        return _offer_from_assistant_content(content)
     return None
+
+
+def _latest_want_me_to_offer(
+    messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
+) -> str | None:
+    """Backward-compatible alias for :func:`_latest_actionable_offer`."""
+    return _latest_actionable_offer(messages)
 
 
 def format_recent_conversation(
