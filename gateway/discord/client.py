@@ -1,4 +1,5 @@
 """Discord REST helpers for the gateway output sink."""
+
 from __future__ import annotations
 
 import logging
