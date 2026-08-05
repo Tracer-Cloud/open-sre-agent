@@ -64,7 +64,9 @@ shell_run_tool = RegisteredTool(
                 "description": (
                     "When true, do not print the command line or stdout/stderr to the "
                     "interactive shell. Tool result payload is unchanged. Use for "
-                    "architecture-audit agent-scan and heuristic passes."
+                    "intermediate skill fetches (morning-report weather/news curls, "
+                    "architecture-audit scans) when the user should only see the "
+                    "composed answer, not the raw $ output twice."
                 ),
             },
         },

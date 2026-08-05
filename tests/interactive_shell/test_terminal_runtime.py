@@ -64,8 +64,8 @@ def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
             "-c",
             (
                 "import sys; "
-                "import surfaces.interactive_shell.runtime.agent_presentation; "
-                "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
+                + "import surfaces.interactive_shell.runtime.agent_presentation; "
+                + "print('surfaces.interactive_shell.runtime.shell_turn_execution' in sys.modules)"
             ),
         ],
         check=True,
@@ -805,7 +805,7 @@ class TestSpinnerState:
 
         seen = set()
         for step in range(len(spinner._SPINNER_FRAMES)):
-            spinner.started_at = time.monotonic() - step * spinner._FRAME_INTERVAL_S * 1.001
+            spinner.started_at = time.monotonic() - step * spinner._FRAME_INTERVAL_SECONDS * 1.001
             seen.add(_extract_glyph(spinner.inline_spinner_ansi(), spinner._SPINNER_FRAMES))
         assert seen == set(spinner._SPINNER_FRAMES)
 

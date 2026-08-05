@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from integrations.catalog import classify_integrations as _classify_integrations
+from integrations.mcp_transport import McpTransportMode
 from integrations.x_mcp import (
     DEFAULT_X_MCP_URL,
     XMCPConfig,
@@ -29,6 +30,11 @@ class TestXMCPConfig:
         assert config.mode == "streamable-http"
         assert config.url == DEFAULT_X_MCP_URL
         assert config.is_configured is True
+
+    def test_mode_constructs_shared_enum_member_from_string(self) -> None:
+        """XMCPConfig accepts a plain string but stores the shared McpTransportMode."""
+        config = XMCPConfig(mode="stdio", command="python")
+        assert config.mode is McpTransportMode.STDIO
 
     def test_streamable_http_requires_url(self) -> None:
         with pytest.raises(ValidationError, match="requires a non-empty url"):

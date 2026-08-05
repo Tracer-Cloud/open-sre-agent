@@ -12,9 +12,10 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
+from gateway.runtime.approvals import ApprovalBroker
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.sink_protocol import GatewayAgentCallback
-from gateway.slack.approvals import ApprovalBroker, handle_block_actions_payload
+from gateway.slack.approvals import handle_block_actions_payload
 from gateway.slack.channel_intro import ChannelIntroGreeter
 from gateway.slack.client import SlackWebApiClient
 from gateway.slack.dispatcher import _SlackTurnDispatcher

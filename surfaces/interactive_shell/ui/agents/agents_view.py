@@ -25,7 +25,7 @@ from platform.terminal.theme import BOLD_BRAND
 from surfaces.interactive_shell.ui.components.rendering import print_repl_table, repl_table
 from tools.system.fleet_monitoring.registry import AgentRecord
 from tools.system.fleet_monitoring.sampler import get_snapshot, get_tokens_per_min, get_usd_per_hour
-from tools.system.fleet_monitoring.status import Status, compute_status
+from tools.system.fleet_monitoring.status import FleetProcessStatus, compute_status
 
 _UNFILLED = "-"
 
@@ -41,10 +41,10 @@ _COLUMNS: tuple[tuple[str, JustifyMethod], ...] = (
     ("status", "left"),
 )
 
-_STATUS_COLORS: dict[Status, str] = {
-    Status.ACTIVE: "green",
-    Status.IDLE: "yellow",
-    Status.STUCK: "red",
+_STATUS_COLORS: dict[FleetProcessStatus, str] = {
+    FleetProcessStatus.ACTIVE: "green",
+    FleetProcessStatus.IDLE: "yellow",
+    FleetProcessStatus.STUCK: "red",
 }
 
 
@@ -80,7 +80,7 @@ def _format_usd_per_hour(value: float | None) -> str:
     return f"${value:.2f}"
 
 
-def _format_status(status: Status, msg: str = "") -> str:
+def _format_status(status: FleetProcessStatus, msg: str = "") -> str:
     """Return a Rich-markup-colorized status cell for the /fleet table."""
     color = _STATUS_COLORS.get(status, "default")
     label = f"{status.value} ({msg})" if msg else status.value
@@ -111,7 +111,7 @@ def _build_agents_table(records: Iterable[AgentRecord]) -> Table:
                 stuck_after_s=480,
             )
             status_msg = ""
-            if status is Status.STUCK:
+            if status is FleetProcessStatus.STUCK:
                 anchor = snapshot.last_output_at or snapshot.started_at
                 status_msg = f"{_format_uptime(now - anchor)} no progress"
 

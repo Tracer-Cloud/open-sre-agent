@@ -10,7 +10,7 @@ from gateway.billing.credits_client import CreditsOutcome, consume_credits
 
 _URL_ENV = "OPENSRE_WEBAPP_URL"
 _SECRET_ENV = "AGENT_USAGE_SECRET"
-_ORG_ENV = "OPENSRE_ORGANIZATION_ID"
+_ORG_ENV = "ORGANIZATION_ID"
 
 
 @pytest.fixture

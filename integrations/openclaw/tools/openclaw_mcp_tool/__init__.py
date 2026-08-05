@@ -1,15 +1,24 @@
-"""OpenClaw MCP-backed bridge tools."""
+"""OpenClaw MCP-backed bridge tools.
+
+Package layout (separation of concerns):
+
+- ``models.py``   — payload type aliases shared by the whole package.
+- ``results.py``  — pure shaping of MCP results/failures into agent payloads.
+- ``params.py``   — availability + ``extract_params`` reads over the agent-state
+  ``openclaw`` source.
+- ``__init__.py`` — this file: config resolution, MCP dispatch, and the
+  ``@tool`` entrypoints. They stay here because the tool registry discovers a
+  package's tools on its own module (``TOOL_MODULES`` would be needed to look
+  into sub-modules) and tests patch the bridge callables on this module.
+"""
 
 from __future__ import annotations
 
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.mcp_bridge import unavailable_response
-from core.tool_framework.utils.mcp_params import first_list, first_string
 from core.tool_framework.utils.mcp_tool_listing import build_mcp_tool_listing
 from integrations.openclaw import (
     OpenClawConfig,
-    OpenClawToolCallResult,
     build_openclaw_config,
     describe_openclaw_error,
     openclaw_config_from_env,
@@ -21,19 +30,21 @@ from integrations.openclaw import (
 from integrations.openclaw import (
     list_openclaw_tools as list_openclaw_mcp_tools,
 )
-
-OpenClawParams = dict[str, object]
-OpenClawBridgeResponse = dict[str, object]
-OpenClawConversationRow = dict[str, object]
-
-
-def _openclaw_unavailable_response(
-    error: str,
-    *,
-    tool_name: str | None = None,
-    arguments: OpenClawParams | None = None,
-) -> OpenClawBridgeResponse:
-    return unavailable_response("openclaw", error, tool_name=tool_name, arguments=arguments)
+from integrations.openclaw.tools.openclaw_mcp_tool.models import (
+    OpenClawBridgeResponse,
+    OpenClawParams,
+)
+from integrations.openclaw.tools.openclaw_mcp_tool.params import (
+    conversation_detail_params,
+    conversation_search_params,
+    extract_params,
+    is_available,
+)
+from integrations.openclaw.tools.openclaw_mcp_tool.results import (
+    conversation_rows_from_result,
+    normalize_tool_result,
+    unavailable_result,
+)
 
 
 def _resolve_config(
@@ -63,81 +74,6 @@ def _resolve_config(
     return env_config
 
 
-def _openclaw_available(sources: dict[str, dict]) -> bool:
-    return bool(sources.get("openclaw", {}).get("connection_verified"))
-
-
-def _openclaw_extract_params(sources: dict[str, dict]) -> OpenClawParams:
-    openclaw = sources.get("openclaw", {})
-    if not openclaw:
-        return {}
-    return {
-        "openclaw_url": first_string(openclaw, "openclaw_url", "url"),
-        "openclaw_mode": first_string(openclaw, "openclaw_mode", "mode"),
-        "openclaw_token": first_string(openclaw, "openclaw_token", "auth_token"),
-        "openclaw_command": first_string(openclaw, "openclaw_command", "command"),
-        "openclaw_args": first_list(openclaw, "openclaw_args", "args"),
-    }
-
-
-def _openclaw_conversation_id(sources: dict[str, dict]) -> str:
-    openclaw = sources.get("openclaw", {})
-    return str(
-        openclaw.get("openclaw_conversation_id") or openclaw.get("conversation_id") or ""
-    ).strip()
-
-
-def _openclaw_conversation_params(sources: dict[str, dict]) -> OpenClawParams:
-    params = _openclaw_extract_params(sources)
-    openclaw = sources.get("openclaw", {})
-    params["search"] = (
-        openclaw.get("openclaw_search_query")
-        or openclaw.get("search_query")
-        or openclaw.get("search")
-        or ""
-    )
-    params["limit"] = 10
-    return params
-
-
-def _openclaw_conversation_detail_params(sources: dict[str, dict]) -> OpenClawParams:
-    params = _openclaw_extract_params(sources)
-    conversation_id = _openclaw_conversation_id(sources)
-    if conversation_id:
-        params["conversation_id"] = conversation_id
-    return params
-
-
-def _normalize_tool_result(result: OpenClawToolCallResult) -> OpenClawBridgeResponse:
-    if result.get("is_error"):
-        return _openclaw_unavailable_response(
-            str(result.get("text") or "OpenClaw MCP tool call failed."),
-            tool_name=str(result.get("tool", "")).strip() or None,
-            arguments=result.get("arguments", {}),
-        )
-    return {
-        "source": "openclaw",
-        "available": True,
-        "tool": result.get("tool"),
-        "arguments": result.get("arguments", {}),
-        "text": result.get("text", ""),
-        "structured_content": result.get("structured_content"),
-        "content": result.get("content", []),
-    }
-
-
-def _conversation_rows_from_result(result: OpenClawToolCallResult) -> list[OpenClawConversationRow]:
-    structured = result.get("structured_content")
-    if isinstance(structured, list):
-        return [item for item in structured if isinstance(item, dict)]
-    if isinstance(structured, dict):
-        conversations = structured.get("conversations")
-        if isinstance(conversations, list):
-            return [item for item in conversations if isinstance(item, dict)]
-        return [structured]
-    return []
-
-
 def _normalize_named_bridge_call(
     config: OpenClawConfig,
     *,
@@ -163,13 +99,13 @@ def _normalize_named_bridge_call(
             method=f"invoke_openclaw_mcp_tool('{tool_name}')",
             extras={"mcp_tool": tool_name, "transport": config.mode},
         )
-        return _openclaw_unavailable_response(
+        return unavailable_result(
             describe_openclaw_error(err, config),
             tool_name=tool_name,
             arguments=arguments,
         )
 
-    payload = _normalize_tool_result(result)
+    payload = normalize_tool_result(result)
     if payload.get("available") is False:
         payload.setdefault("tool", tool_name)
         payload.setdefault("arguments", arguments)
@@ -217,8 +153,8 @@ def _normalize_named_bridge_call(
         },
         "required": [],
     },
-    is_available=_openclaw_available,
-    extract_params=_openclaw_extract_params,
+    is_available=is_available,
+    extract_params=extract_params,
 )
 def list_openclaw_bridge_tools(
     name_filter: str | None = None,
@@ -243,13 +179,13 @@ def list_openclaw_bridge_tools(
         openclaw_args,
     )
     if config is None:
-        payload = _openclaw_unavailable_response("OpenClaw MCP integration is not configured.")
+        payload = unavailable_result("OpenClaw MCP integration is not configured.")
         payload["tools"] = []
         return payload
 
     runtime_error = openclaw_runtime_unavailable_reason(config)
     if runtime_error is not None:
-        payload = _openclaw_unavailable_response(runtime_error)
+        payload = unavailable_result(runtime_error)
         payload["tools"] = []
         return payload
 
@@ -264,7 +200,7 @@ def list_openclaw_bridge_tools(
             method="list_openclaw_mcp_tools",
             extras={"transport": config.mode},
         )
-        payload = _openclaw_unavailable_response(describe_openclaw_error(err, config))
+        payload = unavailable_result(describe_openclaw_error(err, config))
         payload["tools"] = []
         return payload
 
@@ -305,8 +241,8 @@ def list_openclaw_bridge_tools(
         },
         "required": [],
     },
-    is_available=_openclaw_available,
-    extract_params=_openclaw_conversation_params,
+    is_available=is_available,
+    extract_params=conversation_search_params,
 )
 def search_openclaw_conversations(
     search: str = "",
@@ -327,13 +263,13 @@ def search_openclaw_conversations(
         openclaw_args,
     )
     if config is None:
-        payload = _openclaw_unavailable_response("OpenClaw MCP integration is not configured.")
+        payload = unavailable_result("OpenClaw MCP integration is not configured.")
         payload["conversations"] = []
         return payload
 
     runtime_error = openclaw_runtime_unavailable_reason(config)
     if runtime_error is not None:
-        payload = _openclaw_unavailable_response(runtime_error)
+        payload = unavailable_result(runtime_error)
         payload["conversations"] = []
         return payload
 
@@ -356,13 +292,13 @@ def search_openclaw_conversations(
             method="invoke_openclaw_mcp_tool('conversations_list')",
             extras={"transport": config.mode},
         )
-        payload = _openclaw_unavailable_response(describe_openclaw_error(err, config))
+        payload = unavailable_result(describe_openclaw_error(err, config))
         payload["conversations"] = []
         return payload
 
-    payload = _normalize_tool_result(result)
+    payload = normalize_tool_result(result)
     payload["search"] = search.strip()
-    payload["conversations"] = _conversation_rows_from_result(result)
+    payload["conversations"] = conversation_rows_from_result(result)
     return payload
 
 
@@ -388,8 +324,8 @@ def search_openclaw_conversations(
         },
         "required": ["conversation_id"],
     },
-    is_available=_openclaw_available,
-    extract_params=_openclaw_conversation_detail_params,
+    is_available=is_available,
+    extract_params=conversation_detail_params,
 )
 def get_openclaw_conversation(
     conversation_id: str | None = None,
@@ -403,7 +339,7 @@ def get_openclaw_conversation(
     """Fetch a specific OpenClaw conversation."""
     normalized_conversation_id = (conversation_id or "").strip()
     if not normalized_conversation_id:
-        return _openclaw_unavailable_response("conversation_id is required.")
+        return unavailable_result("conversation_id is required.")
 
     config = _resolve_config(
         openclaw_url,
@@ -413,11 +349,11 @@ def get_openclaw_conversation(
         openclaw_args,
     )
     if config is None:
-        return _openclaw_unavailable_response("OpenClaw MCP integration is not configured.")
+        return unavailable_result("OpenClaw MCP integration is not configured.")
 
     runtime_error = openclaw_runtime_unavailable_reason(config)
     if runtime_error is not None:
-        return _openclaw_unavailable_response(runtime_error)
+        return unavailable_result(runtime_error)
 
     return _normalize_named_bridge_call(
         config,
@@ -450,8 +386,8 @@ def get_openclaw_conversation(
         },
         "required": ["conversation_id", "content"],
     },
-    is_available=_openclaw_available,
-    extract_params=_openclaw_conversation_detail_params,
+    is_available=is_available,
+    extract_params=conversation_detail_params,
 )
 def send_openclaw_message(
     conversation_id: str | None = None,
@@ -467,9 +403,9 @@ def send_openclaw_message(
     normalized_conversation_id = (conversation_id or "").strip()
     normalized_content = (content or "").strip()
     if not normalized_conversation_id:
-        return _openclaw_unavailable_response("conversation_id is required.")
+        return unavailable_result("conversation_id is required.")
     if not normalized_content:
-        return _openclaw_unavailable_response("content is required.")
+        return unavailable_result("content is required.")
 
     config = _resolve_config(
         openclaw_url,
@@ -479,11 +415,11 @@ def send_openclaw_message(
         openclaw_args,
     )
     if config is None:
-        return _openclaw_unavailable_response("OpenClaw MCP integration is not configured.")
+        return unavailable_result("OpenClaw MCP integration is not configured.")
 
     runtime_error = openclaw_runtime_unavailable_reason(config)
     if runtime_error is not None:
-        return _openclaw_unavailable_response(runtime_error)
+        return unavailable_result(runtime_error)
 
     return _normalize_named_bridge_call(
         config,
@@ -516,8 +452,8 @@ def send_openclaw_message(
         },
         "required": ["tool_name"],
     },
-    is_available=_openclaw_available,
-    extract_params=_openclaw_extract_params,
+    is_available=is_available,
+    extract_params=extract_params,
 )
 def call_openclaw_bridge_tool(
     tool_name: str | None = None,
@@ -532,7 +468,7 @@ def call_openclaw_bridge_tool(
     """Call a specific OpenClaw MCP bridge tool."""
     normalized_tool_name = (tool_name or "").strip()
     if not normalized_tool_name:
-        return _openclaw_unavailable_response(
+        return unavailable_result(
             "tool_name is required to call an OpenClaw MCP tool.",
             arguments=arguments or {},
         )
@@ -545,7 +481,7 @@ def call_openclaw_bridge_tool(
         openclaw_args,
     )
     if config is None:
-        return _openclaw_unavailable_response(
+        return unavailable_result(
             "OpenClaw MCP integration is not configured.",
             tool_name=normalized_tool_name or None,
             arguments=arguments or {},
@@ -553,7 +489,7 @@ def call_openclaw_bridge_tool(
 
     runtime_error = openclaw_runtime_unavailable_reason(config)
     if runtime_error is not None:
-        return _openclaw_unavailable_response(
+        return unavailable_result(
             runtime_error,
             tool_name=normalized_tool_name,
             arguments=arguments or {},
@@ -570,10 +506,10 @@ def call_openclaw_bridge_tool(
             method="invoke_openclaw_mcp_tool",
             extras={"mcp_tool": normalized_tool_name, "transport": config.mode},
         )
-        return _openclaw_unavailable_response(
+        return unavailable_result(
             describe_openclaw_error(err, config),
             tool_name=normalized_tool_name,
             arguments=arguments or {},
         )
 
-    return _normalize_tool_result(result)
+    return normalize_tool_result(result)

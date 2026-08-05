@@ -68,6 +68,8 @@ def test_deleted_app_nodes_package_is_not_referenced_by_python_code() -> None:
     offenders: list[str] = []
 
     for path in tracked_python_files(str(ROOT)):
+        if not path.exists():
+            continue
         rel = path.relative_to(ROOT)
         if not rel.parts or rel.parts[0] not in {"app", "tests"}:
             continue

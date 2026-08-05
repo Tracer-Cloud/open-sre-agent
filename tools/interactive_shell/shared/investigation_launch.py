@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, runtime_checkable
+from enum import StrEnum
+from typing import Any, Protocol, runtime_checkable
 
 from rich.console import Console
 from rich.markup import escape
@@ -22,7 +23,22 @@ from tools.interactive_shell.shared.execution_policy import (
     plan_foreground_tool,
 )
 
-ForegroundInvestigationStatus = Literal["completed", "failed", "cancelled"]
+
+class ForegroundInvestigationStatus(StrEnum):
+    """Terminal outcome of one foreground REPL/UI investigation run.
+
+    Distinct from ``gateway.storage.investigations.store.InvestigationStatus``,
+    which tracks a different state machine (the async gateway job lifecycle,
+    including in-flight ``QUEUED``/``RUNNING`` states this one never has).
+    Do not merge the two. Canonical definition lives here (``tools/``, tier 2)
+    rather than in ``surfaces/interactive_shell/ui/investigation_outcome.py``
+    (tier 1) because tier 2 may not import tier 1 (see docs/ARCHITECTURE.md);
+    ``investigation_outcome.py`` re-exports this instead of duplicating it.
+    """
+
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class InvestigationSession(Protocol):
@@ -75,8 +91,9 @@ class InvestigationLaunchPorts(Protocol):
         alert_text: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
-        raise NotImplementedError
+        """Run a free-text investigation, rendering progress through ``console``."""
 
     def run_sample_alert(
         self,
@@ -84,8 +101,9 @@ class InvestigationLaunchPorts(Protocol):
         template_name: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
-        raise NotImplementedError
+        """Run a built-in sample alert, rendering progress through ``console``."""
 
     def start_background_text(
         self,
@@ -181,6 +199,7 @@ def launch_investigation(
 
 __all__ = [
     "ForegroundInvestigationResult",
+    "ForegroundInvestigationStatus",
     "InvestigationLaunchPorts",
     "InvestigationSession",
     "launch_investigation",

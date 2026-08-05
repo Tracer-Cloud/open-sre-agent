@@ -14,7 +14,8 @@ Initial areas:
 - `auth/` owns runtime authentication and identity checks.
 - `analytics/` owns product and runtime analytics.
 - `common/` owns small shared helpers that do not belong to a runtime subsystem.
-- `deployment/` owns EC2 provisioning (`aws/` primitives, `deploy.py`, `destroy.py`). Makefile: `make deploy`.
+- `cloudflare_install_proxy/` owns the Cloudflare Worker for `install.opensre.com`.
+- `deployment_ec2/` owns EC2 AWS primitives and Telegram gateway AMI/systemd deploy (`telegram_gateway/`). Makefile: `make deploy-gateway`.
 - `notifications/` owns notification delivery transports and channel-specific senders.
 - `observability/` owns logging, tracing, progress, debug output, and runtime
   display ports.

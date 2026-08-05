@@ -127,22 +127,22 @@ def _resolve_overlaps(matches: list[DetectedIdentifier]) -> list[DetectedIdentif
     """Drop matches that overlap (fully or partially) a longer earlier match.
 
     Sort by start ASC, then by length DESC so the longest match at each
-    start position is considered first. For each candidate, drop it if any
-    already-kept match shares even a single character — this prevents
-    ``_apply_replacements`` from processing overlapping spans and producing
-    corrupted output when replacements are spliced in reverse.
+    start position is considered first. Kept intervals are non-overlapping and
+    start-ordered, so a candidate only needs to compare against the previous
+    kept end — O(N) after the sort, not O(N²) against the full kept list.
     """
     if not matches:
         return []
     by_start = sorted(matches, key=lambda m: (m.start, -(m.end - m.start)))
     result: list[DetectedIdentifier] = []
+    last_end = -1
     for m in by_start:
-        # Partial-overlap check: kept.start < m.end AND kept.end > m.start
-        # means [kept.start, kept.end) and [m.start, m.end) share characters.
-        if any(kept.start < m.end and kept.end > m.start and kept is not m for kept in result):
+        # Overlap with previous kept: last_end > m.start (half-open spans).
+        if m.start < last_end:
             continue
         result.append(m)
-    return sorted(result, key=lambda m: m.start)
+        last_end = m.end
+    return result
 
 
 __all__ = [

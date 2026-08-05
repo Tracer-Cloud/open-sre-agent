@@ -119,15 +119,23 @@ def _lock_path() -> Path:
     return _store_path().with_suffix(".lock")
 
 
+def _ensure_private_store_directory(path: Path) -> None:
+    """Create the store directory and restrict it to the current user."""
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != "nt":
+        with contextlib.suppress(OSError):
+            path.chmod(0o700)
+
+
 def _acquire_lock() -> FileLock:
     """Create and return a FileLock for the current STORE_PATH."""
-    _store_path().parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_store_directory(_store_path().parent)
     return FileLock(str(_lock_path()), timeout=_LOCK_TIMEOUT_SECONDS)
 
 
 def _atomic_write(dest: Path, data: dict[str, Any]) -> None:
     """Write ``data`` to ``dest`` atomically via a temp file + fsync + replace."""
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_private_store_directory(dest.parent)
     serialized = json.dumps(data, indent=2) + "\n"
     fd: int | None = None
     tmp_path_str: str | None = None
@@ -241,6 +249,17 @@ def _locked_update(mutator: Callable[[dict[str, Any]], bool]) -> tuple[dict[str,
 def load_integrations() -> list[dict[str, Any]]:
     """Return all active local integrations (v2 shape)."""
     return list(_load_raw().get("integrations", []))
+
+
+def replace_integrations(integrations: list[dict[str, Any]]) -> None:
+    """Atomically replace the complete local integration set.
+
+    Remote hydration uses this all-or-nothing operation so a failed write
+    cannot leave a partially updated credential store behind.
+    """
+    if any(not isinstance(record, dict) for record in integrations):
+        raise ValueError("integrations must contain only objects")
+    _save({"version": _VERSION, "integrations": integrations})
 
 
 def _record_with_flat_credentials_view(record: dict[str, Any]) -> dict[str, Any]:

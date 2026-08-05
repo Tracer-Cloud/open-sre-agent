@@ -15,13 +15,15 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Any
 
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
+from config.local_env import bootstrap_opensre_env_once
 from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_opensre_version
 from core.domain.alerts.inbox import (
@@ -32,15 +34,12 @@ from core.domain.alerts.inbox import (
 )
 
 ensure_project_platform_package()
+bootstrap_opensre_env_once(override=False)
 
 from gateway.http.investigations import router as investigations_router  # noqa: E402
-from integrations.harness_adapters import (  # noqa: E402
-    register_harness_adapters as _register_integration_adapters,
-)
+from gateway.runtime.bootstrap import install_runtime  # noqa: E402
+from gateway.runtime.readiness import is_gateway_ready  # noqa: E402
 from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
-from tools.harness_adapters import (  # noqa: E402
-    register_harness_adapters as _register_tool_adapters,
-)
 from tools.investigation.capability import (  # noqa: E402
     resolve_investigation_context,
     run_investigation_payload,
@@ -50,8 +49,7 @@ from tools.investigation.capability import (  # noqa: E402
 # vendor registries (alert-source routing, incident anchors, taxonomy, alert
 # detail fields). Without this they stay empty and degrade silently. Registering
 # here rather than via surfaces.boundary keeps gateway off a surfaces import.
-_register_integration_adapters()
-_register_tool_adapters()
+install_runtime(harness_adapters=True, scheduler_runners=False)
 
 init_sentry(entrypoint="webapp")
 
@@ -95,15 +93,21 @@ def get_health_response() -> HealthResponse:
 @app.get("/ok", response_model=HealthResponse)
 def health(response: Response) -> HealthResponse:
     health_response = get_health_response()
-    response.status_code = (
-        status.HTTP_200_OK if health_response.ok else status.HTTP_503_SERVICE_UNAVAILABLE
-    )
+    response.status_code = HTTPStatus.OK if health_response.ok else HTTPStatus.SERVICE_UNAVAILABLE
     return health_response
 
 
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz() -> JSONResponse:
+    """Report mandatory startup readiness separately from process liveness."""
+    if is_gateway_ready():
+        return JSONResponse({"status": "ready"}, status_code=HTTPStatus.OK)
+    return JSONResponse({"status": "not_ready"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE)
 
 
 def _alert_inbox() -> AlertInbox:
@@ -126,13 +130,13 @@ def _gateway_auth_error(request: Request) -> JSONResponse | None:
         supplied = request.headers.get("authorization", "")
         if hmac.compare_digest(supplied, f"Bearer {token}"):
             return None
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
     client_host = request.client.host if request.client else ""
     if client_host in _LOOPBACK_HOSTS:
         return None
     return JSONResponse(
         {"error": "set OPENSRE_ALERT_LISTENER_TOKEN to accept non-loopback callers"},
-        status_code=403,
+        status_code=HTTPStatus.FORBIDDEN,
     )
 
 
@@ -144,20 +148,24 @@ async def receive_alert(request: Request) -> JSONResponse:
     try:
         declared_length = int(request.headers.get("content-length", 0))
     except ValueError:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=400)
+        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
     if declared_length < 0:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=400)
+        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
     if declared_length > MAX_ALERT_BODY_BYTES:
-        return JSONResponse({"error": "payload too large"}, status_code=413)
+        return JSONResponse(
+            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        )
 
     body = await request.body()
     if len(body) > MAX_ALERT_BODY_BYTES:
-        return JSONResponse({"error": "payload too large"}, status_code=413)
+        return JSONResponse(
+            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        )
 
     try:
         data = json.loads(body)
     except ValueError:
-        return JSONResponse({"error": "invalid json"}, status_code=400)
+        return JSONResponse({"error": "invalid json"}, status_code=HTTPStatus.BAD_REQUEST)
 
     try:
         if not isinstance(data, dict):
@@ -172,7 +180,7 @@ async def receive_alert(request: Request) -> JSONResponse:
         logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
         return JSONResponse(
             {"error": f"invalid alert payload: {type(exc).__name__}"},
-            status_code=400,
+            status_code=HTTPStatus.BAD_REQUEST,
         )
 
     inbox = _alert_inbox()
@@ -181,7 +189,7 @@ async def receive_alert(request: Request) -> JSONResponse:
     if not accepted:
         payload["dropped"] = inbox.dropped
         payload["warning"] = "inbox full, oldest alert dropped"
-    return JSONResponse(payload, status_code=202)
+    return JSONResponse(payload, status_code=HTTPStatus.ACCEPTED)
 
 
 class InvestigateRequest(BaseModel):
@@ -232,5 +240,5 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
         capture_exception(exc, context="gateway.http.webapp.investigate")
         return JSONResponse(
             {"error": f"investigation failed: {type(exc).__name__}"},
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )

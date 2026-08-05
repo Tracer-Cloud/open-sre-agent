@@ -48,7 +48,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
     if is_azure_openai_provider(provider):
         from config.config import AZURE_OPENAI_LLM_CONFIG
 
-        azure = resolve_azure_openai_request_kwargs(settings, model_type="reasoning")
+        azure = resolve_azure_openai_request_kwargs(settings, model_type=ModelType.REASONING)
         return LiteLLMAgentClient(
             litellm_model=azure["litellm_model"],
             max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
@@ -60,7 +60,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
     if is_openai_compat_provider(provider):
         from config.config import PROVIDER_OLLAMA
 
-        resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
+        resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
         max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return LiteLLMAgentClient(
             litellm_model=_litellm_model_for_compat(resolved.model),
@@ -74,7 +74,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
     if is_vertex_ai_provider(provider):
         from config.config import VERTEX_AI_LLM_CONFIG
 
-        vertex = resolve_vertex_ai_request_kwargs(settings, model_type="reasoning")
+        vertex = resolve_vertex_ai_request_kwargs(settings, model_type=ModelType.REASONING)
         return LiteLLMAgentClient(
             litellm_model=vertex["litellm_model"],
             max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
@@ -101,7 +101,7 @@ def build_litellm_llm_client(
     from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
     def _fallback(provider_prefix: str) -> str | None:
-        if model_type == "toolcall":
+        if model_type is ModelType.TOOLCALL:
             return None
         attr = f"{provider_prefix}_toolcall_model"
         return str(getattr(settings, attr, None) or "")
@@ -143,7 +143,7 @@ def build_litellm_llm_client(
         raw_fallback = _fallback(provider)
         fallback_model: str | None = None
         if raw_fallback:
-            fallback_compat = resolve_openai_compat_provider(settings, provider, "toolcall")
+            fallback_compat = resolve_openai_compat_provider(settings, provider, ModelType.TOOLCALL)
             fallback_model = _litellm_model_for_compat(fallback_compat.model)
         return LiteLLMLLMClient(
             litellm_model=_litellm_model_for_compat(compat.model),

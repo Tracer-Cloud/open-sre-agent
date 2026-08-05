@@ -58,10 +58,10 @@ def test_registry_provider_names_match_meter_registry() -> None:
 def test_registry_keys_cover_known_providers() -> None:
     # Drift guard: every provider that ``provider_for`` can resolve
     # must have an explicit registry entry (real or null). Without
-    # this check, adding a name to ``providers.KNOWN_PROVIDERS``
+    # this check, adding a member to ``provider_ids.FleetAgentProvider``
     # while forgetting both registry tables would silently fall
     # through ``get_token_source`` to ``null_token_source`` — the
     # right behavior, but masks the wiring bug.
-    from tools.system.fleet_monitoring.providers import KNOWN_PROVIDERS
+    from tools.system.fleet_monitoring.provider_ids import FleetAgentProvider
 
-    assert set(TOKEN_SOURCE_REGISTRY) >= KNOWN_PROVIDERS
+    assert set(TOKEN_SOURCE_REGISTRY) >= set(FleetAgentProvider)

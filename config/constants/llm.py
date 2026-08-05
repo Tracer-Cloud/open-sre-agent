@@ -12,3 +12,8 @@ from typing import Final
 AZURE_OPENAI_BASE_URL_ENV: Final[str] = "AZURE_OPENAI_BASE_URL"
 AZURE_OPENAI_API_VERSION_ENV: Final[str] = "AZURE_OPENAI_API_VERSION"
 AZURE_OPENAI_API_KEY_ENV: Final[str] = "AZURE_OPENAI_API_KEY"
+
+#: Opt-in provider-native structured outputs (Anthropic ``output_config`` /
+#: OpenAI ``chat.completions.parse``). Default off until a live diagnose turn
+#: has verified the request shape — silent fallback would double-invoke.
+OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV: Final[str] = "OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT"

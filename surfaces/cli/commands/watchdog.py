@@ -6,8 +6,10 @@ import click
 from pydantic import ValidationError
 
 from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
-from tools.system.watch_dog.config import WatchdogConfig
+from tools.system.watch_dog.config import WATCHDOG_SUPPORTED_PROVIDERS, WatchdogConfig
 from tools.system.watch_dog.runner import run_watchdog
+
+_PROVIDER_CHOICES = [p.value for p in WATCHDOG_SUPPORTED_PROVIDERS]
 
 
 @click.command(name="watchdog")
@@ -47,7 +49,7 @@ from tools.system.watch_dog.runner import run_watchdog
 @click.option("--once", is_flag=True, help="Exit after the first threshold alarm.")
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "rocketchat"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     default="telegram",
     show_default=True,
     help="Messaging provider for alarm delivery.",
@@ -56,8 +58,8 @@ from tools.system.watch_dog.runner import run_watchdog
     "--chat-id",
     type=str,
     default=None,
-    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID or "
-    "ROCKETCHAT_DEFAULT_CHANNEL).",
+    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID, "
+    "ROCKETCHAT_DEFAULT_CHANNEL, or BUZZ_DEFAULT_CHANNEL).",
 )
 @click.option("--verbose", is_flag=True, help="Print one line per sampled process state.")
 def watchdog_command(

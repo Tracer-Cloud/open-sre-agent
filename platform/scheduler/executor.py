@@ -12,6 +12,12 @@ from platform.scheduler.credentials import (
     resolve_rocketchat_credentials,
     resolve_slack_credentials,
     resolve_telegram_credentials,
+    resolve_telegram_default_chat_id,
+)
+from platform.scheduler.loop_constants import (
+    LOOP_CHANNELS_PARAM,
+    LOOP_SLACK_CHAT_ID_PARAM,
+    LOOP_TELEGRAM_CHAT_ID_PARAM,
 )
 from platform.scheduler.tasks import build_message
 from platform.scheduler.types import Provider, ScheduledTask, TaskStatus
@@ -67,7 +73,7 @@ def execute_task(
             fire_time,
             status=TaskStatus.SUCCESS,
             posted_message_id="",
-            provider=task.provider.value,
+            provider=_run_provider_label(task),
         )
         _emit_analytics(task, TaskStatus.SUCCESS)
         logger.info("Task %s produced no message; delivery skipped", task.id)
@@ -82,10 +88,19 @@ def execute_task(
             fire_time,
             status=TaskStatus.SUCCESS,
             posted_message_id=message_id,
-            provider=task.provider.value,
+            error=error,
+            provider=_run_provider_label(task),
         )
-        _emit_analytics(task, TaskStatus.SUCCESS)
-        logger.info("Task %s delivered successfully (message_id=%s)", task.id, message_id)
+        _emit_analytics(task, TaskStatus.SUCCESS, error=error)
+        if error:
+            logger.warning(
+                "Task %s delivered with partial channel failures (message_id=%s): %s",
+                task.id,
+                message_id,
+                error,
+            )
+        else:
+            logger.info("Task %s delivered successfully (message_id=%s)", task.id, message_id)
         return True
     else:
         _record_failure(task, fire_time, error)
@@ -100,6 +115,16 @@ def _deliver(
 
     Returns (success, error, message_id).
     """
+    delivery_providers, parse_error = _loop_delivery_providers(task)
+    if parse_error:
+        return False, parse_error, ""
+    if delivery_providers:
+        return _deliver_to_providers(task, message, delivery_providers)
+    return _deliver_single(task, message)
+
+
+def _deliver_single(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Deliver one message to ``task.provider``."""
     if task.provider == Provider.TELEGRAM:
         return _deliver_telegram(task, message)
     elif task.provider == Provider.SLACK:
@@ -108,6 +133,8 @@ def _deliver(
         return _deliver_discord(task, message)
     elif task.provider == Provider.ROCKETCHAT:
         return _deliver_rocketchat(task, message)
+    elif task.provider == Provider.INTERACTIVE_SHELL:
+        return _deliver_interactive_shell(task, message)
     else:
         return False, f"Unsupported provider: {task.provider}", ""
 
@@ -168,6 +195,95 @@ def _delivery_targets_for_task(task: ScheduledTask) -> tuple[tuple[Provider, str
     return tuple(unique)
 
 
+def _loop_delivery_providers(task: ScheduledTask) -> tuple[tuple[Provider, ...], str]:
+    """Return fan-out providers requested by loop metadata."""
+    raw = task.params.get(LOOP_CHANNELS_PARAM, "").strip()
+    if not raw:
+        return (), ""
+
+    providers: list[Provider] = []
+    seen: set[Provider] = set()
+    for item in raw.split(","):
+        value = item.strip().lower()
+        if not value:
+            continue
+        try:
+            provider = Provider(value)
+        except ValueError:
+            return (), f"Unsupported loop delivery channel: {value}"
+        if provider not in seen:
+            providers.append(provider)
+            seen.add(provider)
+    if not providers:
+        return (), "Loop delivery channel list is empty"
+    return tuple(providers), ""
+
+
+def _deliver_to_providers(
+    task: ScheduledTask,
+    message: str,
+    providers: tuple[Provider, ...],
+) -> tuple[bool, str, str]:
+    """Fan out one built message to every requested provider.
+
+    Retries destinations that fail on the first pass so a transient outage on
+    one channel does not permanently miss the tick. When at least one channel
+    succeeds, the claim completes as success and failed destinations are
+    surfaced in the error field (callers can ``/loops run`` for a fresh
+    second-precision delivery of the remaining channels).
+    """
+    pending = list(providers)
+    message_ids: list[str] = []
+    errors: list[str] = []
+    for attempt in range(3):
+        if not pending:
+            break
+        still_pending: list[Provider] = []
+        for provider in pending:
+            delivery_task = _task_for_delivery_provider(task, provider)
+            ok, error, message_id = _deliver_single(delivery_task, message)
+            if ok:
+                message_ids.append(
+                    f"{provider.value}:{message_id}" if message_id else provider.value
+                )
+                continue
+            if attempt < 2:
+                still_pending.append(provider)
+            else:
+                errors.append(f"{provider.value}: {error}")
+        pending = still_pending
+
+    if message_ids and not errors:
+        return True, "", ", ".join(message_ids)
+    if message_ids and errors:
+        return True, f"partial delivery: {'; '.join(errors)}", ", ".join(message_ids)
+    return False, "; ".join(errors), ""
+
+
+def _task_for_delivery_provider(task: ScheduledTask, provider: Provider) -> ScheduledTask:
+    """Return a task-shaped view carrying the destination for ``provider``."""
+    chat_id = task.chat_id
+    if provider == Provider.TELEGRAM:
+        chat_id = (
+            task.params.get(LOOP_TELEGRAM_CHAT_ID_PARAM, "").strip()
+            or (task.chat_id if task.provider == Provider.TELEGRAM else "")
+            or resolve_telegram_default_chat_id(task.params)
+        )
+    elif provider == Provider.SLACK:
+        chat_id = task.params.get(LOOP_SLACK_CHAT_ID_PARAM, "").strip() or (
+            task.chat_id if task.provider == Provider.SLACK else ""
+        )
+    elif provider == Provider.INTERACTIVE_SHELL:
+        chat_id = ""
+    return task.model_copy(update={"provider": provider, "chat_id": chat_id})
+
+
+def _run_provider_label(task: ScheduledTask) -> str:
+    """Return the provider label persisted with run history."""
+    channels = task.params.get(LOOP_CHANNELS_PARAM, "").strip()
+    return channels or task.provider.value
+
+
 def _strip_html(text: str) -> str:
     """Strip HTML tags for providers that use plain text or Markdown."""
     return _HTML_TAG_RE.sub("", text)
@@ -200,14 +316,30 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
 
 def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
     """Deliver via Slack using the shared Slack delivery helper when possible."""
+    from platform.scheduler.delivery import slack_can_deliver
+
     creds = resolve_slack_credentials(task.params)
-    access_token = creds.get("access_token", "")
-    webhook_url = creds.get("webhook_url", "")
+    access_token = str(creds.get("access_token") or "").strip()
+    webhook_url = str(creds.get("webhook_url") or "").strip()
+    chat_id = (task.chat_id or "").strip()
+
+    # Same policy as readiness: chat_id → bot token; empty chat_id → webhook OK.
+    if not slack_can_deliver(creds, chat_id=chat_id):
+        if chat_id and webhook_url and not access_token:
+            return (
+                False,
+                "Slack bot token required when chat_id is set (a webhook alone "
+                "cannot target an explicit chat_id)",
+                "",
+            )
+        if not chat_id:
+            return False, "Missing chat_id or webhook_url for Slack delivery", ""
+        return False, "Scheduled tasks require Slack bot access_token for chat_id delivery", ""
 
     # Strip HTML tags — Slack uses mrkdwn, not HTML
     plain_message = _strip_html(message)
 
-    if access_token and task.chat_id:
+    if access_token and chat_id:
         # Direct API post as a new top-level message
         from platform.notifications.delivery_transport import post_json
 
@@ -216,7 +348,7 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
             "Content-Type": "application/json; charset=utf-8",
         }
         payload = {
-            "channel": task.chat_id,
+            "channel": chat_id,
             "text": plain_message,
         }
         response = post_json(
@@ -235,23 +367,14 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
         msg_ts = str(response.data.get("ts", ""))
         return True, "", msg_ts
 
-    if webhook_url:
-        from integrations.slack.delivery import send_slack_webhook_message
+    # Channel-bound webhook path (no explicit chat_id).
+    from integrations.slack.delivery import send_slack_webhook_message
 
-        ok, error = send_slack_webhook_message(
-            plain_message,
-            webhook_url=webhook_url,
-        )
-        return ok, error, ""
-
-    if not task.chat_id:
-        return False, "Missing chat_id or webhook_url for Slack delivery", ""
-
-    return (
-        False,
-        "Scheduled tasks require Slack webhook_url or bot access_token",
-        "",
+    ok, error = send_slack_webhook_message(
+        plain_message,
+        webhook_url=webhook_url,
     )
+    return ok, error, ""
 
 
 def _deliver_discord(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
@@ -317,6 +440,18 @@ def _deliver_rocketchat(task: ScheduledTask, message: str) -> tuple[bool, str, s
     return (True, "", msg_id) if ok else (False, error, "")
 
 
+def _deliver_interactive_shell(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Persist loop output to the local interactive-shell inbox."""
+    try:
+        from platform.scheduler.local_delivery import record_loop_message
+
+        message_id = record_loop_message(task, _strip_html(message))
+        return True, "", message_id
+    except Exception as exc:
+        logger.warning("Interactive-shell loop delivery failed for task %s: %s", task.id, exc)
+        return False, f"Interactive-shell delivery error: {type(exc).__name__}", ""
+
+
 def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
     """Record a failed execution in the claim store and emit analytics."""
     complete_run(
@@ -324,7 +459,7 @@ def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
         fire_time,
         status=TaskStatus.FAILED,
         error=error,
-        provider=task.provider.value,
+        provider=_run_provider_label(task),
     )
     _emit_analytics(task, TaskStatus.FAILED, error=error)
     logger.warning("Task %s failed: %s", task.id, error)

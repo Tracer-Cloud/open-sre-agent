@@ -13,22 +13,14 @@ if TYPE_CHECKING:
 # lazy module attributes resolved by `__getattr__` below; ruff's F822 check
 # can't see them.
 __all__ = (
-    "ALERT_TEMPLATE_CHOICES",
     "MANAGED_INTEGRATION_SERVICES",
     "SAMPLE_ALERT_OPTIONS",
     "SETUP_SERVICES",
     "VERIFY_SERVICES",
 )
 
-ALERT_TEMPLATE_CHOICES: tuple[str, ...] = (
-    "generic",
-    "datadog",
-    "grafana",
-    "honeycomb",
-    "coralogix",
-    "splunk",
-)
-
+# Template names for these options are the shared ALERT_TEMPLATE_CHOICES in
+# config/constants/investigation.py; the labels here are CLI-only.
 SAMPLE_ALERT_OPTIONS: tuple[tuple[str, str], ...] = (
     ("generic", "Generic - High error rate in payments ETL"),
     ("datadog", "Datadog - payments-etl error rate high"),

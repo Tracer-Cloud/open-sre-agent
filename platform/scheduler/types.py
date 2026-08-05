@@ -20,6 +20,7 @@ class TaskKind(StrEnum):
     SENTRY_MORNING_DIGEST = "sentry_morning_digest"
     SENTRY_UPTIME_WATCH = "sentry_uptime_watch"
     GITHUB_PR_SWEEP = "github_pr_sweep"
+    POSTHOG_METRIC_REPORT = "posthog_metric_report"
     WORK_ITEM_REMINDER = "work_item_reminder"
     WORK_ITEM_CHECKIN = "work_item_checkin"
 
@@ -35,12 +36,23 @@ class TaskStatus(StrEnum):
 
 
 class Provider(StrEnum):
-    """Supported messaging providers for delivery."""
+    """The canonical delivery-provider vocabulary: where a scheduled outbound
+    message (cron digest, watchdog alarm, ...) can be sent.
+
+    Distinct from ``integrations.messaging_security.MessagingPlatform``,
+    which tracks gateway *inbound* identity, not delivery. Not every consumer
+    supports every member here (e.g. Sentry digest delivery has no Discord
+    path, watchdog alarms only support Telegram/Rocket.Chat/Buzz) -- those
+    consumers define their own documented subset rather than exposing a
+    choice that would silently fail.
+    """
 
     TELEGRAM = "telegram"
     SLACK = "slack"
     DISCORD = "discord"
     ROCKETCHAT = "rocketchat"
+    INTERACTIVE_SHELL = "interactive_shell"
+    BUZZ = "buzz"
 
 
 def _generate_task_id() -> str:
@@ -51,6 +63,7 @@ class ScheduledTask(BaseModel):
     """A persisted scheduled-task definition."""
 
     id: str = Field(default_factory=_generate_task_id)
+    name: str = ""
     kind: TaskKind
     cron: str
     timezone: str = "UTC"

@@ -39,10 +39,9 @@ def parse_memory_file(text: str) -> MemoryRecord | None:
         return None
 
     body = "\n".join(lines[close_idx + 1 :]).strip("\n")
-    typed: MemoryType = memory_type  # type: ignore[assignment]
     return MemoryRecord(
         slug=slug,
-        memory_type=typed,
+        memory_type=MemoryType(memory_type),
         description=fields["description"],
         created_at=fields["created"],
         updated_at=fields["updated"],

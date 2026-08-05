@@ -13,6 +13,10 @@ class DefaultRunRecordFactory:
     def __init__(self, session: Any) -> None:
         self._session = session
 
+    def bind_session(self, session: Any) -> None:
+        """Point run records at a freshly resolved session (gateway reuse)."""
+        self._session = session
+
     def build(self, *, client: Any, prompt: str, response_text: str, started: float) -> Any:
         return build_llm_run_info(
             session=self._session,

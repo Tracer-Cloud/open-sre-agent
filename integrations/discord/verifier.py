@@ -10,6 +10,7 @@ wizard use.
 
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from typing import Any
 
@@ -17,6 +18,8 @@ import httpx
 
 from config.constants.discord import DISCORD_API_BASE
 from integrations.verification import register_verifier, result
+
+logger = logging.getLogger(__name__)
 
 _ME_URL = f"{DISCORD_API_BASE}/users/@me"
 
@@ -42,6 +45,7 @@ def verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         username = str(response.json().get("username", "")).strip()
     except Exception:
+        logger.debug("Failed to parse Discord /users/@me response", exc_info=True)
         username = ""
     return result(
         "discord", source, "passed", f"Discord bot authenticated as @{username or 'unknown'}."

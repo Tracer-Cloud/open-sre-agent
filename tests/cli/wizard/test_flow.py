@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import integrations.setup_flow as _setup_flow
+from config.secrets.store import SecretSaveResult
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from surfaces.cli.wizard import _ui, azure_openai, flow, llm_credential
 from surfaces.cli.wizard import store as wizard_store
@@ -20,6 +21,20 @@ from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.validation import ValidationResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
+
+# Persisting a secret reports which storage tier accepted it, so stubs have to
+# answer that question too — a stub returning ``None`` would make every wizard
+# run look like it had fallen back to on-disk storage.
+_KEYRING_SAVE = SecretSaveResult("keyring", "stored in the system keychain.")
+
+
+def _stub_save(*_args: object, **_kwargs: object) -> SecretSaveResult:
+    return _KEYRING_SAVE
+
+
+def _stub_save_recording(saved: list, provider: str, value: str) -> SecretSaveResult:
+    saved.append((provider, value))
+    return _KEYRING_SAVE
 
 
 def _stub_telegram_setup(monkeypatch: pytest.MonkeyPatch, verify) -> None:
@@ -55,7 +70,7 @@ def _stub_dagster_setup(monkeypatch: pytest.MonkeyPatch, verify) -> None:
 @pytest.fixture(autouse=True)
 def _stub_managed_llm_secret_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
     """Wizard flow tests should not touch the developer's real keychain."""
-    monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_api_key", _stub_save)
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +90,11 @@ def _isolate_integration_store(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
     empty temp store so tests never read the developer's real integrations
     (e.g. a live Slack bot token) as pre-existing defaults."""
     monkeypatch.setattr("integrations.store.STORE_PATH", tmp_path / "integrations.json")
+
+
+@pytest.fixture(autouse=True)
+def _skip_loop_seeding(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flow, "_seed_onboarding_loops", lambda: 0)
 
 
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
@@ -101,6 +121,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
 
     saved: dict[str, object] = {}
     saved_llm_keys: list[tuple[str, str]] = []
+    seeded_loops: list[bool] = []
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
@@ -117,10 +138,11 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
 
     monkeypatch.setattr(flow, "save_local_config", _save_local_config)
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(flow, "_seed_onboarding_loops", lambda: seeded_loops.append(True) or 3)
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -130,6 +152,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert saved["provider"] == "anthropic"
     assert "api_key" not in saved
     assert saved_llm_keys == [("anthropic", "secret-key")]
+    assert seeded_loops == [True]
 
     output = capsys.readouterr().out
     assert "Summary" in output
@@ -171,7 +194,7 @@ def test_run_wizard_no_saved_provider_shows_selection(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     exit_code = flow.run_wizard()
     assert exit_code == 0
@@ -219,7 +242,7 @@ def test_run_wizard_shows_keyring_fix_steps_when_secure_storage_is_unavailable(
 
     assert exit_code == 1
     output = capsys.readouterr().out
-    assert "OpenSRE could not save your API key to the local system keychain." in output
+    assert "OpenSRE could not save your API key to secure local storage." in output
     assert "Install it first: sudo apt update && sudo apt install -y gnome-keyring" in output
     assert "dbus-user-session" in output
     assert "Start a D-Bus shell: dbus-run-session -- sh" in output
@@ -270,7 +293,7 @@ def test_run_wizard_configures_optional_integrations(monkeypatch, tmp_path, caps
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -352,7 +375,7 @@ def test_run_wizard_configures_honeycomb(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -437,7 +460,7 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -513,7 +536,7 @@ def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -582,7 +605,7 @@ def test_run_wizard_configures_dagster_oss_skips_secret(monkeypatch, tmp_path) -
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
     monkeypatch.setattr(
         _setup_flow,
         "sync_env_values",
@@ -653,7 +676,7 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -737,7 +760,7 @@ def test_run_wizard_dagster_retries_on_validation_failure(monkeypatch, tmp_path)
     _stub_dagster_setup(monkeypatch, _validate_dagster)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -832,7 +855,7 @@ def test_run_wizard_configures_github_mcp_and_sentry(monkeypatch, tmp_path, caps
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -935,7 +958,7 @@ def test_run_wizard_reuses_saved_defaults_when_user_keeps_provider(monkeypatch, 
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -1051,7 +1074,7 @@ def test_run_wizard_persists_matching_local_config_and_env(monkeypatch, tmp_path
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -1106,7 +1129,7 @@ def test_run_wizard_codex_skips_api_key_and_runs_cli_onboarding(monkeypatch, tmp
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -1161,7 +1184,7 @@ def test_run_wizard_openai_oauth_is_onboarding_auth_method(monkeypatch, tmp_path
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
     monkeypatch.setattr(
         flow, "_render_saved_summary", lambda **kwargs: saved_summary.update(kwargs)
@@ -1272,7 +1295,7 @@ def test_run_wizard_claude_code_skips_api_key_and_runs_cli_onboarding(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -1324,7 +1347,7 @@ def test_run_wizard_gemini_cli_skips_api_key_and_runs_cli_onboarding(monkeypatch
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -1767,7 +1790,7 @@ def test_run_wizard_configures_gitlab(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -1857,7 +1880,7 @@ def test_run_wizard_gitlab_retries_on_validation_failure(monkeypatch, tmp_path) 
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -1959,7 +1982,7 @@ def test_run_wizard_switches_provider_and_keeps_store_and_env_in_sync(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -2024,7 +2047,7 @@ def test_run_wizard_configures_opensearch(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -2128,7 +2151,7 @@ def test_run_wizard_opensearch_retries_on_validation_failure(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
     monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_args, **_kwargs: None)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
@@ -2219,7 +2242,7 @@ def test_run_wizard_opensearch_allows_url_only_when_auth_blank(monkeypatch, tmp_
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
     monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(_setup_flow, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env")
     monkeypatch.setattr(
@@ -2318,7 +2341,7 @@ def test_run_wizard_opensearch_rejects_empty_basic_password(monkeypatch, tmp_pat
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
     monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(_setup_flow, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env")
     monkeypatch.setattr(
@@ -2389,7 +2412,7 @@ def test_run_wizard_configures_telegram(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
 
     def _sync_env_values(values: dict[str, str], **_kwargs):
         synced_env_values.append(values)
@@ -2461,7 +2484,7 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
     _stub_telegram_setup(monkeypatch, _validate)
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_keyring_secret", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
     monkeypatch.setattr(_setup_flow, "sync_env_values", lambda *_a, **_kw: tmp_path / ".env")
     monkeypatch.setattr(_setup_flow, "sync_env_secret", lambda *_a, **_kw: None)
     monkeypatch.setattr(
@@ -2645,6 +2668,7 @@ def test_run_wizard_llm_key_retries_on_validation_failure(monkeypatch, tmp_path,
     def _save_api_key(provider, value, **_kwargs):
         saved_llm_keys.append((provider, value))
         call_order.append(f"persist:{value}")
+        return _KEYRING_SAVE
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -2735,7 +2759,7 @@ def test_run_wizard_saved_provider_missing_key_validates_on_reentry(monkeypatch,
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -2793,7 +2817,7 @@ def test_run_wizard_llm_key_save_anyway_persists_unvalidated_key(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -2859,7 +2883,7 @@ def test_run_wizard_llm_key_repick_returns_to_provider_menu(monkeypatch, tmp_pat
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
     exit_code = flow.run_wizard()
 
@@ -2895,6 +2919,7 @@ def test_run_wizard_llm_key_valid_first_try_validates_once(monkeypatch, tmp_path
     def _save_api_key(provider, value, **_kwargs):
         saved_llm_keys.append((provider, value))
         call_order.append(f"persist:{value}")
+        return _KEYRING_SAVE
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -2980,7 +3005,7 @@ def test_run_wizard_azure_llm_key_validation_runs_after_endpoint_prompt(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3048,7 +3073,7 @@ def test_run_wizard_cli_provider_skips_llm_key_validation(monkeypatch, tmp_path)
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3130,7 +3155,7 @@ def test_run_wizard_ollama_host_is_validated_then_persisted_to_dotenv(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3205,7 +3230,7 @@ def test_run_wizard_ollama_host_env_write_failure_offers_recovery_menu(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     # RED expectation: the write error is caught and turned into the shared recovery menu,
@@ -3271,7 +3296,7 @@ def test_run_wizard_saved_provider_with_stored_key_skips_validation(monkeypatch,
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3334,7 +3359,7 @@ def test_run_wizard_legacy_key_migration_does_not_validate(monkeypatch, tmp_path
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3385,6 +3410,7 @@ def test_run_wizard_llm_key_persist_failure_offers_recovery_menu(
         persist_attempts.append((provider, value))
         if len(persist_attempts) == 1:
             raise RuntimeError("keychain locked")
+        return _KEYRING_SAVE
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -3407,7 +3433,7 @@ def test_run_wizard_llm_key_persist_failure_offers_recovery_menu(
     assert validation_call_count == 1  # validation is NOT re-run on persist retry
     assert "ANTHROPIC_API_KEY could not be saved. What next?" in select_prompts
     output = capsys.readouterr().out
-    assert "OpenSRE could not save your API key to the local system keychain." in output
+    assert "OpenSRE could not save your API key to secure local storage." in output
 
 
 def test_run_wizard_llm_key_persist_failure_repick_returns_to_provider_menu(
@@ -3454,6 +3480,7 @@ def test_run_wizard_llm_key_persist_failure_repick_returns_to_provider_menu(
         persist_attempts.append((provider, value))
         if len(persist_attempts) == 1:
             raise RuntimeError("keychain locked")
+        return _KEYRING_SAVE
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "password", _mock_password)
@@ -3588,7 +3615,7 @@ def test_run_wizard_llm_key_back_at_reprompt_returns_to_provider_menu(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3643,7 +3670,7 @@ def test_run_wizard_llm_key_ctrl_c_at_retry_menu_cancels_setup(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3705,7 +3732,7 @@ def test_run_wizard_llm_key_validator_exception_treated_as_failure(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3774,7 +3801,7 @@ def test_run_wizard_llm_key_validation_failure_output_masks_secret(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -3851,7 +3878,7 @@ def test_run_wizard_validates_the_model_the_user_picked_change_provider(
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", _save_local_config)
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_api_key", _stub_save)
 
     exit_code = flow.run_wizard()
 
@@ -3929,7 +3956,7 @@ def test_run_wizard_validates_the_model_the_user_picked_saved_provider(
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", _save_local_config)
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_api_key", _stub_save)
 
     exit_code = flow.run_wizard()
 
@@ -4229,6 +4256,7 @@ def test_run_wizard_keyring_failure_at_saved_provider_site_reaches_the_shared_me
         persist_attempts.append((provider, value))
         if len(persist_attempts) == 1:
             raise RuntimeError("keychain locked")
+        return _KEYRING_SAVE
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
@@ -4314,6 +4342,7 @@ def test_run_wizard_keyring_failure_at_legacy_migration_site_reaches_the_shared_
         persist_attempts.append((provider, value))
         if len(persist_attempts) == 1:
             raise RuntimeError("keychain locked")
+        return _KEYRING_SAVE
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
@@ -4428,7 +4457,7 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -4615,7 +4644,7 @@ def test_run_wizard_summary_credential_line_after_save_anyway(monkeypatch, tmp_p
     monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
     monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
-    monkeypatch.setattr(_ui, "save_api_key", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_ui, "save_api_key", _stub_save)
 
     exit_code = flow.run_wizard()
 
@@ -4742,7 +4771,7 @@ def test_run_wizard_azure_endpoint_reprompted_on_retry_after_validation_failure(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -4843,7 +4872,7 @@ def test_run_wizard_azure_endpoint_reprompted_on_repick_then_reselect(
     monkeypatch.setattr(
         _ui,
         "save_api_key",
-        lambda provider, value, **_kwargs: saved_llm_keys.append((provider, value)),
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
     )
 
     exit_code = flow.run_wizard()
@@ -4896,3 +4925,35 @@ def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
     assert "unverified" not in line.lower(), (
         f"a verified host must not read unverified; got {line!r}"
     )
+
+
+@pytest.mark.parametrize("stale_mode", ["aha", "banana", ""])
+def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale_mode) -> None:
+    """A saved mode that is no longer offered must default to 'focused'.
+
+    Saved defaults outlive the modes they name — a value persisted by an older
+    build, or a mode removed in a refactor, must not be passed to the chooser as
+    a default it cannot render.
+    """
+    # Arrange
+    monkeypatch.setattr(
+        flow,
+        "_local_defaults",
+        lambda: {"provider": None, "model": "", "wizard_mode": stale_mode, "auth_method": None},
+    )
+    seen: dict[str, object] = {}
+
+    def _capture_choose(_prompt, _choices, default=None, **_kwargs):
+        seen["default"] = default
+        raise KeyboardInterrupt  # stop the wizard once the default is known
+
+    monkeypatch.setattr(flow, "_choose", _capture_choose)
+    monkeypatch.setattr(flow, "_render_header", lambda: None)
+    monkeypatch.setattr(flow, "_step_header", lambda *_a, **_k: None)
+
+    # Act
+    with pytest.raises(KeyboardInterrupt):
+        flow.run_wizard()
+
+    # Assert
+    assert seen["default"] == "focused"

@@ -232,11 +232,63 @@ def test_anthropic_invoke_strips_internal_message_markers(
     client.invoke(messages=messages)
 
     api_messages = captured["messages"]
-    assert api_messages[1] == {
-        "role": "assistant",
-        "content": [{"type": "tool_use", "id": "seed", "name": "n", "input": {}}],
-    }
+    # Internal markers stripped; last content block may carry cache_control.
+    assert api_messages[1]["role"] == "assistant"
+    assert "_opensre_seed" not in api_messages[1]
+    assert api_messages[1]["content"] == [
+        {
+            "type": "tool_use",
+            "id": "seed",
+            "name": "n",
+            "input": {},
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+    # Original caller messages keep markers and are not mutated with cache_control.
     assert messages[1]["_opensre_seed"] is True
+    assert "cache_control" not in messages[1]["content"][0]
+
+
+def test_anthropic_invoke_marks_system_and_last_tool_for_prompt_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stable tools→system prefix gets Anthropic cache_control breakpoints."""
+    _install_fake_anthropic(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    captured: dict[str, Any] = {}
+
+    def capture_create(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return types.SimpleNamespace(
+            content=[types.SimpleNamespace(type="text", text="ok")],
+            usage=types.SimpleNamespace(input_tokens=1, output_tokens=1),
+        )
+
+    client = AnthropicAgentClient(model="claude-sonnet-4-6")
+    client._client = types.SimpleNamespace(messages=types.SimpleNamespace(create=capture_create))
+
+    tools = [
+        {"type": "custom", "name": "a", "description": "a", "input_schema": {"type": "object"}},
+        {"type": "custom", "name": "b", "description": "b", "input_schema": {"type": "object"}},
+    ]
+    client.invoke(
+        messages=[{"role": "user", "content": "hi"}],
+        system="stable system",
+        tools=tools,
+    )
+
+    system = captured["system"]
+    assert isinstance(system, list)
+    assert system[0]["type"] == "text"
+    assert system[0]["text"] == "stable system"
+    assert system[0]["cache_control"] == {"type": "ephemeral"}
+
+    api_tools = captured["tools"]
+    assert "cache_control" not in api_tools[0]
+    assert api_tools[1]["cache_control"] == {"type": "ephemeral"}
+    # Caller-owned tool dicts must not be mutated.
+    assert "cache_control" not in tools[1]
 
 
 def test_openai_agent_client_invoke_strips_internal_message_markers(

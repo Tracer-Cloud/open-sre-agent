@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import time
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import httpx
@@ -54,7 +55,7 @@ def install(console: Console) -> bool:
 def is_server_running(host: str = DEFAULT_OLLAMA_HOST) -> bool:
     try:
         r = httpx.get(f"{host.rstrip('/')}/api/tags", timeout=2.0)
-        return r.status_code == 200
+        return r.status_code == HTTPStatus.OK
     except Exception:
         return False
 

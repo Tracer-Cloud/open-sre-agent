@@ -1,4 +1,10 @@
-"""Filesystem path and write primitives for long-term memory."""
+"""Filesystem path and write primitives for long-term memory.
+
+The lowest layer of the memory package: it knows where files live and how to
+write one safely, and imports nothing else from the package. Seeding the index
+needs :mod:`core.domain.memory.index`, so it lives in
+:mod:`core.domain.memory.store`, which already sits above both.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,21 @@ import contextlib
 import tempfile
 from pathlib import Path
 
+# Unix permission bits, one octal digit per audience: owner, group, everyone
+# else. Each digit adds read (4), write (2) and execute (1).
+#
+# 0o700 on a directory — owner gets 7 (4+2+1: list it, create and delete entries,
+# and enter it), group and everyone else get 0. On a directory the execute bit is
+# what allows entering at all, so without it the owner could not reach the files
+# inside.
 MEMORY_DIR_MODE = 0o700
+
+# 0o600 on a file — owner gets 6 (4+2: read and write), group and everyone else
+# get 0. No execute bit: these are notes, never run.
+#
+# Both are owner-only because memory holds whatever the user told the agent to
+# remember, which can include names, hosts and incident detail. On a shared
+# machine the default would otherwise leave them world-readable.
 MEMORY_FILE_MODE = 0o600
 
 
@@ -26,22 +46,6 @@ def ensure_memory_dir() -> Path:
     directory.mkdir(parents=True, exist_ok=True, mode=MEMORY_DIR_MODE)
     with contextlib.suppress(OSError):
         directory.chmod(MEMORY_DIR_MODE)
-    return directory
-
-
-def ensure_memory_store() -> Path:
-    """Create the memory directory and an empty ``MEMORY.md`` when absent.
-
-    Safe to call on every chat turn / ``/memory`` invocation — mkdir is
-    idempotent and the index file is only seeded once.
-    """
-    directory = ensure_memory_dir()
-    index_path = directory / "MEMORY.md"
-    if not index_path.exists():
-        from core.domain.memory.index import write_index
-
-        with contextlib.suppress(OSError):
-            write_index(directory, [])
     return directory
 
 
@@ -74,7 +78,6 @@ __all__ = [
     "MEMORY_DIR_MODE",
     "MEMORY_FILE_MODE",
     "ensure_memory_dir",
-    "ensure_memory_store",
     "memory_dir",
     "memory_path",
     "write_text_atomically",

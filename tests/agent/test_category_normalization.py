@@ -56,26 +56,26 @@ def test_normalize_maps_spacing_and_hyphen_variants() -> None:
     )
 
 
-def test_normalize_leaves_unknown_labels_unchanged() -> None:
+def test_normalize_fail_closed_maps_unknown_labels_to_unknown() -> None:
     allowed = taxonomy_categories_for_alert_source("grafana")
 
     assert (
         normalize_root_cause_category("totally_unknown_label", allowed_categories=allowed)
-        == "totally_unknown_label"
+        == "unknown"
     )
 
 
-def test_normalize_respects_allowed_category_scope() -> None:
-    hermes_allowed = taxonomy_categories_for_alert_source("hermes")
+def test_normalize_fail_closed_when_alias_target_out_of_scope() -> None:
+    """Alias targets outside the allowed taxonomy must not leak through."""
+    hermes_allowed = {"agent_hang", "ghost_session", "unknown"}
 
-    # database -> connection_exhaustion only when that target is in the allowed set
-    assert (
-        normalize_root_cause_category("database", allowed_categories=hermes_allowed) == "database"
+    assert normalize_root_cause_category("database", allowed_categories=hermes_allowed) == (
+        "unknown"
     )
     assert (
         normalize_root_cause_category(
             "performance_degradation",
             allowed_categories=hermes_allowed,
         )
-        == "performance_degradation"
+        == "unknown"
     )

@@ -8,6 +8,7 @@ wrong one gets a 401 that looks like an empty result.
 
   - :func:`webapp_bearer_token`  — routes accepting either credential
   - :func:`webapp_machine_token` — routes accepting only the machine token
+  - :func:`webapp_shared_secret` — routes accepting only the shared secret
 
 Lives here rather than in ``config/`` because minting reaches
 ``clerk_tokens``: putting the choice in the constants leaf would make ``config``
@@ -25,7 +26,13 @@ from config.constants.billing import MACHINE_SECRET_ENV, USAGE_SECRET_ENV
 logger = logging.getLogger(__name__)
 
 
-def _shared_secret() -> str:
+def webapp_shared_secret() -> str:
+    """Shared fleet secret, for routes that accept only that credential.
+
+    ``/api/agent/integrations`` compares the bearer against
+    ``AGENT_USAGE_SECRET`` alone, so a machine token there is a 401. Returns ""
+    when unset, which leaves the caller switched off.
+    """
     return (os.getenv(USAGE_SECRET_ENV) or "").strip()
 
 
@@ -53,4 +60,4 @@ def webapp_bearer_token() -> str:
     Prefers the org-scoped machine token and falls back to the shared secret.
     Returns "" when neither is available, which leaves the caller switched off.
     """
-    return webapp_machine_token() or _shared_secret()
+    return webapp_machine_token() or webapp_shared_secret()

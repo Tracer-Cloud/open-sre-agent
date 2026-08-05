@@ -69,6 +69,16 @@ class DefaultToolProvider:
         self._slash_ports_factory = slash_ports_factory
         self._tool_context: ActionToolContext | None = None
 
+    def bind_session(self, session: Any) -> None:
+        """Point this provider at a freshly resolved session (gateway reuse)."""
+        self._session = session
+        self._tool_context = None
+
+    def bind_console(self, console: Any) -> None:
+        """Point tool UI (observers, subprocess presenter) at ``console``."""
+        self._console = console
+        self._tool_context = None
+
     def action_tools(
         self,
         *,
@@ -109,6 +119,9 @@ class DefaultToolProvider:
             is_tty=is_tty,
             request_exit=self._request_exit,
             action_already_listed=True,
+            # Built once per turn, before any tool runs — so the current
+            # history length is this turn's starting boundary.
+            history_start=len(getattr(self._session, "history", None) or []),
             subprocess_presenter=subprocess_presenter,
             investigation_ports=investigation_ports,
             llm_provider_ports=llm_provider_ports,

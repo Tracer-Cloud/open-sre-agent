@@ -39,11 +39,22 @@ from core.llm.shared.openai_chat_completions import (
     LLM_CLIENT_TIMEOUT_SEC,
     normalize_messages_openai,
 )
-from core.llm.shared.structured_output import StructuredOutputClient
+from core.llm.shared.structured_output import (
+    StructuredOutputClient,
+    json_schema_for_structured_output,
+)
 from core.llm.shared.usage import llm_response_with_usage
+from core.llm.transports.sdk.anthropic_cache import (
+    cached_system,
+    is_cache_unsupported_error,
+    strip_cache_markers,
+)
 from core.llm.types import LLMResponse
 
 logger = logging.getLogger(__name__)
+
+# Anthropic overloaded — not in stdlib ``http.HTTPStatus`` (non-standard code).
+_ANTHROPIC_OVERLOADED_STATUS = 529
 
 
 def _normalize_messages(prompt_or_messages: Any) -> tuple[str | None, list[dict[str, str]]]:
@@ -98,11 +109,12 @@ def _format_anthropic_retry_error(err: Exception) -> str:
         )
     # Detect overloaded via HTTP status (error-response path) or via body error
     # type (SSE streaming path: the SDK raises APIStatusError from body events
-    # where the initial HTTP response was 200, so status_code is absent/not 529).
+    # where the initial HTTP response was 200, so status_code is absent / not
+    # ``_ANTHROPIC_OVERLOADED_STATUS``).
     body = getattr(err, "body", None)
     error_obj = body.get("error") if isinstance(body, dict) else None
     body_error_type = error_obj.get("type", "") if isinstance(error_obj, dict) else ""
-    if status_code == 529 or body_error_type == "overloaded_error":
+    if status_code == _ANTHROPIC_OVERLOADED_STATUS or body_error_type == "overloaded_error":
         return (
             "Anthropic API is overloaded (HTTP 529) after multiple retries. "
             "Try again in a few seconds."
@@ -173,6 +185,11 @@ def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | N
 
 
 class LLMClient:
+    # Best-effort prompt caching: a class default so every instance starts
+    # marking; flipped to an instance False for the client's lifetime the
+    # first time the provider rejects the cache markers with a 400.
+    _cache_markers_enabled = True
+
     def __init__(
         self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
     ) -> None:
@@ -188,6 +205,29 @@ class LLMClient:
 
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
+
+    def invoke_structured(self, model: type[BaseModel], prompt: str) -> str:
+        """Constrained JSON via Anthropic ``output_config.format`` (json_schema).
+
+        Uses the same retry policy and usage reporting as :meth:`invoke`: this
+        call carries the cached system prefix, so leaving it out of token
+        accounting would hide the diagnose stage's spend and cache hits.
+        """
+        kwargs = self._build_request_kwargs(prompt)
+        kwargs["output_config"] = {
+            "format": {
+                "type": "json_schema",
+                "schema": json_schema_for_structured_output(model),
+            }
+        }
+        response = self._create_with_retry(kwargs)
+        return llm_response_with_usage(
+            _extract_text(response),
+            self._model,
+            getattr(response, "usage", None),
+            input_key="input_tokens",
+            output_key="output_tokens",
+        ).content
 
     def _ensure_client(self) -> None:
         api_key = provider_credentials.resolve_llm_api_key("ANTHROPIC_API_KEY")
@@ -218,44 +258,14 @@ class LLMClient:
             "messages": messages,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = cached_system(system) if self._cache_markers_enabled else system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         return kwargs
 
     def invoke(self, prompt_or_messages: Any) -> LLMResponse:
-        from platform.guardrails.engine import GuardrailBlockedError
-
         kwargs = self._build_request_kwargs(prompt_or_messages)
-
-        backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
-        max_attempts = _RETRY_MAX_ATTEMPTS
-        last_err: Exception | None = None
-        for attempt in range(max_attempts):
-            try:
-                response = self._client.messages.create(**kwargs)
-                break
-            except AuthenticationError as err:
-                raise RuntimeError(
-                    "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
-                ) from err
-            except NotFoundError as err:
-                raise RuntimeError(
-                    f"Anthropic model '{self._model}' was not found. "
-                    "Check your configured model name and try again."
-                ) from err
-            except AnthropicBadRequestError as err:
-                raise RuntimeError(_format_anthropic_bad_request(err)) from err
-            except GuardrailBlockedError:
-                raise
-            except Exception as err:
-                last_err = err
-                if attempt == max_attempts - 1:
-                    raise RuntimeError(_format_anthropic_retry_error(err)) from err
-                time.sleep(backoff_seconds)
-                backoff_seconds *= 2
-        else:
-            raise RuntimeError("LLM invocation failed without a concrete error") from last_err
+        response = self._create_with_retry(kwargs)
 
         content = _extract_text(response)
         usage = getattr(response, "usage", None)
@@ -266,6 +276,56 @@ class LLMClient:
             input_key="input_tokens",
             output_key="output_tokens",
         )
+
+    def _create_with_retry(self, kwargs: dict[str, Any]) -> Any:
+        """Call the messages API with the shared backoff and error mapping."""
+        # What this request carries, decided before any concurrent turn can
+        # clear the shared flag.
+        marked = strip_cache_markers(kwargs) != kwargs
+        from platform.guardrails.engine import GuardrailBlockedError
+
+        backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
+        max_attempts = _RETRY_MAX_ATTEMPTS
+        last_err: Exception | None = None
+        for attempt in range(max_attempts):
+            try:
+                return self._client.messages.create(**kwargs)
+            except AuthenticationError as err:
+                raise RuntimeError(
+                    "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
+                ) from err
+            except NotFoundError as err:
+                raise RuntimeError(
+                    f"Anthropic model '{self._model}' was not found. "
+                    "Check your configured model name and try again."
+                ) from err
+            except AnthropicBadRequestError as err:
+                # Any bad request may be the markers' fault: Bedrock's
+                # ValidationException does not reliably name the field, so the
+                # only dependable probe is to retry without them. Markers are
+                # disabled only if that retry actually succeeds, leaving genuine
+                # bad requests (bad max_tokens, oversized prompt) untouched.
+                if marked and is_cache_unsupported_error(err):
+                    # Keyed on what this request carried: a concurrent turn may
+                    # already have cleared the shared flag. The stripped retry
+                    # carries no markers, so this path runs at most once.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "Model '%s' rejected prompt-cache markers; retrying without "
+                        "prompt caching (requests will pay full input price).",
+                        self._model,
+                    )
+                    return self._create_with_retry(strip_cache_markers(kwargs))
+                raise RuntimeError(_format_anthropic_bad_request(err)) from err
+            except GuardrailBlockedError:
+                raise
+            except Exception as err:
+                last_err = err
+                if attempt == max_attempts - 1:
+                    raise RuntimeError(_format_anthropic_retry_error(err)) from err
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
+        raise RuntimeError("LLM invocation failed without a concrete error") from last_err
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:
         """Yield text chunks as the model emits them.
@@ -279,6 +339,9 @@ class LLMClient:
         from platform.guardrails.engine import GuardrailBlockedError
 
         kwargs = self._build_request_kwargs(prompt_or_messages)
+        # What this request carries, decided before any concurrent turn can
+        # clear the shared flag.
+        marked = strip_cache_markers(kwargs) != kwargs
 
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
@@ -300,6 +363,18 @@ class LLMClient:
                     "Check your configured model name and try again."
                 ) from err
             except AnthropicBadRequestError as err:
+                if not emitted and marked and is_cache_unsupported_error(err):
+                    # Keyed on what this request carried, not the shared flag.
+                    # Only before the first chunk: retrying after output has
+                    # reached the caller would duplicate visible text.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "Model '%s' rejected prompt-cache markers; retrying without "
+                        "prompt caching (requests will pay full input price).",
+                        self._model,
+                    )
+                    yield from self.invoke_stream(prompt_or_messages)
+                    return
                 raise RuntimeError(_format_anthropic_bad_request(err)) from err
             except GuardrailBlockedError:
                 raise
@@ -321,6 +396,11 @@ class BedrockLLMClient:
     - Anthropic Claude models → AnthropicBedrock SDK (existing behaviour)
     - Non-Anthropic models (Mistral, GPT OSS, Llama, etc.) → boto3 ``converse`` API
     """
+
+    # Best-effort prompt caching: Bedrock rejects cache markers with a 400 for
+    # Claude models that predate prompt caching, so the first such rejection
+    # flips this to an instance False for the client's lifetime.
+    _cache_markers_enabled = True
 
     def __init__(
         self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
@@ -362,10 +442,13 @@ class BedrockLLMClient:
             "messages": messages,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = cached_system(system) if self._cache_markers_enabled else system
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
 
+        # What this request carries, decided before any concurrent turn can
+        # clear the shared flag.
+        marked = strip_cache_markers(kwargs) != kwargs
         backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
         max_attempts = _RETRY_MAX_ATTEMPTS
         last_err: Exception | None = None
@@ -374,6 +457,21 @@ class BedrockLLMClient:
                 response = self._anthropic_client.messages.create(**kwargs)
                 break
             except AnthropicBadRequestError as err:
+                # Bedrock's ValidationException often does not name the field,
+                # so wording alone cannot tell a marker rejection from any other
+                # bad request. Retry once stripped and keep markers off only if
+                # that actually fixed it.
+                if marked and is_cache_unsupported_error(err):
+                    # Keyed on what this request carried: a concurrent turn may
+                    # already have cleared the shared flag. The stripped retry
+                    # carries no markers, so this path runs at most once.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "Bedrock model '%s' rejected prompt-cache markers; retrying "
+                        "without prompt caching (requests will pay full input price).",
+                        self._model,
+                    )
+                    return self._invoke_anthropic(prompt_or_messages)
                 err_msg = str(err)
                 err_msg_lower = err_msg.lower()
                 if "on-demand throughput" in err_msg or "inference profile" in err_msg_lower:
@@ -618,6 +716,58 @@ class OpenAILLMClient:
 
     def with_structured_output(self, model: type[BaseModel]) -> StructuredOutputClient:
         return StructuredOutputClient(self, model)
+
+    def invoke_structured(self, model: type[BaseModel], prompt: str) -> BaseModel:
+        """Constrained JSON via OpenAI ``chat.completions.parse`` (strict schema)."""
+        kwargs = self._build_request_kwargs(prompt)
+        client = self._ensure_client()
+        parse_kwargs: dict[str, Any] = {
+            "model": kwargs["model"],
+            "messages": kwargs["messages"],
+            "response_format": model,
+        }
+        if "max_tokens" in kwargs:
+            parse_kwargs["max_tokens"] = kwargs["max_tokens"]
+        if "max_completion_tokens" in kwargs:
+            parse_kwargs["max_completion_tokens"] = kwargs["max_completion_tokens"]
+        if "temperature" in kwargs:
+            parse_kwargs["temperature"] = kwargs["temperature"]
+        if "reasoning_effort" in kwargs:
+            parse_kwargs["reasoning_effort"] = kwargs["reasoning_effort"]
+        completion = self._parse_with_retry(client, parse_kwargs)
+        # Same accounting as invoke(): this call carries the cached prefix, so
+        # leaving it out would hide the diagnose stage's spend and cache hits.
+        llm_response_with_usage(
+            "",
+            self._model,
+            getattr(completion, "usage", None),
+            input_key="prompt_tokens",
+            output_key="completion_tokens",
+        )
+        message = completion.choices[0].message
+        if getattr(message, "refusal", None):
+            raise RuntimeError(f"OpenAI refused structured output: {message.refusal}")
+        parsed = message.parsed
+        if not isinstance(parsed, BaseModel):
+            raise RuntimeError("OpenAI structured output returned no parsed payload")
+        return parsed
+
+    def _parse_with_retry(self, client: OpenAI, parse_kwargs: dict[str, Any]) -> Any:
+        """Structured parse with the same backoff as :meth:`invoke`."""
+        backoff_seconds = _RETRY_INITIAL_BACKOFF_SEC
+        last_err: Exception | None = None
+        for attempt in range(_RETRY_MAX_ATTEMPTS):
+            try:
+                return client.chat.completions.parse(**parse_kwargs)
+            except (OpenAIAuthError, OpenAINotFoundError, OpenAIBadRequestError):
+                raise
+            except Exception as err:
+                last_err = err
+                if attempt == _RETRY_MAX_ATTEMPTS - 1:
+                    raise
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
+        raise RuntimeError("OpenAI structured invocation failed") from last_err
 
     def _ensure_client(self) -> OpenAI:
         api_key = (

@@ -423,11 +423,18 @@ class TestOverlappingRedactionReachesDownstream:
         # Subscript (not ``.get``) so a missing ``system`` kwarg surfaces a
         # KeyError immediately — the whole point of the test is that the
         # client hoisted the system entry out of the messages list.
+        # System is sent as cache-marked text blocks; redaction must have been
+        # applied to the text before it was wrapped.
         system_kwarg = captured["system"]
         assert system_kwarg, "system kwarg must be non-empty after redaction"
-        assert "api_key=" not in system_kwarg
-        assert "AKIA" not in system_kwarg
-        assert "[REDACTED:generic_api_token]" in system_kwarg
+        system_text = (
+            "".join(block["text"] for block in system_kwarg if isinstance(block, dict))
+            if isinstance(system_kwarg, list)
+            else str(system_kwarg)
+        )
+        assert "api_key=" not in system_text
+        assert "AKIA" not in system_text
+        assert "[REDACTED:generic_api_token]" in system_text
         # System must be a separate kwarg, not smuggled into ``messages``.
         for msg in captured.get("messages", []):
             assert msg.get("role") != "system", f"system role leaked into messages list: {msg!r}"

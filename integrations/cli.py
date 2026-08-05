@@ -44,6 +44,7 @@ from integrations.verify import (
     verification_exit_code,
     verify_integrations,
 )
+from integrations.webapp_vault import delete_webapp_org_integration
 
 _B = ANSI_BOLD
 _R = ANSI_RESET
@@ -581,6 +582,12 @@ def _setup_rocketchat() -> None:
     _run_spec_setup(ROCKETCHAT_SETUP)
 
 
+def _setup_buzz() -> None:
+    from integrations.buzz.setup import BUZZ_SETUP
+
+    _run_spec_setup(BUZZ_SETUP)
+
+
 def _setup_smtp() -> None:
     from integrations.smtp.setup import SMTP_SETUP
 
@@ -722,6 +729,7 @@ _HANDLERS: dict[str, Any] = {
     "discord": _setup_discord,
     "telegram": _setup_telegram,
     "rocketchat": _setup_rocketchat,
+    "buzz": _setup_buzz,
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
@@ -860,6 +868,7 @@ def cmd_remove(service: str | None) -> None:
             print("  Cancelled.")
             return
     if remove_integration(service):
+        delete_webapp_org_integration(service)
         print(f"  ✓ Removed '{service}'.")
     else:
         print(f"  No integration found for '{service}'.")

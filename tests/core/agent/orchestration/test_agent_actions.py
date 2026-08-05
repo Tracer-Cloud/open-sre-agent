@@ -108,12 +108,23 @@ def _response_from_actions(actions: list[PlannedAction]) -> AgentLLMResponse:
 
 
 def _message_from_agent_prompt(messages: list[dict[str, object]]) -> str:
+    """Extract what the user literally typed from the built user message.
+
+    The literal envelope is one segment of the message, not the whole of it:
+    the turn's ephemeral blocks (recent conversation, prior action facts) follow
+    it so they stay out of the cacheable system prompt while still being the
+    part an over-budget turn drops first. Read between the delimiters rather
+    than assuming the envelope spans the string.
+    """
     raw = str(messages[-1].get("content", "")) if messages else ""
     prefix = "USER MESSAGE (literal): <<<"
     suffix = ">>>"
-    if raw.startswith(prefix) and raw.endswith(suffix):
-        return raw[len(prefix) : -len(suffix)]
-    return raw
+    start = raw.find(prefix)
+    if start == -1:
+        return raw
+    body_at = start + len(prefix)
+    end = raw.find(suffix, body_at)
+    return raw[body_at:end] if end != -1 else raw
 
 
 def _expected_shell_argv(command: str) -> list[str]:
@@ -622,8 +633,9 @@ def test_nitro_prompt_executes_remote_then_investigation(monkeypatch: object) ->
         alert_text: str,
         context_overrides: dict[str, object] | None = None,
         cancel_requested: object | None = None,
+        console: Console | None = None,
     ) -> dict[str, object]:
-        _ = (context_overrides, cancel_requested)
+        _ = (context_overrides, cancel_requested, console)
         investigation_payloads.append(alert_text)
         return {"root_cause": "hello world handled"}
 
@@ -686,15 +698,19 @@ def test_services_version_deploy_prompt_executes_in_order(monkeypatch: object) -
 
 def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
     calls: list[str] = []
+    session = Session()
+    console, buf = _capture()
 
     def _fake_run_sample_alert_for_session(
         *,
         template_name: str = "generic",
         context_overrides: dict[str, object] | None = None,
         cancel_requested: object | None = None,
+        console: Console | None = None,
     ) -> dict[str, object]:
         calls.append(template_name)
         assert context_overrides is None
+        assert console is turn_console
         return {
             "root_cause": "sample failure",
             "problem_md": "sample",
@@ -703,14 +719,12 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 
     import surfaces.interactive_shell.runtime.investigation_adapter as investigation_adapter
 
+    turn_console = console
     monkeypatch.setattr(
         investigation_adapter,
         "run_sample_alert_for_session",
         _fake_run_sample_alert_for_session,
     )
-
-    session = Session()
-    console, buf = _capture()
 
     assert (
         action_turn.run_action_tool_turn("okay launch a simple alert", session, console).handled
@@ -744,7 +758,9 @@ def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
         template_name: str = "generic",
         context_overrides: dict[str, object] | None = None,
         cancel_requested: object | None = None,
+        console: Console | None = None,
     ) -> dict[str, object]:
+        _ = console
         raise OpenSREError("sample pipeline blocked")
 
     import surfaces.interactive_shell.runtime.investigation_adapter as investigation_adapter

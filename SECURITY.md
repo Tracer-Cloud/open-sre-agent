@@ -34,6 +34,10 @@ Please avoid public disclosure until we’ve had a reasonable opportunity to inv
 
 If you need product help or documentation, use:
 
+## Product communications. 
+
+By creating an account or installing OpenSRE, you agree that we may occasionally contact you (e.g., via email, GitHub, or Discord) about your use of the product, to ask for feedback, or to inform you of relevant updates. These messages are infrequent and you can opt out at any time by replying or emailing hello@opensre.com.
+
 - Docs: https://opensre.com/docs
 - Book a demo: https://opensre.com
 - Email: support@opensre.com

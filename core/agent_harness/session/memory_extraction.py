@@ -21,6 +21,7 @@ from typing import Any, Protocol
 
 from core.domain.memory import (
     MEMORY_TYPES,
+    MemoryType,
     auto_extract_enabled,
     ensure_memory_store,
     find_memory_safety_issues,
@@ -315,9 +316,10 @@ def _save_extracted(items: list[dict[str, Any]], messages: list[tuple[str, str]]
         slug = slugify(name)
         if not is_valid_slug(slug):
             continue
+        # ``memory_type`` was already validated against MEMORY_TYPES above.
         if save_memory(
             slug=slug,
-            memory_type=memory_type,  # type: ignore[arg-type]
+            memory_type=MemoryType(memory_type),
             description=description,
             body=content,
         ):

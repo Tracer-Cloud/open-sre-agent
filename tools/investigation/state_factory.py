@@ -64,7 +64,7 @@ def make_initial_state(
             "opensre_eval_rubric": rubric,
         }
     )
-    return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
+    return cast(AgentState, state.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 
 def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str]:

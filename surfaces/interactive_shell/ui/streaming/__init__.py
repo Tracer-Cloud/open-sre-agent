@@ -42,7 +42,7 @@ from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same
 # value (and intent) as ``runtime.core.state.PROMPT_REFRESH_INTERVAL_S``.
-_PROGRESS_INTERVAL_S = 0.1
+_PROGRESS_INTERVAL_SECONDS = 0.1
 
 # Markdown rendering constants — extracted so streaming.py and any
 # external caller (e.g. agent_actions.py for the planned-actions
@@ -170,7 +170,7 @@ def stream_to_console(
         nonlocal progress_hook
         if progress_hook is None:
             return last_progress_at
-        if not force and now - last_progress_at < _PROGRESS_INTERVAL_S:
+        if not force and now - last_progress_at < _PROGRESS_INTERVAL_SECONDS:
             return last_progress_at
         try:
             progress_hook(total_bytes)

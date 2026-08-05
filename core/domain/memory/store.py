@@ -13,15 +13,16 @@ other or race the index rebuild.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from filelock import FileLock, Timeout
 
 from core.domain.memory.files import (
     ensure_memory_dir,
-    ensure_memory_store,
     memory_dir,
     memory_path,
     write_text_atomically,
@@ -45,8 +46,33 @@ from core.domain.memory.safety import find_memory_safety_issues
 from core.domain.memory.slugs import is_valid_slug
 
 _INDEX_FILENAME = "MEMORY.md"
+
+#: Distinct memory stores kept parsed at once. Each Slack user in an org has
+#: their own memory directory, so a single entry would make concurrent users
+#: evict each other on every turn. Bounded so the cache cannot grow with the
+#: number of users a gateway has ever served.
+_PARSED_STORE_CACHE_SIZE = 16
+
 _LOCK_FILENAME = ".memory.lock"
 _LOCK_TIMEOUT_SECONDS = 10.0
+
+
+def ensure_memory_store() -> Path:
+    """Create the memory directory and an empty ``MEMORY.md`` when absent.
+
+    Lives here rather than beside the other path helpers because seeding the
+    index needs :mod:`core.domain.memory.index`, and the file primitives must
+    not depend on anything above them.
+
+    Safe to call on every chat turn / ``/memory`` invocation — mkdir is
+    idempotent and the index file is only seeded once.
+    """
+    directory = ensure_memory_dir()
+    index_path = directory / _INDEX_FILENAME
+    if not index_path.exists():
+        with contextlib.suppress(OSError):
+            write_index(directory, [])
+    return directory
 
 
 def _now_iso() -> str:
@@ -121,13 +147,40 @@ def load_memory(slug: str) -> MemoryRecord | None:
     return parse_memory_file(text)
 
 
-def list_memories() -> list[MemoryRecord]:
-    """All parseable memories, most recently updated first."""
-    directory = memory_dir()
-    if not directory.is_dir():
-        return []
+def _memory_dir_signature(directory: Path) -> tuple[tuple[str, int, int], ...]:
+    """Name, mtime and size of every memory file — cheap enough to check per turn.
+
+    Directory mtime alone is not enough: editing a memory in place leaves it
+    unchanged, so the cache would serve a stale body. Per-file size and mtime
+    move on any edit.
+    """
+    entries: list[tuple[str, int, int]] = []
+    for path in sorted(directory.glob("*.md")):
+        if path.name == _INDEX_FILENAME:
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        entries.append((path.name, stat.st_mtime_ns, stat.st_size))
+    return tuple(entries)
+
+
+@lru_cache(maxsize=_PARSED_STORE_CACHE_SIZE)
+def _parsed_memories(
+    directory_key: str,
+    _signature: tuple[tuple[str, int, int], ...],
+) -> tuple[MemoryRecord, ...]:
+    """Parse every memory file under ``directory_key``.
+
+    Keyed by the directory *and* its file signature. The directory is part of
+    the key because memory stores are per-principal — one Slack user must
+    never be served another's memories, however alike the two stores look.
+    The signature is part of the key so an edited memory is re-read.
+    """
+    directory = Path(directory_key)
     records: list[MemoryRecord] = []
-    for path in directory.glob("*.md"):
+    for path in sorted(directory.glob("*.md")):
         if path.name == _INDEX_FILENAME:
             continue
         try:
@@ -138,7 +191,21 @@ def list_memories() -> list[MemoryRecord]:
         if record is not None:
             records.append(record)
     records.sort(key=lambda r: r.updated_at, reverse=True)
-    return records
+    return tuple(records)
+
+
+def list_memories() -> list[MemoryRecord]:
+    """All parseable memories, most recently updated first.
+
+    Every action-agent turn renders the memory index, so this would otherwise
+    read and parse the whole store on each turn — a cost that grows with the
+    number of memories a user has accumulated. Parsed records are reused until
+    the files change.
+    """
+    directory = memory_dir()
+    if not directory.is_dir():
+        return []
+    return list(_parsed_memories(str(directory), _memory_dir_signature(directory)))
 
 
 def delete_memory(slug: str) -> bool:

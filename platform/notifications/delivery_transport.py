@@ -15,14 +15,15 @@ The helper deliberately does **not** decide whether the call succeeded
 at the provider level. It returns ``ok=True`` whenever the request
 completed without raising; callers then inspect ``status_code`` and
 ``data``/``text`` to apply provider semantics (e.g. ``data["ok"]`` for
-Slack, ``status_code in (200, 201)`` for Discord, ``status_code == 200``
-for Telegram).
+Slack, ``status_code in (HTTPStatus.OK, HTTPStatus.CREATED)`` for Discord,
+``status_code == HTTPStatus.OK`` for Telegram).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from types import MappingProxyType
 from typing import Any
 
@@ -121,9 +122,15 @@ def post_form(
         # non-JSON body is permitted; fall through with empty data
         pass
 
+    status_code_val = (
+        HTTPStatus(response.status_code)
+        if response.status_code in HTTPStatus._value2member_map_
+        else response.status_code
+    )
+
     return DeliveryResponse(
         ok=True,
-        status_code=response.status_code,
+        status_code=status_code_val,
         data=parsed_data,
         text=text,
     )
@@ -183,9 +190,15 @@ def post_json(
         # non-JSON body is permitted; fall through with empty data
         pass
 
+    status_code_val = (
+        HTTPStatus(response.status_code)
+        if response.status_code in HTTPStatus._value2member_map_
+        else response.status_code
+    )
+
     return DeliveryResponse(
         ok=True,
-        status_code=response.status_code,
+        status_code=status_code_val,
         data=data,
         text=text,
     )

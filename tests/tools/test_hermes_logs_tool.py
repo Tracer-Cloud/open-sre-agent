@@ -136,6 +136,9 @@ class TestErrorPaths:
         log = _write_log(tmp_path, _LINES)
         result = get_hermes_logs(op="ponder", log_path=str(log))
         assert "error" in result
+        assert "unknown op" in result["error"]
+        assert "'scan'" in result["error"]
+        assert "'tail'" in result["error"]
 
     def test_missing_file_returns_empty_response_with_at_start_cursor(self, tmp_path: Path) -> None:
         ghost = tmp_path / "no-such.log"

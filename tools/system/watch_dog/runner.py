@@ -13,6 +13,10 @@ from typing import Protocol
 
 import click
 
+from integrations.buzz.alarms import BuzzAlarmDispatcher
+from integrations.buzz.credentials import (
+    load_credentials_from_env as load_buzz_credentials_from_env,
+)
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.rocketchat.credentials import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
@@ -20,7 +24,8 @@ from integrations.rocketchat.credentials import (
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from platform.common.exit_codes import ERROR, SUCCESS
-from tools.system.watch_dog.config import AlarmProvider, WatchdogConfig
+from platform.scheduler.types import Provider
+from tools.system.watch_dog.config import WatchdogConfig, WatchdogThreshold
 from tools.system.watch_dog.process_monitor import ProcessMonitor, ProcessSample, Sampler
 
 
@@ -35,7 +40,7 @@ class Dispatcher(Protocol):
 class ThresholdBreach:
     """A threshold violation observed for a sample."""
 
-    name: str
+    name: WatchdogThreshold
     limit: float
     observed: float
     window_seconds: float | None = None
@@ -81,7 +86,7 @@ def run_watchdog(
 
             for breach in breaches:
                 active_dispatcher.dispatch(
-                    breach.name,
+                    breach.name.value,
                     _format_alarm_message(sample, breach, provider=config.provider),
                 )
 
@@ -94,9 +99,12 @@ def run_watchdog(
 
 
 def _build_dispatcher(config: WatchdogConfig) -> Dispatcher:
-    if config.provider == "rocketchat":
+    if config.provider == Provider.ROCKETCHAT:
         rc_creds = load_rocketchat_credentials_from_env(channel_override=config.chat_id)
         return RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=config.cooldown)
+    if config.provider == Provider.BUZZ:
+        buzz_creds = load_buzz_credentials_from_env(channel_override=config.chat_id)
+        return BuzzAlarmDispatcher(buzz_creds, cooldown_seconds=config.cooldown)
     creds = load_credentials_from_env(chat_id_override=config.chat_id)
     return AlarmDispatcher(creds, cooldown_seconds=config.cooldown, parse_mode="HTML")
 
@@ -115,7 +123,7 @@ def _evaluate_thresholds(
         if observed_cpu >= config.max_cpu:
             breaches.append(
                 ThresholdBreach(
-                    name="max_cpu",
+                    name=WatchdogThreshold.MAX_CPU,
                     limit=config.max_cpu,
                     observed=observed_cpu,
                     window_seconds=config.cpu_window,
@@ -125,7 +133,7 @@ def _evaluate_thresholds(
     if config.max_runtime is not None and sample.runtime_seconds >= config.max_runtime:
         breaches.append(
             ThresholdBreach(
-                name="max_runtime",
+                name=WatchdogThreshold.MAX_RUNTIME,
                 limit=config.max_runtime,
                 observed=sample.runtime_seconds,
             )
@@ -134,7 +142,7 @@ def _evaluate_thresholds(
     if config.max_rss is not None and sample.rss_bytes >= config.max_rss:
         breaches.append(
             ThresholdBreach(
-                name="max_rss",
+                name=WatchdogThreshold.MAX_RSS,
                 limit=float(config.max_rss),
                 observed=float(sample.rss_bytes),
             )
@@ -183,7 +191,7 @@ def _alarm_started_and_command(sample: ProcessSample) -> tuple[str, str]:
 
 
 def _format_alarm_message(
-    sample: ProcessSample, breach: ThresholdBreach, *, provider: AlarmProvider
+    sample: ProcessSample, breach: ThresholdBreach, *, provider: Provider
 ) -> str:
     """Format the alarm body for the delivering provider.
 
@@ -192,7 +200,7 @@ def _format_alarm_message(
     provider gets its own markup around the same fields rather than sending
     one format to both.
     """
-    if provider == "rocketchat":
+    if provider == Provider.ROCKETCHAT:
         return _format_alarm_message_markdown(sample, breach)
     return _format_alarm_message_html(sample, breach)
 
@@ -244,16 +252,16 @@ def _format_alarm_message_markdown(sample: ProcessSample, breach: ThresholdBreac
 
 
 def _format_threshold_breach(breach: ThresholdBreach) -> str:
-    if breach.name == "max_cpu":
+    if breach.name == WatchdogThreshold.MAX_CPU:
         window = f"  window={_format_duration(breach.window_seconds or 0)}"
         return f"max_cpu  limit={breach.limit:.1f}%  observed={breach.observed:.1f}%{window}"
-    if breach.name == "max_runtime":
+    if breach.name == WatchdogThreshold.MAX_RUNTIME:
         return (
             "max_runtime  "
             f"limit={_format_duration(breach.limit)}  "
             f"observed={_format_duration(breach.observed)}"
         )
-    if breach.name == "max_rss":
+    if breach.name == WatchdogThreshold.MAX_RSS:
         return (
             "max_rss  "
             f"limit={_format_bytes(breach.limit)}  "

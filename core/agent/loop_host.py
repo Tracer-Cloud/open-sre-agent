@@ -33,33 +33,37 @@ class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
     _tool_hooks: ToolExecutionHooks
 
     def _filter_tools(self, tools: list[RuntimeToolT]) -> list[RuntimeToolT]:
-        pass
+        """Narrow the tool list the loop may call this iteration."""
 
     def _emit_runtime(self, event: RuntimeEvent) -> None:
-        pass
+        """Publish one runtime event to whoever is watching the turn."""
 
     def _drain_steering_messages(self, messages: list[RuntimeMessage]) -> None:
-        pass
+        """Append any queued steering messages, in place."""
 
     def _pop_follow_up_message(self) -> str | None:
-        pass
+        """The next queued follow-up prompt, or None when there is none."""
 
     def _should_accept_conclusion(
-        self, *, evidence_count: int, iteration: int
+        self,
+        *,
+        evidence_count: int,
+        iteration: int,
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
-        pass
+        """Whether the loop may conclude now, and why not when it may not."""
 
     def _transform_messages(self, messages: list[RuntimeMessage]) -> list[RuntimeMessage]:
-        pass
+        """Adjust runtime messages before they are converted for the provider."""
 
     def _convert_to_llm(self, llm: Any, messages: list[RuntimeMessage]) -> list[ProviderMessage]:
-        pass
+        """Render runtime messages in the provider's wire shape."""
 
     def _before_request(self, request: ProviderRequest) -> ProviderRequest:
-        pass
+        """Last chance to alter the request before it is sent."""
 
     def _after_response(self, request: ProviderRequest, response: Any) -> Any:
-        pass
+        """Inspect or replace the provider response before the loop reads it."""
 
 
 __all__ = ["LoopHost"]

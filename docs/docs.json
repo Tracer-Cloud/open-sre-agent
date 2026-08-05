@@ -45,9 +45,11 @@
               "interactive-shell-assistant",
               "deployment",
               "api",
+              "python-api",
               "faq",
               "cloudopsbench",
-              "bi-weekly-giveaway"
+              "bi-weekly-giveaway",
+              "pr-review-flow"
             ]
           }
         ]
@@ -86,7 +88,8 @@
           {
             "group": "Configuration",
             "pages": [
-              "configuration/environment-variables"
+              "configuration/environment-variables",
+              "configuration/remote-sync"
             ]
           }
         ]
@@ -161,8 +164,12 @@
               "kubernetes",
               "cloudtrail_events",
               "bitbucket",
+              "elb",
+              "ec2",
               "github",
               "github-workflow-tools",
+              "github-security-fix",
+              "github-ci-fix",
               "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",
@@ -187,6 +194,7 @@
               "messaging/discord",
               "messaging/telegram",
               "messaging/rocketchat",
+              "messaging/buzz",
               "messaging/whatsapp",
               "messaging/twilio-sms"
             ]
