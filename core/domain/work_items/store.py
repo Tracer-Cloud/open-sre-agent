@@ -36,6 +36,10 @@ _LEGACY_SLACK_FILENAME = "slack_captured_tasks.jsonl"
 _LEGACY_IMPORT_SENTINEL = ".legacy_slack_imported"
 
 
+class WorkItemStoreError(RuntimeError):
+    """Raised when the durable work-item store cannot be loaded safely."""
+
+
 @dataclass(frozen=True)
 class WorkItemResolution:
     selector: str
@@ -333,15 +337,21 @@ def _store_lock(path: Path) -> FileLock:
 
 
 def _load_items_no_lock(path: Path) -> list[WorkItem]:
+    """Load work items from ``path``.
+
+    A missing file is treated as an empty store. An existing but unreadable,
+    truncated, or non-list file raises ``WorkItemStoreError`` so mutations
+    cannot overwrite durable state with an empty list.
+    """
     if not path.exists():
         return []
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Failed to read work item store: %s", exc)
-        return []
+        raise WorkItemStoreError(f"Failed to read work item store at {path}") from exc
     if not isinstance(raw, list):
-        return []
+        raise WorkItemStoreError(f"Work item store at {path} has a non-list root; refusing to load")
     items: list[WorkItem] = []
     for entry in raw:
         if not isinstance(entry, Mapping):
@@ -444,6 +454,7 @@ __all__ = [
     "CompleteWorkItemsResult",
     "UpdateWorkItemResult",
     "WorkItemResolution",
+    "WorkItemStoreError",
     "add_work_item",
     "complete_work_items",
     "ensure_work_items_store",

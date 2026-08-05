@@ -272,7 +272,8 @@ def _build_work_item_reminder(task: ScheduledTask) -> str:
     """Build a one-shot reminder for a durable work item.
 
     Missing or already-completed work items produce a quiet tick so stale
-    reminders do not spam the channel.
+    reminders do not spam the channel. ``last_reminded_at`` is recorded by the
+    executor after successful delivery, not here.
     """
     from pathlib import Path
 
@@ -280,8 +281,6 @@ def _build_work_item_reminder(task: ScheduledTask) -> str:
         WorkItemStatus,
         build_work_item_reminder_message,
         get_work_item,
-        now_iso,
-        set_work_item_last_reminded,
     )
 
     item_id = task.params.get("work_item_id", "").strip()
@@ -292,7 +291,6 @@ def _build_work_item_reminder(task: ScheduledTask) -> str:
     item = get_work_item(item_id, store_path=store_path)
     if item is None or item.status is WorkItemStatus.COMPLETED:
         return ""
-    set_work_item_last_reminded(item.id, now_iso(), store_path=store_path)
     return build_work_item_reminder_message(item)
 
 

@@ -24,6 +24,8 @@ from tools.system.work_items import (
 def _isolated_work_items_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(OPENSRE_WORK_ITEMS_DIR_ENV, str(tmp_path / "work_items"))
     monkeypatch.setattr("tools.system.work_items.tool.add_scheduled_task", lambda task: task)
+    monkeypatch.setattr("tools.system.work_items.tool.list_tasks", lambda: [])
+    monkeypatch.setattr("tools.system.work_items.tool.update_task", lambda _task: True)
 
 
 def _registered(fn: Any) -> Any:
@@ -118,6 +120,50 @@ def test_add_with_reminder_supports_multi_target_fanout() -> None:
 
 def test_update_with_invalid_selector_is_structured() -> None:
     assert work_task_update(selector="nope", priority="high")["error"] == "not_found"
+
+
+def test_update_reminder_disables_previous_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.scheduler.types import Provider, ScheduledTask, TaskKind
+
+    created = work_task_add(
+        title="Ping channel",
+        remind_at="2026-07-30T09:00",
+        channel_provider="slack",
+        channel_id="C123",
+    )
+    item_id = created["task"]["id"]
+    old_task = ScheduledTask(
+        id="old-reminder",
+        kind=TaskKind.WORK_ITEM_REMINDER,
+        cron="0 9 30 7 *",
+        provider=Provider.SLACK,
+        chat_id="C123",
+        enabled=True,
+        params={"work_item_id": item_id},
+    )
+    saved: dict[str, ScheduledTask] = {}
+    monkeypatch.setattr(
+        "tools.system.work_items.tool.list_tasks",
+        lambda: [old_task],
+    )
+
+    def _capture_update(task: ScheduledTask) -> bool:
+        saved["task"] = task
+        return True
+
+    monkeypatch.setattr("tools.system.work_items.tool.update_task", _capture_update)
+
+    result = work_task_update(
+        selector=item_id,
+        remind_at="2026-07-31T10:00",
+        channel_provider="slack",
+        channel_id="C123",
+    )
+
+    assert result["status"] == "updated"
+    assert result["scheduled_task_id"]
+    assert saved["task"].id == "old-reminder"
+    assert saved["task"].enabled is False
 
 
 def test_schedule_checkin_validates_delivery_target() -> None:

@@ -25,6 +25,7 @@ from core.domain.work_items import (
 from core.tool_framework.tool_decorator import tool
 from core.types import AgentToolContext
 from platform.scheduler.store import add_task as add_scheduled_task
+from platform.scheduler.store import list_tasks, update_task
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 from tools.system.work_items.results import (
     added_result,
@@ -138,6 +139,22 @@ def _invalid_delivery_targets(targets: list[WorkItemChannelTarget]) -> list[str]
     return invalid
 
 
+def _disable_existing_item_reminders(item_id: str) -> int:
+    """Disable enabled one-shot reminders for ``item_id`` so updates replace them."""
+    disabled = 0
+    for task in list_tasks():
+        if task.kind is not TaskKind.WORK_ITEM_REMINDER:
+            continue
+        if not task.enabled:
+            continue
+        if task.params.get("work_item_id", "").strip() != item_id:
+            continue
+        task.enabled = False
+        if update_task(task):
+            disabled += 1
+    return disabled
+
+
 def _schedule_item_reminder(
     item: WorkItem,
     *,
@@ -154,6 +171,8 @@ def _schedule_item_reminder(
     ]
     if not valid_targets:
         return None
+    # Replace any prior reminder for this work item before scheduling a new one.
+    _disable_existing_item_reminders(item.id)
     primary = valid_targets[0]
     parsed_provider = Provider(primary.provider)
     schedule_timezone = "UTC" if remind_at.tzinfo is not None else timezone

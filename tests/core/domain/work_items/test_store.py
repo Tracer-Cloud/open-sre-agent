@@ -77,3 +77,33 @@ def test_ambiguous_completion_reports_candidates() -> None:
 
     assert result.completed == ()
     assert {item.id for item in result.ambiguous["Fix Slack"]} == {first.id, second.id}
+
+
+def test_corrupt_store_does_not_wipe_on_mutation(tmp_path: Path) -> None:
+    from core.domain.work_items.store import WorkItemStoreError, work_items_path
+
+    add_work_item(title="Keep me")
+    path = work_items_path()
+    original = path.read_text(encoding="utf-8")
+    path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(WorkItemStoreError):
+        add_work_item(title="Should not replace prior tasks")
+
+    path.write_text(original, encoding="utf-8")
+    assert [item.title for item in list_work_items()] == ["Keep me"]
+
+
+def test_non_list_store_root_does_not_wipe_on_mutation() -> None:
+    from core.domain.work_items.store import WorkItemStoreError, work_items_path
+
+    add_work_item(title="Keep me")
+    path = work_items_path()
+    original = path.read_text(encoding="utf-8")
+    path.write_text('{"items": []}\n', encoding="utf-8")
+
+    with pytest.raises(WorkItemStoreError):
+        update_work_item("Keep me", changes={"priority": "high"})
+
+    path.write_text(original, encoding="utf-8")
+    assert list_work_items()[0].priority.value == "normal"

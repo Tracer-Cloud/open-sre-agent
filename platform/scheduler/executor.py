@@ -20,7 +20,7 @@ from platform.scheduler.loop_constants import (
     LOOP_TELEGRAM_CHAT_ID_PARAM,
 )
 from platform.scheduler.tasks import build_message
-from platform.scheduler.types import Provider, ScheduledTask, TaskStatus
+from platform.scheduler.types import Provider, ScheduledTask, TaskKind, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,7 @@ def execute_task(
             provider=_run_provider_label(task),
         )
         _emit_analytics(task, TaskStatus.SUCCESS, error=error)
+        _record_work_item_reminder_delivery(task)
         if error:
             logger.warning(
                 "Task %s delivered with partial channel failures (message_id=%s): %s",
@@ -105,6 +106,29 @@ def execute_task(
     else:
         _record_failure(task, fire_time, error)
         return False
+
+
+def _record_work_item_reminder_delivery(task: ScheduledTask) -> None:
+    """Persist ``last_reminded_at`` only after a reminder was delivered."""
+    if task.kind is not TaskKind.WORK_ITEM_REMINDER:
+        return
+    item_id = task.params.get("work_item_id", "").strip()
+    if not item_id:
+        return
+    from pathlib import Path
+
+    from core.domain.work_items import now_iso, set_work_item_last_reminded
+
+    store_path_text = task.params.get("store_path", "").strip()
+    store_path = Path(store_path_text).expanduser() if store_path_text else None
+    try:
+        set_work_item_last_reminded(item_id, now_iso(), store_path=store_path)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Failed to record last_reminded_at for work item %s after delivery",
+            item_id,
+            exc_info=True,
+        )
 
 
 def _deliver(
