@@ -1,15 +1,15 @@
 """Optional mirroring of conversation context to a store the user owns.
 
 Off by default. When switched on, conversation history and memory are copied
-to the user's own object store (AWS/S3 today; other backends register under
-:mod:`platform.filestorage.providers`). Credentials never leave the machine —
-see :mod:`platform.filestorage.syncable`.
+to the user's own object store (built-in: AWS/S3, GCS, and Vercel Blob; others
+register under :mod:`platform.filestorage.providers`). Credentials never leave
+the machine - see :mod:`platform.filestorage.syncable`.
 
 Surfaces share one **stateless, thread-safe** service
 (:mod:`platform.filestorage.operations`): ``opensre remote-sync``, REPL
-``/remote-sync``, and gateway headless slash ports. No cached config or store —
-each call re-reads settings and builds a fresh backend. Roots follow the
-active principal scope (``sessions_dir`` / ``get_memory_dir``).
+``/remote-sync``, and gateway headless slash ports. Setup writes the stored
+``remote_sync`` section; each sync re-reads settings and builds a fresh backend.
+Roots follow the active principal scope (``sessions_dir`` / ``get_memory_dir``).
 
 This is the object-store counterpart to a mounted org context root: same idea,
 different mechanism, because a laptop has no provisioned filesystem and the
@@ -25,12 +25,15 @@ from platform.filestorage.config import (
 )
 from platform.filestorage.engine import (
     SyncReport,
+    local_files,
     pull,
     push,
+    relative_key,
     resolve_direction,
     run_sync,
 )
 from platform.filestorage.enums import (
+    BucketExposure,
     BuiltInProvider,
     RemoteSyncSubcommand,
     SyncDirection,
@@ -43,10 +46,20 @@ from platform.filestorage.errors import (
     RemoteSyncUnavailableError,
     UnsyncablePathError,
 )
+from platform.filestorage.exclusions import (
+    NO_EXCLUSIONS,
+    ExclusionRules,
+    parse_exclusions,
+)
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    NO_EXCLUSIONS_HELP,
+    format_exclusion_lines,
+    format_exposure_line,
     format_report_lines,
     format_status_lines,
+    root_state,
 )
 from platform.filestorage.operations import (
     SyncRootStatus,
@@ -55,11 +68,18 @@ from platform.filestorage.operations import (
     run_remote_sync,
 )
 from platform.filestorage.ports import ObjectStore, RemoteObject
-from platform.filestorage.providers import build_object_store
+from platform.filestorage.providers import build_object_store, check_bucket_exposure
 from platform.filestorage.syncable import SyncRoot, is_syncable, resolved_roots, syncable_roots
 
 __all__ = [
+    "NO_EXCLUSIONS",
+    "NO_EXCLUSIONS_HELP",
+    "BucketExposure",
+    "ExclusionRules",
     "OrgScopeNotSupportedError",
+    "PublicAccessStatus",
+    "format_exclusion_lines",
+    "format_exposure_line",
     "format_status_lines",
     "format_report_lines",
     "DISABLED_HELP",
@@ -79,14 +99,19 @@ __all__ = [
     "SyncStatus",
     "UnsyncablePathError",
     "build_object_store",
+    "check_bucket_exposure",
     "get_sync_status",
     "is_syncable",
     "load_remote_sync_config",
+    "local_files",
+    "parse_exclusions",
     "pull",
     "push",
+    "relative_key",
     "remote_sync_enabled",
     "resolve_direction",
     "resolved_roots",
+    "root_state",
     "run_remote_sync",
     "run_sync",
     "syncable_roots",

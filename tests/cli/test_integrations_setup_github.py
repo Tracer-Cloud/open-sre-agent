@@ -11,15 +11,26 @@ from click.testing import CliRunner
 import integrations.setup_flow as setup_flow
 from integrations.cli import _setup_github, cmd_setup
 from integrations.github.mcp import GitHubMCPValidationResult
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
+
+
+def _prompt_answering(answer: object) -> object:
+    """A questionary prompt double: calling it yields an object whose ``ask()`` returns ``answer``."""
+
+    def _prompt(*_args: object, **_kwargs: object) -> object:
+        return type("X", (), {"ask": lambda *_aa, **_kk: answer})()
+
+    return _prompt
 
 
 def _mock_confirm(monkeypatch: pytest.MonkeyPatch, *, advanced: bool) -> None:
     """Mock the advanced-settings confirm prompt at the top of ``_setup_github``."""
-    monkeypatch.setattr(
-        "integrations.cli.questionary.confirm",
-        lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: advanced})(),
-    )
+    monkeypatch.setattr("integrations.cli.questionary.confirm", _prompt_answering(advanced))
+
+
+def _mock_select_auto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock the transport-mode select prompt to answer "auto"."""
+    monkeypatch.setattr("integrations.cli.questionary.select", _prompt_answering("auto"))
 
 
 def _patch_apply_setup(monkeypatch: pytest.MonkeyPatch, fake: object) -> None:
@@ -42,10 +53,7 @@ def test_setup_github_prints_connected_and_saves_on_validation_success(
     _mock_confirm(monkeypatch, advanced=True)
     monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "ghp_x")
     monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", lambda: "full")
-    monkeypatch.setattr(
-        "integrations.cli.questionary.select",
-        lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
-    )
+    _mock_select_auto(monkeypatch)
 
     monkeypatch.setattr(
         "integrations.github.mcp.validate_github_mcp_config",
@@ -158,10 +166,7 @@ def test_setup_github_exits_without_save_on_validation_failure(
     monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=True)
     monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "")
-    monkeypatch.setattr(
-        "integrations.cli.questionary.select",
-        lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
-    )
+    _mock_select_auto(monkeypatch)
     monkeypatch.setattr(
         "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
@@ -200,10 +205,7 @@ def test_cmd_setup_github_skips_saved_line_on_validation_failure(
     monkeypatch.setattr("integrations.cli._p", fake_p)
     _mock_confirm(monkeypatch, advanced=True)
     monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "x")
-    monkeypatch.setattr(
-        "integrations.cli.questionary.select",
-        lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
-    )
+    _mock_select_auto(monkeypatch)
     monkeypatch.setattr(
         "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(
@@ -241,10 +243,7 @@ def test_cmd_setup_github_prints_saved_after_success(
     _mock_confirm(monkeypatch, advanced=True)
     monkeypatch.setattr("integrations.cli._setup_github_auth_token", lambda _mode: "tok")
     monkeypatch.setattr("integrations.cli._prompt_github_repo_report_level", lambda: "standard")
-    monkeypatch.setattr(
-        "integrations.cli.questionary.select",
-        lambda *_a, **_k: type("X", (), {"ask": lambda *_aa, **_kk: "auto"})(),
-    )
+    _mock_select_auto(monkeypatch)
     monkeypatch.setattr(
         "integrations.github.mcp.validate_github_mcp_config",
         lambda _c, **_kwargs: GitHubMCPValidationResult(

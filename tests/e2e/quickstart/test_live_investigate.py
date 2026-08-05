@@ -38,7 +38,7 @@ QUICKSTART_ALERT_DOC_PATH = "tests/e2e/kubernetes/fixtures/datadog_k8s_alert.jso
 
 def _opensre_cmd() -> list[str]:
     """Prefer the editable module entry — never a Homebrew/PyInstaller binary on PATH."""
-    return [sys.executable, "-m", "surfaces.cli.__main__"]
+    return [sys.executable, "-m", "surfaces.cli.app"]
 
 
 def test_live_quickstart_investigate_completes(tmp_path: Path) -> None:

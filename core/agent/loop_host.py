@@ -45,7 +45,11 @@ class LoopHost[RuntimeToolT: RuntimeTool](Protocol):
         """The next queued follow-up prompt, or None when there is none."""
 
     def _should_accept_conclusion(
-        self, *, evidence_count: int, iteration: int
+        self,
+        *,
+        evidence_count: int,
+        iteration: int,
+        final_text: str = "",
     ) -> tuple[bool, str | None]:
         """Whether the loop may conclude now, and why not when it may not."""
 

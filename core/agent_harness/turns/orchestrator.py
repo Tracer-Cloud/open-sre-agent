@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.ports import (
+    AnswerRequest,
     ConfirmFn,
     ErrorReporter,
     EvidenceGatherer,
@@ -35,14 +36,17 @@ from core.agent_harness.ports import (
     StreamAnswerFn,
     TurnAccounting,
 )
-from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
+from core.agent_harness.prompts.assistant import (
+    AssistantTurnPrompt,
+    build_cli_agent_turn_prompt,
+)
 from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
 from core.agent_harness.prompts.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
 from platform.observability.trace.spans import component_span, emit_route
@@ -94,7 +98,7 @@ def stage_turn_llm_failure(session: Any, *, client: Any | None = None) -> None:
 def _stream_response(
     *,
     client: Any,
-    prompt: str,
+    turn_prompt: AssistantTurnPrompt,
     output: OutputSink,
     run_factory: RunRecordFactory,
     error_reporter: ErrorReporter | None,
@@ -104,7 +108,7 @@ def _stream_response(
         started = time.monotonic()
         text_str = output.stream(
             label=_ASSISTANT_LABEL,
-            chunks=client.invoke_stream(prompt),
+            chunks=client.invoke_stream(turn_prompt.messages()),
         )
     except KeyboardInterrupt:
         output.print("· cancelled")
@@ -122,7 +126,12 @@ def _stream_response(
             stage_turn_llm_failure(session, client=client)
         output.render_error(f"assistant failed: {exc}")
         return None
-    return run_factory.build(client=client, prompt=prompt, response_text=text_str, started=started)
+    return run_factory.build(
+        client=client,
+        prompt=turn_prompt.joined(),
+        response_text=text_str,
+        started=started,
+    )
 
 
 def _record_answer_turn(session: SessionStore, message: str, assistant_text: str) -> None:
@@ -149,12 +158,7 @@ def stream_answer(
     reasoning: ReasoningClientProvider,
     run_factory: RunRecordFactory,
     error_reporter: ErrorReporter | None = None,
-    confirm_fn: ConfirmFn | None = None,
-    is_tty: bool | None = None,
-    tool_observation: str | None = None,
-    tool_observation_on_screen: bool = True,
-    handoff_contents: tuple[str, ...] = (),
-    turn_plan: TurnPlan | None = None,
+    request: AnswerRequest | None = None,
 ) -> Any | None:
     """Stream one grounded conversational answer (guidance only, no tools).
 
@@ -162,32 +166,33 @@ def stream_answer(
     no ReAct loop. The **tool-calling** agent is ``core.agent.Agent`` — see
     ``core/agent_harness/AGENTS.md``.
 
-    ``turn_plan`` is the turn-wide assembly built at turn start. Its snapshot
-    (conversation history, integration state, prior investigation, synthetic-run
-    path) grounds prompt construction in a stable turn-start view rather than the
-    live session.
+    ``request.turn_plan`` is the turn-wide assembly built at turn start. Its
+    snapshot (conversation history, integration state, prior investigation,
+    synthetic-run path) grounds prompt construction in a stable turn-start view
+    rather than the live session.
     """
+    req = request if request is not None else AnswerRequest()
     client = reasoning.get()
     if client is None:
         return None
 
+    turn_plan = req.turn_plan
     ctx = (
         turn_plan.snapshot if turn_plan is not None else TurnSnapshot.from_session(message, session)
     )
-    _ = (confirm_fn, is_tty)
 
-    prompt = build_cli_agent_prompt_from_provider(
+    turn_prompt = build_cli_agent_turn_prompt(
         message=message,
         prompts=prompts,
-        tool_observation=tool_observation,
-        tool_observation_on_screen=tool_observation_on_screen,
-        handoff_contents=handoff_contents,
+        tool_observation=req.tool_observation,
+        tool_observation_on_screen=req.tool_observation_on_screen,
+        handoff_contents=req.handoff_contents,
         turn_snapshot=ctx,
     )
 
     run = _stream_response(
         client=client,
-        prompt=prompt,
+        turn_prompt=turn_prompt,
         output=output,
         run_factory=run_factory,
         error_reporter=error_reporter,
@@ -277,13 +282,20 @@ def _is_prior_investigation_follow_up_handoff(handoff_contents: tuple[str, ...])
     return is_prior_investigation_follow_up(handoff_contents)
 
 
+@dataclass(frozen=True)
+class _RouteOutcome:
+    """Effects of one routed path, ready to pack into ``TurnResult``."""
+
+    final_intent: str
+    response_text: str
+    llm_run: Any | None = None
+
+
 def _gather_and_answer(
     *,
     text: str,
     answer: StreamAnswerFn,
     gather: EvidenceGatherer,
-    confirm_fn: ConfirmFn | None,
-    is_tty: bool | None,
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
 ) -> Any | None:
@@ -297,23 +309,21 @@ def _gather_and_answer(
     skip_gather = _is_prior_investigation_follow_up_handoff(handoff_contents) and (
         turn_plan.snapshot.last_state is not None
     )
-    gathered = None if skip_gather else gather(text, is_tty=is_tty, turn_plan=turn_plan)
+    gathered = None if skip_gather else gather(text, turn_plan=turn_plan)
     if skip_gather:
         log.debug("gather skipped: follow_up handoff with prior investigation state")
 
-    # When evidence was gathered, mark it off-screen so the prompt builder
-    # includes it. When nothing was gathered, omit the flag entirely so the
-    # call shape matches the plain conversational (no-observation) path.
-    on_screen: dict[str, bool] = {"tool_observation_on_screen": False} if gathered else {}
-
+    # Off-screen when we have evidence text so the prompt builder injects it;
+    # on-screen (plain path) when there is nothing to inject.
+    observation = gathered if gathered else None
     return answer(
         text,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        tool_observation=gathered or None,
-        handoff_contents=handoff_contents,
-        turn_plan=turn_plan,
-        **on_screen,
+        AnswerRequest(
+            tool_observation=observation,
+            tool_observation_on_screen=observation is None,
+            handoff_contents=handoff_contents,
+            turn_plan=turn_plan,
+        ),
     )
 
 
@@ -327,7 +337,7 @@ def run_turn(
     accounting: TurnAccounting,
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
-) -> ShellTurnResult:
+) -> TurnResult:
     """Run one full turn through three paths, in order:
 
     1. ``summarize_observation`` — a successful action left discovery output, so
@@ -347,8 +357,25 @@ def run_turn(
 
     # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
     # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
+    # Schedule offers prefer session.pending_schedule_offer (structured) over
+    # scraping prose.
     prior_messages = getattr(session, "cli_agent_messages", None) or ()
-    text = expand_affirmative_follow_up(text, prior_messages)
+    pending_schedule = getattr(session, "pending_schedule_offer", None)
+    expanded = expand_affirmative_follow_up(
+        text,
+        prior_messages,
+        pending_schedule=pending_schedule,
+    )
+    # Whether this turn is the confirmation of a pending offer. The offer is
+    # consumed only once the command actually lands — clearing it here would
+    # burn it on a rejected ``cron add``, leaving a second "yes" with nothing
+    # to expand.
+    confirms_schedule = (
+        pending_schedule is not None
+        and expanded.startswith("/cron ")
+        and hasattr(session, "pending_schedule_offer")
+    )
+    text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their
@@ -372,6 +399,13 @@ def run_turn(
         is_tty=is_tty,
         turn_plan=turn_plan,
     )
+
+    if (
+        confirms_schedule
+        and action_result.executed_success_count > 0
+        and hasattr(session, "pending_schedule_offer")
+    ):
+        session.pending_schedule_offer = None
     accounting.record_action_result(action_result)
 
     handoff_contents = action_result.handoff_contents
@@ -402,28 +436,31 @@ def run_turn(
     )
 
     with component_span(f"route:{route.intent}", session_id=sid):
+        # if/elif + raise (not match/assert_never): CodeQL does not model
+        # ``assert_never`` as noreturn, so locals bound only inside match arms
+        # and read after the match trip py/uninitialized-local-variable.
         if route.intent == "summarize_observation":
             with apply_reasoning_effort(turn_snapshot.reasoning_effort):
                 run = answer(
                     text,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
-                    tool_observation=observation,
-                    handoff_contents=handoff_contents,
-                    turn_plan=turn_plan,
+                    AnswerRequest(
+                        tool_observation=observation,
+                        handoff_contents=handoff_contents,
+                        turn_plan=turn_plan,
+                    ),
                 )
-            result = ShellTurnResult(
+            outcome = _RouteOutcome(
                 final_intent="cli_agent_summarized",
-                action_result=action_result,
-                assistant_response_text=_response_text(run),
+                response_text=_response_text(run),
                 llm_run=run,
             )
         elif route.intent == "handled_without_llm":
+            # The one route that never calls the model: the action already
+            # produced the text the user sees.
             _record_action_only_turn(session, text, action_result.response_text)
-            result = ShellTurnResult(
+            outcome = _RouteOutcome(
                 final_intent="cli_agent_handled",
-                action_result=action_result,
-                assistant_response_text=action_result.response_text,
+                response_text=action_result.response_text,
             )
         elif route.intent == "gather_and_answer":
             with apply_reasoning_effort(turn_snapshot.reasoning_effort):
@@ -431,21 +468,25 @@ def run_turn(
                     text=text,
                     answer=answer,
                     gather=gather,
-                    confirm_fn=confirm_fn,
-                    is_tty=is_tty,
                     handoff_contents=handoff_contents,
                     turn_plan=turn_plan,
                 )
-            result = ShellTurnResult(
+            outcome = _RouteOutcome(
                 final_intent="cli_agent_fallback",
-                action_result=action_result,
-                assistant_response_text=_response_text(run),
+                response_text=_response_text(run),
                 llm_run=run,
             )
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
-    return accounting.finalize(result)
+        return accounting.finalize(
+            TurnResult(
+                final_intent=outcome.final_intent,
+                action_result=action_result,
+                assistant_response_text=outcome.response_text,
+                llm_run=outcome.llm_run,
+            )
+        )
 
 
 __all__ = [

@@ -169,14 +169,26 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
+        from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+
         self.turn_runtime = AgentTurnRuntime(
             session=self.session,
             state=self.state,
             spinner=self.spinner,
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
+            console=self.service_console,
+            action_runner=ShellActionRunner(
+                session=self.session,
+                console=self.service_console,
+                request_exit=self.prompt.request_exit,
+            ),
         )
-        self.echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+        # Prompt echoes belong in the same stream as everything else this turn
+        # writes, so an embedding caller captures the whole conversation.
+        self.echo_console = console or Console(
+            highlight=False, force_terminal=True, color_system="truecolor"
+        )
         self.input_reader = PromptInputReader(
             self.prompt,
             self.state,

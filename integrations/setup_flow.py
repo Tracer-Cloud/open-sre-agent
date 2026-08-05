@@ -37,6 +37,7 @@ from pathlib import Path
 from config.env_file import is_sensitive_env_key, sync_env_secret, sync_env_values
 from integrations.store import upsert_integration
 from integrations.verification import VerifierFn
+from integrations.webapp_vault import push_webapp_org_integration
 
 
 @dataclass(frozen=True)
@@ -328,6 +329,9 @@ def apply_setup(
         return SetupOutcome(ok=False, detail=f"Could not save {spec.service} credentials: {exc}")
 
     upsert_integration(spec.service, {"credentials": credentials})
+    # Mirror the change up so a silo's edit reaches the org vault. No-op off a
+    # silo, and never fatal: the local store is already the working copy.
+    push_webapp_org_integration(spec.service, credentials)
 
     if spec.finalize is not None:
         note = spec.finalize(credentials)

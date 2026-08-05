@@ -45,9 +45,11 @@
               "interactive-shell-assistant",
               "deployment",
               "api",
+              "python-api",
               "faq",
               "cloudopsbench",
-              "bi-weekly-giveaway"
+              "bi-weekly-giveaway",
+              "pr-review-flow"
             ]
           }
         ]
@@ -163,8 +165,11 @@
               "sqs_queues",
               "bitbucket",
               "elb",
+              "ec2",
               "github",
               "github-workflow-tools",
+              "github-security-fix",
+              "github-ci-fix",
               "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",

@@ -14,18 +14,22 @@ from config.constants.filestorage import (
 )
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncReport, content_tag
-from platform.filestorage.enums import SyncRootName
+from platform.filestorage.enums import RemoteSyncField, SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    direction_label,
     format_report_lines,
     format_status_lines,
+    sanitize_terminal_text,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers import build_object_store as surface_build
 from platform.filestorage.providers.registry import (
+    SetupExtraField,
     build_object_store,
+    provider_extra_fields,
     register_object_store,
     registered_providers,
     unregister_object_store,
@@ -88,6 +92,90 @@ def test_formatters_return_immutable_tuples() -> None:
     assert "2 uploaded" in format_report_lines(report)[0]
 
 
+def test_format_report_lines_marks_a_dry_run_as_a_preview() -> None:
+    report = SyncReport(uploaded=["a"], downloaded=["b"], skipped=2)
+    lines = format_report_lines(report, dry_run=True)
+    assert lines[0] == "Dry run — 1 would be downloaded, 1 would be uploaded, 2 already current."
+
+
+def test_format_report_lines_shows_nonzero_byte_sizes() -> None:
+    report = SyncReport(
+        uploaded=["a"],
+        downloaded=["b"],
+        uploaded_bytes=4500,
+        downloaded_bytes=1200,
+        skipped=2,
+    )
+    lines = format_report_lines(report)
+    assert "4.4 KiB" in lines[0]
+    assert "1.2 KiB" in lines[0]
+    assert "5.6 KiB total" in lines[0]
+
+
+def test_format_report_lines_omits_size_when_no_bytes_moved() -> None:
+    report = SyncReport(
+        uploaded=["a"], downloaded=[], uploaded_bytes=0, downloaded_bytes=0, skipped=1
+    )
+    lines = format_report_lines(report)
+    assert lines[0] == "Sync complete — 0 downloaded, 1 uploaded, 1 already current."
+
+
+def test_format_report_lines_shows_only_download_size_when_upload_is_zero() -> None:
+    report = SyncReport(
+        uploaded=[], downloaded=["b"], uploaded_bytes=0, downloaded_bytes=2048, skipped=1
+    )
+    lines = format_report_lines(report)
+    assert "2.0 KiB" in lines[0]
+    assert "2.0 KiB total" in lines[0]
+
+
+def test_format_report_lines_shows_small_byte_count_in_bytes() -> None:
+    report = SyncReport(
+        uploaded=["a"], downloaded=[], uploaded_bytes=500, downloaded_bytes=0, skipped=0
+    )
+    lines = format_report_lines(report)
+    assert "500 B" in lines[0]
+    assert "500 B total" in lines[0]
+
+
+def test_format_report_lines_handles_megabyte_boundary() -> None:
+    report = SyncReport(
+        uploaded=[], downloaded=[], uploaded_bytes=0, downloaded_bytes=2_500_000, skipped=3
+    )
+    lines = format_report_lines(report)
+    assert "2.4 MiB" in lines[0]
+    assert "2.4 MiB total" in lines[0]
+
+
+def test_direction_label_is_distinct_and_shared_by_both_surfaces() -> None:
+    """One source of truth for the label, so CLI and REPL cannot drift apart."""
+    assert direction_label(SyncDirection.PULL) == "Pulling"
+    assert direction_label(SyncDirection.PUSH) == "Pushing"
+    assert direction_label(SyncDirection.PULL) != direction_label(SyncDirection.PUSH)
+
+
+def test_sanitize_terminal_text_leaves_ordinary_paths_untouched() -> None:
+    assert sanitize_terminal_text("sessions/a.jsonl") == "sessions/a.jsonl"
+    assert sanitize_terminal_text("sessions/日本語.jsonl") == "sessions/日本語.jsonl"
+
+
+def test_sanitize_terminal_text_replaces_escape_and_control_characters() -> None:
+    # ESC (CSI/OSC lead-in), a C0 control char, and a C1 control char.
+    crafted = "sessions/\x1b[2K\x1b]0;pwned\x07\x07\x9bwhoami.jsonl"
+    cleaned = sanitize_terminal_text(crafted)
+    assert "\x1b" not in cleaned
+    assert "\x07" not in cleaned
+    assert "\x9b" not in cleaned
+    assert "sessions/" in cleaned
+    assert "whoami.jsonl" in cleaned
+
+
+def test_format_report_lines_sanitizes_kept_remote_keys() -> None:
+    report = SyncReport(kept_remote=["sessions/\x1b[2Kspoofed.jsonl"])
+    lines = format_report_lines(report)
+    assert not any("\x1b" in line for line in lines)
+
+
 def test_factory_delegates_to_registry() -> None:
     store = _MemStore()
     register_object_store("factory-test", lambda _cfg: store)
@@ -101,6 +189,34 @@ def test_registry_unregister_and_unknown() -> None:
     unregister_object_store("temp-prov")
     with pytest.raises(RemoteSyncConfigError, match="unknown remote-sync provider"):
         build_object_store(RemoteSyncConfig(bucket="b", provider="temp-prov"))
+
+
+def test_aws_declares_region_and_profile() -> None:
+    # Loading the built-in aws module (via provider_extra_fields) must not
+    # require boto3 to have built a client — this only reads the declaration.
+    fields = {extra.field for extra in provider_extra_fields("aws")}
+    assert fields == {RemoteSyncField.REGION, RemoteSyncField.PROFILE}
+
+
+def test_vercel_declares_no_extra_fields() -> None:
+    assert provider_extra_fields("vercel") == ()
+
+
+def test_unknown_provider_declares_no_extra_fields() -> None:
+    assert provider_extra_fields("does-not-exist") == ()
+
+
+def test_provider_extra_fields_registered_and_cleaned_up() -> None:
+    register_object_store(
+        "extra-fields-test",
+        lambda _cfg: _MemStore(),
+        extra_fields=(SetupExtraField(RemoteSyncField.REGION, "Region"),),
+    )
+    assert provider_extra_fields("extra-fields-test") == (
+        SetupExtraField(RemoteSyncField.REGION, "Region"),
+    )
+    unregister_object_store("extra-fields-test")
+    assert provider_extra_fields("extra-fields-test") == ()
 
 
 def test_registry_safe_under_concurrent_register_and_build() -> None:

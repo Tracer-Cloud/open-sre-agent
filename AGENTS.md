@@ -23,6 +23,20 @@
   solely inside `config/config.py` (nothing it imports needs it) may live there.
 - Do not keep compatibility-only forwarding modules after refactors. Once imports and tests
   are migrated, remove the old module path in the same change and use one canonical import path.
+- Test fakes: never inline a lambda that builds an ad-hoc `type(...)` object (or
+  nests another lambda) into `monkeypatch.setattr` / `patch`. Extract a named
+  `def` and pass it — `type(...)` inside the helper body is fine:
+
+  ```python
+  def _build_harness() -> Any:
+      return type("H", (), {"resolve_env_variables": lambda _self: None})()
+
+  monkeypatch.setattr(startup, "_build_harness", _build_harness)
+  ```
+
+  Trivial lambdas (`lambda **_kw: None`, `lambda: sentinel`) stay inline.
+  Precedent: `gateway/tests/runtime/test_startup.py` (`_StubHarness`),
+  `tests/cli/test_integrations_setup_github.py` (`_prompt_answering`).
 - Protocol methods you **add or change** use a **docstring-only body** — no
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
@@ -131,7 +145,6 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 | `surfaces/interactive_shell/`                 | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI.                                                                                                                                                                                                                        |
 | `integrations/`                               | Per-integration config normalization, verification, clients, helpers, store/catalog logic, the Hermes log pipeline, and per-vendor tool packages under `integrations/<vendor>/tools/`.                                                                                                                                                 |
 | `tools/`                                      | Tool registry, per-tool packages for cross-cutting tools that aren't vendor-specific (e.g. `tools/system/fleet_monitoring/`, `tools/system/watch_dog/`, `tools/system/sre_guidance_tool/`), and the interactive-shell action tools. Framework primitives (decorator, base class, utils) live in `core/tool_framework/`.                |
-| `platform/`                                   | Cross-cutting platform services: guardrails, masking, sandbox, analytics, auth, notifications, observability, harness ports (`platform/harness_ports.py`), shared multi-tenant contracts (`platform/deployment_contracts/`), Fargate deployment (private submodule `platform/deployment_multi_tenant/` → `opensre-infra-aws`), and EC2 AWS helpers (`platform/deployment_ec2/`). |
 | `config/`                                     | Shared constants, prompts, and UI theme.                                                                                                                                                                                                                                                                                               |
 | `tests/`                                      | Unit, integration, synthetic, deployment, e2e, chaos engineering, and support tests.                                                                                                                                                                                                                                                   |
 | `docs/`                                       | User-facing documentation, integration guides, and docs-site assets.                                                                                                                                                                                                                                                                   |
@@ -157,12 +170,6 @@ Main packages one level deeper:
 - `surfaces/interactive_shell/` — REPL watchdog slash commands (`/watch`, `/watches`, `/unwatch`): PR demo steps live under **Interactive shell: REPL watchdog demo** in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#interactive-shell-repl-watchdog-demo).
 - `config/constants/` — Shared prompt and other static constants.
 - `platform/deployment_ec2/` — EC2 AWS SDK primitives (`client`, `config`, EC2/IAM, SSM) and Telegram gateway AMI/systemd lifecycle (`telegram_gateway/`). Makefile: `make build-gateway-image`, `make deploy-gateway`.
-- `platform/deployment_multi_tenant/` — private git submodule
- (`https://github.com/Tracer-Cloud/opensre-infra-aws.git`): Fargate fleet Terraform
- (`modules/fargate_fleet`), Lambda runtimes (`lambda_control_plane/`,
- `lambda_public_forwarder/`), and shared / team stacks under `stacks/`. Init with
- `git submodule update --init platform/deployment_multi_tenant`. Makefile:
- `make cdk-verify` (bundle path check).
 - `platform/guardrails/` — Guardrail rules, evaluation engine, audit helpers, and CLI bindings.
 - `platform/harness_ports.py` — Harness port layer (integration resolution, tool registry, investigation tools, GitHub repo scope). Real implementations are wired at startup via `integrations/harness_adapters.py` and `tools/harness_adapters.py` through `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`. See `core/agent_harness/AGENTS.md` for the import boundary.
 - `integrations/hermes/` — Hermes log tailing, incident classification, correlator, sinks, and investigation bridge.
@@ -174,7 +181,7 @@ Main packages one level deeper:
 - `core/state/` — Shared agent runtime envelope (`AgentState`), chat slice, investigation pipeline slice contracts, `EvidenceEntry`, state-update helpers, and pure defaults.
 - `core/domain/types/` — Shared typed contracts for evidence, retrieval, and tool-related payloads.
 - `tools/system/watch_dog/` — Watchdog feature: per-threshold Telegram alarm dispatch with cooldown, sitting on top of `integrations/telegram/*`.
-- `gateway/http/webapp.py` — Web-facing health app served by the gateway daemon; the `opensre` CLI is `surfaces/cli/__main__.py`.
+- `gateway/http/webapp.py` — Web-facing health app served by the gateway daemon; the `opensre` CLI is `surfaces/cli/app.py`.
 
 ## 2. Entry Points
 
@@ -252,6 +259,17 @@ Steps:
   result (`_finished = await task` in `gateway/discord/worker.py`
   `_reap_cancelled_task`) over a bare expression statement; do not "fix" by
   skipping the await.
+- Implicit string concatenation in a list (CodeQL
+  `py/implicit-string-concatenation-in-list`): two adjacent string literals
+  inside a list/tuple display are indistinguishable from a **missing comma**,
+  so a long message split over two lines trips it. Do not silence it with an
+  explicit `+` — extract the text to a module constant and reference that. The
+  same implicit concatenation is fine in a parenthesised assignment, where no
+  comma could have been intended. Precedent:
+  `tools/system/python_execution_tool/__init__.py`
+  (`_RUNTIME_FACTS_ANTI_EXAMPLE`). Bites hardest in `use_cases` /
+  `anti_examples` / `examples` tool metadata, where entries are prose and
+  routinely exceed the 100-char line limit.
 - Mixed import styles (CodeQL `py/import-and-import-from`): importing one
   module with both `import X as alias` and `from X import name` — even when
   the `from` import is function-local — raises an alert. It usually happens

@@ -322,6 +322,29 @@ Other tools:
   replies that merely say what someone could implement.
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
+- skill_view — load one skill playbook by name from the SKILLS INDEX. When the
+  user request matches an indexed skill, call skill_view(name) in THIS turn
+  BEFORE emitting that skill's tool sequence. Do not invent the workflow from
+  the one-line index description alone. Fat skills live on disk; the harness
+  only carries the thin index.
+
+Scheduled deliveries — OpenSRE can run recurring work through /cron
+(slash_invoke). Treat scheduling as a first-class offer, not an afterthought:
+- When the user asks for something that sounds recurring ("every morning",
+  "each weekday", "daily at 8", "every Monday", "keep sending this",
+  "schedule this", "set up a cron") OR after you finish a naturally recurring
+  skill (morning report, digests), call propose_scheduled_delivery with the
+  kind/cron/tz/provider (and chat_id when required). For daily_summary you
+  MUST pass briefing_text (the composed report) and you MUST have already
+  run the weather/news fetches — the tool rejects propose-only turns. Show
+  the tool's response_text (briefing + closer). WAIT. Do NOT call /cron until
+  they confirm. Their yes expands from the structured pending offer — never
+  invent flags.
+- Slack webhook delivery: omit chat_id. Telegram/discord/rocketchat: chat_id
+  is required. List / remove / run / logs still use slash_invoke /cron …
+- A one-off run that the user did not ask to repeat still gets the offer when
+  the skill is inherently recurring; never skip the offer just because they
+  did not say "schedule".
 
 Delivery tool unavailable — never fabricate a command to deliver. When the user
 asks to send, post, notify, share, or message a channel but the matching send

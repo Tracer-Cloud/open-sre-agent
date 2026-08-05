@@ -17,15 +17,15 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.harness import AgentHarness, HarnessConfig, HarnessStartupResult
-    from core.agent_harness.turns.action_driver import ToolCallingDeps
-    from core.agent_harness.turns.action_driver import (
-        run_action_agent_turn as execute_action_agent_turn,
-    )
+    from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+    from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
+    from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence as gather_evidence
+    from core.agent_harness.turns.headless_adapters import BufferOutputSink
     from core.agent_harness.turns.headless_dispatch import HeadlessAgent
     from core.agent_harness.turns.orchestrator import run_turn, stream_answer
-    from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
     from core.agent_harness.turns.turn_snapshot import (
         AgentRuntimeRequest,
         TurnSnapshot,
@@ -40,21 +40,30 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "AgentHarness": ("core.agent_harness.harness", "AgentHarness"),
     "HarnessConfig": ("core.agent_harness.harness", "HarnessConfig"),
     "HarnessStartupResult": ("core.agent_harness.harness", "HarnessStartupResult"),
-    "ShellTurnResult": ("core.agent_harness.turns.turn_results", "ShellTurnResult"),
+    "TurnResult": ("core.agent_harness.turns.turn_results", "TurnResult"),
     "ToolCallingTurnResult": ("core.agent_harness.turns.turn_results", "ToolCallingTurnResult"),
     "AgentRuntimeRequest": ("core.agent_harness.turns.turn_snapshot", "AgentRuntimeRequest"),
     "TurnSnapshot": ("core.agent_harness.turns.turn_snapshot", "TurnSnapshot"),
     "TurnSnapshotSource": ("core.agent_harness.turns.turn_snapshot", "TurnSnapshotSource"),
     "ToolCallingDeps": ("core.agent_harness.turns.action_driver", "ToolCallingDeps"),
-    "execute_action_agent_turn": (
-        "core.agent_harness.turns.action_driver",
-        "run_action_agent_turn",
-    ),
+    "ActionTurnRunner": ("core.agent_harness.turns.action_driver", "ActionTurnRunner"),
     "gather_tool_evidence": ("core.agent_harness.turns.evidence_driver", "gather_tool_evidence"),
     "gather_evidence": ("core.agent_harness.turns.evidence_driver", "gather_tool_evidence"),
     "HeadlessAgent": (
         "core.agent_harness.turns.headless_dispatch",
         "HeadlessAgent",
+    ),
+    "build_default_headless_agent": (
+        "core.agent_harness.turns.default_headless_agent",
+        "build_default_headless_agent",
+    ),
+    "BufferOutputSink": (
+        "core.agent_harness.turns.headless_adapters",
+        "BufferOutputSink",
+    ),
+    "DefaultPromptContextProvider": (
+        "core.agent_harness.prompts.prompt_context",
+        "DefaultPromptContextProvider",
     ),
     "run_turn": ("core.agent_harness.turns.orchestrator", "run_turn"),
     "stream_answer": ("core.agent_harness.turns.orchestrator", "stream_answer"),
@@ -76,15 +85,18 @@ def __dir__() -> list[str]:
 __all__ = [
     "AgentHarness",
     "AgentRuntimeRequest",
+    "BufferOutputSink",
+    "DefaultPromptContextProvider",
     "HarnessConfig",
     "HarnessStartupResult",
     "HeadlessAgent",
-    "ShellTurnResult",
     "ToolCallingDeps",
     "ToolCallingTurnResult",
+    "TurnResult",
     "TurnSnapshot",
     "TurnSnapshotSource",
-    "execute_action_agent_turn",
+    "build_default_headless_agent",
+    "ActionTurnRunner",
     "gather_evidence",
     "gather_tool_evidence",
     "run_turn",

@@ -23,9 +23,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.llm.internal.preload import preload_llm_clients
-from gateway.config.configure_gateway_logging import configure_gateway_logging
+from gateway.config.logging_config import configure_logging
 from gateway.discord.background import DiscordGatewayBackground
 from gateway.discord.wiring import start_discord_worker
 from gateway.runtime.concurrency import (
@@ -42,11 +40,7 @@ from gateway.runtime.daemon import (
     write_component_status,
 )
 from gateway.runtime.errors import GatewayConfigurationError
-from gateway.runtime.readiness import set_gateway_ready
-from gateway.runtime.remote_run_worker import (
-    RemoteRunWorker,
-    build_remote_run_worker,
-)
+from gateway.runtime.readiness import set_ready
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from gateway.slack.socket_mode_worker import SlackGatewayBackground
 from gateway.slack.wiring import start_slack_worker
@@ -56,10 +50,6 @@ from gateway.telegram.wiring import start_telegram_worker
 
 SlashPortsFactory = Callable[[], Any]
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
-RemoteRunWorkerFactory = Callable[
-    [str, str, Any, TurnConcurrencyGate, logging.Logger],
-    RemoteRunWorker,
-]
 
 
 class GatewayManager:
@@ -70,7 +60,6 @@ class GatewayManager:
         *,
         slash_ports_factory: SlashPortsFactory | None = None,
         credential_hydrator_factory: CredentialHydratorFactory | None = None,
-        remote_run_worker_factory: RemoteRunWorkerFactory | None = None,
         turn_gate: TurnConcurrencyGate | None = None,
     ) -> None:
         self.settings: GatewaySettings | None = None
@@ -80,39 +69,23 @@ class GatewayManager:
         self.discord_background_worker: DiscordGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
-        self.remote_run_worker: RemoteRunWorker | None = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
         self._credential_hydrator_factory = (
             credential_hydrator_factory or GatewayCredentialHydrator.from_environment
         )
-        self._remote_run_worker_factory = remote_run_worker_factory
         profile = os.getenv("OPENSRE_SIZE_PROFILE", "SMALL").strip().upper()
         self.turn_gate = turn_gate or TurnConcurrencyGate.for_profile(profile)
         self._stopped = threading.Event()
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
         """Assemble the turn handler, start all components, and own the lifecycle."""
-        from integrations.harness_adapters import register_harness_adapters as register_integrations
-        from tools.harness_adapters import register_harness_adapters as register_tools
+        from gateway.runtime import startup
 
-        logger = self.logger = configure_gateway_logging()
-        set_gateway_ready(False)
-        bootstrap = self._hydrate_credentials(logger)
-
-        harness = AgentHarness(HarnessConfig(open_storage=False))
-        harness.resolve_env_variables()
-        # Mirror shell boot: register harness adapters here (gateway cannot import
-        # surfaces.boundary without a surfaces↔gateway peer import).
-        register_integrations()
-        register_tools()
-        # Env-gated (OPENSRE_NO_TELEMETRY / DO_NOT_TRACK / missing DSN) — free when off.
-        from platform.observability.errors.sentry import init_sentry
-
-        init_sentry(entrypoint="gateway")
-        # Load the LLM client graph as one snapshot at boot (avoids a stale
-        # mixed-version process after a code change).
-        preload_llm_clients()
+        logger = self.logger = configure_logging()
+        set_ready(False)
+        self._load_credentials(logger)
+        startup.run(logger)
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
@@ -126,9 +99,6 @@ class GatewayManager:
             gate=self.turn_gate,
         )
 
-        # A configured durable worker is mandatory. Start it before components
-        # with externally visible side effects so a bad Neon bootstrap fails closed.
-        self._start_remote_runs(logger, handler, bootstrap)
         self._start_web(logger)
         self._start_telegram(logger, chat_handler)
         self._start_slack(logger, chat_handler)
@@ -138,7 +108,7 @@ class GatewayManager:
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
         # and/or Slack — do not rely on transport-specific log strings alone.
         logger.info("[gateway] ready")
-        set_gateway_ready(True)
+        set_ready(True)
 
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
@@ -149,11 +119,8 @@ class GatewayManager:
 
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Shut down all components and return whether the chat worker stopped."""
-        set_gateway_ready(False)
+        set_ready(False)
         stopped = True
-        if self.remote_run_worker is not None:
-            stopped = self.remote_run_worker.stop(timeout=timeout)
-            self.remote_run_worker = None
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
@@ -170,7 +137,7 @@ class GatewayManager:
         self._stopped.set()
         return stopped
 
-    def _hydrate_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
+    def _load_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
         """Hydrate before any transport, scheduler, or worker can start."""
         try:
             hydrator = self._credential_hydrator_factory()
@@ -252,12 +219,11 @@ class GatewayManager:
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
-        from integrations.sentry.scheduler_bootstrap import install as install_sentry_runner
+        from gateway.runtime.bootstrap import install_runtime
         from platform.scheduler.runner import start_background_scheduler
-        from tools.investigation.scheduler_bootstrap import install as install_scheduler_runner
 
-        install_scheduler_runner()
-        install_sentry_runner()
+        # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
+        install_runtime(harness_adapters=False, scheduler_runners=True)
         from gateway.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 
         gate_registered_scheduler_runners(self.turn_gate)
@@ -267,51 +233,6 @@ class GatewayManager:
             return
         self.scheduler = scheduler
         self.components["scheduler"] = f"running {task_count} scheduled task(s)"
-
-    def _start_remote_runs(
-        self,
-        logger: logging.Logger,
-        handler: Any,
-        bootstrap: GatewayBootstrap | None,
-    ) -> None:
-        """Start the Neon run worker when a bootstrap bundle supplies its DSN."""
-        organization_id = os.getenv("ORGANIZATION_ID", "").strip()
-        database_url = bootstrap.database_url if bootstrap is not None else None
-        if not organization_id or not database_url:
-            self.components["api_runs"] = "not configured"
-            return
-        factory = self._remote_run_worker_factory
-        if factory is None:
-
-            def factory(
-                org: str,
-                dsn: str,
-                callback: Any,
-                gate: TurnConcurrencyGate,
-                log: logging.Logger,
-            ) -> RemoteRunWorker:
-                return build_remote_run_worker(
-                    organization_id=org,
-                    database_url=dsn,
-                    handler=callback,
-                    gate=gate,
-                    logger=log,
-                )
-
-        try:
-            worker = factory(
-                organization_id,
-                database_url,
-                handler,
-                self.turn_gate,
-                logger,
-            )
-            worker.start()
-        except Exception as exc:
-            logger.error("remote run worker startup failed (%s)", type(exc).__name__)
-            raise GatewayConfigurationError("Remote run worker startup failed") from None
-        self.remote_run_worker = worker
-        self.components["api_runs"] = "polling"
 
     def _publish_status(self, logger: logging.Logger) -> None:
         GATEWAY_PID_FILE.parent.mkdir(parents=True, exist_ok=True)

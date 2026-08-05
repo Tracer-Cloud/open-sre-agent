@@ -28,31 +28,18 @@ def _load_anthropic_client() -> tuple[Any, type[Exception]]:
 
 def _get_provider_base_url(provider_value: str) -> str | None:
     """Get the base_url for OpenAI-compatible non-OpenAI providers, or None for native OpenAI."""
-    if provider_value == "openrouter":
-        from config.config import OPENROUTER_BASE_URL
+    # Lazy imports keep config loading out of the validation module import graph.
+    from config import config as llm_config
 
-        return OPENROUTER_BASE_URL
-    if provider_value == "deepseek":
-        from config.config import DEEPSEEK_BASE_URL
-
-        return DEEPSEEK_BASE_URL
-    if provider_value == "gemini":
-        from config.config import GEMINI_BASE_URL
-
-        return GEMINI_BASE_URL
-    if provider_value == "nvidia":
-        from config.config import NVIDIA_BASE_URL
-
-        return NVIDIA_BASE_URL
-    if provider_value == "groq":
-        from config.config import GROQ_BASE_URL
-
-        return GROQ_BASE_URL
-    if provider_value == "minimax":
-        from config.config import MINIMAX_BASE_URL
-
-        return MINIMAX_BASE_URL
-    return None
+    base_urls = {
+        "openrouter": llm_config.OPENROUTER_BASE_URL,
+        "deepseek": llm_config.DEEPSEEK_BASE_URL,
+        "gemini": llm_config.GEMINI_BASE_URL,
+        "nvidia": llm_config.NVIDIA_BASE_URL,
+        "groq": llm_config.GROQ_BASE_URL,
+        "minimax": llm_config.MINIMAX_BASE_URL,
+    }
+    return base_urls.get(provider_value)
 
 
 def _provider_validation_label(provider: ProviderOption) -> str:

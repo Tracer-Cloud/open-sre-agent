@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -10,7 +11,7 @@ import pytest
 from rich.console import Console
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncReport
+from platform.filestorage.engine import SyncProgress, SyncReport
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
@@ -97,9 +98,17 @@ def test_gateway_dispatch_status_on(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _run(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _run(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
+    ) -> SyncReport:
+        del on_progress
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport(
             uploaded=["sessions/a.jsonl"],
             downloaded=["memory/b.md"],
@@ -123,7 +132,7 @@ def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> No
         )
         is True
     )
-    assert seen == {"pull_only": True, "push_only": False}
+    assert seen == {"pull_only": True, "push_only": False, "dry_run": False}
     out = buf.getvalue()
     assert "1 downloaded" in out
     assert "1 uploaded" in out
@@ -160,5 +169,5 @@ def test_gateway_dispatch_sync_error_stays_handled(monkeypatch: pytest.MonkeyPat
         is True
     )
     out = buf.getvalue()
-    assert "Sync failed" in out
+    assert "Remote-sync command failed" in out
     assert leaked not in out, "provider detail reached the gateway reply"

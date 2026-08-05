@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 
 GroundcoverConfig = GroundcoverIntegrationConfig
 
-# Short connect/init timeout; SSE reads can stream longer than a single request.
-_DEFAULT_TIMEOUT = 30.0
-_DEFAULT_SSE_READ_TIMEOUT = 120.0
+# Short connect/init timeout (seconds); SSE reads can stream longer than a single request.
+_DEFAULT_TIMEOUT_SECONDS = 30.0
+_DEFAULT_SSE_READ_TIMEOUT_SECONDS = 120.0
 # One retry only, and only for connection-level failures. MCP query tools are
 # read-only/idempotent, but we keep the retry budget tiny to fail fast.
 _MAX_CONNECT_RETRIES = 1
@@ -126,7 +126,7 @@ class GroundcoverClient:
         self,
         config: GroundcoverConfig,
         *,
-        timeout: float = _DEFAULT_TIMEOUT,
+        timeout: float = _DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         self.config = config
         self.timeout = timeout
@@ -150,7 +150,7 @@ class GroundcoverClient:
     async def _session(self) -> AsyncIterator[ClientSession]:
         stack = AsyncExitStack()
         try:
-            read_timeout = max(_DEFAULT_SSE_READ_TIMEOUT, self.timeout)
+            read_timeout = max(_DEFAULT_SSE_READ_TIMEOUT_SECONDS, self.timeout)
             http_client = await stack.enter_async_context(
                 httpx.AsyncClient(
                     headers=self.config.request_headers,

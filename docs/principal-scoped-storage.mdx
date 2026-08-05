@@ -17,7 +17,7 @@ Local CLI and Telegram stay on the flat host home when no org scope is bound.
 
 | Context | Principal | Actor |
 | --- | --- | --- |
-| Slack | Organization from `OPENSRE_ORGANIZATION_ID` | Slack user id |
+| Slack | Organization from `ORGANIZATION_ID` | Slack user id |
 | Other surfaces | Unchanged (not part of this change) | — |
 
 With no organization configured, or a team outside `OPENSRE_SILO_TEAM_IDS`, the
@@ -93,7 +93,7 @@ could drift.
 A deployment is told which organization it serves:
 
 ```bash
-export OPENSRE_ORGANIZATION_ID=org_...
+export ORGANIZATION_ID=org_...
 export OPENSRE_SILO_TEAM_IDS=T0123        # recommended in production
 ```
 
@@ -128,8 +128,8 @@ Session transcripts and `integrations.json` are not copied automatically. To
 keep continuity on a silo, copy them once:
 
 ```bash
-mkdir -p ~/.opensre/orgs/$OPENSRE_ORGANIZATION_ID/users
-cp ~/.opensre/integrations.json ~/.opensre/orgs/$OPENSRE_ORGANIZATION_ID/
+mkdir -p ~/.opensre/orgs/$ORGANIZATION_ID/users
+cp ~/.opensre/integrations.json ~/.opensre/orgs/$ORGANIZATION_ID/
 ```
 
 Telegram and other surfaces keep matching their migrated empty-actor rows.
@@ -138,8 +138,8 @@ Telegram and other surfaces keep matching their migrated empty-actor rows.
 
 | Env | Purpose |
 | --- | --- |
-| `OPENSRE_ORGANIZATION_ID` | The organization this deployment serves. Required for Slack turns, and required to use `OPENSRE_CONTEXT_ROOT` |
-| `OPENSRE_CONTEXT_ROOT` | Mounted, org-scoped volume holding this organization's context (`/workspace/memories` in the Slack service). Requires `OPENSRE_ORGANIZATION_ID` to say who owns it |
+| `ORGANIZATION_ID` | The organization this deployment serves. Required for Slack turns, and required to use `OPENSRE_CONTEXT_ROOT` |
+| `OPENSRE_CONTEXT_ROOT` | Mounted, org-scoped volume holding this organization's context (`/workspace/memories` in the Slack service). Requires `ORGANIZATION_ID` to say who owns it |
 | `OPENSRE_SILO_TEAM_IDS` | Comma-separated Slack team ids this deployment serves. Unset, any workspace is served (with a warning); set, every other workspace is refused |
 
 ## Non-goals (this change)

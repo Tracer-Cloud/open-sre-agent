@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from core.tool_framework.tool_decorator import tool
@@ -11,8 +12,6 @@ from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.tempo import TempoConfig, tempo_extract_params
 from integrations.tempo.availability import tempo_available_or_backend
 from integrations.tempo.client import TempoClient
-
-_VALID_ACTIONS = ("search", "get_trace", "list_services", "list_span_names")
 
 
 def _tempo_is_available(sources: dict[str, dict]) -> bool:
@@ -30,8 +29,11 @@ def _tempo_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+_VALID_ACTIONS = ("search", "get_trace", "list_services", "list_span_names")
+
+
 def _dispatch(
-    client: Any,
+    client: TempoClient,
     *,
     action: str,
     trace_id: str | None,
@@ -43,15 +45,10 @@ def _dispatch(
     time_range_minutes: int,
     limit: int,
 ) -> dict[str, Any]:
-    result: dict[str, Any]
-    if action == "get_trace":
-        result = client.get_trace_by_id(trace_id or "")
-    elif action == "list_services":
-        result = client.list_services(time_range_minutes=time_range_minutes)
-    elif action == "list_span_names":
-        result = client.list_span_names(time_range_minutes=time_range_minutes)
-    else:
-        result = client.search_traces(
+    """Route one Tempo action through a single handler map."""
+
+    def _search() -> dict[str, Any]:
+        return client.search_traces(
             service=service,
             span_name=span_name,
             min_duration_ms=min_duration_ms,
@@ -60,7 +57,15 @@ def _dispatch(
             time_range_minutes=time_range_minutes,
             limit=limit,
         )
-    return result
+
+    handlers: dict[str, Callable[[], dict[str, Any]]] = {
+        "search": _search,
+        "get_trace": lambda: client.get_trace_by_id(trace_id or ""),
+        "list_services": lambda: client.list_services(time_range_minutes=time_range_minutes),
+        "list_span_names": lambda: client.list_span_names(time_range_minutes=time_range_minutes),
+    }
+    # Keys stay aligned with ``_VALID_ACTIONS`` (schema enum + unknown fallback).
+    return handlers.get(action, handlers["search"])()
 
 
 @tool(

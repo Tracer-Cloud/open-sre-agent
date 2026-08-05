@@ -18,8 +18,9 @@ import re
 import tempfile
 from pathlib import Path
 
-from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
+from config.constants.organization import organization_id
+from config.constants.tenancy import INTEGRATIONS_STORE_PATH_ENV
 from config.scope_context import current_scope
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,6 @@ PROJECT_ROOT = REPO_ROOT
 SYNTHETIC_SCENARIOS_DIR = REPO_ROOT / "tests" / "synthetic" / "rds_postgres"
 
 OPENSRE_HOME_DIR = Path.home() / ".opensre"
-# Default unbound integrations path (docs / tests expecting the flat layout).
-INTEGRATIONS_STORE_PATH = OPENSRE_HOME_DIR / "integrations.json"
 OPENSRE_TMP_DIR = Path(tempfile.gettempdir()) / "opensre"
 
 # Set by the deployed Slack service to the mounted, org-chrooted volume.
@@ -106,15 +105,14 @@ def opensre_home() -> Path:
     mounted_root = os.getenv(CONTEXT_ROOT_ENV, "").strip()
     if mounted_root:
         # The mount is chrooted to exactly one org. If this deployment declares
-        # its owner (OPENSRE_ORGANIZATION_ID, set on every silo), refuse a turn
-        # for any other org — otherwise a multi-workspace gateway could write
-        # org B's data into org A's volume. Fail closed.
-        silo_owner = os.getenv(ORGANIZATION_ID_ENV, "").strip()
+        # its owner, refuse a turn for any other org — otherwise a
+        # multi-workspace gateway could write org B's data into org A's volume.
+        # Fail closed.
+        silo_owner = organization_id()
         if not silo_owner:
             raise ContextRootOwnerMismatchError(
-                f"{CONTEXT_ROOT_ENV} is set but {ORGANIZATION_ID_ENV} does not say which "
-                "organization owns the mount; refusing to write a customer's data to an "
-                "unidentified volume"
+                f"{CONTEXT_ROOT_ENV} is set but no organization is configured for this "
+                "deployment; refusing to write a customer's data to an unidentified volume"
             )
         if scope.principal.id != silo_owner:
             raise ContextRootOwnerMismatchError(
@@ -143,7 +141,16 @@ def session_home() -> Path:
 
 
 def integrations_store_path() -> Path:
-    """Integrations store path (shared by every member of the org)."""
+    """Integrations store path (shared by every member of the org).
+
+    A deployed silo overrides this with ``OPENSRE_INTEGRATIONS_STORE_PATH``,
+    which the control plane points at ephemeral container storage: that silo
+    serves one tenant, and its credentials are re-hydrated from the tenant's
+    Secrets Manager blob at every boot rather than kept on the shared mount.
+    """
+    override = os.getenv(INTEGRATIONS_STORE_PATH_ENV, "").strip()
+    if override:
+        return Path(override).expanduser()
     return opensre_home() / "integrations.json"
 
 
@@ -169,7 +176,6 @@ def ensure_opensre_tmp_dir() -> Path:
 
 
 __all__ = [
-    "INTEGRATIONS_STORE_PATH",
     "CONTEXT_ROOT_ENV",
     "OPENSRE_HOME_DIR",
     "OPENSRE_TMP_DIR",

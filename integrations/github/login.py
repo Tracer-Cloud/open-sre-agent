@@ -23,6 +23,7 @@ from integrations.github.mcp_oauth import (
     authorize_github_via_device_flow,
 )
 from integrations.store import upsert_integration
+from integrations.webapp_vault import push_webapp_org_integration
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ def authenticate_and_configure_github(
         # handle instead of the local system username.
         credentials["username"] = result.authenticated_user
     upsert_integration("github", {"credentials": credentials})
+    push_webapp_org_integration("github", credentials)
     username = result.authenticated_user
     if username:
         from platform.analytics.cli import identify_github_username

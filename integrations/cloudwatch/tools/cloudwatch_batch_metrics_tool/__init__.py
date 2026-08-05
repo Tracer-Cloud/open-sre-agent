@@ -10,6 +10,11 @@ from integrations.aws.cloudwatch_client import get_metric_statistics
 from integrations.cloudwatch.availability import cloudwatch_is_available
 from platform.common.evidence_compaction import truncate_list
 
+_METRIC_NAMES: dict[str, str] = {
+    "cpu": "CPUUtilization",
+    "memory": "MemoryUtilization",
+}
+
 
 @tool(
     name="get_cloudwatch_batch_metrics",
@@ -27,7 +32,11 @@ from platform.common.evidence_compaction import truncate_list
         "type": "object",
         "properties": {
             "job_queue": {"type": "string", "description": "The AWS Batch job queue name"},
-            "metric_type": {"type": "string", "enum": ["cpu", "memory"], "default": "cpu"},
+            "metric_type": {
+                "type": "string",
+                "enum": list(_METRIC_NAMES),
+                "default": "cpu",
+            },
             "limit": {
                 "type": "integer",
                 "default": 50,
@@ -43,11 +52,12 @@ def get_cloudwatch_batch_metrics(
     """Get CloudWatch metrics for AWS Batch jobs."""
     if not job_queue:
         return {"error": "job_queue is required"}
-    if metric_type not in ["cpu", "memory"]:
-        return {"error": "metric_type must be 'cpu' or 'memory'"}
+    metric_name = _METRIC_NAMES.get(metric_type)
+    if metric_name is None:
+        known = ", ".join(repr(name) for name in _METRIC_NAMES)
+        return {"error": f"metric_type must be one of: {known}"}
 
     try:
-        metric_name = "CPUUtilization" if metric_type == "cpu" else "MemoryUtilization"
         metrics_response = get_metric_statistics(
             namespace="AWS/Batch",
             metric_name=metric_name,

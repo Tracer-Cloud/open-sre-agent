@@ -316,6 +316,10 @@ class ProxySchemeUnknown(AssertionError, URLSchemeUnknown):
             message = "Proxy URL had no scheme, should start with http:// or https://"
         else:
             message = f"Proxy URL had unsupported scheme {scheme}, should use http:// or https://"
+        # AssertionError defines its own __init__ slot, so super() dispatch stops
+        # there and URLSchemeUnknown.__init__ (which sets ``scheme``) never runs.
+        # Call it explicitly first; super() then sets the intended message/args.
+        URLSchemeUnknown.__init__(self, scheme)  # type: ignore[arg-type]
         super().__init__(message)
 
 

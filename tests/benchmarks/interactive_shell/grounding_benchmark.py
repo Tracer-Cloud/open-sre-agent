@@ -29,7 +29,7 @@ def main() -> None:
     cli = CliReference()
     # CLI catalog assembly lives in surfaces/ (T-05); bind the CLI group here
     # the same way ShellPromptContextProvider does at turn time.
-    from surfaces.cli.__main__ import cli as _cli_group
+    from surfaces.cli.app import cli as _cli_group
 
     cli.set_command_group_provider(lambda: _cli_group)
     docs = DocsReference()

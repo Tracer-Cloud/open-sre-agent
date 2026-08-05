@@ -1,14 +1,23 @@
+---
+name: morning-report
+description: >-
+  Weather + news morning briefing: fetch live weather and headlines, compose
+  a plain-text briefing, deliver it. Multi-step; load before acting.
+recurring: weekdays 08:00
+---
 ══════════════════════════════════════════════════════════
 MORNING REPORT SKILL #1 — weather + daily news briefing:
 ══════════════════════════════════════════════════════════
 Recognize a request for a morning briefing — "morning report", "morning
 briefing", "daily brief", "give me my morning update", "weather and news
-summary", or similar — as a two-source gather that ends in a composed summary.
-This is a DATA-DEPENDENT chain (see the COMPOUND TURN RULE box): fetch the raw
-inputs first with read-only shell commands, WAIT for their results, then hand
-the real content to the assistant to write the report. Never fabricate weather
-values or headlines, and never emit the compose/deliver step in the same
-response as the fetches.
+summary", or similar — as a weather+news briefing YOU own end-to-end. This is
+a DATA-DEPENDENT chain (see the COMPOUND TURN RULE box): fetch the raw inputs
+first with read-only shell commands, WAIT for their results, then YOU compose,
+deliver, and offer the schedule (steps 3–5). Do NOT call assistant_handoff and
+do NOT start an investigation/gather for this request — that produces a second,
+unrelated "status report" after the briefing. Never fabricate weather values or
+headlines, and never emit the compose/deliver step in the same response as the
+fetches.
 
 OUTPUT MUST BE HUMAN-READABLE — NEVER RAW MARKUP. The fetched feed is raw
 RSS/XML/HTML; it is INTERMEDIATE data only. NEVER present the raw feed, XML
@@ -18,13 +27,16 @@ plain-text briefing produced in the final step. The news fetch below already
 strips the feed down to plain-text headline lines so nothing but readable text
 comes back.
 Steps, in order:
-1) Fetch today's weather with shell_run. Use the city the user named; if none
-   is given, use their configured/default city, else omit the location:
-     → shell_run(command="curl -s 'wttr.in/<city>?format=%l:+%c+%t,+feels+%f,+%h+humidity,+wind+%w'")
+1) Fetch today's weather with shell_run. Use quiet=true so the $ curl line and
+   raw stdout stay off the user's screen — they only need the composed briefing
+   in step 3, not the same weather line twice. Use the city the user named; if
+   none is given, use their configured/default city, else omit the location:
+     → shell_run(command="curl -s 'wttr.in/<city>?format=%l:+%c+%t,+feels+%f,+%h+humidity,+wind+%w'", quiet=true)
 2) Fetch current headlines with shell_run as PLAIN TEXT — extract just the
    headline titles from the feed, drop the channel title, and cap the list.
+   Also quiet=true (same reason: intermediate fetch, not the user-facing answer).
    Do NOT fetch the raw feed without this extraction pipeline:
-     → shell_run(command="curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | grep -oE '<title><!\\[CDATA\\[[^]]*\\]\\]>' | sed -E 's/<title><!\\[CDATA\\[//; s/\\]\\]>//' | sed '1d' | head -n 8")
+     → shell_run(command="curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | grep -oE '<title><!\\[CDATA\\[[^]]*\\]\\]>' | sed -E 's/<title><!\\[CDATA\\[//; s/\\]\\]>//' | sed '1d' | head -n 8", quiet=true)
 3) After BOTH tool results are in, compose a clean, human-readable briefing
    from the ACTUAL fetched data. Required format — Markdown/plain text only,
    no HTML/XML, no links, no angle brackets:
@@ -48,13 +60,36 @@ Steps, in order:
    "Delivery tool unavailable" rule above instead of fabricating a command.
 Examples:
 - "give me my morning report"
-    → shell_run(command="curl -s 'wttr.in/Amsterdam?format=%l:+%c+%t,+feels+%f,+%h+humidity,+wind+%w'")
-      + shell_run(command="curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | grep -oE '<title><!\\[CDATA\\[[^]]*\\]\\]>' | sed -E 's/<title><!\\[CDATA\\[//; s/\\]\\]>//' | sed '1d' | head -n 8")   [both this turn — independent fetches]
+    → shell_run(command="curl -s 'wttr.in/Amsterdam?format=%l:+%c+%t,+feels+%f,+%h+humidity,+wind+%w'", quiet=true)
+      + shell_run(command="curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | grep -oE '<title><!\\[CDATA\\[[^]]*\\]\\]>' | sed -E 's/<title><!\\[CDATA\\[//; s/\\]\\]>//' | sed '1d' | head -n 8", quiet=true)   [both this turn — independent fetches]
     → (observe both results)
     → slack_send_message(message="<the FULL composed plain-text weather + headlines briefing>")   [next turn — mandatory Slack delivery]
 - "morning briefing for Berlin and post it to telegram"
-    → shell_run(command="curl -s 'wttr.in/Berlin?format=%l:+%c+%t,+feels+%f,+%h+humidity,+wind+%w'")
-      + shell_run(command="curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | grep -oE '<title><!\\[CDATA\\[[^]]*\\]\\]>' | sed -E 's/<title><!\\[CDATA\\[//; s/\\]\\]>//' | sed '1d' | head -n 8")   [both this turn]
+    → shell_run(command="curl -s 'wttr.in/Berlin?format=%l:+%c+%t,+feels+%f,+%h+humidity,+wind+%w'", quiet=true)
+      + shell_run(command="curl -s 'https://feeds.bbci.co.uk/news/rss.xml' | grep -oE '<title><!\\[CDATA\\[[^]]*\\]\\]>' | sed -E 's/<title><!\\[CDATA\\[//; s/\\]\\]>//' | sed '1d' | head -n 8", quiet=true)   [both this turn]
     → (observe both results)
     → slack_send_message(message="<the FULL composed briefing>")
       + telegram_send_message(message="<the FULL composed briefing>")   [next turn — Slack always + Telegram because the user named it]
+
+5) AFTER the briefing exists (steps 1–3 done; step 4 delivery attempted),
+   ALWAYS offer to make mornings recurring. NEVER call
+   propose_scheduled_delivery as the first or only tool of this skill — the
+   tool will REJECT that and the user would only see a schedule offer with no
+   weather/news. Steps 1–3 must have run first. Call propose_scheduled_delivery
+   with briefing_text set to the FULL composed briefing from step 3 (required).
+   The tool returns response_text = briefing + closer; show that to the user
+   (or at least end with the closer). Do NOT call /cron yet; the user's bare
+   "yes" expands to the tool's slash_preview with no LLM round-trip.
+   Defaults when they accept without overrides: weekdays 08:00 in their
+   timezone if known else UTC, provider matching where you just delivered
+   (Slack webhook by default — omit chat_id). Kind is daily_summary.
+   Example after Slack webhook delivery:
+     → propose_scheduled_delivery(kind="daily_summary", cron="0 8 * * 1-5",
+         timezone="UTC", provider="slack",
+         briefing_text="<FULL composed weather + headlines briefing>")
+     → show the tool's response_text (briefing + Want me to: …)
+   Pass chat_id only when you have a concrete Telegram/Discord/Rocket.Chat
+   destination (or a Slack #name/C… you already reported). Never invent one.
+   Skip the offer only when they already asked for a one-off and explicitly
+   declined recurrence earlier in this conversation. A briefing that runs
+   once is a demo; a morning that arrives every weekday is the product.

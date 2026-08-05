@@ -10,16 +10,16 @@ live in ``turn_seams``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Unpack
+from dataclasses import dataclass
 
 from rich.console import Console
 
-from core.agent_harness.ports import OutputSink
+from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
-from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
+from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
@@ -27,13 +27,74 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     gather_integration_tool_evidence,
 )
 from surfaces.interactive_shell.runtime.turn_seams import (
-    AnswerKwargs,
     AnswerShellQuestion,
     GatherEvidence,
     RunActionToolTurn,
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
+
+
+@dataclass(frozen=True)
+class _ShellTurnBindings:
+    """Session/console-bound seams handed to ``run_turn`` for one shell turn."""
+
+    session: Session
+    console: Console
+    gather: GatherEvidence
+    answer: AnswerShellQuestion
+    output: OutputSink
+    action_runner: ShellActionRunner | None = None
+    execute: RunActionToolTurn | None = None
+    request_exit: Callable[[], None] | None = None
+    tool_hooks: ToolExecutionHooks | None = None
+
+    def execute_actions(
+        self,
+        text: str,
+        *,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+        turn_plan: TurnPlan | None = None,
+    ) -> ToolCallingTurnResult:
+        if self.action_runner is not None:
+            return self.action_runner.run(
+                text,
+                confirm_fn=confirm_fn,
+                is_tty=is_tty,
+                turn_plan=turn_plan,
+            )
+        if self.execute is None:
+            raise RuntimeError("shell turn bindings missing action runner or execute seam")
+        return self.execute(
+            text,
+            self.session,
+            self.console,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            request_exit=self.request_exit,
+            turn_plan=turn_plan,
+            output=self.output,
+            tool_hooks=self.tool_hooks,
+        )
+
+    def answer_question(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
+        return self.answer(
+            text,
+            self.session,
+            self.console,
+            output=self.output,
+            request=request,
+        )
+
+    def gather_evidence(self, text: str, *, turn_plan: TurnPlan | None = None) -> str | None:
+        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
+        return self.gather(
+            text,
+            self.session,
+            self.console,
+            resolved_integrations=resolved,
+        )
 
 
 def execute_shell_turn(
@@ -45,67 +106,53 @@ def execute_shell_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     request_exit: Callable[[], None] | None = None,
+    action_runner: ShellActionRunner | None = None,
     execute_actions: RunActionToolTurn | None = None,
     gather_evidence: GatherEvidence | None = None,
     answer_agent: AnswerShellQuestion | None = None,
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
-) -> ShellTurnResult:
+) -> TurnResult:
     """Execute one submitted interactive-shell turn.
 
     The action driver, gather pass, and conversational assistant default to the
     shell adapters but are overridable via ``execute_actions`` / ``gather_evidence``
-    / ``answer_agent`` (the test injection seams, typed in ``turn_seams``). They are
-    bound to the live ``session``/``console`` here and handed to
-    :func:`core.agent_harness.turns.orchestrator.run_turn`, which performs
-    the pure path routing.
+    / ``answer_agent`` (the test injection seams, typed in ``turn_seams``). Prefer
+    a long-lived ``action_runner`` for the REPL so the core action stack is not
+    rebuilt every turn; the one-shot path is only for tests and cold entrypoints.
     """
-    _execute = execute_actions or run_action_tool_turn
-    _gather = gather_evidence or gather_integration_tool_evidence
-    _answer = answer_agent or answer_shell_question
-    accounting = ShellTurnAccounting(session=session, text=text, recorder=recorder)
     resolved_output = resolve_output_sink(console, output)
-
-    def execute_bound(
-        t: str,
-        *,
-        confirm_fn: Callable[[str], str] | None = None,
-        is_tty: bool | None = None,
-        turn_plan: TurnPlan | None = None,
-    ) -> ToolCallingTurnResult:
-        return _execute(
-            t,
-            session,
-            console,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
+    runner: ShellActionRunner | None = None
+    injected_execute: RunActionToolTurn | None = execute_actions
+    if injected_execute is None:
+        runner = action_runner or ShellActionRunner(
+            session=session,
+            console=console,
             request_exit=request_exit,
-            turn_plan=turn_plan,
-            output=resolved_output,
+            output=output,
             tool_hooks=tool_hooks,
         )
+        if action_runner is not None:
+            runner.bind_turn(console=console, output=output, tool_hooks=tool_hooks)
 
-    def answer_bound(t: str, **kwargs: Unpack[AnswerKwargs]) -> LlmRunInfo | None:
-        # run_turn controls which keys are present (it omits tool_observation_on_screen
-        # on the plain path); AnswerKwargs types them without forcing presence.
-        return _answer(t, session, console, output=resolved_output, **kwargs)
-
-    def gather_bound(
-        t: str,
-        *,
-        is_tty: bool | None = None,
-        turn_plan: TurnPlan | None = None,
-    ) -> str | None:
-        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
-        return _gather(t, session, console, is_tty=is_tty, resolved_integrations=resolved)
-
+    bindings = _ShellTurnBindings(
+        session=session,
+        console=console,
+        gather=gather_evidence or gather_integration_tool_evidence,
+        answer=answer_agent or answer_shell_question,
+        output=resolved_output,
+        action_runner=runner,
+        execute=injected_execute,
+        request_exit=request_exit,
+        tool_hooks=tool_hooks,
+    )
     return run_turn(
         text,
         session,
-        execute_actions=execute_bound,
-        answer=answer_bound,
-        gather=gather_bound,
-        accounting=accounting,
+        execute_actions=bindings.execute_actions,
+        answer=bindings.answer_question,
+        gather=bindings.gather_evidence,
+        accounting=ShellTurnAccounting(session=session, text=text, recorder=recorder),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
     )

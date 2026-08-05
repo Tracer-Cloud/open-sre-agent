@@ -45,15 +45,15 @@ def test_unknown_provider_falls_back_to_null_meter() -> None:
 
 
 def test_registry_keys_cover_known_providers() -> None:
-    """Drift guard: every name in :data:`KNOWN_PROVIDERS` must have an
+    """Drift guard: every member of :class:`FleetAgentProvider` must have an
     explicit registry entry. Otherwise a future provider added to
-    ``providers.py`` but forgotten here would silently fall through
+    ``provider_ids.py`` but forgotten here would silently fall through
     to ``null_meter`` — correct fallback behavior, but masks the
     wiring bug.
     """
-    from tools.system.fleet_monitoring.providers import KNOWN_PROVIDERS
+    from tools.system.fleet_monitoring.provider_ids import FleetAgentProvider
 
-    assert set(TOKEN_METER_REGISTRY) >= KNOWN_PROVIDERS
+    assert set(TOKEN_METER_REGISTRY) >= set(FleetAgentProvider)
 
 
 def test_registry_provider_names_are_lowercase_kebab() -> None:

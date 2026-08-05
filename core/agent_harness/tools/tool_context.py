@@ -29,6 +29,9 @@ class ActionToolContext:
     # summary. The action-agent dispatcher passes True because it has already
     # rendered the planned action list.
     action_already_listed: bool = False
+    #: Length of ``session.history`` when this turn began, so a tool can tell
+    #: what THIS turn produced from what the session already contained.
+    history_start: int = 0
     # Surface-injected subprocess presenter (``tools.interactive_shell.subprocess``).
     subprocess_presenter: Any = None
     investigation_ports: Any = None

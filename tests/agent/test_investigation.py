@@ -923,6 +923,7 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
             *,
             evidence_count: int,  # noqa: ARG002 — base signature
             iteration: int,  # noqa: ARG002 — base signature
+            final_text: str = "",  # noqa: ARG002 — base signature
         ) -> tuple[bool, str | None]:
             return False, None  # invalid — rejects without providing context
 
@@ -965,6 +966,7 @@ def test_should_accept_conclusion_subclass_can_force_continuation() -> None:
             *,
             evidence_count: int,
             iteration: int,  # noqa: ARG002 — base signature
+            final_text: str = "",  # noqa: ARG002 — base signature
         ) -> tuple[bool, str | None]:
             if evidence_count >= 5:
                 return True, None

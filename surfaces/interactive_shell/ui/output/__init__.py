@@ -31,6 +31,7 @@ from surfaces.interactive_shell.ui.output.tracker import (
     get_tracker,
     reset_tracker,
     set_silent_tracker,
+    set_tracker_console,
 )
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "ProgressTracker",
     "get_tracker",
     "reset_tracker",
+    "set_tracker_console",
     "set_silent_tracker",
     # Rendering
     "render_completed_investigation_footer",

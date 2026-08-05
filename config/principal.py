@@ -10,9 +10,12 @@ actors, so the two are separate.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from enum import StrEnum
 
-PrincipalKind = Literal["org", "individual"]
+
+class PrincipalKind(StrEnum):
+    ORG = "org"
+    INDIVIDUAL = "individual"
 
 
 @dataclass(frozen=True)
@@ -27,9 +30,15 @@ class Principal:
     id: str
 
     def __post_init__(self) -> None:
-        if self.kind not in ("org", "individual"):
-            raise ValueError(f"unsupported principal kind: {self.kind!r}")
-        principal_id = (self.id or "").strip()
+        object.__setattr__(
+            self,
+            "kind",
+            PrincipalKind(self.kind),
+        )
+        if not isinstance(self.id, str):
+            raise TypeError("principal id must be a string")
+
+        principal_id = self.id.strip()
         if not principal_id:
             raise ValueError("principal id must be non-empty")
         object.__setattr__(self, "id", principal_id)
@@ -37,12 +46,12 @@ class Principal:
     @classmethod
     def org(cls, org_id: str) -> Principal:
         """Build an organization principal."""
-        return cls(kind="org", id=org_id)
+        return cls(kind=PrincipalKind.ORG, id=org_id)
 
     @classmethod
     def individual(cls, individual_id: str) -> Principal:
         """Build an individual principal."""
-        return cls(kind="individual", id=individual_id)
+        return cls(kind=PrincipalKind.INDIVIDUAL, id=individual_id)
 
 
 @dataclass(frozen=True)

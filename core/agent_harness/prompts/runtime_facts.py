@@ -26,14 +26,16 @@ _STATIC_GUIDANCE = (
     "When the user asks for the local timezone name, Python version, process "
     "id, parent process id, host/pod name, cloud provider or region, "
     "kubeconfig path, or which tools are installed, answer from the strings "
-    "above — never run "
+    "above directly, WITHOUT any tool call — these facts are authoritative "
+    "and re-reading them through the sandbox wastes a round-trip. Never run "
     f"{_BLOCKED_COMMANDS}, and never probe cloud instance metadata over the "
     "network. To list files in the scratchpad or another directory, "
     "use the Python execution sandbox with `pathlib.Path(...).iterdir()` — "
     "never `ls` or subprocess. Do NOT "
     "invent field names, values, or numbers not present above. Do NOT shell "
     "out or use subprocess — the Python execution sandbox blocks process "
-    "spawning; use `inputs['opensre_runtime']` inside the sandbox instead."
+    "spawning; when Python code you are already running for another reason "
+    "needs these facts, read `inputs['opensre_runtime']` instead."
 )
 
 _LIVE_GUIDANCE = (
@@ -150,6 +152,37 @@ def _cloud_line(runtime: Mapping[str, Any]) -> str | None:
     )
 
 
+def _workspace_line(runtime: Mapping[str, Any]) -> str | None:
+    """Which repo is “ours” — or an explicit unknown.
+
+    Without this, “our GitHub stars” triggers follow-ups instead of resolving to
+    the OpenSRE checkout / configured workspace repo.
+    """
+    if "workspace_repo" not in runtime:
+        return None
+    repo = _clean_str(runtime, "workspace_repo")
+    if repo:
+        return (
+            f"this OpenSRE workspace repo is {repo} — treat “our” / “this repo” "
+            f"as {repo} unless the user names a different repository"
+        )
+    return (
+        "no workspace git/GitHub repo was detected for this process — ask which "
+        "repository the user means rather than assuming Tracer-Cloud/opensre or "
+        "any other default"
+    )
+
+
+def _capability_warnings_line(runtime: Mapping[str, Any]) -> str | None:
+    warnings = runtime.get("capability_warnings")
+    if not isinstance(warnings, list) or not warnings:
+        return None
+    parts = [str(item).strip() for item in warnings if str(item).strip()]
+    if not parts:
+        return None
+    return "".join(("capability warnings at boot: ", "; ".join(parts)))
+
+
 # Order is part of the prompt contract — keep stable for snapshot/tests.
 _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _version_line,
@@ -159,7 +192,9 @@ _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _str_fact("python_version", "Python interpreter version is {}"),
     _pid_line,
     _cloud_line,
+    _workspace_line,
     _tools_line,
+    _capability_warnings_line,
     _str_fact("kubeconfig", "kubeconfig path is {}"),
     _str_fact("scratchpad_dir", "scratchpad directory is {}"),
 )
@@ -190,9 +225,13 @@ def _render_facts(
     lines = _fact_lines(producers, runtime)
     if not lines:
         return ""
-    return (
-        "Runtime facts (quote the strings below EXACTLY when asked; do not "
-        "paraphrase them into other field names): " + "; ".join(lines) + guidance
+    return "".join(
+        (
+            "Runtime facts (quote the strings below EXACTLY when asked; do not "
+            "paraphrase them into other field names): ",
+            "; ".join(lines),
+            guidance,
+        )
     )
 
 

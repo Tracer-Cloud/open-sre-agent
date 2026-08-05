@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from rich.console import Console
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncReport
-from platform.filestorage.enums import SyncRootName
+from platform.filestorage.engine import SyncProgress, SyncReport
+from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -65,9 +66,17 @@ def test_status_enabled_shows_roots(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
-    def _run(*, pull_only: bool = False, push_only: bool = False) -> SyncReport:
+    def _run(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
+    ) -> SyncReport:
+        del on_progress
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
+        seen["dry_run"] = dry_run
         return SyncReport(uploaded=["memory/a.md"], skipped=0)
 
     monkeypatch.setattr(
@@ -77,7 +86,69 @@ def test_sync_subcommand_calls_service(monkeypatch: pytest.MonkeyPatch) -> None:
     # console.status context manager — Rich Console.status works without a real TTY
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync --push-only", Session(), console) is True
-    assert seen == {"pull_only": False, "push_only": True}
+    assert seen == {"pull_only": False, "push_only": True, "dry_run": False}
+    assert "1 uploaded" in buf.getvalue()
+
+
+def test_sync_dry_run_forwards_flag_and_labels_the_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, bool] = {}
+
+    def _run(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
+    ) -> SyncReport:
+        del on_progress
+        seen["dry_run"] = dry_run
+        return SyncReport(uploaded=["sessions/a.jsonl"], skipped=0)
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.run_remote_sync",
+        _run,
+    )
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync sync --dry-run", Session(), console) is True
+    assert seen == {"dry_run": True}
+    out = buf.getvalue()
+    assert "Dry run" in out
+    assert "would be uploaded" in out
+
+
+def test_sync_progress_callback_is_wired_through_a_direction_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The service-supplied on_progress must work through a real Progress bar.
+
+    Exercises both add_task (first PULL event) and reset (the PULL→PUSH
+    direction change) without raising, against a non-terminal console —
+    the same rendering path the gateway uses.
+    """
+
+    def _run(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
+    ) -> SyncReport:
+        assert on_progress is not None
+        on_progress(SyncProgress(SyncDirection.PULL, "memory/a.md", 1, 1))
+        on_progress(SyncProgress(SyncDirection.PUSH, "sessions/b.jsonl", 1, 1))
+        return SyncReport(downloaded=["memory/a.md"], uploaded=["sessions/b.jsonl"])
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.run_remote_sync",
+        _run,
+    )
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync sync", Session(), console) is True
+    # A non-terminal console (as used here and by the gateway) renders no live
+    # progress output — only the final report reaches buf. Wiring correctness
+    # is verified above by on_progress firing through both branches without
+    # raising.
+    assert "1 downloaded" in buf.getvalue()
     assert "1 uploaded" in buf.getvalue()
 
 
@@ -91,6 +162,49 @@ def test_sync_disabled_prints_help(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Remote sync is off" in buf.getvalue()
 
 
+def test_setup_requires_bucket_flag() -> None:
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync setup", Session(), console) is True
+    assert "--bucket" in buf.getvalue()
+
+
+def test_setup_writes_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    console, buf = _capture()
+    assert (
+        dispatch_slash(
+            "/remote-sync setup --provider vercel --bucket opensre-remote-sync",
+            Session(),
+            console,
+        )
+        is True
+    )
+    out = buf.getvalue()
+    assert "settings saved" in out
+    assert "vercel" in out
+    assert "BLOB_READ_WRITE_TOKEN" in out
+
+
+def test_setup_disabled_says_off_without_a_sync_suggestion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from config.constants import paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    console, buf = _capture()
+    assert (
+        dispatch_slash(
+            "/remote-sync setup --provider gcs --bucket b --disabled", Session(), console
+        )
+        is True
+    )
+    out = buf.getvalue()
+    assert "Remote sync is off" in out
+    assert "remote-sync sync" not in out
+
+
 def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**_kwargs: object) -> SyncReport:
         raise RemoteSyncConfigError("bad flags")
@@ -102,7 +216,7 @@ def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     console, buf = _capture()
     assert dispatch_slash("/remote-sync sync --pull-only --push-only", Session(), console) is True
     out = buf.getvalue()
-    assert "Sync failed" in out
+    assert "failed" in out.lower()
     # This handler also serves gateway chat, so provider detail must not appear.
     assert "bad flags" not in out, "error detail reached the chat reply"
 
@@ -135,11 +249,11 @@ def test_slash_command_metadata_for_planner() -> None:
     cmd = SLASH_COMMANDS["/remote-sync"]
     assert cmd.first_arg_completions is not None
     labels = {label for label, _hint in cmd.first_arg_completions}
-    assert labels == {"status", "sync"}
-    assert any("OPENSRE_REMOTE_SYNC" in note for note in (cmd.notes or ()))
+    assert labels == {"status", "sync", "setup"}
+    assert any("setup" in note.lower() for note in (cmd.notes or ()))
     catalog = MCP_BY_COMMAND["/remote-sync"]
     assert "status" in catalog.llm_description
-    assert "sync" in catalog.llm_description
+    assert "setup" in catalog.llm_description
 
 
 def test_sync_shows_kept_remote(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -247,19 +247,10 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
 
     monkeypatch.setattr(main_entrypoint, "run_initial_input", _run_initial_input)
 
-    class _Session:
-        active_theme_name = None
-
-        def hydrate_configured_integrations(self) -> None:
-            return None
-
-        def warm_resolved_integrations(self) -> None:
-            return None
-
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime_context",
-        lambda **_kwargs: SimpleNamespace(session=_Session(), inbox=None),
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
     )
 
     class _PromptSession:
@@ -336,3 +327,532 @@ def test_explicit_bypass_detects_ci_environment(monkeypatch: Any) -> None:
     monkeypatch.delenv("OPENSRE_SKIP_GITHUB_LOGIN", raising=False)
     monkeypatch.setenv("CI", "true")
     assert flg._github_login_explicitly_bypassed() is True
+
+
+def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any) -> None:
+    """An embedding caller can capture the shell's output.
+
+    The module built one forced-terminal Console at import and used it for the
+    splash, the ready box, and the login gate, so nothing could redirect them.
+    """
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from config.repl_config import ReplConfig
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: console.print("SPLASH"))
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda console: console.print("READY"))
+    # Stop before the event loop; the startup renders are what this pins.
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
+
+    # Act
+    exit_code = main_entrypoint.run_repl(
+        config=ReplConfig(enabled=True, layout="classic"),
+        console=captured,
+    )
+
+    # Assert
+    assert exit_code == 0
+    text = captured.file.getvalue()  # type: ignore[attr-defined]
+    assert "SPLASH" in text
+    assert "READY" in text
+
+
+def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
+    """Omitting the console keeps today's behaviour, not a silent no-op."""
+    # Arrange
+    seen: list[object] = []
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: seen.append(console))
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
+
+    from config.repl_config import ReplConfig
+
+    # Act
+    main_entrypoint.run_repl(config=ReplConfig(enabled=True, layout="classic"))
+
+    # Assert
+    assert seen == [main_entrypoint._DEFAULT_CONSOLE]
+
+
+def test_run_repl_async_routes_the_console_into_resume(monkeypatch: Any, tmp_path: Path) -> None:
+    """The async half must use the caller's console too, not the module default.
+
+    ``run_repl`` renders the splash before the event loop; everything after —
+    resume output and the controller — runs inside ``run_repl_async``, so the
+    console has to survive the hand-off.
+    """
+    # Arrange
+    import asyncio
+    from io import StringIO
+
+    from rich.console import Console
+
+    monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.setattr("platform.analytics.cli.identify_saved_github_username", lambda: None)
+
+    seen: list[object] = []
+
+    def _resume(_prefix: Any, _session: Any, console: Any, **_kwargs: Any) -> bool:
+        seen.append(console)
+        return False
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.session_cmds.resume.resume_session_by_prefix",
+        _resume,
+    )
+
+    class _PromptSession:
+        history = None
+
+    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime_context",
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+    )
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    exit_code = asyncio.run(
+        main_entrypoint.run_repl_async(resume_session_id="missing", console=captured)
+    )
+
+    # Assert
+    assert exit_code == 1
+    assert seen == [captured]
+
+
+def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
+    """The console must survive the sync-to-async hand-off.
+
+    ``run_repl`` renders the splash itself and then delegates everything else;
+    dropping the argument there would silently return output to the module
+    default while the startup renders still looked correct.
+    """
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from config.repl_config import ReplConfig
+
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: True)
+
+    seen: list[object] = []
+
+    async def _fake_async(**kwargs: Any) -> int:
+        seen.append(kwargs.get("console"))
+        return 0
+
+    monkeypatch.setattr(main_entrypoint, "run_repl_async", _fake_async)
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    exit_code = main_entrypoint.run_repl(
+        config=ReplConfig(enabled=True, layout="classic"), console=captured
+    )
+
+    # Assert
+    assert exit_code == 0
+    assert seen == [captured]
+
+
+def test_package_facade_exposes_every_runtime_parameter() -> None:
+    """``surfaces.interactive_shell.run_repl`` is the seam embedders import.
+
+    It repeats the runtime signature rather than erasing it to ``*args``, which
+    keeps type checking but means a parameter added to the runtime and not here
+    is unreachable — ``console=`` was, so redirecting shell output raised
+    TypeError through the public import.
+    """
+    # Arrange
+    import inspect
+
+    from surfaces.interactive_shell import run_repl as facade
+    from surfaces.interactive_shell.main import run_repl as runtime
+
+    # Act
+    facade_params = inspect.signature(facade).parameters
+    runtime_params = inspect.signature(runtime).parameters
+
+    # Assert
+    assert set(runtime_params) <= set(facade_params), (
+        "runtime parameters missing from the package facade: "
+        f"{sorted(set(runtime_params) - set(facade_params))}"
+    )
+
+
+def test_console_injection_works_through_the_package_facade(monkeypatch: Any) -> None:
+    """Capturing shell output must work via the documented import path."""
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from config.repl_config import ReplConfig
+    from surfaces.interactive_shell import run_repl as facade
+
+    monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
+    monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: console.print("SPLASH"))
+    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    exit_code = facade(config=ReplConfig(enabled=True, layout="classic"), console=captured)
+
+    # Assert
+    assert exit_code == 0
+    assert "SPLASH" in captured.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> None:
+    """Scripted replay must honour the caller's console too.
+
+    ``run_repl_async`` returns through ``run_initial_input`` before the shell
+    ever starts, and that function built its own forced-terminal Console — so
+    an embedding caller got every replayed line on stdout instead of its own
+    stream, while the interactive path looked correctly wired.
+    """
+    # Arrange
+    import asyncio
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.startup import initial_input as replay
+
+    monkeypatch.setattr("platform.analytics.cli.identify_saved_github_username", lambda: None)
+    monkeypatch.setattr(replay, "render_splash", lambda console: console.print("REPLAY-SPLASH"))
+    monkeypatch.setattr(replay, "render_ready_box", lambda _console: None)
+
+    class _PromptSession:
+        history = None
+
+    # Rendering happens before the first turn; stub the turn so this pins the
+    # console wiring rather than the whole execution stack.
+    monkeypatch.setattr(replay, "render_submitted_prompt", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.shell_turn_execution.execute_shell_turn",
+        lambda *_a, **_kw: None,
+    )
+
+    monkeypatch.setattr(main_entrypoint, "build_prompt_session", lambda: _PromptSession())
+    monkeypatch.setattr(
+        main_entrypoint,
+        "create_repl_runtime_context",
+        lambda **_kwargs: SimpleNamespace(session=Session(), inbox=None),
+    )
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    asyncio.run(main_entrypoint.run_repl_async(initial_input="/exit", console=captured))
+
+    # Assert
+    assert "REPLAY-SPLASH" in captured.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_turn_output_and_prompt_echo_reach_the_supplied_console() -> None:
+    """The conversation itself must land in the caller's stream.
+
+    Startup renders honoured the injected console while the controller and turn
+    host built their own force-terminal consoles, so an embedding caller
+    captured the splash and missed every agent response, tool line and prompt
+    echo — the part it actually wanted.
+    """
+    # Arrange
+    import threading
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.turn_host import (
+        AgentTurnRuntime,
+        _streaming_console,
+    )
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+    runtime = AgentTurnRuntime(
+        session=Session(),
+        state=SimpleNamespace(),
+        spinner=SimpleNamespace(streaming=False, bytes_in=0),
+        invalidate_prompt=lambda: None,
+        console=captured,
+    )
+
+    # Act
+    turn_console = _streaming_console(runtime, threading.Event())
+    turn_console.print("AGENT-RESPONSE")
+
+    # Assert
+    assert captured.file.getvalue() == turn_console.file.getvalue()  # type: ignore[attr-defined]
+    assert "AGENT-RESPONSE" in turn_console.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_turn_output_reaches_capture_and_record_on_the_supplied_console() -> None:
+    """Writing to the caller's *stream* is not the same as writing to its console.
+
+    ``capture()`` and ``record`` buffer inside the ``Console`` object, not at its
+    file, so a turn that renders to a copy of ``console.file`` leaves both empty:
+    a caller wrapping a turn in ``capture()`` gets back nothing, and a recorded
+    transcript silently omits every agent response.
+    """
+    # Arrange
+    import threading
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.turn_host import (
+        AgentTurnRuntime,
+        _streaming_console,
+    )
+
+    def build_runtime(console: Console) -> AgentTurnRuntime:
+        return AgentTurnRuntime(
+            session=Session(),
+            state=SimpleNamespace(),
+            spinner=SimpleNamespace(streaming=False, bytes_in=0),
+            invalidate_prompt=lambda: None,
+            console=console,
+        )
+
+    capturing = Console(file=StringIO(), force_terminal=False, width=80)
+    recording = Console(file=StringIO(), force_terminal=False, width=80, record=True)
+
+    # Act
+    with capturing.capture() as capture:
+        _streaming_console(build_runtime(capturing), threading.Event()).print("CAPTURED-RESPONSE")
+    _streaming_console(build_runtime(recording), threading.Event()).print("RECORDED-RESPONSE")
+
+    # Assert
+    assert "CAPTURED-RESPONSE" in capture.get()
+    assert "RECORDED-RESPONSE" in recording.export_text()
+
+
+def test_turn_output_falls_back_to_the_shell_terminal() -> None:
+    """With no console supplied the turn keeps today's forced-terminal output."""
+    # Arrange
+    import threading
+
+    from surfaces.interactive_shell.runtime.turn_host import (
+        AgentTurnRuntime,
+        _streaming_console,
+    )
+
+    runtime = AgentTurnRuntime(
+        session=Session(),
+        state=SimpleNamespace(),
+        spinner=SimpleNamespace(streaming=False, bytes_in=0),
+        invalidate_prompt=lambda: None,
+    )
+
+    # Act
+    turn_console = _streaming_console(runtime, threading.Event())
+
+    # Assert
+    assert turn_console.is_terminal is True
+
+
+def test_controller_routes_its_console_to_echo_and_turns() -> None:
+    """The controller must hand its console to both output paths.
+
+    It builds several consoles; only ``service_console`` honoured injection, so
+    prompt echoes and agent turns still went to the shell's own terminal while
+    the caller captured nothing of the conversation.
+    """
+    # Arrange
+    from io import StringIO
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.controller import InteractiveShellController
+
+    captured = Console(file=StringIO(), force_terminal=False, width=80)
+
+    # Act
+    controller = InteractiveShellController(Session(), console=captured)
+
+    # Assert
+    assert controller.service_console is captured
+    assert controller.echo_console is captured
+    assert controller.turn_runtime.console is captured
+
+
+def test_investigation_rendering_uses_the_supplied_console() -> None:
+    """``/investigate`` output must land in the caller's console too.
+
+    The stream renderer built its own ``Console``, so an embedding caller that
+    captured the conversation still lost investigation progress, tool detail and
+    the final report — the longest output the shell produces.
+    """
+    # Arrange
+    import surfaces.cli.ui.renderer as renderer_module
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        repl_foreground_renderer,
+    )
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    built: list[renderer_module.StreamRenderer] = []
+
+    class _RecordingRenderer(renderer_module.StreamRenderer):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            built.append(self)
+
+        def render_stream(self, _events: Any) -> dict[str, Any]:
+            self._console.print("INVESTIGATION-PROGRESS")
+            return {}
+
+    # Act
+    original = renderer_module.StreamRenderer
+    renderer_module.StreamRenderer = _RecordingRenderer  # type: ignore[misc]
+    try:
+        repl_foreground_renderer(captured)(iter(()))
+    finally:
+        renderer_module.StreamRenderer = original  # type: ignore[misc]
+
+    # Assert
+    assert built[0]._console is captured
+    assert "INVESTIGATION-PROGRESS" in captured.file.getvalue()  # type: ignore[attr-defined]
+
+
+def test_investigation_progress_display_uses_the_supplied_console(
+    monkeypatch: Any,
+) -> None:
+    """Progress and tool-detail lines must follow the console too.
+
+    The renderer honouring an injected console is not enough: it builds a
+    ``ProgressTracker`` whose event-log display owned a separate ``Console``, so
+    stage progress and every tool-detail line still went to the shell terminal.
+    """
+    # Arrange
+    from surfaces.interactive_shell.ui.output import tracker as tracker_module
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    monkeypatch.setattr(tracker_module, "_repl_progress_active", lambda: True)
+    monkeypatch.setattr(tracker_module, "_is_silent_output", lambda: False)
+    monkeypatch.setattr(tracker_module, "get_output_format", lambda: "rich")
+    monkeypatch.setattr(tracker_module, "register_tool_detail_toggle", lambda _fn: None)
+
+    # Act
+    tracker = tracker_module.ProgressTracker(console=captured)
+
+    # Assert
+    assert tracker._display is not None
+    assert tracker._display._console is captured  # type: ignore[attr-defined]
+
+
+def test_action_investigation_ports_forward_the_supplied_console(
+    monkeypatch: Any,
+) -> None:
+    """``investigation_start`` / ``alert_sample`` must keep the turn console.
+
+    Slash ``/investigate`` already threaded ``console=`` into the session runner.
+    Action-tool ports called the same adapters without it, so an embedding
+    caller that captured the conversation still lost investigation progress.
+    """
+    # Arrange
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        repl_investigation_launch_ports,
+    )
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    seen_text: list[Console | None] = []
+    seen_sample: list[Console | None] = []
+
+    def _fake_text(**kwargs: Any) -> dict[str, Any]:
+        seen_text.append(kwargs.get("console"))
+        return {}
+
+    def _fake_sample(**kwargs: Any) -> dict[str, Any]:
+        seen_sample.append(kwargs.get("console"))
+        return {}
+
+    def _unused_background(**_kwargs: Any) -> str:
+        raise AssertionError("background launcher should not run")
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter.run_investigation_for_session",
+        _fake_text,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.investigation_adapter.run_sample_alert_for_session",
+        _fake_sample,
+    )
+    ports = repl_investigation_launch_ports(
+        start_background_text=_unused_background,
+        start_background_sample=_unused_background,
+    )
+
+    # Act
+    ports.run_text_investigation(
+        alert_text="cpu high",
+        context_overrides=None,
+        cancel_requested=None,
+        console=captured,
+    )
+    ports.run_sample_alert(
+        template_name="generic",
+        context_overrides=None,
+        cancel_requested=None,
+        console=captured,
+    )
+
+    # Assert
+    assert seen_text == [captured]
+    assert seen_sample == [captured]
+
+
+def test_investigation_stage_progress_reaches_the_supplied_console() -> None:
+    """Stage progress must follow the caller's console, not just the renderer's.
+
+    Investigation stages (``intake``, ``gather_evidence``, ``resolve_integrations``,
+    ``upstream_correlation``) call the process-wide ``get_tracker()`` rather than
+    the renderer's own tracker. Wiring only the renderer left every
+    ``tracker.start(...)`` line — the running commentary of an investigation —
+    going to the shell terminal while the embedder captured nothing of it.
+    """
+    # Arrange
+    from surfaces.interactive_shell.runtime.investigation_adapter import (
+        repl_foreground_renderer,
+    )
+    from surfaces.interactive_shell.ui.output import tracker as tracker_module
+
+    captured = Console(file=io.StringIO(), force_terminal=False, width=80)
+    seen: list[Console | None] = []
+
+    def _render(events: Any) -> dict[str, Any]:
+        # Runs while the renderer is active, exactly where a stage would call it.
+        seen.append(tracker_module._tracker_console)
+        return {}
+
+    original = tracker_module._tracker_console
+
+    # Act
+    import surfaces.cli.ui.renderer as renderer_module
+
+    real_renderer = renderer_module.StreamRenderer
+    renderer_module.StreamRenderer = lambda **_kw: SimpleNamespace(render_stream=_render)  # type: ignore[assignment]
+    try:
+        repl_foreground_renderer(captured)(iter(()))
+    finally:
+        renderer_module.StreamRenderer = real_renderer  # type: ignore[assignment]
+
+    # Assert
+    assert seen == [captured]
+    assert tracker_module._tracker_console is original

@@ -90,6 +90,8 @@ fi
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git add Formula/opensre.rb
-git commit -m "chore: update opensre formula to ${VERSION}"
+git commit \
+  -m "chore: update opensre formula to ${VERSION}" \
+  -m "Co-authored-by: OpenSRE Agent <312630446+opensreagent@users.noreply.github.com>"
 git push origin HEAD:main
 echo "Pushed homebrew-tap update for version ${VERSION}."

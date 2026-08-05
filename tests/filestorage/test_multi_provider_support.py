@@ -1,7 +1,8 @@
-"""Prove remote sync supports more than one cloud without shipping non-AWS SDKs.
+"""Prove remote sync supports more than one cloud without shipping every SDK.
 
-AWS/S3 is the only built-in backend. Community providers (GCS, Azure, …)
-register the same way these fakes do — the engine and factory never change.
+Built-in backends (aws, gcs, vercel, azure) register via ``_BUILTIN_MODULES``.
+Community providers register the same way these fakes do - the engine and
+factory never change.
 """
 
 from __future__ import annotations
@@ -81,11 +82,12 @@ def roots(tmp_path: Path) -> tuple[SyncRoot, ...]:
     )
 
 
-def test_aws_is_the_only_built_in_provider() -> None:
-    assert "aws" in registered_providers()
-    # Non-AWS backends are not shipped — community modules register later.
-    assert "gcs" not in registered_providers()
-    assert "azure" not in registered_providers()
+def test_built_in_providers_include_aws_gcs_vercel_and_azure() -> None:
+    providers = registered_providers()
+    assert "aws" in providers
+    assert "gcs" in providers
+    assert "vercel" in providers
+    assert "azure" in providers
 
 
 def test_unknown_provider_fails_closed_listing_known_ones(
@@ -100,20 +102,27 @@ def test_unknown_provider_fails_closed_listing_known_ones(
 
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
-    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "gcs")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "azure-blob")
 
     config = load_remote_sync_config()
     assert config is not None
     with pytest.raises(RemoteSyncConfigError, match="unknown remote-sync provider") as caught:
         build_object_store(config)
-    # Operator sees what is installed today (aws) so they know to add a module.
+    # Operator sees what is installed today so they know to add a module.
     assert "aws" in str(caught.value)
+    assert "gcs" in str(caught.value)
+    assert "vercel" in str(caught.value)
 
 
 def test_community_style_gcs_registration_drives_the_engine(
     roots: tuple[SyncRoot, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Same path a GCS contributor would take: register, set provider, sync."""
+    """A community registration overrides the built-in of the same name.
+
+    GCS is built in now; registering a stand-in under the same name must win
+    without a lazy built-in import replacing it — the open/closed seam a third
+    party uses to ship a fix without forking.
+    """
     from config.constants.filestorage import (
         REMOTE_SYNC_BUCKET_ENV,
         REMOTE_SYNC_ENV,

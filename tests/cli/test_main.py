@@ -9,10 +9,12 @@ from unittest.mock import patch
 import click
 import pytest
 
+from config.constants.product import RELEASE_STAGE
 from config.repl_config import ReplConfig
 from platform.analytics import provider
 from platform.analytics.events import Event
-from surfaces.cli.__main__ import _sentry_entrypoint_for_invocation, main
+from surfaces.cli.app import cli, main
+from surfaces.cli.startup import sentry_entrypoint_for
 
 
 class _EmptyCatalog:
@@ -47,9 +49,9 @@ def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, obj
 
 
 def test_main_runs_health_command(monkeypatch) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
 
     with (
         patch("integrations.verify.verify_integrations") as mock_verify,
@@ -78,9 +80,9 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[BaseException] = []
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
         "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
@@ -95,10 +97,10 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
 def test_main_treats_onboard_abort_as_clean_cancel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
     monkeypatch.setattr(
         "surfaces.cli.wizard.flow.run_wizard",
         lambda: (_ for _ in ()).throw(click.Abort()),
@@ -110,14 +112,14 @@ def test_main_treats_onboard_abort_as_clean_cancel(
 
 
 def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
 
     def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", _raise_missing_sentry)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "9999.0.0")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_update_available", lambda _c, _l: False)
 
@@ -128,12 +130,12 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
 
 
 def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
 
     def _raise_missing_sentry(**_kwargs: object) -> None:
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", _raise_missing_sentry)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", _raise_missing_sentry)
 
     with pytest.raises(ModuleNotFoundError):
         main(["health"])
@@ -142,12 +144,12 @@ def test_main_non_update_still_raises_when_sentry_sdk_missing(monkeypatch) -> No
 def test_main_does_not_capture_analytics_for_help(monkeypatch, capsys) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "surfaces.cli.app.capture_first_run_if_needed", lambda: captured.append("install")
     )
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+        "surfaces.cli.app.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["--help"])
 
@@ -160,12 +162,12 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "surfaces.cli.app.capture_first_run_if_needed", lambda: captured.append("install")
     )
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+        "surfaces.cli.app.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
         "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
@@ -183,12 +185,12 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     captured: list[str] = []
     captured_errors: list[BaseException] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "surfaces.cli.app.capture_first_run_if_needed", lambda: captured.append("install")
     )
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+        "surfaces.cli.app.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
         "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
@@ -206,12 +208,12 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
 def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "surfaces.cli.app.capture_first_run_if_needed", lambda: captured.append("install")
     )
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+        "surfaces.cli.app.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("integrations.verify.verify_integrations", lambda: [])
 
     exit_code = main(["health"])
@@ -224,14 +226,14 @@ def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) 
 def test_main_fast_version_command_skips_runtime_bootstrap(monkeypatch, capsys) -> None:
     captured: list[dict[str, object] | None] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_first_run_if_needed",
+        "surfaces.cli.app.capture_first_run_if_needed",
         lambda: captured.append({"unexpected": "install"}),
     )
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_cli_invoked",
+        "surfaces.cli.app.capture_cli_invoked",
         lambda properties=None: captured.append(properties),
     )
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
 
     exit_code = main(["version"])
 
@@ -247,12 +249,12 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
     flush_calls: list[int] = []
 
     monkeypatch.setattr(
-        "surfaces.cli.__main__.init_sentry",
+        "platform.observability.errors.sentry.init_sentry",
         lambda entrypoint=None: root_init_entrypoints.append(entrypoint),
     )
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
 
@@ -281,15 +283,15 @@ def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:
 
 
 def test_sentry_entrypoint_uses_debug_for_debug_group_invocations() -> None:
-    assert _sentry_entrypoint_for_invocation(["debug", "future-check"]) == "debug"
+    assert sentry_entrypoint_for(cli, ["debug", "future-check"]) == "debug"
 
 
 def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> None:
     debug_module = importlib.import_module("surfaces.cli.commands.debug")
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: False)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "")
 
@@ -301,10 +303,10 @@ def test_main_debug_sentry_exits_nonzero_when_disabled(monkeypatch, capsys) -> N
 
 def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -> None:
     debug_module = importlib.import_module("surfaces.cli.commands.debug")
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(debug_module, "sentry_transport_enabled", lambda: True)
     monkeypatch.setattr(debug_module, "resolved_sentry_dsn_host", lambda: "sentry.example.test")
     monkeypatch.setattr(debug_module, "capture_exception", lambda *_args, **_kw: "event-123")
@@ -333,7 +335,7 @@ def test_main_emits_first_run_install_before_cli_invoked(
     # This test validates analytics event ordering only; avoid real Sentry init
     # side effects (e.g. sdk integration hooks) that are unrelated to the
     # install/cli-invoked event contract.
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
     provider.shutdown_analytics(flush=False)
     provider._instance = None
     provider._cached_anonymous_id = None
@@ -351,12 +353,12 @@ def test_main_emits_first_run_install_before_cli_invoked(
     monkeypatch.setattr(provider.atexit, "register", lambda _func: None)
     posted_payloads = _stub_analytics_httpx(monkeypatch)
 
-    monkeypatch.setattr("surfaces.cli.__main__.render_landing", lambda _group: None)
+    monkeypatch.setattr("surfaces.cli.app.render_landing", lambda _group: None)
 
     exit_code = main(["--no-interactive"])
 
     assert exit_code == 0
-    assert "OpenSRE is in Public Beta" in capsys.readouterr().err
+    assert RELEASE_STAGE in capsys.readouterr().err
     # CLI exit is non-blocking; wait for the daemon worker to finish posts.
     analytics = provider._instance
     if analytics is not None and analytics._worker is not None:
@@ -397,12 +399,12 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
 ) -> None:
     captured: list[str] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_first_run_if_needed", lambda: captured.append("install")
+        "surfaces.cli.app.capture_first_run_if_needed", lambda: captured.append("install")
     )
     monkeypatch.setattr(
-        "surfaces.cli.__main__.capture_cli_invoked", lambda *_args: captured.append("cli")
+        "surfaces.cli.app.capture_cli_invoked", lambda *_args: captured.append("cli")
     )
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
 
     if setup == "surfaces.cli.wizard.flow.run_wizard":
         onboard_module = importlib.import_module("surfaces.cli.commands.onboard")
@@ -447,13 +449,13 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
     never reaching render_landing().  The fix guards the SystemExit on
     `config.enabled`, so disabled mode falls through to render_landing().
     """
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
 
     # Force the TTY branch so the regression path is actually exercised.
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
     # Force disabled interactive config via the loader.  Return a disabled config
     # regardless of how the CLI resolved the flag.
@@ -464,7 +466,7 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.render_landing",
+        "surfaces.cli.app.render_landing",
         lambda _group: landing_calls.append(1),
     )
 
@@ -487,11 +489,11 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
     passes cli_enabled=None (deferring to env/config, which default to enabled),
     so run_repl must still be called.
     """
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
     load_calls: list[dict] = []
     orig_load = ReplConfig.load
@@ -505,7 +507,7 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.render_landing",
+        "surfaces.cli.app.render_landing",
         lambda _group: landing_calls.append(1),
     )
 
@@ -535,11 +537,11 @@ def test_env_disables_interactive_without_flag(monkeypatch) -> None:
     still entered the REPL. The CLI now passes cli_enabled=None when no flag is
     given, so the env var disables the shell and the landing page renders.
     """
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
     # Hermetic: ignore any real ~/.opensre/config.yml and drive purely via the env var.
     monkeypatch.setattr("config.repl_config._read_config_file", lambda: {})
@@ -557,7 +559,7 @@ def test_env_disables_interactive_without_flag(monkeypatch) -> None:
 
     landing_calls: list[int] = []
     monkeypatch.setattr(
-        "surfaces.cli.__main__.render_landing",
+        "surfaces.cli.app.render_landing",
         lambda _group: landing_calls.append(1),
     )
 
@@ -575,11 +577,11 @@ def test_env_disables_interactive_without_flag(monkeypatch) -> None:
 
 
 def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
     load_calls: list[dict] = []
     orig_load = ReplConfig.load
@@ -608,9 +610,9 @@ def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
 
 
 def test_invalid_theme_flag_returns_usage_error(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
 
     exit_code = main(["--theme", "chartreuse"])
 
@@ -621,11 +623,11 @@ def test_invalid_theme_flag_returns_usage_error(monkeypatch, capsys) -> None:
 
 
 def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.shutdown_analytics", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdin.isatty", lambda: True)
-    monkeypatch.setattr("surfaces.cli.__main__.sys.stdout.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
     load_calls: list[dict] = []
 
@@ -652,12 +654,12 @@ def test_main_flushes_analytics_when_events_are_pending(
 ) -> None:
     """A one-shot CLI exit must drain queued events (e.g. investigation_completed)."""
     calls: list[dict[str, object]] = []
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.analytics_needs_flush", lambda: True)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.analytics_needs_flush", lambda: True)
     monkeypatch.setattr(
-        "surfaces.cli.__main__.shutdown_analytics",
+        "surfaces.cli.app.shutdown_analytics",
         lambda **kwargs: calls.append(kwargs),
     )
 
@@ -672,12 +674,12 @@ def test_main_does_not_block_when_no_events_are_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[dict[str, object]] = []
-    monkeypatch.setattr("surfaces.cli.__main__.capture_first_run_if_needed", lambda: None)
-    monkeypatch.setattr("surfaces.cli.__main__.capture_cli_invoked", lambda *_args: None)
-    monkeypatch.setattr("surfaces.cli.__main__.init_sentry", lambda **_kw: None)
-    monkeypatch.setattr("surfaces.cli.__main__.analytics_needs_flush", lambda: False)
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
+    monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
+    monkeypatch.setattr("surfaces.cli.app.analytics_needs_flush", lambda: False)
     monkeypatch.setattr(
-        "surfaces.cli.__main__.shutdown_analytics",
+        "surfaces.cli.app.shutdown_analytics",
         lambda **kwargs: calls.append(kwargs),
     )
 
@@ -685,3 +687,21 @@ def test_main_does_not_block_when_no_events_are_pending(
 
     assert exit_code != 0
     assert calls == [{"flush": False}]
+
+
+def test_root_main_propagates_the_cli_exit_code(monkeypatch) -> None:
+    """``python main.py`` must exit with the CLI's status, not always 0.
+
+    main.py is the documented entry point, so a swallowed exit code silently
+    breaks CI steps, shell `&&` chains, and anything that checks $?.
+    """
+    # Arrange
+    import main as root_main
+
+    monkeypatch.setattr("surfaces.cli.app.main", lambda *_a, **_k: 2)
+
+    # Act
+    status = root_main.main()
+
+    # Assert
+    assert status == 2

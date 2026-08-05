@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 
 def test_health_command_runs() -> None:

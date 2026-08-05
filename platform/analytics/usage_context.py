@@ -14,14 +14,13 @@ are not an integration inventory source of truth (that lives in the webapp).
 from __future__ import annotations
 
 import contextlib
-import os
 import threading
 from collections.abc import Iterator
 from contextvars import ContextVar, Token
 from typing import Final
 from uuid import uuid4
 
-from config.constants.billing import ORGANIZATION_ID_ENV
+from config.constants.organization import organization_id
 from platform.analytics.repl_context import get_cli_session_id
 
 type JsonScalar = str | bool | int | float
@@ -74,12 +73,11 @@ def get_user_id() -> str | None:
 
 
 def get_organization_id() -> str | None:
-    """Return org id from context, else ``OPENSRE_ORGANIZATION_ID`` when set."""
+    """Return org id from context, else ``ORGANIZATION_ID`` when set."""
     bound = _ORGANIZATION_ID.get()
     if bound:
         return bound
-    env_value = (os.getenv(ORGANIZATION_ID_ENV) or "").strip()
-    return env_value or None
+    return organization_id() or None
 
 
 def bind_surface(surface: str | None) -> Token[str | None]:
