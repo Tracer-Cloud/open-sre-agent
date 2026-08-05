@@ -253,3 +253,80 @@ class TestMessageBuilders:
         assert captured["source"] == "scheduled_sentry_uptime_watch"
         assert captured["task_id"] == "uptime1"
         assert captured["project_slug"] == "api"
+
+    def test_posthog_metric_report_uses_agent_runner(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        task = ScheduledTask(
+            id="ph1",
+            kind=TaskKind.POSTHOG_METRIC_REPORT,
+            cron="0 8 * * 1",
+            provider=Provider.SLACK,
+            chat_id="C123",
+            params={"stats_period": "30d", "metrics": "dau,signups"},
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "Metric report: DAU up 12%"
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        msg = tasks_mod.build_message(task)
+        assert msg == "Metric report: DAU up 12%"
+        assert captured["source"] == "scheduled_posthog_metric_report"
+        assert captured["task_id"] == "ph1"
+        assert captured["stats_period"] == "30d"
+        assert captured["metrics"] == "dau,signups"
+
+    def test_posthog_metric_report_defaults_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        task = ScheduledTask(
+            kind=TaskKind.POSTHOG_METRIC_REPORT,
+            cron="0 8 * * 1",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "report"
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        tasks_mod.build_message(task)
+        assert captured["stats_period"] == "7d"
+
+    def test_posthog_metric_report_strips_credentials(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        task = ScheduledTask(
+            kind=TaskKind.POSTHOG_METRIC_REPORT,
+            cron="0 8 * * 1",
+            provider=Provider.SLACK,
+            chat_id="C123",
+            params={"api_key": "secret", "stats_period": "7d"},
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "report"
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        tasks_mod.build_message(task)
+        assert "api_key" not in captured
+        assert captured["stats_period"] == "7d"
+
+    def test_posthog_metric_report_failure_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        task = ScheduledTask(
+            kind=TaskKind.POSTHOG_METRIC_REPORT,
+            cron="0 8 * * 1",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+        )
+
+        def _raise(_payload: dict[str, object]) -> str:
+            raise RuntimeError("LLM unavailable")
+
+        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _raise)
+
+        with pytest.raises(RuntimeError, match="PostHog metric report failed"):
+            tasks_mod.build_message(task)

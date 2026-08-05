@@ -200,7 +200,7 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
     # Placeholder posted into the thread, then edited with the final answer.
     assert messaging.posts[0]["thread_ts"] == "100.1"
     assert messaging.updates[-1]["text"] == "done"
-    # Viktor-like coworker UX: eyes while working, then checkmark.
+    # Coworker UX: eyes while working, then checkmark.
     emoji_ops = [(r["op"], r["emoji"]) for r in messaging.reactions]
     assert ("add", "eyes") in emoji_ops
     assert ("remove", "eyes") in emoji_ops

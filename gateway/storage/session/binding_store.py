@@ -32,7 +32,7 @@ class BindingStore(Protocol):
         principal: Principal | None = None,
         actor: Actor | str | None = None,
     ) -> str | None:
-        raise NotImplementedError
+        """Return the session id for the binding, if present."""
 
     def bind(
         self,
@@ -43,7 +43,7 @@ class BindingStore(Protocol):
         principal: Principal | None = None,
         actor: Actor | str | None = None,
     ) -> None:
-        raise NotImplementedError
+        """Bind the chat to the provided session id."""
 
     def rotate(
         self,
@@ -53,7 +53,7 @@ class BindingStore(Protocol):
         principal: Principal | None = None,
         actor: Actor | str | None = None,
     ) -> str:
-        raise NotImplementedError
+        """Create and return a replacement session id for the chat."""
 
     def has_any_actor_binding(
         self,
@@ -62,10 +62,10 @@ class BindingStore(Protocol):
         chat_id: str,
         principal: Principal | None = None,
     ) -> bool:
-        raise NotImplementedError
+        """Return whether the chat has any actor-specific binding."""
 
     def close(self) -> None:
-        raise NotImplementedError
+        """Release any resources held by the binding store."""
 
 
 def legacy_bindings_for(path: Path) -> list[dict[str, Any]]:
