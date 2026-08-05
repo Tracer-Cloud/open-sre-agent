@@ -1,14 +1,23 @@
+---
+name: github-security-fix
+description: >-
+  Remediate GitHub security / Dependabot / CodeQL / code-quality alerts via
+  fix_github_security_alert
+---
 ══════════════════════════════════════════════════════════
 GITHUB SECURITY AND QUALITY FIX SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════
 
 WHEN TO USE:
-- The user asks to fix/remediate GitHub security alerts, Security and quality
-  findings, Code Quality findings, Dependabot alerts, CodeQL/code-scanning
-  alerts, vulnerable dependencies, or repo security issues.
+- The user asks to fix/remediate GitHub security and quality issues, security
+  alerts, Security and quality findings, Code Quality findings, Dependabot
+  alerts, CodeQL/code-scanning alerts, vulnerable dependencies, or repo
+  security issues.
 - The user says "hey fix the security issues", "fix the security issues in
-  owner/repo", or "fix the opensre repo security issues and raise a PR".
-- A GitHub security alert URL or `/security/quality` URL is provided.
+  owner/repo", "fix the security and quality issues", or "fix the opensre repo
+  security issues and raise a PR".
+- A GitHub security alert URL, `/security/code-scanning` page URL, or
+  `/security/quality` URL is provided.
 
 USE THIS TOOL:
 - `fix_github_security_alert`
@@ -26,13 +35,16 @@ HARD RULES:
   and let the tool select one open supported security or quality finding.
 - If no owner/repo is named, omit both and let the tool use the current
   checkout's GitHub origin.
-- If the user supplies an alert or `/security/quality` URL, pass it as
+- If the user supplies an alert URL, `/security/code-scanning` page URL, or
+  `/security/quality` URL, pass it as
   `alert_url`.
 - If they name a Dependabot alert, code-scanning alert, CodeQL alert, or Code
   Quality finding number, pass `alert_type` and `alert_number`.
 - Use `alert_type="code_quality"` for GitHub `/security/quality` standard
   findings such as unused import, empty except, unreachable code, or mixed
   returns.
+- Use `alert_type="code_scanning"` for GitHub `/security/code-scanning` pages
+  or broad CodeQL/code-scanning requests.
 - Set `open_pr=true` only when they ask to open/raise/create a PR or "ship" the
   fix; otherwise leave it false for a local diff.
 - Never use `github_cli` to run a raw `gh` workflow around this. The fixer owns
@@ -60,3 +72,5 @@ Compact examples:
    → fix_github_security_alert(alert_type="dependabot", alert_number=12)
 5) "fix https://github.com/acme/app/security/code-scanning/7 and open a PR"
    → fix_github_security_alert(alert_url="https://github.com/acme/app/security/code-scanning/7", open_pr=true)
+6) "fix the code scanning errors on https://github.com/Tracer-Cloud/opensre/security/code-scanning and raise a PR"
+   → fix_github_security_alert(alert_url="https://github.com/Tracer-Cloud/opensre/security/code-scanning", alert_type="code_scanning", open_pr=true)

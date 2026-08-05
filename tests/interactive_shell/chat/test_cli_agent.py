@@ -82,8 +82,12 @@ class _FakeLLMClient:
         self._content = content
         self.last_prompt: str | None = None
 
-    def invoke_stream(self, prompt: str) -> Iterator[str]:
-        self.last_prompt = prompt
+    def invoke_stream(self, prompt: Any) -> Iterator[str]:
+        from integrations.llm_cli.text import flatten_messages_to_prompt
+
+        # Answer path passes ``AssistantTurnPrompt.messages()``; flatten so
+        # substring asserts on ``last_prompt`` keep working.
+        self.last_prompt = flatten_messages_to_prompt(prompt)
         if isinstance(self._content, list):
             parts: list[str] = []
             for block in self._content:

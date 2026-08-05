@@ -103,7 +103,8 @@ def _confirm_fn(context: Any) -> Any:
     source="github",
     display_name="Fix GitHub security or quality finding",
     description=(
-        "Fix a GitHub Dependabot alert, code-scanning alert, or Code Quality finding "
+        "Fix a GitHub security and quality issue, Dependabot alert, "
+        "code-scanning/CodeQL alert, or Code Quality finding "
         "in the current repository with built-in local fixers and an auto-detected "
         "coding agent (Pi, Claude Code, or Codex CLI). With open_pr=true, commit the "
         "fix to a fresh opensre/github-security-fix-* branch, push it, and open a PR. "
@@ -112,8 +113,9 @@ def _confirm_fn(context: Any) -> Any:
     ),
     use_cases=[
         "Fix a GitHub Dependabot alert and open a pull request",
-        "Fix a GitHub code-scanning alert in the local checkout",
+        "Fix a GitHub code-scanning alert or code-scanning page backlog in the local checkout",
         "Fix a GitHub Code Quality finding from the Security and quality page",
+        "Fix GitHub security and quality issues and raise a PR",
         "Auto-select one open supported security or quality finding from a repo and propose a PR",
     ],
     anti_examples=[

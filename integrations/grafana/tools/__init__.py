@@ -487,6 +487,7 @@ def query_grafana_logs(
     result_data = {
         "source": "grafana_loki",
         "available": True,
+        "truncated": result.get("truncated", False),
         "logs": compacted_logs,
         "error_logs": compacted_error_logs,
         "total_logs": result.get("total_logs", 0),
@@ -499,6 +500,13 @@ def query_grafana_logs(
         "account_id": client.account_id,
     }
     summary = summarize_counts(len(logs_data), len(compacted_logs), "logs")
+
+    if result.get("truncated"):
+        cap_warning = (
+            "WARNING: Upstream Loki query hit the maximum line limit; earlier logs were dropped. "
+        )
+        summary = cap_warning + (summary or "")
+
     if summary:
         result_data["truncation_note"] = summary
     return result_data

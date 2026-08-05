@@ -13,8 +13,13 @@ from click.testing import CliRunner
 
 from config.constants.filestorage import REMOTE_SYNC_BUCKET_ENV, REMOTE_SYNC_ENV
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncReport
-from platform.filestorage.enums import BuiltInProvider, RemoteSyncSubcommand, SyncRootName
+from platform.filestorage.engine import SyncProgress, SyncReport
+from platform.filestorage.enums import (
+    BuiltInProvider,
+    RemoteSyncSubcommand,
+    SyncDirection,
+    SyncRootName,
+)
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from platform.filestorage.setup import RemoteSyncSetupRequest
@@ -92,12 +97,76 @@ def test_sync_prints_report(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) 
     assert "already current" in result.output
 
 
+def test_sync_creates_progress_bars_on_a_tty(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A TTY gets a real bar per direction, driven end-to-end without crashing.
+
+    Click hides bar frames (percent, current item) when the underlying
+    stream isn't a real TTY — true for CliRunner's captured output even
+    after faking ``isatty()`` for our own gate — falling back to printing
+    each bar's label once. That fallback is what this asserts: the wiring
+    reaches Click's ProgressBar and survives a direction change intact.
+    """
+    _set_interactive(monkeypatch)
+
+    def _fake_run_remote_sync(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
+    ) -> SyncReport:
+        assert on_progress is not None
+        on_progress(SyncProgress(SyncDirection.PULL, "memory/a.md", 1, 1))
+        on_progress(SyncProgress(SyncDirection.PUSH, "sessions/a.jsonl", 1, 2))
+        on_progress(SyncProgress(SyncDirection.PUSH, "sessions/b.jsonl", 2, 2))
+        return SyncReport(
+            downloaded=["memory/a.md"], uploaded=["sessions/a.jsonl", "sessions/b.jsonl"]
+        )
+
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync.run_remote_sync", _fake_run_remote_sync)
+    result = runner.invoke(remote_sync_command, ["sync"])
+    assert result.exit_code == 0, result.output
+    assert "Pulling" in result.output
+    assert "Pushing" in result.output
+    assert "1 downloaded" in result.output
+    assert "2 uploaded" in result.output
+
+
+def test_sync_stays_script_clean_off_a_tty(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CliRunner's stdout is not a TTY by default: on_progress must stay None."""
+    seen: dict[str, object] = {}
+
+    def _capture(
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
+    ) -> SyncReport:
+        seen["on_progress"] = on_progress
+        return SyncReport(uploaded=["sessions/a.jsonl"])
+
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync.run_remote_sync", _capture)
+    result = runner.invoke(remote_sync_command, ["sync"])
+    assert result.exit_code == 0
+    assert seen["on_progress"] is None
+
+
 def test_sync_passes_direction_flags(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, bool] = {}
 
     def _capture(
-        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
+        del on_progress
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
         seen["dry_run"] = dry_run
@@ -118,8 +187,13 @@ def test_sync_passes_dry_run_and_labels_the_report(
     seen: dict[str, bool] = {}
 
     def _capture(
-        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
+        del on_progress
         seen["dry_run"] = dry_run
         return SyncReport(uploaded=["sessions/a.jsonl"])
 

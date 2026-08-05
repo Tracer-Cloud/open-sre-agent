@@ -148,3 +148,50 @@ class TestCaptureServiceError:
                 exc, logger=mock_logger, integration="datadog", method="search_logs"
             )
             assert mock_report.call_args.kwargs["severity"] == "warning"
+
+    def test_unreachable_service_omits_traceback_by_default(
+        self, mock_logger: logging.Logger
+    ) -> None:
+        """A stopped service is an operational fact; the HTTP stack explains nothing."""
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="kubernetes", method="probe_access"
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is False
+
+    def test_unreachable_service_omits_traceback_from_any_method(
+        self, mock_logger: logging.Logger
+    ) -> None:
+        """Classification is by exception, not method: any call can hit a dead host.
+
+        Keyed on the method name instead, one investigation against a stopped
+        cluster printed ~180 lines of urllib3 stack across three tool calls.
+        """
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="kubernetes", method="list_pods"
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is False
+
+    def test_a_genuine_bug_keeps_its_traceback(self, mock_logger: logging.Logger) -> None:
+        """Quieting unreachable hosts must not quiet defects."""
+        exc = KeyError("items")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc, logger=mock_logger, integration="kubernetes", method="list_pods"
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is True
+
+    def test_include_traceback_override_wins(self, mock_logger: logging.Logger) -> None:
+        exc = ConnectionError("refused")
+        with patch("platform.observability.errors.service.report_exception") as mock_report:
+            capture_service_error(
+                exc,
+                logger=mock_logger,
+                integration="kubernetes",
+                method="probe_access",
+                include_traceback=True,
+            )
+            assert mock_report.call_args.kwargs["include_traceback"] is True

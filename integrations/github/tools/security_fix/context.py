@@ -89,7 +89,8 @@ _SECURITY_URL_RE = re.compile(
     r"(?P<owner>[^/\s]+)/(?P<repo>[^/\s#?]+)/"
     r"(?P<section>security/(?P<security_kind>dependabot|code-scanning|secret-scanning)"
     r"|code-scanning(?:/alerts)?)"
-    r"/(?P<number>\d+)",
+    r"(?:/(?P<number>\d+))?/?"
+    r"(?:[?#][^\s]*)?(?=$|[\s).,;])",
     re.IGNORECASE,
 )
 _QUALITY_URL_RE = re.compile(
@@ -167,11 +168,12 @@ def parse_security_alert_url(alert_url: str | None) -> SecurityAlertRef | None:
         alert_type = "code_scanning"
     else:
         return None
+    raw_number = match.group("number")
     return SecurityAlertRef(
         owner=match.group("owner"),
         repo=match.group("repo").removesuffix(".git"),
         alert_type=alert_type,
-        number=int(match.group("number")),
+        number=int(raw_number) if raw_number else None,
     )
 
 

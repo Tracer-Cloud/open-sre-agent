@@ -14,6 +14,7 @@ import os
 from typing import Any
 
 from config.llm_credentials import resolve_env_credential
+from platform.scheduler.types import Provider
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +166,24 @@ def _get_integration_credential(service: str, key: str) -> str:
         return ""
 
 
+def requires_explicit_chat_id(provider: str, task_params: dict[str, str] | None = None) -> bool:
+    """Whether a scheduled task needs an explicit ``chat_id`` to be deliverable.
+
+    Mirrors what :func:`platform.scheduler.executor._deliver_slack` actually
+    does: a Slack webhook is bound to one channel and is its own destination,
+    so it can deliver without a chat id. A bot token cannot — it posts to a
+    named channel — and every other provider always needs one. Accepting a
+    task without a reachable destination stores a schedule that fires into
+    nothing.
+    """
+    if provider.strip().lower() != Provider.SLACK.value:
+        return True
+    creds = resolve_slack_credentials(task_params or {})
+    return not creds.get("webhook_url", "").strip()
+
+
 __all__ = [
+    "requires_explicit_chat_id",
     "resolve_discord_credentials",
     "resolve_rocketchat_credentials",
     "resolve_slack_credentials",

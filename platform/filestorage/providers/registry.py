@@ -20,8 +20,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
+from platform.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncConfigError
+from platform.filestorage.exposure import PublicAccessChecker, PublicAccessStatus, not_checked
 
 if TYPE_CHECKING:
     from platform.filestorage.config import RemoteSyncConfig
@@ -55,6 +56,7 @@ class SetupExtraField:
 _REGISTRY: dict[str, ObjectStoreFactory] = {}
 _CREDENTIAL_HINTS: dict[str, str] = {}
 _EXTRA_FIELDS: dict[str, tuple[SetupExtraField, ...]] = {}
+_PUBLIC_ACCESS_CHECKERS: dict[str, PublicAccessChecker] = {}
 _REGISTRY_LOCK = threading.RLock()
 
 # Built-in backends, imported on first use so this package never imports itself.
@@ -64,6 +66,7 @@ _BUILTIN_MODULES = {
     BuiltInProvider.AWS.value: "platform.filestorage.providers.aws",
     BuiltInProvider.GCS.value: "platform.filestorage.providers.gcs",
     BuiltInProvider.VERCEL.value: "platform.filestorage.providers.vercel",
+    BuiltInProvider.AZURE.value: "platform.filestorage.providers.azure",
 }
 
 
@@ -80,6 +83,7 @@ def register_object_store(
     *,
     credential_hint: str | None = None,
     extra_fields: tuple[SetupExtraField, ...] = (),
+    public_access_checker: PublicAccessChecker | None = None,
 ) -> None:
     """Bind ``name`` (the value of ``OPENSRE_REMOTE_SYNC_PROVIDER``) to a factory.
 
@@ -91,6 +95,11 @@ def register_object_store(
     ``extra_fields`` declares which of ``RemoteSyncConfig``'s ``region``/
     ``profile`` slots this provider consumes (see :func:`provider_extra_fields`).
     Omit it — as most providers do — when the provider needs neither.
+
+    ``public_access_checker`` answers whether the store is publicly readable
+    (see :func:`check_bucket_exposure`). Omit it when the provider has no way
+    to ask — ``status`` then reports the exposure as unchecked rather than
+    guessing.
     """
     key = name.strip().lower()
     if not key:
@@ -100,6 +109,10 @@ def register_object_store(
         if credential_hint is not None:
             _CREDENTIAL_HINTS[key] = credential_hint
         _EXTRA_FIELDS[key] = extra_fields
+        if public_access_checker is None:
+            _PUBLIC_ACCESS_CHECKERS.pop(key, None)
+        else:
+            _PUBLIC_ACCESS_CHECKERS[key] = public_access_checker
 
 
 def unregister_object_store(name: str) -> None:
@@ -109,6 +122,7 @@ def unregister_object_store(name: str) -> None:
         _REGISTRY.pop(key, None)
         _CREDENTIAL_HINTS.pop(key, None)
         _EXTRA_FIELDS.pop(key, None)
+        _PUBLIC_ACCESS_CHECKERS.pop(key, None)
 
 
 def registered_providers() -> tuple[str, ...]:
@@ -156,6 +170,35 @@ def credential_hint_for_provider(provider: str) -> str:
     return hint if hint is not None else _DEFAULT_CREDENTIAL_HINT
 
 
+def check_bucket_exposure(config: RemoteSyncConfig) -> PublicAccessStatus:
+    """Ask ``config.provider`` whether ``config.bucket`` is publicly readable.
+
+    Loads a not-yet-imported built-in module first, same as
+    :func:`credential_hint_for_provider`. A provider with no registered
+    checker resolves to :func:`~platform.filestorage.exposure.not_checked`.
+
+    Never raises: a checker is community-authored code as far as this
+    registry is concerned, and an exposure check is a best-effort courtesy on
+    top of ``status``/``setup``, not something either command should fail
+    for. An unexpected exception degrades to ``UNKNOWN`` with only the
+    exception's type named — not its message, which could carry provider
+    internals — matching the same failure the checker itself is asked to
+    report for a merely unreachable store.
+    """
+    key = config.provider.strip().lower()
+    with _REGISTRY_LOCK:
+        _load_builtin(key)
+        checker = _PUBLIC_ACCESS_CHECKERS.get(key)
+    if checker is None:
+        return not_checked(config.provider)
+    try:
+        return checker(config)
+    except Exception as exc:  # noqa: BLE001 - see docstring: a checker must never fail status/setup
+        return PublicAccessStatus(
+            BucketExposure.UNKNOWN, f"exposure check raised {type(exc).__name__}"
+        )
+
+
 def provider_extra_fields(provider: str) -> tuple[SetupExtraField, ...]:
     """``region``/``profile`` fields ``provider`` declared, or ``()`` for neither.
 
@@ -176,6 +219,7 @@ __all__ = [
     "SetupExtraField",
     "build_object_store",
     "builtin_providers",
+    "check_bucket_exposure",
     "credential_hint_for_provider",
     "provider_extra_fields",
     "register_object_store",
