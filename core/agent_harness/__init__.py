@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.harness import AgentHarness, HarnessConfig, HarnessStartupResult
-    from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+    from core.agent_harness.prompts.context import DefaultPromptContextProvider
     from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
     from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence
@@ -62,7 +62,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "BufferOutputSink",
     ),
     "DefaultPromptContextProvider": (
-        "core.agent_harness.prompts.prompt_context",
+        "core.agent_harness.prompts.context",
         "DefaultPromptContextProvider",
     ),
     "run_turn": ("core.agent_harness.turns.orchestrator", "run_turn"),

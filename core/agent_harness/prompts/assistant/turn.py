@@ -1,4 +1,4 @@
-"""Terminal assistant prompt assembly for the interactive shell."""
+"""One assistant turn: provider grounding → cache-split system/user messages."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import core.agent_harness.prompts.synthetic_failure as synthetic_failure
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from core.agent_harness.prompts.assistant_agent_prompt import (
-    _build_observation_block,
-    _build_system_prompt,
-    build_assistant_system_prompt_envelope,
+from core.agent_harness.prompts.assistant.assemble import assemble_assistant_envelope
+from core.agent_harness.prompts.assistant.observation import (
     build_handoff_guidance_block,
+    build_observation_block,
 )
+from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
 from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
     format_recent_conversation,
@@ -38,65 +38,34 @@ class AssistantPromptContextProvider(Protocol):
         return "interactive_shell"
 
     def cli_reference(self) -> str:
-        raise NotImplementedError
+        """CLI / slash-command reference text for the STABLE tier."""
 
     def agents_md(self) -> str:
-        raise NotImplementedError
+        """Repo map (AGENTS.md) for the CONTEXT tier."""
 
     def docs(self, query: str) -> str:
-        raise NotImplementedError
+        """Per-question docs retrieval for the EPHEMERAL tier."""
 
     def investigation_flow(self) -> str:
-        raise NotImplementedError
+        """Investigation-pipeline reference for the STABLE tier."""
 
     def runtime_facts(self) -> Mapping[str, Any]:
         """Runtime facts for this turn: session metadata plus fresh live values."""
-        raise NotImplementedError
 
     def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:
         """Static environment block; ``runtime`` reuses the turn's capture."""
-        raise NotImplementedError
 
     def long_term_memory(self) -> str:
-        raise NotImplementedError
+        """Durable memory index for the VOLATILE tier."""
+
+    def setup_state(self) -> str:
+        """The operator's connected integrations and schedules, as a fact block."""
 
     def suggested_synthetic_prompt(self) -> str:
-        raise NotImplementedError
+        """Suggested follow-up after a failed synthetic observation."""
 
     def log_diagnostics(self, reason: str) -> None:
-        raise NotImplementedError
-
-
-def build_assistant_system_prompt(
-    reference: str,
-    history: str,
-    agents_md: str = "",
-    docs: str = "",
-    investigation_flow: str = "",
-    prior_investigation: str = "",
-    prior_action_facts: str = "",
-    environment: str = "",
-    long_term_memory: str = "",
-    surface: str = "interactive_shell",
-) -> str:
-    """Build the system prompt for one assistant turn."""
-    return _build_system_prompt(
-        reference,
-        history,
-        agents_md=agents_md,
-        docs=docs,
-        investigation_flow=investigation_flow,
-        prior_investigation=prior_investigation,
-        prior_action_facts=prior_action_facts,
-        environment=environment,
-        long_term_memory=long_term_memory,
-        surface=surface,
-    )
-
-
-def build_observation_block(tool_observation: str | None, *, on_screen: bool = True) -> str:
-    """Wrap freshly gathered tool output for the assistant."""
-    return _build_observation_block(tool_observation, on_screen=on_screen)
+        """Emit grounding-cache diagnostics for ``reason``."""
 
 
 def _assistant_context_blocks(
@@ -175,30 +144,33 @@ def build_cli_agent_turn_prompt(
     """
     prompts.log_diagnostics("cli_agent_grounding")
     facts = runtime if runtime is not None else prompts.runtime_facts()
-    system = build_assistant_system_prompt_envelope(
-        prompts.cli_reference(),
-        format_recent_conversation(list(turn_snapshot.conversation_messages)),
-        agents_md=prompts.agents_md(),
-        docs=prompts.docs(message),
-        investigation_flow=prompts.investigation_flow(),
-        # The session's completed investigation stays available for the whole
-        # session — a retrospective question can come at any point, and dropping
-        # it would make OpenSRE claim it lacks incident details it still holds.
-        # Age only downgrades it to background (see the note), because past the
-        # recall window the turn also gathers fresh evidence.
-        prior_investigation=build_prior_investigation_block(
-            turn_snapshot.last_state,
-            explicit_follow_up=is_prior_investigation_follow_up(handoff_contents),
-        ),
-        prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
-        environment=prompts.environment_block(facts),
-        long_term_memory=prompts.long_term_memory(),
-        surface=prompts.surface(),
+    envelope = assemble_assistant_envelope(
+        AssistantPromptParts(
+            reference=prompts.cli_reference(),
+            history=format_recent_conversation(list(turn_snapshot.conversation_messages)),
+            agents_md=prompts.agents_md(),
+            docs=prompts.docs(message),
+            investigation_flow=prompts.investigation_flow(),
+            # The session's completed investigation stays available for the whole
+            # session — a retrospective question can come at any point, and dropping
+            # it would make OpenSRE claim it lacks incident details it still holds.
+            # Age only downgrades it to background (see the note), because past the
+            # recall window the turn also gathers fresh evidence.
+            prior_investigation=build_prior_investigation_block(
+                turn_snapshot.last_state,
+                explicit_follow_up=is_prior_investigation_follow_up(handoff_contents),
+            ),
+            prior_action_facts=format_prior_action_facts(list(turn_snapshot.conversation_messages)),
+            environment=prompts.environment_block(facts),
+            long_term_memory=prompts.long_term_memory(),
+            setup_state=prompts.setup_state(),
+            surface=prompts.surface(),
+        )
     )
     # Live facts (time/uptime/disk/memory) sit immediately before the user
     # message so the system/env prefix stays byte-stable for prompt caching.
     live_block = build_live_runtime_facts_block(facts)
-    cached, ephemeral = system.render_split()
+    cached, ephemeral = envelope.render_split()
     # Large ``user`` half: join once (no chained f-string copies).
     return AssistantTurnPrompt(
         system=cached,
@@ -233,8 +205,6 @@ def build_cli_agent_prompt_from_provider(**kwargs: Any) -> str:
 __all__ = [
     "AssistantPromptContextProvider",
     "AssistantTurnPrompt",
-    "build_assistant_system_prompt",
     "build_cli_agent_prompt_from_provider",
     "build_cli_agent_turn_prompt",
-    "build_observation_block",
 ]

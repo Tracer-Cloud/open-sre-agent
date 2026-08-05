@@ -10,7 +10,7 @@ from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
 from core.agent_harness.llm_resolution import resolve_provider_models
-from core.agent_harness.prompts import build_environment_block
+from core.agent_harness.prompts.assistant.environment import build_environment_block
 from core.agent_harness.prompts.surfaces import profile_for
 from platform.observability.trace.spans import component_span
 
@@ -49,10 +49,14 @@ class DefaultPromptContextProvider:
     def __init__(self, session: Any, *, surface: str = "interactive_shell") -> None:
         self._session = session
         self._surface = surface
+        self._setup_state: str | None = None
+        self._setup_state_key: tuple[Any, ...] | None = None
 
     def bind_session(self, session: Any) -> None:
         """Point this provider at a freshly resolved session (gateway reuse)."""
         self._session = session
+        self._setup_state = None
+        self._setup_state_key = None
 
     def surface(self) -> str:
         return self._surface
@@ -138,6 +142,29 @@ class DefaultPromptContextProvider:
             return ""
         ensure_memory_store()
         return render_prompt_index()
+
+    def setup_state(self) -> str:
+        """The install's integrations and schedules, recomputed when they change.
+
+        Keyed on the integration names plus a stat of the scheduler stores, so
+        connecting an integration or adding a schedule mid-session shows up on
+        the next turn instead of serving the first turn's facts all session.
+        """
+        from platform.setup_state import (
+            collect_setup_state,
+            render_setup_state,
+            setup_state_fingerprint,
+        )
+
+        profile = profile_for(self._surface)
+        if not profile.setup_state:
+            return ""
+        integrations = self._visible_integrations()
+        key = (integrations, setup_state_fingerprint())
+        if self._setup_state is None or self._setup_state_key != key:
+            self._setup_state = render_setup_state(collect_setup_state(integrations))
+            self._setup_state_key = key
+        return self._setup_state
 
     def suggested_synthetic_prompt(self) -> str:
         return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST

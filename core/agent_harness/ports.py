@@ -161,6 +161,9 @@ class PromptContextProvider(Protocol):
     def long_term_memory(self) -> str:
         raise NotImplementedError
 
+    def setup_state(self) -> str:
+        """The operator's connected integrations and schedules, as a fact block."""
+
     def suggested_synthetic_prompt(self) -> str:
         raise NotImplementedError
 

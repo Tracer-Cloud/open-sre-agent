@@ -43,6 +43,15 @@ def deliver_background_notifications(
             results["rocketchat"] = deliver_rocketchat_notification(record)
             continue
 
+        if channel == "buzz":
+            # Imported lazily for the same reason as the telegram channel.
+            from surfaces.interactive_shell.runtime.background.buzz_channel import (
+                deliver_buzz_notification,
+            )
+
+            results["buzz"] = deliver_buzz_notification(record)
+            continue
+
         if channel != "email":
             results[channel] = "unsupported"
             continue

@@ -32,7 +32,7 @@ def test_format_agent_response_compact_single_line() -> None:
 
 
 def test_agent_response_rule_is_in_assistant_system_prompt() -> None:
-    from core.agent_harness.prompts.assistant_agent_prompt import _build_system_prompt
+    from core.agent_harness.prompts.assistant import _build_system_prompt
 
     prompt = _build_system_prompt("ref", "history")
 
@@ -46,7 +46,7 @@ def test_format_agent_response_rejects_empty_found_with_detail() -> None:
 
 
 def test_observation_block_on_screen_requires_want_me_to() -> None:
-    from core.agent_harness.prompts.assistant_agent_prompt import _build_observation_block
+    from core.agent_harness.prompts.assistant import _build_observation_block
 
     block = _build_observation_block("grafana: passed", on_screen=True)
 

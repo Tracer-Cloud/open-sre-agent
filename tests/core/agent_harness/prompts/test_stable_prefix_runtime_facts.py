@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.assistant_agent_prompt import build_environment_block
+from core.agent_harness.prompts.assistant import (
+    build_cli_agent_prompt_from_provider,
+    build_environment_block,
+)
 from core.agent_harness.prompts.runtime_facts import (
     render_live_runtime_facts,
     render_static_runtime_facts,
@@ -104,6 +106,9 @@ def test_full_prompt_places_live_facts_immediately_before_user_message() -> None
         def long_term_memory(self) -> str:
             return ""
 
+        def setup_state(self) -> str:
+            return ""
+
         def suggested_synthetic_prompt(self) -> str:
             return "try again"
 
@@ -179,6 +184,9 @@ def test_render_captures_runtime_facts_once_and_shares_it() -> None:
             )
 
         def long_term_memory(self) -> str:
+            return ""
+
+        def setup_state(self) -> str:
             return ""
 
         def suggested_synthetic_prompt(self) -> str:

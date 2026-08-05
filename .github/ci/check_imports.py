@@ -38,8 +38,19 @@ class ImportCheck:
 
 
 def _run_importlinter(*, config: Path | None = None) -> int:
-    lint_imports = Path(sys.executable).with_name("lint-imports")
-    if not lint_imports.is_file():
+    scripts_dir = Path(sys.executable).parent
+    lint_imports = next(
+        (
+            candidate
+            for candidate in (
+                scripts_dir / "lint-imports",
+                scripts_dir / "lint-imports.exe",
+            )
+            if candidate.is_file()
+        ),
+        None,
+    )
+    if lint_imports is None:
         print(
             "lint-imports not found — install dev deps (import-linter package).",
             file=sys.stderr,

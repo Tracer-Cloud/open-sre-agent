@@ -9,7 +9,7 @@ to the rendered prompt.
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.assistant_agent_prompt import _build_system_prompt
+from core.agent_harness.prompts.assistant import _build_system_prompt
 from core.agent_harness.prompts.surfaces import PromptSurface, profile_for
 
 
@@ -39,12 +39,22 @@ def test_the_two_surfaces_differ_only_in_the_declared_flags() -> None:
     # Act
     differing = {
         name
-        for name in ("cli_rules", "vendor_persona", "long_term_memory_by_default")
+        for name in (
+            "cli_rules",
+            "vendor_persona",
+            "long_term_memory_by_default",
+            "setup_state",
+        )
         if getattr(shell, name) != getattr(gateway, name)
     }
 
     # Assert
-    assert differing == {"cli_rules", "vendor_persona", "long_term_memory_by_default"}
+    assert differing == {
+        "cli_rules",
+        "vendor_persona",
+        "long_term_memory_by_default",
+        "setup_state",
+    }
 
 
 def test_cli_rules_reach_the_shell_prompt_and_not_the_gateway_one() -> None:

@@ -24,6 +24,7 @@ from surfaces.cli.commands.integrations import integrations
 from surfaces.cli.commands.messaging import messaging
 from surfaces.cli.commands.misses import misses_command
 from surfaces.cli.commands.onboard import onboard
+from surfaces.cli.commands.posthog_report import posthog_command
 from surfaces.cli.commands.remote_sync import remote_sync_command
 from surfaces.cli.commands.sentry_digest import sentry_command
 from surfaces.cli.commands.tests import tests
@@ -43,6 +44,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     hermes_command,
     cron_command,
     sentry_command,
+    posthog_command,
     watchdog_command,
     debug_command,
     gateway_command,
