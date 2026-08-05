@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from core.domain.types.evidence import EvidenceSource
-from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
 from integrations.slack.thread_client import fetch_thread, parse_thread_ref
@@ -13,7 +12,7 @@ from integrations.slack.web_client import bot_token_configured
 class ReplaySlackThreadLocallyTool(BaseTool):
     name = "replay_slack_thread_locally"
     source: ClassVar[EvidenceSource] = "slack"
-    surfaces: ClassVar[tuple[ToolSurface, ...]] = ("investigation", "chat", "action")
+    surfaces = ("investigation", "chat", "action")
     side_effect_level = "read_only"
     description = "Fetch a captured Slack thread for local replay and Slack bot behavior testing."
     input_schema = {

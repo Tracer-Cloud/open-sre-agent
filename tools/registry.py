@@ -159,7 +159,7 @@ def clear_tool_registry_cache() -> None:
     clear_descriptor_index_cache()
 
 
-def get_registered_tools(surface: ToolSurface | None = None) -> list[RegisteredTool]:
+def get_registered_tools(surface: ToolSurface | str | None = None) -> list[RegisteredTool]:
     if surface is None:
         return list(_load_registry_snapshot())
     return list(_load_surface_snapshot(surface))
@@ -175,13 +175,13 @@ def get_registered_tool(tool_name: str) -> RegisteredTool | None:
     return _load_registry_tool_map().get(tool_name)
 
 
-def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
+def get_registered_tool_map(surface: ToolSurface | str | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())
     return {tool.name: tool for tool in get_registered_tools(surface)}
 
 
-def get_tool_descriptors(surface: ToolSurface | None = None) -> list[ToolDescriptor]:
+def get_tool_descriptors(surface: ToolSurface | str | None = None) -> list[ToolDescriptor]:
     """Cheap tool metadata for ``surface`` — reads the static index, imports no
     executor. Use for listing/availability; call :func:`load_tool` to materialize
     an executor only when a tool must run.

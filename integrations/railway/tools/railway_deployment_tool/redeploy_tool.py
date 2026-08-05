@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from core.domain.types.evidence import EvidenceSource
-from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.tool_decorator import tool
 from integrations.config_models import RailwayIntegrationConfig
@@ -17,7 +16,7 @@ from integrations.railway.client import (
 class RedeployRailwayServiceTool(BaseTool):
     name = "redeploy_railway_service"
     source: ClassVar[EvidenceSource] = "railway"
-    surfaces: ClassVar[tuple[ToolSurface, ...]] = ("investigation", "chat", "action")
+    surfaces = ("investigation", "chat", "action")
     side_effect_level = "external"
     requires_approval = True
     approval_reason = "Triggers a Railway redeploy of the selected service."
