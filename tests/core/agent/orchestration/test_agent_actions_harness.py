@@ -106,6 +106,47 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
     assert "slash_invoke" in harness.llm.tool_schema_names
 
 
+def test_slash_invoke_suppresses_hallucinated_success_closing(monkeypatch) -> None:
+    """After /health (self-recording), the model must not invent "everything's green".
+
+    slash_invoke already printed the real report; a closing line that claims
+    success without reading that output is shown under ● assistant and misleads.
+    """
+
+    def _fake_dispatch(
+        command: str,
+        session: Session,
+        console: Console,
+        **_kwargs: object,
+    ) -> bool:
+        session.record("slash", command, ok=True)
+        console.print("Summary: 3 passed  |  4 failed")
+        return True
+
+    monkeypatch.setattr(slash_adapter, "dispatch_slash", _fake_dispatch)
+    lied = "Health check passed — everything's green. ✅"
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response("slash_invoke", {"command": "/health", "args": []}),
+                no_tool_response(lied),
+            ]
+        )
+    )
+
+    result = run_action_tool_turn(
+        "yes do that health check",
+        Session(),
+        harness.console,
+        deps=harness.deps,
+    )
+
+    console_text = harness.console_buffer.getvalue()
+    assert "3 passed" in console_text
+    assert lied not in console_text
+    assert "everything's green" not in result.response_text
+
+
 def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     tool = RegisteredTool(
         name="fake_send_message",
@@ -749,19 +790,20 @@ def test_llm_failure_on_literal_slash_input_stays_terminal() -> None:
 
 def test_stream_failure_stages_llm_error_and_identity() -> None:
     """A conversational stream failure stages both the error and the attempted LLM."""
+    from core.agent_harness.prompts.assistant import AssistantTurnPrompt
     from core.agent_harness.turns.orchestrator import _stream_response
 
     class _FailingStreamClient:
         _model = "claude-sonnet-4-6"
         _provider_label = "Anthropic"
 
-        def invoke_stream(self, _prompt: str) -> Any:
+        def invoke_stream(self, _prompt: Any) -> Any:
             raise RuntimeError("Anthropic authentication failed.")
 
     session = Session()
     run = _stream_response(
         client=_FailingStreamClient(),
-        prompt="hi",
+        turn_prompt=AssistantTurnPrompt(system="", user="hi"),
         output=_OutputSink(Console(force_terminal=False)),
         run_factory=object(),
         error_reporter=None,
@@ -799,6 +841,95 @@ def test_build_action_agent_returns_action_turn_plan() -> None:
     assert isinstance(plan, ActionTurnPlan)
     assert "test message" in plan.user_message
     assert plan.agent is not None
+
+
+def test_build_action_agent_keeps_conversation_out_of_system() -> None:
+    """Ephemeral history prefixes the user turn so the system cache can stick."""
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+
+    marker = "zzmarker-harness-conversation-must-not-be-system"
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    snapshot = TurnSnapshot(
+        text="follow up",
+        conversation_messages=(("user", marker),),
+        configured_integrations=("github",),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+
+    plan = _build_action_agent(
+        message="follow up",
+        session=Session(),
+        agent_tools=[],
+        turn_snapshot=snapshot,
+        resolved_integrations={},
+        deps=deps,
+        tool_hooks=None,
+        tool_resources={},
+        observer=lambda *_args, **_kwargs: None,
+    )
+
+    system = plan.agent._system
+    assert marker not in system
+    assert marker in plan.user_message
+    assert "USER MESSAGE (literal): <<<follow up>>>" in plan.user_message
+
+
+def test_build_action_agent_system_identical_across_conversation_growth() -> None:
+    """Regression: growing history must not rewrite the cached system string."""
+    from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+
+    def _plan(messages: list[tuple[str, str]]) -> ActionTurnPlan:
+        return _build_action_agent(
+            message="follow up",
+            session=Session(),
+            agent_tools=[],
+            turn_snapshot=TurnSnapshot(
+                text="follow up",
+                conversation_messages=tuple(messages),
+                configured_integrations=("github",),
+                configured_integrations_known=True,
+                last_state=None,
+                last_synthetic_observation_path=None,
+                reasoning_effort=None,
+            ),
+            resolved_integrations={},
+            deps=deps,
+            tool_hooks=None,
+            tool_resources={},
+            observer=lambda *_args, **_kwargs: None,
+        )
+
+    first = _plan([("user", "hello")])
+    second = _plan([("user", "hello"), ("assistant", "hi"), ("user", "zzmarker-growth")])
+    assert first.agent._system == second.agent._system
+    assert "zzmarker-growth" not in second.agent._system
+    assert "zzmarker-growth" in second.user_message
+
+
+def test_bang_shell_bypass_does_not_use_action_envelope() -> None:
+    """Explicit !shell must keep the short static system, not the action envelope."""
+    llm = FakeActionLLM([no_tool_response()])
+    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    plan = _build_action_agent(
+        message="!echo hello",
+        session=Session(),
+        agent_tools=[],
+        turn_snapshot=None,
+        resolved_integrations={},
+        deps=deps,
+        tool_hooks=None,
+        tool_resources={},
+        observer=lambda *_args, **_kwargs: None,
+    )
+    assert plan.agent._system == "Execute the explicit shell_run tool call."
+    assert plan.user_message == "!echo hello"
 
 
 def test_turn_resolved_integrations_trusts_plan_without_reresolving(
@@ -863,3 +994,92 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
     )
 
     assert gather_calls == []
+
+
+@pytest.mark.skip(
+    reason=(
+        "Known defect, no principled signal yet: a handoff after a completed "
+        "action turn sweeps every integration (~106s observed after a morning "
+        "report whose Slack delivery failed). Gating on "
+        "executed_success_count breaks "
+        "test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state, "
+        "which runs a tool successfully and legitimately needs the gather. "
+        "Distinguishing 'already answered' from 'did a side effect, now needs "
+        "evidence' requires a signal the turn result does not carry."
+    )
+)
+def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -> None:
+    """A handoff explaining a completed turn must not trigger a live sweep.
+
+    Observed: a morning report ran its fetches, composed the briefing, and
+    handed off to explain that Slack delivery had failed. Because a handoff was
+    present the turn fell through to gather-and-answer, which queried every
+    connected integration for 106 seconds — after the user already had their
+    answer. The assistant still speaks; it just composes from what the turn
+    produced instead of probing Datadog, Kubernetes and Grafana afresh.
+    """
+    session = Session()
+    gather_calls: list[str] = []
+    answer_kwargs: list[dict[str, Any]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=2,
+            executed_count=2,
+            executed_success_count=2,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("Slack webhook is not configured in this environment.",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: kubernetes_list_pods\nResult: should-not-run"
+
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        answer_kwargs.append({"handoff_contents": request.handoff_contents})
+        return None
+
+    run_turn(
+        "give me a morning report",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "give me a morning report"),
+    )
+
+    assert gather_calls == [], "swept integrations after the turn already answered"
+    assert answer_kwargs, "the assistant must still explain the handoff"
+    assert answer_kwargs[0]["handoff_contents"]
+
+
+def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
+    """A handoff with no work behind it is exactly what gathering is for."""
+    session = Session()
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=False,
+            handoff_contents=("why is the orders-api slow?",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: search_sentry_issues\nResult: 3 issues"
+
+    run_turn(
+        "why is the orders-api slow?",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "why is the orders-api slow?"),
+    )
+
+    assert gather_calls, "a question with no prior work still needs evidence"

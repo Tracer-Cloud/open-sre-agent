@@ -1,7 +1,7 @@
 """Prove remote sync supports more than one cloud without shipping every SDK.
 
-Built-in backends (aws, gcs, vercel) register via ``_BUILTIN_MODULES``. Community
-providers (Azure, …) register the same way these fakes do - the engine and
+Built-in backends (aws, gcs, vercel, azure) register via ``_BUILTIN_MODULES``.
+Community providers register the same way these fakes do - the engine and
 factory never change.
 """
 
@@ -82,12 +82,12 @@ def roots(tmp_path: Path) -> tuple[SyncRoot, ...]:
     )
 
 
-def test_built_in_providers_include_aws_gcs_and_vercel() -> None:
-    assert "aws" in registered_providers()
-    assert "gcs" in registered_providers()
-    assert "vercel" in registered_providers()
-    # Community backends are not shipped - they register from third-party packages.
-    assert "azure" not in registered_providers()
+def test_built_in_providers_include_aws_gcs_vercel_and_azure() -> None:
+    providers = registered_providers()
+    assert "aws" in providers
+    assert "gcs" in providers
+    assert "vercel" in providers
+    assert "azure" in providers
 
 
 def test_unknown_provider_fails_closed_listing_known_ones(
@@ -102,7 +102,7 @@ def test_unknown_provider_fails_closed_listing_known_ones(
 
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
-    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "azure")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "azure-blob")
 
     config = load_remote_sync_config()
     assert config is not None

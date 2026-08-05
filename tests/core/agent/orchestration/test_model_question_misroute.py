@@ -173,8 +173,11 @@ def test_model_question_handoff_answers_from_active_llm_context(
     class _LLM:
         last_prompt: str | None = None
 
-        def invoke_stream(self, prompt: str) -> Iterator[str]:
-            self.last_prompt = prompt
+        def invoke_stream(self, prompt: object) -> Iterator[str]:
+            from integrations.llm_cli.text import flatten_messages_to_prompt
+
+            # Answer path passes system+user messages, not a joined string.
+            self.last_prompt = flatten_messages_to_prompt(prompt)
             yield "You are using OpenAI with reasoning model `gpt-5.5` and tool-call model `gpt-5.4-mini`."
 
     llm = _LLM()

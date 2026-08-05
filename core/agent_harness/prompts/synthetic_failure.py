@@ -43,9 +43,11 @@ def load_observation_text(path_str: str, *, max_chars: int = MAX_OBSERVATION_PRO
     except OSError:
         return ""
     if len(raw) > max_chars:
-        return (
-            raw[:max_chars]
-            + f"\n… [truncated for prompt size; observation is {len(raw)} characters total]"
+        return "".join(
+            (
+                raw[:max_chars],
+                f"\n… [truncated for prompt size; observation is {len(raw)} characters total]",
+            )
         )
     return raw
 

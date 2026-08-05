@@ -42,6 +42,9 @@ opensre remote-sync setup --provider gcs --bucket my-opensre-bucket
 opensre remote-sync setup --provider vercel --bucket opensre-remote-sync
 export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 
+# Non-interactive — Azure Blob (uses ambient credentials via Azure CLI or env vars)
+opensre remote-sync setup --provider azure --profile my-storage-account --bucket my-container
+
 # Same from the shell (flags required; no interactive prompts on chat gateways)
 # /remote-sync setup --provider vercel --bucket opensre-remote-sync
 ```
@@ -63,6 +66,12 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 # export OPENSRE_REMOTE_SYNC_PROVIDER=vercel
 # export OPENSRE_REMOTE_SYNC_BUCKET=opensre-remote-sync
 # export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+
+# Or Azure Blob
+# export OPENSRE_REMOTE_SYNC=1
+# export OPENSRE_REMOTE_SYNC_PROVIDER=azure
+# export OPENSRE_REMOTE_SYNC_PROFILE=my-storage-account
+# export OPENSRE_REMOTE_SYNC_BUCKET=my-container
 ```
 
 | Variable | Description |
@@ -80,7 +89,7 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
 
-`--region`/`--profile` are AWS-only today - `opensre remote-sync setup`
+`--region` are AWS-only, while --profile is used by AWS and Azure — `opensre remote-sync setup`
 rejects either one for a provider that doesn't use it, rather than saving it
 silently and never reading it back. (Their env-var equivalents,
 `OPENSRE_REMOTE_SYNC_REGION`/`PROFILE`, are read the same way regardless of
@@ -216,8 +225,9 @@ backends today:
 | Amazon S3 (default) | `aws` | Ambient AWS config (`AWS_*`, profile, SSO) |
 | Google Cloud Storage | `gcs` | Application Default Credentials (`gcloud auth application-default login`) |
 | Vercel Blob | `vercel` | Ambient `BLOB_READ_WRITE_TOKEN` |
+| Azure Blob Storage | `azure` | Ambient Azure config (`AZURE_*`, Azure CLI, Managed Identity) |
 
-Other clouds (Azure, …) are community additions: implement `ObjectStore`,
+Other clouds (GCS, …) are community additions: implement `ObjectStore`,
 call `register_object_store("<name>", factory)`, and set
 `OPENSRE_REMOTE_SYNC_PROVIDER` — the engine, CLI, and REPL do not change.
 
@@ -286,6 +296,31 @@ share history at the same token (or an equivalent token for that store), plus
 the same prefix.
 </Note>
 
+Access mode (private or public) is set once, for the whole store, when you
+create it — Vercel does not let you change it afterward. `status` can check
+this and warn you if the store came out public, but it needs a **different,
+broader** credential than `BLOB_READ_WRITE_TOKEN`: a Vercel account/team API
+token, since the store-management API does not accept a Blob read-write
+token at all. If you already use the `vercel` integration for observability,
+this is the same `VERCEL_API_TOKEN` (and optional `VERCEL_TEAM_ID` for a
+token spanning several teams) — nothing new to set up. Entirely optional:
+without it, `status` shows "could not confirm it is private" instead of
+failing.
+
+```bash
+# Optional — enables the public-store warning on status
+export VERCEL_API_TOKEN=...
+# export VERCEL_TEAM_ID=...   # only if the token spans multiple teams
+```
+
+### Azure Blob Storage
+
+Any private Azure Storage container works. `OPENSRE_REMOTE_SYNC_BUCKET` is your Container name, and `OPENSRE_REMOTE_SYNC_PROFILE` maps to your Storage Account Name.
+
+Authentication relies entirely on Azure's ambient credentials (`DefaultAzureCredential`). This means you can authenticate via the Azure CLI (`az login`), Managed Identities, or environment variables (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`). opensre will never store these credentials directly.
+
+The authenticated principal must have the **Storage Blob Data Contributor** role assignment on the storage account. The generic "Contributor" role is insufficient as it only grants control-plane access, not data-plane access.
+
 ## The store
 
 <Warning>
@@ -294,13 +329,13 @@ opensre has remembered about your systems. Prefer a private S3 bucket or a
 private Vercel Blob store — never a public one.
 </Warning>
 
-On AWS and GCS, `status` checks this for you: if the bucket policy (S3) or
-bucket IAM policy (GCS) makes the bucket publicly readable, `opensre
-remote-sync status` / `/remote-sync status` opens with a warning instead of
-silently mirroring your history into it. Without the permission the check
-needs — or on Vercel, which has no bucket-level public/private setting to
-check — `status` shows "could not confirm it is private" instead of failing;
-it never blocks the rest of the command.
+`status` checks this for you on every built-in provider: the bucket policy
+(S3), the bucket IAM policy (GCS), or the store's access mode (Vercel Blob,
+via the optional `VERCEL_API_TOKEN` above) — if any of them say public,
+`opensre remote-sync status` / `/remote-sync status` opens with a warning
+instead of silently mirroring your history into it. Without the permission
+or credential the check needs, `status` shows "could not confirm it is
+private" instead of failing; it never blocks the rest of the command.
 
 ## How conflicts resolve
 

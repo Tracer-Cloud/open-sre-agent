@@ -4,9 +4,50 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
-type PromptBlockKind = Literal["system", "rule", "context", "conversation", "tool", "user"]
+
+class PromptBlockKind(StrEnum):
+    """What a block is, independent of how often it changes.
+
+    Orthogonal to :class:`PromptTier`: a ``CONVERSATION`` block is ephemeral, a
+    ``RULE`` block is usually stable.
+    """
+
+    SYSTEM = "system"
+    RULE = "rule"
+    CONTEXT = "context"
+    CONVERSATION = "conversation"
+    TOOL = "tool"
+    USER = "user"
+
+
+class PromptTier(StrEnum):
+    """How often a block's text changes, which is what decides cacheability.
+
+    The first three form the cached prefix, joined in declaration order;
+    :attr:`EPHEMERAL` must stay outside it or it invalidates everything before
+    it on every turn.
+    """
+
+    #: Changes on release or config.
+    STABLE = "stable"
+    #: Changes per project or session.
+    CONTEXT = "context"
+    #: Changes on an explicit rebuild, such as a memory write.
+    VOLATILE = "volatile"
+    #: Changes every turn.
+    EPHEMERAL = "ephemeral"
+
+
+_CACHED_TIERS: frozenset[PromptTier] = frozenset(
+    {PromptTier.STABLE, PromptTier.CONTEXT, PromptTier.VOLATILE}
+)
+
+#: Layer order the prompt is emitted in, so the layout is a property of the
+#: envelope rather than of the order a builder happens to append in.
+_TIER_ORDER: dict[PromptTier, int] = {tier: index for index, tier in enumerate(PromptTier)}
 
 
 @dataclass(frozen=True)
@@ -15,7 +56,11 @@ class PromptBlock:
 
     id: str
     content: str
-    kind: PromptBlockKind = "context"
+    kind: PromptBlockKind = PromptBlockKind.CONTEXT
+    #: Orthogonal to ``kind``: ``kind`` says what the block is, ``tier`` says
+    #: when it changes. A ``conversation`` block is ``ephemeral``; a ``rule`` is
+    #: usually ``stable``.
+    tier: PromptTier = PromptTier.CONTEXT
     title: str | None = None
     priority: int = 0
     provenance: str | None = None
@@ -51,7 +96,7 @@ class PromptEnvelope:
         content: str,
         *,
         block_id: str = "prompt",
-        kind: PromptBlockKind = "system",
+        kind: PromptBlockKind = PromptBlockKind.SYSTEM,
         metadata: Mapping[str, Any] | None = None,
     ) -> PromptEnvelope:
         """Wrap an existing string prompt in a single structured block."""
@@ -85,10 +130,48 @@ class PromptEnvelope:
             raise KeyError(f"PromptEnvelope block not found: {block_id}")
         return block
 
-    def render(self) -> str:
-        """Render all non-empty blocks in order."""
-        rendered = [block.render() for block in self.blocks]
+    def _render(self, blocks: Iterable[PromptBlock]) -> str:
+        """Render ``blocks`` grouped into layers, stable within each layer."""
+        ordered = sorted(blocks, key=lambda block: _TIER_ORDER[block.tier])
+        rendered = [block.render() for block in ordered]
         return self.separator.join(text for text in rendered if text)
 
+    def render(self) -> str:
+        """Render every non-empty block, layer by layer."""
+        return self._render(self.blocks)
 
-__all__ = ["PromptBlock", "PromptEnvelope"]
+    def _partition(self) -> tuple[list[PromptBlock], list[PromptBlock]]:
+        """Split the blocks into ``(cached, ephemeral)``, losing none.
+
+        Anything not in :data:`_CACHED_TIERS` is ephemeral, so a tier added
+        later stays out of the cached prefix instead of vanishing from both
+        halves.
+        """
+        cached: list[PromptBlock] = []
+        ephemeral: list[PromptBlock] = []
+        for block in self.blocks:
+            target = cached if block.tier in _CACHED_TIERS else ephemeral
+            target.append(block)
+        return cached, ephemeral
+
+    def render_split(self) -> tuple[str, str]:
+        """Return ``(cached, ephemeral)``.
+
+        Joining the two non-empty halves with ``separator`` reproduces
+        :meth:`render`, so splitting never changes what the model reads — only
+        where it sits. The cached half is what a provider marks as a cache
+        breakpoint; the ephemeral half belongs with the user turn.
+        """
+        cached, ephemeral = self._partition()
+        return self._render(cached), self._render(ephemeral)
+
+    def render_cached(self) -> str:
+        """Render the blocks that are stable enough to sit behind a cache marker."""
+        return self._render(self._partition()[0])
+
+    def render_ephemeral(self) -> str:
+        """Render the per-turn blocks that must stay out of the cached prefix."""
+        return self._render(self._partition()[1])
+
+
+__all__ = ["PromptBlock", "PromptBlockKind", "PromptEnvelope", "PromptTier"]

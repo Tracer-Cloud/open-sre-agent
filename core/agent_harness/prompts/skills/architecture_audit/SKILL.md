@@ -1,3 +1,9 @@
+---
+name: architecture-audit
+description: >-
+  Architecture audit / layering scan of a repo with AGENT SCAN, heuristic
+  passes, and a filled REPORT TEMPLATE
+---
 ══════════════════════════════════════════════════════════
 ARCHITECTURE AUDIT SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════

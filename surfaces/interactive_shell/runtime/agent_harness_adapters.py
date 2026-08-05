@@ -35,7 +35,15 @@ class ShellOutputSink:
         self._console = console
 
     def print(self, message: str = "") -> None:
-        self._console.print(message)
+        """Render harness text literally.
+
+        Everything the harness prints here is data — tool output, model
+        replies, skill bodies. A ``sed 's/\\]\\]>//'`` in a shell command
+        reads to Rich as an unbalanced markup tag and raised ``MarkupError``,
+        which took the whole turn down. Styled output goes through the
+        ``render_*`` methods instead.
+        """
+        self._console.print(message, markup=False)
 
     def render_response_header(self, label: str) -> None:
         render_response_header(self._console, label)

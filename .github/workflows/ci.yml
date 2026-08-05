@@ -24,28 +24,11 @@ on:
       - ".github/ci/**"
       - ".github/workflows/ci.yml"
 
+  # No path filter: a filtered workflow never starts, so its gate never
+  # reports and a PR that needs it can wait forever. The `changes` job
+  # below decides what actually runs.
   pull_request:
     branches: [main]
-    paths:
-      - "surfaces/**"
-      - "config/**"
-      - "core/**"
-      - "platform/deployment_fargate/**"
-      - "integrations/**"
-      - "platform/**"
-      - "tools/**"
-      - "gateway/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "pytest.ini"
-      - "ruff.toml"
-      - "mypy.ini"
-      - "Makefile"
-      - ".importlinter"
-      - ".importlinter.strict"
-      - ".github/ci/**"
-      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
@@ -59,7 +42,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      source: ${{ steps.filter.outputs.source }}
+    steps:
+      - uses: actions/checkout@v5
+      # Pin to immutable SHA (dorny/paths-filter@v4.0.2). A movable tag here
+      # could repoint and skip quality/standard/thorough while CI Gate still passes.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        with:
+          filters: |
+            source:
+              - "surfaces/**"
+              - "config/**"
+              - "core/**"
+              - "platform/deployment_fargate/**"
+              - "integrations/**"
+              - "platform/**"
+              - "tools/**"
+              - "gateway/**"
+              - "tests/**"
+              - "pyproject.toml"
+              - "uv.lock"
+              - "pytest.ini"
+              - "ruff.toml"
+              - "mypy.ini"
+              - "Makefile"
+              - ".importlinter"
+              - ".importlinter.strict"
+              - ".github/ci/**"
+              - ".github/workflows/ci.yml"
+
   quality:
+    needs: [changes]
+    if: needs.changes.outputs.source == 'true'
     name: quality (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -110,6 +129,8 @@ jobs:
         run: uv run lint-imports --config .importlinter.strict
 
   test:
+    needs: [changes]
+    if: needs.changes.outputs.source == 'true'
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
@@ -379,7 +400,8 @@ jobs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4
+      # Same pin as Detect relevant changes — see comment there.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -478,7 +500,7 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [quality, test, coverage-report]
+    needs: [changes, quality, test, coverage-report]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -489,13 +511,28 @@ jobs:
       - name: Require green upstream jobs
         run: |
           set -euo pipefail
+          changes='${{ needs.changes.result }}'
           quality='${{ needs.quality.result }}'
           test_result='${{ needs.test.result }}'
           coverage='${{ needs.coverage-report.result }}'
-          echo "quality=$quality test=$test_result coverage-report=$coverage"
+          echo "changes=$changes quality=$quality test=$test_result coverage-report=$coverage"
 
-          [ "$quality" = success ] || { echo "::error::quality is $quality"; exit 1; }
-          [ "$test_result" = success ] || { echo "::error::test is $test_result"; exit 1; }
+          # If the decision job itself failed we cannot tell whether the suite
+          # was needed, so refuse rather than pass a PR nothing checked.
+          [ "$changes" = success ] || { echo "::error::changes is $changes"; exit 1; }
+
+          # quality/test are skipped when a PR touches no source path (docs
+          # only). That is not a failure — but it must be the only reason.
+          case "$quality" in
+            success) ;;
+            skipped) echo "quality skipped: no source paths changed" ;;
+            *) echo "::error::quality is $quality"; exit 1 ;;
+          esac
+          case "$test_result" in
+            success) ;;
+            skipped) echo "test skipped: no source paths changed" ;;
+            *) echo "::error::test is $test_result"; exit 1 ;;
+          esac
 
           # coverage-report only runs on pushes to main; on pull requests it is
           # skipped, which is not a failure.
