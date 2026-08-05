@@ -1,8 +1,11 @@
 """Persist remote-sync settings (shared by CLI and slash ``setup``).
 
 Writes the ``remote_sync`` section of ``~/.opensre/config.yml``. Ambient cloud
-credentials (AWS profile session, ``BLOB_READ_WRITE_TOKEN``, …) stay outside
-this file — opensre never stores them.
+credentials (AWS profile session, GCP Application Default Credentials,
+``BLOB_READ_WRITE_TOKEN``, …) stay outside this file — opensre never stores
+them. ``update_section`` merges, so keys written by older versions survive;
+setup itself supplies exactly the six values below and never anything
+credential-shaped.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from config.local_settings import LocalSettingsError, update_section
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import RemoteSyncField
 from platform.filestorage.errors import RemoteSyncConfigError
-from platform.filestorage.providers.registry import provider_extra_fields
+from platform.filestorage.providers.registry import provider_extra_fields, registered_providers
 
 
 @dataclass(frozen=True)
@@ -35,12 +38,17 @@ class RemoteSyncSetupRequest:
 def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConfig:
     """Merge ``request`` into ``remote_sync`` and return the stored config shape.
 
-    Does not enable process env overrides — those still win at load time.
+    Environment overrides still win at load time. The provider is validated
+    against the registry so a typo fails here, not at the first sync.
     """
     bucket = request.bucket.strip()
     if not bucket:
         raise RemoteSyncConfigError("bucket (store name) is required")
     provider = request.provider.strip().lower() or DEFAULT_REMOTE_SYNC_PROVIDER
+    known = registered_providers()
+    if provider not in known:
+        listed = ", ".join(known) or "(none)"
+        raise RemoteSyncConfigError(f"unknown remote-sync provider {provider!r}; known: {listed}")
     prefix = request.prefix.strip() or DEFAULT_REMOTE_SYNC_PREFIX
     region = request.region.strip()
     profile = request.profile.strip()
@@ -74,7 +82,16 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
     )
 
 
-__all__ = [
-    "RemoteSyncSetupRequest",
-    "save_remote_sync_settings",
-]
+def disable_remote_sync() -> None:
+    """Switch stored sync off, keeping the rest of the section for later.
+
+    Pure merge: the stored provider/bucket/prefix survive, so re-enabling is a
+    one-line change rather than a full setup again.
+    """
+    try:
+        update_section("remote_sync", {"enabled": False})
+    except LocalSettingsError as exc:
+        raise RemoteSyncConfigError(str(exc)) from exc
+
+
+__all__ = ["RemoteSyncSetupRequest", "disable_remote_sync", "save_remote_sync_settings"]

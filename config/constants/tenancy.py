@@ -10,9 +10,9 @@ webapp maintains through the control plane, or the webapp's credentials API
 (:data:`CREDENTIALS_API_URL_ENV`). The secret is the deployed route and wins
 when both are configured; the API is the staged fallback.
 
-Distinct from :data:`config.constants.billing.ORGANIZATION_ID_ENV`
-(``OPENSRE_ORGANIZATION_ID``), which the EC2 Slack service sets. Both hold a
-Clerk organization id and the two names are converging on one:
+Separate from :data:`config.constants.billing.ORGANIZATION_ID_ENV`
+(``ORGANIZATION_ID``), which every deployment sets to name the organization
+it serves. Two questions, two answers:
 
 * **Provisioning** ("did the control plane provision this silo?") is answered
   by :data:`CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV` — only the control plane
@@ -21,16 +21,13 @@ Clerk organization id and the two names are converging on one:
 * **Serving** ("which organization does this process serve?" — usage
   attribution, credits, Slack principal, webapp vault, mount ownership, and
   credential hydration once the secret says this is a silo) goes through
-  :func:`config.constants.organization.organization_id`, which reads whichever
-  name the deployment sets and warns when they conflict.
+  :func:`config.constants.organization.organization_id`, which reads
+  ``ORGANIZATION_ID``.
 """
 
 from __future__ import annotations
 
 from typing import Final
-
-#: The tenant this silo serves, assigned by the control plane.
-TENANT_ORGANIZATION_ID_ENV: Final[str] = "ORGANIZATION_ID"
 
 #: Where the gateway exchanges its identity for the tenant's credentials.
 CREDENTIALS_API_URL_ENV: Final[str] = "OPENSRE_CREDENTIALS_API_URL"
@@ -51,5 +48,4 @@ __all__ = [
     "CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV",
     "INTEGRATIONS_SECRET_ARN_ENV",
     "INTEGRATIONS_STORE_PATH_ENV",
-    "TENANT_ORGANIZATION_ID_ENV",
 ]

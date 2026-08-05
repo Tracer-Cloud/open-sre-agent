@@ -30,8 +30,13 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnRes
 class _EchoClient:
     """Streaming client that mirrors persona markers — no network."""
 
-    def invoke_stream(self, prompt: str) -> Any:
-        marker = "CUSTOM PERSONA" if "CUSTOM PERSONA" in prompt else "ok"
+    def invoke_stream(self, prompt: Any) -> Any:
+        from integrations.llm_cli.text import flatten_messages_to_prompt
+
+        # Answer path passes ``AssistantTurnPrompt.messages()`` (system+user),
+        # not a single joined string — scan content, not list membership.
+        text = flatten_messages_to_prompt(prompt)
+        marker = "CUSTOM PERSONA" if "CUSTOM PERSONA" in text else "ok"
         yield f"echo:{marker}"
 
 

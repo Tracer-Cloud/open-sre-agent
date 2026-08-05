@@ -16,7 +16,6 @@ export
 	prefect-local-test run dev docs-dev \
 	build-gateway-image deploy-gateway destroy-gateway \
 	install-gateway-on-new-server destroy-gateway-on-new-server \
-	cdk-verify \
 	deploy-lambda deploy-prefect deploy-flink destroy-lambda destroy-prefect destroy-flink \
 	test test-full test-cov test-scope test-cli-smoke test-turn-live test-grafana \
 	rabbitmq-local-up rabbitmq-local-down test-rabbitmq-real \
@@ -303,17 +302,6 @@ install-gateway-on-new-server:
 destroy-gateway-on-new-server:
 	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle destroy-installed-server
 
-# Fargate fleet + Lambda APIs are Terraform under platform/deployment_multi_tenant
-# (see DEPLOYMENT.md). cdk-verify keeps the historical Make/CI name.
-OPENSRE_INFRA_AWS_DIR ?= platform/deployment_multi_tenant
-
-cdk-verify:
-	@if [ ! -f "$(OPENSRE_INFRA_AWS_DIR)/scripts/build-lambda-bundles.sh" ]; then \
-		echo "Skipping cdk-verify: $(OPENSRE_INFRA_AWS_DIR) submodule not checked out"; \
-	else \
-		uv run pytest tests/platform/deployment_multi_tenant/test_lambda_bundle_paths.py -q; \
-	fi
-
 # Deploy Lambda test case
 deploy-lambda:
 	@echo "Deploying Lambda stack..."
@@ -493,9 +481,6 @@ help:
 	@echo "  make install-gateway-on-new-server  - Start a plain server and install the gateway on it (no image)"
 	@echo "  make destroy-gateway-on-new-server  - Tear down the server created by the command above"
 	@echo "  make destroy-gateway - Terminate gateway instance and clean up (set OPENSRE_GATEWAY_DESTROY_PURGE_AMI=1 to also deregister AMI)"
-	@echo ""
-	@echo "  FARGATE DEPLOYMENT (Terraform under platform/deployment_multi_tenant)"
-	@echo "  make cdk-verify                     - Check Lambda bundle whitelist covers platform imports"
 	@echo ""
 	@echo "  E2E TEST INFRA (AWS SDK)"
 	@echo "  make deploy-lambda     - Deploy Lambda stack (~50s)"

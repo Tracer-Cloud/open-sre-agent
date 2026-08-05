@@ -1044,6 +1044,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "execute_github_issue_mutation",
         "execute_python_code",
         "fetch_failed_run",
+        # fix_github_pr_ci catches only GitHubCiFixError for known states;
+        # unexpected errors escape to the global #1476 wrapper.
+        "fix_github_pr_ci",
+        # fix_github_security_alert catches only GitHubSecurityFixError for
+        # known states; unexpected errors escape to the global #1476 wrapper.
+        "fix_github_security_alert",
         # fix_sentry_issue catches only its own FixIssueError for known states;
         # unexpected errors escape to the global #1476 wrapper.
         "fix_sentry_issue",
@@ -1235,6 +1241,8 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_issues",
         "search_sentry_issues",
         "shell_run",
+        "skill_view",
+        "propose_scheduled_delivery",
         "slack_add_reaction",
         "slack_capture_task",
         "slack_join_channel",

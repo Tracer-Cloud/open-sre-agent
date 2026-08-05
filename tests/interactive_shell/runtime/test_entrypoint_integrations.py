@@ -247,15 +247,6 @@ def test_run_repl_async_identifies_saved_github_username(monkeypatch: Any) -> No
 
     monkeypatch.setattr(main_entrypoint, "run_initial_input", _run_initial_input)
 
-    class _Session:
-        active_theme_name = None
-
-        def hydrate_configured_integrations(self) -> None:
-            return None
-
-        def warm_resolved_integrations(self) -> None:
-            return None
-
     monkeypatch.setattr(
         main_entrypoint,
         "create_repl_runtime_context",
