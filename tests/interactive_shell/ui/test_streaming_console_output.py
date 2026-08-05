@@ -119,3 +119,19 @@ def test_streaming_console_status_forwards_to_output() -> None:
     assert status.console is target
     with status:
         pass
+
+
+def test_streaming_console_status_without_output_uses_self() -> None:
+    """No output injected: status must render through the adapter itself."""
+    buf = io.StringIO()
+    console = StreamingConsole(
+        _Spinner(),
+        threading.Event(),
+        file=buf,
+        force_terminal=False,
+        highlight=False,
+    )
+    status = console.status("working...")
+    assert status.console is console
+    with status:
+        pass

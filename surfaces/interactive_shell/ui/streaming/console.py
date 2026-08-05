@@ -95,22 +95,20 @@ class StreamingConsole(Console):
         speed: float = 1.0,
         refresh_per_second: float = 12.5,
     ) -> Status:
-        """Render the spinner on the console this turn renders through."""
+        """Render the spinner on the console this turn renders through.
+
+        Defaults are copied from ``rich.console.Console.status`` — if Rich
+        changes them, this pins the old values silently.
+        """
+        kwargs: dict[str, Any] = {
+            "spinner": spinner,
+            "spinner_style": spinner_style,
+            "speed": speed,
+            "refresh_per_second": refresh_per_second,
+        }
         if self._output is not None:
-            return self._output.status(
-                status,
-                spinner=spinner,
-                spinner_style=spinner_style,
-                speed=speed,
-                refresh_per_second=refresh_per_second,
-            )
-        return super().status(
-            status,
-            spinner=spinner,
-            spinner_style=spinner_style,
-            speed=speed,
-            refresh_per_second=refresh_per_second,
-        )
+            return self._output.status(status, **kwargs)
+        return super().status(status, **kwargs)
 
     @property
     def file(self) -> IO[str]:
