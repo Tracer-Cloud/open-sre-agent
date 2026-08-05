@@ -159,8 +159,6 @@ def _normalize_run(run: dict[str, Any]) -> dict[str, Any]:
 
 UNGROUPED_SECTION_NAME = "ungrouped"
 
-_STEP_LOG_MAX_RETRY_TAIL_LINES = 20000
-
 
 def _append_log_section(sections: list[dict[str, str]], name: str, lines: list[str]) -> None:
     """Append a non-empty log section preserving original ordering."""
@@ -718,7 +716,8 @@ def get_github_actions_step_log(
         and wants_step
         and extracted["match_strategy"] == "full-log"
     ):
-        retry_tail_lines = min(original_lines, _STEP_LOG_MAX_RETRY_TAIL_LINES)
+        # get_job_logs already clamps to the server's content window.
+        retry_tail_lines = original_lines
         if retry_tail_lines > tail_lines:
             retry_attempted = True
             retry_text, retry_original_lines, retry_error = _fetch_job_log(
