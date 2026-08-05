@@ -36,7 +36,10 @@ from core.agent_harness.ports import (
     StreamAnswerFn,
     TurnAccounting,
 )
-from core.agent_harness.prompts import build_cli_agent_prompt_from_provider
+from core.agent_harness.prompts.assistant import (
+    AssistantTurnPrompt,
+    build_cli_agent_turn_prompt,
+)
 from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
 from core.agent_harness.prompts.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
@@ -95,7 +98,7 @@ def stage_turn_llm_failure(session: Any, *, client: Any | None = None) -> None:
 def _stream_response(
     *,
     client: Any,
-    prompt: str,
+    turn_prompt: AssistantTurnPrompt,
     output: OutputSink,
     run_factory: RunRecordFactory,
     error_reporter: ErrorReporter | None,
@@ -105,7 +108,7 @@ def _stream_response(
         started = time.monotonic()
         text_str = output.stream(
             label=_ASSISTANT_LABEL,
-            chunks=client.invoke_stream(prompt),
+            chunks=client.invoke_stream(turn_prompt.messages()),
         )
     except KeyboardInterrupt:
         output.print("· cancelled")
@@ -123,7 +126,12 @@ def _stream_response(
             stage_turn_llm_failure(session, client=client)
         output.render_error(f"assistant failed: {exc}")
         return None
-    return run_factory.build(client=client, prompt=prompt, response_text=text_str, started=started)
+    return run_factory.build(
+        client=client,
+        prompt=turn_prompt.joined(),
+        response_text=text_str,
+        started=started,
+    )
 
 
 def _record_answer_turn(session: SessionStore, message: str, assistant_text: str) -> None:
@@ -173,7 +181,7 @@ def stream_answer(
         turn_plan.snapshot if turn_plan is not None else TurnSnapshot.from_session(message, session)
     )
 
-    prompt = build_cli_agent_prompt_from_provider(
+    turn_prompt = build_cli_agent_turn_prompt(
         message=message,
         prompts=prompts,
         tool_observation=req.tool_observation,
@@ -184,7 +192,7 @@ def stream_answer(
 
     run = _stream_response(
         client=client,
-        prompt=prompt,
+        turn_prompt=turn_prompt,
         output=output,
         run_factory=run_factory,
         error_reporter=error_reporter,
@@ -349,8 +357,25 @@ def run_turn(
 
     # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
     # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
+    # Schedule offers prefer session.pending_schedule_offer (structured) over
+    # scraping prose.
     prior_messages = getattr(session, "cli_agent_messages", None) or ()
-    text = expand_affirmative_follow_up(text, prior_messages)
+    pending_schedule = getattr(session, "pending_schedule_offer", None)
+    expanded = expand_affirmative_follow_up(
+        text,
+        prior_messages,
+        pending_schedule=pending_schedule,
+    )
+    # Whether this turn is the confirmation of a pending offer. The offer is
+    # consumed only once the command actually lands — clearing it here would
+    # burn it on a rejected ``cron add``, leaving a second "yes" with nothing
+    # to expand.
+    confirms_schedule = (
+        pending_schedule is not None
+        and expanded.startswith("/cron ")
+        and hasattr(session, "pending_schedule_offer")
+    )
+    text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their
@@ -374,6 +399,13 @@ def run_turn(
         is_tty=is_tty,
         turn_plan=turn_plan,
     )
+
+    if (
+        confirms_schedule
+        and action_result.executed_success_count > 0
+        and hasattr(session, "pending_schedule_offer")
+    ):
+        session.pending_schedule_offer = None
     accounting.record_action_result(action_result)
 
     handoff_contents = action_result.handoff_contents

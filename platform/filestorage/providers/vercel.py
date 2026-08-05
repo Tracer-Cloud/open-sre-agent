@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 import httpx
 
 from config.constants.filestorage import BLOB_READ_WRITE_TOKEN_ENV
+from config.constants.vercel import VERCEL_API_BASE_URL, VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BuiltInProvider
+from platform.filestorage.enums import BucketExposure, BuiltInProvider
 from platform.filestorage.errors import RemoteSyncUnavailableError
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers.registry import register_object_store
 
@@ -28,6 +31,19 @@ _API_VERSION = "12"
 _ACCESS = "private"
 _LIST_LIMIT = 1000
 _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+
+# Store-management API — a *different* host and a *different* token type than
+# _API_BASE: it does not accept BLOB_READ_WRITE_TOKEN at all (confirmed live:
+# that token shape gets a 403 with "invalidToken": true), only a Vercel
+# account/team API token. Reuses VERCEL_API_BASE_URL / VERCEL_API_TOKEN_ENV /
+# VERCEL_TEAM_ID_ENV — the same host and credential the (unrelated)
+# integrations/vercel/ SRE integration already talks to and asks for — rather
+# than inventing a second Vercel token convention; platform/ cannot import
+# integrations/vercel/client.py directly (see docs/ARCHITECTURE.md's tier
+# table: platform must never import integrations), so this call is
+# hand-rolled instead of shared. Used solely by check_public_access — sync
+# itself never calls this host.
+_ACCOUNT_API_BASE = VERCEL_API_BASE_URL
 
 
 class VercelBlobObjectStore:
@@ -256,6 +272,94 @@ def _factory(config: RemoteSyncConfig) -> VercelBlobObjectStore:
     return VercelBlobObjectStore(config)
 
 
-register_object_store(PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT)
+def check_public_access(
+    _config: RemoteSyncConfig, *, client: httpx.Client | None = None
+) -> PublicAccessStatus:
+    """Ask Vercel whether the configured Blob store's access mode is public.
 
-__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "VercelBlobObjectStore"]
+    ``_config`` is unused: unlike AWS/GCS, the store id here comes from
+    ``BLOB_READ_WRITE_TOKEN`` (see below), not ``config.bucket`` — the
+    parameter stays only to satisfy the shared ``PublicAccessChecker`` shape
+    every provider's checker is called through.
+
+    Unlike S3/GCS, Vercel Blob access is a **store-level, immutable**
+    property — set at store creation and the same for every object in it
+    (see Vercel's docs: "you cannot change it after the creation of a blob
+    store"). ``GET /v1/storage/stores/{id}`` on ``_ACCOUNT_API_BASE`` answers
+    it in one call, the same shape as the AWS/GCS checks, but needs two
+    ambient values this provider does not otherwise require:
+
+    - ``VERCEL_API_TOKEN_ENV`` (``VERCEL_API_TOKEN``), plus an optional
+      ``VERCEL_TEAM_ID_ENV`` (``VERCEL_TEAM_ID``) for a token that spans
+      several teams — the same credential the ``integrations/vercel/`` SRE
+      integration already asks for, reused here rather than inventing a
+      second Vercel token convention. ``BLOB_READ_WRITE_TOKEN`` cannot
+      authenticate this endpoint at all (confirmed live: it is rejected with
+      ``invalidToken: true``), so this is a genuinely different,
+      broader-scoped credential, not an extra permission on the same one.
+      Entirely optional: unset, the check degrades to unchecked, same as no
+      permission on AWS/GCS.
+    - The store id, parsed from ``BLOB_READ_WRITE_TOKEN`` the same way
+      :class:`VercelBlobObjectStore` does — ``config.bucket`` is a
+      human-facing label, not guaranteed to be the API store id.
+
+    Degrades to :class:`~platform.filestorage.enums.BucketExposure.UNKNOWN`
+    rather than raising, and never carries the raw Vercel response body in
+    ``detail`` — this result can be echoed straight into a gateway chat
+    surface (see ``format_status_lines``), and that text is not vetted for
+    that (CWE-209).
+    """
+    api_token = os.getenv(VERCEL_API_TOKEN_ENV, "").strip()
+    if not api_token:
+        return PublicAccessStatus(
+            BucketExposure.UNKNOWN, f"set {VERCEL_API_TOKEN_ENV} to check this"
+        )
+    store_id = _store_id_from_token(_token_from_env().strip())
+    if not store_id:
+        return PublicAccessStatus(
+            BucketExposure.UNKNOWN,
+            f"cannot determine the store id — set {BLOB_READ_WRITE_TOKEN_ENV}",
+        )
+    team_id = os.getenv(VERCEL_TEAM_ID_ENV, "").strip()
+    owns_client = client is None
+    cl = client if client is not None else httpx.Client(timeout=_TIMEOUT)
+    try:
+        response = cl.get(
+            f"{_ACCOUNT_API_BASE}/v1/storage/stores/{store_id}",
+            headers={"authorization": f"Bearer {api_token}"},
+            params={"teamId": team_id} if team_id else {},
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+            return PublicAccessStatus(
+                BucketExposure.UNKNOWN, f"{VERCEL_API_TOKEN_ENV} cannot read this store"
+            )
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    except (httpx.HTTPError, ValueError) as exc:
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    finally:
+        if owns_client:
+            cl.close()
+    if not isinstance(payload, dict):
+        return PublicAccessStatus(BucketExposure.UNKNOWN, "malformed store response")
+    store = payload.get("store")
+    access = store.get("access") if isinstance(store, dict) else None
+    if access == "public":
+        return PublicAccessStatus(BucketExposure.PUBLIC)
+    if access == "private":
+        return PublicAccessStatus(BucketExposure.PRIVATE)
+    return PublicAccessStatus(
+        BucketExposure.UNKNOWN, "store response did not include an access mode"
+    )
+
+
+register_object_store(
+    PROVIDER_NAME,
+    _factory,
+    credential_hint=CREDENTIAL_HINT,
+    public_access_checker=check_public_access,
+)
+
+__all__ = ["CREDENTIAL_HINT", "PROVIDER_NAME", "VercelBlobObjectStore", "check_public_access"]

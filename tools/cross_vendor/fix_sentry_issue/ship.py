@@ -2,9 +2,10 @@
 
 Runs only after the coding agent has left a successful fix in the workspace
 working tree. Sequences the safe git primitives in :mod:`integrations.git` and the
-PR call in :mod:`pr`, and enforces the "never touch the base branch" guarantee: the
-fix always lands on a namespaced ``opensre/sentry-fix-*`` branch, the base branch is
-never committed to or pushed, and the PR is opened *into* the base branch.
+PR call in :mod:`integrations.github.pull_requests`, and enforces the "never touch
+the base branch" guarantee: the fix always lands on a namespaced
+``opensre/sentry-fix-*`` branch, the base branch is never committed to or pushed,
+and the PR is opened *into* the base branch.
 
 Git primitives raise a neutral :class:`GitCommandError`; this module maps its
 ``kind`` onto the tool's :class:`FixIssueError` error surface.
@@ -31,8 +32,20 @@ from integrations.git import (
     short_head,
 )
 from integrations.github.client import resolve_github_token
-from tools.cross_vendor.fix_sentry_issue.errors import ERR_NO_CHANGES, ERR_PR_FAILED, FixIssueError
-from tools.cross_vendor.fix_sentry_issue.pr import PullRequest, open_pull_request
+from integrations.github.pull_requests import (
+    ERR_GITHUB_TOKEN as GH_PR_ERR_GITHUB_TOKEN,
+)
+from integrations.github.pull_requests import (
+    GitHubPullRequestError,
+    PullRequest,
+    open_pull_request,
+)
+from tools.cross_vendor.fix_sentry_issue.errors import (
+    ERR_GITHUB_TOKEN,
+    ERR_NO_CHANGES,
+    ERR_PR_FAILED,
+    FixIssueError,
+)
 
 _BRANCH_PREFIX = "opensre/sentry-fix"
 _SUBJECT_MAX = 72
@@ -175,7 +188,7 @@ def ship_fix(
         )
     except GitCommandError as exc:
         raise FixIssueError(exc.kind, exc.message, branch_name=branch) from exc
-    except FixIssueError as exc:
-        exc.branch_name = branch
-        raise
+    except GitHubPullRequestError as exc:
+        kind = ERR_GITHUB_TOKEN if exc.kind == GH_PR_ERR_GITHUB_TOKEN else ERR_PR_FAILED
+        raise FixIssueError(kind, exc.message, branch_name=branch) from exc
     return ShipResult(branch_name=branch, pr=pr)

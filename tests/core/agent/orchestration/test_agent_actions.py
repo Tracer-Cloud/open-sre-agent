@@ -108,12 +108,23 @@ def _response_from_actions(actions: list[PlannedAction]) -> AgentLLMResponse:
 
 
 def _message_from_agent_prompt(messages: list[dict[str, object]]) -> str:
+    """Extract what the user literally typed from the built user message.
+
+    The literal envelope is one segment of the message, not the whole of it:
+    the turn's ephemeral blocks (recent conversation, prior action facts) follow
+    it so they stay out of the cacheable system prompt while still being the
+    part an over-budget turn drops first. Read between the delimiters rather
+    than assuming the envelope spans the string.
+    """
     raw = str(messages[-1].get("content", "")) if messages else ""
     prefix = "USER MESSAGE (literal): <<<"
     suffix = ">>>"
-    if raw.startswith(prefix) and raw.endswith(suffix):
-        return raw[len(prefix) : -len(suffix)]
-    return raw
+    start = raw.find(prefix)
+    if start == -1:
+        return raw
+    body_at = start + len(prefix)
+    end = raw.find(suffix, body_at)
+    return raw[body_at:end] if end != -1 else raw
 
 
 def _expected_shell_argv(command: str) -> list[str]:

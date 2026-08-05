@@ -178,8 +178,6 @@ class HTTPDigestAuth(AuthBase):
         if hash_utf8 is None:
             return None
 
-        # XXX not implemented yet
-        entdig = None
         p_parsed = urlparse(url)
         #: path is request-uri defined in RFC 2616 which should not be empty
         path = p_parsed.path or "/"
@@ -226,8 +224,6 @@ class HTTPDigestAuth(AuthBase):
             base += f', opaque="{opaque}"'
         if algorithm:
             base += f', algorithm="{algorithm}"'
-        if entdig:
-            base += f', digest="{entdig}"'
         if qop:
             base += f', qop="auth", nc={ncvalue}, cnonce="{cnonce}"'
 

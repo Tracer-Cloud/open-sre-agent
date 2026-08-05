@@ -10,8 +10,13 @@ from core.agent_harness.prompts.conversation_memory import (
     format_prior_action_facts,
     format_recent_conversation,
 )
-from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
-from core.agent_harness.prompts.skills_loader import load_skills_block
+from core.agent_harness.prompts.envelope import (
+    PromptBlock,
+    PromptBlockKind,
+    PromptEnvelope,
+    PromptTier,
+)
+from core.agent_harness.prompts.skills_loader import load_skills_index
 from platform.harness_ports import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
@@ -29,8 +34,11 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
     blocks = [
         PromptBlock(
             id="action-agent-system-base",
-            kind="system",
-            content=_SYSTEM_PROMPT_BASE + "\n\n",
+            kind=PromptBlockKind.SYSTEM,
+            tier=PromptTier.STABLE,
+            # Trailing separators stay in the block; avoid ``base + "\n\n"`` which
+            # copies the entire stable prompt body on every turn.
+            content="".join((_SYSTEM_PROMPT_BASE, "\n\n")),
             provenance="core.agent_harness.prompts.action_agent_system_prompt",
         ),
     ]
@@ -39,53 +47,63 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
         blocks.append(
             PromptBlock(
                 id="action-agent-vendor-fragments",
-                kind="rule",
-                content=vendor_fragments + "\n\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                content="".join((vendor_fragments, "\n\n")),
                 provenance="platform.harness_ports.action_prompt_vendor_fragments",
             )
         )
-    skills = load_skills_block()
-    if skills:
+    skills_index = load_skills_index()
+    if skills_index:
         blocks.append(
             PromptBlock(
                 id="action-agent-skills",
-                kind="rule",
-                content=skills + "\n\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                content=skills_index,
                 provenance="core.agent_harness.prompts.skills",
             )
         )
-    blocks += [
+    blocks.append(
         PromptBlock(
             id="connected-integrations",
-            kind="context",
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.CONTEXT,
             content=connected_integrations_block(turn_snapshot),
             provenance="core.agent_harness.turns.turn_snapshot",
-        ),
-        PromptBlock(
-            id="recent-conversation",
-            kind="conversation",
-            content=recent_conversation_block(turn_snapshot),
-            provenance="core.agent_harness.turns.turn_snapshot",
-        ),
-    ]
-    action_facts = prior_action_facts_block(turn_snapshot)
-    if action_facts:
-        blocks.append(
-            PromptBlock(
-                id="prior-action-facts",
-                kind="context",
-                content=action_facts,
-                provenance="core.agent_harness.turns.turn_snapshot",
-            )
         )
+    )
+    # Volatile before ephemeral so render_cached + render_ephemeral reassemble
+    # into render() and the cache breakpoint can sit after memory.
     memory_block = long_term_memory_block()
     if memory_block:
         blocks.append(
             PromptBlock(
                 id="long-term-memory",
-                kind="context",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.VOLATILE,
                 content=memory_block,
                 provenance="core.domain.memory",
+            )
+        )
+    blocks.append(
+        PromptBlock(
+            id="recent-conversation",
+            kind=PromptBlockKind.CONVERSATION,
+            tier=PromptTier.EPHEMERAL,
+            content=recent_conversation_block(turn_snapshot),
+            provenance="core.agent_harness.turns.turn_snapshot",
+        )
+    )
+    action_facts = prior_action_facts_block(turn_snapshot)
+    if action_facts:
+        blocks.append(
+            PromptBlock(
+                id="prior-action-facts",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
+                content=action_facts,
+                provenance="core.agent_harness.turns.turn_snapshot",
             )
         )
     return PromptEnvelope.from_blocks(
@@ -116,11 +134,18 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
 
 
 def recent_conversation_block(turn_snapshot: TurnSnapshot) -> str:
-    history = format_recent_conversation(list(turn_snapshot.conversation_messages))
+    # Newest-first: this block rides after the literal user message, and
+    # context_budget shrinks with text[:keep]. Chronological (oldest-first)
+    # order put the latest turns at the truncated tail — follow-ups then saw
+    # only stale chatter. Newest-first drops the oldest turns under pressure.
+    history = format_recent_conversation(
+        list(turn_snapshot.conversation_messages),
+        newest_first=True,
+    )
     return (
-        "RECENT CONVERSATION (context only, oldest first; previous assistant messages "
+        "RECENT CONVERSATION (context only, newest first; previous assistant messages "
         "may contain shell stdout, computed values, and prior tool inputs/results. Use "
-        "these as facts when resolving follow-up references in the USER MESSAGE below "
+        "these as facts when resolving follow-up references in the USER MESSAGE above "
         "and when composing later tool inputs. Do NOT re-run turns that already "
         f"completed):\n{history}\n\n"
     )
@@ -131,10 +156,11 @@ def prior_action_facts_block(turn_snapshot: TurnSnapshot) -> str:
     if not facts:
         return ""
     return (
-        "PRIOR ACTION FACTS (extracted from earlier persisted assistant/tool "
-        "outputs; use these values when the USER MESSAGE refers to previous "
-        "results, sent messages, comparisons, or 'both/that/them'. Do NOT ask "
-        f"the user to paste values already listed here):\n{facts}\n\n"
+        "PRIOR ACTION FACTS (newest first; extracted from earlier persisted "
+        "assistant/tool outputs; use these values when the USER MESSAGE refers "
+        "to previous results, sent messages, comparisons, or 'both/that/them'. "
+        "Do NOT ask the user to paste values already listed here):\n"
+        f"{facts}\n\n"
     )
 
 
@@ -162,8 +188,26 @@ def long_term_memory_block() -> str:
     )
 
 
-def build_action_user_message(text: str) -> str:
-    return _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
+def build_action_user_message(text: str, *, prefix: str = "") -> str:
+    """Wrap the user turn; optional ``prefix`` carries ephemeral system halves.
+
+    ``prefix`` is where per-turn conversation / prior-action-facts land once the
+    action driver opts into :meth:`PromptEnvelope.render_cached` — the same text
+    the model used to see at the end of ``system``, moved here so the cached
+    system prefix stays byte-stable across turns.
+
+    Layout (required by head-preserving truncation ``text[:keep]``):
+
+    1. Literal user message first — never drop the active request.
+    2. Ephemeral history next, newest-first — when the combined turn is over
+       budget, the tail cut removes the oldest chatter, not the latest turns
+       the follow-up is referring to.
+    """
+    body = _USER_TEMPLATE.format(text=sanitize_action_text(text.strip()))
+    if not prefix:
+        return body
+    # Ephemeral history can be large; join avoids an intermediate f-string copy.
+    return "".join((body, "\n", prefix))
 
 
 def sanitize_action_text(text: str) -> str:

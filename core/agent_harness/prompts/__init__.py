@@ -21,17 +21,32 @@ from core.agent_harness.prompts.assistant import (
 from core.agent_harness.prompts.assistant_agent_prompt import (
     _build_observation_block,
     _build_system_prompt,
+    build_assistant_system_prompt_envelope,
     build_environment_block,
 )
-from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.prompts.envelope import (
+    PromptBlock,
+    PromptBlockKind,
+    PromptEnvelope,
+    PromptTier,
+)
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
+    build_gather_system_prompt_envelope,
     build_gather_system_prompt_from_turn_snapshot,
 )
 from core.agent_harness.prompts.skills_loader import (
     SKILLS_HEADER,
+    list_action_skills,
+    load_skill_body,
     load_skills_block,
+    load_skills_index,
     skills_dir,
+)
+from core.agent_harness.prompts.surfaces import (
+    PromptSurface,
+    SurfaceProfile,
+    profile_for,
 )
 
 __all__ = [
@@ -42,18 +57,28 @@ __all__ = [
     "_build_system_prompt",
     "AssistantPromptContextProvider",
     "PromptBlock",
+    "PromptBlockKind",
     "PromptEnvelope",
+    "PromptSurface",
+    "PromptTier",
+    "SurfaceProfile",
     "build_action_system_prompt",
+    "profile_for",
     "build_action_system_prompt_envelope",
     "build_action_user_message",
     "build_assistant_system_prompt",
+    "build_assistant_system_prompt_envelope",
     "build_gather_system_prompt",
+    "build_gather_system_prompt_envelope",
     "build_gather_system_prompt_from_turn_snapshot",
     "build_cli_agent_prompt_from_provider",
     "build_environment_block",
     "build_observation_block",
     "connected_integrations_block",
+    "list_action_skills",
+    "load_skill_body",
     "load_skills_block",
+    "load_skills_index",
     "prior_action_facts_block",
     "recent_conversation_block",
     "sanitize_action_text",

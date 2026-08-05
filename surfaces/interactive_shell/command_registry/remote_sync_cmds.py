@@ -6,21 +6,27 @@ import logging
 
 from rich.console import Console
 from rich.markup import escape
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskID, TextColumn
 
 from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
 from platform.filestorage import OrgScopeNotSupportedError, RemoteSyncError
-from platform.filestorage.enums import RemoteSyncSubcommand
+from platform.filestorage.engine import SyncProgress
+from platform.filestorage.enums import BucketExposure, RemoteSyncSubcommand, SyncDirection
 from platform.filestorage.messages import (
     DISABLED_HELP,
+    direction_label,
     format_exclusion_lines,
+    format_exposure_line,
     format_report_lines,
     format_setup_lines,
     root_state,
+    sanitize_terminal_text,
 )
 from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.providers.registry import builtin_providers
 from platform.filestorage.setup import RemoteSyncSetupRequest, save_remote_sync_settings
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -30,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 _USAGE = (
     f"/remote-sync [{RemoteSyncSubcommand.STATUS}|{RemoteSyncSubcommand.SYNC}|"
-    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only] "
+    f"{RemoteSyncSubcommand.SETUP}] [--pull-only|--push-only|--dry-run] "
     f"[--provider … --bucket …]"
 )
 
@@ -52,6 +58,9 @@ def _print_status(console: Console) -> bool:
         return True
     cfg = status.config
     console.print(f"Remote sync is on ({cfg.provider}) → [{HIGHLIGHT}]{cfg.bucket}/{cfg.prefix}[/]")
+    if status.exposure is not None:
+        style = ERROR if status.exposure.exposure is BucketExposure.PUBLIC else DIM
+        console.print(f"[{style}]{escape(format_exposure_line(status.exposure))}[/]")
     for root in status.roots:
         console.print(f"  {root.name:<10} {root.path} [{DIM}]({root_state(root)})[/]")
     for line in format_exclusion_lines(status.exclusions):
@@ -67,15 +76,45 @@ def _print_status(console: Console) -> bool:
 
 def _run_sync(console: Console, args: list[str]) -> bool:
     flags = {a.lower() for a in args}
-    with console.status("syncing…", spinner="dots"):
+    dry_run = "--dry-run" in flags
+    bar = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("{task.fields[current]}"),
+        console=console,
+        transient=True,
+    )
+    task_id: TaskID | None = None
+    current_direction: SyncDirection | None = None
+
+    def _on_progress(progress: SyncProgress) -> None:
+        nonlocal task_id, current_direction
+        # Rich renders task fields as markup; a session/memory filename is
+        # attacker-shaped the same way an exclude pattern is, so it gets the
+        # same treatment as _print_status's escape(line) below.
+        key_text = escape(sanitize_terminal_text(progress.key))
+        if progress.direction is not current_direction:
+            current_direction = progress.direction
+            label = direction_label(progress.direction)
+            if task_id is None:
+                task_id = bar.add_task(label, total=progress.total, current=key_text)
+            else:
+                bar.reset(task_id, total=progress.total, description=label, current=key_text)
+        assert task_id is not None
+        bar.update(task_id, completed=progress.completed, current=key_text)
+
+    with bar:
         report = run_remote_sync(
             pull_only="--pull-only" in flags,
             push_only="--push-only" in flags,
+            dry_run=dry_run,
+            on_progress=_on_progress,
         )
     if report is None:
         console.print(f"[{DIM}]{DISABLED_HELP}[/]")
         return True
-    lines = format_report_lines(report)
+    lines = format_report_lines(report, dry_run=dry_run)
     _print_lines(console, lines, dim_last=bool(report.kept_remote))
     return True
 
@@ -117,7 +156,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
             enabled=enabled,
         )
     )
-    _print_lines(console, format_setup_lines(config))
+    _print_lines(console, format_setup_lines(config, enabled=enabled))
     return True
 
 
@@ -167,7 +206,7 @@ COMMANDS: tuple[SlashCommand, ...] = (
         notes=(
             "Off until setup or OPENSRE_REMOTE_SYNC is set. "
             f"Subcommands: status, sync, setup. Default provider is "
-            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: aws, vercel). "
+            f"{DEFAULT_REMOTE_SYNC_PROVIDER} (built-in: {', '.join(builtin_providers())}). "
             "Credentials stay ambient; integration keys are never uploaded. "
             "Same service as `opensre remote-sync`.",
         ),

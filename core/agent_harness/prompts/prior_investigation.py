@@ -62,13 +62,23 @@ def _summarize_evidence(evidence: Any) -> list[str]:
         sample = {key: evidence[key] for key in sample_keys}
         return [
             f"Evidence items: {len(evidence)}",
-            "Evidence keys: " + ", ".join(map(str, sample_keys)),
-            "Sample evidence:\n" + json.dumps(sample, indent=2, default=str)[:1500],
+            "".join(("Evidence keys: ", ", ".join(map(str, sample_keys)))),
+            "".join(
+                (
+                    "Sample evidence:\n",
+                    json.dumps(sample, indent=2, default=str)[:1500],
+                )
+            ),
         ]
     if isinstance(evidence, list):
         return [
             f"Evidence items: {len(evidence)}",
-            "Sample evidence:\n" + json.dumps(evidence[:3], indent=2, default=str)[:1500],
+            "".join(
+                (
+                    "Sample evidence:\n",
+                    json.dumps(evidence[:3], indent=2, default=str)[:1500],
+                )
+            ),
         ]
     return [
         f"Evidence type: {type(evidence).__name__}",
