@@ -39,3 +39,22 @@ def test_openai_and_bedrock_share_composite_flattening() -> None:
         schema, unsupported_keys=BEDROCK_UNSUPPORTED_SCHEMA_KEYS
     )
     assert openai_cleaned == bedrock_cleaned == {"type": "string"}
+
+
+def test_openai_normalizer_preserves_property_named_title() -> None:
+    """Field names must not be confused with stripped schema-metadata keys."""
+    schema = {
+        "type": "object",
+        "title": "WorkTaskAdd",
+        "properties": {
+            "title": {"type": "string", "minLength": 1},
+            "priority": {"type": "string", "enum": ["low", "normal"]},
+        },
+        "required": ["title"],
+        "additionalProperties": False,
+    }
+    cleaned = normalize_openai_tool_input_schema(schema)
+    assert "title" not in cleaned  # metadata key stripped
+    assert cleaned["properties"]["title"] == {"type": "string", "minLength": 1}
+    assert cleaned["required"] == ["title"]
+    assert cleaned["properties"]["priority"]["enum"] == ["low", "normal"]

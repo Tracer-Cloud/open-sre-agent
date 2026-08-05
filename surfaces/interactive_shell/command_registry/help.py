@@ -77,6 +77,7 @@ def _raw_help_sections() -> list[HelpSection]:
     from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_CMDS
     from surfaces.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_CMDS
     from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_CMDS
+    from surfaces.interactive_shell.command_registry.work_cmds import COMMANDS as WORK_CMDS
 
     return [
         _quick_access_section(),
@@ -92,7 +93,14 @@ def _raw_help_sections() -> list[HelpSection]:
         ("Investigation", list(INV_CMDS) + list(RCA_CMDS)),
         ("Privacy", list(PRIVACY_CMDS) + list(MEMORY_CMDS)),
         ("Remote sync", list(REMOTE_SYNC_CMDS)),
-        ("Tasks", list(LOOPS_CMDS) + list(TASK_CMDS) + list(WATCH_CMDS) + list(GATEWAY_CMDS)),
+        (
+            "Tasks",
+            list(WORK_CMDS)
+            + list(LOOPS_CMDS)
+            + list(TASK_CMDS)
+            + list(WATCH_CMDS)
+            + list(GATEWAY_CMDS),
+        ),
         ("Theme", list(THEME_CMDS)),
         ("Agents", list(AGENTS_CMDS)),
         ("Alerts", list(ALERTS_CMDS)),
