@@ -38,6 +38,13 @@ from config.constants.billing import (
     USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
 )
+from config.constants.buzz import (
+    BUZZ_AUTH_TAG_ENV,
+    BUZZ_DEFAULT_CHANNEL_ENV,
+    BUZZ_PATH_ENV,
+    BUZZ_PRIVATE_KEY_ENV,
+    BUZZ_RELAY_URL_ENV,
+)
 from config.constants.coralogix import (
     CORALOGIX_API_KEY_ENV,
     CORALOGIX_APPLICATION_NAME_ENV,
@@ -334,6 +341,11 @@ __all__ = [
     "BETTERSTACK_QUERY_ENDPOINT_ENV",
     "BETTERSTACK_SOURCES_ENV",
     "BETTERSTACK_USERNAME_ENV",
+    "BUZZ_AUTH_TAG_ENV",
+    "BUZZ_DEFAULT_CHANNEL_ENV",
+    "BUZZ_PATH_ENV",
+    "BUZZ_PRIVATE_KEY_ENV",
+    "BUZZ_RELAY_URL_ENV",
     "CONTEXT_ROOT_ENV",
     "BLOB_READ_WRITE_TOKEN_ENV",
     "DEFAULT_REMOTE_SYNC_PREFIX",

@@ -123,6 +123,42 @@ def resolve_rocketchat_credentials(task_params: dict[str, str]) -> dict[str, str
     return resolved
 
 
+def resolve_buzz_credentials(task_params: dict[str, str]) -> dict[str, str]:
+    """Resolve Buzz credentials from task params, integration store, or env.
+
+    Priority: task.params > integration store > environment variable (then
+    keyring for ``private_key``), applied per key. Returns whichever of
+    ``private_key``/``relay_url``/``default_channel``/``auth_tag`` could be
+    resolved; the caller decides whether the combination is usable.
+    """
+    resolved: dict[str, str] = {}
+
+    # Non-secret fields: params → store → plain env.
+    for key, env_var in (
+        ("relay_url", "BUZZ_RELAY_URL"),
+        ("default_channel", "BUZZ_DEFAULT_CHANNEL"),
+        ("auth_tag", "BUZZ_AUTH_TAG"),
+    ):
+        value = task_params.get(key, "").strip()
+        if not value:
+            value = _get_integration_credential("buzz", key).strip()
+        if not value:
+            value = os.getenv(env_var, "").strip()
+        if value:
+            resolved[key] = value
+
+    # Private key: params → store → env then keyring.
+    private_key = _resolve_credentials(
+        task_params,
+        service="buzz",
+        credential_key="private_key",
+        env_vars=("BUZZ_PRIVATE_KEY",),
+    )
+    resolved.update(private_key)
+
+    return resolved
+
+
 def _resolve_credentials(
     task_params: dict[str, str],
     *,

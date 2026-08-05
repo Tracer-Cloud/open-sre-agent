@@ -193,6 +193,7 @@
               "messaging/discord",
               "messaging/telegram",
               "messaging/rocketchat",
+              "messaging/buzz",
               "messaging/whatsapp",
               "messaging/twilio-sms"
             ]

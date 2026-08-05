@@ -39,7 +39,7 @@ class Provider(StrEnum):
     Distinct from ``integrations.messaging_security.MessagingPlatform``,
     which tracks gateway *inbound* identity, not delivery. Not every consumer
     supports every member here (e.g. Sentry digest delivery has no Discord
-    path, watchdog alarms only support Telegram/Rocket.Chat) -- those
+    path, watchdog alarms only support Telegram/Rocket.Chat/Buzz) -- those
     consumers define their own documented subset rather than exposing a
     choice that would silently fail.
     """
@@ -48,6 +48,7 @@ class Provider(StrEnum):
     SLACK = "slack"
     DISCORD = "discord"
     ROCKETCHAT = "rocketchat"
+    BUZZ = "buzz"
 
 
 def _generate_task_id() -> str:
