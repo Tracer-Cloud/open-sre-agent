@@ -270,6 +270,17 @@ def _choose_model(
     resolved_default = (default or "").strip()
     models = provider.models
     if not models:
+        # Providers with no curated catalog but arbitrary model IDs (custom
+        # OpenAI-/Anthropic-compatible gateways) must still be asked for a model
+        # ID rather than silently returning an empty default.
+        if provider.allow_custom_models:
+            _step("Model")
+            return _prompt_value(
+                f"{_provider_model_prompt_label(provider)} model ID ({provider.model_env})",
+                default=resolved_default or provider.default_model,
+                allow_empty=False,
+                back_on_cancel=back_on_cancel,
+            )
         return resolved_default or provider.default_model
 
     _step("Model")

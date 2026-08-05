@@ -65,7 +65,17 @@ def parse_tool_calls(message: Any) -> list[ToolCall]:
             input_dict = json.loads(raw_arguments) if raw_arguments else {}
         except json.JSONDecodeError:
             input_dict = {}
-        tool_calls.append(ToolCall(id=call_id, name=name, input=input_dict))
+        # A model may send arguments as JSON "null" or a non-object (some
+        # OpenAI-compatible gateways do for no-arg tools); coerce to {} so
+        # downstream consumers that require a dict never receive None. Mirrors
+        # the guard in the Responses-API parser (openai_responses.py).
+        tool_calls.append(
+            ToolCall(
+                id=call_id,
+                name=name,
+                input=input_dict if isinstance(input_dict, dict) else {},
+            )
+        )
     return tool_calls
 
 

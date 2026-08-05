@@ -26,6 +26,8 @@ OpenSRE is provider-agnostic: bring your own model. Selection is controlled by t
 | GitHub Copilot CLI| `copilot`| `copilot login` or `gh auth login` (CLI) | Copilot CLI default                           | Copilot CLI default                             |
 | xAI Groq API key | `groq`      | `GROQ_API_KEY`                  | `llama-3.3-70b-versatile`                     | `llama-3.1-8b-instant`                          |
 | Azure OpenAI | `azure-openai` | `AZURE_OPENAI_API_KEY` + resource URL | `gpt-5.4-mini` (deployment name)            | `gpt-5.4-mini` (deployment name)                 |
+| Custom OpenAI-compatible | `custom-openai` | `CUSTOM_OPENAI_API_KEY` + `CUSTOM_OPENAI_BASE_URL` | your `CUSTOM_OPENAI_MODEL`      | your `CUSTOM_OPENAI_MODEL`                       |
+| Custom Anthropic-compatible | `custom-anthropic` | `CUSTOM_ANTHROPIC_API_KEY` + `CUSTOM_ANTHROPIC_BASE_URL` | your `CUSTOM_ANTHROPIC_MODEL` | your `CUSTOM_ANTHROPIC_MODEL`             |
 | xAI Grok Build CLI | `grok-cli` | `grok login` (CLI)             | Grok Build CLI default                        | Grok Build CLI default                          |
 | Pi CLI (BYOK)| `pi`          | provider API key env or `pi` → `/login` | Pi configured model (`PI_MODEL` to override) | same as reasoning model |
 
@@ -221,6 +223,42 @@ In the REPL, switch provider or deployment like any other API provider:
 ```
 
 If deployment discovery fails during onboarding, enter the deployment name manually — it must match a deployment in your Azure resource, not a model ID from `/openai/models`.
+
+### Custom OpenAI-/Anthropic-compatible endpoints
+
+Point OpenSRE at an arbitrary base URL — a LiteLLM proxy, vLLM, LocalAI, or an internal model gateway — for self-hosted, proxied, and on-prem deployments where direct calls to the public APIs are not allowed. Two providers cover the two API shapes:
+
+**`custom-openai`** reuses the OpenAI-compatible client:
+
+```bash
+export LLM_PROVIDER=custom-openai
+export CUSTOM_OPENAI_BASE_URL=http://localhost:4000/v1   # LiteLLM, vLLM, LocalAI, …
+export CUSTOM_OPENAI_API_KEY=your-key
+export CUSTOM_OPENAI_MODEL=gpt-5.4                       # applies to every tier
+# Optional per-tier overrides:
+# export CUSTOM_OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
+```
+
+**`custom-anthropic`** uses the Anthropic SDK with a base-URL override:
+
+```bash
+export LLM_PROVIDER=custom-anthropic
+export CUSTOM_ANTHROPIC_BASE_URL=https://proxy.example.com
+export CUSTOM_ANTHROPIC_API_KEY=your-key
+export CUSTOM_ANTHROPIC_MODEL=claude-opus-4-7
+```
+
+Both require the base URL and a model — onboarding and startup fail loudly if either is missing, rather than reaching a wrong endpoint mid-investigation.
+
+- **The base URL is used verbatim.** Include the API path yourself (e.g. `/v1` for OpenAI-compatible gateways). OpenSRE never appends a path, so `http://host/v1` stays `http://host/v1` — it does not become `/v1/v1`.
+- **`custom-anthropic` is SDK-only.** It ignores `OPENSRE_LLM_TRANSPORT=litellm` by design and errors if you force it; use `custom-openai` for a LiteLLM-proxied OpenAI-compatible endpoint.
+- Run with `opensre --debug` (or set `TRACER_VERBOSE=1`) to print the resolved provider, redacted base URL (host only — never a token), and model for each call when debugging a gateway.
+
+Quick setup:
+
+```bash
+opensre onboard   # choose the custom provider; paste base URL, API key, model
+```
 
 ### OpenRouter
 

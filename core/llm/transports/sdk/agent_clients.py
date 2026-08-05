@@ -83,17 +83,32 @@ class AnthropicAgentClient:
         model: str,
         max_tokens: int = 4096,
         *,
+        base_url: str | None = None,
+        api_key_env: str = "ANTHROPIC_API_KEY",
         client: Any | None = None,
         credential_resolver: Callable[[str], str] | None = None,
     ) -> None:
+        # base_url + api_key_env let a custom-anthropic gateway (Anthropic SDK
+        # with a base-URL override) reuse this client. They default to the
+        # first-party Anthropic endpoint/key, so existing behavior is unchanged.
+        # Only override the hint for a non-default key env so subclasses
+        # (e.g. BedrockAgentClient) keep their own class-level auth_error_hint.
+        if api_key_env != "ANTHROPIC_API_KEY":
+            self.auth_error_hint = f"Check {api_key_env}."
         if client is None:
             from anthropic import Anthropic
 
             from config.llm_credentials import resolve_env_credential
 
             resolver = credential_resolver or resolve_env_credential
-            api_key = resolver("ANTHROPIC_API_KEY")
-            self._client = Anthropic(api_key=api_key, timeout=AGENT_CLIENT_TIMEOUT_SEC)
+            api_key = resolver(api_key_env)
+            client_kwargs: dict[str, Any] = {
+                "api_key": api_key,
+                "timeout": AGENT_CLIENT_TIMEOUT_SEC,
+            }
+            if base_url:
+                client_kwargs["base_url"] = base_url
+            self._client = Anthropic(**client_kwargs)
         else:
             self._client = client
         self._model = model

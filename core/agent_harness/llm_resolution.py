@@ -53,12 +53,15 @@ def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
         cli_model = (os.getenv(env_key, "").strip() if env_key else "") or "CLI default"
         return (cli_model, cli_model)
 
-    single_model = str(getattr(settings, f"{provider}_model", "")).strip()
+    # Settings attributes use the underscore form; the provider slug can be
+    # hyphenated (custom-openai, custom-anthropic, azure-openai, vertex-ai).
+    attr_prefix = provider.replace("-", "_")
+    single_model = str(getattr(settings, f"{attr_prefix}_model", "")).strip()
     if single_model:
         return (single_model, single_model)
 
-    reasoning_model = str(getattr(settings, f"{provider}_reasoning_model", "")).strip()
-    toolcall_model = str(getattr(settings, f"{provider}_toolcall_model", "")).strip()
+    reasoning_model = str(getattr(settings, f"{attr_prefix}_reasoning_model", "")).strip()
+    toolcall_model = str(getattr(settings, f"{attr_prefix}_toolcall_model", "")).strip()
     return (reasoning_model or "default", toolcall_model or reasoning_model or "default")
 
 

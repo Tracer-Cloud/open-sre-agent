@@ -30,9 +30,12 @@ def test_registry_entries_are_well_formed() -> None:
         "minimax",
         "groq",
         "ollama",
+        "custom-openai",
     }
     for name, spec in _OPENAI_COMPATIBLE_PROVIDERS.items():
-        if name == "ollama":
+        if name in ("ollama", "custom-openai"):
+            # Base URL is resolved from settings (ollama_host / custom_openai_base_url),
+            # not a static constant.
             assert spec.base_url is None
         else:
             assert spec.base_url is not None and spec.base_url.startswith("http"), name
@@ -42,7 +45,7 @@ def test_registry_entries_are_well_formed() -> None:
     assert _OPENAI_COMPATIBLE_PROVIDERS["openrouter"].temperature is None
 
 
-@pytest.mark.parametrize("provider", sorted(_OPENAI_COMPATIBLE_PROVIDERS))
+@pytest.mark.parametrize("provider", sorted(set(_OPENAI_COMPATIBLE_PROVIDERS) - {"custom-openai"}))
 def test_create_llm_client_dispatches_registry_provider(
     provider: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -69,7 +72,7 @@ def test_create_llm_client_dispatches_registry_provider(
     assert client._max_tokens == spec.config.max_tokens
 
 
-@pytest.mark.parametrize("provider", sorted(_OPENAI_COMPATIBLE_PROVIDERS))
+@pytest.mark.parametrize("provider", sorted(set(_OPENAI_COMPATIBLE_PROVIDERS) - {"custom-openai"}))
 def test_create_llm_client_dispatches_registry_provider_to_litellm_when_transport_enabled(
     provider: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

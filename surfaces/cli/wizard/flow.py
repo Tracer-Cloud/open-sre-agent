@@ -53,13 +53,13 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.azure_openai import (
-    ensure_endpoint_settings as ensure_azure_openai_endpoint_settings,
-)
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_URL,
+)
+from surfaces.cli.wizard.endpoint_prompt import (
+    ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
@@ -804,7 +804,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # so this call short-circuits on the configured endpoint rather than
                 # re-prompting — its only job now is to hand the endpoint env back for the
                 # .env sync.
-                azure_env = ensure_azure_openai_endpoint_settings(provider)
+                azure_env = ensure_provider_endpoint_settings(provider)
                 if azure_env is None:
                     force_repick = True
                     continue
@@ -854,7 +854,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             # ``AZURE_OPENAI_BASE_URL`` in ``os.environ``, so this call short-circuits on the
             # configured endpoint instead of re-prompting — its only job now is to hand the
             # endpoint env back for the .env sync.
-            azure_env = ensure_azure_openai_endpoint_settings(provider)
+            azure_env = ensure_provider_endpoint_settings(provider)
             if azure_env is None:
                 force_repick = True
                 continue
