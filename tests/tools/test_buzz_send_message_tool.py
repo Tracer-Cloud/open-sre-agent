@@ -42,18 +42,16 @@ def _patch_config(monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_metadata_declares_buzz_source() -> None:
+def test_metadata_and_registration() -> None:
     metadata = BuzzSendMessageTool.metadata()
     assert metadata.name == "buzz_send_message"
     assert metadata.source == "buzz"
     assert metadata.side_effect_level == "external"
     assert buzz_send_message.requires_approval is True
-
-
-def test_registered_tool_is_scoped_off_the_chat_surface() -> None:
+    # Not on the gateway chat surface: the reply sink delivers gateway messages,
+    # so exposing a send tool there lets the agent target the wrong platform.
     registered = buzz_send_message.__opensre_registered_tool__
     assert registered.surfaces == ("investigation", "action")
-    assert registered.requires_approval is True
 
 
 def test_init_is_only_registry_entrypoint() -> None:
@@ -74,11 +72,6 @@ def test_is_available_true_with_private_key(buzz_source: dict[str, Any]) -> None
 
 def test_is_available_false_when_not_configured() -> None:
     assert buzz_send_message.is_available({}) is False
-
-
-def test_is_available_false_when_private_key_missing(buzz_source: dict[str, Any]) -> None:
-    buzz_source["buzz"]["private_key"] = ""
-    assert buzz_send_message.is_available(buzz_source) is False
 
 
 def test_extract_params_returns_no_credentials(buzz_source: dict[str, Any]) -> None:

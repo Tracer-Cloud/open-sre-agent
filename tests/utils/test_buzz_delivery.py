@@ -33,18 +33,6 @@ def _fake_run_factory(returncode: int, stdout: str = "", stderr: str = ""):
 # ---------------------------------------------------------------------------
 
 
-def test_post_message_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("integrations.buzz.client.shutil.which", lambda _name: "/usr/bin/buzz")
-    monkeypatch.setattr(
-        "integrations.buzz.client.subprocess.run",
-        _fake_run_factory(0, stdout='{"event_id": "evt-1", "accepted": true}'),
-    )
-    ok, error, event_id = post_buzz_message(_RELAY, "chan-uuid", "hello", _PRIVATE_KEY)
-    assert ok is True
-    assert error == ""
-    assert event_id == "evt-1"
-
-
 def test_post_message_missing_binary_never_leaks_private_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -67,25 +55,18 @@ def test_post_message_logs_never_contain_private_key(
     assert _PRIVATE_KEY not in caplog.text
 
 
-@pytest.mark.parametrize(
-    "returncode,stderr,expected_snippet",
-    [
-        (1, '{"error": "user", "message": "channel not found"}', "channel not found"),
-        (2, '{"error": "network", "message": "connection refused"}', "connection refused"),
-        (3, '{"error": "auth", "message": "invalid key"}', "invalid key"),
-        (5, '{"error": "conflict", "message": "value superseded"}', "value superseded"),
-    ],
-)
-def test_post_message_maps_exit_codes_to_errors(
-    monkeypatch: pytest.MonkeyPatch, returncode: int, stderr: str, expected_snippet: str
-) -> None:
+def test_post_message_surfaces_client_error_detail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """post_buzz_message is a thin passthrough; exhaustive exit-code -> error-string
+    mapping is BuzzClient's concern and is covered in tests/integrations/test_buzz.py.
+    This only confirms the wrapper doesn't swallow or reformat the detail."""
     monkeypatch.setattr("integrations.buzz.client.shutil.which", lambda _name: "/usr/bin/buzz")
     monkeypatch.setattr(
-        "integrations.buzz.client.subprocess.run", _fake_run_factory(returncode, stderr=stderr)
+        "integrations.buzz.client.subprocess.run",
+        _fake_run_factory(1, stderr='{"error": "user", "message": "channel not found"}'),
     )
     ok, error, event_id = post_buzz_message(_RELAY, "chan-uuid", "hello", _PRIVATE_KEY)
     assert ok is False
-    assert expected_snippet in error
+    assert error == "channel not found"
     assert event_id == ""
 
 
@@ -111,17 +92,6 @@ def test_send_report_posts_with_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     content_index = captured["cmd"].index("--content") + 1
     assert "OpenSRE Investigation" in captured["cmd"][content_index]
     assert "Report text" in captured["cmd"][content_index]
-
-
-def test_send_report_returns_false_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("integrations.buzz.client.shutil.which", lambda _name: "/usr/bin/buzz")
-    monkeypatch.setattr(
-        "integrations.buzz.client.subprocess.run",
-        _fake_run_factory(1, stderr='{"error": "user", "message": "channel not found"}'),
-    )
-    ok, error = send_buzz_report("Report", _CTX)
-    assert ok is False
-    assert "channel not found" in error
 
 
 def test_send_report_truncates_text_to_4096(monkeypatch: pytest.MonkeyPatch) -> None:

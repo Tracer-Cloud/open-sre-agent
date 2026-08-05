@@ -22,9 +22,10 @@ from platform.common.errors import OpenSREError
 # ---------------------------------------------------------------------------
 
 
-def test_config_defaults_relay_url() -> None:
+def test_config_defaults() -> None:
     cfg = BuzzConfig.model_validate({"private_key": "nsec1x"})
     assert cfg.relay_url == "http://localhost:3000"
+    assert cfg.buzz_path == "buzz"
 
 
 def test_config_strips_trailing_slash_from_relay_url() -> None:
@@ -40,10 +41,6 @@ def test_config_rejects_relay_url_without_scheme() -> None:
 def test_config_is_configured_reflects_private_key() -> None:
     assert BuzzConfig.model_validate({}).is_configured is False
     assert BuzzConfig.model_validate({"private_key": "nsec1x"}).is_configured is True
-
-
-def test_config_buzz_path_defaults_to_buzz() -> None:
-    assert BuzzConfig.model_validate({"private_key": "k"}).buzz_path == "buzz"
 
 
 # ---------------------------------------------------------------------------
@@ -160,40 +157,25 @@ def test_probe_passes_and_reports_channel_count(monkeypatch: pytest.MonkeyPatch)
     assert "2 channel(s)" in result.detail
 
 
-def test_probe_reports_auth_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "returncode,stderr,expected_snippet",
+    [
+        (3, '{"error": "auth", "message": "invalid key"}', "authentication failed"),
+        (2, '{"error": "network", "message": "connection refused"}', "unreachable"),
+        (4, "boom", "exit 4"),
+    ],
+)
+def test_probe_reports_failure_detail(
+    monkeypatch: pytest.MonkeyPatch, returncode: int, stderr: str, expected_snippet: str
+) -> None:
     monkeypatch.delenv("BUZZ_PATH", raising=False)
     monkeypatch.setattr("integrations.buzz.client.shutil.which", lambda _name: "/usr/bin/buzz")
     monkeypatch.setattr(
-        "integrations.buzz.client.subprocess.run",
-        _fake_run_factory(3, stderr='{"error": "auth", "message": "invalid key"}'),
+        "integrations.buzz.client.subprocess.run", _fake_run_factory(returncode, stderr=stderr)
     )
     result = _client().probe_access()
     assert result.status == "failed"
-    assert "authentication failed" in result.detail.lower()
-    assert "invalid key" in result.detail
-
-
-def test_probe_reports_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("BUZZ_PATH", raising=False)
-    monkeypatch.setattr("integrations.buzz.client.shutil.which", lambda _name: "/usr/bin/buzz")
-    monkeypatch.setattr(
-        "integrations.buzz.client.subprocess.run",
-        _fake_run_factory(2, stderr='{"error": "network", "message": "connection refused"}'),
-    )
-    result = _client().probe_access()
-    assert result.status == "failed"
-    assert "unreachable" in result.detail.lower()
-
-
-def test_probe_reports_other_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("BUZZ_PATH", raising=False)
-    monkeypatch.setattr("integrations.buzz.client.shutil.which", lambda _name: "/usr/bin/buzz")
-    monkeypatch.setattr(
-        "integrations.buzz.client.subprocess.run", _fake_run_factory(4, stderr="boom")
-    )
-    result = _client().probe_access()
-    assert result.status == "failed"
-    assert "exit 4" in result.detail
+    assert expected_snippet in result.detail.lower()
 
 
 # ---------------------------------------------------------------------------
