@@ -90,11 +90,17 @@ def test_provider_recomputes_when_the_scheduler_store_changes(monkeypatch) -> No
 
     provider = DefaultPromptContextProvider(_StubSession(("slack",)))
     counts = iter([0, 7])
-    monkeypatch.setattr(setup_state, "_scheduled_tasks", lambda: [object()] * next(counts))
-    monkeypatch.setattr(setup_state, "_latest_delivery_ok", lambda _tasks: None)
+    fingerprints = iter([((1, 1), (0, 0), (0, 0)), ((2, 2), (0, 0), (0, 0))])
 
-    fingerprints = iter([((1, 1), (0, 0)), ((2, 2), (0, 0))])
-    monkeypatch.setattr(setup_state, "setup_state_fingerprint", lambda: next(fingerprints))
+    def _growing_task_list() -> list[object]:
+        return [object()] * next(counts)
+
+    def _moving_fingerprint() -> tuple[tuple[int, int], ...]:
+        return next(fingerprints)
+
+    monkeypatch.setattr(setup_state, "_scheduled_tasks", _growing_task_list)
+    monkeypatch.setattr(setup_state, "_latest_delivery_ok", lambda _tasks: None)
+    monkeypatch.setattr(setup_state, "setup_state_fingerprint", _moving_fingerprint)
 
     # Act
     first = provider.setup_state()
@@ -103,3 +109,31 @@ def test_provider_recomputes_when_the_scheduler_store_changes(monkeypatch) -> No
     # Assert: adding a schedule shows up on the next turn.
     assert "configured: 0" in first
     assert "configured: 7" in second
+
+
+def test_headless_provider_reports_no_setup_state() -> None:
+    # Arrange: headless runs (scheduled reports, digests) have no operator at a
+    # terminal, so there is no setup to narrate.
+    from core.agent_harness.turns.headless_adapters import EmptyPromptContextProvider
+
+    # Act / Assert
+    assert EmptyPromptContextProvider().setup_state() == ""
+
+
+def test_shell_provider_delegates_setup_state_to_its_base(monkeypatch) -> None:
+    # Arrange: the interactive shell wraps the default provider, so the block
+    # has to survive that delegation to reach a real shell turn.
+    from surfaces.interactive_shell.grounding import cli_reference as shell_grounding
+
+    def _no_cli_reference(_session: object) -> str:
+        return ""
+
+    monkeypatch.setattr(shell_grounding, "session_cli_reference", _no_cli_reference)
+    provider = shell_grounding.ShellPromptContextProvider(_StubSession((_MARKER,)))
+
+    # Act
+    rendered = provider.setup_state()
+
+    # Assert
+    assert _MARKER in rendered
+    assert provider.surface() == "interactive_shell"

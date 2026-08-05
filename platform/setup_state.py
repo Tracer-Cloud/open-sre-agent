@@ -41,17 +41,24 @@ def _scheduled_tasks() -> list[Any]:
     return list(list_tasks())
 
 
-def _store_paths() -> tuple[Path, Path]:
+def _store_paths() -> tuple[Path, ...]:
+    """The files whose contents the snapshot is derived from.
+
+    The run database runs in WAL mode, so a finished delivery lands in the
+    ``-wal`` sidecar and the main file keeps its size and mtime until a
+    checkpoint. Both are watched, or a completed run stays invisible.
+    """
     from platform.scheduler.claim_store import _default_db_path
     from platform.scheduler.store import _default_store_path
 
-    return _default_store_path(), _default_db_path()
+    db = _default_db_path()
+    return _default_store_path(), db, db.with_name(f"{db.name}-wal")
 
 
 def setup_state_fingerprint() -> tuple[tuple[int, int], ...]:
     """A cheap change signal for the scheduler stores.
 
-    Two ``stat`` calls stand in for re-reading the task list and every task's
+    A stat per store stands in for re-reading the task list and every task's
     run history, so a caller can cache the rendered block for a whole session
     and still notice a schedule added or a delivery completed mid-session.
     A missing store reads as zeroes — it appears once created.

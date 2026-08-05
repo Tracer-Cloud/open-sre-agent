@@ -185,3 +185,32 @@ class TestSetupFingerprint:
 
         # Act / Assert
         assert setup_state.setup_state_fingerprint() is not None
+
+
+class TestFingerprintWatchesWalSidecar:
+    def test_detects_a_delivery_recorded_only_in_the_wal_file(self, tmp_path, monkeypatch) -> None:
+        # Arrange: the run database runs in WAL mode, so a finished delivery
+        # lands in the sidecar while the main file keeps its size and mtime
+        # until a checkpoint.
+        tasks = tmp_path / "scheduler_tasks.json"
+        tasks.write_text("[]")
+        db = tmp_path / "scheduler.db"
+        db.write_bytes(b"main")
+        wal = tmp_path / "scheduler.db-wal"
+        wal.write_bytes(b"")
+        monkeypatch.setattr(setup_state, "_store_paths", lambda: (tasks, db, wal))
+        before = setup_state.setup_state_fingerprint()
+
+        # Act: only the sidecar changes, as a completed run would leave it.
+        wal.write_bytes(b"a finished delivery row")
+
+        # Assert: watching the main file alone would report stale delivery status.
+        assert setup_state.setup_state_fingerprint() != before
+
+    def test_real_store_paths_include_the_wal_sidecar(self) -> None:
+        # Arrange / Act
+        paths = setup_state._store_paths()
+
+        # Assert: dropping the sidecar silently reintroduces stale delivery
+        # status, which no other test would catch.
+        assert any(path.name.endswith("-wal") for path in paths)
