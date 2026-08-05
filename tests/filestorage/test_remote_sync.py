@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from config.constants.filestorage import (
+    DEFAULT_REMOTE_SYNC_PREFIX,
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PREFIX_ENV,
@@ -1201,6 +1202,36 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     assert config.bucket == "env-bucket"
     assert config.prefix == "env-prefix"
     assert config.exclude.patterns == ("*.tmp",)
+
+
+def test_docs_two_env_vars_soft_fail_corrupt_optional_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Docs happy path: only switch + bucket in env; corrupt config must not block."""
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "docs-bucket")
+    # Intentionally leave prefix/provider/region/profile/exclude unset so they
+    # would have fallen through to the corrupt file before the soft-fail fix.
+    for name in (
+        REMOTE_SYNC_PREFIX_ENV,
+        "OPENSRE_REMOTE_SYNC_REGION",
+        "OPENSRE_REMOTE_SYNC_PROFILE",
+        "OPENSRE_REMOTE_SYNC_PROVIDER",
+        "OPENSRE_REMOTE_SYNC_EXCLUDE",
+        "OPENSRE_REMOTE_SYNC_EXCLUDE_OFF",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    config = load_remote_sync_config()
+
+    assert config is not None
+    assert config.bucket == "docs-bucket"
+    # Defaults for optionals when stored section is unreadable
+    assert config.prefix == DEFAULT_REMOTE_SYNC_PREFIX
 
 
 def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:

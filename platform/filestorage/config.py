@@ -135,17 +135,27 @@ def _exclusions(stored: Callable[[], dict[str, Any]]) -> ExclusionRules:
     return parse_exclusions(stored().get("exclude"))
 
 
-def _lazy_stored() -> Callable[[], dict[str, Any]]:
+def _lazy_stored(*, soft: bool = False) -> Callable[[], dict[str, Any]]:
     """Read the settings file at most once, and only if something needs it.
 
     A run configured entirely through the environment must not fail because an
     unrelated section of ``config.yml`` is damaged.
+
+    When ``soft`` is true (docs happy path: switch + bucket already in env), a
+    corrupt stored section falls back to ``{}`` so optional fields use defaults
+    instead of blocking sync.
     """
     cache: dict[str, dict[str, Any]] = {}
 
     def read() -> dict[str, Any]:
         if "section" not in cache:
-            cache["section"] = _stored_section()
+            try:
+                cache["section"] = _stored_section()
+            except RemoteSyncConfigError:
+                if soft:
+                    cache["section"] = {}
+                else:
+                    raise
         return cache["section"]
 
     return read
@@ -169,7 +179,17 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     Naming a bucket is not enough — the switch has to be on too, so an
     exported bucket left over from another tool never starts uploading.
     """
-    stored = _lazy_stored()
+    env_switch = os.getenv(REMOTE_SYNC_ENV)
+    env_bucket = os.getenv(REMOTE_SYNC_BUCKET_ENV, "").strip()
+    # Docs path: only OPENSRE_REMOTE_SYNC + OPENSRE_REMOTE_SYNC_BUCKET.
+    # Optionals may still consult the file — soft-fail corrupt YAML there.
+    soft = (
+        env_switch is not None
+        and env_switch.strip() != ""
+        and env_switch.strip().lower() in _TRUTHY
+        and bool(env_bucket)
+    )
+    stored = _lazy_stored(soft=soft)
     if not _enabled(stored):
         return None
     bucket = _env_or_stored(REMOTE_SYNC_BUCKET_ENV, "bucket", stored)
