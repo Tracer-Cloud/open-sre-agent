@@ -93,6 +93,7 @@ def load_credentials_from_env(
     private_key = creds.get("private_key", "")
     relay_url = creds.get("relay_url", "") or "http://localhost:3000"
     auth_tag = creds.get("auth_tag", "")
+    buzz_path = creds.get("buzz_path", "") or "buzz"
     channel = _resolve_channel(channel_override)
 
     if not private_key:
@@ -119,4 +120,5 @@ def load_credentials_from_env(
         private_key=private_key,
         auth_tag=auth_tag,
         channel=channel,
+        buzz_path=buzz_path,
     )

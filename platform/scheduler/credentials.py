@@ -128,8 +128,8 @@ def resolve_buzz_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     Priority: task.params > integration store > environment variable (then
     keyring for ``private_key``), applied per key. Returns whichever of
-    ``private_key``/``relay_url``/``default_channel``/``auth_tag`` could be
-    resolved; the caller decides whether the combination is usable.
+    ``private_key``/``relay_url``/``default_channel``/``auth_tag``/``buzz_path``
+    could be resolved; the caller decides whether the combination is usable.
     """
     resolved: dict[str, str] = {}
 
@@ -138,6 +138,7 @@ def resolve_buzz_credentials(task_params: dict[str, str]) -> dict[str, str]:
         ("relay_url", "BUZZ_RELAY_URL"),
         ("default_channel", "BUZZ_DEFAULT_CHANNEL"),
         ("auth_tag", "BUZZ_AUTH_TAG"),
+        ("buzz_path", "BUZZ_PATH"),
     ):
         value = task_params.get(key, "").strip()
         if not value:

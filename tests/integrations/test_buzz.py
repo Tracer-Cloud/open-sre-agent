@@ -345,3 +345,30 @@ def test_load_credentials_succeeds_with_key_and_channel(monkeypatch: pytest.Monk
     creds = load_credentials_from_env(channel_override="chan-uuid")
     assert creds.private_key == "nsec1x"
     assert creds.channel == "chan-uuid"
+    assert creds.buzz_path == "buzz"
+
+
+def test_load_credentials_preserves_custom_buzz_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: a stored non-PATH buzz_path must survive into watchdog/alarm
+    credential resolution, not silently fall back to a bare `buzz` PATH lookup."""
+    monkeypatch.setattr(
+        "platform.scheduler.credentials.resolve_buzz_credentials",
+        lambda _params: {
+            "private_key": "nsec1x",
+            "relay_url": "http://localhost:3000",
+            "buzz_path": "/opt/buzz/bin/buzz",
+        },
+    )
+    creds = load_credentials_from_env(channel_override="chan-uuid")
+    assert creds.buzz_path == "/opt/buzz/bin/buzz"
+
+
+def test_resolve_buzz_credentials_includes_buzz_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.scheduler.credentials import resolve_buzz_credentials
+
+    monkeypatch.setattr(
+        "platform.scheduler.credentials._get_integration_credential",
+        lambda _service, key: "/opt/buzz/bin/buzz" if key == "buzz_path" else "",
+    )
+    resolved = resolve_buzz_credentials({})
+    assert resolved.get("buzz_path") == "/opt/buzz/bin/buzz"
