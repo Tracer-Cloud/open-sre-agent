@@ -524,3 +524,140 @@ def test_get_step_log_reports_retry_error_when_retry_fetch_fails() -> None:
     assert result["retry_attempted"] is True
     assert result["retry_error"] == "rate limited"
     assert result["truncated"] is True
+
+
+def _job_logs_result(arguments: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tool": "get_job_logs",
+        "arguments": arguments,
+        "is_error": False,
+        "text": json.dumps(payload),
+        "structured_content": None,
+        "content": [],
+    }
+
+
+def test_get_step_log_keeps_small_body_when_retry_also_misses_the_step() -> None:
+    """A retry that still can't find the step must not swap the small first
+    response for the multi-thousand-line retry body: that goes straight into the
+    agent's context for no gain."""
+    small_log = "##[group]Checkout\nCloning repository\n##[endgroup]"
+    huge_log = "\n".join(f"unrelated log line {i}" for i in range(3000))
+
+    def mcp_response(config: object, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if tool != "get_job_logs":
+            return _mcp_response(config, tool, arguments)
+        content = small_log if arguments.get("tail_lines") == 500 else huge_log
+        return _job_logs_result(
+            arguments, {"job_id": 9001, "logs_content": content, "original_length": 5000}
+        )
+
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=mcp_response),
+    ):
+        result = log_tool(
+            owner="org",
+            repo="repo",
+            run_id=101,
+            job_id=9001,
+            step_name="Deploy",
+            github_token="tok",
+        )
+
+    assert result["retry_attempted"] is True
+    assert result["retry_error"] is None
+    assert result["match_strategy"] == "full-log"
+    assert result["log_text"] == small_log
+    assert result["returned_lines"] == len(small_log.splitlines())
+
+
+def test_get_step_log_does_not_report_complete_log_with_blank_lines_as_truncated() -> None:
+    """original_length counts blank lines too, so the returned text must be
+    measured unstripped or a complete log looks truncated and burns a retry."""
+    logs_content = "\nsetup\nrun tests\nteardown\n\n"
+
+    def mcp_response(config: object, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if tool != "get_job_logs":
+            return _mcp_response(config, tool, arguments)
+        return _job_logs_result(
+            arguments,
+            {
+                "job_id": 9001,
+                "logs_content": logs_content,
+                "original_length": len(logs_content.splitlines()),
+            },
+        )
+
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=mcp_response),
+    ):
+        result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001, github_token="tok")
+
+    assert result["returned_lines"] == 5
+    assert result["truncated"] is False
+    assert result["retry_attempted"] is False
+
+
+def test_get_step_log_retry_without_original_length_keeps_known_line_count() -> None:
+    """A retry response that omits original_length must not turn a known total
+    into None and silently flip truncated back to False."""
+
+    def mcp_response(config: object, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if tool != "get_job_logs":
+            return _mcp_response(config, tool, arguments)
+        if arguments.get("tail_lines") == 500:
+            return _job_logs_result(
+                arguments,
+                {
+                    "job_id": 9001,
+                    "logs_content": "##[group]Checkout\nCloning repository\n##[endgroup]",
+                    "original_length": 5000,
+                },
+            )
+        return _job_logs_result(
+            arguments,
+            {
+                "job_id": 9001,
+                "logs_content": (
+                    "##[group]Checkout\nCloning repository\n##[endgroup]\n"
+                    "##[group]Deploy\nkubectl apply -f manifests/\n##[endgroup]"
+                ),
+            },
+        )
+
+    log_tool = cast(Any, get_github_actions_step_log)
+    with (
+        patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=object()),
+        patch("integrations.github.tools.actions.call_github_mcp_tool", side_effect=mcp_response),
+    ):
+        result = log_tool(
+            owner="org",
+            repo="repo",
+            run_id=101,
+            job_id=9001,
+            step_name="Deploy",
+            github_token="tok",
+        )
+
+    assert result["match_strategy"] == "step_name"
+    assert result["original_lines"] == 5000
+    assert result["truncated"] is True
+
+
+def test_get_step_log_unavailable_payload_carries_truncation_keys() -> None:
+    """The error paths must expose the same keys as the success path so callers
+    never have to key-check before reading them."""
+    log_tool = cast(Any, get_github_actions_step_log)
+    with patch("integrations.github.tools.actions.resolve_github_mcp_config", return_value=None):
+        result = log_tool(owner="org", repo="repo", run_id=101, job_id=9001)
+
+    assert result["available"] is False
+    assert result["truncated"] is False
+    assert result["returned_lines"] == 0
+    assert result["original_lines"] is None
+    assert result["retry_attempted"] is False
+    assert result["retry_error"] is None
