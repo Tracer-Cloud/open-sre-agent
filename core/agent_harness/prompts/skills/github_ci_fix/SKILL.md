@@ -1,3 +1,9 @@
+---
+name: github-ci-fix
+description: >-
+  Fix failing GitHub PR CI / Actions checks via fix_github_pr_ci and push to
+  the existing PR head
+---
 ══════════════════════════════════════════════════════════
 GITHUB PR CI FIX SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════

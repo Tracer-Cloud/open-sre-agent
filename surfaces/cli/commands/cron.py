@@ -11,6 +11,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from platform.scheduler.credentials import requires_explicit_chat_id
 from platform.scheduler.types import Provider, TaskKind
 
 _console = Console()
@@ -65,8 +66,13 @@ def cron_command() -> None:
 @click.option(
     "--chat-id",
     type=str,
-    required=True,
-    help="Chat/channel ID for the target provider.",
+    default="",
+    show_default=False,
+    help=(
+        "Chat/channel ID for the target provider. Required unless the "
+        "provider already has a configured destination, such as a webhook "
+        "is configured (the webhook's bound channel is the destination)."
+    ),
 )
 @click.option(
     "--window",
@@ -89,13 +95,14 @@ def cron_add(
 
     # Validate cron expression by constructing the APScheduler trigger
     _validate_cron_and_timezone(cron_expr, timezone)
+    _validate_chat_id_for_provider(provider, chat_id)
 
     task = ScheduledTask(
         kind=TaskKind(kind),
         cron=cron_expr,
         timezone=timezone,
         provider=Provider(provider),
-        chat_id=chat_id,
+        chat_id=chat_id.strip(),
         window_hours=window_hours,
     )
 
@@ -259,6 +266,20 @@ def _validate_cron_and_timezone(cron_expr: str, timezone: str) -> None:
     except (ValueError, TypeError, KeyError) as exc:
         _console.print(f"[red]Error: invalid cron expression or timezone: {exc}[/red]")
         raise SystemExit(1) from exc
+
+
+def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:
+    """Reject a task with no destination the scheduler could deliver to.
+
+    Which providers can resolve a destination on their own is the scheduler's
+    knowledge, not the CLI's — see
+    :func:`platform.scheduler.credentials.requires_explicit_chat_id`.
+    """
+    if chat_id.strip() or not requires_explicit_chat_id(provider):
+        return
+    _console.print(f"[red]Error: --chat-id is required for provider {provider}.[/red]")
+    _console.print("  This provider has no configured destination to fall back on.")
+    raise SystemExit(2)
 
 
 __all__ = ["cron_command"]
