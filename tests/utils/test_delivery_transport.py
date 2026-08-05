@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from http import HTTPStatus
 
 from platform.notifications.delivery_transport import DeliveryResponse, post_form, post_json
 
@@ -46,7 +47,7 @@ class TestPostJsonHappyPath:
         )
         result = post_json("https://example.test/api", {"hello": "world"})
         assert result.ok is True
-        assert result.status_code == 200
+        assert result.status_code == HTTPStatus.OK
         assert result.data == body
         assert result.text == '{"ok":true,"id":"msg-1"}'
         assert result.error == ""
@@ -62,7 +63,7 @@ class TestPostJsonHappyPath:
         )
         result = post_json("https://example.test", {})
         assert result.ok is True
-        assert result.status_code == 403
+        assert result.status_code == HTTPStatus.FORBIDDEN
         assert result.data == {"error": "forbidden"}
         assert result.error == ""
 
@@ -148,7 +149,7 @@ class TestPostJsonResponseDecoding:
         )
         result = post_json("https://example.test", {})
         assert result.ok is True
-        assert result.status_code == 200
+        assert result.status_code == HTTPStatus.OK
         assert result.data == {}  # callers can still .get(...) safely
         assert result.text == "<html>oops</html>"
 
@@ -173,7 +174,7 @@ class TestPostJsonResponseDecoding:
         )
         result = post_json("https://example.test", {})
         assert result.ok is True
-        assert result.status_code == 204
+        assert result.status_code == HTTPStatus.NO_CONTENT
         assert result.data == {}
         assert result.text == ""
 
@@ -287,7 +288,7 @@ class TestPostFormHappyPath:
         )
         result = post_form("https://api.twilio.com/test", {"To": "+1", "Body": "hi"})
         assert result.ok is True
-        assert result.status_code == 201
+        assert result.status_code == HTTPStatus.CREATED
         assert result.data == body
         assert result.error == ""
 
