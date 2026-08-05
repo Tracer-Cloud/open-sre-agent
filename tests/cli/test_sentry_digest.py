@@ -21,7 +21,7 @@ def test_schedule_add_requires_delivery_provider(monkeypatch) -> None:
         lambda: ("sentry",),
     )
     monkeypatch.setattr(
-        "integrations.sentry.digest_prerequisites.delivery_provider_ready",
+        "platform.scheduler.delivery.delivery_provider_ready",
         lambda _provider: False,
     )
 
@@ -51,7 +51,7 @@ def test_uptime_watch_add_sends_activation_notice(monkeypatch, tmp_path) -> None
         lambda: ("sentry", "telegram"),
     )
     monkeypatch.setattr(
-        "integrations.sentry.digest_prerequisites.delivery_provider_ready",
+        "platform.scheduler.delivery.delivery_provider_ready",
         lambda _provider: True,
     )
     monkeypatch.setattr(

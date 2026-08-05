@@ -1,6 +1,6 @@
 ---
 name: posthog-summary
-description: Summarise PostHog product analytics into a per-metric report (like a Viktor report). Use for PostHog usage overviews, per-metric summaries, product-analytics digests, or "what happened this week" reporting.
+description: Summarise PostHog product analytics into a per-metric team pulse. Use for PostHog usage overviews, per-metric summaries, product-analytics digests, or "what happened this week" reporting.
 tools:
   - list_posthog_tools
   - call_posthog_tool
@@ -8,9 +8,13 @@ tools:
 
 # PostHog Summary
 
-PostHog product-analytics reporting. Produce a per-metric summary report over a
-window. Single source (PostHog); finish here, then optionally suggest a
-multi-source follow-up.
+PostHog product-analytics reporting for chat delivery. Produce a per-metric
+pulse over a window — what moved, why it matters — not a raw dashboard export.
+Single source (PostHog MCP); finish here, then optionally suggest a multi-source
+follow-up.
+
+Requires the **PostHog MCP** integration (`posthog_mcp`). The REST-only
+`posthog` integration cannot serve this skill.
 
 ## 1. Discover
 
@@ -20,8 +24,18 @@ tool) BEFORE any aggregation query and only reference events and properties it
 confirms exist. Do not reference a property (e.g. `properties.$mcp_error`)
 without seeing it in the schema first — HogQL rejects queries against unknown
 properties. To pull metric data, use `call_posthog_tool` with
-`tool_name: "execute-sql"`; use insight/dashboard tools when the user names a
-specific dashboard.
+`tool_name: "execute-sql"` and **SQL as a top-level string**:
+
+```json
+{
+  "tool_name": "execute-sql",
+  "arguments": { "query": "SELECT count() FROM events WHERE event = '$pageview'" }
+}
+```
+
+Never nest the SQL (`{"query": {"query": "SELECT …"}}`) — PostHog rejects that
+with `parameter "query" must be of type string`. Use insight/dashboard tools
+when the user names a specific dashboard.
 
 ## 2. Fetch metrics
 
@@ -34,8 +48,9 @@ Map user words to windows:
 Run **one small HogQL query per metric** — do NOT combine multiple metrics into a
 single aggregated statement, and never cross-join events against synthetic
 "window" rows. That combined shape is the most common cause of PostHog's
-`unknown error running this query`. Compute the two windows with an explicit
-conditional aggregate over a single time filter, e.g.:
+`unknown error running this query`. Return **only aggregate numbers** (two
+columns: current / previous) — never event-level rows. Compute the two windows
+with an explicit conditional aggregate over a single time filter, e.g.:
 
 ```sql
 SELECT
@@ -65,7 +80,7 @@ For each metric: current value, previous value, absolute change, percent change,
 and direction (up / down / flat). Flag a metric as notable when the percent
 change exceeds ~15% in either direction, or when a value hits zero unexpectedly.
 
-## 4. Summarise (per-metric report)
+## 4. Summarise (team pulse)
 
 Open with **I found:** a one-line scope summary (window + project + metric
 count). Then a per-metric table:
@@ -73,7 +88,8 @@ count). Then a per-metric table:
 Metric | Current | Previous | Change | % | Trend
 
 - Trend: use up / down / flat words, never rely on colour alone.
-- Call out the 1-3 most notable movers with a short "why it matters" line.
+- After the table, call out the 1-3 most notable movers with a short "why it
+  matters" line and one clear next action when the data supports it.
 - When a window returns no data, say so explicitly for that metric — never
   silently widen the window or invent numbers.
 
@@ -82,6 +98,9 @@ Metric | Current | Previous | Change | % | Trend
 - HogQL time ranges are relative; state the absolute window in the report.
 - Distinguish "metric returned zero" (real) from "query failed" (report the
   failure, do not present it as zero).
+- `execute-sql` arguments must be `{"query": "<sql string>"}`. Nested
+  `{"query": {"query": "…"}}` fails before any data is read — unwrap and retry
+  once, then mark the metric failed if it still errors.
 - The MCP server exposes 240+ tools; narrow with `name_filter` before calling —
   never dump the full listing.
 - One bounded query per metric group; event-level scans are expensive.

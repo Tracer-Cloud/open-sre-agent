@@ -174,6 +174,32 @@ class TestExecutor:
         assert args[3] == "tok"
         assert args[4] == "u1"
 
+    def test_slack_delivery_fails_with_webhook_when_chat_id_set(self) -> None:
+        """Webhook ignores chat_id — must not silently deliver to the wrong channel."""
+        task = ScheduledTask(
+            id="test_sl_webhook_chat",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.SLACK,
+            chat_id="C0123ABCD",
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch(
+                "platform.scheduler.executor.resolve_slack_credentials",
+                return_value={"webhook_url": "https://hooks.slack.com/services/T/B/x"},
+            ),
+            patch("integrations.slack.delivery.send_slack_webhook_message") as mock_hook,
+        ):
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is False
+        mock_hook.assert_not_called()
+
     def test_rocketchat_delivery_fails_without_token_credentials(self) -> None:
         task = ScheduledTask(
             id="test_rc_03",

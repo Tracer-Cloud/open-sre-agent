@@ -9,6 +9,7 @@ from platform.scheduler.delivery import (
     delivery_provider_ready,
     delivery_setup_hint,
     rocketchat_delivery_ready,
+    slack_can_deliver,
     slack_delivery_ready,
     telegram_delivery_ready,
 )
@@ -29,17 +30,37 @@ class TestDeliveryReadiness:
         assert delivery_provider_ready(Provider.TELEGRAM) is True
         assert any_delivery_ready() is True
 
-    def test_slack_ready_with_webhook(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_slack_ready_with_bot_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "platform.scheduler.delivery.resolve_telegram_credentials",
             lambda _params: {},
         )
         monkeypatch.setattr(
             "platform.scheduler.delivery.resolve_slack_credentials",
-            lambda _params: {"webhook_url": "https://hooks.slack.com/services/x"},
+            lambda _params: {"access_token": "xoxb-token"},
         )
         assert slack_delivery_ready() is True
         assert delivery_provider_ready("slack") is True
+
+    def test_slack_not_ready_with_webhook_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A webhook posts to its own fixed channel and ignores the task's
+        # chat_id, so a webhook-only install must not pass readiness for a
+        # report that always carries an explicit --chat-id.
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_telegram_credentials",
+            lambda _params: {},
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_rocketchat_credentials",
+            lambda _params: {},
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_slack_credentials",
+            lambda _params: {"webhook_url": "https://hooks.slack.com/services/x"},
+        )
+        assert slack_delivery_ready() is False
+        assert delivery_provider_ready("slack") is False
+        assert any_delivery_ready() is False
 
     def test_rocketchat_ready_with_full_token_trio(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Isolate telegram/slack too: any_delivery_ready() must read
@@ -103,3 +124,17 @@ class TestDeliveryReadiness:
         assert "Telegram" in delivery_setup_hint(Provider.TELEGRAM)
         assert "Slack" in delivery_setup_hint(Provider.SLACK)
         assert "Rocket.Chat" in delivery_setup_hint(Provider.ROCKETCHAT)
+
+    def test_unknown_provider_hint(self) -> None:
+        hint = delivery_setup_hint("discord")
+        assert "discord" in hint
+        assert "not a supported delivery provider" in hint
+        assert "telegram" in hint
+
+    def test_slack_can_deliver_policy(self) -> None:
+        assert slack_can_deliver({"access_token": "xoxb"}, chat_id="C1") is True
+        assert (
+            slack_can_deliver({"webhook_url": "https://hooks.slack.com/x"}, chat_id="C1") is False
+        )
+        assert slack_can_deliver({"webhook_url": "https://hooks.slack.com/x"}, chat_id="") is True
+        assert slack_can_deliver({}, chat_id="") is False

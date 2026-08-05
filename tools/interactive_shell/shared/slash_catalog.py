@@ -127,7 +127,8 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         ),
     ),
     "/posthog": _mcp(
-        "Schedule and run automated PostHog per-metric summary reports (requires Telegram or Slack). "
+        "Schedule and run automated PostHog per-metric summary reports "
+        "(requires Telegram, Slack bot token, or Rocket.Chat). "
         "Subcommands: report run, report schedule list|add|run|remove.",
         "User asks to schedule or automate a PostHog metric summary report delivery",
         "User asks to list or run configured PostHog report schedules",

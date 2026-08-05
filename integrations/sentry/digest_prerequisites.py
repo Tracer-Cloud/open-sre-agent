@@ -5,8 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from platform.harness_ports import configured_integration_services
-from platform.scheduler.delivery import delivery_provider_ready, delivery_setup_hint
-from platform.scheduler.types import Provider
+from platform.scheduler.delivery import require_delivery_provider
 
 _console = Console()
 
@@ -22,13 +21,8 @@ def require_sentry_integration() -> None:
     raise SystemExit(1)
 
 
-def require_digest_delivery_provider(provider: str) -> None:
-    """Exit when the chosen delivery provider is not configured."""
-    provider_enum = Provider(provider)
-    if delivery_provider_ready(provider_enum):
-        return
-    _console.print(f"[red]{delivery_setup_hint(provider_enum)}[/red]")
-    raise SystemExit(1)
+# Stable alias — delivery gate lives in platform.scheduler.delivery.
+require_digest_delivery_provider = require_delivery_provider
 
 
 __all__ = ["require_digest_delivery_provider", "require_sentry_integration"]

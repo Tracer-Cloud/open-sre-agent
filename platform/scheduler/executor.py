@@ -143,14 +143,30 @@ def _deliver_telegram(task: ScheduledTask, message: str) -> tuple[bool, str, str
 
 def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
     """Deliver via Slack using the shared Slack delivery helper when possible."""
+    from platform.scheduler.delivery import slack_can_deliver
+
     creds = resolve_slack_credentials(task.params)
-    access_token = creds.get("access_token", "")
-    webhook_url = creds.get("webhook_url", "")
+    access_token = str(creds.get("access_token") or "").strip()
+    webhook_url = str(creds.get("webhook_url") or "").strip()
+    chat_id = (task.chat_id or "").strip()
+
+    # Same policy as readiness: chat_id → bot token; empty chat_id → webhook OK.
+    if not slack_can_deliver(creds, chat_id=chat_id):
+        if chat_id and webhook_url and not access_token:
+            return (
+                False,
+                "Slack bot token required when chat_id is set (a webhook alone "
+                "cannot target an explicit chat_id)",
+                "",
+            )
+        if not chat_id:
+            return False, "Missing chat_id or webhook_url for Slack delivery", ""
+        return False, "Scheduled tasks require Slack bot access_token for chat_id delivery", ""
 
     # Strip HTML tags — Slack uses mrkdwn, not HTML
     plain_message = _strip_html(message)
 
-    if access_token and task.chat_id:
+    if access_token and chat_id:
         # Direct API post as a new top-level message
         from platform.notifications.delivery_transport import post_json
 
@@ -159,7 +175,7 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
             "Content-Type": "application/json; charset=utf-8",
         }
         payload = {
-            "channel": task.chat_id,
+            "channel": chat_id,
             "text": plain_message,
         }
         response = post_json(
@@ -178,23 +194,14 @@ def _deliver_slack(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
         msg_ts = str(response.data.get("ts", ""))
         return True, "", msg_ts
 
-    if webhook_url:
-        from integrations.slack.delivery import send_slack_webhook_message
+    # Channel-bound webhook path (no explicit chat_id).
+    from integrations.slack.delivery import send_slack_webhook_message
 
-        ok, error = send_slack_webhook_message(
-            plain_message,
-            webhook_url=webhook_url,
-        )
-        return ok, error, ""
-
-    if not task.chat_id:
-        return False, "Missing chat_id or webhook_url for Slack delivery", ""
-
-    return (
-        False,
-        "Scheduled tasks require Slack webhook_url or bot access_token",
-        "",
+    ok, error = send_slack_webhook_message(
+        plain_message,
+        webhook_url=webhook_url,
     )
+    return ok, error, ""
 
 
 def _deliver_discord(task: ScheduledTask, message: str) -> tuple[bool, str, str]:

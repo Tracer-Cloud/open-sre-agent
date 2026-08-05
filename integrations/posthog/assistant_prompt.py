@@ -11,11 +11,12 @@ def posthog_assistant_prompt_fragment() -> str:
     return (
         "PostHog metric report: open **I found:** with a one-line scope summary "
         "(window, project, metric count). Present a per-metric table with columns "
-        "Metric | Current | Previous | Change | % | Trend. Use up/down/flat words for "
-        "the trend, never colour alone. Call out the 1-3 most notable movers with a "
-        "short why-it-matters line. When a metric window returns no data, say so "
-        "explicitly for that metric, do not silently widen the window or present a "
-        "failed query as zero."
+        "Metric | Current | Previous | Change | % | Trend. Use up/down/flat words "
+        "for the trend, never colour alone. After the table, call out the 1-3 most "
+        "notable movers with a short why-it-matters line and one clear next action "
+        "when the data supports it. When a metric window returns no data, say so "
+        "explicitly for that metric; distinguish real zeros from failed queries — "
+        "never silently widen the window or present a failed query as zero."
     )
 
 

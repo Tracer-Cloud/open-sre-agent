@@ -116,7 +116,7 @@ A successful check connects to the MCP server and reports how many tools it disc
 
 ## Metric report (scheduled)
 
-Deliver a per-metric PostHog analytics summary to Slack or Telegram, on demand or on a schedule. This uses the headless **posthog-summary** skill path (schema discovery, then one bounded HogQL query per metric), not the investigation pipeline or generic `opensre cron` kinds. It requires the PostHog **MCP** integration above — the REST `posthog` integration alone cannot serve it.
+Deliver a per-metric PostHog analytics pulse to Telegram, Slack, or Rocket.Chat, on demand or on a schedule — coworker-style digests (what moved and why it matters), not a raw dashboard dump. Slack delivery needs a bot token (a webhook alone cannot honor `--chat-id`). This uses the headless **posthog-summary** skill path (schema discovery, then one bounded HogQL query per metric), not the investigation pipeline or generic `opensre cron` kinds. It requires the PostHog **MCP** integration above — the REST `posthog` integration alone cannot serve it.
 
 | Command | What it does |
 | --- | --- |
@@ -149,10 +149,12 @@ opensre posthog report schedule add \
   --period 7d
 ```
 
+Slack delivery needs `SLACK_BOT_TOKEN`. A `SLACK_WEBHOOK_URL` alone will not work here: a webhook always posts to the one channel it was created for, so it cannot honour `--chat-id`.
+
 `--period` accepts a relative window (`24h`, `7d`, `30d`; default `7d`). Optional `--metrics` narrows the report to a comma-separated set instead of the default metric set.
 
 The gateway daemon picks up scheduled reports automatically when it is running. If the LLM is unavailable, the run fails with an error (no deterministic fallback).
 
 <Note>
-The report compares the current window against the previous comparable window per metric. When a metric returns no data for the window it is reported explicitly as zero-ingestion, not silently widened or fabricated.
+The report compares the current window against the previous comparable window per metric. Real zeros are reported as zeros; failed queries are called out as failures — never silently widened or fabricated, and never presented as zero when the query did not run.
 </Note>

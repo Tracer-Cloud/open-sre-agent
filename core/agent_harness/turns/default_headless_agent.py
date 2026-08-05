@@ -54,6 +54,7 @@ def build_default_headless_agent(
     slash_ports_factory: SlashPortsFactory | None = None,
     prompts: PromptContextProvider | None = None,
     gather_enabled: bool = True,
+    gather_max_iterations: int | None = None,
     is_tty: bool = False,
 ) -> HeadlessAgent:
     """Return a :class:`HeadlessAgent` wired with default harness ports.
@@ -96,6 +97,7 @@ def build_default_headless_agent(
         accounting=turn_accounting,
         error_reporter=error_reporter,
         gather_enabled=gather_enabled,
+        gather_max_iterations=gather_max_iterations,
         is_tty=is_tty,
     )
 
