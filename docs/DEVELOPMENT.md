@@ -13,8 +13,8 @@ make install
 [`make install`](https://github.com/Tracer-Cloud/opensre/blob/main/Makefile) runs `uv sync --frozen --extra dev` and the analytics install helper. Use **`uv run opensre …`** from the repo root so you always hit this checkout’s `.venv`, not another `opensre` on your `PATH`.
 
 ```bash
-opensre onboard
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+uv run opensre onboard
+uv run opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 ```
 
 ## Quality gates (same as CI)
