@@ -26,6 +26,7 @@ _CORE_FIELDS = (
     "last_investigation_id",
     "last_assistant_intent",
     "last_synthetic_observation_path",
+    "pending_schedule_offer",
     "integrations",
     "available_capabilities",
     "accumulated_context",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from integrations.grafana.base import GrafanaClientBase
 from integrations.grafana.config import GrafanaAccountConfig
@@ -13,6 +14,11 @@ from integrations.grafana.tempo import TempoMixin
 logger = logging.getLogger(__name__)
 
 _grafana_client_cache: dict[str, GrafanaClient] = {}
+#: Datasource discovery is one network round trip per account. An investigation
+#: queries Mimir, Loki, Tempo and alert rules concurrently, so without this the
+#: first callers all miss the empty cache and each runs its own discovery — and
+#: against an unreachable Grafana each one waits out the full connect timeout.
+_grafana_client_lock = threading.Lock()
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
@@ -47,9 +53,39 @@ def get_grafana_client_from_credentials(
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials."""
     cache_key = f"creds_{account_id}_{endpoint}"
-    if cache_key in _grafana_client_cache:
-        return _grafana_client_cache[cache_key]
+    cached = _grafana_client_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    with _grafana_client_lock:
+        # Re-check inside the lock: a caller that queued behind the discovery
+        # above must reuse its result rather than repeat the round trip.
+        cached = _grafana_client_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        return _build_and_cache_client(
+            cache_key=cache_key,
+            endpoint=endpoint,
+            api_key=api_key,
+            account_id=account_id,
+            username=username,
+            password=password,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+        )
 
+
+def _build_and_cache_client(
+    *,
+    cache_key: str,
+    endpoint: str,
+    api_key: str,
+    account_id: str,
+    username: str,
+    password: str,
+    verify_ssl: bool,
+    ca_bundle: str,
+) -> GrafanaClient:
+    """Discover datasources once and cache the resulting client."""
     config = GrafanaAccountConfig(
         account_id=account_id,
         instance_url=endpoint.rstrip("/"),

@@ -14,6 +14,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from core.agent_harness.session.history_entry import build_history_entry
+
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
@@ -23,6 +25,7 @@ else:
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
+from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState
@@ -137,6 +140,9 @@ class SessionCore:
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
+    pending_schedule_offer: PendingScheduleOffer | None = None
+    """Structured schedule awaiting bare yes — set by propose_scheduled_delivery."""
+
     # Infra keys pulled from a completed investigation state and carried into the
     # next investigation. A class-level tuple so callers have a single source for
     # "what counts as accumulated context".
@@ -183,11 +189,13 @@ class SessionCore:
         ``unknown_command`` or ``invalid_subcommand``) so analytics can
         distinguish them from handler failures.
         """
-        entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
-        if response_text:
-            entry["response_text"] = response_text
-        if slash_outcome:
-            entry["slash_outcome"] = slash_outcome
+        entry = build_history_entry(
+            kind,
+            text,
+            ok=ok,
+            response_text=response_text,
+            slash_outcome=slash_outcome,
+        )
 
         self.history.append(entry)
         self._shed_stale_response_text()
@@ -361,6 +369,7 @@ class SessionCore:
             else TaskRegistry()
         )
         self.last_synthetic_observation_path = None
+        self.pending_schedule_offer = None
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
             self.session_id = str(uuid.uuid4())

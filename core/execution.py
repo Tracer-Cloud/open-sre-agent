@@ -181,6 +181,25 @@ def execute_tools(
     ]
 
 
+def _unavailable_tool_message(name: str, tool_map: Mapping[str, Any]) -> str:
+    """Explain a missing tool so the caller can recover on the next iteration.
+
+    A tool absent from the map is usually configured-but-unavailable (its
+    integration lacks a credential this session), not nonexistent — so say
+    "not available" and name the siblings that are, rather than leaving the
+    model to guess and the user to read a bare identifier.
+    """
+    family = name.split("_", 1)[0]
+    siblings = sorted(
+        other for other in tool_map if other != name and other.split("_", 1)[0] == family
+    )
+    if not siblings:
+        return f"tool {name!r} is not available in this session"
+    return (
+        f"tool {name!r} is not available in this session; available instead: {', '.join(siblings)}"
+    )
+
+
 def _execute_one_tool_call(
     tc: ToolCall,
     *,
@@ -196,7 +215,9 @@ def _execute_one_tool_call(
     if tool is None:
         mark_span_outcome(span_attrs, "unknown_tool", error=True)
         logger.debug("tool_call unknown name=%s id=%s", tc.name, tc.id)
-        return _error_result(f"unknown tool: {tc.name}", metadata={"tool_name": tc.name})
+        return _error_result(
+            _unavailable_tool_message(tc.name, tool_map), metadata={"tool_name": tc.name}
+        )
 
     try:
         validation_error = tool.validate_public_input(tc.input)

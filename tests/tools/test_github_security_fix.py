@@ -81,6 +81,25 @@ def test_parse_security_alert_url_supports_common_github_urls() -> None:
     assert code.alert_type == "code_scanning"
     assert code.number == 7
 
+    code_page = parse_security_alert_url(
+        "https://github.com/acme/app/security/code-scanning?query=is%3Aopen"
+    )
+    assert code_page is not None
+    assert code_page.alert_type == "code_scanning"
+    assert code_page.number is None
+
+    code_alerts_page = parse_security_alert_url("https://github.com/acme/app/code-scanning/alerts")
+    assert code_alerts_page is not None
+    assert code_alerts_page.alert_type == "code_scanning"
+    assert code_alerts_page.number is None
+
+    code_page_with_sentence_punctuation = parse_security_alert_url(
+        "https://github.com/acme/app/security/code-scanning."
+    )
+    assert code_page_with_sentence_punctuation is not None
+    assert code_page_with_sentence_punctuation.alert_type == "code_scanning"
+    assert code_page_with_sentence_punctuation.number is None
+
     quality_page = parse_security_alert_url("https://github.com/acme/app/security/quality")
     assert quality_page is not None
     assert quality_page.alert_type == "code_quality"
@@ -203,6 +222,47 @@ def test_gather_code_quality_context_builds_coding_task() -> None:
     assert "maintainability" in ctx.task
     assert "This import is unused." in ctx.task
     assert request.call_args.kwargs["api_version"] == "2026-03-10"
+
+
+def test_gather_code_scanning_page_url_targets_code_scanning_alerts() -> None:
+    alert = {
+        "number": 7,
+        "html_url": "https://github.com/acme/app/security/code-scanning/7",
+        "rule": {
+            "id": "py/stack-trace-exposure",
+            "description": "Stack trace exposure",
+            "security_severity_level": "high",
+            "help": "Return a generic error on external surfaces.",
+        },
+        "most_recent_instance": {
+            "location": {"path": "gateway/http/webapp.py", "start_line": 20},
+            "message": {"text": "Exception details are exposed in an HTTP response."},
+        },
+    }
+    paths: list[str] = []
+
+    def fake_paginate(_self: GitHubRestClient, path: str, **_kwargs: Any) -> list[dict[str, Any]]:
+        paths.append(path)
+        if path.endswith("/code-scanning/alerts"):
+            return [alert]
+        if path.endswith("/code-scanning/alerts/7/instances"):
+            return []
+        raise AssertionError(f"unexpected path: {path}")
+
+    with patch.object(GitHubRestClient, "paginate", fake_paginate):
+        ctx = gather_security_alert_context(
+            alert_url="https://github.com/acme/app/security/code-scanning",
+            github_token="tok",
+        )
+
+    assert ctx.alert_type == "code_scanning"
+    assert ctx.number == 7
+    assert ctx.summary == "Stack trace exposure"
+    assert "gateway/http/webapp.py:20" in ctx.task
+    assert paths == [
+        "/repos/acme/app/code-scanning/alerts",
+        "/repos/acme/app/code-scanning/alerts/7/instances",
+    ]
 
 
 def test_gather_auto_selects_highest_severity_supported_alert() -> None:
