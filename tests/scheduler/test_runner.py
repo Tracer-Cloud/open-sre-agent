@@ -14,6 +14,8 @@ from platform.scheduler.runner import (
     _pending_fire_times,
     _register_jobs,
     compute_next_run,
+    refresh_background_scheduler,
+    resync_scheduler_jobs,
     run_task_now,
 )
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
@@ -175,6 +177,72 @@ class TestRegisterJobs:
 
         assert count == 1
         assert scheduler.job_ids == ["prompt-loop"]
+
+    def test_resync_removes_stale_jobs(
+        self,
+        tmp_path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from platform.scheduler import store as scheduler_store
+        from platform.scheduler.store import add_task
+
+        class _FakeJob:
+            def __init__(self, job_id: str) -> None:
+                self.id = job_id
+
+        class _FakeScheduler:
+            def __init__(self) -> None:
+                self.jobs: dict[str, _FakeJob] = {"stale": _FakeJob("stale")}
+
+            def add_listener(self, *_args: object) -> None:
+                return None
+
+            def add_job(self, *args: object, **kwargs: object) -> None:
+                _ = args
+                job_id = str(kwargs["id"])
+                self.jobs[job_id] = _FakeJob(job_id)
+
+            def get_jobs(self) -> list[_FakeJob]:
+                return list(self.jobs.values())
+
+            def remove_job(self, job_id: str) -> None:
+                self.jobs.pop(job_id, None)
+
+        store_path = tmp_path / "tasks.json"
+        monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store_path)
+        add_task(
+            ScheduledTask(
+                id="keep",
+                kind=TaskKind.DAILY_SUMMARY,
+                cron="0 9 * * *",
+                provider=Provider.TELEGRAM,
+            ),
+            store_path,
+        )
+
+        scheduler = _FakeScheduler()
+        count = resync_scheduler_jobs(scheduler)
+
+        assert count == 1
+        assert set(scheduler.jobs) == {"keep"}
+
+    def test_refresh_starts_when_scheduler_was_idle(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        sentinel = object()
+
+        def _start_background_scheduler(*, task_filter=None):
+            _ = task_filter
+            return sentinel, 2
+
+        monkeypatch.setattr(
+            "platform.scheduler.runner.start_background_scheduler",
+            _start_background_scheduler,
+        )
+        scheduler, count = refresh_background_scheduler(None)
+        assert scheduler is sentinel
+        assert count == 2
 
 
 class TestRunTaskNow:

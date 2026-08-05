@@ -69,6 +69,7 @@ class GatewayManager:
         self.discord_background_worker: DiscordGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
+        self._scheduler_reload_thread: threading.Thread | None = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
         self._credential_hydrator_factory = (
@@ -120,7 +121,11 @@ class GatewayManager:
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Shut down all components and return whether the chat worker stopped."""
         set_ready(False)
+        self._stopped.set()
         stopped = True
+        if self._scheduler_reload_thread is not None:
+            self._scheduler_reload_thread.join(timeout=min(timeout, 2.0))
+            self._scheduler_reload_thread = None
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
@@ -134,7 +139,6 @@ class GatewayManager:
         if self.discord_background_worker is not None:
             stopped = self.discord_background_worker.stop(timeout=timeout) and stopped
         clear_component_status()
-        self._stopped.set()
         return stopped
 
     def _load_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
@@ -220,6 +224,7 @@ class GatewayManager:
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
         from gateway.runtime.bootstrap import install_runtime
+        from platform.scheduler.reload_signal import consume_scheduler_reload_request
         from platform.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
@@ -227,12 +232,58 @@ class GatewayManager:
         from gateway.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 
         gate_registered_scheduler_runners(self.turn_gate)
+        # Drop any reload request queued before this process owned the scheduler.
+        consume_scheduler_reload_request()
         scheduler, task_count = start_background_scheduler()
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"
+        else:
+            self.scheduler = scheduler
+            self.components["scheduler"] = f"running {task_count} scheduled task(s)"
+        self._start_scheduler_reload_watcher(_logger)
+
+    def _start_scheduler_reload_watcher(self, logger: logging.Logger) -> None:
+        """Poll for cross-process reload requests from `/loops` and cron mutations."""
+        if self._scheduler_reload_thread is not None:
             return
+
+        def _watch() -> None:
+            from platform.scheduler.reload_signal import (
+                RELOAD_POLL_SECONDS,
+                consume_scheduler_reload_request,
+            )
+
+            while not self._stopped.wait(timeout=RELOAD_POLL_SECONDS):
+                if not consume_scheduler_reload_request():
+                    continue
+                try:
+                    self._reload_scheduler(logger)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Scheduler reload failed (%s)",
+                        type(exc).__name__,
+                    )
+
+        self._scheduler_reload_thread = threading.Thread(
+            target=_watch,
+            name="opensre-scheduler-reload",
+            daemon=True,
+        )
+        self._scheduler_reload_thread.start()
+
+    def _reload_scheduler(self, logger: logging.Logger) -> None:
+        """Resync the live scheduler (or start one) from the current task store."""
+        from platform.scheduler.runner import refresh_background_scheduler
+
+        scheduler, task_count = refresh_background_scheduler(self.scheduler)
         self.scheduler = scheduler
-        self.components["scheduler"] = f"running {task_count} scheduled task(s)"
+        if scheduler is None:
+            self.components["scheduler"] = "idle (no scheduled tasks)"
+            logger.info("Scheduler idle after reload (no enabled tasks)")
+        else:
+            self.components["scheduler"] = f"running {task_count} scheduled task(s)"
+            logger.info("Scheduler reloaded with %d task(s)", task_count)
+        self._publish_status(logger)
 
     def _publish_status(self, logger: logging.Logger) -> None:
         GATEWAY_PID_FILE.parent.mkdir(parents=True, exist_ok=True)

@@ -113,11 +113,13 @@ def _register_jobs(
     scheduler: Any,
     *,
     task_filter: TaskFilter | None = None,
+    add_listener: bool = True,
 ) -> int:
     """Register all enabled tasks on *scheduler*; invalid tasks are logged and skipped."""
-    from apscheduler.events import EVENT_JOB_SUBMITTED
+    if add_listener:
+        from apscheduler.events import EVENT_JOB_SUBMITTED
 
-    scheduler.add_listener(_on_job_submitted, EVENT_JOB_SUBMITTED)
+        scheduler.add_listener(_on_job_submitted, EVENT_JOB_SUBMITTED)
 
     enabled_count = 0
     for task in list_tasks():
@@ -153,6 +155,64 @@ def _register_jobs(
             task.timezone,
         )
     return enabled_count
+
+
+def _desired_task_ids(*, task_filter: TaskFilter | None = None) -> set[str]:
+    """Return enabled task ids that should be registered under ``task_filter``."""
+    desired: set[str] = set()
+    for task in list_tasks():
+        if not task.enabled:
+            continue
+        if task_filter is not None and not task_filter(task):
+            continue
+        desired.add(task.id)
+    return desired
+
+
+def resync_scheduler_jobs(
+    scheduler: Any,
+    *,
+    task_filter: TaskFilter | None = None,
+) -> int:
+    """Replace registered jobs on a live scheduler with the current task store."""
+    existing_ids = {job.id for job in scheduler.get_jobs()}
+    enabled_count = _register_jobs(
+        scheduler,
+        task_filter=task_filter,
+        add_listener=False,
+    )
+    desired_ids = _desired_task_ids(task_filter=task_filter)
+    for job_id in existing_ids - desired_ids:
+        try:
+            scheduler.remove_job(job_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to remove stale scheduler job %s: %s", job_id, exc)
+    logger.info("Scheduler resynced with %d enabled task(s)", enabled_count)
+    return enabled_count
+
+
+def refresh_background_scheduler(
+    scheduler: Any | None,
+    *,
+    task_filter: TaskFilter | None = None,
+) -> tuple[Any | None, int]:
+    """Resync ``scheduler`` or start one when the store gained its first task.
+
+    Returns ``(scheduler, task_count)``. When every task is disabled/removed the
+    existing scheduler is shut down and ``None`` is returned.
+    """
+    if scheduler is None:
+        return start_background_scheduler(task_filter=task_filter)
+
+    enabled_count = resync_scheduler_jobs(scheduler, task_filter=task_filter)
+    if enabled_count > 0:
+        return scheduler, enabled_count
+
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Scheduler shutdown after empty resync failed: %s", exc)
+    return None, 0
 
 
 def start_background_scheduler(
@@ -224,6 +284,8 @@ def run_task_now(task_id: str) -> bool:
 
 __all__ = [
     "compute_next_run",
+    "refresh_background_scheduler",
+    "resync_scheduler_jobs",
     "run_task_now",
     "start_background_scheduler",
     "start_scheduler",

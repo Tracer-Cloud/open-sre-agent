@@ -73,6 +73,7 @@ def test_reload_loop_scheduler_replaces_existing_scheduler(
 ) -> None:
     schedulers = [_FakeScheduler(), _FakeScheduler()]
     started: list[_FakeScheduler] = []
+    reloads: list[str] = []
 
     def _install_runtime() -> None:
         return None
@@ -83,15 +84,23 @@ def test_reload_loop_scheduler_replaces_existing_scheduler(
         started.append(scheduler)
         return scheduler, 1
 
+    def _request_scheduler_reload() -> None:
+        reloads.append("requested")
+
     monkeypatch.setattr(loop_scheduler, "install_runtime", _install_runtime)
     monkeypatch.setattr(
         loop_scheduler,
         "start_background_scheduler",
         _start_background_scheduler,
     )
+    monkeypatch.setattr(
+        "platform.scheduler.reload_signal.request_scheduler_reload",
+        _request_scheduler_reload,
+    )
 
     assert loop_scheduler.start_loop_scheduler() == 1
     assert started[0].shutdown_waits == []
     assert loop_scheduler.reload_loop_scheduler() == 1
+    assert reloads == ["requested"]
     assert started[0].shutdown_waits == [False]
     assert started[1].shutdown_waits == []

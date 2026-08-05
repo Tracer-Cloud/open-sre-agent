@@ -87,10 +87,19 @@ def execute_task(
             fire_time,
             status=TaskStatus.SUCCESS,
             posted_message_id=message_id,
+            error=error,
             provider=_run_provider_label(task),
         )
-        _emit_analytics(task, TaskStatus.SUCCESS)
-        logger.info("Task %s delivered successfully (message_id=%s)", task.id, message_id)
+        _emit_analytics(task, TaskStatus.SUCCESS, error=error)
+        if error:
+            logger.warning(
+                "Task %s delivered with partial channel failures (message_id=%s): %s",
+                task.id,
+                message_id,
+                error,
+            )
+        else:
+            logger.info("Task %s delivered successfully (message_id=%s)", task.id, message_id)
         return True
     else:
         _record_failure(task, fire_time, error)
@@ -158,17 +167,40 @@ def _deliver_to_providers(
     message: str,
     providers: tuple[Provider, ...],
 ) -> tuple[bool, str, str]:
-    """Fan out one built message to every requested provider."""
-    errors: list[str] = []
+    """Fan out one built message to every requested provider.
+
+    Retries destinations that fail on the first pass so a transient outage on
+    one channel does not permanently miss the tick. When at least one channel
+    succeeds, the claim completes as success and failed destinations are
+    surfaced in the error field (callers can ``/loops run`` for a fresh
+    second-precision delivery of the remaining channels).
+    """
+    pending = list(providers)
     message_ids: list[str] = []
-    for provider in providers:
-        delivery_task = _task_for_delivery_provider(task, provider)
-        ok, error, message_id = _deliver_single(delivery_task, message)
-        if ok:
-            message_ids.append(f"{provider.value}:{message_id}" if message_id else provider.value)
-        else:
-            errors.append(f"{provider.value}: {error}")
-    return (not errors, "; ".join(errors), ", ".join(message_ids))
+    errors: list[str] = []
+    for attempt in range(3):
+        if not pending:
+            break
+        still_pending: list[Provider] = []
+        for provider in pending:
+            delivery_task = _task_for_delivery_provider(task, provider)
+            ok, error, message_id = _deliver_single(delivery_task, message)
+            if ok:
+                message_ids.append(
+                    f"{provider.value}:{message_id}" if message_id else provider.value
+                )
+                continue
+            if attempt < 2:
+                still_pending.append(provider)
+            else:
+                errors.append(f"{provider.value}: {error}")
+        pending = still_pending
+
+    if message_ids and not errors:
+        return True, "", ", ".join(message_ids)
+    if message_ids and errors:
+        return True, f"partial delivery: {'; '.join(errors)}", ", ".join(message_ids)
+    return False, "; ".join(errors), ""
 
 
 def _task_for_delivery_provider(task: ScheduledTask, provider: Provider) -> ScheduledTask:

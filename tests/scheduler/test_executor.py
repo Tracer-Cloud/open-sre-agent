@@ -194,6 +194,41 @@ class TestExecutor:
         mock_shell.assert_called_once()
         mock_slack.assert_called_once()
 
+    def test_loop_fanout_partial_success_completes_claim(self) -> None:
+        """One channel failing must not leave an unrecoverable failed claim."""
+        from platform.scheduler.claim_store import get_runs
+
+        task = ScheduledTask(
+            id="test_fanout_partial",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+            params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch("platform.scheduler.executor._deliver_interactive_shell") as mock_shell,
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+        ):
+            mock_shell.return_value = (True, "", "local:1")
+            mock_slack.return_value = (False, "webhook missing", "")
+            result = execute_task(task, "2026-01-01T09:05")
+
+        assert result is True
+        runs = get_runs(task.id)
+        assert len(runs) == 1
+        assert runs[0].status.value == "success"
+        assert "interactive_shell:local:1" in runs[0].posted_message_id
+        assert "partial delivery" in runs[0].error
+        assert "slack" in runs[0].error
+        # First attempt + two retries for the failed slack destination.
+        assert mock_slack.call_count == 3
+        assert mock_shell.call_count == 1
+
     def test_rocketchat_delivery_posts_to_channel(self) -> None:
         task = ScheduledTask(
             id="test_rc_02",

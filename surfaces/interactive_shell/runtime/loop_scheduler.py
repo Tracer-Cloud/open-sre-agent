@@ -32,7 +32,14 @@ def start_loop_scheduler() -> int:
 
 
 def reload_loop_scheduler() -> int:
-    """Reload prompt-loop jobs after a loop is created or changed."""
+    """Reload prompt-loop jobs after a loop is created or changed.
+
+    Also signals any long-lived gateway scheduler so jobs stay registered after
+    this shell exits.
+    """
+    from platform.scheduler.reload_signal import request_scheduler_reload
+
+    request_scheduler_reload()
     with _scheduler_lock:
         _shutdown_locked()
         return _start_locked()
