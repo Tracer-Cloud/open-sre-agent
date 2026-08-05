@@ -15,8 +15,8 @@ The helper deliberately does **not** decide whether the call succeeded
 at the provider level. It returns ``ok=True`` whenever the request
 completed without raising; callers then inspect ``status_code`` and
 ``data``/``text`` to apply provider semantics (e.g. ``data["ok"]`` for
-Slack, ``status_code in (200, 201)`` for Discord, ``status_code == 200``
-for Telegram).
+Slack, ``status_code in (HTTPStatus.OK, HTTPStatus.CREATED)`` for Discord,
+``status_code == HTTPStatus.OK`` for Telegram).
 """
 
 from __future__ import annotations
@@ -25,6 +25,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
+
+from http import HTTPStatus
 
 import httpx
 
