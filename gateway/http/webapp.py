@@ -93,7 +93,7 @@ def get_health_response() -> HealthResponse:
 @app.get("/ok", response_model=HealthResponse)
 def health(response: Response) -> HealthResponse:
     health_response = get_health_response()
-    response.status_code = HTTPStatus.OK if health_response.ok else HTTPStatus.SERVICE_UNAVAILABLE
+    response.status_code = int(HTTPStatus.OK) if health_response.ok else int(HTTPStatus.SERVICE_UNAVAILABLE)
     return health_response
 
 
@@ -106,8 +106,8 @@ def healthz() -> dict[str, str]:
 def readyz() -> JSONResponse:
     """Report mandatory startup readiness separately from process liveness."""
     if is_gateway_ready():
-        return JSONResponse({"status": "ready"}, status_code=HTTPStatus.OK)
-    return JSONResponse({"status": "not_ready"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE)
+        return JSONResponse({"status": "ready"}, status_code=int(HTTPStatus.OK))
+    return JSONResponse({"status": "not_ready"}, status_code=int(HTTPStatus.SERVICE_UNAVAILABLE))
 
 
 def _alert_inbox() -> AlertInbox:
@@ -130,13 +130,13 @@ def _gateway_auth_error(request: Request) -> JSONResponse | None:
         supplied = request.headers.get("authorization", "")
         if hmac.compare_digest(supplied, f"Bearer {token}"):
             return None
-        return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
+        return JSONResponse({"error": "unauthorized"}, status_code=int(HTTPStatus.UNAUTHORIZED))
     client_host = request.client.host if request.client else ""
     if client_host in _LOOPBACK_HOSTS:
         return None
     return JSONResponse(
         {"error": "set OPENSRE_ALERT_LISTENER_TOKEN to accept non-loopback callers"},
-        status_code=HTTPStatus.FORBIDDEN,
+        status_code=int(HTTPStatus.FORBIDDEN),
     )
 
 
@@ -148,24 +148,24 @@ async def receive_alert(request: Request) -> JSONResponse:
     try:
         declared_length = int(request.headers.get("content-length", 0))
     except ValueError:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
+        return JSONResponse({"error": "invalid Content-Length"}, status_code=int(HTTPStatus.BAD_REQUEST))
     if declared_length < 0:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
+        return JSONResponse({"error": "invalid Content-Length"}, status_code=int(HTTPStatus.BAD_REQUEST))
     if declared_length > MAX_ALERT_BODY_BYTES:
         return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            {"error": "payload too large"}, status_code=int(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
         )
 
     body = await request.body()
     if len(body) > MAX_ALERT_BODY_BYTES:
         return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            {"error": "payload too large"}, status_code=int(HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
         )
 
     try:
         data = json.loads(body)
     except ValueError:
-        return JSONResponse({"error": "invalid json"}, status_code=HTTPStatus.BAD_REQUEST)
+        return JSONResponse({"error": "invalid json"}, status_code=int(HTTPStatus.BAD_REQUEST))
 
     try:
         if not isinstance(data, dict):
@@ -180,7 +180,7 @@ async def receive_alert(request: Request) -> JSONResponse:
         logger.warning("Alert payload rejected (%s): %s", type(exc).__name__, exc)
         return JSONResponse(
             {"error": f"invalid alert payload: {type(exc).__name__}"},
-            status_code=HTTPStatus.BAD_REQUEST,
+            status_code=int(HTTPStatus.BAD_REQUEST),
         )
 
     inbox = _alert_inbox()
@@ -189,7 +189,7 @@ async def receive_alert(request: Request) -> JSONResponse:
     if not accepted:
         payload["dropped"] = inbox.dropped
         payload["warning"] = "inbox full, oldest alert dropped"
-    return JSONResponse(payload, status_code=HTTPStatus.ACCEPTED)
+    return JSONResponse(payload, status_code=int(HTTPStatus.ACCEPTED))
 
 
 class InvestigateRequest(BaseModel):
@@ -240,5 +240,5 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
         capture_exception(exc, context="gateway.http.webapp.investigate")
         return JSONResponse(
             {"error": f"investigation failed: {type(exc).__name__}"},
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            status_code=int(HTTPStatus.SERVICE_UNAVAILABLE),
         )
