@@ -227,9 +227,11 @@ def push(
     # Every candidate has now cleared validation (phase 1). Only here, in
     # phase 2, does anything transfer — validate-then-transfer, never
     # interleaved. Each planned file's outcome is independent, so the uploads
-    # run across a bounded thread pool. Outcomes are consumed as each upload
-    # finishes (``as_completed``), so progress reports and the report's own
-    # aggregation fire per file rather than deferring to the very end.
+    # run across a bounded thread pool. Progress is reported per upload as each
+    # finishes (``as_completed``), so bars advance during the transfer rather
+    # than jumping at the end; the report itself is folded afterwards in
+    # ``planned`` order so ``uploaded``/``kept_remote`` ordering is deterministic
+    # and never follows the arbitrary order the pool happened to finish in.
     def _transfer(key: str, path: Path) -> _PushOutcome:
         if key in previewed_pulls:
             return _PushOutcome(key=key, skipped=True)
@@ -250,6 +252,7 @@ def push(
     # the transfer. Work not yet started is cancelled so files after the
     # failed one are never uploaded, and the exception propagates to the caller
     # unchanged. In-flight uploads that already began cannot be un-started.
+    outcomes: dict[str, _PushOutcome] = {}
     with ThreadPoolExecutor(max_workers=min(_PUSH_TRANSFER_WORKERS, len(planned) or 1)) as pool:
         futures: dict[Future[_PushOutcome], str] = {
             pool.submit(_transfer, key, path): key for key, path in planned
@@ -258,19 +261,27 @@ def push(
         try:
             for future in as_completed(futures):
                 outcome = future.result()
+                outcomes[outcome.key] = outcome
                 completed += 1
-                if outcome.skipped:
-                    result.skipped += 1
-                elif outcome.kept_remote:
-                    result.kept_remote.append(outcome.key)
-                elif outcome.uploaded:
-                    result.uploaded.append(outcome.key)
-                    result.uploaded_bytes += outcome.uploaded_bytes
                 _report(outcome.key, completed)
         except BaseException:
             for pending in futures:
                 pending.cancel()
             raise
+
+    # Fold outcomes into the report in ``planned`` order, not the completion
+    # order ``as_completed`` yielded above, so ``uploaded`` and ``kept_remote``
+    # key ordering is identical across identical pushes. Reached only when every
+    # upload succeeded — a failure re-raises out of the loop above.
+    for key, _ in planned:
+        outcome = outcomes[key]
+        if outcome.skipped:
+            result.skipped += 1
+        elif outcome.kept_remote:
+            result.kept_remote.append(outcome.key)
+        elif outcome.uploaded:
+            result.uploaded.append(outcome.key)
+            result.uploaded_bytes += outcome.uploaded_bytes
 
     if previewed_pulls:
         # Keys pull previewed but that never had a local file to begin with

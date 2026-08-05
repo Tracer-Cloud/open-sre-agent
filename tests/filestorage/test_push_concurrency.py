@@ -40,6 +40,15 @@ _FAIL_FAST_FILE_COUNT = _PUSH_TRANSFER_WORKERS * 10
 # short enough that teardown of any in-flight peers stays quick.
 _PEER_HOLD_SECONDS = 0.5
 
+# Files for the ordering test. Kept at or below the worker cap so every upload
+# is genuinely in flight at once — the reverse-completion barrier below can only
+# drive all N to finish in reverse order when none are still queued.
+_ORDER_FILE_COUNT = 6
+
+# Barrier/event ceiling for the ordering test: a stuck upload fails fast rather
+# than hanging the suite.
+_BARRIER_TIMEOUT_SECONDS = 5.0
+
 
 def _listing(objects: dict[str, bytes]) -> list[RemoteObject]:
     """Render a stored-objects map as a bucket listing the engine can compare."""
@@ -290,3 +299,73 @@ def test_progress_reports_once_per_planned_file(tmp_path: Path) -> None:
     assert sorted(p.completed for p in seen) == list(range(1, _FILE_COUNT + 1))
     assert all(p.direction is SyncDirection.PUSH for p in seen)
     assert all(p.total == _FILE_COUNT for p in seen)
+
+
+def _index_of(key: str) -> int:
+    """Planned index encoded in a ``sessions/s{i}.jsonl`` key."""
+    return int(key.removeprefix("sessions/s").removesuffix(".jsonl"))
+
+
+class _ReverseCompletionStore:
+    """Forces uploads to COMPLETE in the exact reverse of planned order.
+
+    Every upload first gathers at a barrier, so all N are genuinely in flight at
+    once; then file index ``i`` is held until file ``i + 1`` has finished. The
+    last planned file therefore completes first and the first planned file
+    completes last. A report that folded outcomes in completion order would come
+    out reversed — this store exists to make that reversal happen on purpose so
+    the planned-order fold is pinned against it.
+    """
+
+    def __init__(self, count: int) -> None:
+        self.objects: dict[str, bytes] = {}
+        self.completion_order: list[str] = []
+        self._count = count
+        # All N uploads must arrive before any may finish, so they overlap and
+        # the reverse-release chain below has every peer waiting.
+        self._gate = threading.Barrier(count, timeout=_BARRIER_TIMEOUT_SECONDS)
+        self._done = [threading.Event() for _ in range(count)]
+        self._lock = threading.Lock()
+
+    def list_objects(self, prefix: str) -> list[RemoteObject]:
+        return [obj for obj in _listing(self.objects) if obj.key.startswith(prefix)]
+
+    def get_object(self, key: str) -> bytes:
+        return self.objects[key]
+
+    def put_object(self, key: str, data: bytes) -> None:
+        index = _index_of(key)
+        self._gate.wait()
+        # Release strictly last-to-first: hold until the next planned file is done.
+        if index + 1 < self._count:
+            self._done[index + 1].wait(timeout=_BARRIER_TIMEOUT_SECONDS)
+        self.objects[key] = data
+        with self._lock:
+            self.completion_order.append(key)
+        self._done[index].set()
+
+    def describe(self) -> str:
+        return "reverse://store"
+
+
+def test_report_folds_in_planned_order_not_completion_order(tmp_path: Path) -> None:
+    """uploaded keys follow planned order even when uploads finish reversed.
+
+    ``as_completed`` yields futures in whatever order they finish, so folding the
+    report as they arrive lets a slow-first/fast-last transfer produce a
+    non-deterministic ``uploaded`` ordering. The engine folds in planned order
+    instead; this pins that the report is stable against the reversed completion
+    the store deliberately produces.
+    """
+    # Arrange
+    roots = _make_root(tmp_path, _ORDER_FILE_COUNT)
+    store = _ReverseCompletionStore(_ORDER_FILE_COUNT)
+
+    # Act
+    report = push(store, roots=roots)
+
+    # Assert: the store really did finish in reverse (else the test proves
+    # nothing), yet the report is in planned order — not that completion order.
+    planned_order = [f"sessions/s{i}.jsonl" for i in range(_ORDER_FILE_COUNT)]
+    assert store.completion_order == list(reversed(planned_order))
+    assert report.uploaded == planned_order
