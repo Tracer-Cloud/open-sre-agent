@@ -83,14 +83,7 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
         "gateway.runtime.credential_hydration.CredentialsApiClient",
         _ApiClient,
     )
-    secrets = _Secrets(
-        json.dumps(
-            {
-                "credentials_api_token": "bootstrap-token",
-                "database_url": "postgresql://neon.invalid/test",
-            }
-        )
-    )
+    secrets = _Secrets(json.dumps({"credentials_api_token": "bootstrap-token"}))
     hydrator = GatewayCredentialHydrator(
         config=CredentialHydrationConfig(
             organization_id="org-a",
@@ -100,11 +93,10 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
         secrets_client=secrets,
     )
 
-    bootstrap = hydrator.hydrate()
+    hydrator.hydrate()
 
     assert secrets.calls == ["arn:aws:secretsmanager:region:account:secret:org-a"]
     assert _ApiClient.authorization == "bootstrap-token"
-    assert bootstrap.database_url == "postgresql://neon.invalid/test"
     assert json.loads(path.read_text())["version"] == 2
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
@@ -132,7 +124,7 @@ def test_hydrates_from_integrations_secret_when_no_credentials_api_url(
     integrations_arn = "arn:aws:secretsmanager:region:account:secret:org-a-integrations"
     secrets = _SecretsById(
         {
-            bootstrap_arn: json.dumps({"database_url": "postgresql://neon.invalid/test"}),
+            bootstrap_arn: json.dumps({}),
             integrations_arn: json.dumps(
                 {
                     "version": 2,
@@ -167,7 +159,6 @@ def test_hydrates_from_integrations_secret_when_no_credentials_api_url(
 
     assert secrets.calls == [bootstrap_arn, integrations_arn]
     assert bootstrap.integrations_hydrated is True
-    assert bootstrap.database_url == "postgresql://neon.invalid/test"
     stored = json.loads(path.read_text())
     assert stored["version"] == 2
     assert [record["service"] for record in stored["integrations"]] == ["grafana"]
@@ -217,7 +208,7 @@ def test_hydrated_secret_is_visible_to_integration_resolution(
     integrations_arn = "arn:aws:secretsmanager:region:account:secret:org-a-integrations"
     secrets = _SecretsById(
         {
-            bootstrap_arn: json.dumps({"database_url": "postgresql://neon.invalid/test"}),
+            bootstrap_arn: json.dumps({}),
             integrations_arn: json.dumps(
                 {
                     "version": 2,

@@ -306,7 +306,12 @@ class BenchmarkRunner:
 
         # Persist a JSON sidecar to output_dir/report.json regardless of validation
         (output_dir / "report.json").write_text(
-            json.dumps(_report_to_dict(report, self.cost), ensure_ascii=False, indent=2) + "\n",
+            json.dumps(
+                _report_to_dict(report, self.cost, aborted=aborted, abort_reason=abort_reason),
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
@@ -824,8 +829,22 @@ def _cell_to_dict(case: BenchmarkCase, run: RunResult, score: CaseScore) -> dict
     }
 
 
-def _report_to_dict(report: BenchmarkReport, cost: CostTracker) -> dict[str, Any]:
-    """Serializable shape for report.json."""
+def _report_to_dict(
+    report: BenchmarkReport,
+    cost: CostTracker,
+    *,
+    aborted: bool = False,
+    abort_reason: str | None = None,
+) -> dict[str, Any]:
+    """Serializable shape for report.json.
+
+    ``aborted``/``abort_reason`` mirror the same-named ``RunOutcome`` fields
+    so a halted run's artifact carries the fact of the halt, not just the
+    process exit code. Without this, report.json from a run cut off mid-grid
+    is key-identical to a complete run's; the exit code never reaches the
+    artifact since ``entrypoint.sh`` disables ``set -e`` so the S3 sync
+    still runs regardless of the bench's own exit status.
+    """
     return {
         "run_id": report.run_id,
         "config_hash": report.config_hash,
@@ -842,4 +861,6 @@ def _report_to_dict(report: BenchmarkReport, cost: CostTracker) -> dict[str, Any
         "cost": cost.summary(),
         "opensre_sha": _git_sha(),
         "host": {"user": os.environ.get("USER", ""), "cwd": str(Path.cwd())},
+        "aborted": aborted,
+        "abort_reason": abort_reason,
     }

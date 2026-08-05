@@ -3,12 +3,19 @@
 from collections.abc import Mapping
 from typing import Any
 
+from core.agent_harness.prompts.envelope import (
+    PromptBlock,
+    PromptBlockKind,
+    PromptEnvelope,
+    PromptTier,
+)
 from core.agent_harness.prompts.rules import (
     AGENT_RESPONSE_THREE_TIER_RULE,
     CLI_ASSISTANT_MARKDOWN_RULE,
     INTERACTIVE_SHELL_TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.runtime_facts import render_runtime_facts
+from core.agent_harness.prompts.surfaces import profile_for
 from platform.harness_ports import assistant_prompt_vendor_fragments, gateway_persona_fragments
 
 _TERMINOLOGY_RULE = INTERACTIVE_SHELL_TERMINOLOGY_RULE
@@ -141,7 +148,7 @@ def build_environment_block(
 
     if not facts:
         return ""
-    return "--- Environment (current shell state) ---\n" + "\n".join(facts) + "\n\n"
+    return "".join(("--- Environment (current shell state) ---\n", "\n".join(facts), "\n\n"))
 
 
 _CLI_PREAMBLE = (
@@ -175,6 +182,278 @@ _GATEWAY_PREAMBLE = (
 )
 
 
+_DOCS_PREAMBLE = (
+    "--- Documentation reference (docs/) ---\n"
+    "Relevant OpenSRE documentation pages for this question. When answering "
+    "how to configure or set up something, use these to give the complete "
+    "procedure — including steps that happen outside OpenSRE (creating "
+    "accounts, API keys, bots, OAuth apps, finding IDs) — not just the "
+    "in-tool command. Do not invent steps beyond what these pages state.\n"
+)
+
+_PRIOR_ACTION_FACTS_PREAMBLE = (
+    "--- Prior action facts in this session ---\n"
+    "These are extracted from earlier persisted assistant/tool outputs. Use "
+    "them for follow-up questions and comparisons; do not ask the user to "
+    "paste values that are already listed here.\n"
+)
+
+_LONG_TERM_MEMORY_PREAMBLE = (
+    "--- Long-term memory ---\n"
+    "Durable knowledge stored locally in ~/.opensre/memory (view/edit with "
+    "/memory). Facts below are injected into every chat turn — use them to "
+    "personalize answers and never re-ask for information already listed. "
+    "Treat listed bodies as ground truth; do not invent details beyond them. "
+    "The action planner may save, recall, or delete memories before this "
+    "assistant runs; do not claim a memory was saved, updated, or forgotten "
+    "unless the current tool results confirm it.\n"
+)
+
+
+_INTERACTION_RULES = (
+    "Exception: if Recent CLI conversation ends with **Want me to:** and "
+    "the user replies yes/sure/ok/please (or 'Yes — please …'), fulfill "
+    "that offer from the prior turn — do NOT pivot to paste-an-alert / "
+    "integration-setup onboarding for those affirmatives. If the offer "
+    "had two options joined by 'or', do both (or the clearer one) rather "
+    "than asking what 'yes' means.\n"
+    "Be brief and friendly. Ground CLI facts in the reference below; do "
+    "not invent subcommands. For investigation-flow questions, use the "
+    "investigation flow reference below and do not claim the pipeline "
+    "definition is unavailable.\n"
+    "For vague operational questions (for example why a database is slow) "
+    "with no pasted alert, restate the user's question in your reply and "
+    "ask for the target system, service, or alert context. A vendor "
+    "fragment may define its own exception to this default when a "
+    "channel/context marker is already present (see the vendor's "
+    "assistant-prompt fragment, e.g. Slack) — do not apply the ask-for-"
+    "context default in that case.\n\n"
+    "The Recent CLI conversation may include outputs from earlier action tools "
+    "(shell stdout, computed values, and sent-message inputs/results). Treat "
+    "those as available thread context for follow-up questions; do not ask the "
+    "user to paste values that are already present there.\n\n"
+)
+
+
+def _block(
+    block_id: str,
+    content: str,
+    *,
+    kind: PromptBlockKind,
+    tier: PromptTier,
+    provenance: str,
+) -> PromptBlock:
+    return PromptBlock(id=block_id, content=content, kind=kind, tier=tier, provenance=provenance)
+
+
+def build_assistant_system_prompt_envelope(
+    reference: str,
+    history: str,
+    agents_md: str = "",
+    docs: str = "",
+    investigation_flow: str = "",
+    prior_investigation: str = "",
+    prior_action_facts: str = "",
+    environment: str = "",
+    long_term_memory: str = "",
+    surface: str = "interactive_shell",
+) -> PromptEnvelope:
+    """Assemble the assistant prompt as tiered blocks.
+
+    Layer assignment follows what changes and when: rules and references are
+    stable for the process, the environment and repo map are session context, a
+    prior investigation and stored memory change on their own events, and the
+    per-question docs retrieval, prior action facts and conversation change on
+    every turn.
+    """
+    profile = profile_for(surface)
+    here = "core.agent_harness.prompts.assistant_agent_prompt"
+    blocks: list[PromptBlock] = [
+        _block(
+            "assistant-preamble",
+            _CLI_PREAMBLE if profile.cli_rules else _GATEWAY_PREAMBLE,
+            kind=PromptBlockKind.SYSTEM,
+            tier=PromptTier.STABLE,
+            provenance=here,
+        ),
+        _block(
+            "assistant-interaction-rules",
+            _INTERACTION_RULES,
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.STABLE,
+            provenance=here,
+        ),
+        _block(
+            "assistant-prior-investigation-rule",
+            f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n",
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.STABLE,
+            provenance=here,
+        ),
+    ]
+    if profile.cli_rules:
+        blocks.append(
+            _block(
+                "assistant-setup-guidance",
+                f"{_SETUP_GUIDANCE_RULE}\n\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                provenance=here,
+            )
+        )
+    blocks.append(
+        _block(
+            "assistant-source-scoped-rule",
+            f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n",
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.STABLE,
+            provenance=here,
+        )
+    )
+    vendor_fragments_text = assistant_prompt_vendor_fragments()
+    if vendor_fragments_text:
+        blocks.append(
+            _block(
+                "assistant-vendor-fragments",
+                f"{vendor_fragments_text}\n\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                provenance="platform.harness_ports.assistant_prompt_vendor_fragments",
+            )
+        )
+    if profile.cli_rules:
+        blocks.append(
+            _block(
+                "assistant-response-shape",
+                f"{_RESPONSE_SHAPE_RULE}\n\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                provenance=here,
+            )
+        )
+    # Gateway persona wording is vendor-owned and reached only through the port
+    # — see integrations.slack.gateway_persona. It replaces the CLI-shaped rules
+    # above wholesale rather than adding to them.
+    if profile.vendor_persona:
+        blocks.append(
+            _block(
+                "assistant-gateway-persona",
+                f"{gateway_persona_fragments()}\n\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                provenance="platform.harness_ports.gateway_persona_fragments",
+            )
+        )
+    if profile.cli_rules:
+        blocks.append(
+            _block(
+                "assistant-terminology",
+                f"{_TERMINOLOGY_RULE}\n",
+                kind=PromptBlockKind.RULE,
+                tier=PromptTier.STABLE,
+                provenance=here,
+            )
+        )
+    blocks.append(
+        _block(
+            "assistant-markdown-rule",
+            f"{_MARKDOWN_RULE}\n\n",
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.STABLE,
+            provenance=here,
+        )
+    )
+    blocks.append(
+        _block(
+            "assistant-cli-reference",
+            f"--- CLI reference ---\n{reference}\n\n",
+            kind=PromptBlockKind.CONTEXT,
+            tier=PromptTier.STABLE,
+            provenance="core.agent_harness.ports.PromptContextProvider.cli_reference",
+        )
+    )
+    if investigation_flow:
+        blocks.append(
+            _block(
+                "assistant-investigation-flow",
+                f"--- Investigation flow reference ---\n{investigation_flow}\n\n",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.STABLE,
+                provenance="core.agent_harness.grounding.investigation_flow_reference",
+            )
+        )
+    if environment:
+        blocks.append(
+            _block(
+                "assistant-environment",
+                environment,
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.CONTEXT,
+                provenance="core.agent_harness.prompts.build_environment_block",
+            )
+        )
+    if agents_md:
+        blocks.append(
+            _block(
+                "assistant-repo-map",
+                f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.CONTEXT,
+                provenance="core.agent_harness.grounding.agents_md",
+            )
+        )
+    if prior_investigation:
+        blocks.append(
+            _block(
+                "assistant-prior-investigation",
+                f"--- Prior investigation in this session ---\n{prior_investigation}\n\n",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.VOLATILE,
+                provenance="core.agent_harness.prompts.prior_investigation",
+            )
+        )
+    if long_term_memory:
+        blocks.append(
+            _block(
+                "assistant-long-term-memory",
+                _LONG_TERM_MEMORY_PREAMBLE + long_term_memory + "\n\n",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.VOLATILE,
+                provenance="core.domain.memory",
+            )
+        )
+    if docs:
+        blocks.append(
+            _block(
+                "assistant-docs",
+                _DOCS_PREAMBLE + docs + "\n\n",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
+                provenance="core.agent_harness.grounding.docs",
+            )
+        )
+    if prior_action_facts:
+        blocks.append(
+            _block(
+                "assistant-prior-action-facts",
+                _PRIOR_ACTION_FACTS_PREAMBLE + prior_action_facts + "\n\n",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
+                provenance="core.agent_harness.turns.turn_snapshot",
+            )
+        )
+    blocks.append(
+        _block(
+            "assistant-recent-conversation",
+            f"--- Recent CLI conversation ---\n{history}\n",
+            kind=PromptBlockKind.CONVERSATION,
+            tier=PromptTier.EPHEMERAL,
+            provenance="core.agent_harness.turns.turn_snapshot",
+        )
+    )
+    return PromptEnvelope.from_blocks(blocks, separator="", metadata={"prompt": "assistant_system"})
+
+
 def _build_system_prompt(
     reference: str,
     history: str,
@@ -188,101 +467,18 @@ def _build_system_prompt(
     surface: str = "interactive_shell",
 ) -> str:
     """Build the system prompt for one assistant turn."""
-    is_gateway = surface == "gateway"
-    preamble = _GATEWAY_PREAMBLE if is_gateway else _CLI_PREAMBLE
-    # Gateway (Slack) persona wording is vendor-owned and reached only through
-    # the port — see integrations.slack.gateway_persona. The CLI equivalents
-    # (terminology/setup/response-shape rules) stay empty for gateway turns
-    # and are replaced wholesale by the joined gateway persona block below.
-    gateway_persona_block = f"{gateway_persona_fragments()}\n\n" if is_gateway else ""
-    # Separators live inside each block so an empty gateway slot contributes
-    # nothing rather than a run of blank lines.
-    terminology_block = "" if is_gateway else f"{_TERMINOLOGY_RULE}\n"
-    setup_block = "" if is_gateway else f"{_SETUP_GUIDANCE_RULE}\n\n"
-    response_shape_block = "" if is_gateway else f"{_RESPONSE_SHAPE_RULE}\n\n"
-    repo_map_block = f"--- Repo map (AGENTS.md) ---\n{agents_md}\n\n" if agents_md else ""
-    docs_block = (
-        "--- Documentation reference (docs/) ---\n"
-        "Relevant OpenSRE documentation pages for this question. When answering "
-        "how to configure or set up something, use these to give the complete "
-        "procedure — including steps that happen outside OpenSRE (creating "
-        "accounts, API keys, bots, OAuth apps, finding IDs) — not just the "
-        f"in-tool command. Do not invent steps beyond what these pages state.\n{docs}\n\n"
-        if docs
-        else ""
-    )
-    investigation_flow_block = (
-        f"--- Investigation flow reference ---\n{investigation_flow}\n\n"
-        if investigation_flow
-        else ""
-    )
-    prior_investigation_block = (
-        f"--- Prior investigation in this session ---\n{prior_investigation}\n\n"
-        if prior_investigation
-        else ""
-    )
-    prior_action_facts_block = (
-        "--- Prior action facts in this session ---\n"
-        "These are extracted from earlier persisted assistant/tool outputs. Use "
-        "them for follow-up questions and comparisons; do not ask the user to "
-        f"paste values that are already listed here.\n{prior_action_facts}\n\n"
-        if prior_action_facts
-        else ""
-    )
-    long_term_memory_block = (
-        "--- Long-term memory ---\n"
-        "Durable knowledge stored locally in ~/.opensre/memory (view/edit with "
-        "/memory). Facts below are injected into every chat turn — use them to "
-        "personalize answers and never re-ask for information already listed. "
-        "Treat listed bodies as ground truth; do not invent details beyond them. "
-        "The action planner may save, recall, or delete memories before this "
-        "assistant runs; do not claim a memory was saved, updated, or forgotten "
-        f"unless the current tool results confirm it.\n{long_term_memory}\n\n"
-        if long_term_memory
-        else ""
-    )
-    vendor_fragments_text = assistant_prompt_vendor_fragments()
-    vendor_fragments = f"{vendor_fragments_text}\n\n" if vendor_fragments_text else ""
-    return (
-        f"{preamble}"
-        "Exception: if Recent CLI conversation ends with **Want me to:** and "
-        "the user replies yes/sure/ok/please (or 'Yes — please …'), fulfill "
-        "that offer from the prior turn — do NOT pivot to paste-an-alert / "
-        "integration-setup onboarding for those affirmatives. If the offer "
-        "had two options joined by 'or', do both (or the clearer one) rather "
-        "than asking what 'yes' means.\n"
-        "Be brief and friendly. Ground CLI facts in the reference below; do "
-        "not invent subcommands. For investigation-flow questions, use the "
-        "investigation flow reference below and do not claim the pipeline "
-        "definition is unavailable.\n"
-        "For vague operational questions (for example why a database is slow) "
-        "with no pasted alert, restate the user's question in your reply and "
-        "ask for the target system, service, or alert context. A vendor "
-        "fragment may define its own exception to this default when a "
-        "channel/context marker is already present (see the vendor's "
-        "assistant-prompt fragment, e.g. Slack) — do not apply the ask-for-"
-        "context default in that case.\n\n"
-        "The Recent CLI conversation may include outputs from earlier action tools "
-        "(shell stdout, computed values, and sent-message inputs/results). Treat "
-        "those as available thread context for follow-up questions; do not ask the "
-        "user to paste values that are already present there.\n\n"
-        f"{_PRIOR_INVESTIGATION_FOLLOW_UP_RULE}\n\n"
-        f"{setup_block}"
-        f"{_SOURCE_SCOPED_INVESTIGATION_RULE}\n\n"
-        f"{vendor_fragments}"
-        f"{response_shape_block}"
-        f"{gateway_persona_block}"
-        f"{terminology_block}{_MARKDOWN_RULE}\n\n"
-        f"{environment}"
-        f"--- CLI reference ---\n{reference}\n\n"
-        f"{docs_block}"
-        f"{investigation_flow_block}"
-        f"{prior_investigation_block}"
-        f"{prior_action_facts_block}"
-        f"{long_term_memory_block}"
-        f"{repo_map_block}"
-        f"--- Recent CLI conversation ---\n{history}\n"
-    )
+    return build_assistant_system_prompt_envelope(
+        reference,
+        history,
+        agents_md=agents_md,
+        docs=docs,
+        investigation_flow=investigation_flow,
+        prior_investigation=prior_investigation,
+        prior_action_facts=prior_action_facts,
+        environment=environment,
+        long_term_memory=long_term_memory,
+        surface=surface,
+    ).render()
 
 
 def _build_observation_block(tool_observation: str | None, *, on_screen: bool = True) -> str:

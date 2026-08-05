@@ -280,3 +280,24 @@ def test_explicit_follow_up_answers_from_an_old_investigation_unlabelled() -> No
     # Assert: the findings lead the answer, not flagged as background.
     assert "the-incident-they-asked-about" in answer_prompt
     assert STALE_PRIOR_INVESTIGATION_NOTE not in answer_prompt
+
+
+def test_gather_prompt_is_assembled_in_the_same_layers_as_the_action_prompt() -> None:
+    """Three layers has to mean every prompt, not just the action one.
+
+    A builder that returns a bare string cannot be cached, trimmed or reasoned
+    about by tier, so it silently opts out of the assembly contract.
+    """
+    # Arrange
+    from core.agent_harness.prompts import PromptTier, build_gather_system_prompt_envelope
+
+    session = _SessionView()
+
+    # Act
+    envelope = build_gather_system_prompt_envelope(session)
+    tiers = [block.tier for block in envelope.blocks]
+
+    # Assert
+    assert envelope.render() == build_gather_system_prompt(session)
+    assert PromptTier.STABLE in tiers
+    assert tiers == sorted(tiers, key=lambda tier: list(PromptTier).index(tier))

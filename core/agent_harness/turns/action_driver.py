@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -28,7 +29,10 @@ from core.agent_harness.ports import (
     SessionStore,
     ToolProvider,
 )
-from core.agent_harness.prompts import build_action_system_prompt, build_action_user_message
+from core.agent_harness.prompts import (
+    build_action_system_prompt_envelope,
+    build_action_user_message,
+)
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
@@ -268,6 +272,21 @@ def _has_preferred_tool_response_text(result: Any) -> bool:
     )
 
 
+def _self_recording_tools_only(result: Any) -> bool:
+    """True when every executed tool (except handoff) already printed to the console.
+
+    Those tools return a bare success flag to the model; any closing prose is
+    invented without the command's on-screen output (e.g. claiming ``/health``
+    was all-green after the report already showed failures).
+    """
+    names = [
+        tool_call.name
+        for tool_call, _tool_result in getattr(result, "tool_results", [])
+        if tool_call.name != "assistant_handoff"
+    ]
+    return bool(names) and all(name in SELF_RECORDING_ACTION_TOOL_NAMES for name in names)
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
@@ -377,6 +396,23 @@ def _bang_shell_command(message: str) -> str | None:
     return f"!{cmd}" if cmd else None
 
 
+def _slash_tokens(stripped: str) -> tuple[str, list[str]]:
+    """Split slash text into a command and arguments, keeping quoted spans whole.
+
+    A quoted argument such as a five-field cron expression must survive as one
+    token or the target command sees five stray positionals. Ordinary prose
+    after a slash can contain an unbalanced apostrophe that ``shlex`` refuses,
+    so fall back to a plain split rather than failing the dispatch.
+    """
+    try:
+        parts = shlex.split(stripped, posix=True)
+    except ValueError:
+        parts = stripped.split()
+    if not parts:
+        return stripped, []
+    return parts[0], parts[1:]
+
+
 def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall | None:
     """Deterministic ``slash_invoke`` for input the user typed as a literal ``/command``.
 
@@ -387,19 +423,24 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     LLM is unavailable — e.g. a provider with no credit — so users can still run
     ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
 
+    Also accepts schedule affirmatives that ``expand_affirmative_follow_up`` rewrote
+    into a leading ``/cron add …`` (after stripping a vendor context prefix).
+
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
     """
-    stripped = message.strip()
+    from platform.harness_ports import strip_message_context_prefix
+
+    _, remainder = strip_message_context_prefix(message)
+    stripped = remainder.strip()
     if not stripped.startswith("/"):
         return None
     if not any(getattr(tool, "name", None) == "slash_invoke" for tool in agent_tools):
         return None
     if stripped == "/":
-        command, args = "/", []
+        command, args = "/", list[str]()
     else:
-        parts = stripped.split()
-        command, args = parts[0], parts[1:]
+        command, args = _slash_tokens(stripped)
     return ToolCall(
         id="direct_slash_0",
         name="slash_invoke",
@@ -454,10 +495,14 @@ def _build_action_agent(
     else:
         factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
-        system = build_action_system_prompt(
+        envelope = build_action_system_prompt_envelope(
             turn_snapshot or TurnSnapshot.from_session(message, session)
         )
-        user_message = build_action_user_message(message)
+        # Cached half stays byte-identical across turns; ephemeral (conversation,
+        # prior-action-facts) rides with the user message so Anthropic's system
+        # cache_control breakpoint is not invalidated every turn.
+        system = envelope.render_cached()
+        user_message = build_action_user_message(message, prefix=envelope.render_ephemeral())
 
     config = AgentConfig(
         llm=llm,
@@ -572,7 +617,11 @@ def _compose_response(
     generic_text = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
-    final_text_chunk = "" if prefer_tool_response_text else final_text
+    # Self-recording tools (slash/shell/…) already rendered the real output.
+    # Drop model closings so they cannot contradict what the user just saw
+    # (classic failure: inventing "health check passed" after a failed /health).
+    suppress_final = prefer_tool_response_text or _self_recording_tools_only(result)
+    final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
@@ -593,7 +642,7 @@ def _compose_response(
     # single tool call and must not replace tool-derived response_text or get
     # streamed on action-only turns (gateway finalize / cross-surface parity).
     # A tool's explicit ``response_text`` also wins over chatty model closings.
-    use_final_text = _is_user_facing_final_text(final_text) and not prefer_tool_response_text
+    use_final_text = _is_user_facing_final_text(final_text) and not suppress_final
     response_text = final_text if use_final_text else "\n".join(response_chunks)
     return response_text, display_chunks, use_final_text
 
@@ -616,6 +665,8 @@ def _show_response(
     if display_chunks:
         output.print()
         output.render_response_header("assistant")
+        # Literal text: the sink decides how to render it safely. The harness
+        # must not reach for terminal-markup helpers (agent_harness/AGENTS.md).
         output.print("\n".join(display_chunks))
         return
     if handled:

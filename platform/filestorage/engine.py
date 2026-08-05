@@ -18,6 +18,7 @@ import hashlib
 import logging
 import os
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,30 @@ from platform.filestorage.ports import ObjectStore, RemoteObject
 from platform.filestorage.syncable import SyncRoot, resolved_roots, syncable_roots
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SyncProgress:
+    """One evaluated candidate, for a live "how much is left" display.
+
+    Fired for every candidate a direction's pass looks at — transferred,
+    skipped as unchanged, or held back for a newer remote copy — not only the
+    ones that move. A tree that is mostly already in sync would otherwise
+    barely advance a caller's progress bar even though the whole tree is
+    being scanned, which is the exact "looks hung" symptom this exists to fix.
+    ``completed`` is 1-based and counts up to ``total`` within one direction;
+    a full sync's pull pass and push pass each start their own count at 1.
+    """
+
+    direction: SyncDirection
+    key: str
+    completed: int
+    total: int
+
+
+#: A callback raising propagates to the caller, same as any other unexpected
+#: error during a sync.
+ProgressCallback = Callable[[SyncProgress], None]
 
 
 @dataclass
@@ -129,6 +154,7 @@ def push(
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket.
 
@@ -168,25 +194,35 @@ def push(
                 continue
             planned.append((key, path))
 
-    for key, path in planned:
+    total = len(planned)
+
+    def _report(key: str, completed: int) -> None:
+        if on_progress is not None:
+            on_progress(SyncProgress(SyncDirection.PUSH, key, completed, total))
+
+    for completed, (key, path) in enumerate(planned, start=1):
         if key in previewed_pulls:
             result.skipped += 1
+            _report(key, completed)
             continue
         data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
             if comparable_etag(existing) == content_tag(data):
                 result.skipped += 1
+                _report(key, completed)
                 continue
             if existing.last_modified > _modified_at(path):
                 # The store holds the more recent write, so uploading would
                 # destroy it. Same rule pull applies in the other direction.
                 result.kept_remote.append(key)
+                _report(key, completed)
                 continue
         if not dry_run:
             store.put_object(key, data)
         result.uploaded.append(key)
         result.uploaded_bytes += len(data)
+        _report(key, completed)
 
     if previewed_pulls:
         # Keys pull previewed but that never had a local file to begin with
@@ -204,6 +240,7 @@ def pull(
     remote: list[RemoteObject] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy.
 
@@ -214,28 +251,39 @@ def pull(
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
     by_name = {root.name: root for root in roots}
+    listing = remote if remote is not None else store.list_objects("")
+    total = len(listing)
 
-    for obj in remote if remote is not None else store.list_objects(""):
+    def _report(key: str, completed: int) -> None:
+        if on_progress is not None:
+            on_progress(SyncProgress(SyncDirection.PULL, key, completed, total))
+
+    for completed, obj in enumerate(listing, start=1):
         target = _local_path_for(obj, by_name)
         if target is None:
+            _report(obj.key, completed)
             continue
         # Excluding a path means it does not belong on this machine, so the
         # pattern holds in both directions: a file another machine still
         # uploads is not pulled back down here.
         if exclusions.excludes(obj.key):
             result.excluded.add(obj.key)
+            _report(obj.key, completed)
             continue
         if not _should_download(obj, target):
             result.skipped += 1
+            _report(obj.key, completed)
             continue
         if dry_run:
             result.downloaded_bytes += obj.size
             result.downloaded.append(obj.key)
+            _report(obj.key, completed)
             continue
         data = store.get_object(obj.key)
         result.downloaded_bytes += len(data)
         _write_atomically(target, data)
         result.downloaded.append(obj.key)
+        _report(obj.key, completed)
     return result
 
 
@@ -271,12 +319,15 @@ def run_sync(
     roots: tuple[SyncRoot, ...] | None = None,
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
     The listing is fetched once and shared: a pull changes local files, never
     the bucket, so the push half can reuse it. ``dry_run`` previews the same
-    plan without writing anywhere, local or remote.
+    plan without writing anywhere, local or remote. ``on_progress``, when
+    given, is called once per key evaluated in the pull pass and then again
+    for the push pass — see :data:`ProgressCallback`.
     """
     report = SyncReport()
     listing = store.list_objects("")
@@ -288,6 +339,7 @@ def run_sync(
             remote=listing,
             exclusions=exclusions,
             dry_run=dry_run,
+            on_progress=on_progress,
         )
     if direction is not SyncDirection.PULL:
         push(
@@ -297,12 +349,15 @@ def run_sync(
             remote=listing,
             exclusions=exclusions,
             dry_run=dry_run,
+            on_progress=on_progress,
         )
     return report
 
 
 __all__ = [
+    "ProgressCallback",
     "SyncDirection",
+    "SyncProgress",
     "SyncReport",
     "comparable_etag",
     "content_tag",

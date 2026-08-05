@@ -87,6 +87,20 @@ def test_expands_bare_sure_without_slack_prefix() -> None:
     )
 
 
+def test_schedule_yes_without_pending_offer_does_not_scrape_prose() -> None:
+    """Prose-only schedule closers must not invent /cron — pending offer is required."""
+    history = [
+        (
+            "assistant",
+            "**Want me to:** schedule this as a recurring daily_summary every "
+            "weekday at 8am to Slack?",
+        ),
+    ]
+    expanded = expand_affirmative_follow_up("yes", history)
+    assert expanded.startswith("Yes — please schedule this")
+    assert not expanded.startswith("/cron")
+
+
 def test_run_turn_expands_yes_before_execute_actions() -> None:
     """Gateway Slack 'yes' must not reach the action agent as a bare affirmative."""
     session = InMemorySessionStore()
@@ -121,3 +135,27 @@ def test_run_turn_expands_yes_before_execute_actions() -> None:
 
     assert len(seen) == 1
     assert "Yes — please list their display names and titles, too." in seen[0]
+
+
+def test_an_offer_from_an_earlier_turn_is_never_reachable() -> None:
+    """A bare yes may only ever mean the most recent offer.
+
+    Walking back through history is what turned a "yes" to a scheduling offer
+    into ``nvm install 22`` from two turns earlier — the agent installed Node
+    unasked. Not expanding is harmless; the model still sees the conversation.
+    Expanding to the wrong offer executes something nobody agreed to.
+    """
+    # Arrange
+    history = [
+        ("assistant", "Want me to: fix kubernetes and run nvm install 22 for openclaw?"),
+        ("user", "give me a morning report"),
+        ("assistant", "Good morning! Here is your briefing.\nDelivered to Slack."),
+    ]
+
+    # Act
+    expanded = expand_affirmative_follow_up("yes", history)
+
+    # Assert
+    assert expanded == "yes"
+    assert "nvm" not in expanded
+    assert "kubernetes" not in expanded

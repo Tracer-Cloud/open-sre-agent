@@ -11,6 +11,7 @@ from core.agent_harness.grounding.investigation_flow_reference import (
 )
 from core.agent_harness.llm_resolution import resolve_provider_models
 from core.agent_harness.prompts import build_environment_block
+from core.agent_harness.prompts.surfaces import profile_for
 from platform.observability.trace.spans import component_span
 
 # Minimum retrieval score for a docs page to ground an assistant answer. A
@@ -132,8 +133,8 @@ class DefaultPromptContextProvider:
 
         if not memory_enabled():
             return ""
-        # Host-global store: keep gateway prompt injection off unless opted in.
-        if self._surface == "gateway" and not gateway_memory_enabled():
+        profile = profile_for(self._surface)
+        if not profile.long_term_memory_by_default and not gateway_memory_enabled():
             return ""
         ensure_memory_store()
         return render_prompt_index()

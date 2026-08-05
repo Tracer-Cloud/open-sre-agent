@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.state import MAX_CONVERSATION_TURNS
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 from platform.harness_ports import strip_message_context_prefix
@@ -24,55 +25,113 @@ _ACTION_FACT_MARKERS = (
 _VALUE_LINE_RE = re.compile(
     r"(?im)^[A-Z][A-Za-z0-9 ._/-]{1,64}:\s+.*(?:[-+]?\d+(?:\.\d+)?\s*°?\s*[CF]|sent|true|false|\{|\[)"
 )
-_AFFIRMATIVE_RE = re.compile(
-    r"(?is)^\s*(?:yes|y|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|do that)"
-    r"(?:\s*please)?\s*[.!?]?\s*$"
+_AFFIRMATIVES = frozenset(
+    {
+        "yes",
+        "y",
+        "yeah",
+        "yep",
+        "yup",
+        "sure",
+        "ok",
+        "okay",
+        "please",
+        "go ahead",
+        "do it",
+        "do that",
+    }
 )
-# Slack users often restate the offer instead of a bare yes.
-_AFFIRMATIVE_RESTATED_RE = re.compile(
-    r"(?is)(?:want\s+me\s+to\s*:.*\byes\b|\bi replied yes\b|"
-    r"you asked .*\byes\b|\bas a yes\b)"
-)
-_WANT_ME_TO_RE = re.compile(
-    r"(?is)\*{0,2}Want me to:\*{0,2}\s*(.+?)(?:\n\s*\n|\Z)",
-)
-_OR_SPLIT_RE = re.compile(r"(?i),\s*or\s+|\s+or\s+")
+_WANT_ME_TO_MARKER = "want me to:"
 
 
 def expand_affirmative_follow_up(
     text: str,
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...] | None,
+    *,
+    pending_schedule: PendingScheduleOffer | None = None,
 ) -> str:
-    """Rewrite bare affirmatives into the prior ``Want me to:`` offer.
+    """Rewrite bare affirmatives into the prior actionable offer.
 
     Gateway/Slack turns often arrive as ``yes`` / ``sure`` after the assistant
     offered a next step. Without expansion, the action agent treats that as a
     new vague request and hands off to the investigate-onboarding assistant.
-    Preserves any leading ``[Slack …]`` context line for channel targeting.
+
+    Schedule offers use :class:`PendingScheduleOffer` on the session (set by
+    ``propose_scheduled_delivery``) — never scraped from Want-me-to prose. A
+    confirmed schedule becomes a literal ``/cron add …`` so the shell dispatches
+    without an LLM round-trip.
+
+    Non-schedule Want-me-to closers still expand from the newest assistant turn
+    only, so an older remediation offer cannot shadow a fresher one.
     """
     raw = text if isinstance(text, str) else ""
-    if not raw.strip() or not messages:
+    if not raw.strip():
         return raw
 
     prefix, remainder = strip_message_context_prefix(raw)
-    if not (_AFFIRMATIVE_RE.match(remainder) or _AFFIRMATIVE_RESTATED_RE.search(remainder)):
+    if not (_is_affirmative(remainder) or _is_restated_affirmative(remainder)):
         return raw
 
-    offer = _latest_want_me_to_offer(messages)
+    if pending_schedule is not None:
+        # Literal slash — no vendor context prefix (would hide the leading /).
+        return pending_schedule.to_slash_command()
+
+    if not messages:
+        return raw
+
+    offer = _latest_actionable_offer(messages)
     if not offer:
         return raw
     return f"{prefix}Yes — please {_normalize_offer(offer)}."
 
 
+def _is_affirmative(text: str) -> bool:
+    cleaned = text.strip().lower().rstrip(".!?")
+    if cleaned.endswith(" please"):
+        cleaned = cleaned[: -len(" please")].rstrip()
+    return cleaned in _AFFIRMATIVES
+
+
+def _is_restated_affirmative(text: str) -> bool:
+    """Slack users often restate the offer instead of a bare yes."""
+    lowered = text.lower()
+    if "i replied yes" in lowered or "as a yes" in lowered:
+        return True
+    quotes_an_offer = "want me to" in lowered or "you asked" in lowered
+    return quotes_an_offer and "yes" in lowered
+
+
 def _normalize_offer(offer: str) -> str:
     """Collapse dual ``A, or B`` Want-me-to offers into an actionable request."""
-    parts = [p.strip(" .?") for p in _OR_SPLIT_RE.split(offer, maxsplit=1) if p.strip()]
-    if len(parts) == 2:
-        return f"do both — {parts[0]}; and {parts[1]}"
+    lowered = offer.lower()
+    for sep in (", or ", " or "):
+        idx = lowered.find(sep)
+        if idx < 0:
+            continue
+        left = offer[:idx].strip(" .?")
+        right = offer[idx + len(sep) :].strip(" .?")
+        if left and right:
+            return f"do both — {left}; and {right}"
     return offer
 
 
-def _latest_want_me_to_offer(
+def _offer_from_assistant_content(content: str) -> str | None:
+    """Extract one actionable offer from a single assistant message, if any."""
+    lowered = content.lower()
+    pos = lowered.rfind(_WANT_ME_TO_MARKER)
+    if pos < 0:
+        return None
+    rest = content[pos + len(_WANT_ME_TO_MARKER) :].lstrip()
+    if rest.startswith("**"):
+        rest = rest[2:].lstrip()
+    blank = rest.find("\n\n")
+    if blank >= 0:
+        rest = rest[:blank]
+    offer = rest.strip().rstrip("?").strip()
+    return offer or None
+
+
+def _latest_actionable_offer(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
 ) -> str | None:
     for entry in reversed(messages):
@@ -82,28 +141,38 @@ def _latest_want_me_to_offer(
             continue
         if role != "assistant" or not isinstance(content, str):
             continue
-        # A compacted session summary can quote an old offer; only live
-        # assistant messages carry an actionable "Want me to:".
+        # Only the newest assistant turn. Searching further back is what turned
+        # a "yes" to a scheduling offer into an unrelated `nvm install 22` from
+        # two turns earlier: not expanding is harmless, since the model still
+        # reads the conversation, but expanding to a stale offer runs something
+        # nobody agreed to.
         if content.startswith(SESSION_SUMMARY_PREFIX):
-            continue
-        match = _WANT_ME_TO_RE.search(content)
-        if not match:
-            continue
-        offer = match.group(1).strip().rstrip("?").strip()
-        if offer:
-            return offer
+            return None
+        return _offer_from_assistant_content(content)
     return None
+
+
+def _latest_want_me_to_offer(
+    messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
+) -> str | None:
+    """Backward-compatible alias for :func:`_latest_actionable_offer`."""
+    return _latest_actionable_offer(messages)
 
 
 def format_recent_conversation(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
     *,
     max_turns: int = MAX_CONVERSATION_TURNS,
+    newest_first: bool = False,
 ) -> str:
     """Render recent CLI-agent turns as ``User:``/``Assistant:`` lines.
 
-    Accepts a list or tuple of ``(role, content)`` pairs (oldest first).
-    Returns at most ``max_turns`` turns (oldest first, most recent last).
+    Accepts a list or tuple of ``(role, content)`` pairs (oldest first on input).
+    Returns at most ``max_turns`` turns. Default order is chronological (oldest
+    first). Pass ``newest_first=True`` for action-agent ephemeral context: the
+    user message leads and head-preserving truncation (``text[:keep]``) must
+    drop stale turns at the tail, not the latest ones.
+
     Returns :data:`NO_HISTORY_PLACEHOLDER` when empty so prompt builders
     always have a stable, non-empty block. Never raises.
     """
@@ -111,15 +180,45 @@ def format_recent_conversation(
     if not cap:
         return NO_HISTORY_PLACEHOLDER
 
-    lines: list[str] = []
+    window: list[tuple[str, str]] = []
     for entry in messages[-cap:]:
         try:
             role, content = entry
         except (TypeError, ValueError):
             continue
-        label = "User" if role == "user" else "Assistant"
-        lines.append(f"{label}: {content}")
-    return "\n".join(lines) if lines else NO_HISTORY_PLACEHOLDER
+        if not isinstance(content, str):
+            continue
+        window.append((str(role), content))
+    if not window:
+        return NO_HISTORY_PLACEHOLDER
+
+    if newest_first:
+        window = _newest_turn_first(window)
+
+    return "\n".join(
+        f"{'User' if role == 'user' else 'Assistant'}: {content}" for role, content in window
+    )
+
+
+def _newest_turn_first(
+    window: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    """Reverse by user/assistant turn pairs; keep order inside each turn."""
+    pairs: list[list[tuple[str, str]]] = []
+    idx = 0
+    while idx < len(window):
+        role, _content = window[idx]
+        if role == "user" and idx + 1 < len(window) and window[idx + 1][0] == "assistant":
+            pairs.append([window[idx], window[idx + 1]])
+            idx += 2
+            continue
+        pairs.append([window[idx]])
+        idx += 1
+    pairs.reverse()
+    ordered: list[tuple[str, str]] = []
+    for pair in pairs:
+        ordered.extend(pair)
+    return ordered
 
 
 def format_prior_action_facts(
@@ -168,8 +267,10 @@ def format_prior_action_facts(
 
     rendered: list[str] = []
     remaining = max(max_chars, 0)
-    # `facts` was collected newest-first; reverse back to maintain chronological order
-    for idx, fact in enumerate(reversed(facts), start=1):
+    # Newest-first: this block sits after the user message in the action
+    # ephemeral half, and context_budget keeps the head. Chronological order
+    # would put the freshest facts at the truncated tail.
+    for idx, fact in enumerate(facts, start=1):
         if remaining <= 0:
             break
         chunk = f"- Prior assistant/tool output {idx}:\n{fact.strip()}"
