@@ -1,9 +1,8 @@
 """Discord REST helpers for the gateway output sink."""
 from __future__ import annotations
 
-from http import HTTPStatus
-
 import logging
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
