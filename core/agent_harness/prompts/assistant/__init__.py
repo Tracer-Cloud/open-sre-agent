@@ -25,10 +25,8 @@ from core.agent_harness.prompts.assistant.observation import (
 )
 from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
 from core.agent_harness.prompts.assistant.text import (
-    _MARKDOWN_RULE,
-    _SETUP_GUIDANCE_RULE,
-    _SOURCE_SCOPED_INVESTIGATION_RULE,
-    _TERMINOLOGY_RULE,
+    MARKDOWN_RULE,
+    TERMINOLOGY_RULE,
 )
 from core.agent_harness.prompts.assistant.turn import (
     AssistantPromptContextProvider,
@@ -41,10 +39,8 @@ __all__ = [
     "AssistantPromptContextProvider",
     "AssistantPromptParts",
     "AssistantTurnPrompt",
-    "_MARKDOWN_RULE",
-    "_SETUP_GUIDANCE_RULE",
-    "_SOURCE_SCOPED_INVESTIGATION_RULE",
-    "_TERMINOLOGY_RULE",
+    "MARKDOWN_RULE",
+    "TERMINOLOGY_RULE",
     "_build_observation_block",
     "_build_system_prompt",
     "assemble_assistant_envelope",

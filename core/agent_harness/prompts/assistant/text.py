@@ -164,11 +164,6 @@ INTERACTION_RULES = (
     "user to paste values that are already present there.\n\n"
 )
 
-# Legacy private aliases — tests and characterization snapshots import these.
-_TERMINOLOGY_RULE = TERMINOLOGY_RULE
-_MARKDOWN_RULE = MARKDOWN_RULE
-_SOURCE_SCOPED_INVESTIGATION_RULE = SOURCE_SCOPED_INVESTIGATION_RULE
-_SETUP_GUIDANCE_RULE = SETUP_GUIDANCE_RULE
 
 __all__ = [
     "CLI_PREAMBLE",

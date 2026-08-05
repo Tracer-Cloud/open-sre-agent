@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from platform.setup_state import SetupSnapshot, render_setup_state
+import platform.setup_state as setup_state
 
 
 class TestRenderSetupState:
     def test_reports_connected_integrations_and_schedule_count(self) -> None:
         # Arrange: a configured install with one live schedule.
-        state = SetupSnapshot(
+        state = setup_state.SetupSnapshot(
             integrations=("posthog_mcp", "slack"),
             schedule_count=2,
             last_delivery_ok=True,
         )
 
         # Act
-        rendered = render_setup_state(state)
+        rendered = setup_state.render_setup_state(state)
 
         # Assert: the facts the assistant needs to ground a next step.
         assert "posthog_mcp" in rendered
@@ -24,10 +24,10 @@ class TestRenderSetupState:
 
     def test_names_the_empty_install_explicitly(self) -> None:
         # Arrange: a first-run user — nothing connected, nothing scheduled.
-        state = SetupSnapshot(integrations=(), schedule_count=0, last_delivery_ok=None)
+        state = setup_state.SetupSnapshot(integrations=(), schedule_count=0, last_delivery_ok=None)
 
         # Act
-        rendered = render_setup_state(state)
+        rendered = setup_state.render_setup_state(state)
 
         # Assert: "none" must be stated, not left absent. An omitted line reads
         # as "unknown" and the model fills the gap by guessing.
@@ -36,10 +36,12 @@ class TestRenderSetupState:
 
     def test_states_facts_without_instructing_the_model(self) -> None:
         # Arrange: the block is a CONTEXT-tier fact sheet, not a rule block.
-        state = SetupSnapshot(integrations=("slack",), schedule_count=0, last_delivery_ok=None)
+        state = setup_state.SetupSnapshot(
+            integrations=("slack",), schedule_count=0, last_delivery_ok=None
+        )
 
         # Act
-        rendered = render_setup_state(state)
+        rendered = setup_state.render_setup_state(state)
 
         # Assert: no imperative guidance leaks in. Instructions belong to the
         # STABLE persona; mixing them here means a per-turn fact change would
@@ -51,12 +53,16 @@ class TestRenderSetupState:
     def test_failed_last_delivery_is_distinguished_from_never_run(self) -> None:
         # Arrange: a schedule that ran and failed is not the same as one that
         # has never fired — conflating them hides a broken delivery.
-        failed = SetupSnapshot(integrations=("slack",), schedule_count=1, last_delivery_ok=False)
-        never = SetupSnapshot(integrations=("slack",), schedule_count=1, last_delivery_ok=None)
+        failed = setup_state.SetupSnapshot(
+            integrations=("slack",), schedule_count=1, last_delivery_ok=False
+        )
+        never = setup_state.SetupSnapshot(
+            integrations=("slack",), schedule_count=1, last_delivery_ok=None
+        )
 
         # Act
-        failed_text = render_setup_state(failed).lower()
-        never_text = render_setup_state(never).lower()
+        failed_text = setup_state.render_setup_state(failed).lower()
+        never_text = setup_state.render_setup_state(never).lower()
 
         # Assert
         assert failed_text != never_text
@@ -68,7 +74,6 @@ class TestCollectSetupState:
     def test_pairs_caller_integrations_with_live_schedules(self, monkeypatch) -> None:
         # Arrange: the caller owns the integration list because the session
         # already holds the hydrated names.
-        import platform.setup_state as setup_state
 
         def _tasks() -> list[object]:
             return [object(), object()]
@@ -86,7 +91,6 @@ class TestCollectSetupState:
 
     def test_unreadable_scheduler_keeps_the_integrations_it_was_given(self, monkeypatch) -> None:
         # Arrange: a fresh install where the scheduler store does not exist yet.
-        import platform.setup_state as setup_state
 
         def _boom() -> list[object]:
             raise OSError("no store on a fresh install")
@@ -101,3 +105,83 @@ class TestCollectSetupState:
         assert state.integrations == ("slack",)
         assert state.schedule_count == 0
         assert state.last_delivery_ok is None
+
+
+class TestLatestDeliveryOrdering:
+    def test_selects_the_run_that_finished_last_not_the_one_that_started_last(
+        self, monkeypatch
+    ) -> None:
+        # Arrange: overlapping runs. The slow one started first but finished
+        # last, so its outcome is the operator's most recent delivery.
+        from platform.scheduler.types import TaskRun, TaskStatus
+
+        slow_failed = TaskRun(
+            task_id="slow",
+            fire_time="2026-08-05T10:00:00Z",
+            started_at="2026-08-05T10:00:00Z",
+            finished_at="2026-08-05T10:30:00Z",
+            status=TaskStatus.FAILED,
+        )
+        quick_ok = TaskRun(
+            task_id="quick",
+            fire_time="2026-08-05T10:05:00Z",
+            started_at="2026-08-05T10:05:00Z",
+            finished_at="2026-08-05T10:06:00Z",
+            status=TaskStatus.SUCCESS,
+        )
+        runs = {"slow": [slow_failed], "quick": [quick_ok]}
+        monkeypatch.setattr(
+            setup_state,
+            "_task_runs",
+            lambda task_id: runs[task_id],
+        )
+
+        class _Task:
+            def __init__(self, task_id: str) -> None:
+                self.id = task_id
+
+        # Act
+        result = setup_state._latest_delivery_ok([_Task("slow"), _Task("quick")])
+
+        # Assert: reporting the quick success would hide a later failure.
+        assert result is False
+
+
+class TestSetupFingerprint:
+    def test_changes_when_a_schedule_is_added(self, tmp_path, monkeypatch) -> None:
+        # Arrange: a store file standing in for the scheduler task list.
+
+        store = tmp_path / "scheduler_tasks.json"
+        store.write_text("[]")
+        db = tmp_path / "scheduler.db"
+        monkeypatch.setattr(setup_state, "_store_paths", lambda: (store, db))
+        before = setup_state.setup_state_fingerprint()
+
+        # Act: the operator adds a schedule mid-session.
+        store.write_text('[{"id": "t1"}]')
+
+        # Assert: the cache key moves, so the next turn recomputes.
+        assert setup_state.setup_state_fingerprint() != before
+
+    def test_stable_while_nothing_changes(self, tmp_path, monkeypatch) -> None:
+        # Arrange
+
+        store = tmp_path / "scheduler_tasks.json"
+        store.write_text("[]")
+        db = tmp_path / "scheduler.db"
+        monkeypatch.setattr(setup_state, "_store_paths", lambda: (store, db))
+
+        # Act / Assert: an unchanged install must not re-read the stores.
+        assert setup_state.setup_state_fingerprint() == setup_state.setup_state_fingerprint()
+
+    def test_missing_stores_do_not_raise(self, tmp_path, monkeypatch) -> None:
+        # Arrange: a fresh install with neither store created yet.
+
+        monkeypatch.setattr(
+            setup_state,
+            "_store_paths",
+            lambda: (tmp_path / "absent.json", tmp_path / "absent.db"),
+        )
+
+        # Act / Assert
+        assert setup_state.setup_state_fingerprint() is not None

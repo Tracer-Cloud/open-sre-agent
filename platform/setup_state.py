@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -40,21 +41,62 @@ def _scheduled_tasks() -> list[Any]:
     return list(list_tasks())
 
 
-def _latest_delivery_ok(tasks: Sequence[Any]) -> bool | None:
-    """Whether the most recent finished run across ``tasks`` succeeded."""
+def _store_paths() -> tuple[Path, Path]:
+    from platform.scheduler.claim_store import _default_db_path
+    from platform.scheduler.store import _default_store_path
+
+    return _default_store_path(), _default_db_path()
+
+
+def setup_state_fingerprint() -> tuple[tuple[int, int], ...]:
+    """A cheap change signal for the scheduler stores.
+
+    Two ``stat`` calls stand in for re-reading the task list and every task's
+    run history, so a caller can cache the rendered block for a whole session
+    and still notice a schedule added or a delivery completed mid-session.
+    A missing store reads as zeroes — it appears once created.
+    """
+    marks: list[tuple[int, int]] = []
+    for path in _store_paths():
+        try:
+            stat = path.stat()
+        except OSError:
+            marks.append((0, 0))
+        else:
+            marks.append((stat.st_mtime_ns, stat.st_size))
+    return tuple(marks)
+
+
+def _task_runs(task_id: str) -> list[Any]:
     from platform.scheduler.claim_store import get_runs
+
+    return list(get_runs(task_id, limit=_FINISHED_RUN_LOOKBACK))
+
+
+def _completed_at(run: Any) -> str:
+    """When a run finished, falling back to its start for older rows."""
+    return str(run.finished_at or run.started_at)
+
+
+def _latest_delivery_ok(tasks: Sequence[Any]) -> bool | None:
+    """Whether the delivery that finished most recently across ``tasks`` succeeded.
+
+    Ordered by completion, not by start: runs overlap, so a slow task that
+    started first can finish after a quick one. Picking by start time would
+    report the quick run's outcome and hide the later failure.
+    """
     from platform.scheduler.types import TaskStatus
 
-    finished = []
-    for task in tasks:
-        for run in get_runs(task.id, limit=_FINISHED_RUN_LOOKBACK):
-            if run.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
-                finished.append(run)
-                break
+    finished = [
+        run
+        for task in tasks
+        for run in _task_runs(task.id)
+        if run.status in (TaskStatus.SUCCESS, TaskStatus.FAILED)
+    ]
     if not finished:
         return None
-    newest = max(finished, key=lambda run: run.started_at)
-    return newest.status == TaskStatus.SUCCESS
+    newest = max(finished, key=_completed_at)
+    return bool(newest.status == TaskStatus.SUCCESS)
 
 
 def collect_setup_state(integrations: Sequence[str] = ()) -> SetupSnapshot:

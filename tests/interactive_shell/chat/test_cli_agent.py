@@ -20,8 +20,8 @@ from rich.console import Console
 
 from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.assistant import (
-    _MARKDOWN_RULE,
-    _TERMINOLOGY_RULE,
+    MARKDOWN_RULE,
+    TERMINOLOGY_RULE,
     _build_observation_block,
     _build_system_prompt,
     build_environment_block,
@@ -139,12 +139,12 @@ class TestSystemPromptTerminology:
         assert "!" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
-        assert _TERMINOLOGY_RULE in prompt
+        assert TERMINOLOGY_RULE in prompt
         assert "Never use the word 'REPL'" in prompt
 
     def test_prompt_requests_markdown_formatting(self) -> None:
         prompt = _build_system_prompt(reference="(ref)", history="(hist)")
-        assert _MARKDOWN_RULE in prompt
+        assert MARKDOWN_RULE in prompt
         assert "Markdown" in prompt
 
     def test_conversational_prompt_does_not_expose_action_json_contract(self) -> None:
