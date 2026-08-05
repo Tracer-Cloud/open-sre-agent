@@ -1,9 +1,9 @@
 """Optional mirroring of conversation context to a store the user owns.
 
 Off by default. When switched on, conversation history and memory are copied
-to the user's own object store (built-in: AWS/S3 and Vercel Blob; others
+to the user's own object store (built-in: AWS/S3, GCS, and Vercel Blob; others
 register under :mod:`platform.filestorage.providers`). Credentials never leave
-the machine — see :mod:`platform.filestorage.syncable`.
+the machine - see :mod:`platform.filestorage.syncable`.
 
 Surfaces share one **stateless, thread-safe** service
 (:mod:`platform.filestorage.operations`): ``opensre remote-sync``, REPL
@@ -33,6 +33,7 @@ from platform.filestorage.engine import (
     run_sync,
 )
 from platform.filestorage.enums import (
+    BucketExposure,
     BuiltInProvider,
     RemoteSyncSubcommand,
     SyncDirection,
@@ -50,10 +51,12 @@ from platform.filestorage.exclusions import (
     ExclusionRules,
     parse_exclusions,
 )
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.messages import (
     DISABLED_HELP,
     NO_EXCLUSIONS_HELP,
     format_exclusion_lines,
+    format_exposure_line,
     format_report_lines,
     format_status_lines,
     root_state,
@@ -65,15 +68,18 @@ from platform.filestorage.operations import (
     run_remote_sync,
 )
 from platform.filestorage.ports import ObjectStore, RemoteObject
-from platform.filestorage.providers import build_object_store
+from platform.filestorage.providers import build_object_store, check_bucket_exposure
 from platform.filestorage.syncable import SyncRoot, is_syncable, resolved_roots, syncable_roots
 
 __all__ = [
     "NO_EXCLUSIONS",
     "NO_EXCLUSIONS_HELP",
+    "BucketExposure",
     "ExclusionRules",
     "OrgScopeNotSupportedError",
+    "PublicAccessStatus",
     "format_exclusion_lines",
+    "format_exposure_line",
     "format_status_lines",
     "format_report_lines",
     "DISABLED_HELP",
@@ -93,6 +99,7 @@ __all__ = [
     "SyncStatus",
     "UnsyncablePathError",
     "build_object_store",
+    "check_bucket_exposure",
     "get_sync_status",
     "is_syncable",
     "load_remote_sync_config",

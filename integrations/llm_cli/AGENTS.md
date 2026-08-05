@@ -17,6 +17,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `semver_utils.py`    | Shared semver helpers (`parse_semver_three_part`, `semver_to_tuple`). |
 | `binary_resolver.py` | Shared executable resolution helpers (`env -> PATH -> fallback paths`).                     |
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
+| `agent_exec.py`      | Shared machinery for the *agentic* ("hands") role used by coding-agent backends: injection-guarded task prompt, deadline-polled subprocess with pipe draining, outcome classification (limit markers). Leaf — imports nothing from `integrations/pi` or `integrations/coding_agent`. |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |
 | `codex.py`           | Reference adapter: binary resolution, `codex exec`, `--version`, and opt-in-only `login status` probing. |
 | `opencode.py`        | Multi-provider CLI: `--version`, then `opencode auth list` (see `_parse_opencode_auth_list_output`). |

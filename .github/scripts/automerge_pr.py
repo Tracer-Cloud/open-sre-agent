@@ -10,6 +10,39 @@ import sys
 from typing import Any
 
 AUTOMERGE_LABEL = "automerge"
+#: Fields ``gh pr view`` must return. Built by joining so the list stays
+#: readable without adjacent string literals, which read as a missing comma.
+PR_VIEW_FIELDS = ",".join(
+    (
+        "baseRefName",
+        "changedFiles",
+        "isDraft",
+        "labels",
+        "mergeable",
+        "mergeStateStatus",
+        "state",
+        "statusCheckRollup",
+        "title",
+    )
+)
+#: Process exit code. Every path through ``main`` reports success — a PR that
+#: is skipped is not an error. Real failures raise ``CalledProcessError`` and
+#: exit with the code ``gh`` returned.
+EXIT_SUCCESS = 0
+#: How many protected paths the refusal names before summarising the rest.
+#: Enough to show the reader why without pasting a whole diff into the log.
+PROTECTED_PATHS_LOGGED = 3
+#: Paths a machine must never merge on its own. The first three carry the
+#: agent runtime, the multi-tenant platform and the chat gateway — a bad
+#: change there reaches every user. The last two are the merge machinery
+#: itself, which must not be able to widen its own permissions.
+PROTECTED_PATH_PREFIXES = (
+    "core/",
+    "platform/",
+    "gateway/",
+    ".github/workflows/",
+    ".github/scripts/",
+)
 AUTOMERGE_WORKFLOW_NAME = "Auto-merge"
 AUTOMERGE_JOB_CHECK_NAME = "Merge when CI is green"
 # External app checks that are not Actions workflow_run triggers. Waiting on them
@@ -80,6 +113,54 @@ def _rollup_item_is_green(check: dict[str, Any]) -> tuple[bool, str]:
     return _check_run_is_green(check)
 
 
+def _list_pr_files(repo: str, pr_number: str) -> list[dict[str, Any]]:
+    """REST file listing for a PR (paginated). One entry per changed file.
+
+    ``gh pr view --json files`` is unusable for a security check: it caps at 100
+    entries with no indication it truncated, and its entries carry only the
+    destination ``path``. The REST listing paginates and carries
+    ``previous_filename``. ``--paginate`` merges pages into one array; ``--slurp``
+    would only wrap them in an outer list and needs a newer ``gh``.
+    """
+    payload = _run_gh(
+        [
+            "api",
+            f"repos/{repo}/pulls/{pr_number}/files",
+            "--paginate",
+        ]
+    )
+    # Defensive: some ``gh`` versions / flags yield a list of page arrays.
+    if isinstance(payload, list) and payload and isinstance(payload[0], list):
+        return [entry for page in payload for entry in page]
+    return list(payload or [])
+
+
+def _paths_from_pr_files(entries: list[dict[str, Any]]) -> list[str]:
+    """Destination and rename-origin paths from a REST file listing."""
+    paths = {str(entry.get("filename") or "") for entry in entries}
+    paths |= {str(entry.get("previous_filename") or "") for entry in entries}
+    return sorted(path for path in paths if path)
+
+
+def _file_listing_is_complete(changed_files: Any, entries: list[dict[str, Any]]) -> bool:
+    """True when the REST listing covers every changed file in the PR.
+
+    Completeness is ``len(entries)`` vs ``changedFiles``, not the expanded path
+    count. Renames contribute one entry but two paths (destination +
+    ``previous_filename``); comparing the inflated path set to ``changedFiles``
+    would let a truncated rename-heavy response look complete while protected
+    files past the cut stay invisible.
+    """
+    if not isinstance(changed_files, int):
+        return True
+    return len(entries) >= changed_files
+
+
+def _protected_paths(paths: list[str]) -> list[str]:
+    """Paths that require a human to press merge, sorted and unique."""
+    return sorted({path for path in paths if path.startswith(PROTECTED_PATH_PREFIXES)})
+
+
 def _squash_commit_subject(title: str, pr_number: str) -> str:
     suffix = f"(#{pr_number})"
     stripped = title.rstrip()
@@ -124,35 +205,52 @@ def main() -> int:
             "--repo",
             repo,
             "--json",
-            "baseRefName,isDraft,mergeable,mergeStateStatus,labels,state,statusCheckRollup,title",
+            PR_VIEW_FIELDS,
         ]
     )
 
     if pr.get("baseRefName") != "main":
         print(f"PR #{pr_number} does not target main; skipping.")
-        return 0
+        return EXIT_SUCCESS
 
     if pr.get("state") != "OPEN":
         print(f"PR #{pr_number} is not open; skipping.")
-        return 0
+        return EXIT_SUCCESS
 
     if pr.get("isDraft"):
         print(f"PR #{pr_number} is a draft; skipping.")
-        return 0
+        return EXIT_SUCCESS
 
     label_names = {label["name"] for label in pr.get("labels", [])}
     if AUTOMERGE_LABEL not in label_names:
         print(f"PR #{pr_number} does not have the {AUTOMERGE_LABEL} label; skipping.")
-        return 0
+        return EXIT_SUCCESS
+
+    entries = _list_pr_files(repo, pr_number)
+    changed = pr.get("changedFiles")
+    if not _file_listing_is_complete(changed, entries):
+        print(
+            f"PR #{pr_number} changes {changed} files but only {len(entries)} "
+            "are visible; a human must merge."
+        )
+        return EXIT_SUCCESS
+
+    protected = _protected_paths(_paths_from_pr_files(entries))
+    if protected:
+        shown = ", ".join(protected[:PROTECTED_PATHS_LOGGED])
+        hidden = len(protected) - PROTECTED_PATHS_LOGGED
+        more = f" (+{hidden} more)" if hidden > 0 else ""
+        print(f"PR #{pr_number} touches protected paths; a human must merge: {shown}{more}")
+        return EXIT_SUCCESS
 
     if pr.get("mergeable") != "MERGEABLE":
         print(f"PR #{pr_number} is not mergeable ({pr.get('mergeStateStatus')}); skipping.")
-        return 0
+        return EXIT_SUCCESS
 
     green, reason = _checks_are_green(pr.get("statusCheckRollup") or [])
     if not green:
         print(f"PR #{pr_number} not ready to merge: {reason}")
-        return 0
+        return EXIT_SUCCESS
 
     title = pr["title"]
     print(f"Merging PR #{pr_number}: {title}")
@@ -172,7 +270,7 @@ def main() -> int:
         check=True,
     )
     print(f"Merged PR #{pr_number}.")
-    return 0
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ Pins the documented ladder in ``docs/python-api.mdx`` — two-line start, custom
 sink, custom grounding, multi-turn reuse — without a live LLM provider.
 
 The action planner still talks to the real provider when tools are empty, so
-these scenarios stub ``run_action_agent_turn`` and inject a streaming Echo
+these scenarios stub ``ActionTurnRunner.run`` and inject a streaming Echo
 client on the reasoning port. That isolates the embedder-facing seams.
 """
 
@@ -30,8 +30,13 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnRes
 class _EchoClient:
     """Streaming client that mirrors persona markers — no network."""
 
-    def invoke_stream(self, prompt: str) -> Any:
-        marker = "CUSTOM PERSONA" if "CUSTOM PERSONA" in prompt else "ok"
+    def invoke_stream(self, prompt: Any) -> Any:
+        from integrations.llm_cli.text import flatten_messages_to_prompt
+
+        # Answer path passes ``AssistantTurnPrompt.messages()`` (system+user),
+        # not a single joined string — scan content, not list membership.
+        text = flatten_messages_to_prompt(prompt)
+        marker = "CUSTOM PERSONA" if "CUSTOM PERSONA" in text else "ok"
         yield f"echo:{marker}"
 
 
@@ -93,8 +98,8 @@ def _unhandled_actions(*_args: Any, **_kwargs: Any) -> ToolCallingTurnResult:
 def stub_action_planner(monkeypatch: Any) -> None:
     """Keep the action planner off the network so Echo can answer."""
     monkeypatch.setattr(
-        "core.agent_harness.turns.headless_dispatch.run_action_agent_turn",
-        _unhandled_actions,
+        "core.agent_harness.turns.headless_dispatch.ActionTurnRunner.run",
+        lambda _self, *_args, **_kwargs: _unhandled_actions(),
     )
 
 

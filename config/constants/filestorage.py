@@ -5,7 +5,7 @@ enabled, conversation history and memory are mirrored to a store the user owns
 so a second machine can pick up where the first left off.
 
 The backend is selected by ``OPENSRE_REMOTE_SYNC_PROVIDER`` (default ``aws``;
-built-in also ``vercel``). New vendors register under
+built-in also ``gcs`` and ``vercel``). New vendors register under
 ``platform.filestorage.providers`` without changing the sync engine.
 """
 
@@ -14,10 +14,10 @@ from __future__ import annotations
 # Master switch. Sync stays off until this is truthy, even if a bucket is named.
 REMOTE_SYNC_ENV = "OPENSRE_REMOTE_SYNC"
 # Cloud provider registered in platform.filestorage.providers (default: aws).
-# Value must stay aligned with BuiltInProvider.AWS in platform.filestorage.enums.
+# Value must stay aligned with BuiltInProvider in platform.filestorage.enums.
 REMOTE_SYNC_PROVIDER_ENV = "OPENSRE_REMOTE_SYNC_PROVIDER"
-# Top-level store name the user owns (S3 bucket, Vercel Blob store name/id, …).
-# Required when sync is on.
+# Top-level store name the user owns (S3 bucket, GCS bucket, Vercel Blob store
+# name/id, …). Required when sync is on.
 REMOTE_SYNC_BUCKET_ENV = "OPENSRE_REMOTE_SYNC_BUCKET"
 # Key prefix inside the store, so one store can hold several roots.
 REMOTE_SYNC_PREFIX_ENV = "OPENSRE_REMOTE_SYNC_PREFIX"

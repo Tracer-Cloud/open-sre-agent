@@ -8,8 +8,9 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
+from platform.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncUnavailableError
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers.registry import SetupExtraField, register_object_store
 
@@ -112,8 +113,55 @@ def _factory(config: RemoteSyncConfig) -> S3ObjectStore:
     return S3ObjectStore(config)
 
 
+def check_public_access(
+    config: RemoteSyncConfig, *, client: Any | None = None
+) -> PublicAccessStatus:
+    """Ask S3 whether ``config.bucket`` is publicly readable.
+
+    Uses ``s3:GetBucketPolicyStatus``, so the result reflects only the bucket
+    policy (plus account/bucket Block Public Access settings, which factor
+    into ``IsPublic``), not object or bucket ACLs.
+
+    Degrades to :class:`~platform.filestorage.enums.BucketExposure.UNKNOWN`
+    rather than raising: the permission can be missing on an otherwise
+    perfectly usable bucket, and this check must never stand in the way of
+    ``status`` or ``setup`` reporting the rest of what they know. ``detail``
+    never carries the raw exception text for any failure but the permission
+    gap — this result can be echoed straight into a gateway chat surface (see
+    ``format_status_lines``), and an S3 error message is not vetted for that
+    (CWE-209).
+    """
+    try:
+        s3 = client if client is not None else _build_client(config)
+        response = s3.get_bucket_policy_status(Bucket=config.bucket)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code == "AccessDenied":
+            return PublicAccessStatus(
+                BucketExposure.UNKNOWN, "missing the s3:GetBucketPolicyStatus permission"
+            )
+        if code == "NoSuchBucketPolicy":
+            # No policy means nothing grants public access through one.
+            return PublicAccessStatus(BucketExposure.PRIVATE)
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    except (BotoCoreError, ValueError, RemoteSyncUnavailableError) as exc:
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    is_public = bool(response.get("PolicyStatus", {}).get("IsPublic", False))
+    return PublicAccessStatus(BucketExposure.PUBLIC if is_public else BucketExposure.PRIVATE)
+
+
 register_object_store(
-    PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT, extra_fields=EXTRA_FIELDS
+    PROVIDER_NAME,
+    _factory,
+    credential_hint=CREDENTIAL_HINT,
+    extra_fields=EXTRA_FIELDS,
+    public_access_checker=check_public_access,
 )
 
-__all__ = ["CREDENTIAL_HINT", "EXTRA_FIELDS", "PROVIDER_NAME", "S3ObjectStore"]
+__all__ = [
+    "CREDENTIAL_HINT",
+    "EXTRA_FIELDS",
+    "PROVIDER_NAME",
+    "S3ObjectStore",
+    "check_public_access",
+]
