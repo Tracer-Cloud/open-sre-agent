@@ -41,6 +41,7 @@ def build_message(task: ScheduledTask) -> str:
         TaskKind.SENTRY_MORNING_DIGEST: _build_sentry_morning_digest,
         TaskKind.SENTRY_UPTIME_WATCH: _build_sentry_uptime_watch,
         TaskKind.GITHUB_PR_SWEEP: _build_github_pr_sweep,
+        TaskKind.POSTHOG_METRIC_REPORT: _build_posthog_metric_report,
     }
     builder = builders.get(task.kind)
     if builder is None:
@@ -243,6 +244,24 @@ def _build_github_pr_sweep(task: ScheduledTask) -> str:
         logger.error("GitHub PR sweep failed for task %s: %s", task.id, exc)
         raise RuntimeError(
             f"GitHub PR sweep failed for task {task.id}. Check logs for details."
+        ) from exc
+
+
+def _build_posthog_metric_report(task: ScheduledTask) -> str:
+    """Build a PostHog per-metric report via the headless posthog-summary skill path."""
+    try:
+        safe_params = {k: v for k, v in task.params.items() if k not in _CREDENTIAL_KEYS}
+        payload = {
+            "stats_period": "7d",
+            **safe_params,
+            "source": "scheduled_posthog_metric_report",
+            "task_id": task.id,
+        }
+        return invoke_agent_runner(payload)
+    except Exception as exc:
+        logger.error("PostHog metric report failed for task %s: %s", task.id, exc)
+        raise RuntimeError(
+            f"PostHog metric report failed for task {task.id}. Check logs for details."
         ) from exc
 
 

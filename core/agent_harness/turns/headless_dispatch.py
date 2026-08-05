@@ -104,6 +104,7 @@ class HeadlessAgent:
         accounting: TurnAccounting | None = None,
         error_reporter: ErrorReporter | None = None,
         gather_enabled: bool = False,
+        gather_max_iterations: int | None = None,
         confirm_fn: ConfirmFn | None = None,
         is_tty: bool | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
@@ -127,6 +128,7 @@ class HeadlessAgent:
         self._accounting = accounting
         self._error_reporter = error_reporter if error_reporter is not None else NoopErrorReporter()
         self._gather_enabled = gather_enabled
+        self._gather_max_iterations = gather_max_iterations
         self._confirm_fn = confirm_fn
         self._is_tty = is_tty
         self._tool_hooks = tool_hooks
@@ -224,6 +226,7 @@ class HeadlessAgent:
             self._store,
             error_reporter=self._error_reporter,
             resolved_integrations=resolved,
+            max_iterations=self._gather_max_iterations,
         )
 
     def dispatch(self, message: str) -> TurnResult:
