@@ -11,6 +11,12 @@ from platform.scheduler.credentials import (
     resolve_rocketchat_credentials,
     resolve_slack_credentials,
     resolve_telegram_credentials,
+    resolve_telegram_default_chat_id,
+)
+from platform.scheduler.loop_constants import (
+    LOOP_CHANNELS_PARAM,
+    LOOP_SLACK_CHAT_ID_PARAM,
+    LOOP_TELEGRAM_CHAT_ID_PARAM,
 )
 from platform.scheduler.tasks import build_message
 from platform.scheduler.types import Provider, ScheduledTask, TaskStatus
@@ -66,7 +72,7 @@ def execute_task(
             fire_time,
             status=TaskStatus.SUCCESS,
             posted_message_id="",
-            provider=task.provider.value,
+            provider=_run_provider_label(task),
         )
         _emit_analytics(task, TaskStatus.SUCCESS)
         logger.info("Task %s produced no message; delivery skipped", task.id)
@@ -81,7 +87,7 @@ def execute_task(
             fire_time,
             status=TaskStatus.SUCCESS,
             posted_message_id=message_id,
-            provider=task.provider.value,
+            provider=_run_provider_label(task),
         )
         _emit_analytics(task, TaskStatus.SUCCESS)
         logger.info("Task %s delivered successfully (message_id=%s)", task.id, message_id)
@@ -99,6 +105,16 @@ def _deliver(
 
     Returns (success, error, message_id).
     """
+    delivery_providers, parse_error = _loop_delivery_providers(task)
+    if parse_error:
+        return False, parse_error, ""
+    if delivery_providers:
+        return _deliver_to_providers(task, message, delivery_providers)
+    return _deliver_single(task, message)
+
+
+def _deliver_single(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Deliver one message to ``task.provider``."""
     if task.provider == Provider.TELEGRAM:
         return _deliver_telegram(task, message)
     elif task.provider == Provider.SLACK:
@@ -107,8 +123,76 @@ def _deliver(
         return _deliver_discord(task, message)
     elif task.provider == Provider.ROCKETCHAT:
         return _deliver_rocketchat(task, message)
+    elif task.provider == Provider.INTERACTIVE_SHELL:
+        return _deliver_interactive_shell(task, message)
     else:
         return False, f"Unsupported provider: {task.provider}", ""
+
+
+def _loop_delivery_providers(task: ScheduledTask) -> tuple[tuple[Provider, ...], str]:
+    """Return fan-out providers requested by loop metadata."""
+    raw = task.params.get(LOOP_CHANNELS_PARAM, "").strip()
+    if not raw:
+        return (), ""
+
+    providers: list[Provider] = []
+    seen: set[Provider] = set()
+    for item in raw.split(","):
+        value = item.strip().lower()
+        if not value:
+            continue
+        try:
+            provider = Provider(value)
+        except ValueError:
+            return (), f"Unsupported loop delivery channel: {value}"
+        if provider not in seen:
+            providers.append(provider)
+            seen.add(provider)
+    if not providers:
+        return (), "Loop delivery channel list is empty"
+    return tuple(providers), ""
+
+
+def _deliver_to_providers(
+    task: ScheduledTask,
+    message: str,
+    providers: tuple[Provider, ...],
+) -> tuple[bool, str, str]:
+    """Fan out one built message to every requested provider."""
+    errors: list[str] = []
+    message_ids: list[str] = []
+    for provider in providers:
+        delivery_task = _task_for_delivery_provider(task, provider)
+        ok, error, message_id = _deliver_single(delivery_task, message)
+        if ok:
+            message_ids.append(f"{provider.value}:{message_id}" if message_id else provider.value)
+        else:
+            errors.append(f"{provider.value}: {error}")
+    return (not errors, "; ".join(errors), ", ".join(message_ids))
+
+
+def _task_for_delivery_provider(task: ScheduledTask, provider: Provider) -> ScheduledTask:
+    """Return a task-shaped view carrying the destination for ``provider``."""
+    chat_id = task.chat_id
+    if provider == Provider.TELEGRAM:
+        chat_id = (
+            task.params.get(LOOP_TELEGRAM_CHAT_ID_PARAM, "").strip()
+            or (task.chat_id if task.provider == Provider.TELEGRAM else "")
+            or resolve_telegram_default_chat_id(task.params)
+        )
+    elif provider == Provider.SLACK:
+        chat_id = task.params.get(LOOP_SLACK_CHAT_ID_PARAM, "").strip() or (
+            task.chat_id if task.provider == Provider.SLACK else ""
+        )
+    elif provider == Provider.INTERACTIVE_SHELL:
+        chat_id = ""
+    return task.model_copy(update={"provider": provider, "chat_id": chat_id})
+
+
+def _run_provider_label(task: ScheduledTask) -> str:
+    """Return the provider label persisted with run history."""
+    channels = task.params.get(LOOP_CHANNELS_PARAM, "").strip()
+    return channels or task.provider.value
 
 
 def _strip_html(text: str) -> str:
@@ -260,6 +344,18 @@ def _deliver_rocketchat(task: ScheduledTask, message: str) -> tuple[bool, str, s
     return (True, "", msg_id) if ok else (False, error, "")
 
 
+def _deliver_interactive_shell(task: ScheduledTask, message: str) -> tuple[bool, str, str]:
+    """Persist loop output to the local interactive-shell inbox."""
+    try:
+        from platform.scheduler.local_delivery import record_loop_message
+
+        message_id = record_loop_message(task, _strip_html(message))
+        return True, "", message_id
+    except Exception as exc:
+        logger.warning("Interactive-shell loop delivery failed for task %s: %s", task.id, exc)
+        return False, f"Interactive-shell delivery error: {type(exc).__name__}", ""
+
+
 def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
     """Record a failed execution in the claim store and emit analytics."""
     complete_run(
@@ -267,7 +363,7 @@ def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
         fire_time,
         status=TaskStatus.FAILED,
         error=error,
-        provider=task.provider.value,
+        provider=_run_provider_label(task),
     )
     _emit_analytics(task, TaskStatus.FAILED, error=error)
     logger.warning("Task %s failed: %s", task.id, error)

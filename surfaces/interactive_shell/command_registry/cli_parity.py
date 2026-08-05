@@ -478,7 +478,13 @@ COMMANDS: list[SlashCommand] = [
         "/cron",
         "Manage cron-driven scheduled deliveries.",
         _cmd_cron,
-        usage=("/cron list", "/cron add", "/cron remove <id>", "/cron run <id>", "/cron logs <id>"),
+        usage=(
+            "/cron list",
+            "/cron add --name <name>",
+            "/cron remove <id>",
+            "/cron run <id>",
+            "/cron logs <id>",
+        ),
     ),
     SlashCommand(
         "/sentry",

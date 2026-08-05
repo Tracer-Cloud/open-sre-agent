@@ -92,6 +92,11 @@ def _isolate_integration_store(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
     monkeypatch.setattr("integrations.store.STORE_PATH", tmp_path / "integrations.json")
 
 
+@pytest.fixture(autouse=True)
+def _skip_loop_seeding(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(flow, "_seed_onboarding_loops", lambda: 0)
+
+
 def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, capsys) -> None:
     # advanced -> falls back to local -> change provider? Yes -> pick anthropic -> skip integrations
     select_responses = iter(
@@ -116,6 +121,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
 
     saved: dict[str, object] = {}
     saved_llm_keys: list[tuple[str, str]] = []
+    seeded_loops: list[bool] = []
 
     monkeypatch.setattr(_ui, "select_prompt", _mock_select)
     monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
@@ -132,6 +138,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
 
     monkeypatch.setattr(flow, "save_local_config", _save_local_config)
     monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(flow, "_seed_onboarding_loops", lambda: seeded_loops.append(True) or 3)
     monkeypatch.setattr(
         _ui,
         "save_api_key",
@@ -145,6 +152,7 @@ def test_run_wizard_advanced_remote_falls_back_to_local(monkeypatch, tmp_path, c
     assert saved["provider"] == "anthropic"
     assert "api_key" not in saved
     assert saved_llm_keys == [("anthropic", "secret-key")]
+    assert seeded_loops == [True]
 
     output = capsys.readouterr().out
     assert "Summary" in output

@@ -35,6 +35,10 @@ from surfaces.interactive_shell.runtime.input.actions import (
     InputAction,
     SubmitTurn,
 )
+from surfaces.interactive_shell.runtime.loop_scheduler import (
+    shutdown_loop_scheduler,
+    start_loop_scheduler,
+)
 from surfaces.interactive_shell.runtime.turn_host import (
     AgentTurnRuntime,
     run_agent_turn,
@@ -236,6 +240,10 @@ class InteractiveShellController:
         )
         # Fleet sampler is lazy: /fleet triggers it on first live use.
         self.session.terminal.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
+        try:
+            start_loop_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Loop scheduler could not start: %s", exc)
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:
@@ -275,6 +283,7 @@ class InteractiveShellController:
         for (label, _task), result in zip(self.tasks, shutdown_results, strict=True):
             if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                 log.debug("%s task shutdown raised exception: %s", label, result)
+        shutdown_loop_scheduler()
 
 
 __all__ = ["InteractiveShellController"]

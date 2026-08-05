@@ -13,7 +13,9 @@ import logging
 import os
 from typing import Any
 
+from config.constants import TELEGRAM_DEFAULT_CHAT_ID_ENV
 from config.llm_credentials import resolve_env_credential
+from platform.scheduler.loop_constants import LOOP_TELEGRAM_CHAT_ID_PARAM
 from platform.scheduler.types import Provider
 
 logger = logging.getLogger(__name__)
@@ -30,6 +32,21 @@ def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
         credential_key="bot_token",
         env_vars=("TELEGRAM_BOT_TOKEN",),
     )
+
+
+def resolve_telegram_default_chat_id(task_params: dict[str, str] | None = None) -> str:
+    """Resolve the default Telegram destination for scheduled delivery."""
+    params = task_params or {}
+    explicit = (
+        params.get("chat_id", "").strip() or params.get(LOOP_TELEGRAM_CHAT_ID_PARAM, "").strip()
+    )
+    if explicit:
+        return explicit
+
+    store_chat_id = _get_integration_credential("telegram", "default_chat_id").strip()
+    if store_chat_id:
+        return store_chat_id
+    return os.getenv(TELEGRAM_DEFAULT_CHAT_ID_ENV, "").strip()
 
 
 def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
@@ -172,11 +189,14 @@ def requires_explicit_chat_id(provider: str, task_params: dict[str, str] | None 
     Mirrors what :func:`platform.scheduler.executor._deliver_slack` actually
     does: a Slack webhook is bound to one channel and is its own destination,
     so it can deliver without a chat id. A bot token cannot — it posts to a
-    named channel — and every other provider always needs one. Accepting a
-    task without a reachable destination stores a schedule that fires into
-    nothing.
+    named channel. Interactive-shell delivery writes to the local loop inbox
+    and never needs a chat id. Accepting a task without a reachable destination
+    stores a schedule that fires into nothing.
     """
-    if provider.strip().lower() != Provider.SLACK.value:
+    provider_name = provider.strip().lower()
+    if provider_name == Provider.INTERACTIVE_SHELL.value:
+        return False
+    if provider_name != Provider.SLACK.value:
         return True
     creds = resolve_slack_credentials(task_params or {})
     return not creds.get("webhook_url", "").strip()
@@ -187,5 +207,6 @@ __all__ = [
     "resolve_discord_credentials",
     "resolve_rocketchat_credentials",
     "resolve_slack_credentials",
+    "resolve_telegram_default_chat_id",
     "resolve_telegram_credentials",
 ]

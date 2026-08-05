@@ -112,9 +112,12 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     ),
     "/cron": _mcp(
         "Manage cron-driven scheduled deliveries. "
-        "Subcommands: list, add, remove <id>, run <id>, logs <id>.",
-        "User asks to list, add, remove, run, or view logs for scheduled delivery tasks",
-        anti_examples=("User asks about one-off messaging without a schedule (use /messaging)",),
+        "Subcommands: add, remove <id>, run <id>, logs <id>, list.",
+        "User asks to create, remove, run, or view logs for scheduled delivery tasks",
+        anti_examples=(
+            "User asks to list active recurring loops (use /loops)",
+            "User asks about one-off messaging without a schedule (use /messaging)",
+        ),
     ),
     "/sentry": _mcp(
         "Schedule and run automated Sentry morning digests (requires Telegram or Slack). "
@@ -205,6 +208,19 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "and API-key providers such as deepseek.",
         "User asks to log in to ChatGPT, Claude, DeepSeek, or another LLM provider",
         anti_examples=("User asks to log in to a non-LLM integration (use /integrations or /mcp)",),
+    ),
+    "/loops": _mcp(
+        "List, create, stop, start, delete, run once, and debug recurring prompt loops, "
+        "including next fire time. "
+        "Subcommands: list, active, all, add, run <id>, stop <id>, start <id>, delete <id>, "
+        "next <id>, messages. "
+        "Use add with --prompt, --time or --cron, optional --channel, and --run-now.",
+        "User asks to list active loops or recurring scheduled loops",
+        "User asks when configured loops will run next",
+        "User asks to set up a manual recurring loop from a prompt",
+        "User asks to add a loop and execute it once immediately",
+        "User asks to stop, disable, resume, start, delete, or remove a recurring loop",
+        anti_examples=("User wants low-level cron task logs by task id (use /cron)",),
     ),
     "/rca": _mcp(
         "Browse persisted RCA reports across sessions. Subcommands: history, show <id>, save <path>.",

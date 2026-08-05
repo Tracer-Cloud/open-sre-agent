@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 import platform.scheduler.tasks as tasks_mod
+from platform.scheduler.loop_constants import LOOP_PROMPT_PARAM
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
@@ -192,6 +193,39 @@ class TestMessageBuilders:
         tasks_mod._build_custom_investigation(task)
         assert "bot_token" not in captured_payload
         assert captured_payload.get("custom_param") == "safe_value"
+
+    def test_custom_investigation_with_loop_prompt_uses_agent_runner(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        task = ScheduledTask(
+            id="manual-loop",
+            name="Morning ops",
+            kind=TaskKind.CUSTOM_INVESTIGATION,
+            cron="0 8 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+            params={LOOP_PROMPT_PARAM: "Check incidents and summarize risk."},
+        )
+        captured: dict[str, object] = {}
+
+        def _mock_agent_runner(payload: dict[str, object]) -> str:
+            captured.update(payload)
+            return "Manual loop report"
+
+        monkeypatch.setattr(
+            "platform.scheduler.tasks.invoke_agent_runner",
+            _mock_agent_runner,
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.tasks.invoke_investigation_runner",
+            lambda _payload: pytest.fail("manual loops must not run RCA investigation"),
+        )
+
+        msg = tasks_mod._build_custom_investigation(task)
+
+        assert msg == "Manual loop report"
+        assert captured["source"] == "scheduled_manual_loop"
+        assert captured["loop_prompt"] == "Check incidents and summarize risk."
+        assert captured["name"] == "Morning ops"
 
     def test_sentry_morning_digest_uses_agent_runner(self, monkeypatch: pytest.MonkeyPatch) -> None:
         task = ScheduledTask(

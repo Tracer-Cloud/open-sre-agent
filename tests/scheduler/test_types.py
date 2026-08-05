@@ -39,6 +39,7 @@ class TestScheduledTask:
             chat_id="C123",
         )
         assert task.timezone == "UTC"
+        assert task.name == ""
         assert task.window_hours == 24
         assert task.enabled is True
         assert task.params == {}
@@ -59,6 +60,7 @@ class TestScheduledTask:
         assert Provider.SLACK == "slack"
         assert Provider.DISCORD == "discord"
         assert Provider.ROCKETCHAT == "rocketchat"
+        assert Provider.INTERACTIVE_SHELL == "interactive_shell"
 
 
 class TestTaskRun:

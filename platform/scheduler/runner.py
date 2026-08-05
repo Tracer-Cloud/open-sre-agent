@@ -11,14 +11,16 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from platform.scheduler.executor import execute_task
 from platform.scheduler.store import get_task, list_tasks, update_task
 from platform.scheduler.types import ScheduledTask
 
 logger = logging.getLogger(__name__)
+TaskFilter = Callable[[ScheduledTask], bool]
 
 # Populated by EVENT_JOB_SUBMITTED before each job runs (job_id -> fire_time).
 _pending_fire_times: dict[str, str] = {}
@@ -41,6 +43,22 @@ def _make_trigger(task: ScheduledTask) -> Any:
     except (ValueError, TypeError, KeyError) as exc:
         raise ValueError(f"Invalid cron/timezone for task {task.id}: {exc}") from exc
     return trigger
+
+
+def _next_run_from_trigger(trigger: Any, now: datetime | None = None) -> str | None:
+    """Return the next UTC fire time for an already-built trigger."""
+    base = now or datetime.now(UTC)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=UTC)
+    next_fire = cast(datetime | None, trigger.get_next_fire_time(None, base))
+    if next_fire is None:
+        return None
+    return next_fire.astimezone(UTC).isoformat()
+
+
+def compute_next_run(task: ScheduledTask, now: datetime | None = None) -> str | None:
+    """Return the task's next UTC cron fire time, or raise for invalid schedules."""
+    return _next_run_from_trigger(_make_trigger(task), now)
 
 
 def _compute_fire_time(scheduled_run_time: Any) -> str:
@@ -91,7 +109,11 @@ def _scheduled_job(task_id: str) -> None:
         update_task(task)
 
 
-def _register_jobs(scheduler: Any) -> int:
+def _register_jobs(
+    scheduler: Any,
+    *,
+    task_filter: TaskFilter | None = None,
+) -> int:
     """Register all enabled tasks on *scheduler*; invalid tasks are logged and skipped."""
     from apscheduler.events import EVENT_JOB_SUBMITTED
 
@@ -101,11 +123,17 @@ def _register_jobs(scheduler: Any) -> int:
     for task in list_tasks():
         if not task.enabled:
             continue
+        if task_filter is not None and not task_filter(task):
+            continue
         try:
             trigger = _make_trigger(task)
         except ValueError as exc:
             logger.error("Skipping task %s: %s", task.id, exc)
             continue
+        next_run = _next_run_from_trigger(trigger)
+        if task.next_run != next_run:
+            task.next_run = next_run
+            update_task(task)
 
         scheduler.add_job(
             _scheduled_job,
@@ -127,7 +155,10 @@ def _register_jobs(scheduler: Any) -> int:
     return enabled_count
 
 
-def start_background_scheduler() -> tuple[Any, int]:
+def start_background_scheduler(
+    *,
+    task_filter: TaskFilter | None = None,
+) -> tuple[Any, int]:
     """Start a non-blocking scheduler for embedding in a host process.
 
     Installs no signal handlers and never exits the process. Returns
@@ -137,7 +168,7 @@ def start_background_scheduler() -> tuple[Any, int]:
     from apscheduler.schedulers.background import BackgroundScheduler
 
     scheduler = BackgroundScheduler()
-    enabled_count = _register_jobs(scheduler)
+    enabled_count = _register_jobs(scheduler, task_filter=task_filter)
     if enabled_count == 0:
         return None, 0
     scheduler.start()
@@ -191,4 +222,9 @@ def run_task_now(task_id: str) -> bool:
     return execute_task(task, fire_time)
 
 
-__all__ = ["run_task_now", "start_background_scheduler", "start_scheduler"]
+__all__ = [
+    "compute_next_run",
+    "run_task_now",
+    "start_background_scheduler",
+    "start_scheduler",
+]

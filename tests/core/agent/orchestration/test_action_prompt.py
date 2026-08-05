@@ -250,6 +250,10 @@ def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
     assert "scheduled deliveries" in prompt
     assert "propose_scheduled_delivery" in prompt
     assert "every morning" in prompt
+    assert "slash_invoke /loops" in prompt
+    assert "/loops add" in prompt
+    assert "--prompt" in prompt
+    assert "--run-now" in prompt
     assert "do not call /cron until they confirm" in prompt
 
 
@@ -610,10 +614,17 @@ def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:
 
     # Act
     entry = MCP_BY_COMMAND.get("/cron")
+    loops_entry = MCP_BY_COMMAND.get("/loops")
 
     # Assert
     assert entry is not None, "the prompt offers /cron but it is not in the slash catalog"
     assert "add" in entry.llm_description.lower()
+    assert loops_entry is not None, "the prompt offers /loops but it is not in the slash catalog"
+    assert "add" in loops_entry.llm_description.lower()
+    assert "delete" in loops_entry.llm_description.lower()
+    assert "run once" in loops_entry.llm_description.lower()
+    assert "stop" in loops_entry.llm_description.lower()
+    assert "next fire time" in loops_entry.llm_description.lower()
 
 
 def test_scheduling_is_never_offered_without_asking_first() -> None:

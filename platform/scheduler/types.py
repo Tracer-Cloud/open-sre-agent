@@ -48,6 +48,7 @@ class Provider(StrEnum):
     SLACK = "slack"
     DISCORD = "discord"
     ROCKETCHAT = "rocketchat"
+    INTERACTIVE_SHELL = "interactive_shell"
 
 
 def _generate_task_id() -> str:
@@ -58,6 +59,7 @@ class ScheduledTask(BaseModel):
     """A persisted scheduled-task definition."""
 
     id: str = Field(default_factory=_generate_task_id)
+    name: str = ""
     kind: TaskKind
     cron: str
     timezone: str = "UTC"

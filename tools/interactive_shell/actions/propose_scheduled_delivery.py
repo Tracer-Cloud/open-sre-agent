@@ -93,7 +93,7 @@ def execute_propose_scheduled_delivery_tool(
             "ok": False,
             "error": "cron must have exactly 5 fields (minute hour day month day_of_week)",
         }
-    if provider != Provider.SLACK.value and not chat_id:
+    if provider not in {Provider.SLACK.value, Provider.INTERACTIVE_SHELL.value} and not chat_id:
         return {
             "ok": False,
             "error": f"--chat-id is required for provider {provider}",

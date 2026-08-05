@@ -32,6 +32,7 @@ from surfaces.interactive_shell.command_registry.integrations import (
 from surfaces.interactive_shell.command_registry.investigation import (
     COMMANDS as INVESTIGATION_COMMANDS,
 )
+from surfaces.interactive_shell.command_registry.loops_cmds import COMMANDS as LOOPS_COMMANDS
 from surfaces.interactive_shell.command_registry.memory_cmds import (
     COMMANDS as MEMORY_COMMANDS,
 )
@@ -87,6 +88,7 @@ _MERGED_SEQUENCE = tuple(
         TOOLS_COMMANDS,
         INVESTIGATION_COMMANDS,
         RCA_COMMANDS,
+        LOOPS_COMMANDS,
         TASK_COMMANDS,
         WATCH_COMMANDS,
         GATEWAY_COMMANDS,

@@ -8,6 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from platform.scheduler.executor import execute_task
+from platform.scheduler.local_delivery import get_loop_messages
+from platform.scheduler.loop_constants import LOOP_CHANNELS_PARAM
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
@@ -137,6 +139,60 @@ class TestExecutor:
 
         assert result is True
         mock_deliver.assert_called_once()
+
+    def test_interactive_shell_delivery_success(self, tmp_path: Path) -> None:
+        inbox_path = tmp_path / "loop_messages.jsonl"
+        task = ScheduledTask(
+            id="test_shell_01",
+            name="Local loop",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="<b>Scheduled</b> report",
+            ),
+            patch(
+                "platform.scheduler.local_delivery._default_inbox_path",
+                return_value=inbox_path,
+            ),
+        ):
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        messages = get_loop_messages(inbox_path=inbox_path)
+        assert len(messages) == 1
+        assert messages[0].name == "Local loop"
+        assert messages[0].message == "Scheduled report"
+
+    def test_loop_fanout_builds_message_once(self) -> None:
+        task = ScheduledTask(
+            id="test_fanout",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+            params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ) as mock_build,
+            patch("platform.scheduler.executor._deliver_interactive_shell") as mock_shell,
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+        ):
+            mock_shell.return_value = (True, "", "local:1")
+            mock_slack.return_value = (True, "", "ts_123")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        mock_build.assert_called_once_with(task)
+        mock_shell.assert_called_once()
+        mock_slack.assert_called_once()
 
     def test_rocketchat_delivery_posts_to_channel(self) -> None:
         task = ScheduledTask(
