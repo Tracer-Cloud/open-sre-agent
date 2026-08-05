@@ -143,7 +143,9 @@ class BuzzClient:
             if isinstance(parsed, list):
                 channel_count = f" ({len(parsed)} channel(s) visible)"
         except json.JSONDecodeError:
-            pass
+            logger.debug(
+                "buzz channels list output was not JSON; skipping channel count enrichment."
+            )
         return ProbeResult.passed(
             f"Connected to Buzz relay at {self._config.relay_url}{channel_count}."
         )
