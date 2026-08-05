@@ -66,17 +66,19 @@ def validate_servicenow_config(config: dict[str, str]) -> ServiceNowValidationRe
     except Exception as err:
         return ServiceNowValidationResult(ok=False, detail=f"ServiceNow validation failed: {err}")
 
-    if resp.status_code == 200:
+    from http import HTTPStatus
+
+    if resp.status_code == HTTPStatus.OK:
         return ServiceNowValidationResult(
             ok=True,
             detail=f"ServiceNow connected as {username} at {base_url}.",
             instance_url=base_url,
         )
-    if resp.status_code == 401:
+    if resp.status_code == HTTPStatus.UNAUTHORIZED:
         return ServiceNowValidationResult(
             ok=False, detail="ServiceNow credentials invalid. Check username and password."
         )
-    if resp.status_code == 403:
+    if resp.status_code == HTTPStatus.FORBIDDEN:
         return ServiceNowValidationResult(
             ok=False,
             detail=(
@@ -84,7 +86,7 @@ def validate_servicenow_config(config: dict[str, str]) -> ServiceNowValidationRe
                 "Grant a role with table read access (e.g. itil)."
             ),
         )
-    if resp.status_code == 404:
+    if resp.status_code == HTTPStatus.NOT_FOUND:
         return ServiceNowValidationResult(
             ok=False, detail="ServiceNow instance URL not found. Check the URL."
         )

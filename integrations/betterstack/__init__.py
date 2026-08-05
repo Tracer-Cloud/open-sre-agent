@@ -232,8 +232,10 @@ def validate_betterstack_config(
         return BetterStackValidationResult(ok=False, detail=err)
     assert response is not None
 
+    from http import HTTPStatus
+
     status = response.status_code
-    if status == 200:
+    if status == HTTPStatus.OK:
         body = response.text.strip()
         if not body:
             return BetterStackValidationResult(
@@ -244,12 +246,12 @@ def validate_betterstack_config(
             ok=True,
             detail=f"Connected to Better Stack SQL API at {config.query_endpoint}.",
         )
-    if status == 401:
+    if status == HTTPStatus.UNAUTHORIZED:
         return BetterStackValidationResult(
             ok=False,
             detail="Better Stack authentication failed (check BETTERSTACK_USERNAME / BETTERSTACK_PASSWORD).",
         )
-    if status == 404:
+    if status == HTTPStatus.NOT_FOUND:
         return BetterStackValidationResult(
             ok=False,
             detail=(
