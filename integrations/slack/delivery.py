@@ -8,6 +8,7 @@ from typing import Any
 
 from config.config import SLACK_CHANNEL
 from platform.notifications.delivery_errors import extract_http_error
+from http import HTTPStatus
 from platform.notifications.delivery_transport import post_json
 from platform.notifications.redaction import redact_slack_token
 from platform.observability import debug_print

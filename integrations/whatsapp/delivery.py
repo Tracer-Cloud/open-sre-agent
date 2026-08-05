@@ -7,6 +7,7 @@ from typing import Any
 
 from platform.common.truncation import truncate
 from platform.notifications.delivery_errors import extract_http_error
+from http import HTTPStatus
 from platform.notifications.delivery_transport import post_form
 from platform.notifications.limits import MAX_MESSAGE_SIZE
 from platform.notifications.redaction import redact_token
@@ -48,7 +49,7 @@ def post_whatsapp_message_twilio(
         logger.warning("[whatsapp] twilio post exception: %s", error)
         return False, error, ""
 
-    if response.status_code not in (200, 201):
+    if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
         error_message = extract_http_error(response.data, response.status_code, response.text)
         error_message = redact_token(error_message, auth_token)
         logger.warning("[whatsapp] twilio post failed: %s", error_message)

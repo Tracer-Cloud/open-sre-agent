@@ -11,6 +11,7 @@ from typing import Any
 
 from platform.common.truncation import truncate
 from platform.notifications.delivery_errors import extract_http_error
+from http import HTTPStatus
 from platform.notifications.delivery_transport import post_form
 from platform.notifications.redaction import redact_token
 
@@ -62,7 +63,7 @@ def post_twilio_sms(
         logger.warning("[twilio-sms] post exception: %s", error)
         return False, error, ""
 
-    if response.status_code not in (200, 201):
+    if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
         error_message = extract_http_error(response.data, response.status_code, response.text)
         error_message = redact_token(error_message, auth_token)
         logger.warning("[twilio-sms] post failed: %s", error_message)

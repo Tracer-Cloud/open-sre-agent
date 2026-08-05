@@ -8,6 +8,7 @@ from typing import Any
 from config.constants.discord import DISCORD_API_BASE
 from platform.common.truncation import truncate
 from platform.notifications.delivery_errors import extract_http_error
+from http import HTTPStatus
 from platform.notifications.delivery_transport import post_json
 from platform.notifications.limits import MAX_MESSAGE_SIZE
 from platform.notifications.redaction import redact_token
@@ -41,7 +42,7 @@ def post_discord_message(
         safe_error = redact_token(response.error, bot_token)
         logger.warning("[discord] post message exception: %s", safe_error)
         return False, safe_error, ""
-    if response.status_code not in (200, 201):
+    if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
         logger.warning("[discord] post message failed: %s", response.status_code)
         error_message = extract_http_error(response.data, response.status_code, response.text)
         safe_error = redact_token(error_message, bot_token)
@@ -70,7 +71,7 @@ def create_discord_thread(
         safe_error = redact_token(response.error, bot_token)
         logger.warning("[discord] create thread exception: %s", safe_error)
         return False, safe_error, ""
-    if response.status_code not in (200, 201):
+    if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
         error_message = extract_http_error(response.data, response.status_code, response.text)
         safe_error = redact_token(error_message, bot_token)
         logger.warning("[discord] create thread failed: %s", safe_error)

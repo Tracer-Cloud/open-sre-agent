@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from http import HTTPStatus
 
 from config.constants.discord import DISCORD_API_BASE
 
@@ -61,7 +62,7 @@ def _post_message(
     except httpx.HTTPError as exc:
         logger.warning("[discord-gateway] post failed: %s", type(exc).__name__)
         return None
-    if response.status_code not in (200, 201):
+    if response.status_code not in (HTTPStatus.OK, HTTPStatus.CREATED):
         logger.warning("[discord-gateway] post HTTP %s", response.status_code)
         return None
     return str(response.json().get("id") or "") or None
@@ -89,7 +90,7 @@ def edit_message_with_components(
     except httpx.HTTPError as exc:
         logger.warning("[discord-gateway] edit failed: %s", type(exc).__name__)
         return False
-    return response.status_code == 200
+    return response.status_code == HTTPStatus.OK
 
 
 def edit_message(
@@ -110,7 +111,7 @@ def edit_message(
     except httpx.HTTPError as exc:
         logger.warning("[discord-gateway] edit failed: %s", type(exc).__name__)
         return False
-    return response.status_code == 200
+    return response.status_code == HTTPStatus.OK
 
 
 def add_reaction(
@@ -130,7 +131,7 @@ def add_reaction(
         )
     except httpx.HTTPError:
         return False
-    return response.status_code in (200, 204)
+    return response.status_code in (HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 
 def remove_reaction(
@@ -150,7 +151,7 @@ def remove_reaction(
         )
     except httpx.HTTPError:
         return False
-    return response.status_code in (200, 204)
+    return response.status_code in (HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 
 def split_discord_content(text: str, *, limit: int = _MAX_CONTENT) -> list[str]:
