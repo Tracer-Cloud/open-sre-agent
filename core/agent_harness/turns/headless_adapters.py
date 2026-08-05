@@ -126,6 +126,9 @@ class EmptyPromptContextProvider:
     def long_term_memory(self) -> str:
         return ""
 
+    def setup_state(self) -> str:
+        return ""
+
     def suggested_synthetic_prompt(self) -> str:
         return ""
 

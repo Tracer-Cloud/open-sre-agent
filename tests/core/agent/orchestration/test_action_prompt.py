@@ -13,8 +13,10 @@ from core.agent_harness.prompts import (
     prior_action_facts_block,
     recent_conversation_block,
 )
-from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
+from core.agent_harness.prompts.assistant import (
+    build_cli_agent_prompt_from_provider,
+    build_handoff_guidance_block,
+)
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
 from core.agent_harness.prompts.skills_loader import (
     SKILLS_HEADER,
@@ -466,6 +468,9 @@ class _FakePrompts:
         return ""
 
     def long_term_memory(self) -> str:
+        return ""
+
+    def setup_state(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:

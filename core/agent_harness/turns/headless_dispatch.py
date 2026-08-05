@@ -41,7 +41,7 @@ from core.agent_harness.ports import (
     ToolProvider,
     TurnAccounting,
 )
-from core.agent_harness.prompts.prompt_context import (
+from core.agent_harness.prompts.context import (
     DefaultPromptContextProvider,
     supports_default_prompt_context,
 )

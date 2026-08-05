@@ -31,6 +31,9 @@ class SurfaceProfile:
     #: The memory store is host-global, so a shared chat surface only injects it
     #: when a deployment opts in.
     long_term_memory_by_default: bool
+    #: The operator's connected integrations and schedules. Scoped to one
+    #: installation, so a shared chat surface does not report it to every member.
+    setup_state: bool
 
 
 _PROFILES: dict[PromptSurface, SurfaceProfile] = {
@@ -39,12 +42,14 @@ _PROFILES: dict[PromptSurface, SurfaceProfile] = {
         cli_rules=True,
         vendor_persona=False,
         long_term_memory_by_default=True,
+        setup_state=True,
     ),
     PromptSurface.GATEWAY: SurfaceProfile(
         surface=PromptSurface.GATEWAY,
         cli_rules=False,
         vendor_persona=True,
         long_term_memory_by_default=False,
+        setup_state=False,
     ),
 }
 

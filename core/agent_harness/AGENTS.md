@@ -66,9 +66,10 @@ subpackage. Default port implementations live with the concern they serve, not i
   default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
   (`run_record.py`).
 - `prompts/` — action-agent and conversational-assistant prompt builders (pure
-  string assembly; grounding text is supplied via `PromptContextProvider`), plus
-  `prompt_context.py` (`DefaultPromptContextProvider`).
-  `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
+  string assembly; grounding text is supplied via `PromptContextProvider`).
+  Layout: `assistant/` (parts → contributors → envelope → turn), `context/`
+  (`DefaultPromptContextProvider`), shared `envelope.py` / `surfaces.py`
+  (surface Strategy table), plus `conversation_memory.py` and peer builders.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt

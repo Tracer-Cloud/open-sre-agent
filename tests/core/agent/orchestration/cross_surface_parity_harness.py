@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.context import DefaultPromptContextProvider
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider

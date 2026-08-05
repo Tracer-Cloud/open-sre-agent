@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.context import DefaultPromptContextProvider
 
 
 def _session(integrations: list[str], cache: dict) -> SimpleNamespace:
