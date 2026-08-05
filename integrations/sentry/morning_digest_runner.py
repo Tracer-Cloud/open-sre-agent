@@ -92,7 +92,13 @@ def run_sentry_morning_digest(payload: AgentPayload) -> str:
     message = build_morning_digest_prompt(payload)
     result = _dispatch_headless_turn(message, payload)
     report = result.primary_response_text
-    if not result.answered or not report:
+    if not result.answered:
+        if report:
+            raise RuntimeError(f"Sentry morning digest failed: {report}")
+        raise RuntimeError(
+            "Sentry morning digest failed: the reasoning client did not produce a response."
+        )
+    if not report:
         raise RuntimeError(
             "Sentry morning digest failed: the reasoning client did not produce a response."
         )

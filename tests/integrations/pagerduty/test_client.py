@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pytest
@@ -474,3 +475,23 @@ def test_make_client_uses_default_base_url_when_none() -> None:
     client = make_pagerduty_client("test-key", None)
     assert client is not None
     assert client.config.base_url == "https://api.pagerduty.com"
+
+
+def _raise_runtime_error(**_kwargs: Any) -> None:
+    raise RuntimeError("construction failure")
+
+
+def test_make_client_logs_soft_fail_on_construction_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Force client construction inside the factory to raise, exercising the
+    # soft-fail `except Exception` path (SM-115). The factory must still return
+    # None, but must no longer swallow the exception silently.
+    monkeypatch.setattr("integrations.pagerduty.client.PagerDutyConfig", _raise_runtime_error)
+    with caplog.at_level(logging.WARNING, logger="integrations.pagerduty.client"):
+        result = make_pagerduty_client("test-key")
+    assert result is None
+    assert any(
+        record.levelno == logging.WARNING and record.exc_info is not None
+        for record in caplog.records
+    )

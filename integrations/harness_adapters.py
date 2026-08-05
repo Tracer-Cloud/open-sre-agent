@@ -95,6 +95,7 @@ def _register_prompt_fragments() -> None:
     from integrations.buzz.action_prompt import buzz_action_prompt_fragment
     from integrations.github.action_prompt import github_action_prompt_fragment
     from integrations.github.gather_prompt import github_gather_prompt_fragment
+    from integrations.posthog.assistant_prompt import posthog_assistant_prompt_fragment
     from integrations.rocketchat.action_prompt import rocketchat_action_prompt_fragment
     from integrations.sentry.assistant_prompt import sentry_assistant_prompt_fragment
     from integrations.sentry.gather_prompt import sentry_gather_prompt_fragment
@@ -125,6 +126,7 @@ def _register_prompt_fragments() -> None:
 
     clear_assistant_prompt_fragments()
     register_assistant_prompt_fragment(sentry_assistant_prompt_fragment)
+    register_assistant_prompt_fragment(posthog_assistant_prompt_fragment)
     register_assistant_prompt_fragment(slack_assistant_prompt_fragment)
 
 

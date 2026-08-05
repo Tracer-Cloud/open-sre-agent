@@ -113,3 +113,48 @@ opensre integrations verify posthog_mcp
 ```
 
 A successful check connects to the MCP server and reports how many tools it discovered. If it fails, the most common cause is a missing or invalid personal API key — confirm the key was created with the `MCP Server` preset and that outbound HTTPS to `mcp.posthog.com` is allowed.
+
+## Metric report (scheduled)
+
+Deliver a per-metric PostHog analytics pulse to Telegram, Slack, or Rocket.Chat, on demand or on a schedule — coworker-style digests (what moved and why it matters), not a raw dashboard dump. Slack delivery needs a bot token (a webhook alone cannot honor `--chat-id`). This uses the headless **posthog-summary** skill path (schema discovery, then one bounded HogQL query per metric), not the investigation pipeline or generic `opensre cron` kinds. It requires the PostHog **MCP** integration above — the REST `posthog` integration alone cannot serve it.
+
+| Command | What it does |
+| --- | --- |
+| `opensre posthog report run` | Run once and print the per-metric report to stdout |
+| `opensre posthog report run --period 30d --metrics "active users,pageviews"` | Run once for a custom window and metric focus |
+| `opensre posthog report schedule add` | Schedule recurring delivery (cron + provider + chat) |
+| `opensre posthog report schedule list` | List PostHog report schedules |
+| `opensre posthog report schedule run TASK_ID` | Run a scheduled report immediately |
+| `opensre posthog report schedule remove TASK_ID` | Remove a schedule |
+
+Example — every Monday at 08:00 London time to Telegram:
+
+```bash
+opensre posthog report schedule add \
+  --cron "0 8 * * 1" \
+  --tz Europe/London \
+  --provider telegram \
+  --chat-id "-1001234567890" \
+  --period 7d
+```
+
+Example — same schedule to a Slack channel (`C…` member/channel id):
+
+```bash
+opensre posthog report schedule add \
+  --cron "0 8 * * 1" \
+  --tz Europe/London \
+  --provider slack \
+  --chat-id C0123ABCD \
+  --period 7d
+```
+
+Slack delivery needs `SLACK_BOT_TOKEN`. A `SLACK_WEBHOOK_URL` alone will not work here: a webhook always posts to the one channel it was created for, so it cannot honour `--chat-id`.
+
+`--period` accepts a relative window (`24h`, `7d`, `30d`; default `7d`). Optional `--metrics` narrows the report to a comma-separated set instead of the default metric set.
+
+The gateway daemon picks up scheduled reports automatically when it is running. If the LLM is unavailable, the run fails with an error (no deterministic fallback).
+
+<Note>
+The report compares the current window against the previous comparable window per metric. Real zeros are reported as zeros; failed queries are called out as failures — never silently widened or fabricated, and never presented as zero when the query did not run.
+</Note>
