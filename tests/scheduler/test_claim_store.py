@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from platform.scheduler.claim_store import complete_run, delete_runs, get_runs, try_claim
+from platform.scheduler import claim_store
+from platform.scheduler.claim_store import (
+    complete_run,
+    delete_runs,
+    get_latest_finished_run,
+    get_runs,
+    try_claim,
+)
 from platform.scheduler.types import TaskStatus
 
 
@@ -91,6 +98,52 @@ class TestClaimStore:
     def test_get_runs_empty(self, db_path: Path) -> None:
         runs = get_runs("nonexistent", db_path=db_path)
         assert runs == []
+
+    def test_get_latest_finished_run_ignores_newer_in_flight_starts(self, db_path: Path) -> None:
+        # Arrange: one finished delivery, then six newer RUNNING claims. A
+        # start-ordered lookback of five would drop the finished row.
+        conn = claim_store._connect(db_path)
+        try:
+            claim_store._ensure_schema(conn)
+            conn.execute(
+                "INSERT INTO task_runs "
+                "(task_id, fire_time, started_at, finished_at, status) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    "task1",
+                    "2026-08-05T09:00:00Z",
+                    "2026-08-05T09:00:00Z",
+                    "2026-08-05T09:05:00Z",
+                    TaskStatus.SUCCESS.value,
+                ),
+            )
+            for i in range(6):
+                conn.execute(
+                    "INSERT INTO task_runs "
+                    "(task_id, fire_time, started_at, status) "
+                    "VALUES (?, ?, ?, ?)",
+                    (
+                        "task1",
+                        f"2026-08-05T10:{i:02d}:00Z",
+                        f"2026-08-05T10:{i:02d}:00Z",
+                        TaskStatus.RUNNING.value,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # Act
+        run = get_latest_finished_run("task1", db_path=db_path)
+
+        # Assert
+        assert run is not None
+        assert run.status == TaskStatus.SUCCESS
+        assert run.fire_time == "2026-08-05T09:00:00Z"
+        assert len(get_runs("task1", limit=5, db_path=db_path)) == 5
+        assert all(
+            r.status == TaskStatus.RUNNING for r in get_runs("task1", limit=5, db_path=db_path)
+        )
 
     def test_delete_runs_removes_only_matching_task(self, db_path: Path) -> None:
         try_claim("task1", "2026-01-01T09:00", db_path=db_path)

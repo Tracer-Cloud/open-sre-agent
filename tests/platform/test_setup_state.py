@@ -129,11 +129,11 @@ class TestLatestDeliveryOrdering:
             finished_at="2026-08-05T10:06:00Z",
             status=TaskStatus.SUCCESS,
         )
-        runs = {"slow": [slow_failed], "quick": [quick_ok]}
+        latest = {"slow": slow_failed, "quick": quick_ok}
         monkeypatch.setattr(
             setup_state,
-            "_task_runs",
-            lambda task_id: runs[task_id],
+            "_latest_finished_run",
+            lambda task_id: latest[task_id],
         )
 
         class _Task:
@@ -144,6 +144,57 @@ class TestLatestDeliveryOrdering:
         result = setup_state._latest_delivery_ok([_Task("slow"), _Task("quick")])
 
         # Assert: reporting the quick success would hide a later failure.
+        assert result is False
+
+    def test_finished_delivery_is_not_dropped_behind_newer_in_flight_starts(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        # Arrange: Greptile P1 — more than five newer RUNNING rows (by start)
+        # must not hide an earlier-started finished delivery.
+        from platform.scheduler import claim_store
+        from platform.scheduler.types import TaskStatus
+
+        db = tmp_path / "scheduler.db"
+        monkeypatch.setattr(claim_store, "_default_db_path", lambda: db)
+
+        conn = claim_store._connect(db)
+        try:
+            claim_store._ensure_schema(conn)
+            conn.execute(
+                "INSERT INTO task_runs "
+                "(task_id, fire_time, started_at, finished_at, status) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    "t1",
+                    "2026-08-05T09:00:00Z",
+                    "2026-08-05T09:00:00Z",
+                    "2026-08-05T09:05:00Z",
+                    TaskStatus.FAILED.value,
+                ),
+            )
+            for i in range(6):
+                conn.execute(
+                    "INSERT INTO task_runs "
+                    "(task_id, fire_time, started_at, status) "
+                    "VALUES (?, ?, ?, ?)",
+                    (
+                        "t1",
+                        f"2026-08-05T10:{i:02d}:00Z",
+                        f"2026-08-05T10:{i:02d}:00Z",
+                        TaskStatus.RUNNING.value,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        class _Task:
+            id = "t1"
+
+        # Act
+        result = setup_state._latest_delivery_ok([_Task()])
+
+        # Assert: a start-ordered lookback of 5 would see only RUNNING rows.
         assert result is False
 
 

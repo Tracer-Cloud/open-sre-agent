@@ -30,10 +30,6 @@ class SetupSnapshot:
 # Historical name — prefer :class:`SetupSnapshot`.
 SetupState = SetupSnapshot
 
-#: Look past a few in-flight rows so a pending newest run does not hide a
-#: finished delivery that the model needs to see.
-_FINISHED_RUN_LOOKBACK = 5
-
 
 def _scheduled_tasks() -> list[Any]:
     from platform.scheduler.store import list_tasks
@@ -74,10 +70,10 @@ def setup_state_fingerprint() -> tuple[tuple[int, int], ...]:
     return tuple(marks)
 
 
-def _task_runs(task_id: str) -> list[Any]:
-    from platform.scheduler.claim_store import get_runs
+def _latest_finished_run(task_id: str) -> Any | None:
+    from platform.scheduler.claim_store import get_latest_finished_run
 
-    return list(get_runs(task_id, limit=_FINISHED_RUN_LOOKBACK))
+    return get_latest_finished_run(task_id)
 
 
 def _completed_at(run: Any) -> str:
@@ -90,16 +86,13 @@ def _latest_delivery_ok(tasks: Sequence[Any]) -> bool | None:
 
     Ordered by completion, not by start: runs overlap, so a slow task that
     started first can finish after a quick one. Picking by start time would
-    report the quick run's outcome and hide the later failure.
+    report the quick run's outcome and hide the later failure. In-flight rows
+    are ignored at the store layer so a burst of pending claims cannot hide
+    the last completed delivery.
     """
     from platform.scheduler.types import TaskStatus
 
-    finished = [
-        run
-        for task in tasks
-        for run in _task_runs(task.id)
-        if run.status in (TaskStatus.SUCCESS, TaskStatus.FAILED)
-    ]
+    finished = [run for task in tasks if (run := _latest_finished_run(task.id)) is not None]
     if not finished:
         return None
     newest = max(finished, key=_completed_at)
