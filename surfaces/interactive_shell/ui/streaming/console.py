@@ -18,7 +18,7 @@ class _PromptSpinner(Protocol):
     streaming: bool
 
     def stop(self) -> None:
-        raise NotImplementedError
+        """Stop the prompt spinner."""
 
 
 class StreamingConsole(Console):

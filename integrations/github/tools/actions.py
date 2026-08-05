@@ -54,12 +54,26 @@ def _extract_workflow_jobs(result: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
-def _extract_log_text(result: dict[str, Any]) -> str:
-    """Extract log text from MCP tool result."""
+def _extract_log_text(result: dict[str, Any]) -> tuple[str, int | None]:
+    """Extract log text and its original (pre-tail) line count from an MCP tool result.
+
+    ``original_lines`` is the job's total log line count before ``tail_lines``
+    truncated it (github-mcp-server's ``get_job_logs`` reports this as
+    ``original_length``, despite the name it's a line count, not a character
+    count: it's the ring buffer's total line tally, from the same downstream
+    fetch that also produces the tailed ``logs_content``). ``None`` when the
+    MCP response doesn't report it.
+
+    Text is returned unstripped: ``original_length`` counts blank lines, so
+    stripping here would report a complete log as truncated. ``extract_step_log``
+    strips every branch it returns, so rendered output is unaffected.
+    """
     json_result = _extract_json_text(result)
     if isinstance(json_result, dict) and "logs_content" in json_result:
-        return str(json_result["logs_content"] or "").strip()
-    return str(result.get("text") or "").strip()
+        text = str(json_result["logs_content"] or "")
+        original_lines = json_result.get("original_length")
+        return text, original_lines if isinstance(original_lines, int) else None
+    return str(result.get("text") or ""), None
 
 
 def _normalize_step(step: dict[str, Any]) -> dict[str, Any]:
@@ -178,7 +192,9 @@ def _extract_log_sections(log_text: str) -> list[dict[str, str]]:
         _append_log_section(sections, current_name or UNGROUPED_SECTION_NAME, current_lines)
 
     if not saw_group:
-        return [{"name": "full-log", "text": log_text.strip()}]
+        # No ##[group] markers at all: nothing to select by name/number.
+        # extract_step_log's own full-log fallback handles this case.
+        return []
     return [section for section in sections if section.get("text")]
 
 
@@ -544,6 +560,50 @@ def list_github_actions_run_jobs(
     return payload
 
 
+def _step_log_unavailable_payload(error: Any = None) -> dict[str, Any]:
+    """Unavailable/error payload for ``get_github_actions_step_log``.
+
+    Carries the same truncation and retry keys as the success payload so callers
+    never have to key-check before reading them.
+    """
+    payload = code_host_unavailable_payload(
+        source="github",
+        integration_name="GitHub Actions",
+        empty_key="log_text",
+        empty_value="",
+    ) | {
+        "truncated": False,
+        "returned_lines": 0,
+        "original_lines": None,
+        "retry_attempted": False,
+        "retry_error": None,
+    }
+    if error is not None:
+        payload["error"] = error
+    return payload
+
+
+def _fetch_job_log(
+    config: Any, owner: str, repo: str, job_id: int, tail_lines: int
+) -> tuple[str, int | None, str | None]:
+    """Fetch job log text via get_job_logs. Returns (text, original_lines, error)."""
+    log_result = call_github_mcp_tool(
+        config,
+        "get_job_logs",
+        {
+            "owner": owner,
+            "repo": repo,
+            "job_id": job_id,
+            "return_content": True,
+            "tail_lines": tail_lines,
+        },
+    )
+    if log_result.get("is_error"):
+        return "", None, str(log_result.get("text") or "unknown error")
+    text, original_lines = _extract_log_text(log_result)
+    return text, original_lines, None
+
+
 @tool(
     name="get_github_actions_step_log",
     source="github",
@@ -594,12 +654,7 @@ def get_github_actions_step_log(
         github_url, github_mode, github_token, github_command, github_args
     )
     if config is None:
-        return code_host_unavailable_payload(
-            source="github",
-            integration_name="GitHub Actions",
-            empty_key="log_text",
-            empty_value="",
-        )
+        return _step_log_unavailable_payload()
 
     # Fetch job metadata
     job_result = call_github_mcp_tool(
@@ -614,44 +669,16 @@ def get_github_actions_step_log(
     )
 
     if job_result.get("is_error"):
-        return code_host_unavailable_payload(
-            source="github",
-            integration_name="GitHub Actions",
-            empty_key="log_text",
-            empty_value="",
-        ) | {"error": job_result.get("text")}
+        return _step_log_unavailable_payload(job_result.get("text"))
 
     job = _extract_json_text(job_result)
     if not isinstance(job, dict):
-        return code_host_unavailable_payload(
-            source="github",
-            integration_name="GitHub Actions",
-            empty_key="log_text",
-            empty_value="",
-        ) | {"error": "Unexpected job metadata format"}
+        return _step_log_unavailable_payload("Unexpected job metadata format")
 
     # Fetch job logs
-    log_result = call_github_mcp_tool(
-        config,
-        "get_job_logs",
-        {
-            "owner": owner,
-            "repo": repo,
-            "job_id": job_id,
-            "return_content": True,
-            "tail_lines": tail_lines,
-        },
-    )
-
-    if log_result.get("is_error"):
-        return code_host_unavailable_payload(
-            source="github",
-            integration_name="GitHub Actions",
-            empty_key="log_text",
-            empty_value="",
-        ) | {"error": log_result.get("text")}
-
-    log_text = _extract_log_text(log_result)
+    log_text, original_lines, log_error = _fetch_job_log(config, owner, repo, job_id, tail_lines)
+    if log_error is not None:
+        return _step_log_unavailable_payload(log_error)
 
     # Detect first failed step if not specified
     failed_step = ""
@@ -669,10 +696,53 @@ def get_github_actions_step_log(
 
     # Extract and filter step log
     extracted = extract_step_log(
-        str(log_text),
+        log_text,
         step_name=step_name or failed_step,
         step_number=step_number,
     )
+
+    # A requested step that missed because the tail cut off its ##[group] block
+    # looks identical to "no such step" (both fall back to match_strategy
+    # "full-log"). Re-fetch a bigger tail, sized from the log's own reported
+    # total line count, once before accepting that fallback.
+    wants_step = bool(step_name or failed_step or step_number is not None)
+    returned_lines = len(log_text.splitlines())
+    truncated = original_lines is not None and original_lines > returned_lines
+    retry_attempted = False
+    retry_error: str | None = None
+    if (
+        original_lines is not None
+        and truncated
+        and wants_step
+        and extracted["match_strategy"] == "full-log"
+    ):
+        # get_job_logs already clamps to the server's content window.
+        retry_tail_lines = original_lines
+        if retry_tail_lines > tail_lines:
+            retry_attempted = True
+            retry_text, retry_original_lines, retry_error = _fetch_job_log(
+                config, owner, repo, job_id, retry_tail_lines
+            )
+            if retry_error is None:
+                retry_extracted = extract_step_log(
+                    retry_text,
+                    step_name=step_name or failed_step,
+                    step_number=step_number,
+                )
+                # Adopt the bigger body only if it found the step. Otherwise it
+                # is the same full-log fallback orders of magnitude larger,
+                # headed straight into the agent's context; keep the first
+                # response. "full-log" plus retry_attempted and no retry_error
+                # already says a wider window was fetched and still missed.
+                if retry_extracted["match_strategy"] != "full-log":
+                    extracted = retry_extracted
+                    log_text = retry_text
+                    # A retry without original_length must not erase a known count.
+                    if retry_original_lines is not None:
+                        original_lines = retry_original_lines
+                    returned_lines = len(log_text.splitlines())
+                    truncated = original_lines is not None and original_lines > returned_lines
+
     extracted.update(
         {
             "source": "github",
@@ -682,6 +752,11 @@ def get_github_actions_step_log(
             "job_name": job.get("name", ""),
             "job_conclusion": job.get("conclusion", ""),
             "job_steps": normalized_steps,
+            "truncated": truncated,
+            "returned_lines": returned_lines,
+            "original_lines": original_lines,
+            "retry_attempted": retry_attempted,
+            "retry_error": retry_error,
         }
     )
     return extracted

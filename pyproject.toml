@@ -37,7 +37,8 @@ dependencies = [
     # Cap below 49: cryptography 49.0.0 dropped x86-64 macOS wheels, which breaks
     # the frozen darwin-x64 release binary (PyInstaller bundles a broken _openssl
     # extension and the binary crashes at startup). Keep 48.x until the darwin-x64
-    # release target is dropped.
+    # release target is dropped. Dependabot is told to leave this pin alone in
+    # .github/dependabot.yml.
     "cryptography>=48.0.1,<49",
     "keyring>=23.0.1",
     # AWS
