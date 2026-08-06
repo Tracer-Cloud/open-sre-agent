@@ -51,9 +51,7 @@ def test_connectivity_error_skips_later_calls_to_that_tool() -> None:
     )
 
     # Act: the model retries the same tool in a later iteration.
-    decision = hooks.before_tool_call(
-        _request("grafana", tool_name="query_grafana_metrics")
-    )
+    decision = hooks.before_tool_call(_request("grafana", tool_name="query_grafana_metrics"))
 
     # Assert: the call is blocked without running, and the reason steers away.
     assert decision is not None
