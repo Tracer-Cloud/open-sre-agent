@@ -427,10 +427,11 @@ def _cmd_loops_messages(session: Session, console: Console, args: list[str]) -> 
 
 
 def _run_loop_task_ids_once(console: Console, task_ids: tuple[str, ...]) -> bool:
+    from bootstrap.adapters import install_harness_adapters, install_scheduler_runners
     from platform.scheduler.runner import run_task_now
-    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    install_runtime()
+    install_harness_adapters()
+    install_scheduler_runners()
     failures: list[str] = []
     for task_id in task_ids:
         if not run_task_now(task_id):

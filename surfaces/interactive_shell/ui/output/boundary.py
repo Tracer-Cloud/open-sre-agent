@@ -17,9 +17,9 @@ def install_harness_ports() -> None:
     ``surfaces`` (not ``tools``) because ``tools`` and ``integrations`` are
     sibling layers and must not import each other — see ``.importlinter.strict``.
     """
-    from surfaces.shared.runtime_bootstrap import install_runtime
+    from bootstrap.adapters import install_harness_adapters
 
-    install_runtime(harness_adapters=True, scheduler_runners=False)
+    install_harness_adapters()
 
 
 def install_product_adapters() -> None:

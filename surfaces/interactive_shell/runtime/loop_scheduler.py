@@ -6,10 +6,10 @@ import logging
 import threading
 from typing import Any
 
+from bootstrap.adapters import install_harness_adapters, install_scheduler_runners
 from platform.scheduler.loop_constants import LOOP_PROMPT_PARAM
 from platform.scheduler.runner import start_background_scheduler
 from platform.scheduler.types import ScheduledTask
-from surfaces.shared.runtime_bootstrap import install_runtime
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ def shutdown_loop_scheduler() -> None:
 def _start_locked() -> int:
     global _scheduler, _task_count
 
-    install_runtime()
+    install_harness_adapters()
+    install_scheduler_runners()
     scheduler, task_count = start_background_scheduler(task_filter=_is_prompt_loop_task)
     _scheduler = scheduler
     _task_count = task_count

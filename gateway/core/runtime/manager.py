@@ -1,15 +1,14 @@
 """Gateway process entrypoint and lifecycle owner.
 
 ``GatewayManager`` is the composition root for the OpenSRE background agent:
-it assembles the transport-agnostic turn handler from a booted session's tools
-and starts every daemon component — the web health app, the Telegram and Slack
-chat workers (when configured), and the scheduled-task runner — then owns the
-process lifecycle (signals, ``stop``/``wait``). Component states are published
-through :func:`gateway.core.runtime.daemon.write_component_status` so the CLI and the
-interactive shell can report status. It holds no transport or agent-dispatch
-logic itself — those live in :mod:`gateway.core.runtime.turn_handler`,
-:mod:`gateway.transports.telegram.wiring`, and :mod:`gateway.transports.slack.wiring`, and
-:mod:`gateway.transports.discord.wiring`.
+logging + credential hydrate, then
+:func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then
+assemble the turn handler and start daemon components — web, Telegram / Slack /
+Discord (when configured), and the scheduled-task runner. Owns signals and
+``stop``/``wait``. Component states go through
+:func:`gateway.core.runtime.daemon.write_component_status`. Transport and turn
+dispatch live in :mod:`gateway.core.runtime.turn_handler` and the transport
+wiring packages — not here.
 """
 
 from __future__ import annotations
@@ -80,13 +79,13 @@ class GatewayManager:
         self._stopped = threading.Event()
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:
-        """Assemble the turn handler, start all components, and own the lifecycle."""
-        from gateway.core.runtime import startup
+        """Credential hydrate, shared process boot, then start daemon components."""
+        from bootstrap.process import GATEWAY_PROFILE, configure_process
 
         logger = self.logger = configure_logging()
         set_ready(False)
         self._load_credentials(logger)
-        startup.run(logger)
+        configure_process(GATEWAY_PROFILE, logger=logger)
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
         # per turn from each chat's live session inside the handler (not here).
@@ -223,12 +222,13 @@ class GatewayManager:
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
-        from gateway.core.runtime.bootstrap import install_runtime
+        from bootstrap.adapters import install_scheduler_runners
         from platform.scheduler.reload_signal import consume_scheduler_reload_request
         from platform.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
-        install_runtime(harness_adapters=False, scheduler_runners=True)
+        # Adapters already registered at process boot; runners attach with the scheduler.
+        install_scheduler_runners()
         from gateway.core.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 
         gate_registered_scheduler_runners(self.turn_gate)

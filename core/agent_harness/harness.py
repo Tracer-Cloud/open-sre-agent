@@ -10,9 +10,8 @@ one layer above and adds env resolution and prompt context.
 
 Headless turns::
 
-    harness = AgentHarness(...)
-    harness.attach_agent(headless)  # or pass agent= on each call
-    harness.dispatch_message("investigate the spike")
+    result = AgentHarness.run_headless_turn("investigate the spike")
+    # or: harness = AgentHarness.start(); harness.dispatch_message(...)
 
 Must not import ``surfaces.interactive_shell`` (enforced by
 ``tests/core/agent/test_import_boundaries.py``). Surfaces inject prompt
@@ -21,13 +20,14 @@ context through :class:`HarnessConfig`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.session import SessionManager
 
 if TYPE_CHECKING:
-    from core.agent_harness.ports import PromptContextProvider
+    from core.agent_harness.ports import OutputSink, PromptContextProvider
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.turns.headless_dispatch import HeadlessAgent
     from core.agent_harness.turns.turn_results import TurnResult
@@ -130,7 +130,11 @@ class AgentHarness:
         return self._config.prompts
 
     @classmethod
-    def start(cls, config: HarnessConfig | None = None) -> AgentHarness:
+    def start(
+        cls,
+        config: HarnessConfig | None = None,
+        **agent_kwargs: Any,
+    ) -> AgentHarness:
         """Return a harness that is ready to :meth:`dispatch_message`.
 
         Runs startup and attaches a default agent, so the common case is two
@@ -139,8 +143,11 @@ class AgentHarness:
             harness = AgentHarness.start()
             result = harness.dispatch_message("why is checkout-api slow?")
 
-        Surfaces that need their own ports (a live gateway sink, a REPL console)
-        still build the agent themselves and call :meth:`attach_agent`.
+        Extra ``agent_kwargs`` are forwarded to
+        :func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`
+        (e.g. ``logger=``, ``gather_max_iterations=``). Surfaces that need their
+        own ports (a live gateway sink, a REPL console) still build the agent
+        themselves and call :meth:`attach_agent`.
         """
         from core.agent_harness.turns.default_headless_agent import (
             build_default_headless_agent,
@@ -149,15 +156,67 @@ class AgentHarness:
 
         harness = cls(config)
         startup = harness.startup()
+        output = agent_kwargs.pop("output", None)
+        if output is None:
+            output = BufferOutputSink()
+        prompts = agent_kwargs.pop("prompts", startup.prompts)
         harness.attach_agent(
             build_default_headless_agent(
                 session=startup.session,
-                output=BufferOutputSink(),
-                # A caller's HarnessConfig.prompts, else the built-in grounding context.
-                prompts=startup.prompts,
+                output=output,
+                prompts=prompts,
+                **agent_kwargs,
             )
         )
         return harness
+
+    @classmethod
+    def run_headless_turn(
+        cls,
+        message: str,
+        *,
+        config: HarnessConfig | None = None,
+        output: OutputSink | None = None,
+        prepare_session: Callable[[SessionCore], None] | None = None,
+        **agent_kwargs: Any,
+    ) -> TurnResult:
+        """Boot a default headless agent and run one turn for ``message``.
+
+        Collapses the harness + BufferOutputSink + ``build_default_headless_agent``
+        stack shared by scheduled digests and report runners. Optional
+        ``prepare_session`` runs after session create (e.g. pin a project scope)
+        and before the agent is built. Extra kwargs forward to
+        :func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`.
+        """
+        from core.agent_harness.turns.default_headless_agent import (
+            build_default_headless_agent,
+        )
+        from core.agent_harness.turns.headless_adapters import BufferOutputSink
+
+        harness_config = config or HarnessConfig(
+            load_env=True,
+            hydrate_integrations=True,
+            warm_integrations=True,
+            persistent_tasks=False,
+            open_storage=False,
+        )
+        harness = cls(harness_config)
+        startup = harness.startup()
+        session = startup.session
+        if prepare_session is not None:
+            prepare_session(session)
+        sink = output if output is not None else BufferOutputSink()
+        prompts = agent_kwargs.pop("prompts", startup.prompts)
+        agent_kwargs.pop("message", None)
+        agent = build_default_headless_agent(
+            session=session,
+            output=sink,
+            prompts=prompts,
+            message=message,
+            **agent_kwargs,
+        )
+        harness.attach_agent(agent)
+        return harness.dispatch_message(message)
 
     @property
     def agent(self) -> HeadlessAgent | None:

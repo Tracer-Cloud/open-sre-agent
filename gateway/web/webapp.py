@@ -23,7 +23,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
-from config.local_env import bootstrap_opensre_env_once
 from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_opensre_version
 from core.domain.alerts.inbox import (
@@ -34,24 +33,19 @@ from core.domain.alerts.inbox import (
 )
 
 ensure_project_platform_package()
-bootstrap_opensre_env_once(override=False)
 
-from gateway.core.runtime.bootstrap import install_runtime  # noqa: E402
+from bootstrap.process import WEB_PROFILE, configure_process  # noqa: E402
 from gateway.core.runtime.readiness import is_gateway_ready  # noqa: E402
 from gateway.web.investigations import router as investigations_router  # noqa: E402
-from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
+from platform.observability.errors.sentry import capture_exception  # noqa: E402
 from tools.investigation.capability import (  # noqa: E402
     resolve_investigation_context,
     run_investigation_payload,
 )
 
-# Mirror shell/gateway boot: /investigate runs the full pipeline, which reads the
-# vendor registries (alert-source routing, incident anchors, taxonomy, alert
-# detail fields). Without this they stay empty and degrade silently. Registering
-# here rather than via surfaces.boundary keeps gateway off a surfaces import.
-install_runtime(harness_adapters=True, scheduler_runners=False)
-
-init_sentry(entrypoint="webapp")
+# Standalone uvicorn and in-process gateway both need adapters for /investigate.
+# Shared boot order lives in bootstrap.process (env → sentry → adapters).
+configure_process(WEB_PROFILE)
 
 logger = logging.getLogger(__name__)
 

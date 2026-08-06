@@ -92,19 +92,22 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.rebind_for_resume` then :meth:`SessionManager.restore_context`.
   REPL exit calls :meth:`SessionManager.close` via
   :meth:`SessionManager.for_session`.
-- **gateway** — `gateway/core/runtime/manager.py` bootstraps the process via
-  :meth:`SessionManager.create` (``open_storage=False``).
-  `gateway/core/storage/session/resolver.py::SessionResolver` owns per-chat
-  chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
-  `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
+- **gateway** — process boot is
+  :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``);
+  `GatewayManager` stays lifecycle-only (credentials → process boot →
+  transports). Per-chat session create/resolve stays on
+  `gateway/core/storage/session/resolver.py::SessionResolver` →
+  `SessionManager`. Turn dispatch uses `HeadlessAgent` via
   `gateway/core/runtime/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
-- **headless** — ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
-  bypass ``SessionManager`` by design: they never persist to JSONL and do not
-  need create/resolve/rotate/close. Tool-calling turns still run through the
-  shared harness; only session lifecycle is skipped.
+- **headless / scheduled** — non-TTY hosts use
+  :meth:`AgentHarness.run_headless_turn` (or ``start`` + ``dispatch_message``).
+  That is the same ``run_turn`` engine as the shell; do not reassemble
+  ``BufferOutputSink`` + ``build_default_headless_agent`` in integrations.
+  Ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
+  bypass ``SessionManager`` by design when tests need no JSONL.
 
 `Session` (formerly `ReplSession`) is the in-memory session object used by every
 surface, including headless gateway — it is not REPL-specific. Do not re-add
@@ -190,6 +193,18 @@ composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
 (`core.agent.mixins`) instead of subclassing `Agent`, with a specialised ReAct
 `run()` (seed calls, evidence collection, duplicate detection, stagnation
 handling). It is still the tool-calling shape — composition, not a forked loop.
+
+## Four hosts, one turn engine
+
+| Host | Process boot | Turn binder |
+|------|--------------|-------------|
+| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `execute_shell_turn` → `run_turn` (TTY ports) |
+| Gateway chat | `configure_process(GATEWAY_PROFILE)` | `GatewayTurnHandler` → `HeadlessAgent` → `run_turn` |
+| Standalone web | `configure_process(WEB_PROFILE)` | HTTP handlers / investigations |
+| Scheduled digests | adapters via profile; runners via `install_scheduler_runners` | `AgentHarness.run_headless_turn` → `run_turn` |
+
+Do **not** force the REPL through `HeadlessAgent`. Shell is the TTY adapter of
+the same engine; headless APIs are for non-TTY hosts.
 
 ## Keep the loop primitive in core
 
