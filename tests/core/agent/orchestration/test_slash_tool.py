@@ -214,3 +214,156 @@ def test_exit_slash_requests_runtime_exit() -> None:
     assert handled is True
     assert ports.dispatched == ["/quit"]
     assert requested_exit == [True]
+
+
+@dataclass
+class FailureRecordingSlashPorts(FakeSlashPorts):
+    """Fake ports whose dispatch records a failing slash row, like a real
+    handler whose delegated CLI subprocess exited non-zero."""
+
+    error_text: str = "Usage: opensre cron remove [OPTIONS] TASK_ID"
+    fail_commands: frozenset[str] = frozenset({"/cron remove"})
+
+    def dispatch(self, command: str, *, session: Any = None, **_kwargs: Any) -> bool:
+        self.dispatched.append(command)
+        failed = command in self.fail_commands
+        session.record(
+            "slash",
+            command,
+            ok=not failed,
+            response_text=self.error_text if failed else None,
+        )
+        return True
+
+
+def test_failed_dispatch_returns_error_observation() -> None:
+    """A failed slash row must reach the model, not collapse into ok=true."""
+    ports = FailureRecordingSlashPorts(tty=True)
+    ctx, _buf, _session, _ports = _ctx(ports=ports)
+
+    result = slash_tool.execute_slash_tool({"command": "/cron", "args": ["remove"]}, ctx)
+
+    assert result == {
+        "ok": False,
+        "command": "/cron remove",
+        "error": "Usage: opensre cron remove [OPTIONS] TASK_ID",
+    }
+
+
+def test_corrected_retry_after_failure_executes_in_same_turn() -> None:
+    """The per-turn dedupe blocks identical re-runs only, not a corrected line."""
+    ports = FailureRecordingSlashPorts(tty=True)
+    ctx, _buf, _session, _ports = _ctx(ports=ports)
+
+    first = slash_tool.execute_slash_tool({"command": "/cron", "args": ["remove"]}, ctx)
+    retry = slash_tool.execute_slash_tool(
+        {"command": "/cron", "args": ["remove", "ecf7c2580b83"]}, ctx
+    )
+
+    assert isinstance(first, dict) and first["ok"] is False
+    assert retry is True
+    assert ports.dispatched == ["/cron remove", "/cron remove ecf7c2580b83"]
+
+
+def test_error_observation_excerpt_is_capped() -> None:
+    ports = FailureRecordingSlashPorts(tty=True, error_text="x" * 5000)
+    ctx, _buf, _session, _ports = _ctx(ports=ports)
+
+    result = slash_tool.execute_slash_tool({"command": "/cron", "args": ["remove"]}, ctx)
+
+    assert isinstance(result, dict)
+    # Matches _MAX_OBSERVED_ERROR_CHARS in tools.interactive_shell.actions.slash.
+    assert len(result["error"]) == 700
+
+
+def test_failed_rows_from_earlier_turns_are_not_evidence() -> None:
+    """Only rows THIS dispatch appended count; stale failures must not leak in."""
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, highlight=False)
+    session = Session()
+    session.record("slash", "/health", ok=False, response_text="old failure")
+    ports = FakeSlashPorts(tty=True)
+    ctx = ActionToolContext(
+        session=session,
+        console=console,
+        slash_ports=ports,
+        history_start=len(session.history),
+    )
+
+    result = slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx)
+
+    assert result is True
+    assert ports.dispatched == ["/health"]
+
+
+def test_cron_list_output_reaches_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Successful '/cron list' must surface task ids in the observation so the
+    agent can chain a data-dependent '/cron remove <id>' in the same turn."""
+    import subprocess
+
+    import surfaces.interactive_shell.command_registry.cli_parity as cli_parity
+    from surfaces.interactive_shell.runtime.slash_adapter import repl_slash_ports
+
+    def _fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        assert kwargs.get("capture_output") is True
+        return subprocess.CompletedProcess(
+            cmd,
+            returncode=0,
+            stdout="ecf7c2580b83  daily_summary  0 8 * * 1-5  UTC  slack",
+            stderr="",
+        )
+
+    monkeypatch.setattr(cli_parity.subprocess, "run", _fake_run)
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, highlight=False)
+    session = Session()
+    ctx = ActionToolContext(
+        session=session,
+        console=console,
+        is_tty=True,
+        slash_ports=repl_slash_ports(),
+    )
+
+    result = slash_tool.execute_slash_tool({"command": "/cron", "args": ["list"]}, ctx)
+
+    assert isinstance(result, dict)
+    assert result["ok"] is True
+    assert "ecf7c2580b83" in result["output"]
+
+
+def test_cron_remove_missing_task_id_regression(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-end through the real dispatcher: '/cron remove' without a TASK_ID
+    exits 2; the tool observation must say so instead of {"ok": true}."""
+    import subprocess
+
+    import surfaces.interactive_shell.command_registry.cli_parity as cli_parity
+    from surfaces.interactive_shell.runtime.slash_adapter import repl_slash_ports
+
+    def _fake_run(cmd: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            cmd,
+            returncode=2,
+            stdout="",
+            stderr="Usage: opensre cron remove [OPTIONS] TASK_ID",
+        )
+
+    monkeypatch.setattr(cli_parity.subprocess, "run", _fake_run)
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, highlight=False)
+    session = Session()
+    ctx = ActionToolContext(
+        session=session,
+        console=console,
+        is_tty=True,
+        slash_ports=repl_slash_ports(),
+    )
+
+    result = slash_tool.execute_slash_tool({"command": "/cron", "args": ["remove"]}, ctx)
+
+    assert isinstance(result, dict)
+    assert result["ok"] is False
+    assert result["command"] == "/cron remove"
+    # Captured Click usage text tells the model exactly what argument it forgot.
+    assert "Usage: opensre cron remove [OPTIONS] TASK_ID" in result["error"]
+    latest = [row for row in session.history if row.get("type") == "slash"][-1]
+    assert latest["ok"] is False

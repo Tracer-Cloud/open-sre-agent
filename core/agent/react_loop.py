@@ -16,6 +16,7 @@ from typing import Any
 
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
+from core.agent.textual_tool_call import TEXTUAL_TOOL_CALL_NUDGE, looks_like_textual_tool_call
 from core.context_budget import (
     context_budget_ceiling_for_model,
     enforce_context_budget,
@@ -49,6 +50,12 @@ from platform.observability.trace.redaction import redact_sensitive
 from platform.observability.trace.spans import llm_span
 
 logger = logging.getLogger(__name__)
+
+# How many times per run a no-tool-call reply that is really a tool invocation
+# written as plain text gets bounced back to the model. Bounded so a model that
+# keeps degrading its tool calls cannot burn the whole iteration budget on
+# nudges; after the cap the reply is handled as an ordinary conclusion.
+_MAX_TEXTUAL_TOOL_CALL_NUDGES = 2
 
 
 class ReactLoop[RuntimeToolT: RuntimeTool]:
@@ -85,6 +92,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._hit_cap = True
         self._terminated_by_tool = False
         self._iterations_used = 0
+        self._textual_tool_call_nudges = 0
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -179,6 +187,26 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
 
     def _handle_conclusion(self, response: Any, assistant_message: Any, iteration: int) -> bool:
         """No tool calls: accept the answer (maybe after a follow-up) or nudge and continue."""
+        # Transport robustness, like the context budget: a reply whose whole
+        # body is a tool invocation written as plain text is a degraded tool
+        # call, not a conclusion — accepting it would end the turn with the
+        # action never executed. Bounce it back before asking the host.
+        if self._textual_tool_call_nudges < _MAX_TEXTUAL_TOOL_CALL_NUDGES and (
+            looks_like_textual_tool_call(response.content or "", self._runtime_tools)
+        ):
+            self._textual_tool_call_nudges += 1
+            logger.debug(
+                "[runtime] textual tool call in reply body at iteration %s; nudging", iteration
+            )
+            self._messages.append(UserRuntimeMessage(content=TEXTUAL_TOOL_CALL_NUDGE))
+            self._host._emit_runtime(
+                TurnEndEvent(
+                    iteration=iteration,
+                    message=assistant_message,
+                    data={"accepted": False, "textual_tool_call_nudge": True},
+                )
+            )
+            return False
         accept, nudge = self._host._should_accept_conclusion(
             evidence_count=len(self._executed),
             iteration=iteration,

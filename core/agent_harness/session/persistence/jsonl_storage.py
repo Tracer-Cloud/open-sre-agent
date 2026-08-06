@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,10 @@ _TRIGGER_MAX_CHARS = 200
 # Cold tip scan keeps at most this many trailing bytes resident (then grows by the
 # same step only while the window still contains nothing but skippable rows).
 _TAIL_SCAN_CHUNK_BYTES = 64 * 1024
+# WAL intent records bound their serialized arguments so a huge tool payload
+# (e.g. a full script body) never bloats the session log.
+_INTENT_ARGS_MAX_CHARS = 2_000
+_INTENT_USER_TEXT_MAX_CHARS = 200
 
 
 def _now() -> str:
@@ -25,6 +30,17 @@ def _now() -> str:
 
 def _new_id() -> str:
     return uuid.uuid4().hex
+
+
+def _bounded_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Return ``arguments`` as-is when small, else a truncated JSON preview."""
+    try:
+        serialized = json.dumps(arguments, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return {"truncated": str(arguments)[:_INTENT_ARGS_MAX_CHARS]}
+    if len(serialized) <= _INTENT_ARGS_MAX_CHARS:
+        return arguments
+    return {"truncated": serialized[:_INTENT_ARGS_MAX_CHARS]}
 
 
 class JsonlSessionStorage:
@@ -141,7 +157,16 @@ class JsonlSessionStorage:
         result: str,
         ok: bool,
         source: str | None = None,
+        tool_call_id: str | None = None,
+        sidecar: bool = False,
     ) -> None:
+        """Record one executed tool call (``tool_call`` + ``tool_result``).
+
+        With ``tool_call_id`` set, the ``tool_call`` record doubles as the WAL
+        commit for a matching ``tool_intent``. ``sidecar`` keeps both records
+        out of the conversation parent-chain (used by the WAL recorder, whose
+        records are durability bookkeeping, not conversation).
+        """
         call_id = self._append_entry(
             session_id,
             "tool_call",
@@ -149,7 +174,9 @@ class JsonlSessionStorage:
                 "tool": tool,
                 "arguments": arguments,
                 "source": source,
+                "tool_call_id": tool_call_id,
             },
+            sidecar=sidecar,
         )
         self._append_entry(
             session_id,
@@ -159,8 +186,41 @@ class JsonlSessionStorage:
                 "ok": ok,
                 "content": result,
                 "source": source,
+                "tool_call_id": tool_call_id,
             },
             parent_id=call_id,
+            sidecar=sidecar,
+        )
+
+    def append_tool_intent(
+        self,
+        session_id: str,
+        *,
+        tool: str,
+        arguments: dict[str, Any],
+        tool_call_id: str,
+        seq: int,
+        user_text: str | None = None,
+    ) -> str:
+        """Durably record a tool call about to execute (the WAL intent).
+
+        Written and fsynced *before* the tool runs; a later ``tool_call``
+        record with the same ``tool_call_id`` is its commit. An intent with no
+        commit after the session ended means the turn was interrupted
+        mid-execution — recovery re-discovers state instead of replaying.
+        """
+        return self._append_entry(
+            session_id,
+            "tool_intent",
+            {
+                "tool": tool,
+                "arguments": _bounded_arguments(arguments),
+                "tool_call_id": tool_call_id,
+                "seq": seq,
+                "user_text": (user_text or "")[:_INTENT_USER_TEXT_MAX_CHARS] or None,
+            },
+            durable=True,
+            sidecar=True,
         )
 
     def append_tool_update(
@@ -350,31 +410,49 @@ class JsonlSessionStorage:
         *,
         parent_id: str | None = None,
         resolve_parent: bool = True,
+        durable: bool = False,
+        sidecar: bool = False,
     ) -> str:
+        """Append one record.
+
+        ``durable`` flushes and fsyncs before returning — required for WAL
+        intents, whose write-ahead property only holds if the record hits disk
+        before the tool executes. ``sidecar`` marks the record as outside the
+        conversation parent-chain: it takes no auto-resolved parent, never
+        becomes the tip, and the on-disk ``sidecar`` flag lets the cold tail
+        scan skip it (same role the ``trace_span`` type plays).
+        """
         with contextlib.suppress(Exception):
             path = session_path(session_id)
             if not path.exists():
                 return ""
             entry_id = _new_id()
             parent = parent_id
-            if parent is None and resolve_parent:
+            if parent is None and resolve_parent and not sidecar:
                 parent = self._current_leaf_id(session_id, path)
             record = {
                 "id": entry_id,
                 "parent_id": parent,
                 "timestamp": _now(),
                 "type": entry_type,
+                **({"sidecar": True} if sidecar else {}),
                 **{key: value for key, value in payload.items() if value is not None},
             }
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
-            self._remember_leaf(
-                session_id,
-                path,
-                entry_type,
-                entry_id,
-                parent=parent,
-            )
+                if durable:
+                    fh.flush()
+                    os.fsync(fh.fileno())
+            if not sidecar:
+                self._remember_leaf(
+                    session_id,
+                    path,
+                    entry_type,
+                    entry_id,
+                    parent=parent,
+                )
+            # Refresh the sig even for sidecars: the tip is unchanged but the
+            # file grew, and a stale sig would force a cold rescan next append.
             self._leaf_file_sig[(session_id, str(path))] = self._file_sig(path)
             return entry_id
         return ""
@@ -433,11 +511,12 @@ class JsonlSessionStorage:
 
         Returns ``(True, tip)`` when this record ends the scan, or
         ``(False, None)`` to keep scanning older lines — ``trace_span``
-        sidecars and ``session`` headers are never parents. A header-only file
-        resolves to ``None`` when the scan exhausts the file.
+        sidecars, records flagged ``sidecar`` (WAL intents/commits), and
+        ``session`` headers are never parents. A header-only file resolves to
+        ``None`` when the scan exhausts the file.
         """
         rec_type = rec.get("type")
-        if rec_type == "trace_span":
+        if rec_type == "trace_span" or rec.get("sidecar"):
             return False, None
         if rec_type == "leaf":
             parent_id = rec.get("parent_id")
@@ -460,7 +539,7 @@ class JsonlSessionStorage:
         at most once. Peak memory is the buffered tail, bounded by the file.
 
         Tip rules (first matching record from the end):
-        - ``trace_span`` / ``session``: skip (sidecar / header)
+        - ``trace_span`` / ``sidecar``-flagged / ``session``: skip (sidecar / header)
         - ``leaf``: tip is that marker's ``parent_id``
         - anything else: tip is that record's ``id``
         """

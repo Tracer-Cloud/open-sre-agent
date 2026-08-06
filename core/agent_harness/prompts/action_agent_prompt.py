@@ -106,6 +106,19 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.turns.turn_snapshot",
             )
         )
+    recovery = interrupted_turn_recovery_block(turn_snapshot)
+    if recovery:
+        # Ephemeral: the note rides exactly one turn (popped from the session
+        # at snapshot time), so the cached prompt half stays byte-identical.
+        blocks.append(
+            PromptBlock(
+                id="interrupted-turn-recovery",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
+                content=recovery,
+                provenance="core.agent_harness.session.persistence.wal_recovery",
+            )
+        )
     return PromptEnvelope.from_blocks(
         blocks,
         separator="",
@@ -161,6 +174,18 @@ def prior_action_facts_block(turn_snapshot: TurnSnapshot) -> str:
         "to previous results, sent messages, comparisons, or 'both/that/them'. "
         "Do NOT ask the user to paste values already listed here):\n"
         f"{facts}\n\n"
+    )
+
+
+def interrupted_turn_recovery_block(turn_snapshot: TurnSnapshot) -> str:
+    """Render the WAL recovery note for the first action turn after ``/resume``."""
+    note = turn_snapshot.recovery_note
+    if not note:
+        return ""
+    return (
+        "INTERRUPTED-TURN RECOVERY (write-ahead log of the resumed session; "
+        "applies to THIS turn):\n"
+        f"{note}\n\n"
     )
 
 
@@ -221,6 +246,7 @@ __all__ = [
     "build_action_system_prompt",
     "build_action_user_message",
     "connected_integrations_block",
+    "interrupted_turn_recovery_block",
     "long_term_memory_block",
     "prior_action_facts_block",
     "recent_conversation_block",

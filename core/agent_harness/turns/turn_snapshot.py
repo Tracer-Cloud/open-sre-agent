@@ -159,6 +159,11 @@ class TurnSnapshot:
     display_preferences: dict[str, Any] = field(default_factory=dict)
     last_observation: str | None = None
 
+    recovery_note: str | None = None
+    """WAL recovery note from ``/resume`` — dangling tool intents formatted for
+    the action agent. Consumed from ``session.pending_recovery_note`` (popped:
+    the note rides exactly one turn)."""
+
     @classmethod
     def from_session(cls, text: str, session: TurnSnapshotSource) -> TurnSnapshot:
         """Snapshot the relevant session fields for one turn.
@@ -179,6 +184,7 @@ class TurnSnapshot:
         )
         runtime_input = _select_runtime_request_input(text, session)
         last_observation = _read_last_observation(session, runtime_input)
+        recovery_note = _pop_recovery_note(session)
         return cls(
             text=text,
             conversation_messages=snapshot,
@@ -195,6 +201,7 @@ class TurnSnapshot:
             max_iterations=int(getattr(runtime_input, "max_iterations", 1)),
             model=getattr(runtime_input, "model", None),
             last_observation=last_observation,
+            recovery_note=recovery_note,
         )
 
     def render_system_prompt(self) -> str:
@@ -215,6 +222,20 @@ class TurnSnapshot:
             raise ValueError("TurnSnapshot.max_iterations must be positive.")
         if not self.active_tools:
             raise ValueError("TurnSnapshot.active_tools must include at least one tool.")
+
+
+def _pop_recovery_note(session: TurnSnapshotSource) -> str | None:
+    """Consume ``session.pending_recovery_note`` (optional field, one turn only).
+
+    Popping here — the single per-turn snapshot point — guarantees the note is
+    injected into exactly the first turn after ``/resume`` and never lingers in
+    later cached prompts.
+    """
+    note = getattr(session, "pending_recovery_note", None)
+    if not isinstance(note, str) or not note.strip():
+        return None
+    setattr(session, "pending_recovery_note", None)  # noqa: B010 - protocol lacks the optional field
+    return note
 
 
 def _read_last_observation(session: TurnSnapshotSource, runtime_input: Any | None) -> str | None:

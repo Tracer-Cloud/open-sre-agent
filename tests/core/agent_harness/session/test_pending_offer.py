@@ -299,7 +299,7 @@ def test_the_skill_forbids_offering_before_the_work() -> None:
     from core.agent_harness.prompts.skills_loader import skills_dir
 
     body = " ".join(
-        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+        (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
 
     # Assert

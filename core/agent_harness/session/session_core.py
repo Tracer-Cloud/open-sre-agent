@@ -143,6 +143,11 @@ class SessionCore:
     pending_schedule_offer: PendingScheduleOffer | None = None
     """Structured schedule awaiting bare yes — set by propose_scheduled_delivery."""
 
+    pending_recovery_note: str | None = None
+    """WAL recovery note for the next action turn — set on ``/resume`` when the
+    resumed session log holds tool intents that never committed (the process
+    died mid-execution). Consumed once by ``TurnSnapshot.from_session``."""
+
     # Infra keys pulled from a completed investigation state and carried into the
     # next investigation. A class-level tuple so callers have a single source for
     # "what counts as accumulated context".
@@ -370,6 +375,7 @@ class SessionCore:
         )
         self.last_synthetic_observation_path = None
         self.pending_schedule_offer = None
+        self.pending_recovery_note = None
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
             self.session_id = str(uuid.uuid4())

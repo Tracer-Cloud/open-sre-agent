@@ -9,6 +9,7 @@ from typing import Any
 
 import core.agent_harness.session.persistence.paths as storage_paths
 from core.agent_harness.session.persistence.ports import CHAT_KINDS
+from core.agent_harness.session.persistence.wal_recovery import dangling_tool_intents
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 
 _ROOT_CAUSE_PREVIEW_CHARS = 80
@@ -90,6 +91,10 @@ class JsonlSessionRepo:
                 "history": history,
                 "turn_details": turn_details,
                 "has_snapshot": False,
+                # WAL sidecars are off-branch, so scan the full entry list:
+                # intents with no commit are tool calls that were in flight
+                # when the session ended (crash / kill mid-turn).
+                "dangling_tool_intents": dangling_tool_intents(entries),
             }
         return None
 
@@ -259,7 +264,10 @@ def _resolve_entry_id(entries: list[dict[str, Any]], entry_ref: str | None) -> s
         return matches[0] if len(matches) == 1 else entry_ref
     for rec in reversed(entries):
         rec_type = rec.get("type")
-        if rec_type == "trace_span":
+        # WAL intents/commits are sidecars like trace spans: a trailing one
+        # must not be mistaken for the conversation tip (its parent chain is
+        # detached, so resuming from it would drop the whole branch).
+        if rec_type == "trace_span" or rec.get("sidecar"):
             continue
         if rec_type == "leaf":
             parent = str(rec.get("parent_id") or "")

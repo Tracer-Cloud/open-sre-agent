@@ -88,3 +88,9 @@ class Event(StrEnum):
     SCHEDULED_TASK_STARTED = "scheduled_task_started"
     SCHEDULED_TASK_COMPLETED = "scheduled_task_completed"
     SCHEDULED_TASK_FAILED = "scheduled_task_failed"
+
+    # Suggested loops (interactive-shell startup picker shown when no
+    # scheduled tasks are configured)
+    LOOP_SUGGESTION_PROMPTED = "loop_suggestion_prompted"
+    LOOP_SUGGESTION_SELECTED = "loop_suggestion_selected"
+    LOOP_SUGGESTION_SKIPPED = "loop_suggestion_skipped"

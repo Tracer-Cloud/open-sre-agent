@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
+from core.agent.goals import Goal
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
@@ -35,9 +36,11 @@ from core.agent_harness.prompts import (
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
+from core.agent_harness.turns.goal_review import build_goal_reviewer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
@@ -287,6 +290,47 @@ def _self_recording_tools_only(result: Any) -> bool:
     return bool(names) and all(name in SELF_RECORDING_ACTION_TOOL_NAMES for name in names)
 
 
+# Self-recording tools whose result payload carries the real command output
+# back to the model (shell: stdout/stderr/exit_code; slash: the captured
+# console output read back from the history row). A closing summary after a
+# chain of these is grounded in observed output, unlike the bare success flags
+# most self-recording tools return.
+_GROUNDED_CHAIN_TOOL_NAMES: frozenset[str] = frozenset({"shell_run", "slash_invoke"})
+
+
+def _multi_step_grounded_chain(result: Any) -> bool:
+    """True when the turn chained two or more output-carrying tool steps.
+
+    ``_self_recording_tools_only`` suppresses model closings because most
+    self-recording tools hand the model a bare success flag, so closing prose
+    would be invented. ``shell_run`` and ``slash_invoke`` are the exceptions —
+    their tool results carry the real output back to the model — so after a
+    multi-step chain the completion summary is grounded in output the model
+    actually observed, and dropping it left workflow turns ending on raw step
+    output with no wrap-up. Single commands keep the suppression: their one
+    output block is already on screen, and a paraphrase only adds
+    contradiction risk.
+    """
+    names = [
+        tool_call.name
+        for tool_call, _tool_result in getattr(result, "tool_results", [])
+        if tool_call.name != "assistant_handoff"
+    ]
+    return len(names) >= 2 and all(name in _GROUNDED_CHAIN_TOOL_NAMES for name in names)
+
+
+def _asks_the_user(final_text: str) -> bool:
+    """True when the closing message asks the user something.
+
+    A question ("Found 5 loops — remove all of them?") is direction-seeking,
+    not a restatement of tool output, so the invented-summary hazard that
+    justifies suppressing self-recording closings does not apply. Dropping it
+    is worse than any paraphrase risk: the user sees dead air, and their "yes"
+    has no recorded offer to resolve against on the next turn.
+    """
+    return final_text.rstrip().endswith("?")
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
@@ -471,6 +515,10 @@ def _build_action_agent(
     slash_call = (
         None if bang_command is not None else _literal_slash_tool_call(message, agent_tools)
     )
+    # Only LLM-selected turns get a goal reviewer: the verbatim `!shell` and
+    # literal `/slash` paths execute exactly one explicit command by design,
+    # so "did the agent reach the goal" is not a meaningful question there.
+    goal: Goal | None = None
 
     if bang_command is not None:
         # Explicit `!` shell escape: dispatch the verbatim text as a shell_run call.
@@ -503,6 +551,11 @@ def _build_action_agent(
         # cache_control breakpoint is not invalidated every turn.
         system = envelope.render_cached()
         user_message = build_action_user_message(message, prefix=envelope.render_ephemeral())
+        # Reviewed goal: when the agent concludes after tool work, one LLM
+        # check confirms the user's request was carried out; a NOT_REACHED
+        # verdict nudges the loop to continue instead of stopping short
+        # (e.g. "remove the cron loops" ending after only listing them).
+        goal = build_goal_reviewer(llm, message, session)
 
     config = AgentConfig(
         llm=llm,
@@ -512,7 +565,14 @@ def _build_action_agent(
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
-        on_runtime_event=runtime_event_callback_from_observer(observer),
+        # WAL first, observer second: the tool intent must be on disk before
+        # any surface side effect reacts to the same event.
+        on_runtime_event=with_wal_recording(
+            runtime_event_callback_from_observer(observer),
+            session=session,
+            user_text=message,
+        ),
+        goal=goal,
     )
     return ActionTurnPlan(
         agent=build_agent(config),
@@ -620,7 +680,14 @@ def _compose_response(
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
-    suppress_final = prefer_tool_response_text or _self_recording_tools_only(result)
+    # Exceptions: a multi-step shell/slash chain, whose closing summary is
+    # grounded in the output the model observed between steps, and a closing
+    # question, which seeks direction instead of restating output.
+    suppress_final = prefer_tool_response_text or (
+        _self_recording_tools_only(result)
+        and not _multi_step_grounded_chain(result)
+        and not _asks_the_user(final_text)
+    )
     final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see

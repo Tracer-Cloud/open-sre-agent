@@ -1,0 +1,35 @@
+{
+  "completed": true,
+  "completed_at": "2026-08-05T23:29:04.139751+00:00",
+  "completed_steps": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "last_completed_at": "2026-08-05T23:29:04.139619+00:00",
+  "running_total": 166,
+  "values": [
+    {
+      "step": 1,
+      "value": 3
+    },
+    {
+      "step": 2,
+      "value": 8
+    },
+    {
+      "step": 3,
+      "value": 32
+    },
+    {
+      "step": 4,
+      "value": 84
+    },
+    {
+      "step": 5,
+      "value": 39
+    }
+  ]
+}
