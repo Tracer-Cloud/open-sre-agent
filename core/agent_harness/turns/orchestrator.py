@@ -40,8 +40,8 @@ from core.agent_harness.prompts.assistant import (
     AssistantTurnPrompt,
     build_cli_agent_turn_prompt,
 )
-from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
-from core.agent_harness.prompts.prior_investigation import is_prior_investigation_follow_up
+from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
+from core.agent_harness.prompts.memory.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed

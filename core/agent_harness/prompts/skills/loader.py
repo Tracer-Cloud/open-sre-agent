@@ -40,7 +40,6 @@ __all__ = (
 
 SKILLS_HEADER = f"{'=' * 40} SKILLS INDEX {'=' * 40}"
 
-_SKILLS_DIRNAME = "skills"
 _PACKAGE_SKILL_FILENAME = "SKILL.md"
 _REPORT_TEMPLATE_SUFFIX = "_report.md"
 _REPO_SKILLS_PREFIX = "core/agent_harness/prompts/skills"
@@ -61,7 +60,7 @@ class ActionSkill:
 
 def skills_dir() -> Path:
     """Return the directory that holds the bundled skill markdown files."""
-    return Path(__file__).parent / _SKILLS_DIRNAME
+    return Path(__file__).parent
 
 
 def _repo_relative_path(path: Path) -> str:

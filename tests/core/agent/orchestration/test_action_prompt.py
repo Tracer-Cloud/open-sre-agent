@@ -17,8 +17,8 @@ from core.agent_harness.prompts.assistant import (
     build_cli_agent_prompt_from_provider,
     build_handoff_guidance_block,
 )
-from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
-from core.agent_harness.prompts.skills_loader import (
+from core.agent_harness.prompts.memory.conversation import NO_HISTORY_PLACEHOLDER
+from core.agent_harness.prompts.skills.loader import (
     SKILLS_HEADER,
     list_action_skills,
     load_skill_body,
@@ -26,7 +26,7 @@ from core.agent_harness.prompts.skills_loader import (
     load_skills_index,
     skills_dir,
 )
-from core.agent_harness.prompts.skills_loader import (
+from core.agent_harness.prompts.skills.loader import (
     load_skills_block as cached_load_skills_block,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -679,7 +679,7 @@ def test_the_active_instruction_survives_context_truncation() -> None:
 def test_the_cron_guidance_teaches_structured_schedule_offers() -> None:
     """Morning report must propose via tool, not scrape Want-me-to into /cron."""
     # Arrange
-    from core.agent_harness.prompts.skills_loader import skills_dir
+    from core.agent_harness.prompts.skills.loader import skills_dir
 
     base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(

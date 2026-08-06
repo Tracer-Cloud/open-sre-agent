@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult

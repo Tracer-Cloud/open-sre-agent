@@ -10,7 +10,7 @@ to the rendered prompt.
 from __future__ import annotations
 
 from core.agent_harness.prompts.assistant import _build_system_prompt
-from core.agent_harness.prompts.surfaces import PromptSurface, profile_for
+from core.agent_harness.prompts.kernel.surfaces import PromptSurface, profile_for
 
 
 def test_every_surface_has_a_declared_profile() -> None:

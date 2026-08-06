@@ -12,7 +12,7 @@ from rich.console import Console
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import AnswerRequest
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
 from core.agent_harness.turns.action_driver import (

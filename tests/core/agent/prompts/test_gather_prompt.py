@@ -14,7 +14,7 @@ from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
 )
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
     STALE_PRIOR_INVESTIGATION_NOTE,
 )

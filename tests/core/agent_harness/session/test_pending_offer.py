@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.tools.tool_context import ActionToolContext
 from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
@@ -296,7 +296,7 @@ def test_the_offer_tool_does_not_advertise_itself_as_the_way_to_run_a_report() -
 def test_the_skill_forbids_offering_before_the_work() -> None:
     """The recipe must state the ordering, not merely imply it by step number."""
     # Arrange
-    from core.agent_harness.prompts.skills_loader import skills_dir
+    from core.agent_harness.prompts.skills.loader import skills_dir
 
     body = " ".join(
         (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.prompts.envelope import (
+from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockKind,
     PromptEnvelope,
     PromptTier,
 )
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     is_within_recall_window,
     prior_investigation_headline,
 )
@@ -75,7 +75,7 @@ def build_gather_system_prompt_envelope(session: SessionStore) -> PromptEnvelope
             kind=PromptBlockKind.SYSTEM,
             tier=PromptTier.STABLE,
             content=_GATHER_BASE,
-            provenance="core.agent_harness.prompts.gather",
+            provenance="core.agent_harness.prompts.gather.assemble",
         )
     ]
     vendor_fragments = gather_prompt_vendor_fragments()
@@ -119,7 +119,7 @@ def build_gather_system_prompt_envelope(session: SessionStore) -> PromptEnvelope
                 kind=PromptBlockKind.CONTEXT,
                 tier=PromptTier.VOLATILE,
                 content=(f"\n{rule}\n--- Prior investigation in this session ---\n{prior}\n"),
-                provenance="core.agent_harness.prompts.prior_investigation",
+                provenance="core.agent_harness.prompts.memory.prior_investigation",
             )
         )
     return PromptEnvelope.from_blocks(blocks, separator="", metadata={"prompt": "gather_system"})

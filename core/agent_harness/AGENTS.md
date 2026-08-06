@@ -65,11 +65,11 @@ subpackage. Default port implementations live with the concern they serve, not i
 - `accounting/` — session-scoped token accounting and LLM run metadata, plus the
   default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
   (`run_record.py`).
-- `prompts/` — action-agent and conversational-assistant prompt builders (pure
-  string assembly; grounding text is supplied via `PromptContextProvider`).
-  Layout: `assistant/` (parts → contributors → envelope → turn), `context/`
-  (`DefaultPromptContextProvider`), shared `envelope.py` / `surfaces.py`
-  (surface Strategy table), plus `conversation_memory.py` and peer builders.
+- `prompts/` — prompt builders by agent path (pure string assembly; grounding
+  via `PromptContextProvider`). See `prompts/AGENTS.md`. Layout: `kernel/`
+  (envelope + surface Strategy), `assistant/` / `action/` / `gather/` (peer
+  assemblers), `grounding/` (prompt providers), plus leaves `memory/` /
+  `runtime_facts/` / `skills/`.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt

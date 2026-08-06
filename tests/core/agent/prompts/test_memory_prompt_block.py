@@ -40,7 +40,7 @@ class TestDefaultProviderMemory:
         monkeypatch.delenv(OPENSRE_MEMORY_DISABLED_ENV, raising=False)
 
     def _provider_memory(self) -> str:
-        from core.agent_harness.prompts.context import DefaultPromptContextProvider
+        from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 
         return DefaultPromptContextProvider(session=object()).long_term_memory()
 
@@ -70,7 +70,7 @@ class TestDefaultProviderMemory:
 
     def test_gateway_surface_empty_unless_opted_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from config.constants import OPENSRE_MEMORY_GATEWAY_ENABLED_ENV
-        from core.agent_harness.prompts.context import DefaultPromptContextProvider
+        from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 
         save_memory(
             slug="prod-cluster",

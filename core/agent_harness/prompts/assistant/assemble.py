@@ -1,7 +1,7 @@
 """Assemble the assistant system prompt from parts + surface profile.
 
 Deep module: callers pass :class:`AssistantPromptParts`; contributors and the
-surface Strategy table (:class:`~core.agent_harness.prompts.surfaces.SurfaceProfile`)
+surface Strategy table (:class:`~core.agent_harness.prompts.kernel.surfaces.SurfaceProfile`)
 stay inside.
 """
 
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from core.agent_harness.prompts.assistant.blocks import ASSISTANT_BLOCK_CONTRIBUTORS
 from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
-from core.agent_harness.prompts.envelope import PromptBlock, PromptEnvelope
-from core.agent_harness.prompts.surfaces import profile_for
+from core.agent_harness.prompts.kernel.envelope import PromptBlock, PromptEnvelope
+from core.agent_harness.prompts.kernel.surfaces import profile_for
 
 
 def assemble_assistant_envelope(parts: AssistantPromptParts) -> PromptEnvelope:

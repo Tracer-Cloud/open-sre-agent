@@ -5,18 +5,18 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
-from core.agent_harness.prompts.conversation_memory import (
-    format_prior_action_facts,
-    format_recent_conversation,
-)
-from core.agent_harness.prompts.envelope import (
+from core.agent_harness.prompts.action.text import _SYSTEM_PROMPT_BASE
+from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockKind,
     PromptEnvelope,
     PromptTier,
 )
-from core.agent_harness.prompts.skills_loader import load_skills_index
+from core.agent_harness.prompts.memory.conversation import (
+    format_prior_action_facts,
+    format_recent_conversation,
+)
+from core.agent_harness.prompts.skills.loader import load_skills_index
 from platform.harness_ports import action_prompt_vendor_fragments
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             # Trailing separators stay in the block; avoid ``base + "\n\n"`` which
             # copies the entire stable prompt body on every turn.
             content="".join((_SYSTEM_PROMPT_BASE, "\n\n")),
-            provenance="core.agent_harness.prompts.action_agent_system_prompt",
+            provenance="core.agent_harness.prompts.action.text",
         ),
     ]
     vendor_fragments = action_prompt_vendor_fragments()

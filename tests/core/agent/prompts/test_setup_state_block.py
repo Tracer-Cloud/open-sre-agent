@@ -5,7 +5,7 @@ from __future__ import annotations
 from core.agent_harness.prompts.assistant import (
     build_assistant_system_prompt_envelope,
 )
-from core.agent_harness.prompts.envelope import PromptTier
+from core.agent_harness.prompts.kernel.envelope import PromptTier
 
 _SETUP_BLOCK_ID = "assistant-setup-state"
 # A value the model could not produce on its own, so finding it in the rendered
@@ -68,7 +68,7 @@ class _StubSession:
 def test_provider_recomputes_when_an_integration_is_connected(monkeypatch) -> None:
     # Arrange: a session that gains an integration mid-session, as happens when
     # the operator runs the setup wizard from the shell.
-    from core.agent_harness.prompts.context.provider import DefaultPromptContextProvider
+    from core.agent_harness.prompts.grounding.provider import DefaultPromptContextProvider
 
     session = _StubSession(("slack",))
     provider = DefaultPromptContextProvider(session)
@@ -86,7 +86,7 @@ def test_provider_recomputes_when_an_integration_is_connected(monkeypatch) -> No
 def test_provider_recomputes_when_the_scheduler_store_changes(monkeypatch) -> None:
     # Arrange: integrations are unchanged, so only the store fingerprint moves.
     import platform.setup_state as setup_state
-    from core.agent_harness.prompts.context.provider import DefaultPromptContextProvider
+    from core.agent_harness.prompts.grounding.provider import DefaultPromptContextProvider
 
     provider = DefaultPromptContextProvider(_StubSession(("slack",)))
     counts = iter([0, 7])

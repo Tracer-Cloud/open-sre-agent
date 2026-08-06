@@ -23,11 +23,11 @@ from typing import Any, Protocol
 from core.agent import Agent
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.ports import ErrorReporter, SessionStore, ToolEventObserver
-from core.agent_harness.prompts.conversation_memory import (
+from core.agent_harness.prompts.gather import build_gather_system_prompt
+from core.agent_harness.prompts.memory.conversation import (
     NO_HISTORY_PLACEHOLDER,
     format_recent_conversation,
 )
-from core.agent_harness.prompts.gather import build_gather_system_prompt
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer

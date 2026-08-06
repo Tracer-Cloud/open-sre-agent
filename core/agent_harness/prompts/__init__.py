@@ -1,15 +1,26 @@
 """Prompt builders for the decoupled agentic turn engine.
 
-Subpackages:
+Subpackages (by agent path — see ``prompts/AGENTS.md``):
 
-* ``assistant/`` — conversational assistant (parts → contributors → envelope)
-* ``context/`` — grounding providers that feed assemblers
-* ``envelope`` / ``surfaces`` / ``rules`` — shared types and surface Strategy table
+* ``kernel/`` — shared types: ``PromptEnvelope``, tiers, ``SurfaceProfile``
+  (no agent-path knowledge)
+* ``grounding/`` — prompt-side grounding providers
+  (``DefaultPromptContextProvider``); distinct from harness ``grounding/``
+* ``assistant/`` — conversational answer path (parts → contributors →
+  envelope → turn)
+* ``action/`` — tool-calling / slash action-agent system + user prompts
+* ``gather/`` — evidence-gather system prompts
+* ``memory/`` — conversation window + prior-investigation recall fragments
+* ``runtime_facts/`` — runtime-metadata fact lines for prompt assembly
+* ``skills/`` — progressive skill index (thin) + markdown bodies on demand
+
+Root modules: ``rules.py`` (shared rule fragments), ``synthetic_failure.py``.
 """
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.action_agent_prompt import (
+from core.agent_harness.prompts.action import (
+    _SYSTEM_PROMPT_BASE,
     build_action_system_prompt,
     build_action_system_prompt_envelope,
     build_action_user_message,
@@ -18,7 +29,6 @@ from core.agent_harness.prompts.action_agent_prompt import (
     recent_conversation_block,
     sanitize_action_text,
 )
-from core.agent_harness.prompts.action_agent_system_prompt import _SYSTEM_PROMPT_BASE
 from core.agent_harness.prompts.assistant import (
     AssistantPromptContextProvider,
     AssistantPromptParts,
@@ -33,29 +43,27 @@ from core.agent_harness.prompts.assistant import (
     build_environment_block,
     build_observation_block,
 )
-from core.agent_harness.prompts.envelope import (
-    PromptBlock,
-    PromptBlockKind,
-    PromptEnvelope,
-    PromptTier,
-)
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_envelope,
     build_gather_system_prompt_from_turn_snapshot,
 )
-from core.agent_harness.prompts.skills_loader import (
+from core.agent_harness.prompts.kernel import (
+    PromptBlock,
+    PromptBlockKind,
+    PromptEnvelope,
+    PromptSurface,
+    PromptTier,
+    SurfaceProfile,
+    profile_for,
+)
+from core.agent_harness.prompts.skills import (
     SKILLS_HEADER,
     list_action_skills,
     load_skill_body,
     load_skills_block,
     load_skills_index,
     skills_dir,
-)
-from core.agent_harness.prompts.surfaces import (
-    PromptSurface,
-    SurfaceProfile,
-    profile_for,
 )
 
 __all__ = [
