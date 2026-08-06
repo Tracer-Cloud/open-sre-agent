@@ -1,0 +1,27 @@
+"""Exact native OpenSRE report persistence for ORCA."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+
+class NativeReportPolicy:
+    """Write OpenSRE's public report without formatting or normalization."""
+
+    def write(self, payload: dict[str, Any], destination: Path) -> bytes:
+        """Persist exactly the UTF-8 bytes represented by ``payload['report']``."""
+        report = payload.get("report")
+        if not isinstance(report, str):
+            raise ValueError("native OpenSRE payload must contain a string report")
+        data = report.encode("utf-8")
+
+        # ORCA pre-creates /app/report.md as mode 0666 but keeps /app root-owned,
+        # so an atomic sibling rename is not available to the non-root agent.
+        # Flush and fsync the exact pre-created output file instead.
+        with destination.open("wb") as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        return data
