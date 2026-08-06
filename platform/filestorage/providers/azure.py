@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 import httpx
 
+from platform.filestorage import BucketExposure, PublicAccessStatus
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncUnavailableError
@@ -214,8 +215,54 @@ def _factory(config: RemoteSyncConfig) -> AzureBlobObjectStore:
     return AzureBlobObjectStore(config)
 
 
+def check_public_access(
+    config: RemoteSyncConfig, *, client: httpx.Client | None = None
+) -> PublicAccessStatus:
+    account_name = config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
+    if not account_name:
+        return PublicAccessStatus(BucketExposure.UNKNOWN, "AZURE_STORAGE_ACCOUNT_NAME is missing")
+
+    try:
+        token = _get_azure_access_token()
+    except Exception as exc:
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+
+    url = f"https://{account_name}.blob.core.windows.net/{config.bucket}"
+    owns_client = client is None
+    cl = client if client is not None else httpx.Client(timeout=30.0)
+
+    try:
+        response = cl.get(
+            url,
+            params={"restype": "container"},
+            headers={"Authorization": f"Bearer {token}", "x-ms-version": "2026-04-06"},
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (401, 403):
+            return PublicAccessStatus(
+                BucketExposure.UNKNOWN, "missing permission to read container properties"
+            )
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    except httpx.HTTPError as exc:
+        return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
+    finally:
+        if owns_client:
+            cl.close()
+
+    access = response.headers.get("x-ms-blob-public-access")
+    if access in ("blob", "container"):
+        return PublicAccessStatus(BucketExposure.PUBLIC)
+
+    return PublicAccessStatus(BucketExposure.PRIVATE)
+
+
 register_object_store(
-    PROVIDER_NAME, _factory, credential_hint=CREDENTIAL_HINT, extra_fields=EXTRA_FIELDS
+    PROVIDER_NAME,
+    _factory,
+    credential_hint=CREDENTIAL_HINT,
+    extra_fields=EXTRA_FIELDS,
+    public_access_checker=check_public_access,
 )
 
 __all__ = ["CREDENTIAL_HINT", "EXTRA_FIELDS", "PROVIDER_NAME", "AzureBlobObjectStore"]

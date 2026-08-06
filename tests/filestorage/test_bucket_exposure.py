@@ -22,6 +22,7 @@ from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.messages import format_exposure_line, format_status_lines
 from platform.filestorage.operations import SyncRootStatus, SyncStatus, get_sync_status
 from platform.filestorage.providers.aws import check_public_access as aws_check_public_access
+from platform.filestorage.providers.azure import check_public_access as azure_check_public_access
 from platform.filestorage.providers.gcs import check_public_access as gcs_check_public_access
 from platform.filestorage.providers.registry import (
     check_bucket_exposure,
@@ -101,6 +102,135 @@ def test_client_build_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("platform.filestorage.providers.aws._build_client", _raise_client)
     result = aws_check_public_access(RemoteSyncConfig(bucket="b"))
+    assert result.exposure is BucketExposure.UNKNOWN
+
+
+# ── azure.check_public_access ───────────────────────────────────────────────
+
+
+class _AzureResponse:
+    """Fake ``httpx.Response`` exposing only what the Azure checker touches."""
+
+    def __init__(self, *, headers: dict[str, str] | None = None, status_code: int = 200) -> None:
+        self.headers = headers or {}
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            request = httpx.Request("GET", "https://fake.blob.core.windows.net/")
+            response = httpx.Response(self.status_code, request=request)
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}", request=request, response=response
+            )
+
+
+class _AzureClient:
+    """Fake ``httpx.Client`` exposing only ``get``."""
+
+    def __init__(
+        self, response: _AzureResponse | None = None, *, error: Exception | None = None
+    ) -> None:
+        self._response = response
+        self._error = error
+
+    def get(
+        self,
+        _url: str,
+        headers: dict[str, str] | None = None,  # noqa: ARG002
+        params: dict[str, str] | None = None,  # noqa: ARG002
+    ) -> _AzureResponse:
+        if self._error is not None:
+            raise self._error
+        assert self._response is not None
+        return self._response
+
+    def close(self) -> None:
+        pass
+
+
+def test_azure_missing_account_name_degrades_to_a_note(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unconfigured account name must degrade gracefully without attempting auth."""
+    monkeypatch.delenv("AZURE_STORAGE_ACCOUNT_NAME", raising=False)
+    result = azure_check_public_access(RemoteSyncConfig(bucket="b", provider="azure"))
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "AZURE_STORAGE_ACCOUNT_NAME" in result.detail
+
+
+def test_azure_public_blob_access_is_reported_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "testaccount")
+    monkeypatch.setattr(
+        "platform.filestorage.providers.azure._get_azure_access_token", lambda: "token"
+    )
+    client = _AzureClient(_AzureResponse(headers={"x-ms-blob-public-access": "blob"}))
+    result = azure_check_public_access(
+        RemoteSyncConfig(bucket="b", provider="azure"), client=client
+    )
+    assert result == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+def test_azure_public_container_access_is_reported_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "testaccount")
+    monkeypatch.setattr(
+        "platform.filestorage.providers.azure._get_azure_access_token", lambda: "token"
+    )
+    client = _AzureClient(_AzureResponse(headers={"x-ms-blob-public-access": "container"}))
+    result = azure_check_public_access(
+        RemoteSyncConfig(bucket="b", provider="azure"), client=client
+    )
+    assert result == PublicAccessStatus(BucketExposure.PUBLIC)
+
+
+def test_azure_private_access_is_reported_private(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Absence of the x-ms-blob-public-access header dictates a private container."""
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "testaccount")
+    monkeypatch.setattr(
+        "platform.filestorage.providers.azure._get_azure_access_token", lambda: "token"
+    )
+    client = _AzureClient(_AzureResponse(headers={}))
+    result = azure_check_public_access(
+        RemoteSyncConfig(bucket="b", provider="azure"), client=client
+    )
+    assert result == PublicAccessStatus(BucketExposure.PRIVATE)
+
+
+def test_azure_forbidden_degrades_to_a_note_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Missing RBAC permissions must fail closed to UNKNOWN without crashing."""
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "testaccount")
+    monkeypatch.setattr(
+        "platform.filestorage.providers.azure._get_azure_access_token", lambda: "token"
+    )
+    client = _AzureClient(_AzureResponse(status_code=403))
+    result = azure_check_public_access(
+        RemoteSyncConfig(bucket="b", provider="azure"), client=client
+    )
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "permission" in result.detail
+
+
+def test_azure_other_http_error_degrades_without_leaking_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "testaccount")
+    monkeypatch.setattr(
+        "platform.filestorage.providers.azure._get_azure_access_token", lambda: "token"
+    )
+    client = _AzureClient(_AzureResponse(status_code=500))
+    result = azure_check_public_access(
+        RemoteSyncConfig(bucket="b", provider="azure"), client=client
+    )
+    assert result.exposure is BucketExposure.UNKNOWN
+    assert "HTTPStatusError" in result.detail
+
+
+def test_azure_transport_failure_degrades_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "testaccount")
+    monkeypatch.setattr(
+        "platform.filestorage.providers.azure._get_azure_access_token", lambda: "token"
+    )
+    client = _AzureClient(error=httpx.ConnectError("boom"))
+    result = azure_check_public_access(
+        RemoteSyncConfig(bucket="b", provider="azure"), client=client
+    )
     assert result.exposure is BucketExposure.UNKNOWN
 
 
