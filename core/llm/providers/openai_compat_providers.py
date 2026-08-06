@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Final
 
-from config.config import (
+from config.llm_models import (
     DEEPSEEK_BASE_URL,
     DEEPSEEK_LLM_CONFIG,
     GEMINI_BASE_URL,
