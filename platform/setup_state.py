@@ -143,17 +143,31 @@ def render_setup_state(state: SetupSnapshot) -> str:
 
 _CacheKey = tuple[tuple[str, ...], tuple[tuple[int, int], ...]]
 
+
+@dataclass(slots=True)
+class _RenderedCache:
+    """Mutable one-slot memo for :func:`cached_setup_state`.
+
+    A holder object (not a rebound module global) keeps the cache key and block
+    in place so readers and writers share one identity — and static analyzers
+    that treat ``global`` rebinding as unused still see a live object.
+    """
+
+    key: _CacheKey | None = None
+    block: str | None = None
+
+
 #: The last rendered block and the key it was built from: the integrations plus
 #: a stat of the scheduler stores. One entry, not a map — every earlier
 #: fingerprint is dead the moment the stores change, so keeping them would grow
 #: without bound in a long-running gateway.
-_CACHED: tuple[_CacheKey, str] | None = None
+_CACHE = _RenderedCache()
 
 
 def clear_setup_state_cache() -> None:
     """Drop the memoized block. For tests and for a forced re-read."""
-    global _CACHED
-    _CACHED = None
+    _CACHE.key = None
+    _CACHE.block = None
 
 
 def cached_setup_state(integrations: Sequence[str]) -> str:
@@ -163,12 +177,12 @@ def cached_setup_state(integrations: Sequence[str]) -> str:
     rarely, so this collapses a task-list read plus a run lookup per task down
     to two ``stat`` calls on the unchanged path.
     """
-    global _CACHED
     key: _CacheKey = (tuple(integrations), setup_state_fingerprint())
-    if _CACHED is not None and _CACHED[0] == key:
-        return _CACHED[1]
+    if _CACHE.key == key and _CACHE.block is not None:
+        return _CACHE.block
     block = render_setup_state(collect_setup_state(integrations))
-    _CACHED = (key, block)
+    _CACHE.key = key
+    _CACHE.block = block
     return block
 
 

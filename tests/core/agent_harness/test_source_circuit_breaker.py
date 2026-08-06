@@ -111,6 +111,42 @@ def test_unknown_source_is_never_marked_down() -> None:
     assert hooks.before_tool_call(_request("unknown")) is None
 
 
+def test_prior_success_limits_breaker_to_failing_tool() -> None:
+    # Arrange: grafana already answered once this turn; a later tool then times out.
+    breaker = SourceCircuitBreaker()
+    hooks = breaker.hooks()
+    assert hooks.after_tool_call is not None
+    assert hooks.before_tool_call is not None
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_metrics"),
+        ToolExecutionResult(content="cpu=0.2", is_error=False),
+    )
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_logs"),
+        _error_result(f"Max retries exceeded: {_TIMEOUT_MARKER}"),
+    )
+
+    # Act + Assert: only the failing tool is skipped; other grafana tools still run.
+    logs = hooks.before_tool_call(_request("grafana", tool_name="query_grafana_logs"))
+    assert logs is not None and logs.blocked
+    assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_alerts")) is None
+
+
+def test_downstream_connection_error_does_not_poison_vendor() -> None:
+    # Arrange: grafana is up but reports that a datasource backend is down.
+    breaker = SourceCircuitBreaker()
+    hooks = breaker.hooks()
+    assert hooks.after_tool_call is not None
+    assert hooks.before_tool_call is not None
+    hooks.after_tool_call(
+        _request("grafana"),
+        _error_result("datasource prometheus: connection refused to 10.0.0.5:9090"),
+    )
+
+    # Act + Assert: other grafana tools still run — the vendor itself is reachable.
+    assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_logs")) is None
+
+
 class _ConnectTimeoutTool:
     """Registered-tool fake whose run always fails like a dead host."""
 
