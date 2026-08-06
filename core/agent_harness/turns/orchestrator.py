@@ -45,6 +45,7 @@ from core.agent_harness.prompts.memory.prior_investigation import is_prior_inves
 from core.agent_harness.session.pending_offer import (
     arm_pending_investigation_offer,
     consume_confirmed_pending_offer,
+    finalize_gather_investigation_offer,
     first_pending_offer,
     is_pending_offer_confirmation,
 )
@@ -487,15 +488,32 @@ def run_turn(
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
-        # Arm structured investigate-accept after a canonical Want-me-to closer.
+        # Arm structured investigate-accept. Gather answers force the canonical
+        # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
         # Skip when this turn already confirmed a pending offer.
         if not confirms_pending:
-            arm_pending_investigation_offer(
-                session,
-                user_text=original_user_text,
-                assistant_text=outcome.response_text,
-                observation=outcome.evidence_for_offer,
-            )
+            if route.intent == "gather_and_answer" and not _is_prior_investigation_follow_up_handoff(
+                handoff_contents
+            ):
+                response_text, _offer = finalize_gather_investigation_offer(
+                    session,
+                    user_text=original_user_text,
+                    assistant_text=outcome.response_text,
+                    observation=outcome.evidence_for_offer,
+                )
+                outcome = _RouteOutcome(
+                    final_intent=outcome.final_intent,
+                    response_text=response_text,
+                    llm_run=outcome.llm_run,
+                    evidence_for_offer=outcome.evidence_for_offer,
+                )
+            else:
+                arm_pending_investigation_offer(
+                    session,
+                    user_text=original_user_text,
+                    assistant_text=outcome.response_text,
+                    observation=outcome.evidence_for_offer,
+                )
 
         return accounting.finalize(
             TurnResult(

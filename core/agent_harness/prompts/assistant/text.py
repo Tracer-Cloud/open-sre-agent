@@ -186,8 +186,11 @@ INTERACTION_RULES = (
     "those as available thread context for follow-up questions; do not ask the "
     "user to paste values that are already present there.\n\n"
     "When the user asked a cause/why question and this turn gathered quick "
-    "evidence, lead with what the evidence shows and close with **Want me to:** "
-    "run a full investigation. Make the offer once — skip it when the evidence "
+    "evidence, lead with what the evidence shows and close with exactly "
+    "**Want me to:** run a full investigation — that exact phrase, once, as "
+    "the final line. Do NOT offer paste-an-alert, /integrations setup, or a "
+    "dual menu instead of that closer (the shell arms a structured accept on "
+    "it; dual closers break bare yes). Skip the offer only when the evidence "
     "already resolves the question or an investigation just ran.\n\n"
 )
 

@@ -26,4 +26,44 @@ def offer_from_assistant_content(content: str) -> str | None:
     return offer or None
 
 
-__all__ = ["WANT_ME_TO_MARKER", "offer_from_assistant_content"]
+def replace_want_me_to_body(content: str, new_body: str) -> str:
+    """Replace the newest Want-me-to offer body, or append one if missing.
+
+    Keeps prose before the closer. Used after gather answers so dual
+    paste/integrations Want-me-to menus become a single canonical investigate
+    offer the accept path can arm.
+    """
+    body = (new_body or "").strip()
+    if not body:
+        return content if isinstance(content, str) else ""
+    text = content if isinstance(content, str) else ""
+    closer = f"**Want me to:** {body}"
+    if not text.strip():
+        return closer
+
+    lowered = text.lower()
+    pos = lowered.rfind(WANT_ME_TO_MARKER)
+    if pos < 0:
+        return f"{text.rstrip()}\n\n{closer}"
+
+    head = text[:pos].rstrip()
+    while head.endswith("*"):
+        head = head[:-1]
+    head = head.rstrip()
+
+    rest = text[pos + len(WANT_ME_TO_MARKER) :]
+    rest = rest.lstrip()
+    if rest.startswith("**"):
+        rest = rest[2:].lstrip()
+    blank = rest.find("\n\n")
+    after = rest[blank:] if blank >= 0 else ""
+    if head:
+        return f"{head}\n\n{closer}{after}"
+    return f"{closer}{after}"
+
+
+__all__ = [
+    "WANT_ME_TO_MARKER",
+    "offer_from_assistant_content",
+    "replace_want_me_to_body",
+]

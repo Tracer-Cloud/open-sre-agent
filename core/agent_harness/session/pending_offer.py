@@ -21,7 +21,10 @@ import shlex
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from core.agent_harness.session.want_me_to import offer_from_assistant_content
+from core.agent_harness.session.want_me_to import (
+    offer_from_assistant_content,
+    replace_want_me_to_body,
+)
 
 # Common morning-report defaults → human cadence labels (exact cron match only).
 _CADENCE_LABELS: dict[str, str] = {
@@ -36,6 +39,13 @@ INVESTIGATION_ACCEPT_MARKER = "opensre:investigation_start"
 
 # Canonical Want-me-to body for a full-investigation offer (INTERACTION_RULES).
 _INVESTIGATION_WANT_ME_TO_BODY = "run a full investigation"
+# Dogfood: models say "kick off a full investigation…" — still arm.
+_FULL_INVESTIGATION_MARKER = "full investigation"
+_SCHEDULE_OFFER_MARKERS = (
+    "schedule this",
+    "recurring",
+    "/cron",
+)
 
 # Session attribute names that hold a pending affirmative (priority order for yes).
 _PENDING_OFFER_ATTRS: tuple[str, ...] = (
@@ -143,15 +153,45 @@ def parse_investigation_accept_message(message: str) -> str | None:
 
 
 def assistant_offers_full_investigation(assistant_text: str) -> bool:
-    """True when the assistant closer is the canonical full-investigation offer.
+    """True when the assistant Want-me-to closer offers a full investigation.
 
-    Matches :meth:`PendingInvestigationOffer.want_me_to_body` via the shared
-    Want-me-to extractor — not a broad ``investigat`` scrape.
+    Accepts the canonical ``run a full investigation`` and close variants such
+    as ``kick off a full investigation…`` (dogfood). Rejects vendor
+    ``investigate X in Slack`` closers and schedule-only offers.
     """
     offer = offer_from_assistant_content(assistant_text)
     if not offer:
         return False
-    return _INVESTIGATION_WANT_ME_TO_BODY in offer.lower()
+    lowered = offer.lower()
+    if _FULL_INVESTIGATION_MARKER not in lowered:
+        return False
+    if any(marker in lowered for marker in _SCHEDULE_OFFER_MARKERS):
+        return False
+    return True
+
+
+def is_schedule_only_want_me_to(assistant_text: str) -> bool:
+    """True when the closer is a schedule offer (leave it for PendingScheduleOffer)."""
+    offer = offer_from_assistant_content(assistant_text)
+    if not offer:
+        return False
+    lowered = offer.lower()
+    if _FULL_INVESTIGATION_MARKER in lowered:
+        return False
+    return any(marker in lowered for marker in _SCHEDULE_OFFER_MARKERS)
+
+
+def ensure_canonical_investigation_closer(assistant_text: str) -> str:
+    """Force the gather-answer closer to the canonical investigate Want-me-to.
+
+    Dogfood failure: dual paste-alert / ``/integrations setup`` menus left
+    ``yes`` re-gathering or opening setup instead of ``investigation_start``.
+    Schedule-only closers are left untouched.
+    """
+    text = assistant_text if isinstance(assistant_text, str) else ""
+    if is_schedule_only_want_me_to(text):
+        return text
+    return replace_want_me_to_body(text, _INVESTIGATION_WANT_ME_TO_BODY)
 
 
 def synthesize_investigation_alert_text(
@@ -222,7 +262,7 @@ def arm_pending_investigation_offer(
     assistant_text: str,
     observation: str | None = None,
 ) -> PendingInvestigationOffer | None:
-    """Arm session.pending_investigation_offer after a canonical investigate closer.
+    """Arm session.pending_investigation_offer after a full-investigation closer.
 
     ``alert_text`` is synthesized from the diagnostic user text + gather
     evidence (structured), not scraped from assistant prose.
@@ -240,6 +280,41 @@ def arm_pending_investigation_offer(
     return offer
 
 
+def finalize_gather_investigation_offer(
+    session: Any,
+    *,
+    user_text: str,
+    assistant_text: str,
+    observation: str | None = None,
+) -> tuple[str, PendingInvestigationOffer | None]:
+    """Normalize gather closer + arm pending investigate accept.
+
+    Returns ``(response_shown_to_user, offer_or_none)``.
+    """
+    normalized = ensure_canonical_investigation_closer(assistant_text)
+    offer = arm_pending_investigation_offer(
+        session,
+        user_text=user_text,
+        assistant_text=normalized,
+        observation=observation,
+    )
+    _sync_last_assistant_message(session, normalized)
+    return normalized, offer
+
+
+def _sync_last_assistant_message(session: Any, text: str) -> None:
+    messages = getattr(session, "cli_agent_messages", None)
+    if not messages:
+        return
+    try:
+        role, _prev = messages[-1]
+    except (TypeError, ValueError, IndexError):
+        return
+    if role != "assistant":
+        return
+    messages[-1] = ("assistant", text)
+
+
 __all__ = [
     "INVESTIGATION_ACCEPT_MARKER",
     "DispatchablePendingOffer",
@@ -249,8 +324,11 @@ __all__ = [
     "assistant_offers_full_investigation",
     "clear_competing_pending_offers",
     "consume_confirmed_pending_offer",
+    "ensure_canonical_investigation_closer",
+    "finalize_gather_investigation_offer",
     "first_pending_offer",
     "is_pending_offer_confirmation",
+    "is_schedule_only_want_me_to",
     "parse_investigation_accept_message",
     "synthesize_investigation_alert_text",
 ]
