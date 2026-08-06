@@ -39,6 +39,18 @@ class StructuredOutputClient:
             raise
 
 
+def json_schema_for_structured_output(model: type[BaseModel]) -> dict[str, Any]:
+    """Build a strict JSON Schema for ``model`` (no undeclared fields).
+
+    ``additionalProperties: False`` is required by OpenAI's ``strict`` json_schema
+    mode and is what makes Gemini's native ``responseSchema`` reject stray fields
+    rather than silently returning a permissive object.
+    """
+    schema = model.model_json_schema()
+    schema["additionalProperties"] = False
+    return schema
+
+
 def safe_json_loads(payload: str) -> Any:
     try:
         return json.loads(payload)
