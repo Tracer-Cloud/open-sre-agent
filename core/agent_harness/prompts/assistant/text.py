@@ -195,7 +195,7 @@ INTERACTION_RULES = (
     "**Want me to:** run a full investigation — that exact phrase, once, as "
     "the final line. Do NOT offer paste-an-alert, /integrations setup, or a "
     "dual menu instead of that closer (the runtime arms a structured accept on "
-    "it; dual closers break bare yes). Skip the offer only when the evidence "
+    "it, dual closers break bare yes). Skip the offer only when the evidence "
     "already resolves the question or an investigation just ran.\n\n"
 )
 
