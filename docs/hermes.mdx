@@ -1,14 +1,14 @@
 ---
 title: "Hermes log monitoring"
-description: "Tail Hermes errors.log, classify incidents, alert on Telegram; run offline classifier regression tests, then try a local watch demo."
+description: "Tail Hermes errors.log, classify incidents, alert on Telegram or Rocket.Chat; run offline classifier regression tests, then try a local watch demo."
 ---
 
-OpenSRE can **watch the log file written by a [Hermes](https://github.com/NousResearch/hermes-agent) deployment** (typically `errors.log`), turn new lines into structured incidents, optionally **deduplicate and escalate** them, and deliver alerts to **Telegram**. This page is about that **log tail + classifier + delivery** path — separate from OpenSRE’s own runtime logs.
+OpenSRE can **watch the log file written by a [Hermes](https://github.com/NousResearch/hermes-agent) deployment** (typically `errors.log`), turn new lines into structured incidents, optionally **deduplicate and escalate** them, and deliver alerts to **Telegram or Rocket.Chat**. This page is about that **log tail + classifier + delivery** path — separate from OpenSRE’s own runtime logs.
 
 Developer workflow: the **Hermes synthetic suite** under `tests/synthetic/hermes/` runs **offline** classifier checks (no LLM, no live infra); you can run that first, then **watch** a bundled scenario `errors.log` with `opensre hermes watch` as a small local demo. **Optional:** enable **`--investigate`** to attach the full OpenSRE RCA pipeline for **HIGH** / **CRITICAL** incidents ([quickstart](/quickstart)).
 
 <Note>
-Telegram delivery uses the same credential model as the rest of OpenSRE. Configure it once with `opensre integrations setup telegram` (or `opensre onboard`) — `hermes watch` resolves the token from the integration store, environment, or keyring. You can also set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_DEFAULT_CHAT_ID` directly, or pass `--chat-id`. See [Telegram](/messaging/telegram).
+Delivery uses the same credential model as the rest of OpenSRE, for either provider. Telegram: configure once with `opensre integrations setup telegram` (or `opensre onboard`) — `hermes watch` resolves the token from the integration store, environment, or keyring; set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_DEFAULT_CHAT_ID` directly, or pass `--chat-id`. Rocket.Chat: pass `--provider rocketchat` and configure via `opensre integrations setup rocketchat` or `ROCKETCHAT_*` env vars. See [Telegram](/messaging/telegram) and [Rocket.Chat](/messaging/rocketchat).
 </Note>
 
 ---
@@ -86,17 +86,18 @@ Example **Telegram** output when replaying that fixture (critical exit, tracebac
 
 **Why you might see no Telegram:** `warning_burst` needs **five** warnings from the same logger within **60 seconds** (`IncidentClassifier` defaults). Several synthetic scenarios set a lower threshold in `scenario.yml` for **pytest only**; the CLI watcher ignores that file. For example `000-telegram-polling-conflict` expects bursts of **three** warnings — the suite passes, but **`hermes watch` on that file emits no `warning_burst` incidents**, so nothing is sent. Use a log with hard errors (like `002-*`) or your real `errors.log` once Hermes is writing enough warnings.
 
-Correlator **dedup** can also reduce multiple Telegram sends for the same fingerprint; check shutdown line `hermes-watch: correlator metrics delivered=…` — if `delivered=0`, the classifier did not emit any routable incidents for that run.
+Correlator **dedup** can also reduce multiple deliveries (either provider) for the same fingerprint; check shutdown line `hermes-watch: correlator metrics delivered=…` — if `delivered=0`, the classifier did not emit any routable incidents for that run.
 
 ### Common options
 
 | Flag | Purpose |
 |------|---------|
 | `--log-path PATH` | Hermes log file (defaults to `HERMES_LOG_PATH` expansion or `~/.hermes/logs/errors.log`) |
-| `--chat-id ID` | Overrides `TELEGRAM_DEFAULT_CHAT_ID` for this run |
+| `--provider telegram\|rocketchat` | Delivery provider (default `telegram`) |
+| `--chat-id ID` | Overrides the provider's default destination (`TELEGRAM_DEFAULT_CHAT_ID` or `ROCKETCHAT_DEFAULT_CHANNEL`) for this run |
 | `--cooldown-seconds N` | Per-fingerprint cooldown before the same incident is sent again (default `300`) |
 | `--from-start` | Replay the file from the beginning, then tail |
-| `--investigate` / `--no-investigate` | Run an OpenSRE RCA for `HIGH` / `CRITICAL` incidents and append the summary to Telegram |
+| `--investigate` / `--no-investigate` | Run an OpenSRE RCA for `HIGH` / `CRITICAL` incidents and append the summary to the delivered message |
 | `--correlate` / `--no-correlate` | Route through the correlator (dedup, escalation, routing). Default: **on** |
 | `--dedup-window-seconds` | Correlator dedup window when `--correlate` is on |
 | `--escalation-threshold` / `--escalation-window-seconds` | Repeat-hit escalation knobs when `--correlate` is on |
@@ -106,7 +107,9 @@ Correlator **dedup** can also reduce multiple Telegram sends for the same finger
 | Variable | Role |
 |----------|------|
 | `TELEGRAM_BOT_TOKEN` | Bot token, unless already configured via `opensre integrations setup telegram` / `onboard` (see [Telegram](/messaging/telegram)) |
-| `TELEGRAM_DEFAULT_CHAT_ID` | Default destination when `--chat-id` is omitted |
+| `TELEGRAM_DEFAULT_CHAT_ID` | Default Telegram destination when `--chat-id` is omitted |
+| `ROCKETCHAT_*` | Rocket.Chat token or webhook credentials, used when `--provider rocketchat` (see [Rocket.Chat](/messaging/rocketchat)) |
+| `ROCKETCHAT_DEFAULT_CHANNEL` | Default Rocket.Chat destination when `--chat-id` is omitted |
 | `HERMES_LOG_PATH` | Default log path when `--log-path` is omitted |
 | `OPENSRE_HERMES_INVESTIGATE` | If set to `1` / `true` / `yes` / `on`, enables investigation when the CLI does not pass `--investigate` / `--no-investigate` |
 
@@ -120,7 +123,7 @@ For production on-call, you normally run **one long-lived watcher** with the RCA
 uv run opensre hermes watch --investigate
 ```
 
-Configure **LLM + integrations** as for any OpenSRE investigation ([quickstart](/quickstart)). When the classifier emits **HIGH** or **CRITICAL** incidents, each qualifying incident triggers **`run_investigation`** via the Telegram sink. Work runs on a **bounded thread pool** with a **timeout** so log tailing stays responsive; **MEDIUM** and lower stay on a lighter notification path by default.
+Configure **LLM + integrations** as for any OpenSRE investigation ([quickstart](/quickstart)). When the classifier emits **HIGH** or **CRITICAL** incidents, each qualifying incident triggers **`run_investigation`** via the sink, regardless of `--provider`. Work runs on a **bounded thread pool** with a **timeout** so log tailing stays responsive; **MEDIUM** and lower stay on a lighter notification path by default.
 
 For **ad hoc** Hermes log context during **another** investigation (for example Grafana-driven RCA), use **`get_hermes_logs`** below — it samples the log and does not replace a long-running **`opensre hermes watch`** for continuous classification.
 

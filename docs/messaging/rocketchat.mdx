@@ -226,7 +226,19 @@ CLI:
 opensre watchdog --pid <pid> --max-cpu 80 --provider rocketchat --chat-id "#alerts"
 ```
 
-`--chat-id` overrides the configured `default_channel` (token mode) or is optional in webhook-only mode (the webhook's destination is fixed). Alarms require token credentials with a resolvable channel, or a configured incoming webhook — the same rule as scheduled deliveries. Cooldown suppresses repeat alarms for the same threshold (`--cooldown`, default 5 minutes).
+`--chat-id` overrides the configured `default_channel` (token mode) or is optional in webhook-only mode (the webhook's destination is fixed). Unlike scheduled deliveries (cron, Sentry digest), watchdog alarms accept **either** token credentials with a resolvable channel **or** a configured incoming webhook — there is no fixed `--chat-id` requirement forcing token-only mode here. Cooldown suppresses repeat alarms for the same threshold (`--cooldown`, default 5 minutes).
+
+---
+
+## Hermes incident escalation
+
+`opensre hermes watch` (live-tail Hermes error logs, classify incidents, escalate) can deliver to Rocket.Chat instead of Telegram:
+
+```bash
+opensre hermes watch --provider rocketchat --chat-id "#incidents"
+```
+
+Same credential rule as watchdog alarms above (token mode with a channel, or a configured webhook), and the same per-incident-fingerprint cooldown (`--cooldown-seconds`). See [Hermes](/hermes) for the full command reference.
 
 ---
 
