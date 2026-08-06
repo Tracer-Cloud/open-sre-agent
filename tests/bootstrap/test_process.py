@@ -189,3 +189,32 @@ def test_gateway_reports_missing_capabilities_at_boot(monkeypatch: pytest.Monkey
 
     # Assert
     assert warned == ["gateway kubectl missing"]
+
+
+def test_scheduled_command_profile_dispatches_without_touching_sentry(monkeypatch) -> None:
+    # Arrange: cron / digest / report commands run inside an already-booted CLI
+    # process. They need the runners that dispatch scheduled work, but Sentry is
+    # the CLI's to own (its update path tolerates a missing SDK).
+    from bootstrap import process
+
+    ran: list[str] = []
+
+    def _record(name: str):
+        def _step() -> None:
+            ran.append(name)
+
+        return _step
+
+    monkeypatch.setattr(process, "bootstrap_opensre_env_once", lambda **_kw: ran.append("env"))
+    monkeypatch.setattr(process, "install_harness_adapters", _record("adapters"))
+    monkeypatch.setattr(process, "install_scheduler_runners", _record("runners"))
+    monkeypatch.setattr(
+        "platform.observability.errors.sentry.init_sentry",
+        lambda **_kw: ran.append("sentry"),
+    )
+
+    # Act
+    process.configure_process(process.SCHEDULED_COMMAND_PROFILE)
+
+    # Assert
+    assert ran == ["env", "adapters", "runners"]

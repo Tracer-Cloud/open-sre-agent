@@ -11,7 +11,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from bootstrap.adapters import install_harness_adapters, install_scheduler_runners
+from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
 from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
 from surfaces.cli.commands.cron import _validate_cron_and_timezone
 
@@ -242,8 +242,7 @@ def sentry_uptime_watch_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    install_harness_adapters()
-    install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_UPTIME_WATCH:
         _console.print(f"[red]Error: Sentry uptime watch task {task_id} not found.[/red]")
@@ -272,8 +271,7 @@ def sentry_digest_run(project_slug: str) -> None:
     """Run the morning digest once and print the report to stdout."""
     from platform.scheduler.agent_runner import invoke_agent_runner
 
-    install_harness_adapters()
-    install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     payload: dict[str, str] = {
         "source": "cli_sentry_morning_digest",
         "stats_period": "24h",
@@ -436,8 +434,7 @@ def sentry_digest_schedule_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    install_harness_adapters()
-    install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_MORNING_DIGEST:
         _console.print(f"[red]Error: Sentry digest task {task_id} not found.[/red]")

@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import Any
 
-from bootstrap.adapters import install_harness_adapters, install_scheduler_runners
+from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
 from platform.scheduler.loop_constants import LOOP_PROMPT_PARAM
 from platform.scheduler.runner import start_background_scheduler
 from platform.scheduler.types import ScheduledTask
@@ -54,8 +54,7 @@ def shutdown_loop_scheduler() -> None:
 def _start_locked() -> int:
     global _scheduler, _task_count
 
-    install_harness_adapters()
-    install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     scheduler, task_count = start_background_scheduler(task_filter=_is_prompt_loop_task)
     _scheduler = scheduler
     _task_count = task_count

@@ -33,6 +33,7 @@ class ProcessName(StrEnum):
     GATEWAY = "gateway"
     WEB = "web"
     SCHEDULER_WORKER = "scheduler_worker"
+    SCHEDULED_COMMAND = "scheduled_command"
     EMBEDDED = "embedded"
 
 
@@ -100,6 +101,13 @@ SCHEDULER_WORKER_PROFILE: Final = ProcessProfile(
         }
     ),
     sentry_entrypoint=SentryEntrypoint.SCHEDULER,
+)
+SCHEDULED_COMMAND_PROFILE: Final = ProcessProfile(
+    name=ProcessName.SCHEDULED_COMMAND,
+    # A CLI command that creates or dispatches scheduled work (cron, digests,
+    # metric reports). It runs inside an already-booted CLI process, so Sentry
+    # stays with the CLI; it needs the runners scheduled tasks dispatch through.
+    steps=frozenset({BootStep.ENV, BootStep.HARNESS_ADAPTERS, BootStep.SCHEDULER_RUNNERS}),
 )
 EMBEDDED_PROFILE: Final = ProcessProfile(
     name=ProcessName.EMBEDDED,
@@ -191,6 +199,7 @@ __all__ = [
     "GATEWAY_PROFILE",
     "ProcessName",
     "ProcessProfile",
+    "SCHEDULED_COMMAND_PROFILE",
     "SCHEDULER_WORKER_PROFILE",
     "SentryEntrypoint",
     "WEB_PROFILE",
