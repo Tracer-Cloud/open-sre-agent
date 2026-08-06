@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -96,38 +97,90 @@ def extract_text(file: SlackInboundFile, data: bytes) -> str | None:
         text = data.decode("latin-1", errors="replace")
     return _truncate(text)
 
+_ALLOWED_SLACK_HOST_SUFFIXES = (".slack.com", ".slack-edge.com")
+_ALLOWED_SLACK_HOSTS = frozenset(
+    {"files.slack.com", "slack-files.com", "downloads.slack-edge.com", "slack-edge.com"}
+)
+_MAX_REDIRECTS = 5
+
+
+def _is_allowed_slack_host(host: str) -> bool:
+    host = host.lower()
+    return host in _ALLOWED_SLACK_HOSTS or any(
+        host.endswith(suffix) for suffix in _ALLOWED_SLACK_HOST_SUFFIXES
+    )
+
 
 def download_file(file: SlackInboundFile, token: str) -> bytes | None:
     """GET a Slack ``url_private`` with the bot token; None on any failure.
 
     Slack redirects file downloads (307/308) and requires the bot token as a
-    bearer header. The response is size-capped so a huge upload cannot exhaust
-    memory (the file is dropped, not truncated, past the cap).
+    bearer header. Redirect target hosts are validated against the Slack host
+    allowlist, and the Authorization header is never forwarded across different
+    hosts. The response is size-capped so a huge upload cannot exhaust memory.
     """
     if not (file.url_private and token):
         return None
+
+    current_url = file.url_private
+    initial_parsed = urlparse(current_url)
+    initial_host = (initial_parsed.hostname or "").lower()
+
+    if not _is_allowed_slack_host(initial_host):
+        logger.warning("[slack-files] initial host %s not on allowlist; rejected", initial_host)
+        return None
+
     try:
-        with httpx.stream(
-            "GET",
-            file.url_private,
-            headers={"Authorization": f"Bearer {token}"},
-            follow_redirects=True,
-            timeout=_DOWNLOAD_TIMEOUT_SECONDS,
-        ) as response:
-            if response.status_code != httpx.codes.OK:
-                logger.warning("[slack-files] %s download HTTP %s", file.name, response.status_code)
-                return None
-            chunks: list[bytes] = []
-            total = 0
-            for chunk in response.iter_bytes():
-                total += len(chunk)
-                if total > _MAX_FILE_BYTES:
-                    logger.info(
-                        "[slack-files] %s exceeds %d bytes; skipped", file.name, _MAX_FILE_BYTES
+        with httpx.Client(timeout=_DOWNLOAD_TIMEOUT_SECONDS, follow_redirects=False) as client:
+            for _ in range(_MAX_REDIRECTS):
+                parsed = urlparse(current_url)
+                host = (parsed.hostname or "").lower()
+
+                if not _is_allowed_slack_host(host):
+                    logger.warning(
+                        "[slack-files] redirect target host %s not on allowlist; rejected", host
                     )
                     return None
-                chunks.append(chunk)
-            return b"".join(chunks)
+
+                headers: dict[str, str] = {}
+                if host == initial_host or host == "files.slack.com":
+                    headers["Authorization"] = f"Bearer {token}"
+
+                with client.stream("GET", current_url, headers=headers) as response:
+                    if response.status_code in (
+                        httpx.codes.MOVED_PERMANENTLY,
+                        httpx.codes.FOUND,
+                        httpx.codes.SEE_OTHER,
+                        httpx.codes.TEMPORARY_REDIRECT,
+                        httpx.codes.PERMANENT_REDIRECT,
+                    ):
+                        location = response.headers.get("location")
+                        if not location:
+                            return None
+                        current_url = urljoin(current_url, location)
+                        continue
+
+                    if response.status_code != httpx.codes.OK:
+                        logger.warning(
+                            "[slack-files] %s download HTTP %s", file.name, response.status_code
+                        )
+                        return None
+
+                    chunks: list[bytes] = []
+                    total = 0
+                    for chunk in response.iter_bytes():
+                        total += len(chunk)
+                        if total > _MAX_FILE_BYTES:
+                            logger.info(
+                                "[slack-files] %s exceeds %d bytes; skipped",
+                                file.name,
+                                _MAX_FILE_BYTES,
+                            )
+                            return None
+                        chunks.append(chunk)
+                    return b"".join(chunks)
+            logger.warning("[slack-files] too many redirects downloading %s", file.name)
+            return None
     except httpx.HTTPError as exc:
         logger.warning("[slack-files] %s download failed: %s", file.name, type(exc).__name__)
         return None

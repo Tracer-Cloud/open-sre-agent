@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from gateway.transports.slack.attachments import (
     build_files_context,
     extract_text,
@@ -107,3 +109,33 @@ def test_build_files_context_reports_failed_download() -> None:
 
 def test_build_files_context_empty_when_no_files() -> None:
     assert build_files_context((), token="test-bot-token") == ""
+
+
+def test_download_file_rejects_non_allowlisted_host() -> None:
+    from gateway.transports.slack.attachments import download_file
+    file = SlackInboundFile(
+        id="F1", name="log.txt", mimetype="text/plain", size=10, url_private="https://evil.com/file"
+    )
+    assert download_file(file, "token") is None
+
+
+def test_download_file_rejects_redirect_to_non_allowlisted_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlib import contextmanager
+    from collections.abc import Iterator
+    import httpx
+    from gateway.transports.slack.attachments import download_file
+
+    @contextmanager
+    def mock_stream(self: object, method: str, url: str, **kwargs: object) -> Iterator[httpx.Response]:
+        if "files.slack.com" in url:
+            yield httpx.Response(302, headers={"Location": "https://malicious.com/file"})
+        else:
+            yield httpx.Response(200, content=b"stolen")
+
+    monkeypatch.setattr("httpx.Client.stream", mock_stream)
+
+    file = SlackInboundFile(
+        id="F1", name="log.txt", mimetype="text/plain", size=10, url_private="https://files.slack.com/file"
+    )
+    assert download_file(file, "token") is None
+
