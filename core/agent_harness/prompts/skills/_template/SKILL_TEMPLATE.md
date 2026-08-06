@@ -67,6 +67,26 @@ Steps, in order:
    first or only tool — steps 1–3 must have run first.>
 -->
 
+<!-- Multi-step skills must also include the step-labeling block below (house
+     UX style), with N replaced by the skill's total step count. The terminal
+     renders this narration live, turning the tool stream into a readable
+     story instead of a wall of raw commands:
+
+Step labeling rules (UX):
+- Before every numbered step's tool calls, emit this exact header format as
+  assistant text in the SAME response as the tool calls, then one short
+  status sentence:
+    ### [n/N] <step name>
+    <One-sentence status or question.>
+- Never start tool calls for a new step without its header.
+- After a step's tool results are in, state its outcome in one line (start
+  it with ✓ on success, ✗ plus what failed otherwise) before the next
+  step's header.
+- Reuse the step's own name from this skill as the phase name and its own
+  number as n, even when a step is trivial or already satisfied (a ✓ line
+  with no tool calls is fine); never renumber mid-run.
+-->
+
 Compact examples:
 1) "<literal user request>"
    → <tool>(<args>)

@@ -1,9 +1,11 @@
-"""Loading a skill must not print the skill body.
+"""Loading a skill must not print anything through the generic formatter.
 
-``skill_view`` returns the full recipe so the *model* can follow it. With no
-``summary`` in the result, the generic formatter fell through to dumping
-``skill_view input: {...}`` plus the entire 5k-character body — escaped JSON,
-box-drawing characters and all — onto the user's screen before the briefing.
+``skill_view`` returns the full recipe so the *model* can follow it. The
+user-facing event ("Skill <name>" / "↳ Skill activated") is rendered live by
+the surface's tool-event observer, so the end-of-turn generic formatter must
+stay silent: any output here would double-print the activation, and falling
+through to the payload would dump the entire 5k-character skill body —
+escaped JSON, box-drawing characters and all — onto the user's screen.
 """
 
 from __future__ import annotations
@@ -21,8 +23,8 @@ def _skill_view_result() -> dict[str, object]:
     return execute_skill_view_tool({"name": "morning-report"}, _NoContext())
 
 
-def test_loading_a_skill_reports_a_line_not_the_body() -> None:
-    """The user sees that a skill loaded, never its contents."""
+def test_loading_a_skill_emits_nothing_from_the_generic_formatter() -> None:
+    """The observer owns the activation event; the formatter must not duplicate it."""
     # Arrange
     import json
 
@@ -39,7 +41,4 @@ def test_loading_a_skill_reports_a_line_not_the_body() -> None:
     )
 
     # Assert
-    assert "morning-report" in shown
-    assert "CDATA" not in shown, "the skill body reached the user"
-    assert "shell_run(command=" not in shown
-    assert len(shown) < 200, f"expected a short line, got {len(shown)} chars"
+    assert shown == "", f"expected silence, got {len(shown)} chars"

@@ -164,6 +164,13 @@ def runtime_event_from_tuple(kind: str, data: dict[str, Any]) -> RuntimeEvent | 
             has_tool_calls=bool(payload.get("has_tool_calls", False)),
             data=payload,
         )
+    if kind == "message_update":
+        return MessageUpdateEvent(
+            message=payload.get("message"),
+            delta=str(payload.get("content") or ""),
+            iteration=int(payload.get("iteration", -1)),
+            data=payload,
+        )
     if kind == "tool_start":
         args = payload.get("input")
         return ToolExecutionStartEvent(
@@ -206,6 +213,15 @@ def tuple_payload_from_event(event: RuntimeEvent) -> tuple[str, dict[str, Any]] 
         return "agent_start", dict(event.data)
     if isinstance(event, TurnStartEvent):
         return "llm_start", {"iteration": event.iteration, **event.data}
+    if isinstance(event, MessageUpdateEvent):
+        return (
+            "message_update",
+            {
+                "content": event.delta or "",
+                "iteration": event.iteration,
+                **event.data,
+            },
+        )
     if isinstance(event, ToolExecutionStartEvent):
         return (
             "tool_start",

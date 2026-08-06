@@ -392,6 +392,21 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
     cached_load_skills_block.cache_clear()
 
 
+def test_skill_matches_take_priority_over_generic_docs_handoff() -> None:
+    cached_load_skills_block.cache_clear()
+
+    index = load_skills_index()
+    body = load_skill_body("github-ci-fix-onboarding")
+    prompt = build_action_system_prompt(_ctx())
+
+    assert "Skill matches outrank the generic docs/how-to assistant handoff" in index
+    assert '"onboard me"' in index
+    assert "Can you onboard me on the CI/CD flow?" in body
+    assert "Generic docs routing is a fallback, not the first choice" in prompt
+    assert "Action-shaped wording" in prompt
+    cached_load_skills_block.cache_clear()
+
+
 def test_action_system_prompt_includes_context_blocks() -> None:
     prompt = build_action_system_prompt(
         _ctx(

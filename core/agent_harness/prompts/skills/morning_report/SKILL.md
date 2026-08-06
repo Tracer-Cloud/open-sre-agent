@@ -26,6 +26,23 @@ tags, CDATA blocks, or angle-bracket markup to the user, and NEVER let a raw
 plain-text briefing produced in the final step. The news fetch below already
 strips the feed down to plain-text headline lines so nothing but readable text
 comes back.
+STEP LABELING RULES (UX) — the fetches below run quiet, so narrate the 5
+steps:
+- Before every step's tool calls, emit this exact header format as assistant
+  text in the SAME response as the tool calls, then one short status
+  sentence:
+    ### [n/5] <step name>
+    <One-sentence status.>
+- Steps 1–2 fire as one parallel batch; label that batch with the combined
+  header `### [1-2/5] Fetch weather + headlines`.
+- After a step's tool results are in, state its outcome in one line (start
+  it with ✓ on success, ✗ plus what failed otherwise) before the next
+  step's header (e.g. `### [4/5] Deliver to Slack`).
+- Use each step's own number as n; never renumber mid-run. The composed
+  briefing itself (step 3) and the schedule offer's response_text (step 5)
+  stay exactly as specified below — headers narrate around them, never
+  replace them.
+
 Steps, in order:
 1) Fetch today's weather with shell_run. Use quiet=true so the $ curl line and
    raw stdout stay off the user's screen — they only need the composed briefing

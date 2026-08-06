@@ -891,7 +891,7 @@ def _validation_result_from_get_me_profile_counts(
     scope_me = (user_name,) if user_name else ()
     success_detail = (
         f"OK @{user_name or 'unknown'}; repos={profile_count}; "
-        f"owners={','.join(scope_me) if scope_me else '-'}; "
+        f"owners={', '.join(scope_me) if scope_me else '-'}; "
         f"examples=-; mcp_tools={len(tool_names)} | {note}"
     )
     return GitHubMCPValidationResult(
@@ -958,8 +958,8 @@ def _validation_success_from_repo_probe_result(
             f" | listing had no parseable repos ({repo_tool} empty or unexpected response shape)"
         )
     success_detail = (
-        f"OK @{user_name or 'unknown'}; repos={repo_count}; owners={','.join(scope) if scope else '-'}; "
-        f"examples={','.join(samples[:3]) if samples else '-'}; mcp_tools={len(tool_names)}"
+        f"OK @{user_name or 'unknown'}; repos={repo_count}; owners={', '.join(scope) if scope else '-'}; "
+        f"examples={', '.join(samples[:3]) if samples else '-'}; mcp_tools={len(tool_names)}"
         f"{suffix}"
     )
     return GitHubMCPValidationResult(
