@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from core.agent.handle_conclusion import ConclusionHandler
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.context_budget import (
@@ -42,7 +43,7 @@ from core.execution import (
     public_tool_input,
 )
 from core.llm.types import ToolCall
-from core.messages import MessageMapper, UserRuntimeMessage
+from core.messages import MessageMapper
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
 from platform.observability.trace.redaction import redact_sensitive
@@ -85,6 +86,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._hit_cap = True
         self._terminated_by_tool = False
         self._iterations_used = 0
+        self._conclusion = ConclusionHandler(host, self._messages, self._runtime_tools)
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -134,6 +136,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             )
         self._messages.append(assistant_message)
 
+        # If the response has no further actions (tool calls), execute the conclusion handler to decide if the agent should continue or stop.
         if not response.has_tool_calls:
             return self._handle_conclusion(response, assistant_message, iteration)
         return self._observe(response, assistant_message, iteration)
@@ -179,49 +182,16 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
 
     def _handle_conclusion(self, response: Any, assistant_message: Any, iteration: int) -> bool:
         """No tool calls: accept the answer (maybe after a follow-up) or nudge and continue."""
-        accept, nudge = self._host._should_accept_conclusion(
+        accepted = self._conclusion.handle(
+            response,
+            assistant_message,
+            iteration,
             evidence_count=len(self._executed),
-            iteration=iteration,
-            final_text=response.content or "",
         )
-        if accept:
-            follow_up = self._host._pop_follow_up_message()
-            if follow_up is not None:
-                self._messages.append(UserRuntimeMessage(content=follow_up))
-                self._host._emit_runtime(
-                    TurnEndEvent(
-                        iteration=iteration,
-                        message=assistant_message,
-                        data={"accepted": False, "queued_follow_up": True},
-                    )
-                )
-                return False
+        if accepted:
             self._final_text = response.content or ""
             self._hit_cap = False
-            self._host._emit_runtime(
-                TurnEndEvent(
-                    iteration=iteration,
-                    message=assistant_message,
-                    data={"accepted": True},
-                )
-            )
-            return True
-        if nudge is None:
-            raise ValueError(
-                f"{type(self._host).__name__}._should_accept_conclusion returned "
-                "(False, None) — a nudge string is required when rejecting "
-                "the conclusion, otherwise the LLM will loop on an unchanged "
-                "message history until max_iterations."
-            )
-        self._messages.append(UserRuntimeMessage(content=nudge))
-        self._host._emit_runtime(
-            TurnEndEvent(
-                iteration=iteration,
-                message=assistant_message,
-                data={"accepted": False, "nudge": True},
-            )
-        )
-        return False
+        return accepted
 
     def _observe(self, response: Any, assistant_message: Any, iteration: int) -> bool:
         """Execute the requested tools, record results, emit events. Return True if a tool terminated."""

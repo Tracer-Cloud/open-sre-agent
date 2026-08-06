@@ -149,6 +149,31 @@ def test_ambient_column_no_warning_when_all_healthy(monkeypatch: object) -> None
     assert "⚠" not in text
 
 
+def test_ambient_column_shows_skill_count(monkeypatch: object) -> None:
+    monkeypatch.setattr(banner_state_module, "_load_integration_health", lambda: [])
+    monkeypatch.setattr(banner_state_module, "_is_alert_listener_active", lambda: False)
+    monkeypatch.setattr(banner_state_module, "_count_loaded_skills", lambda: 7)
+
+    text = banner_state_module._build_ambient_right_column().plain
+
+    assert "Skills (7) loaded into cyberdeck" in text
+
+
+def test_count_loaded_skills_survives_loader_failure(monkeypatch: object) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _fail_skills_loader(name: str, *args: object, **kwargs: object) -> object:
+        if name == "core.agent_harness.prompts.skills.loader":
+            raise ImportError("simulated heavy import failure")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fail_skills_loader)
+
+    assert banner_state_module._count_loaded_skills() == 0
+
+
 def test_ready_box_expands_to_console_width() -> None:
     console_file = io.StringIO()
     console = Console(file=console_file, force_terminal=False, highlight=False, width=120)

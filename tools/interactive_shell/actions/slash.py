@@ -71,7 +71,17 @@ def _slash_drives_interactive_picker(
     return (name, slash_args[0].lower()) in _INTERACTIVE_PICKER_SUBCOMMANDS
 
 
-def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs: Any) -> bool:
+# Cap the failure excerpt fed back to the model: enough for a usage/typo
+# message, small enough to never bloat the observation.
+_MAX_OBSERVED_ERROR_CHARS = 700
+# Success output gets more room: tables (e.g. ``/cron list`` task ids) must
+# survive so the model can chain a data-dependent follow-up call.
+_MAX_OBSERVED_OUTPUT_CHARS = 2000
+
+
+def _dispatch_and_translate_exit(
+    command: str, ctx: ActionToolContext, **kwargs: Any
+) -> bool | dict[str, Any]:
     should_continue = ctx.slash_ports.dispatch(
         command,
         session=ctx.session,
@@ -82,6 +92,40 @@ def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs:
     )
     if not should_continue and ctx.request_exit is not None:
         ctx.request_exit()
+    return _slash_observation(ctx, command)
+
+
+def _slash_observation(ctx: ActionToolContext, command: str) -> bool | dict[str, Any]:
+    """Build the model-facing result from the slash row this dispatch recorded.
+
+    ``dispatch_slash`` records a history row for the command with an outcome
+    ``response_text`` (captured console output, or an error/usage excerpt when
+    the handler or a delegated CLI subprocess fails). Without reading that row
+    back, the tool observation is always ``{"ok": true}``: the agent cannot
+    react to a failure (e.g. retry ``/cron remove`` with the task id it
+    forgot) and cannot chain a data-dependent follow-up (e.g. read task ids
+    out of ``/cron list``). Rows from earlier turns are not evidence: only
+    look at what THIS turn appended.
+    """
+    history = getattr(ctx.session, "history", None) or []
+    rows = history[getattr(ctx, "history_start", 0) :]
+    for row in reversed(rows):
+        if not isinstance(row, dict) or row.get("type") != "slash":
+            continue
+        if row.get("text") != command:
+            continue
+        if row.get("ok", True):
+            output = str(row.get("response_text") or "").strip()
+            if not output:
+                return True
+            return {"ok": True, "output": output[:_MAX_OBSERVED_OUTPUT_CHARS]}
+        error = str(row.get("response_text") or "").strip()
+        return {
+            "ok": False,
+            "command": command,
+            "error": error[:_MAX_OBSERVED_ERROR_CHARS] or f"{command} failed (non-zero exit code)",
+        }
+    # No row found (recording deferred or handler-owned): assume success.
     return True
 
 
@@ -107,7 +151,7 @@ def _slash_line_parts(stripped: str) -> list[str]:
         return stripped.split()
 
 
-def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
+def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool | dict[str, Any]:
     if ctx.slash_ports is None:
         raise RuntimeError("slash tool requires slash runtime ports")
     command = str(args.get("command", "")).strip()
@@ -177,13 +221,13 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     # this banner is the only indication of what is about to run.
     if not exclusive_stdin_active(ctx.session):
         ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
-    _dispatch_and_translate_exit(
+    observation = _dispatch_and_translate_exit(
         stripped,
         ctx,
         policy_precleared=True,
     )
     agent_turn_executed_slashes(ctx.session).add(stripped)
-    return True
+    return observation
 
 
 def run_slash(*, command: str, args: list[str] | None = None, context: Any) -> dict[str, Any]:

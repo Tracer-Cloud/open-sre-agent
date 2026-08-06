@@ -7,12 +7,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
-    ignore:
-      # cryptography 49+ ships no x86-64 macOS wheel, so the darwin-x64 release
-      # binary is built from source against a mismatched OpenSSL and crashes at
-      # startup. The pin in pyproject.toml must stay at 48.x.
-      - dependency-name: "cryptography"
-        versions: [">=49"]
 
   - package-ecosystem: "npm"
     directory: "/docs"

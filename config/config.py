@@ -25,29 +25,162 @@ from config.llm_auth.auth_method import (
 from config.llm_auth.credentials import status as credential_status
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
+    PROVIDER_BY_VALUE,
     SUPPORTED_PROVIDER_VALUES,
+)
+from config.llm_models import (
+    ANTHROPIC_CLASSIFICATION_MODEL,
+    ANTHROPIC_LLM_CONFIG,
+    ANTHROPIC_REASONING_MODEL,
+    ANTHROPIC_TOOLCALL_MODEL,
+    AZURE_OPENAI_CLASSIFICATION_MODEL,
+    AZURE_OPENAI_LLM_CONFIG,
+    AZURE_OPENAI_REASONING_MODEL,
+    AZURE_OPENAI_TOOLCALL_MODEL,
+    BEDROCK_CLASSIFICATION_MODEL,
+    BEDROCK_LLM_CONFIG,
+    BEDROCK_REASONING_MODEL,
+    BEDROCK_TOOLCALL_MODEL,
+    DEEPSEEK_BASE_URL,
+    DEEPSEEK_CLASSIFICATION_MODEL,
+    DEEPSEEK_LLM_CONFIG,
+    DEEPSEEK_REASONING_MODEL,
+    DEEPSEEK_TOOLCALL_MODEL,
+    DEFAULT_AZURE_OPENAI_API_VERSION,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_OLLAMA_HOST,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_VERTEX_AI_LOCATION,
+    GEMINI_BASE_URL,
+    GEMINI_CLASSIFICATION_MODEL,
+    GEMINI_LLM_CONFIG,
+    GEMINI_REASONING_MODEL,
+    GEMINI_TOOLCALL_MODEL,
+    GROQ_BASE_URL,
+    GROQ_CLASSIFICATION_MODEL,
+    GROQ_LLM_CONFIG,
+    GROQ_REASONING_MODEL,
+    GROQ_TOOLCALL_MODEL,
+    MINIMAX_BASE_URL,
+    MINIMAX_CLASSIFICATION_MODEL,
+    MINIMAX_LLM_CONFIG,
+    MINIMAX_REASONING_MODEL,
+    MINIMAX_TOOLCALL_MODEL,
+    NVIDIA_BASE_URL,
+    NVIDIA_CLASSIFICATION_MODEL,
+    NVIDIA_LLM_CONFIG,
+    NVIDIA_REASONING_MODEL,
+    NVIDIA_TOOLCALL_MODEL,
+    OLLAMA_LLM_CONFIG,
+    OPENAI_CLASSIFICATION_MODEL,
+    OPENAI_LLM_CONFIG,
+    OPENAI_REASONING_MODEL,
+    OPENAI_TOOLCALL_MODEL,
+    OPENROUTER_BASE_URL,
+    OPENROUTER_CLASSIFICATION_MODEL,
+    OPENROUTER_LLM_CONFIG,
+    OPENROUTER_REASONING_MODEL,
+    OPENROUTER_TOOLCALL_MODEL,
+    PROVIDER_MODEL_DEFAULTS,
+    VERTEX_AI_CLASSIFICATION_MODEL,
+    VERTEX_AI_LLM_CONFIG,
+    VERTEX_AI_REASONING_MODEL,
+    VERTEX_AI_TOOLCALL_MODEL,
+    LLMModelConfig,
 )
 from config.local_env import bootstrap_opensre_env
 from config.strict_config import StrictConfigModel
 
-
-class LLMModelConfig(StrictConfigModel):
-    """Configuration for an LLM provider's model variants.
-
-    Three tiers, ordered by capability/cost:
-    - ``reasoning_model`` — highest-capability model used for root-cause
-      diagnosis and other deep-reasoning steps (e.g. Claude Opus, GPT-5).
-    - ``classification_model`` — mid-tier model for tasks that need more
-      reasoning than a fast toolcall model but don't justify reasoning cost
-      (e.g. interactive-shell intent classification). Sonnet for Anthropic.
-    - ``toolcall_model`` — lightweight, low-latency model for simple tool
-      selection / action planning (e.g. Claude Haiku, GPT-5 mini).
-    """
-
-    reasoning_model: str
-    classification_model: str
-    toolcall_model: str
-    max_tokens: int
+__all__ = (
+    "ANTHROPIC_CLASSIFICATION_MODEL",
+    "ANTHROPIC_LLM_CONFIG",
+    "ANTHROPIC_REASONING_MODEL",
+    "ANTHROPIC_TOOLCALL_MODEL",
+    "AZURE_OPENAI_CLASSIFICATION_MODEL",
+    "AZURE_OPENAI_LLM_CONFIG",
+    "AZURE_OPENAI_REASONING_MODEL",
+    "AZURE_OPENAI_TOOLCALL_MODEL",
+    "BEDROCK_CLASSIFICATION_MODEL",
+    "BEDROCK_LLM_CONFIG",
+    "BEDROCK_REASONING_MODEL",
+    "BEDROCK_TOOLCALL_MODEL",
+    "CLERK_CONFIG_DEV",
+    "CLERK_CONFIG_PROD",
+    "CLERK_ISSUER_ENV",
+    "CLERK_JWKS_URL_ENV",
+    "ClerkConfig",
+    "DEEPSEEK_BASE_URL",
+    "DEEPSEEK_CLASSIFICATION_MODEL",
+    "DEEPSEEK_LLM_CONFIG",
+    "DEEPSEEK_REASONING_MODEL",
+    "DEEPSEEK_TOOLCALL_MODEL",
+    "DEFAULT_AZURE_OPENAI_API_VERSION",
+    "DEFAULT_MAX_TOKENS",
+    "DEFAULT_OLLAMA_HOST",
+    "DEFAULT_OLLAMA_MODEL",
+    "DEFAULT_VERTEX_AI_LOCATION",
+    "Environment",
+    "GEMINI_BASE_URL",
+    "GEMINI_CLASSIFICATION_MODEL",
+    "GEMINI_LLM_CONFIG",
+    "GEMINI_REASONING_MODEL",
+    "GEMINI_TOOLCALL_MODEL",
+    "GROQ_BASE_URL",
+    "GROQ_CLASSIFICATION_MODEL",
+    "GROQ_LLM_CONFIG",
+    "GROQ_REASONING_MODEL",
+    "GROQ_TOOLCALL_MODEL",
+    "JWT_ALGORITHM",
+    "JWKS_CACHE_TTL_SECONDS",
+    "LLMModelConfig",
+    "LLMProvider",
+    "LLMResolution",
+    "LLMSettings",
+    "LLM_PROVIDER_API_KEY_ENVS",
+    "MINIMAX_BASE_URL",
+    "MINIMAX_CLASSIFICATION_MODEL",
+    "MINIMAX_LLM_CONFIG",
+    "MINIMAX_REASONING_MODEL",
+    "MINIMAX_TOOLCALL_MODEL",
+    "NVIDIA_BASE_URL",
+    "NVIDIA_CLASSIFICATION_MODEL",
+    "NVIDIA_LLM_CONFIG",
+    "NVIDIA_REASONING_MODEL",
+    "NVIDIA_TOOLCALL_MODEL",
+    "OLLAMA_LLM_CONFIG",
+    "OPENAI_CLASSIFICATION_MODEL",
+    "OPENAI_LLM_CONFIG",
+    "OPENAI_REASONING_MODEL",
+    "OPENAI_TOOLCALL_MODEL",
+    "OPENROUTER_BASE_URL",
+    "OPENROUTER_CLASSIFICATION_MODEL",
+    "OPENROUTER_LLM_CONFIG",
+    "OPENROUTER_REASONING_MODEL",
+    "OPENROUTER_TOOLCALL_MODEL",
+    "PROVIDER_ANTHROPIC",
+    "PROVIDER_BEDROCK",
+    "PROVIDER_MODEL_DEFAULTS",
+    "PROVIDER_OLLAMA",
+    "PROVIDER_OPENAI",
+    "PROVIDER_VERTEX_AI",
+    "SLACK_CHANNEL",
+    "TRACER_BASE_URL_DEV",
+    "TRACER_BASE_URL_PROD",
+    "VERTEX_AI_CLASSIFICATION_MODEL",
+    "VERTEX_AI_LLM_CONFIG",
+    "VERTEX_AI_REASONING_MODEL",
+    "VERTEX_AI_TOOLCALL_MODEL",
+    "describe_llm_resolution",
+    "get_clerk_config_override",
+    "get_configured_llm_provider",
+    "get_environment",
+    "get_llm_provider_api_key_env",
+    "get_tracer_base_url",
+    "has_credentials_for_active_llm_provider",
+    "llm_provider_error_context",
+    "resolve_llm_settings",
+    "resolve_llm_settings_verbose",
+)
 
 
 class Environment(StrEnum):
@@ -114,87 +247,6 @@ def get_environment() -> Environment:
 JWT_ALGORITHM = "RS256"
 JWKS_CACHE_TTL_SECONDS = 3600
 
-# LLM Model Constants
-DEFAULT_MAX_TOKENS = 4096
-
-# Anthropic model constants
-ANTHROPIC_REASONING_MODEL = "claude-opus-4-7"
-ANTHROPIC_CLASSIFICATION_MODEL = "claude-sonnet-4-6"
-ANTHROPIC_TOOLCALL_MODEL = "claude-haiku-4-5-20251001"
-
-# OpenAI model constants
-# Default to GPT-5.4 mini for both reasoning and toolcall paths; override via
-# OPENAI_REASONING_MODEL / OPENAI_TOOLCALL_MODEL when needed.
-OPENAI_REASONING_MODEL = "gpt-5.4-mini"
-# Mid-tier mirrors the toolcall (mini) model by default — OpenAI's mini sits
-# between full and nano, which matches the "Sonnet-equivalent" classification
-# tier well enough; override via OPENAI_CLASSIFICATION_MODEL when needed.
-OPENAI_CLASSIFICATION_MODEL = "gpt-5.4-mini"
-OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
-
-# OpenRouter model constants
-OPENROUTER_REASONING_MODEL = "openrouter/auto"
-OPENROUTER_CLASSIFICATION_MODEL = "openrouter/auto"
-OPENROUTER_TOOLCALL_MODEL = "openrouter/auto"
-
-# DeepSeek model constants
-DEEPSEEK_REASONING_MODEL = "deepseek-v4-pro"
-DEEPSEEK_CLASSIFICATION_MODEL = "deepseek-v4-flash"
-DEEPSEEK_TOOLCALL_MODEL = "deepseek-v4-flash"
-
-# Gemini model constants (Google AI preview IDs; OpenAI-compatible endpoint)
-# UNVERIFIED PLACEHOLDER — gemini-3.1-pro-preview / gemini-3.1-flash-lite-preview are
-# forward-looking IDs that may not yet exist. Override via GEMINI_REASONING_MODEL env var.
-GEMINI_REASONING_MODEL = "gemini-3.1-pro-preview"
-GEMINI_CLASSIFICATION_MODEL = "gemini-3-flash-preview"
-GEMINI_TOOLCALL_MODEL = "gemini-3.1-flash-lite-preview"
-
-# NVIDIA NIM model constants
-# Verified safe defaults from the NVIDIA API Catalog (build.nvidia.com).
-# Override via NVIDIA_REASONING_MODEL, NVIDIA_TOOLCALL_MODEL, or NVIDIA_MODEL env vars.
-NVIDIA_REASONING_MODEL = "meta/llama-3.1-405b-instruct"
-NVIDIA_CLASSIFICATION_MODEL = "meta/llama-3.1-70b-instruct"
-NVIDIA_TOOLCALL_MODEL = "meta/llama-3.1-8b-instruct"
-
-# MiniMax model constants
-MINIMAX_REASONING_MODEL = "MiniMax-M3"
-MINIMAX_CLASSIFICATION_MODEL = "MiniMax-M2.7-highspeed"
-MINIMAX_TOOLCALL_MODEL = "MiniMax-M2.7-highspeed"
-
-# Groq model constants
-GROQ_REASONING_MODEL = "llama-3.3-70b-versatile"
-GROQ_CLASSIFICATION_MODEL = "llama-3.3-70b-versatile"
-GROQ_TOOLCALL_MODEL = "llama-3.1-8b-instant"
-
-# Azure OpenAI deployment-name defaults (must match your Azure deployment names).
-AZURE_OPENAI_REASONING_MODEL = "gpt-5.4-mini"
-AZURE_OPENAI_CLASSIFICATION_MODEL = "gpt-5.4-mini"
-AZURE_OPENAI_TOOLCALL_MODEL = "gpt-5.4-mini"
-DEFAULT_AZURE_OPENAI_API_VERSION = "2024-10-21"
-
-# Base URLs for OpenAI-compatible providers
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # no /v1 — DeepSeek serves the OpenAI-compatible API at the root path
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
-MINIMAX_BASE_URL = "https://api.minimax.io/v1"
-GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-
-# Amazon Bedrock model constants (US cross-region inference profile IDs)
-BEDROCK_REASONING_MODEL = "us.anthropic.claude-sonnet-4-6"
-BEDROCK_CLASSIFICATION_MODEL = "us.anthropic.claude-sonnet-4-6"
-BEDROCK_TOOLCALL_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-
-# Google Vertex AI model constants (Gemini models served via Vertex; ADC auth)
-VERTEX_AI_REASONING_MODEL = "gemini-2.5-pro"
-VERTEX_AI_CLASSIFICATION_MODEL = "gemini-2.5-flash"
-VERTEX_AI_TOOLCALL_MODEL = "gemini-2.5-flash-lite"
-DEFAULT_VERTEX_AI_LOCATION = "us-central1"
-
-# Ollama local model constants
-DEFAULT_OLLAMA_MODEL = "llama3.2"
-DEFAULT_OLLAMA_HOST = "http://localhost:11434"
-
 LLMProvider = Literal[
     "anthropic",
     "openai",
@@ -252,173 +304,52 @@ def _llm_api_key_payload(provider: str) -> dict[str, str]:
     return {}
 
 
+def _resolve_model_env(primary: str, default: str, legacy: str | None = None) -> str:
+    """Resolve a model id from primary env, optional legacy env, then *default*."""
+    if legacy:
+        raw = os.getenv(primary, os.getenv(legacy, default))
+    else:
+        raw = os.getenv(primary, default)
+    return (raw or "").strip() or default
+
+
+def _tiered_model_env_payload() -> dict[str, str]:
+    """Build ``{settings_key}_*_model`` keys from the model catalog + ProviderSpec envs."""
+    payload: dict[str, str] = {}
+    for defaults in PROVIDER_MODEL_DEFAULTS.values():
+        if defaults.single_model_settings:
+            continue
+        spec = PROVIDER_BY_VALUE[defaults.provider]
+        key = defaults.settings_key
+        reasoning_env = spec.model_env or f"{key.upper()}_REASONING_MODEL"
+        payload[f"{key}_reasoning_model"] = _resolve_model_env(
+            reasoning_env, defaults.reasoning, spec.legacy_model_env
+        )
+        classification_env = spec.classification_model_env or f"{key.upper()}_CLASSIFICATION_MODEL"
+        payload[f"{key}_classification_model"] = _resolve_model_env(
+            classification_env, defaults.classification, spec.legacy_model_env
+        )
+        toolcall_env = spec.toolcall_model_env or f"{key.upper()}_TOOLCALL_MODEL"
+        payload[f"{key}_toolcall_model"] = _resolve_model_env(
+            toolcall_env, defaults.toolcall, spec.legacy_model_env
+        )
+    return payload
+
+
 def _llm_settings_env_payload(provider: str) -> dict[str, object]:
     """Build the raw env-backed payload used to validate LLM settings."""
     return {
         "provider": provider,
         **_llm_api_key_payload(provider),
-        "anthropic_reasoning_model": os.getenv(
-            "ANTHROPIC_REASONING_MODEL", ANTHROPIC_REASONING_MODEL
-        ).strip()
-        or ANTHROPIC_REASONING_MODEL,
-        "anthropic_classification_model": os.getenv(
-            "ANTHROPIC_CLASSIFICATION_MODEL", ANTHROPIC_CLASSIFICATION_MODEL
-        ).strip()
-        or ANTHROPIC_CLASSIFICATION_MODEL,
-        "anthropic_toolcall_model": os.getenv(
-            "ANTHROPIC_TOOLCALL_MODEL", ANTHROPIC_TOOLCALL_MODEL
-        ).strip()
-        or ANTHROPIC_TOOLCALL_MODEL,
-        "openai_reasoning_model": os.getenv(
-            "OPENAI_REASONING_MODEL", OPENAI_REASONING_MODEL
-        ).strip()
-        or OPENAI_REASONING_MODEL,
-        "openai_classification_model": os.getenv(
-            "OPENAI_CLASSIFICATION_MODEL", OPENAI_CLASSIFICATION_MODEL
-        ).strip()
-        or OPENAI_CLASSIFICATION_MODEL,
-        "openai_toolcall_model": os.getenv("OPENAI_TOOLCALL_MODEL", OPENAI_TOOLCALL_MODEL).strip()
-        or OPENAI_TOOLCALL_MODEL,
-        "openrouter_reasoning_model": os.getenv(
-            "OPENROUTER_REASONING_MODEL",
-            os.getenv("OPENROUTER_MODEL", OPENROUTER_REASONING_MODEL),
-        ).strip()
-        or OPENROUTER_REASONING_MODEL,
-        "openrouter_classification_model": os.getenv(
-            "OPENROUTER_CLASSIFICATION_MODEL",
-            os.getenv("OPENROUTER_MODEL", OPENROUTER_CLASSIFICATION_MODEL),
-        ).strip()
-        or OPENROUTER_CLASSIFICATION_MODEL,
-        "openrouter_toolcall_model": os.getenv(
-            "OPENROUTER_TOOLCALL_MODEL",
-            os.getenv("OPENROUTER_MODEL", OPENROUTER_TOOLCALL_MODEL),
-        ).strip()
-        or OPENROUTER_TOOLCALL_MODEL,
-        "deepseek_reasoning_model": os.getenv(
-            "DEEPSEEK_REASONING_MODEL",
-            os.getenv("DEEPSEEK_MODEL", DEEPSEEK_REASONING_MODEL),
-        ).strip()
-        or DEEPSEEK_REASONING_MODEL,
-        "deepseek_classification_model": os.getenv(
-            "DEEPSEEK_CLASSIFICATION_MODEL",
-            os.getenv("DEEPSEEK_MODEL", DEEPSEEK_CLASSIFICATION_MODEL),
-        ).strip()
-        or DEEPSEEK_CLASSIFICATION_MODEL,
-        "deepseek_toolcall_model": os.getenv(
-            "DEEPSEEK_TOOLCALL_MODEL",
-            os.getenv("DEEPSEEK_MODEL", DEEPSEEK_TOOLCALL_MODEL),
-        ).strip()
-        or DEEPSEEK_TOOLCALL_MODEL,
-        "gemini_reasoning_model": os.getenv(
-            "GEMINI_REASONING_MODEL",
-            os.getenv("GEMINI_MODEL", GEMINI_REASONING_MODEL),
-        ).strip()
-        or GEMINI_REASONING_MODEL,
-        "gemini_classification_model": os.getenv(
-            "GEMINI_CLASSIFICATION_MODEL",
-            os.getenv("GEMINI_MODEL", GEMINI_CLASSIFICATION_MODEL),
-        ).strip()
-        or GEMINI_CLASSIFICATION_MODEL,
-        "gemini_toolcall_model": os.getenv(
-            "GEMINI_TOOLCALL_MODEL",
-            os.getenv("GEMINI_MODEL", GEMINI_TOOLCALL_MODEL),
-        ).strip()
-        or GEMINI_TOOLCALL_MODEL,
-        "nvidia_reasoning_model": os.getenv(
-            "NVIDIA_REASONING_MODEL",
-            os.getenv("NVIDIA_MODEL", NVIDIA_REASONING_MODEL),
-        ).strip()
-        or NVIDIA_REASONING_MODEL,
-        "nvidia_classification_model": os.getenv(
-            "NVIDIA_CLASSIFICATION_MODEL",
-            os.getenv("NVIDIA_MODEL", NVIDIA_CLASSIFICATION_MODEL),
-        ).strip()
-        or NVIDIA_CLASSIFICATION_MODEL,
-        "nvidia_toolcall_model": os.getenv(
-            "NVIDIA_TOOLCALL_MODEL",
-            os.getenv("NVIDIA_MODEL", NVIDIA_TOOLCALL_MODEL),
-        ).strip()
-        or NVIDIA_TOOLCALL_MODEL,
-        "minimax_reasoning_model": os.getenv(
-            "MINIMAX_REASONING_MODEL",
-            os.getenv("MINIMAX_MODEL", MINIMAX_REASONING_MODEL),
-        ).strip()
-        or MINIMAX_REASONING_MODEL,
-        "minimax_classification_model": os.getenv(
-            "MINIMAX_CLASSIFICATION_MODEL",
-            os.getenv("MINIMAX_MODEL", MINIMAX_CLASSIFICATION_MODEL),
-        ).strip()
-        or MINIMAX_CLASSIFICATION_MODEL,
-        "minimax_toolcall_model": os.getenv(
-            "MINIMAX_TOOLCALL_MODEL",
-            os.getenv("MINIMAX_MODEL", MINIMAX_TOOLCALL_MODEL),
-        ).strip()
-        or MINIMAX_TOOLCALL_MODEL,
-        "groq_reasoning_model": os.getenv(
-            "GROQ_REASONING_MODEL",
-            os.getenv("GROQ_MODEL", GROQ_REASONING_MODEL),
-        ).strip()
-        or GROQ_REASONING_MODEL,
-        "groq_classification_model": os.getenv(
-            "GROQ_CLASSIFICATION_MODEL",
-            os.getenv("GROQ_MODEL", GROQ_CLASSIFICATION_MODEL),
-        ).strip()
-        or GROQ_CLASSIFICATION_MODEL,
-        "groq_toolcall_model": os.getenv(
-            "GROQ_TOOLCALL_MODEL",
-            os.getenv("GROQ_MODEL", GROQ_TOOLCALL_MODEL),
-        ).strip()
-        or GROQ_TOOLCALL_MODEL,
+        **_tiered_model_env_payload(),
         "azure_openai_base_url": os.getenv(AZURE_OPENAI_BASE_URL_ENV, "").strip(),
         "azure_openai_api_version": os.getenv(
             AZURE_OPENAI_API_VERSION_ENV, DEFAULT_AZURE_OPENAI_API_VERSION
         ).strip()
         or DEFAULT_AZURE_OPENAI_API_VERSION,
-        "azure_openai_reasoning_model": os.getenv(
-            "AZURE_OPENAI_REASONING_MODEL",
-            os.getenv("AZURE_OPENAI_MODEL", AZURE_OPENAI_REASONING_MODEL),
-        ).strip()
-        or AZURE_OPENAI_REASONING_MODEL,
-        "azure_openai_classification_model": os.getenv(
-            "AZURE_OPENAI_CLASSIFICATION_MODEL",
-            os.getenv("AZURE_OPENAI_MODEL", AZURE_OPENAI_CLASSIFICATION_MODEL),
-        ).strip()
-        or AZURE_OPENAI_CLASSIFICATION_MODEL,
-        "azure_openai_toolcall_model": os.getenv(
-            "AZURE_OPENAI_TOOLCALL_MODEL",
-            os.getenv("AZURE_OPENAI_MODEL", AZURE_OPENAI_TOOLCALL_MODEL),
-        ).strip()
-        or AZURE_OPENAI_TOOLCALL_MODEL,
-        "bedrock_reasoning_model": os.getenv(
-            "BEDROCK_REASONING_MODEL", BEDROCK_REASONING_MODEL
-        ).strip()
-        or BEDROCK_REASONING_MODEL,
-        "bedrock_classification_model": os.getenv(
-            "BEDROCK_CLASSIFICATION_MODEL", BEDROCK_CLASSIFICATION_MODEL
-        ).strip()
-        or BEDROCK_CLASSIFICATION_MODEL,
-        "bedrock_toolcall_model": os.getenv(
-            "BEDROCK_TOOLCALL_MODEL", BEDROCK_TOOLCALL_MODEL
-        ).strip()
-        or BEDROCK_TOOLCALL_MODEL,
         "vertex_ai_project": os.getenv("VERTEX_AI_PROJECT", "").strip(),
         "vertex_ai_location": os.getenv("VERTEX_AI_LOCATION", DEFAULT_VERTEX_AI_LOCATION).strip()
         or DEFAULT_VERTEX_AI_LOCATION,
-        "vertex_ai_reasoning_model": os.getenv(
-            "VERTEX_AI_REASONING_MODEL",
-            os.getenv("VERTEX_AI_MODEL", VERTEX_AI_REASONING_MODEL),
-        ).strip()
-        or VERTEX_AI_REASONING_MODEL,
-        "vertex_ai_classification_model": os.getenv(
-            "VERTEX_AI_CLASSIFICATION_MODEL",
-            os.getenv("VERTEX_AI_MODEL", VERTEX_AI_CLASSIFICATION_MODEL),
-        ).strip()
-        or VERTEX_AI_CLASSIFICATION_MODEL,
-        "vertex_ai_toolcall_model": os.getenv(
-            "VERTEX_AI_TOOLCALL_MODEL",
-            os.getenv("VERTEX_AI_MODEL", VERTEX_AI_TOOLCALL_MODEL),
-        ).strip()
-        or VERTEX_AI_TOOLCALL_MODEL,
         "ollama_model": os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
         or DEFAULT_OLLAMA_MODEL,
         "ollama_host": os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
@@ -635,91 +566,6 @@ def has_credentials_for_active_llm_provider() -> bool:
     )
     return auth_status.configured and not auth_status.stale
 
-
-# LLM Provider Configs
-ANTHROPIC_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=ANTHROPIC_REASONING_MODEL,
-    classification_model=ANTHROPIC_CLASSIFICATION_MODEL,
-    toolcall_model=ANTHROPIC_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-OPENAI_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=OPENAI_REASONING_MODEL,
-    classification_model=OPENAI_CLASSIFICATION_MODEL,
-    toolcall_model=OPENAI_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-OPENROUTER_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=OPENROUTER_REASONING_MODEL,
-    classification_model=OPENROUTER_CLASSIFICATION_MODEL,
-    toolcall_model=OPENROUTER_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-DEEPSEEK_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=DEEPSEEK_REASONING_MODEL,
-    classification_model=DEEPSEEK_CLASSIFICATION_MODEL,
-    toolcall_model=DEEPSEEK_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-GROQ_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=GROQ_REASONING_MODEL,
-    classification_model=GROQ_CLASSIFICATION_MODEL,
-    toolcall_model=GROQ_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-AZURE_OPENAI_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=AZURE_OPENAI_REASONING_MODEL,
-    classification_model=AZURE_OPENAI_CLASSIFICATION_MODEL,
-    toolcall_model=AZURE_OPENAI_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-GEMINI_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=GEMINI_REASONING_MODEL,
-    classification_model=GEMINI_CLASSIFICATION_MODEL,
-    toolcall_model=GEMINI_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-NVIDIA_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=NVIDIA_REASONING_MODEL,
-    classification_model=NVIDIA_CLASSIFICATION_MODEL,
-    toolcall_model=NVIDIA_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-MINIMAX_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=MINIMAX_REASONING_MODEL,
-    classification_model=MINIMAX_CLASSIFICATION_MODEL,
-    toolcall_model=MINIMAX_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-BEDROCK_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=BEDROCK_REASONING_MODEL,
-    classification_model=BEDROCK_CLASSIFICATION_MODEL,
-    toolcall_model=BEDROCK_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-VERTEX_AI_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=VERTEX_AI_REASONING_MODEL,
-    classification_model=VERTEX_AI_CLASSIFICATION_MODEL,
-    toolcall_model=VERTEX_AI_TOOLCALL_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
-
-OLLAMA_LLM_CONFIG = LLMModelConfig(
-    reasoning_model=DEFAULT_OLLAMA_MODEL,
-    classification_model=DEFAULT_OLLAMA_MODEL,
-    toolcall_model=DEFAULT_OLLAMA_MODEL,
-    max_tokens=DEFAULT_MAX_TOKENS,
-)
 
 # Tracer API Configuration
 TRACER_BASE_URL_DEV = "https://staging.tracer.cloud"

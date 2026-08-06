@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from platform.masking.policy import ALL_KINDS, MaskingPolicy
+from platform.masking.policy import ALL_KINDS, IdentifierKind, MaskingPolicy
+
+
+def test_identifier_kind_strenum_membership() -> None:
+    assert "pod" in ALL_KINDS
+    assert IdentifierKind.POD == "pod"
+    assert "not_a_real_kind" not in ALL_KINDS
 
 
 def test_default_policy_is_disabled() -> None:
@@ -86,10 +92,10 @@ def test_invalid_regex_in_extra_patterns_raises() -> None:
 
 def test_is_kind_enabled_respects_enabled_flag() -> None:
     policy = MaskingPolicy.model_validate({"enabled": False, "kinds": ("pod",)})
-    assert policy.is_kind_enabled("pod") is False
+    assert policy.is_kind_enabled(IdentifierKind.POD) is False
 
 
 def test_is_kind_enabled_filters_by_selected_kinds() -> None:
     policy = MaskingPolicy.model_validate({"enabled": True, "kinds": ("pod", "namespace")})
-    assert policy.is_kind_enabled("pod") is True
-    assert policy.is_kind_enabled("email") is False
+    assert policy.is_kind_enabled(IdentifierKind.POD) is True
+    assert policy.is_kind_enabled(IdentifierKind.EMAIL) is False

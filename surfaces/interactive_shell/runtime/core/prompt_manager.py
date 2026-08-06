@@ -17,10 +17,7 @@ from surfaces.interactive_shell.runtime.core.state import (
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
-from surfaces.interactive_shell.ui.components.cpr_stdin import (
-    drain_stale_cpr_bytes,
-    strip_cpr_sequences,
-)
+from surfaces.interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     build_cancel_key_bindings,
@@ -28,6 +25,7 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 )
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
+from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
 
 # Brief pause so a CPR reply still in flight lands in the stdin buffer before the
 # non-blocking drain runs; without it the reply leaks into this prompt as literal bytes.
@@ -90,17 +88,7 @@ class PromptManager:
         self.loop.call_soon_threadsafe(_exit_prompt_app)
 
     def message_with_spinner(self) -> ANSI:
-        base = prompt_rendering._prompt_message(self.session).value
-        if self.state.is_awaiting_confirmation():
-            confirm_text = self.state.confirm_prompt_text
-            return ANSI(f"{confirm_text}\n{base}")
-        prefix = strip_cpr_sequences(
-            prompt_rendering.resolve_prompt_prefix_ansi(
-                inline_spinner=self.spinner.inline_spinner_ansi(),
-                idle_hint=prompt_rendering.resolve_idle_hint_ansi(self.session),
-            )
-        )
-        return ANSI(f"{prefix}\n{base}")
+        return render_prompt_region(self.session, self.state, self.spinner)
 
     async def read_prompt_text(self) -> str:
         if self.pt_session is None:
