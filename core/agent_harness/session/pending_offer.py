@@ -60,9 +60,11 @@ class DispatchablePendingOffer(Protocol):
 
     def to_dispatch_message(self) -> str:
         """User-message form the action driver executes without an LLM."""
+        raise NotImplementedError
 
     def matches_expanded(self, expanded: str) -> bool:
         """True when ``expanded`` is this offer's dispatch message."""
+        raise NotImplementedError
 
 
 @dataclass(frozen=True, slots=True)
