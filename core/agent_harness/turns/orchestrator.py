@@ -330,6 +330,9 @@ def _gather_and_answer(
 
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
+    # Defer Want-me-to paint only when the gather closer rewrite will flush it.
+    # Follow-ups skip that rewrite; deferring on non-TTY would hold the whole
+    # answer forever (oracle / CI consoles use force_terminal=False).
     observation = gathered if gathered else None
     run = answer(
         text,
@@ -338,7 +341,7 @@ def _gather_and_answer(
             tool_observation_on_screen=observation is None,
             handoff_contents=handoff_contents,
             turn_plan=turn_plan,
-            defer_want_me_to_closer=True,
+            defer_want_me_to_closer=not skip_gather,
         ),
     )
     return run, observation
@@ -533,6 +536,10 @@ def run_turn(
                     assistant_text=outcome.response_text,
                     observation=outcome.evidence_for_offer,
                 )
+                # Follow-up gather answers may still have deferred paint if a
+                # prior path set defer=True; flush so non-TTY hosts see text.
+                if route.intent == "gather_and_answer":
+                    _finish_streamed_response(output, outcome.response_text)
 
         return accounting.finalize(
             TurnResult(

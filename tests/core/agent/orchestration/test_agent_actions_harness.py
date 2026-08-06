@@ -784,6 +784,7 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
             {
                 "tool_observation": request.tool_observation,
                 "handoff_contents": request.handoff_contents,
+                "defer_want_me_to_closer": request.defer_want_me_to_closer,
             }
         )
         return None
@@ -801,7 +802,66 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
     assert answer_kwargs
     assert answer_kwargs[0].get("tool_observation") is None
     assert answer_kwargs[0].get("handoff_contents") == ("follow_up:prior_investigation",)
+    # No gather-closer rewrite on follow-ups — do not defer Want-me-to paint.
+    assert answer_kwargs[0].get("defer_want_me_to_closer") is False
     assert result.final_intent == "cli_agent_fallback"
+
+
+def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:
+    """Regression for oracle 600: deferred Want-me-to held the whole non-TTY paint.
+
+    Follow-ups skip ``finalize_gather_investigation_offer`` (no finish flush). If
+    ``defer_want_me_to_closer`` stays true and the model adds a Want-me-to closer,
+    ``stream_to_console_state`` holds the entire answer on ``force_terminal=False``
+    and the console oracle sees an empty response.
+    """
+    import io
+    from types import SimpleNamespace
+
+    from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
+
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, highlight=False, width=100)
+    sink = ShellOutputSink(console)
+    session = Session()
+    session.last_state = {
+        "root_cause": "disk full on orders-api",
+        "investigation_started_at": time.monotonic(),
+    }
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("follow_up:prior_investigation",),
+        )
+
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+        body = "The disk was full on orders-api.\n\n**Want me to:** run a full investigation"
+        painted = sink.stream(
+            label="OpenSRE",
+            chunks=[body],
+            defer_want_me_to_closer=request.defer_want_me_to_closer,
+        )
+        return SimpleNamespace(response_text=painted)
+
+    result = run_turn(
+        "why did it fail?",
+        session,
+        execute_actions=_execute,
+        gather=lambda *_a, **_k: "should-not-gather",
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "why did it fail?"),
+        output=sink,
+    )
+
+    painted = buf.getvalue()
+    assert "disk was full" in painted
+    assert result.assistant_response_text
+    assert "disk was full" in result.assistant_response_text
 
 
 def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> None:
@@ -812,6 +872,7 @@ def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> 
         "investigation_started_at": time.monotonic(),
     }
     gather_calls: list[str] = []
+    answer_kwargs: list[dict[str, Any]] = []
 
     def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
         return ToolCallingTurnResult(
@@ -827,16 +888,22 @@ def test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state() -> 
         gather_calls.append(text)
         return "Tool: x\nArguments: {}\nResult: y"
 
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        answer_kwargs.append({"defer_want_me_to_closer": request.defer_want_me_to_closer})
+        return None
+
     run_turn(
         "connect local llama",
         session,
         execute_actions=_execute,
         gather=_gather,
-        answer=lambda *_a, **_k: None,
+        answer=_answer,
         accounting=DefaultTurnAccounting(session, "connect local llama"),
     )
 
     assert gather_calls == ["connect local llama"]
+    assert answer_kwargs
+    assert answer_kwargs[0].get("defer_want_me_to_closer") is True
 
 
 def test_execute_with_harness_handles_llm_unavailable() -> None:
