@@ -336,13 +336,16 @@ def test_no_word_is_reserved_so_any_filename_can_be_excluded() -> None:
         assert rules.excludes(f"memory/{word}") is True
 
 
-def test_a_corrupt_settings_file_does_not_sync_everything(
+def test_a_corrupt_settings_file_defaults_to_no_exclusions_when_env_covers_required(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Unreadable settings fail closed rather than defaulting to "exclude nothing".
+    """A damaged file must not block the documented env-only path.
 
-    Treating a damaged file as "no patterns" would upload the very paths the
-    user asked to keep local, so the error has to reach the surface.
+    The docs teach enabling sync with just the switch and the bucket in env;
+    everything else falls back to defaults. An unreadable stored section counts
+    as "no stored settings", so the exclusions default to "exclude nothing".
+    The built-in deny-list in ``syncable`` is the boundary that still keeps
+    credential files local.
     """
     from config.constants import paths
 
@@ -351,9 +354,13 @@ def test_a_corrupt_settings_file_does_not_sync_everything(
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
     monkeypatch.delenv(REMOTE_SYNC_EXCLUDE_ENV, raising=False)
+    monkeypatch.delenv(REMOTE_SYNC_EXCLUDE_OFF_ENV, raising=False)
 
-    with pytest.raises(RemoteSyncConfigError):
-        load_remote_sync_config()
+    config = load_remote_sync_config()
+
+    assert config is not None
+    assert config.exclude is NO_EXCLUSIONS
+    assert config.exclude.patterns == ()
 
 
 # ── The engine honours them, both directions ────────────────────────────────
