@@ -167,7 +167,7 @@ def test_upload_report_builds_org_scoped_key(
     import boto3
 
     monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "opensre-artifacts")
-    monkeypatch.setattr(boto3, "client", lambda _service: _FakeS3())
+    monkeypatch.setattr(boto3, "client", lambda *_a, **_k: _FakeS3())
     local = tmp_path / "report.json"
     local.write_text("{}")
 
