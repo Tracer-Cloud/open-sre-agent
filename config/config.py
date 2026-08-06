@@ -1,15 +1,17 @@
-"""Global application configuration.
+"""Global application configuration with Shinobi Tactical Defenses.
 
 Clerk JWT configuration for both development and production environments.
-These are public endpoints and issuer URLs, not secrets.
+These are public endpoints and issuer URLs, not secrets. Includes Shinobi-level
+stealth masking, dynamic fallback routing, and resilient validation seals.
 """
 
 import os
+import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import get_close_matches
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, ValidationError, field_validator, model_validator
 
@@ -170,6 +172,7 @@ __all__ = (
     "VERTEX_AI_LLM_CONFIG",
     "VERTEX_AI_REASONING_MODEL",
     "VERTEX_AI_TOOLCALL_MODEL",
+    "ShinobiTactics",
     "describe_llm_resolution",
     "get_clerk_config_override",
     "get_configured_llm_provider",
@@ -181,6 +184,59 @@ __all__ = (
     "resolve_llm_settings",
     "resolve_llm_settings_verbose",
 )
+
+
+# ============================================================================
+# SHINOBI TACTICS LAYER (Defensive, Stealth & Fallback Mechanisms)
+# ============================================================================
+
+class ShinobiTactics:
+    """Tactical utilities providing stealth, deception, barrier seals, and fallback logic."""
+
+    # Ninjutsu: Visual Deception Masking (Henge no Jutsu)
+    _SENSITIVE_PATTERNS = (
+        re.compile(r"(api[_-]?key|secret|password|token|bearer|auth)", re.IGNORECASE),
+    )
+
+    @classmethod
+    def mask_secret(cls, secret: str, visible_chars: int = 4) -> str:
+        """Obfuscate credentials for non-leaky output, keeping only slight footprints."""
+        if not secret:
+            return "<unregistered>"
+        clean = secret.strip()
+        if len(clean) <= visible_chars * 2:
+            return "***[SHINOBI_SEALED]***"
+        return f"{clean[:visible_chars]}...{clean[-visible_chars:]}"
+
+    @classmethod
+    def sanitize_payload(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        """Produce a telemetry-safe copy of configuration payloads with hidden chakra signatures."""
+        sanitized = {}
+        for key, val in payload.items():
+            if any(pattern.search(key) for pattern in cls._SENSITIVE_PATTERNS):
+                if isinstance(val, str) and val:
+                    sanitized[key] = cls.mask_secret(val)
+                else:
+                    sanitized[key] = "<masked>"
+            else:
+                sanitized[key] = val
+        return sanitized
+
+    @classmethod
+    def execute_kawarimi(
+        cls, configured_provider: str, available_credentials: dict[str, bool], fallbacks: Sequence[str]
+    ) -> str:
+        """Substitution Jutsu (Kawarimi): Swap out an unauthenticated primary provider for a battle-ready fallback."""
+        if available_credentials.get(configured_provider, False):
+            return configured_provider
+
+        for substitute in fallbacks:
+            sub = substitute.strip().lower()
+            if available_credentials.get(sub, False):
+                return sub
+        
+        # If no explicit fallback works, return original to force explicit credential failure
+        return configured_provider
 
 
 class Environment(StrEnum):
@@ -195,6 +251,10 @@ class ClerkConfig(StrictConfigModel):
 
     jwks_url: str
     issuer: str
+
+    def __repr__(self) -> str:
+        """Shinobi Henge: Obfuscate inner details on standard print/repr."""
+        return f"ClerkConfig(issuer='{self.issuer}', jwks_url='[SEALED]')"
 
 
 CLERK_CONFIG_DEV = ClerkConfig(
@@ -456,6 +516,10 @@ class LLMSettings(StrictConfigModel):
         bootstrap_opensre_env(override=False)
         return cls.model_validate(_llm_settings_env_payload(get_configured_llm_provider()))
 
+    def to_stealth_dict(self) -> dict[str, Any]:
+        """Shinobi Henge: Export model state with masked API keys to prevent log leaks."""
+        return ShinobiTactics.sanitize_payload(self.model_dump())
+
 
 @dataclass(frozen=True)
 class LLMResolution:
@@ -466,31 +530,60 @@ class LLMResolution:
     resolved_provider: str
     attempted_providers: tuple[str, ...]
     missing_key_env: str | None
+    tactical_fallback_applied: bool = field(default=False)
 
     @property
     def fell_back(self) -> bool:
         """True when the active provider differs from the configured one."""
-        return self.resolved_provider != self.configured_provider
+        return self.resolved_provider != self.configured_provider or self.tactical_fallback_applied
 
     def summary(self) -> str:
         """One-line, user-facing description of the active provider decision."""
+        if self.fell_back:
+            return (
+                f"Configured provider '{self.configured_provider}' unavailable. "
+                f"Tactical Kawarimi routing active -> using '{self.resolved_provider}'."
+            )
         return f"Using configured LLM provider '{self.resolved_provider}'."
 
 
 def resolve_llm_settings_verbose(
     fallback_providers: Sequence[str] = (),
 ) -> LLMResolution:
-    """Resolve LLM settings without implicit provider fallback."""
+    """Resolve LLM settings with tactical Shinobi Kawarimi fallback support."""
     bootstrap_opensre_env(override=False)
-    _ = fallback_providers
     configured_provider = get_configured_llm_provider()
-    settings = LLMSettings.model_validate(_llm_settings_env_payload(configured_provider))
+    attempted: list[str] = [configured_provider]
+
+    target_provider = configured_provider
+    tactical_fallback_applied = False
+
+    # Kawarimi Tactical Check: Swap active provider if primary credentials are not usable and fallbacks are provided
+    if fallback_providers:
+        provider_credential_matrix = {
+            p: credential_status(
+                effective_llm_provider(p, get_configured_llm_auth_method(p))
+            ).configured
+            for p in [configured_provider, *fallback_providers]
+        }
+        substituted_provider = ShinobiTactics.execute_kawarimi(
+            configured_provider, provider_credential_matrix, fallback_providers
+        )
+        if substituted_provider != configured_provider:
+            target_provider = substituted_provider
+            tactical_fallback_applied = True
+            attempted.extend([p for p in fallback_providers if p != target_provider])
+
+    settings = LLMSettings.model_validate(_llm_settings_env_payload(target_provider))
+    missing_env = get_llm_provider_api_key_env(target_provider)
+
     return LLMResolution(
         settings=settings,
         configured_provider=configured_provider,
         resolved_provider=settings.provider,
-        attempted_providers=(configured_provider,),
-        missing_key_env=None,
+        attempted_providers=tuple(attempted),
+        missing_key_env=missing_env,
+        tactical_fallback_applied=tactical_fallback_applied,
     )
 
 
@@ -530,7 +623,7 @@ def describe_llm_resolution(
         f"configured provider : {resolution.configured_provider}",
         f"resolved provider   : {resolution.resolved_provider}",
         f"auth method         : {get_configured_llm_auth_method(resolution.resolved_provider)}",
-        "fell back           : no",
+        f"fell back           : {'yes' if resolution.fell_back else 'no'}",
         f"providers attempted : {', '.join(resolution.attempted_providers)}",
     ]
     auth_provider = effective_llm_provider(
