@@ -12,7 +12,9 @@ from integrations.posthog_mcp import (
     DEFAULT_POSTHOG_MCP_URL,
     PostHogMCPConfig,
     build_posthog_mcp_config,
+    clear_posthog_mcp_tool_listing_cache,
     describe_posthog_mcp_error,
+    list_posthog_mcp_tools,
     posthog_mcp_config_from_env,
     posthog_mcp_runtime_unavailable_reason,
     validate_posthog_mcp_config,
@@ -219,3 +221,71 @@ def test_classify_posthog_mcp_credentials() -> None:
     # connection_verified is set at the tool-availability boundary
     view = availability_view(resolved)
     assert view["posthog_mcp"]["connection_verified"] is True
+
+
+# ---------------------------------------------------------------------------
+# Tool-listing cache
+# ---------------------------------------------------------------------------
+
+
+class _FakeMcpTool:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.description = f"{name} description"
+        self.inputSchema = {"type": "object"}  # noqa: N815 - mirrors mcp.types.Tool
+
+
+class TestToolListingCache:
+    def test_repeat_listing_for_same_connection_skips_the_mcp_round_trip(self) -> None:
+        clear_posthog_mcp_tool_listing_cache()
+        config = PostHogMCPConfig(auth_token="phx_cache_test", project_id="cache-1")
+        with patch(
+            "integrations.posthog_mcp._list_tools_sync",
+            return_value=[_FakeMcpTool("execute-sql")],
+        ) as list_sync:
+            first = list_posthog_mcp_tools(config)
+            second = list_posthog_mcp_tools(config)
+
+        assert list_sync.call_count == 1
+        assert first == second
+        assert first[0]["name"] == "execute-sql"
+
+    def test_distinct_connections_do_not_share_cache_entries(self) -> None:
+        clear_posthog_mcp_tool_listing_cache()
+        config_a = PostHogMCPConfig(auth_token="phx_cache_test", project_id="cache-a")
+        config_b = PostHogMCPConfig(auth_token="phx_cache_test", project_id="cache-b")
+        with patch(
+            "integrations.posthog_mcp._list_tools_sync",
+            return_value=[_FakeMcpTool("execute-sql")],
+        ) as list_sync:
+            list_posthog_mcp_tools(config_a)
+            list_posthog_mcp_tools(config_b)
+
+        assert list_sync.call_count == 2
+
+    def test_clear_cache_forces_a_fresh_listing(self) -> None:
+        clear_posthog_mcp_tool_listing_cache()
+        config = PostHogMCPConfig(auth_token="phx_cache_test", project_id="cache-2")
+        with patch(
+            "integrations.posthog_mcp._list_tools_sync",
+            return_value=[_FakeMcpTool("execute-sql")],
+        ) as list_sync:
+            list_posthog_mcp_tools(config)
+            clear_posthog_mcp_tool_listing_cache()
+            list_posthog_mcp_tools(config)
+
+        assert list_sync.call_count == 2
+
+    def test_cached_listing_is_copy_safe(self) -> None:
+        """Mutating a returned listing must not poison the cache."""
+        clear_posthog_mcp_tool_listing_cache()
+        config = PostHogMCPConfig(auth_token="phx_cache_test", project_id="cache-3")
+        with patch(
+            "integrations.posthog_mcp._list_tools_sync",
+            return_value=[_FakeMcpTool("execute-sql")],
+        ):
+            first = list_posthog_mcp_tools(config)
+            first.clear()
+            second = list_posthog_mcp_tools(config)
+
+        assert [tool["name"] for tool in second] == ["execute-sql"]

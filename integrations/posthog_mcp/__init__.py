@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
@@ -460,10 +461,40 @@ def _list_tools_sync(config: PostHogMCPConfig) -> list[types.Tool]:
     return cast(list[types.Tool], _run_async(_list_tools_async(config)))
 
 
+# The hosted server exposes 240+ tools and the catalogue changes rarely, but
+# agents may list it several times within one conversation (each gather turn
+# rediscovers from scratch). Cache the listing per connection so repeats within
+# the TTL skip the MCP round-trip.
+_TOOL_LISTING_TTL_SECONDS = 600.0
+_tool_listing_cache: dict[tuple[str, ...], tuple[float, list[PostHogMCPToolDescriptor]]] = {}
+
+
+def _tool_listing_cache_key(config: PostHogMCPConfig) -> tuple[str, ...]:
+    return (
+        config.url,
+        str(config.mode),
+        config.command,
+        " ".join(config.args),
+        config.auth_token,
+        config.organization_id,
+        config.project_id,
+    )
+
+
+def clear_posthog_mcp_tool_listing_cache() -> None:
+    """Drop all cached tool listings (tests and reconnect flows)."""
+    _tool_listing_cache.clear()
+
+
 def list_posthog_mcp_tools(config: PostHogMCPConfig) -> list[PostHogMCPToolDescriptor]:
-    """List available tools from the PostHog MCP server."""
+    """List available tools from the PostHog MCP server (cached per connection)."""
+    key = _tool_listing_cache_key(config)
+    now = time.monotonic()
+    cached = _tool_listing_cache.get(key)
+    if cached is not None and now - cached[0] < _TOOL_LISTING_TTL_SECONDS:
+        return list(cached[1])
     tools = _list_tools_sync(config)
-    return [
+    descriptors: list[PostHogMCPToolDescriptor] = [
         {
             "name": tool.name,
             "description": tool.description or "",
@@ -471,6 +502,8 @@ def list_posthog_mcp_tools(config: PostHogMCPConfig) -> list[PostHogMCPToolDescr
         }
         for tool in tools
     ]
+    _tool_listing_cache[key] = (now, descriptors)
+    return list(descriptors)
 
 
 async def _call_tool_async(

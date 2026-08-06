@@ -36,7 +36,7 @@ from core.agent_harness.prompts import (
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
-from core.agent_harness.turns.goal_review import build_goal_reviewer
+from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -519,6 +519,7 @@ def _build_action_agent(
     # literal `/slash` paths execute exactly one explicit command by design,
     # so "did the agent reach the goal" is not a meaningful question there.
     goal: Goal | None = None
+    executed_tool_names: list[str] = []
 
     if bang_command is not None:
         # Explicit `!` shell escape: dispatch the verbatim text as a shell_run call.
@@ -555,7 +556,20 @@ def _build_action_agent(
         # check confirms the user's request was carried out; a NOT_REACHED
         # verdict nudges the loop to continue instead of stopping short
         # (e.g. "remove the cron loops" ending after only listing them).
-        goal = build_goal_reviewer(llm, message, session)
+        # The reviewer reads executed tool names from the shared list the
+        # event tap below fills, so it can stand down on handoff/dispatch
+        # turns whose outcome is not reviewable at conclusion time.
+        goal = build_goal_reviewer(llm, message, executed_tool_names)
+
+    # WAL first, observer second: the tool intent must be on disk before
+    # any surface side effect reacts to the same event.
+    on_runtime_event = with_wal_recording(
+        runtime_event_callback_from_observer(observer),
+        session=session,
+        user_text=message,
+    )
+    if goal is not None:
+        on_runtime_event = tap_executed_tool_names(on_runtime_event, executed_tool_names)
 
     config = AgentConfig(
         llm=llm,
@@ -565,13 +579,7 @@ def _build_action_agent(
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
-        # WAL first, observer second: the tool intent must be on disk before
-        # any surface side effect reacts to the same event.
-        on_runtime_event=with_wal_recording(
-            runtime_event_callback_from_observer(observer),
-            session=session,
-            user_text=message,
-        ),
+        on_runtime_event=on_runtime_event,
         goal=goal,
     )
     return ActionTurnPlan(
