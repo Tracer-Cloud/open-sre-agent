@@ -305,10 +305,13 @@ jobs:
     name: coverage-report
     runs-on: ubuntu-latest
     needs: [test]
+    # Do not use always(): when test is cancelled (concurrency) or failed,
+    # there are no coverage-data-* artifacts and ``coverage combine`` exits 1
+    # with "No data to combine". Skip instead; CI Gate treats skipped as OK.
     if: >-
-      always() &&
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success'
     timeout-minutes: 15
 
     steps:
