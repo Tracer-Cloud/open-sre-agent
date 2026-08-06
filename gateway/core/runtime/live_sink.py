@@ -57,15 +57,24 @@ class LiveOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
         return self._require().stream(
             label=label,
             chunks=chunks,
             suppress_if_starts_with=suppress_if_starts_with,
+            defer_want_me_to_closer=defer_want_me_to_closer,
         )
 
     def finalize(self, text: str) -> None:
         self._require().finalize(text)
+
+    def finish_streamed_response(self, text: str) -> None:
+        finish = getattr(self._require(), "finish_streamed_response", None)
+        if callable(finish):
+            finish(text)
+            return
+        self.finalize(text)
 
     def set_tool_status(self, status: str) -> None:
         set_status = getattr(self._require(), "set_tool_status", None)

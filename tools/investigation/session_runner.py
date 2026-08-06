@@ -122,8 +122,11 @@ def run_session_alert_payload(
         try:
 
             async def _pump() -> None:
+                # Session runs are always user-initiated, so the intake noise
+                # gate must not discard them.
                 async for evt in astream_investigation(
                     raw_alert=alert_payload,
+                    user_requested=True,
                 ):
                     event_queue.put(evt)
 

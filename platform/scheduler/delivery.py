@@ -51,6 +51,10 @@ def slack_delivery_ready() -> bool:
     return slack_can_deliver(resolve_slack_credentials({}), chat_id="required")
 
 
+def _rocketchat_token_credentials_present(creds: Mapping[str, Any]) -> bool:
+    return bool(creds.get("server_url") and creds.get("auth_token") and creds.get("user_id"))
+
+
 def rocketchat_delivery_ready() -> bool:
     """Return True when Rocket.Chat token credentials are available.
 
@@ -59,8 +63,21 @@ def rocketchat_delivery_ready() -> bool:
     ``rocketchat`` cron provider — so readiness requires the full token trio,
     not just a configured webhook.
     """
-    creds = resolve_rocketchat_credentials({})
-    return bool(creds.get("server_url") and creds.get("auth_token") and creds.get("user_id"))
+    return _rocketchat_token_credentials_present(resolve_rocketchat_credentials({}))
+
+
+def _slack_task_can_deliver(task_params: dict[str, str], chat_id: str) -> bool:
+    return slack_can_deliver(resolve_slack_credentials(task_params), chat_id=chat_id)
+
+
+def _telegram_task_can_deliver(task_params: dict[str, str], chat_id: str) -> bool:
+    creds = resolve_telegram_credentials(task_params)
+    return bool(creds.get("bot_token")) and bool(chat_id.strip())
+
+
+def _rocketchat_task_can_deliver(task_params: dict[str, str], chat_id: str) -> bool:
+    creds = resolve_rocketchat_credentials(task_params)
+    return _rocketchat_token_credentials_present(creds) and bool(chat_id.strip())
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +86,7 @@ class _DeliveryProviderSpec:
     label: str
     ready: Callable[[], bool]
     setup_hint: str
+    can_deliver: Callable[[dict[str, str], str], bool]
 
 
 # Discord is a member of Provider (cron delivery supports it) but has no
@@ -83,6 +101,7 @@ _DELIVERY_SPECS: tuple[_DeliveryProviderSpec, ...] = (
             "Telegram is not configured for delivery. Run "
             "`opensre integrations setup telegram` or set TELEGRAM_BOT_TOKEN."
         ),
+        can_deliver=_telegram_task_can_deliver,
     ),
     _DeliveryProviderSpec(
         provider=Provider.SLACK,
@@ -95,6 +114,7 @@ _DELIVERY_SPECS: tuple[_DeliveryProviderSpec, ...] = (
             "bot token and always posts to the one channel it was created for, so "
             "it cannot honour an explicit --chat-id."
         ),
+        can_deliver=_slack_task_can_deliver,
     ),
     _DeliveryProviderSpec(
         provider=Provider.ROCKETCHAT,
@@ -106,6 +126,7 @@ _DELIVERY_SPECS: tuple[_DeliveryProviderSpec, ...] = (
             "ROCKETCHAT_AUTH_TOKEN, and ROCKETCHAT_USER_ID (a webhook alone cannot "
             "target an explicit --chat-id)."
         ),
+        can_deliver=_rocketchat_task_can_deliver,
     ),
 )
 
@@ -140,8 +161,38 @@ def _any_setup_hint() -> str:
 
 def delivery_provider_ready(provider: Provider | str) -> bool:
     """Return True when ``provider`` can deliver scheduled messages."""
-    spec = _SPECS_BY_NAME.get(_provider_name(provider))
+    name = _provider_name(provider)
+    # Local loop inbox — always available (executor ``_deliver_interactive_shell``).
+    # Not listed in ``_DELIVERY_SPECS`` so digest CLIs do not offer it as a
+    # chat/webhook channel and ``any_delivery_ready`` stays about remote sinks.
+    if name == Provider.INTERACTIVE_SHELL.value:
+        return True
+    spec = _SPECS_BY_NAME.get(name)
     return spec.ready() if spec is not None else False
+
+
+def task_can_deliver(
+    provider: Provider | str,
+    *,
+    chat_id: str,
+    task_params: Mapping[str, str] | None = None,
+) -> bool:
+    """Whether one scheduled task can actually reach a destination.
+
+    Stricter than :func:`delivery_provider_ready`, which asks only whether the
+    provider is configured globally: a task also needs somewhere to post, and
+    credentials carried in its own ``task_params`` count — each provider's
+    check resolves them the same way the executor does at delivery time. For
+    Slack a webhook carries its own destination, so an empty ``chat_id`` is
+    legitimate there; the other providers require one.
+    """
+    name = _provider_name(provider)
+    if name == Provider.INTERACTIVE_SHELL.value:
+        return True
+    spec = _SPECS_BY_NAME.get(name)
+    if spec is None:
+        return False
+    return spec.can_deliver(dict(task_params or {}), chat_id)
 
 
 def any_delivery_ready() -> bool:
@@ -153,6 +204,11 @@ def delivery_setup_hint(provider: Provider | str | None = None) -> str:
     """Human-readable setup guidance when delivery is not configured."""
     if provider is not None:
         name = _provider_name(provider)
+        if name == Provider.INTERACTIVE_SHELL.value:
+            return (
+                "Interactive-shell delivery writes to the local loop inbox; "
+                "no remote channel setup is required."
+            )
         spec = _SPECS_BY_NAME.get(name)
         if spec is not None:
             return spec.setup_hint
@@ -180,5 +236,6 @@ __all__ = [
     "rocketchat_delivery_ready",
     "slack_can_deliver",
     "slack_delivery_ready",
+    "task_can_deliver",
     "telegram_delivery_ready",
 ]

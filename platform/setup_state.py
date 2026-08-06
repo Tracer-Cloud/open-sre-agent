@@ -24,6 +24,7 @@ class SetupSnapshot:
 
     integrations: tuple[str, ...]
     schedule_count: int
+    deliverable_count: int
     last_delivery_ok: bool | None
 
 
@@ -68,6 +69,26 @@ def setup_state_fingerprint() -> tuple[tuple[int, int], ...]:
         else:
             marks.append((stat.st_mtime_ns, stat.st_size))
     return tuple(marks)
+
+
+def _task_can_deliver(task: Any) -> bool:
+    """Whether one task has a reachable destination.
+
+    A task this cannot evaluate counts as undeliverable rather than raising:
+    the caller counts across every task, so one malformed row must not collapse
+    the whole snapshot and report a configured install as empty.
+    """
+    from platform.scheduler.delivery import task_can_deliver
+
+    try:
+        return task_can_deliver(
+            task.provider,
+            chat_id=str(getattr(task, "chat_id", "") or ""),
+            task_params=getattr(task, "params", None),
+        )
+    except Exception:
+        logger.debug("task deliverability unknown", exc_info=True)
+        return False
 
 
 def _latest_finished_run(task_id: str) -> Any | None:
@@ -115,12 +136,16 @@ def collect_setup_state(integrations: Sequence[str] = ()) -> SetupSnapshot:
         return SetupSnapshot(
             integrations=tuple(integrations),
             schedule_count=len(tasks),
+            deliverable_count=sum(1 for task in tasks if _task_can_deliver(task)),
             last_delivery_ok=_latest_delivery_ok(tasks),
         )
     except Exception:
         logger.debug("setup state unavailable", exc_info=True)
         return SetupSnapshot(
-            integrations=tuple(integrations), schedule_count=0, last_delivery_ok=None
+            integrations=tuple(integrations),
+            schedule_count=0,
+            deliverable_count=0,
+            last_delivery_ok=None,
         )
 
 
@@ -136,7 +161,8 @@ def render_setup_state(state: SetupSnapshot) -> str:
     return (
         "--- Setup state ---\n"
         f"Integrations connected: {integrations}\n"
-        f"Scheduled tasks configured: {state.schedule_count}\n"
+        f"Scheduled tasks: {state.schedule_count} configured, "
+        f"{state.deliverable_count} able to deliver\n"
         f"Last scheduled delivery: {_delivery_phrase(state.last_delivery_ok)}\n\n"
     )
 
@@ -175,7 +201,7 @@ def cached_setup_state(integrations: Sequence[str]) -> str:
 
     Prompt assembly runs on every turn while the underlying stores change
     rarely, so this collapses a task-list read plus a run lookup per task down
-    to two ``stat`` calls on the unchanged path.
+    to one ``stat`` per store on the unchanged path.
     """
     key: _CacheKey = (tuple(integrations), setup_state_fingerprint())
     if _CACHE.key == key and _CACHE.block is not None:
