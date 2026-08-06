@@ -141,4 +141,42 @@ def render_setup_state(state: SetupSnapshot) -> str:
     )
 
 
-__all__ = ["SetupSnapshot", "SetupState", "collect_setup_state", "render_setup_state"]
+_CacheKey = tuple[tuple[str, ...], tuple[tuple[int, int], ...]]
+
+#: The last rendered block and the key it was built from: the integrations plus
+#: a stat of the scheduler stores. One entry, not a map — every earlier
+#: fingerprint is dead the moment the stores change, so keeping them would grow
+#: without bound in a long-running gateway.
+_CACHED: tuple[_CacheKey, str] | None = None
+
+
+def clear_setup_state_cache() -> None:
+    """Drop the memoized block. For tests and for a forced re-read."""
+    global _CACHED
+    _CACHED = None
+
+
+def cached_setup_state(integrations: Sequence[str]) -> str:
+    """Render the setup block, reusing the last result until the stores change.
+
+    Prompt assembly runs on every turn while the underlying stores change
+    rarely, so this collapses a task-list read plus a run lookup per task down
+    to two ``stat`` calls on the unchanged path.
+    """
+    global _CACHED
+    key: _CacheKey = (tuple(integrations), setup_state_fingerprint())
+    if _CACHED is not None and _CACHED[0] == key:
+        return _CACHED[1]
+    block = render_setup_state(collect_setup_state(integrations))
+    _CACHED = (key, block)
+    return block
+
+
+__all__ = [
+    "SetupSnapshot",
+    "SetupState",
+    "cached_setup_state",
+    "clear_setup_state_cache",
+    "collect_setup_state",
+    "render_setup_state",
+]

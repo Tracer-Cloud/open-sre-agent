@@ -29,6 +29,7 @@ from core.agent_harness.prompts.memory.conversation import (
     format_recent_conversation,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
 from core.state import MAX_CONVERSATION_MESSAGES
@@ -219,6 +220,7 @@ def _build_evidence_agent(
         tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=max_iterations,
+        tool_hooks=SourceCircuitBreaker().hooks(),
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
     )
     return build_agent(config)

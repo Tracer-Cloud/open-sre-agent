@@ -185,7 +185,7 @@ def test_turn_snapshot_from_session_reads_last_command_observation_from_session(
         reasoning_effort = None
         last_command_observation = "tool output from shell"
 
-    ctx = TurnSnapshot.from_session("why", _Session())
+    ctx = TurnSnapshot.from_session("why", _Session(), surface="interactive_shell")
 
     assert ctx.last_observation == "tool output from shell"
 
@@ -194,7 +194,7 @@ def test_turn_snapshot_from_session_snapshots_shell_and_runtime_request_fields()
     tool = _tool()
     session = _Session(tool)
 
-    ctx = TurnSnapshot.from_session("next turn", session)
+    ctx = TurnSnapshot.from_session("next turn", session, surface="interactive_shell")
 
     assert session.agent.seen_text == "next turn"
     assert ctx.text == "next turn"

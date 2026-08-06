@@ -64,6 +64,16 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.prompts.skills",
             )
         )
+    if turn_snapshot.setup_state:
+        blocks.append(
+            PromptBlock(
+                id="action-agent-setup-state",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.CONTEXT,
+                content=turn_snapshot.setup_state,
+                provenance="platform.setup_state",
+            )
+        )
     blocks.append(
         PromptBlock(
             id="connected-integrations",

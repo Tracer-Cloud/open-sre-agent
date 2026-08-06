@@ -265,3 +265,49 @@ class TestFingerprintWatchesWalSidecar:
         # Assert: dropping the sidecar silently reintroduces stale delivery
         # status, which no other test would catch.
         assert any(path.name.endswith("-wal") for path in paths)
+
+
+class TestCachedSetupState:
+    def test_recomputes_only_when_the_fingerprint_moves(self, monkeypatch) -> None:
+        # Arrange: prompt assembly runs on every turn, so the rendered block has
+        # to be reused until the underlying stores actually change.
+        renders: list[int] = []
+        fingerprints = iter([((1, 1),), ((1, 1),), ((2, 2),)])
+
+        def _count_render(_state: object) -> str:
+            renders.append(1)
+            return f"render {len(renders)}"
+
+        def _moving_fingerprint() -> tuple[tuple[int, int], ...]:
+            return next(fingerprints)
+
+        monkeypatch.setattr(setup_state, "render_setup_state", _count_render)
+        monkeypatch.setattr(setup_state, "setup_state_fingerprint", _moving_fingerprint)
+        monkeypatch.setattr(setup_state, "_scheduled_tasks", lambda: [])
+        monkeypatch.setattr(setup_state, "_latest_delivery_ok", lambda _tasks: None)
+        setup_state.clear_setup_state_cache()
+
+        # Act
+        first = setup_state.cached_setup_state(("slack",))
+        second = setup_state.cached_setup_state(("slack",))
+        third = setup_state.cached_setup_state(("slack",))
+
+        # Assert: two renders across three calls — the middle one is cached.
+        assert first == second
+        assert third != second
+        assert len(renders) == 2
+
+    def test_a_different_integration_set_is_not_served_from_cache(self, monkeypatch) -> None:
+        # Arrange: connecting an integration must not be masked by a cache hit.
+        monkeypatch.setattr(setup_state, "setup_state_fingerprint", lambda: ((1, 1),))
+        monkeypatch.setattr(setup_state, "_scheduled_tasks", lambda: [])
+        monkeypatch.setattr(setup_state, "_latest_delivery_ok", lambda _tasks: None)
+        setup_state.clear_setup_state_cache()
+
+        # Act
+        one = setup_state.cached_setup_state(("slack",))
+        two = setup_state.cached_setup_state(("slack", "sentry"))
+
+        # Assert
+        assert "sentry" not in one
+        assert "sentry" in two
