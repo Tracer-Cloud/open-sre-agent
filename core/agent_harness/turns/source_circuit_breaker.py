@@ -7,9 +7,10 @@ the same tool are blocked immediately with a reason that steers the model to
 other tools or sources instead of re-paying the connect timeout.
 
 Marks are tool-scoped on purpose. A vendor often exposes several endpoints; one
-failing tool must not suppress reachable siblings, and a concurrent success on
-the same ``source`` must never fight a source-wide mark (the previous design
-could re-poison the vendor after demotion). Application / downstream errors
+failing tool must not suppress reachable siblings. A success for a tool is
+sticky for the turn: a concurrent connectivity failure that finishes after
+that success must not recreate the mark (otherwise the next gather iteration
+blocks a tool that just returned evidence). Application / downstream errors
 still do not trip the breaker at all.
 """
 
@@ -84,6 +85,9 @@ class SourceCircuitBreaker:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._tool_down: dict[str, str] = {}
+        # Sticky for the gather turn: once a tool succeeds, concurrent or later
+        # connectivity failures must not re-mark it.
+        self._tool_ok: set[str] = set()
 
     def hooks(self) -> ToolExecutionHooks:
         """Return execution hooks enforcing the breaker on a tool loop."""
@@ -118,9 +122,8 @@ class SourceCircuitBreaker:
     ) -> None:
         tool_name = request.tool_call.name
         if not result.is_error:
-            # A success clears a prior mark for this tool (transient flake /
-            # concurrent retry). Sibling tools are untouched.
             with self._lock:
+                self._tool_ok.add(tool_name)
                 self._tool_down.pop(tool_name, None)
             return None
         if request.source in _UNBREAKABLE_SOURCES:
@@ -130,6 +133,9 @@ class SourceCircuitBreaker:
             return None
         summary = _summarize(error_text)
         with self._lock:
+            # Success is sticky: do not recreate a mark after the tool answered.
+            if tool_name in self._tool_ok:
+                return None
             self._tool_down.setdefault(tool_name, summary)
         return None
 

@@ -167,6 +167,69 @@ def test_same_tool_success_after_failure_clears_mark() -> None:
     assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_logs")) is None
 
 
+def test_success_then_failure_does_not_repoison_same_tool() -> None:
+    # Arrange: tool answered, then a concurrent/late connectivity error arrives.
+    breaker = SourceCircuitBreaker()
+    hooks = breaker.hooks()
+    assert hooks.after_tool_call is not None
+    assert hooks.before_tool_call is not None
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_metrics"),
+        ToolExecutionResult(content="cpu=0.2", is_error=False),
+    )
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_metrics"),
+        _error_result(f"Max retries exceeded: {_TIMEOUT_MARKER}"),
+    )
+
+    # Act + Assert: sticky success wins — next iteration still runs the tool.
+    assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_metrics")) is None
+
+
+def test_concurrent_same_tool_success_then_failure_does_not_repoison() -> None:
+    """Overlapping same-tool success + failure must leave the tool callable.
+
+    If success clears the mark and failure's setdefault recreates it, the next
+    gather iteration blocks a tool that just returned evidence.
+    """
+    breaker = SourceCircuitBreaker()
+    hooks = breaker.hooks()
+    assert hooks.after_tool_call is not None
+    assert hooks.before_tool_call is not None
+
+    barrier = threading.Barrier(2)
+    errors: list[Exception] = []
+    tool = "query_grafana_metrics"
+
+    def _succeed() -> None:
+        try:
+            barrier.wait(timeout=2)
+            hooks.after_tool_call(
+                _request("grafana", tool_name=tool),
+                ToolExecutionResult(content="cpu=0.2", is_error=False),
+            )
+        except Exception as exc:
+            errors.append(exc)
+
+    def _fail() -> None:
+        try:
+            barrier.wait(timeout=2)
+            hooks.after_tool_call(
+                _request("grafana", tool_name=tool),
+                _error_result(f"Max retries exceeded: {_TIMEOUT_MARKER}"),
+            )
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_succeed), threading.Thread(target=_fail)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=3)
+    assert not errors
+    assert hooks.before_tool_call(_request("grafana", tool_name=tool)) is None
+
+
 def test_concurrent_failure_after_success_does_not_poison_siblings() -> None:
     """Failure completing after a sibling success must stay tool-scoped.
 
