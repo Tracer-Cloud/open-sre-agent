@@ -176,6 +176,40 @@ def test_skill_view_tool_end_without_start_prints_nothing() -> None:
     assert buffer.getvalue() == ""
 
 
+def test_llm_start_advances_spinner_verb_every_two_steps() -> None:
+    """The spinner verb re-rolls once per two agent steps, not every step."""
+    from surfaces.interactive_shell.runtime.core.state import SpinnerState
+    from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
+
+    observer, _buffer = _observer_with_buffer()
+    spinner = SpinnerState()
+    spinner.start()
+    initial = spinner._verb
+    set_investigation_spinner(spinner)
+    try:
+        observer("llm_start", {"iteration": 0})
+        observer("llm_start", {"iteration": 1})
+        assert spinner._verb == initial, "steps 0-1 must keep the verb picked at start()"
+        observer("llm_start", {"iteration": 2})
+        second = spinner._verb
+        assert second != initial, "step 2 must rotate the verb"
+        observer("llm_start", {"iteration": 3})
+        assert spinner._verb == second, "step 3 must keep step 2's verb"
+        observer("llm_start", {"iteration": 4})
+        assert spinner._verb != second, "step 4 must rotate again"
+    finally:
+        set_investigation_spinner(None)
+
+
+def test_llm_start_without_registered_spinner_is_noop() -> None:
+    observer, buffer = _observer_with_buffer()
+
+    observer("llm_start", {"iteration": 3})
+
+    assert buffer.getvalue() == ""
+    assert observer.planned_count == 0
+
+
 def test_message_update_does_not_record_history_or_count_as_planned() -> None:
     observer, _buffer = _observer_with_buffer()
 

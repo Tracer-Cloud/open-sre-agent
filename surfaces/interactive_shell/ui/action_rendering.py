@@ -22,12 +22,16 @@ from rich.text import Text
 from core.agent_harness.turns.action_driver import SELF_RECORDING_ACTION_TOOL_NAMES
 from platform.terminal.theme import BOLD_SKILL, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
+from surfaces.interactive_shell.ui.output.console_state import get_investigation_spinner
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine
 # multiple arguments (``slash_invoke``, ``synthetic_run``) keeps a custom branch
 # in :func:`tool_call_display`.
+# The spinner's thinking verb re-rolls once per this many agent-loop steps.
+_VERB_ROTATION_STEP_INTERVAL = 2
+
 _SIMPLE_TOOL_LABELS: dict[str, tuple[str, str]] = {
     "llm_set_provider": ("LLM provider", "target"),
     "alert_sample": ("sample alert", "template"),
@@ -74,6 +78,9 @@ class ActionRenderObserver:
         self._pending_skill_calls: dict[str, str] = {}
 
     def __call__(self, kind: str, data: dict[str, Any]) -> None:
+        if kind == "llm_start":
+            self._advance_spinner_verb(data)
+            return
         if kind == "message_update":
             self._render_intermediate_message(data)
             return
@@ -100,6 +107,21 @@ class ActionRenderObserver:
         if self.planned_count == 0 and name not in SELF_RECORDING_ACTION_TOOL_NAMES:
             self.session.record("cli_agent", self.message)
         self.planned_count += 1
+
+    def _advance_spinner_verb(self, data: dict[str, Any]) -> None:
+        """Rotate the prompt spinner's thinking verb every two agent steps.
+
+        ``llm_start`` fires once per think→act iteration of the agent loop.
+        The verb picked at ``SpinnerState.start()`` covers the first two
+        iterations; each pair after that re-rolls it, so the label changes
+        during a long turn without flickering on every step.
+        """
+        iteration = int(data.get("iteration", 0) or 0)
+        if iteration < _VERB_ROTATION_STEP_INTERVAL or iteration % _VERB_ROTATION_STEP_INTERVAL:
+            return
+        spinner = get_investigation_spinner()
+        if spinner is not None:
+            spinner.advance_verb()
 
     def _render_intermediate_message(self, data: dict[str, Any]) -> None:
         """Render the model's commentary preceding this iteration's tool calls.

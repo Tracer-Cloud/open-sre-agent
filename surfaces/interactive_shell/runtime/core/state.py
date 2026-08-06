@@ -152,33 +152,102 @@ class SpinnerState:
     # render pass (layout measurement + paint), so a per-call counter can land
     # on the same frame every visible render and freeze the animation.
     _FRAME_INTERVAL_SECONDS = 0.1
-    _THINKING_VERBS = (
-        "thinking",
-        "pondering",
-        "exploring",
-        "reasoning",
-        "considering",
-        "analysing",
-        "investigating",
-        "deliberating",
-        "ruminating",
-        "deducing",
-        "noodling",
+    # Netrunner verb pools, escalating with time spent in the net: the longer
+    # the run, the hotter the trace. Each entry maps the minimum elapsed
+    # seconds to the pool active from that point on (tiers never de-escalate
+    # within a turn). Entries are ordered by ascending threshold.
+    _VERB_TIERS: tuple[tuple[float, tuple[str, ...]], ...] = (
+        (
+            0.0,  # calm run
+            (
+                "jacking in",
+                "scanning the grid",
+                "crawling the datastream",
+                "riding the signal",
+                "running the trace",
+                "decrypting",
+                "compiling daemons",
+                "ghosting the subnet",
+                "deep-diving the stack",
+            ),
+        ),
+        (
+            30.0,  # ICE contact
+            (
+                "cutting ice",
+                "ICE detected… rerouting",
+                "ghosting past the trace",
+                "pinging black ICE",
+                "running the icebreaker",
+                "uploading daemons",
+                "threading resonance",
+            ),
+        ),
+        (
+            90.0,  # deep run
+            (
+                "going past the Blackwall",
+                "black ICE closing… stay frosty",
+                "running Kuang Grade Mark Eleven",
+                "deep in the net… trace hot",
+                "riding the matrix",
+            ),
+        ),
     )
+    # Verbs picked twice as often as the rest of their pool (default weight 1).
+    _VERB_WEIGHTS = {"jacking in": 2, "crawling the datastream": 2}
 
     def __init__(self) -> None:
         self.streaming: bool = False
         self.started_at: float = 0.0
         self.bytes_in: int = 0
-        self._verb: str = self._THINKING_VERBS[0]
+        self._verb_tier: int = 0
+        self._verb: str = self._VERB_TIERS[0][1][0]
         self.phase: str = ""
 
     def start(self) -> None:
         self.streaming = True
         self.started_at = time.monotonic()
         self.bytes_in = 0
-        self._verb = random.choice(self._THINKING_VERBS)
+        self._verb_tier = 0
+        self._verb = self._pick_verb()
         self.phase = ""
+
+    def advance_verb(self) -> None:
+        """Pick a fresh thinking verb (the rotation cadence is the caller's).
+
+        The agent-loop observer calls this at its chosen step boundaries so
+        the label rotates during a long turn. Always picks a verb different
+        from the current one so the change is visible, staying within the
+        currently escalated tier.
+        """
+        self._verb = self._pick_verb(exclude=self._verb)
+
+    def _tier_for_elapsed(self, elapsed: float) -> int:
+        tier = 0
+        for index, (threshold, _pool) in enumerate(self._VERB_TIERS):
+            if elapsed >= threshold:
+                tier = index
+        return tier
+
+    def _escalate_for_elapsed(self, elapsed: float) -> None:
+        """Escalate the verb pool once *elapsed* crosses a tier threshold.
+
+        One-way within a turn: the tier only moves up (``start()`` resets it).
+        On a transition the verb re-rolls immediately from the new pool so
+        escalation shows even during a long single LLM call with no agent-step
+        events.
+        """
+        tier = self._tier_for_elapsed(elapsed)
+        if tier > self._verb_tier:
+            self._verb_tier = tier
+            self._verb = self._pick_verb()
+
+    def _pick_verb(self, exclude: str | None = None) -> str:
+        pool = self._VERB_TIERS[self._verb_tier][1]
+        candidates = [v for v in pool if v != exclude]
+        weights = [self._VERB_WEIGHTS.get(v, 1) for v in candidates]
+        return random.choices(candidates, weights=weights)[0]
 
     def set_phase(self, label: str) -> None:
         """Animate a caller-supplied phase label instead of a thinking verb.
@@ -223,6 +292,7 @@ class SpinnerState:
         if not self.streaming:
             return ""
         elapsed = time.monotonic() - self.started_at
+        self._escalate_for_elapsed(elapsed)
         token_count = self.bytes_in // _CHARS_PER_TOKEN
         frame_idx = int(elapsed / self._FRAME_INTERVAL_SECONDS)
         glyph = self._SPINNER_FRAMES[frame_idx % len(self._SPINNER_FRAMES)]
