@@ -19,15 +19,15 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.ports import AnswerRequest
-from core.agent_harness.prompts import prompt_context as default_prompt_context
-from core.agent_harness.prompts.assistant_agent_prompt import (
-    _MARKDOWN_RULE,
-    _TERMINOLOGY_RULE,
+from core.agent_harness.prompts.assistant import (
+    MARKDOWN_RULE,
+    TERMINOLOGY_RULE,
     _build_observation_block,
     _build_system_prompt,
     build_environment_block,
 )
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.context import DefaultPromptContextProvider
+from core.agent_harness.prompts.context import provider as default_prompt_context
 from surfaces.interactive_shell.runtime import answer_turn as cli_agent
 from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
 from surfaces.interactive_shell.session import Session
@@ -139,12 +139,12 @@ class TestSystemPromptTerminology:
         assert "!" in prompt
         # The prompt must explicitly forbid the "REPL" jargon so the model
         # does not echo it back in answers (#604).
-        assert _TERMINOLOGY_RULE in prompt
+        assert TERMINOLOGY_RULE in prompt
         assert "Never use the word 'REPL'" in prompt
 
     def test_prompt_requests_markdown_formatting(self) -> None:
         prompt = _build_system_prompt(reference="(ref)", history="(hist)")
-        assert _MARKDOWN_RULE in prompt
+        assert MARKDOWN_RULE in prompt
         assert "Markdown" in prompt
 
     def test_conversational_prompt_does_not_expose_action_json_contract(self) -> None:

@@ -9,7 +9,7 @@ from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_cli_agent_prompt_from_provider,
 )
-from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
+from core.agent_harness.prompts.assistant import build_handoff_guidance_block
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
@@ -51,6 +51,9 @@ class _StubPrompts:
         return ""
 
     def long_term_memory(self) -> str:
+        return ""
+
+    def setup_state(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:

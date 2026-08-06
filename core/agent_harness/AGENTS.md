@@ -66,9 +66,10 @@ subpackage. Default port implementations live with the concern they serve, not i
   default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
   (`run_record.py`).
 - `prompts/` — action-agent and conversational-assistant prompt builders (pure
-  string assembly; grounding text is supplied via `PromptContextProvider`), plus
-  `prompt_context.py` (`DefaultPromptContextProvider`).
-  `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
+  string assembly; grounding text is supplied via `PromptContextProvider`).
+  Layout: `assistant/` (parts → contributors → envelope → turn), `context/`
+  (`DefaultPromptContextProvider`), shared `envelope.py` / `surfaces.py`
+  (surface Strategy table), plus `conversation_memory.py` and peer builders.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt
@@ -223,7 +224,9 @@ which owns the actual think → call-tools → observe algorithm.
   for the `from core.agent import AgentRunResult` path.
 - `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
   `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
-  functional entry).
+  functional entry). The conclusion phase delegates to `ConclusionHandler` in
+  `core/agent/handle_conclusion.py` (textual-tool-call bounce, host acceptance,
+  queued follow-ups, nudges).
 - `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
   (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
   `run_react_loop`), and the `_should_accept_conclusion` override hook.

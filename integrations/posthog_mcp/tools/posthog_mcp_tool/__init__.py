@@ -96,6 +96,28 @@ def _posthog_mcp_available(sources: dict[str, dict]) -> bool:
     return bool(sources.get("posthog_mcp", {}).get("connection_verified"))
 
 
+def _normalize_mcp_tool_arguments(tool_name: str, arguments: PostHogMCPParams) -> PostHogMCPParams:
+    """Fix common model mistakes in PostHog MCP tool payloads.
+
+    ``execute-sql`` (and HogQL cousins) expect ``{"query": "<sql string>"}``.
+    Models often nest the HogQL Query object shape as
+    ``{"query": {"query": "SELECT …"}}``, which PostHog rejects with
+    ``parameter "query" must be of type string``. Unwrap one level when the
+    outer value is a single-key dict whose ``query`` value is a string.
+    """
+    if not arguments:
+        return arguments
+    if tool_name not in {"execute-sql", "query-run"}:
+        return arguments
+    nested = arguments.get("query")
+    if not isinstance(nested, dict):
+        return arguments
+    inner = nested.get("query")
+    if isinstance(inner, str) and inner.strip() and set(nested) == {"query"}:
+        return {**arguments, "query": inner}
+    return arguments
+
+
 def _posthog_mcp_extract_params(sources: dict[str, dict]) -> PostHogMCPParams:
     posthog = sources.get("posthog_mcp", {})
     if not posthog:
@@ -113,6 +135,24 @@ def _posthog_mcp_extract_params(sources: dict[str, dict]) -> PostHogMCPParams:
     }
 
 
+def _extract_sql_results(structured: object) -> object | None:
+    """Pull row values out of a HogQL/MCP structured envelope when present."""
+    if not isinstance(structured, dict):
+        return None
+    for key in ("results", "result", "rows", "data"):
+        if key in structured:
+            found: object = structured[key]
+            return found
+    # Common nested shapes: {"query": {"results": …}} / {"results": {"results": …}}
+    for key in ("query", "hogql", "response"):
+        nested = structured.get(key)
+        if isinstance(nested, dict):
+            extracted = _extract_sql_results(nested)
+            if extracted is not None:
+                return extracted
+    return None
+
+
 def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPResponse:
     if result.get("is_error"):
         return _unavailable_response(
@@ -120,15 +160,38 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
             tool_name=str(result.get("tool", "")).strip() or None,
             arguments=result.get("arguments", {}),
         )
-    return {
-        "source": "posthog_mcp",
-        "available": True,
-        "tool": result.get("tool"),
-        "arguments": result.get("arguments", {}),
-        "text": result.get("text", ""),
-        "structured_content": result.get("structured_content"),
-        "content": result.get("content", []),
-    }
+    # Values FIRST: the gather loop truncates each tool result head-first at a
+    # fixed character budget. Echoed SQL / envelope keys ahead of the rows cut
+    # off the numbers the model needs. Arguments are omitted — the observation
+    # block already prints them above the result.
+    tool_name = str(result.get("tool") or "").strip()
+    text = str(result.get("text") or "").strip()
+    structured = result.get("structured_content")
+    payload: PostHogMCPResponse = {}
+    if tool_name in {"execute-sql", "query-run"}:
+        rows = _extract_sql_results(structured)
+        if rows is not None:
+            payload["results"] = rows
+        if text:
+            payload["text"] = text
+        payload["source"] = "posthog_mcp"
+        payload["available"] = True
+        payload["tool"] = tool_name
+        return payload
+
+    if text:
+        payload["text"] = text
+    if structured is not None:
+        payload["structured_content"] = structured
+    # Skip duplicating ``content`` when ``text`` already carries it — doubles
+    # the truncated payload for no new information.
+    content = result.get("content") or []
+    if content and not text:
+        payload["content"] = content
+    payload["source"] = "posthog_mcp"
+    payload["available"] = True
+    payload["tool"] = tool_name or result.get("tool")
+    return payload
 
 
 @tool(
@@ -263,7 +326,10 @@ def list_posthog_tools(
     source="posthog_mcp",
     description=(
         "Call a named tool exposed by the configured PostHog MCP server "
-        "(e.g. run a HogQL query, list feature flags, inspect an error)."
+        "(e.g. run a HogQL query, list feature flags, inspect an error). "
+        "For execute-sql / query-run, pass arguments as "
+        '{"query": "SELECT …"} — the SQL must be a plain string, not '
+        '{"query": {"query": "SELECT …"}}.'
     ),
     use_cases=[
         "Running a HogQL/SQL query against the customer's PostHog project",
@@ -347,8 +413,10 @@ def call_posthog_tool(
             arguments=arguments or {},
         )
 
+    normalized_arguments = _normalize_mcp_tool_arguments(normalized_tool_name, arguments or {})
+
     try:
-        result = call_posthog_mcp_tool(config, normalized_tool_name, arguments or {})
+        result = call_posthog_mcp_tool(config, normalized_tool_name, normalized_arguments)
     except Exception as err:
         report_run_error(
             err,

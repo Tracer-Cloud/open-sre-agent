@@ -21,6 +21,7 @@ from pathlib import Path
 from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
 from config.constants.organization import organization_id
 from config.constants.tenancy import INTEGRATIONS_STORE_PATH_ENV
+from config.constants.work_items import OPENSRE_WORK_ITEMS_DIR_ENV
 from config.scope_context import current_scope
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,13 @@ def get_memory_dir() -> Path:
     return session_home() / "memory"
 
 
+def get_work_items_dir() -> Path:
+    override = os.getenv(OPENSRE_WORK_ITEMS_DIR_ENV, "").strip()
+    if override:
+        return Path(override).expanduser()
+    return session_home() / "work_items"
+
+
 def ensure_opensre_tmp_dir() -> Path:
     OPENSRE_TMP_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     with contextlib.suppress(OSError):
@@ -189,6 +197,7 @@ __all__ = [
     "ensure_opensre_tmp_dir",
     "get_memory_dir",
     "get_store_path",
+    "get_work_items_dir",
     "host_home",
     "integrations_store_path",
     "opensre_home",

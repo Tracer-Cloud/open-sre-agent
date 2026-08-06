@@ -36,9 +36,12 @@ def test_turn_needs_exclusive_stdin_for_bare_integration_menu(
     assert loop_input_policy.turn_needs_exclusive_stdin("/mcp", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/memory", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/model", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/loops", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/theme", session) is True
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/integrations list", session) is False
+    assert loop_input_policy.turn_needs_exclusive_stdin("/loops active", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/loops messages", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/theme blue", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/verify", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/verify datadog", session) is False

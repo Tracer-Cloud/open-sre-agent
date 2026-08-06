@@ -140,7 +140,7 @@ def _build_ambient_right_column(session: object = None) -> Text:
 
     parts.append(Text("───", style=DIM))
 
-    # Skills — count of action-agent playbooks discovered by the harness.
+    # Skills — count of action-agent skills discovered by the harness.
     skills_line = Text(overflow="fold")
     skills_line.append("Skills", style=f"bold {BRAND}")
     skills_line.append(f" ({_count_loaded_skills()}) loaded into cyberdeck", style=SECONDARY)

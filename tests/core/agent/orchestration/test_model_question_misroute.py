@@ -23,8 +23,8 @@ from rich.console import Console
 
 import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
-from core.agent_harness.prompts import prompt_context as default_prompt_context
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.context import DefaultPromptContextProvider
+from core.agent_harness.prompts.context import provider as default_prompt_context
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import Session
 from tests.core.agent.orchestration.action_execution_test_harness import (

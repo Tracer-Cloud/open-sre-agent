@@ -401,7 +401,7 @@ def test_the_assistant_cached_half_is_byte_identical_across_turns() -> None:
     fixed for.
     """
     # Arrange
-    from core.agent_harness.prompts.assistant_agent_prompt import (
+    from core.agent_harness.prompts.assistant import (
         build_assistant_system_prompt_envelope,
     )
 
@@ -431,7 +431,7 @@ def test_the_assistant_cached_half_is_byte_identical_across_turns() -> None:
 def test_per_question_docs_never_reach_the_assistant_cached_half() -> None:
     """Docs are retrieved per message, so caching them would invalidate every turn."""
     # Arrange
-    from core.agent_harness.prompts.assistant_agent_prompt import (
+    from core.agent_harness.prompts.assistant import (
         build_assistant_system_prompt_envelope,
     )
 

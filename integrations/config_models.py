@@ -830,6 +830,47 @@ class RocketChatConfig(StrictConfigModel):
         return self
 
 
+class BuzzConfig(StrictConfigModel):
+    """Buzz (Nostr-based workspace) runtime config for delivery via ``buzz-cli``.
+
+    ``private_key`` is the agent's Nostr identity (hex or ``nsec1...``) and is
+    the only required field. ``default_channel`` is a Buzz channel UUID —
+    channels are identified by UUID, not by name.
+    """
+
+    relay_url: str = "http://localhost:3000"
+    private_key: str = ""
+    default_channel: str = ""
+    auth_tag: str = ""
+    buzz_path: str = "buzz"
+    integration_id: str = ""
+
+    @field_validator("relay_url", mode="before")
+    @classmethod
+    def _normalize_relay_url(cls, value: object) -> str:
+        stripped = str(value or "").strip().rstrip("/")
+        if not stripped:
+            return "http://localhost:3000"
+        if not stripped.startswith(("http://", "https://")):
+            raise ValueError("relay_url must start with http:// or https://")
+        return stripped
+
+    @field_validator("private_key", "auth_tag", mode="before")
+    @classmethod
+    def _strip_secret(cls, value: object) -> str:
+        return str(value or "").strip()
+
+    _normalize_default_channel = field_validator("default_channel", mode="before")(normalize_str())
+    _normalize_buzz_path = field_validator("buzz_path", mode="before")(
+        normalize_with_default("buzz")
+    )
+    _normalize_integration_id = field_validator("integration_id", mode="before")(normalize_str())
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.private_key)
+
+
 class WhatsAppConfig(StrictConfigModel):
     """Twilio WhatsApp runtime config.
 

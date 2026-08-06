@@ -1,0 +1,143 @@
+---
+title: "Buzz"
+description: "Deliver investigation findings to a Buzz (block/buzz) channel."
+---
+
+OpenSRE's Buzz integration delivers investigation findings to a channel in [Buzz](https://github.com/block/buzz), Block's self-hostable, Nostr-based workspace where humans and AI agents share rooms.
+
+Start the interactive shell with `opensre` (no subcommand). Slash commands below are run from that REPL.
+
+<Note>
+Buzz support is **outbound delivery only** (investigation reports, watchdog alarms, and agent-requested messages posted to a channel). Triggering investigations from a Buzz channel is not supported yet.
+</Note>
+
+---
+
+## Prerequisites
+
+- A running Buzz relay (self-hosted) and its URL, e.g. `https://buzz.example.com` (defaults to `http://localhost:3000` for local dev).
+- The **`buzz` CLI** on `PATH`. It is not published to any package registry — build it from the [block/buzz](https://github.com/block/buzz) repo:
+
+  ```bash
+  cargo install --path crates/buzz-cli
+  ```
+
+  If you can't put it on `PATH`, point OpenSRE at the binary with `BUZZ_PATH=/path/to/buzz` or the `buzz_path` field during setup.
+- An agent identity (a Nostr keypair). Generate one with the relay's admin tool:
+
+  ```bash
+  buzz-admin generate-key
+  ```
+
+  This prints a public key (`npub...`) and a private key (`nsec...` or hex). The private key is what OpenSRE needs — treat it like a password; it's routed to the OS keyring, never plain `.env`.
+- If your relay has `BUZZ_REQUIRE_RELAY_MEMBERSHIP` enabled, the agent's public key must be registered as a relay member before it can post — ask your Buzz admin to add it, or messages will fail silently.
+
+---
+
+## Step 1: Find a channel
+
+Buzz channels are identified by **UUID**, not by name. List the channels your agent identity can see:
+
+```bash
+BUZZ_PRIVATE_KEY=<your-key> BUZZ_RELAY_URL=<your-relay> buzz channels list
+```
+
+Copy the UUID of the channel investigation reports should land in.
+
+---
+
+## Step 2: Configure the integration
+
+### Option A: Onboarding wizard (recommended)
+
+Interactive shell:
+
+```text
+/onboard
+```
+
+CLI:
+
+```bash
+opensre onboard
+```
+
+Choose **Buzz** from the integration list. The wizard prompts for:
+
+- **Relay URL** (`BUZZ_RELAY_URL`, defaults to `http://localhost:3000`)
+- **Private key** (OS keyring via `sync_env_secret`, not plain `.env`)
+- **Default channel** — the UUID from Step 1 (`BUZZ_DEFAULT_CHANNEL`)
+- **Auth tag** — optional NIP-OA JSON for owner attestation (`BUZZ_AUTH_TAG`)
+- **CLI binary path** — only if `buzz` isn't on `PATH` (`BUZZ_PATH`)
+
+Credentials are also saved to `~/.opensre/integrations.json` via `upsert_integration("buzz", ...)`.
+
+### Option B: Environment variables
+
+Set in `.env` (private key can also live in the keyring after wizard setup):
+
+```bash
+BUZZ_RELAY_URL=https://buzz.example.com
+BUZZ_PRIVATE_KEY=<nsec-or-hex-private-key>
+BUZZ_DEFAULT_CHANNEL=<channel-uuid>
+# BUZZ_AUTH_TAG=<optional-nip-oa-json>
+BUZZ_PATH=buzz
+```
+
+| Variable | Description |
+|---|---|
+| `BUZZ_RELAY_URL` | Buzz relay base URL. Defaults to `http://localhost:3000`. |
+| `BUZZ_PRIVATE_KEY` | Agent's Nostr private key (hex or `nsec1...`). Required. Resolved via env then keyring. |
+| `BUZZ_DEFAULT_CHANNEL` | Default delivery destination — a channel UUID from `buzz channels list`. Required for delivery. |
+| `BUZZ_AUTH_TAG` | Optional NIP-OA owner-attestation JSON, injected into every signed event. |
+| `BUZZ_PATH` | Override when the `buzz` binary isn't on `PATH`. Defaults to `buzz`. |
+
+OpenSRE picks these up at startup and registers Buzz as an active integration.
+
+<Note>
+**Credential resolution.** `BUZZ_PRIVATE_KEY` resolves via store → env → OS keyring. The rest (relay URL, default channel, auth tag, binary path) stay plain env / store.
+</Note>
+
+---
+
+## Step 3: Verify
+
+Interactive shell:
+
+```text
+/integrations verify buzz
+```
+
+CLI:
+
+```bash
+opensre integrations verify buzz
+```
+
+This resolves the `buzz` binary, then runs `buzz channels list` against the configured relay. A missing binary or key reports **missing** with an install/setup hint; an unreachable relay or rejected key reports **failed**.
+
+You can also trigger a real delivery test against a bundled fixture:
+
+```bash
+opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Findings should appear in the configured channel. Long reports are truncated to 4,096 characters.
+
+---
+
+## Watchdog alarms
+
+Buzz is a supported watchdog delivery provider alongside Telegram and Rocket.Chat:
+
+```text
+/watch <pid> --provider buzz --max-cpu 90
+```
+
+Or from the CLI:
+
+```bash
+opensre watchdog --pid <pid> --provider buzz --max-cpu 90
+```
+
+Alarms use the same per-threshold cooldown as the other providers (default 300s) and deliver to `BUZZ_DEFAULT_CHANNEL` unless `--chat-id <channel-uuid>` overrides it.

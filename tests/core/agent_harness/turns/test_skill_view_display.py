@@ -1,4 +1,4 @@
-"""Loading a playbook must not print the playbook.
+"""Loading a skill must not print the skill body.
 
 ``skill_view`` returns the full recipe so the *model* can follow it. With no
 ``summary`` in the result, the generic formatter fell through to dumping
@@ -21,8 +21,8 @@ def _skill_view_result() -> dict[str, object]:
     return execute_skill_view_tool({"name": "morning-report"}, _NoContext())
 
 
-def test_loading_a_skill_reports_a_line_not_the_playbook() -> None:
-    """The user sees that a playbook loaded, never its contents."""
+def test_loading_a_skill_reports_a_line_not_the_body() -> None:
+    """The user sees that a skill loaded, never its contents."""
     # Arrange
     import json
 
@@ -40,6 +40,6 @@ def test_loading_a_skill_reports_a_line_not_the_playbook() -> None:
 
     # Assert
     assert "morning-report" in shown
-    assert "CDATA" not in shown, "the playbook body reached the user"
+    assert "CDATA" not in shown, "the skill body reached the user"
     assert "shell_run(command=" not in shown
     assert len(shown) < 200, f"expected a short line, got {len(shown)} chars"

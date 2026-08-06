@@ -99,6 +99,9 @@ class _StubPromptContextProvider:
     def long_term_memory(self) -> str:
         return ""
 
+    def setup_state(self) -> str:
+        return ""
+
     def suggested_synthetic_prompt(self) -> str:
         return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 

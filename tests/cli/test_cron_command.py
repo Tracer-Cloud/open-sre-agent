@@ -86,6 +86,64 @@ def test_cron_add_allows_slack_without_chat_id(
     assert "created" in result.output.lower()
 
 
+def test_cron_add_persists_loop_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.scheduler import store as scheduler_store
+    from platform.scheduler.store import list_tasks
+
+    store = tmp_path / "scheduler_tasks.json"
+    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://hooks.slack.test/services/T/B/x")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cron_command,
+        [
+            "add",
+            "--name",
+            "Morning report",
+            "--kind",
+            "daily_summary",
+            "--cron",
+            "0 8 * * 1-5",
+            "--provider",
+            "slack",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Name: Morning report" in result.output
+    assert list_tasks(store)[0].name == "Morning report"
+
+
+def test_cron_add_allows_interactive_shell_without_chat_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from platform.scheduler import store as scheduler_store
+    from platform.scheduler.store import list_tasks
+
+    store = tmp_path / "scheduler_tasks.json"
+    monkeypatch.setattr(scheduler_store, "_default_store_path", lambda: store)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cron_command,
+        [
+            "add",
+            "--name",
+            "Local loop",
+            "--kind",
+            "daily_summary",
+            "--cron",
+            "0 8 * * 1-5",
+            "--provider",
+            "interactive_shell",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert list_tasks(store)[0].provider == Provider.INTERACTIVE_SHELL
+
+
 def test_cron_add_still_requires_chat_id_for_telegram() -> None:
     runner = CliRunner()
     result = runner.invoke(

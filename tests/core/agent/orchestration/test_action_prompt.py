@@ -13,8 +13,10 @@ from core.agent_harness.prompts import (
     prior_action_facts_block,
     recent_conversation_block,
 )
-from core.agent_harness.prompts.assistant import build_cli_agent_prompt_from_provider
-from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
+from core.agent_harness.prompts.assistant import (
+    build_cli_agent_prompt_from_provider,
+    build_handoff_guidance_block,
+)
 from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
 from core.agent_harness.prompts.skills_loader import (
     SKILLS_HEADER,
@@ -250,6 +252,10 @@ def test_system_prompt_offers_scheduled_deliveries_via_cron() -> None:
     assert "scheduled deliveries" in prompt
     assert "propose_scheduled_delivery" in prompt
     assert "every morning" in prompt
+    assert "slash_invoke /loops" in prompt
+    assert "/loops add" in prompt
+    assert "--prompt" in prompt
+    assert "--run-now" in prompt
     assert "do not call /cron until they confirm" in prompt
 
 
@@ -348,7 +354,7 @@ def test_skills_loader_bundles_github_security_fix_skill() -> None:
     skill = skills_dir() / "github_security_fix" / "SKILL.md"
     assert skill.is_file()
 
-    # Index carries the one-line catalog; the playbook loads on demand, so the
+    # Index carries the one-line catalog; the skill body loads on demand, so the
     # detailed assertions from #4727 belong against the body, not the block.
     assert "github-security-fix" in load_skills_index()
     body = load_skill_body("github-security-fix")
@@ -466,6 +472,9 @@ class _FakePrompts:
         return ""
 
     def long_term_memory(self) -> str:
+        return ""
+
+    def setup_state(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:
@@ -610,10 +619,17 @@ def test_the_slash_command_the_prompt_tells_the_agent_to_call_exists() -> None:
 
     # Act
     entry = MCP_BY_COMMAND.get("/cron")
+    loops_entry = MCP_BY_COMMAND.get("/loops")
 
     # Assert
     assert entry is not None, "the prompt offers /cron but it is not in the slash catalog"
     assert "add" in entry.llm_description.lower()
+    assert loops_entry is not None, "the prompt offers /loops but it is not in the slash catalog"
+    assert "add" in loops_entry.llm_description.lower()
+    assert "delete" in loops_entry.llm_description.lower()
+    assert "run once" in loops_entry.llm_description.lower()
+    assert "stop" in loops_entry.llm_description.lower()
+    assert "next fire time" in loops_entry.llm_description.lower()
 
 
 def test_scheduling_is_never_offered_without_asking_first() -> None:

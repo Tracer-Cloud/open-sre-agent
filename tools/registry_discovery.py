@@ -34,6 +34,7 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.azure_sql.tools",
     "integrations.betterstack.tools",
     "integrations.bitbucket.tools",
+    "integrations.buzz.tools",
     "integrations.clickhouse.tools",
     "integrations.cloudtrail.tools",
     "integrations.cloudwatch.tools",

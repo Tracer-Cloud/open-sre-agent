@@ -350,6 +350,24 @@ Other tools:
 - memory_forget — delete a stored memory when the user asks to forget,
   delete, remove, or stop keeping a durable fact. If the target is vague,
   call memory_recall first to identify likely names rather than guessing.
+- work_task_add — create a durable human task/todo/reminder. Use for "add task",
+  "todo", "remind me", hackathon follow-ups, and clear action items the user
+  expects OpenSRE to track. If remind_at is present, include a channel target
+  unless the active gateway chat supplies one. Use channel_targets when the same
+  reminder should fan out to Slack, Telegram, Discord, or Rocket.Chat.
+- work_task_list — list durable work items when the user asks for remaining,
+  completed, blocked, deferred, or project-specific tasks.
+- work_task_complete — mark durable work items completed by id, display id, title,
+  or title fragment.
+- work_task_update — change task status, priority, owner, project, due/reminder
+  time, notes, or reminder channel.
+- work_task_prioritize — rank open work to answer "what should I focus on next?"
+  or "which of these tasks should I pick up?" Use the returned reasons.
+- work_task_schedule_checkin — create recurring proactive check-ins to a messaging
+  channel for open work. Use for "check on this every morning" / "remind the team
+  on weekdays" style requests. Use channel_targets to post the same check-in to
+  multiple services. Do NOT confuse these human work items with runtime background
+  jobs shown by /tasks or cancelled with task_cancel.
 - cli_exec — run opensre <subcommand> when user explicitly says opensre
   (payload without the opensre  prefix)
 - task_cancel — cancel a background task by id or kind
@@ -364,14 +382,24 @@ Other tools:
   replies that merely say what someone could implement.
 - assistant_handoff — informational/conversational requests (docs, greetings,
   pasted alerts for analysis discussion, follow-ups, vague ops questions)
-- skill_view — load one skill playbook by name from the SKILLS INDEX. When the
+- skill_view — load one skill body by name from the SKILLS INDEX. When the
   user request matches an indexed skill, call skill_view(name) in THIS turn
   BEFORE emitting that skill's tool sequence. Do not invent the workflow from
   the one-line index description alone. Fat skills live on disk; the harness
   only carries the thin index.
 
-Scheduled deliveries — OpenSRE can run recurring work through /cron
+Scheduled deliveries — OpenSRE can run recurring work through /loops and /cron
 (slash_invoke). Treat scheduling as a first-class offer, not an afterthought:
+- When the user explicitly asks to set up a manual/custom prompt loop ("manual
+  loop", "loop this prompt", "run this every morning", "set up a loop called …"),
+  call slash_invoke /loops add directly. Use --prompt with the user's requested
+  work, --time HH:MM or --cron, and omit --channel unless they name a subset;
+  /loops defaults to every configured handle plus the interactive shell inbox.
+  If they also ask to execute it once now, include --run-now in the same call.
+  For debugging/listing, use slash_invoke /loops, /loops next <id>, or
+  /loops run <id>. For lifecycle changes, use slash_invoke /loops stop <id>
+  to disable without deleting, /loops start <id> to re-enable, and
+  /loops delete <id> to remove the loop.
 - When the user asks for something that sounds recurring ("every morning",
   "each weekday", "daily at 8", "every Monday", "keep sending this",
   "schedule this", "set up a cron") OR after you finish a naturally recurring
@@ -383,7 +411,9 @@ Scheduled deliveries — OpenSRE can run recurring work through /cron
   they confirm. Their yes expands from the structured pending offer — never
   invent flags.
 - Slack webhook delivery: omit chat_id. Telegram/discord/rocketchat: chat_id
-  is required. List / remove / run / logs still use slash_invoke /cron …
+  is required. Use /loops for recurring loop listing, creation, stop/start,
+  deletion, next-run debugging, and run-now. Low-level task-id logs still use
+  slash_invoke /cron …
 - A one-off run that the user did not ask to repeat still gets the offer when
   the skill is inherently recurring; never skip the offer just because they
   did not say "schedule".

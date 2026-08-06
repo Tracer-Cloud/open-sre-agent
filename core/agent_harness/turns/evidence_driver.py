@@ -45,8 +45,10 @@ log = logging.getLogger(__name__)
 # list tools -> fetch a schema -> call the real tool -> conclude — plus one
 # goal-review nudge; 4 was observed live to cap out on discovery alone, so the
 # PostHog count query never ran. The full multi-stage ReAct budget belongs to
-# investigations.
+# investigations. Headless metric reports (PostHog / digests) may raise this
+# via ``max_iterations``.
 _MAX_GATHER_ITERATIONS = 6
+MAX_REPORT_GATHER_ITERATIONS = 12
 
 # Caps so a chatty tool (or many tools) can't blow up the follow-up prompt the
 # assistant must summarize.
@@ -70,6 +72,7 @@ class GatherAgentFactory(Protocol):
         resolved: dict[str, Any],
         on_progress: ToolEventObserver | None,
         message: str,
+        max_iterations: int = _MAX_GATHER_ITERATIONS,
     ) -> Agent[Any]:
         """Build and return the evidence-gather agent for one turn."""
 
@@ -213,6 +216,7 @@ def _build_evidence_agent(
     resolved: dict[str, Any],
     on_progress: ToolEventObserver | None,
     message: str,
+    max_iterations: int = _MAX_GATHER_ITERATIONS,
 ) -> Agent[Any]:
     """Build the Agent for one evidence-gather turn.
 
@@ -229,7 +233,7 @@ def _build_evidence_agent(
         system=build_gather_system_prompt(session),
         tools=tuple(gather_tools),
         resolved_integrations=resolved,
-        max_iterations=_MAX_GATHER_ITERATIONS,
+        max_iterations=max_iterations,
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
         goal=build_gather_goal_reviewer(llm, message),
     )
@@ -245,6 +249,7 @@ def gather_tool_evidence(
     error_reporter: ErrorReporter | None = None,
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
+    max_iterations: int | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -270,10 +275,14 @@ def gather_tool_evidence(
         if llm is None:
             log.debug("gather_evidence skip: LLM unavailable")
             return None
+        iteration_cap = (
+            _MAX_GATHER_ITERATIONS if max_iterations is None else max(1, int(max_iterations))
+        )
         log.debug(
-            "gather_evidence start tools=%s integrations=%s",
+            "gather_evidence start tools=%s integrations=%s iterations=%s",
             len(gather_tools),
             len(resolved),
+            iteration_cap,
         )
         build_agent_for_turn = agent_factory or _build_evidence_agent
         agent = build_agent_for_turn(
@@ -283,12 +292,13 @@ def gather_tool_evidence(
             resolved=resolved,
             on_progress=on_progress,
             message=message,
+            max_iterations=iteration_cap,
         )
         result = run_react_agent_with_telemetry(
             agent,
             [{"role": "user", "content": _build_gather_user_message(session, message)}],
             phase="gather",
-            iteration_cap=_MAX_GATHER_ITERATIONS,
+            iteration_cap=iteration_cap,
             llm=llm,
             session=session,
         )
@@ -327,4 +337,9 @@ def gather_tool_evidence(
         return _format_observation(result.executed)
 
 
-__all__ = ["GatherAgentFactory", "PersistToolCalls", "gather_tool_evidence"]
+__all__ = [
+    "GatherAgentFactory",
+    "MAX_REPORT_GATHER_ITERATIONS",
+    "PersistToolCalls",
+    "gather_tool_evidence",
+]

@@ -60,8 +60,9 @@ def _stub_agent_factory(run: _FakeRun) -> GatherAgentFactory:
         resolved: dict[str, Any],
         on_progress: Any,
         message: str,
+        max_iterations: int = 4,
     ) -> _StubAgent:
-        _ = (llm, session, gather_tools, resolved, message)
+        _ = (llm, session, gather_tools, resolved, message, max_iterations)
         from core.events import runtime_event_callback_from_observer
 
         return _StubAgent(runtime_event_callback_from_observer(on_progress))

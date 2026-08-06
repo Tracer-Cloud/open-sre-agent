@@ -54,6 +54,7 @@ ignore_imports =
     tools.cross_vendor.fix_sentry_issue.ship -> integrations.github.pull_requests
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.claude_code
     tools.interactive_shell.implementation.claude_code_executor -> integrations.llm_cli.subprocess_env
+    tools.investigation.reporting.delivery.bootstrap -> integrations.buzz.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.discord.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.grafana.reporting_adapter
     tools.investigation.reporting.delivery.bootstrap -> integrations.openclaw.reporting_adapter
@@ -69,6 +70,8 @@ ignore_imports =
     tools.investigation.state_factory -> integrations.opensre.hf_remote
     tools.system.python_execution_tool.credentials -> integrations.github.client
     tools.system.python_execution_tool.credentials -> integrations.github.helpers
+    tools.system.watch_dog.runner -> integrations.buzz.alarms
+    tools.system.watch_dog.runner -> integrations.buzz.credentials
     tools.system.watch_dog.runner -> integrations.rocketchat.alarms
     tools.system.watch_dog.runner -> integrations.rocketchat.credentials
     tools.system.watch_dog.runner -> integrations.telegram.alarms

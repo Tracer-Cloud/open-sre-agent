@@ -84,4 +84,7 @@ def start_discord_gateway_background(
     )
 
 
-__all__ = ["DiscordGatewayBackground", "start_discord_gateway_background"]
+__all__ = [
+    "DiscordGatewayBackground",
+    "start_discord_gateway_background",
+]

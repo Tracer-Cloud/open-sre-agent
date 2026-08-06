@@ -109,6 +109,7 @@
               "sessions",
               "principal-scoped-storage",
               "memory",
+              "work-management",
               "fleet",
               "cron",
               "closed-loop-learning",
@@ -193,6 +194,7 @@
               "messaging/discord",
               "messaging/telegram",
               "messaging/rocketchat",
+              "messaging/buzz",
               "messaging/whatsapp",
               "messaging/twilio-sms"
             ]

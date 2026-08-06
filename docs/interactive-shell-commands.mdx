@@ -97,7 +97,9 @@ When you type `/` and browse completions with the arrow keys, the full descripti
 | Command | What it does |
 | --- | --- |
 | `/background` | Run investigations async; track RCAs and completion notifications |
+| `/loops` | List, create, run once, and debug recurring prompt loops |
 | `/tasks` | List recent and in-flight background tasks |
+| `/work` | List, add, complete, and prioritize human work items |
 | `/cancel <id>` | Cancel a running task by id **elevated** |
 | `/stop` | Guidance for stopping investigations and background work |
 
@@ -679,6 +681,7 @@ Shows persistence on/off, redaction on/off, retention cap, history file path, bu
 ## Tasks and background work
 
 Long-running work is tracked in a per-session task registry surfaced by `/tasks`.
+Human todos and reminders are tracked separately by `/work`.
 
 ### Task kinds
 
@@ -939,6 +942,31 @@ Read/write `~/.opensre/config.yml`. Prefer env vars for secrets; use config for 
 
 Scheduled investigation or report delivery. See [Cron](/cron).
 
+### `/loops`
+
+```text
+/loops
+/loops active
+/loops all
+/loops add --name "Morning ops" --time 08:30 --prompt "Check open incidents and summarize production risk" --run-now
+/loops run <loop_id>
+/loops stop <loop_id>
+/loops start <loop_id>
+/loops delete <loop_id>
+/loops next <loop_id>
+/loops messages
+```
+
+List recurring loops from the scheduler store, create manual prompt loops, run a loop once immediately, stop or restart a loop, delete a loop, and debug the next fire time. Onboarding creates draft examples such as a weekday morning report; active loops run through the cron scheduler when the gateway or `opensre cron start` is running.
+
+You can also ask naturally:
+
+```text
+Set up a manual loop called Morning ops at 08:30 UTC to check open incidents and summarize production risk, and run it once now.
+```
+
+By default, new loops send to every configured default handle OpenSRE can reach: Telegram, Slack, and the local interactive-shell inbox.
+
 ### `/sentry`
 
 ```text
@@ -1116,8 +1144,9 @@ You do not need to memorize every slash command. Examples:
 | Connected integrations | `/integrations list` |
 | Tools | `/tools` |
 | Background tasks | `/tasks` |
+| Human todos and reminders | `/work` |
 | MCP servers | `/mcp list` |
-| Cron jobs | `/cron list` |
+| Cron jobs | `/loops` or `/cron list` |
 | Past REPL sessions | `/sessions` |
 | Watchdog tasks | `/watches` |
 
