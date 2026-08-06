@@ -563,10 +563,17 @@ class StreamRenderer:
                 root_cause = (self._final_state.get("root_cause") or "").strip()
                 if root_cause:
                     _print_info(f"Root cause: {root_cause}")
-                _print_info(
-                    "Investigation finished without a full report. "
-                    "Re-run, or check the logs if this persists."
-                )
+                if self._final_state.get("is_noise"):
+                    _print_info(
+                        "Classified as noise — not an incident, so no "
+                        "investigation ran. Rephrase as a concrete alert or "
+                        "symptom to investigate it."
+                    )
+                else:
+                    _print_info(
+                        "Investigation finished without a full report. "
+                        "Re-run, or check the logs if this persists."
+                    )
             return
 
         from tools.investigation.reporting.renderers.terminal import (

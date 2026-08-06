@@ -60,11 +60,9 @@ class DispatchablePendingOffer(Protocol):
 
     def to_dispatch_message(self) -> str:
         """User-message form the action driver executes without an LLM."""
-        ...
 
     def matches_expanded(self, expanded: str) -> bool:
         """True when ``expanded`` is this offer's dispatch message."""
-        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,9 +163,7 @@ def assistant_offers_full_investigation(assistant_text: str) -> bool:
     lowered = offer.lower()
     if _FULL_INVESTIGATION_MARKER not in lowered:
         return False
-    if any(marker in lowered for marker in _SCHEDULE_OFFER_MARKERS):
-        return False
-    return True
+    return not any(marker in lowered for marker in _SCHEDULE_OFFER_MARKERS)
 
 
 def is_schedule_only_want_me_to(assistant_text: str) -> bool:
@@ -182,16 +178,47 @@ def is_schedule_only_want_me_to(assistant_text: str) -> bool:
 
 
 def ensure_canonical_investigation_closer(assistant_text: str) -> str:
-    """Force the gather-answer closer to the canonical investigate Want-me-to.
+    """Force an existing Want-me-to closer to the canonical investigate body.
 
     Dogfood failure: dual paste-alert / ``/integrations setup`` menus left
     ``yes`` re-gathering or opening setup instead of ``investigation_start``.
-    Schedule-only closers are left untouched.
+    Non-investigation options are dropped (not rephrased above the closer) so
+    the user-visible offer matches what bare ``yes`` accepts. A reply with no
+    Want-me-to closer is returned unchanged — the assistant may legitimately
+    skip the offer. Schedule-only closers are left untouched.
     """
     text = assistant_text if isinstance(assistant_text, str) else ""
-    if is_schedule_only_want_me_to(text):
+    offer = offer_from_assistant_content(text)
+    if offer is None or is_schedule_only_want_me_to(text):
         return text
     return replace_want_me_to_body(text, _INVESTIGATION_WANT_ME_TO_BODY)
+
+
+_MAX_EVIDENCE_LINE_CHARS = 160
+_MAX_EVIDENCE_LINES = 8
+
+
+def _compact_evidence_lines(observation: str) -> list[str]:
+    """One line per gathered tool result: tool name plus a short outcome.
+
+    The gather observation block is ``Tool:``/``Arguments:``/``Result:``
+    paragraphs; raw result payloads (stack traces, JSON error dumps) read as
+    noise to the intake alert parser, so only a compact outcome per tool goes
+    into the alert text.
+    """
+    lines: list[str] = []
+    for block in observation.split("\n\n"):
+        if not block.startswith("Tool: "):
+            continue
+        name = block.split("\n", 1)[0][len("Tool: ") :].strip()
+        _, _, result = block.partition("\nResult: ")
+        outcome = " ".join(result.split()) or "(no result)"
+        if len(outcome) > _MAX_EVIDENCE_LINE_CHARS:
+            outcome = outcome[:_MAX_EVIDENCE_LINE_CHARS] + "…"
+        lines.append(f"- {name}: {outcome}")
+        if len(lines) >= _MAX_EVIDENCE_LINES:
+            break
+    return lines
 
 
 def synthesize_investigation_alert_text(
@@ -205,9 +232,10 @@ def synthesize_investigation_alert_text(
     evidence = (observation or "").strip()
     if not evidence:
         return base
-    snippet = evidence[:max_evidence_chars].rstrip()
-    if len(evidence) > max_evidence_chars:
-        snippet += "\n...[truncated]"
+    compact = _compact_evidence_lines(evidence)
+    snippet = "\n".join(compact) if compact else evidence[:max_evidence_chars].rstrip()
+    if len(snippet) > max_evidence_chars:
+        snippet = snippet[:max_evidence_chars].rstrip() + "\n...[truncated]"
     if not base:
         return snippet
     return f"{base}\n\nEvidence gathered:\n{snippet}"

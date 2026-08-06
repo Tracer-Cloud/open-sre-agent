@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
@@ -110,12 +110,14 @@ def _stream_response(
     run_factory: RunRecordFactory,
     error_reporter: ErrorReporter | None,
     session: Any | None = None,
+    defer_want_me_to_closer: bool = False,
 ) -> Any | None:
     try:
         started = time.monotonic()
         text_str = output.stream(
             label=_ASSISTANT_LABEL,
             chunks=client.invoke_stream(turn_prompt.messages()),
+            defer_want_me_to_closer=defer_want_me_to_closer,
         )
     except KeyboardInterrupt:
         output.print("· cancelled")
@@ -206,6 +208,7 @@ def stream_answer(
         run_factory=run_factory,
         error_reporter=error_reporter,
         session=session,
+        defer_want_me_to_closer=req.defer_want_me_to_closer,
     )
     if run is None:
         return None
@@ -334,9 +337,24 @@ def _gather_and_answer(
             tool_observation_on_screen=observation is None,
             handoff_contents=handoff_contents,
             turn_plan=turn_plan,
+            defer_want_me_to_closer=True,
         ),
     )
     return run, observation
+
+
+def _finish_streamed_response(output: OutputSink | None, text: str) -> None:
+    """Flush deferred/rewritten gather paint on surfaces that support it."""
+    if output is None:
+        return
+    finish = getattr(output, "finish_streamed_response", None)
+    if callable(finish):
+        finish(text)
+        return
+    # Gateway sinks expose ``finalize`` for an in-place edit of the answer.
+    finalize = getattr(output, "finalize", None)
+    if callable(finalize):
+        finalize(text)
 
 
 def run_turn(
@@ -350,6 +368,7 @@ def run_turn(
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
     surface: str = "interactive_shell",
+    output: OutputSink | None = None,
 ) -> TurnResult:
     """Run one full turn through three paths, in order:
 
@@ -492,8 +511,9 @@ def run_turn(
         # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
         # Skip when this turn already confirmed a pending offer.
         if not confirms_pending:
-            if route.intent == "gather_and_answer" and not _is_prior_investigation_follow_up_handoff(
-                handoff_contents
+            if (
+                route.intent == "gather_and_answer"
+                and not _is_prior_investigation_follow_up_handoff(handoff_contents)
             ):
                 response_text, _offer = finalize_gather_investigation_offer(
                     session,
@@ -501,12 +521,8 @@ def run_turn(
                     assistant_text=outcome.response_text,
                     observation=outcome.evidence_for_offer,
                 )
-                outcome = _RouteOutcome(
-                    final_intent=outcome.final_intent,
-                    response_text=response_text,
-                    llm_run=outcome.llm_run,
-                    evidence_for_offer=outcome.evidence_for_offer,
-                )
+                outcome = replace(outcome, response_text=response_text)
+                _finish_streamed_response(output, response_text)
             else:
                 arm_pending_investigation_offer(
                     session,

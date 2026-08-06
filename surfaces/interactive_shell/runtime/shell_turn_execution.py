@@ -155,6 +155,7 @@ def execute_shell_turn(
         accounting=ShellTurnAccounting(session=session, text=text, recorder=recorder),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        output=resolved_output,
     )
 
 

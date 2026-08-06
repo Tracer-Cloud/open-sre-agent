@@ -89,11 +89,16 @@ class BufferOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with)
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
         text = "".join(str(chunk) for chunk in chunks)
         self.streamed.append(text)
         return text
+
+    def finish_streamed_response(self, text: str) -> None:
+        # Headless tests assert on ``TurnResult.assistant_response_text``.
+        _ = text
 
     @property
     def text(self) -> str:

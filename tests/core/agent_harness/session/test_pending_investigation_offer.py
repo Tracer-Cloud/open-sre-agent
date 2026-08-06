@@ -170,19 +170,55 @@ def test_ensure_canonical_closer_rewrites_dual_integrations_menu() -> None:
         "2. walk you through `/integrations setup grafana` to get a live "
         "Grafana connection first?"
     )
+
     fixed = ensure_canonical_investigation_closer(raw)
+
+    # Assert: one closer, canonical body; dual /integrations option is dropped
+    # (not rephrased above the closer — that still steals attention from yes).
     assert fixed.count("**Want me to:**") == 1
     assert fixed.rstrip().endswith("**Want me to:** run a full investigation")
     assert "/integrations" not in fixed
     assert not is_schedule_only_want_me_to(fixed)
 
 
-def test_ensure_canonical_closer_leaves_schedule_only_alone() -> None:
-    schedule = (
-        "Saved.\n\n**Want me to:** schedule this as a recurring daily_summary?"
+def test_ensure_canonical_closer_leaves_offerless_reply_alone() -> None:
+    """A reply that skipped the offer (evidence resolved it) must stay untouched."""
+    resolved = (
+        "The p99 spike traces to the 14:02 deploy of orders-api; rolling back "
+        "resolved it at 14:19. No further action needed."
     )
+
+    fixed = ensure_canonical_investigation_closer(resolved)
+
+    assert fixed == resolved
+    assert "Want me to" not in fixed
+
+
+def test_ensure_canonical_closer_leaves_schedule_only_alone() -> None:
+    schedule = "Saved.\n\n**Want me to:** schedule this as a recurring daily_summary?"
     assert ensure_canonical_investigation_closer(schedule) == schedule
     assert is_schedule_only_want_me_to(schedule)
+
+
+def test_finalize_gather_leaves_offerless_answer_unarmed() -> None:
+    """A gather answer with no closer arms nothing and reaches the user as-is."""
+    session = InMemorySessionStore()
+    resolved = "Root cause found: the 14:02 deploy. Rolled back; latency recovered."
+    session.cli_agent_messages = [
+        ("user", "why is checkout 502?"),
+        ("assistant", resolved),
+    ]
+
+    text, offer = finalize_gather_investigation_offer(
+        session,
+        user_text="why is checkout 502?",
+        assistant_text=resolved,
+        observation="grafana: deploy marker at 14:02",
+    )
+
+    assert text == resolved
+    assert offer is None
+    assert getattr(session, "pending_investigation_offer", None) is None
 
 
 def test_finalize_gather_rewrites_and_arms_dogfood_dual_menu() -> None:
@@ -407,3 +443,33 @@ def test_want_me_to_extractor_lives_outside_conversation() -> None:
         offer_from_assistant_content("Done.\n\n**Want me to:** run a full investigation?")
         == "run a full investigation"
     )
+
+
+def test_synthesize_compacts_tool_observation_blocks() -> None:
+    # Arrange: gather-formatted observation whose result payloads are the raw
+    # multi-line JSON error dumps that read as noise to the intake alert parser.
+    observation = (
+        "Tool: kubernetes_list_pods\n"
+        'Arguments: {"label_selector": "app=gateway"}\n'
+        'Result: {"error": "HTTPSConnectionPool(host=127.0.0.1, port=50859):\n'
+        'Max retries exceeded with url: /api/v1/pods"}\n'
+        "\n"
+        "Tool: query_grafana_service_names\n"
+        "Arguments: {}\n"
+        'Result: {"available": true, "service_names": []}'
+    )
+
+    # Act
+    text = synthesize_investigation_alert_text("why is the gateway slow?", observation)
+
+    # Assert: the question leads; each tool becomes one single-line outcome;
+    # argument payloads do not leak into the alert text.
+    assert text.startswith("why is the gateway slow?")
+    assert "- kubernetes_list_pods:" in text
+    assert "- query_grafana_service_names:" in text
+    assert "Arguments:" not in text
+    assert "Max retries exceeded with url" in text.replace("\n", " ")
+    kubernetes_line = next(
+        line for line in text.splitlines() if line.startswith("- kubernetes_list_pods:")
+    )
+    assert "Max retries exceeded" in kubernetes_line

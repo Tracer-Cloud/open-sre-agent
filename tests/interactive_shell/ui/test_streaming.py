@@ -11,9 +11,11 @@ import pytest
 from rich.console import Console
 
 from surfaces.interactive_shell.ui.streaming import (
+    finish_deferred_closer,
     format_token_count_short,
     render_response_header,
     stream_to_console,
+    stream_to_console_state,
 )
 
 
@@ -1000,3 +1002,49 @@ class TestSuppressionPeek:
         assert result == '  \n{"action":"slash"}'
         output = _strip_ansi(buf.getvalue())
         assert "●" not in output
+
+
+class TestDeferWantMeToCloser:
+    """Gather path holds drifted Want-me-to until the canonical rewrite paints."""
+
+    def test_tty_holds_closer_but_paints_evidence(self) -> None:
+        console, buf = _tty_console()
+        dual = (
+            "Checkout looks unhealthy.\n\n"
+            "**Want me to:**\n"
+            "1. run a full investigation once you paste, or\n"
+            "2. `/integrations setup grafana`?"
+        )
+        paint = stream_to_console_state(
+            console,
+            label="assistant",
+            chunks=_yield_chunks([dual]),
+            defer_want_me_to_closer=True,
+        )
+        visible = _strip_ansi(buf.getvalue())
+        assert paint.deferred_closer is True
+        assert "Checkout looks unhealthy" in visible
+        assert "/integrations setup grafana" not in visible
+        assert "· " not in visible  # footer held until finish
+
+        finish_deferred_closer(
+            console,
+            "Checkout looks unhealthy.\n\n**Want me to:** run a full investigation",
+            footer_elapsed_s=paint.footer_elapsed_s,
+            footer_total_bytes=paint.footer_total_bytes,
+        )
+        after = _strip_ansi(buf.getvalue())
+        assert "run a full investigation" in after
+        assert "/integrations setup grafana" not in after
+
+    def test_non_tty_defers_entire_paint_when_closer_present(self) -> None:
+        console, buf = _non_tty_console()
+        text = "Empty.\n\n**Want me to:** kick off a full investigation after paste?"
+        paint = stream_to_console_state(
+            console,
+            label="assistant",
+            chunks=_yield_chunks([text]),
+            defer_want_me_to_closer=True,
+        )
+        assert paint.deferred_closer is True
+        assert buf.getvalue() == ""
