@@ -29,7 +29,6 @@ _POOL_MAX_CONNECTIONS = 10
 # construction under the module lock in gateway/web/investigations.py.
 # Operators may tune this through DATABASE_URL;e.g. ``postgresql://....?connect_timeout=10``.
 _CONNECT_TIMEOUT_SECONDS = 10  # default connect_timeout applied to the pool DSN
-_CONNECT_TIMEOUT_MIN_SECONDS = 2  # floor; libpq rounds any lower value up to 2 anyway
 _CONNECT_TIMEOUT_MAX_SECONDS = 30  # ceiling; caps an operator-supplied DATABASE_URL value
 
 # Keepalives detect a silently dropped connection;
@@ -73,7 +72,7 @@ def _bounded_connect_timeout(requested: str | None) -> int:
         seconds = 0
     if seconds <= 0:  # unset, unparseable, or libpq's "wait forever"
         return _CONNECT_TIMEOUT_SECONDS  # default
-    return max(_CONNECT_TIMEOUT_MIN_SECONDS, min(seconds, _CONNECT_TIMEOUT_MAX_SECONDS))
+    return min(seconds, _CONNECT_TIMEOUT_MAX_SECONDS)
 
 
 def _connect_kwargs(dsn: str) -> dict[str, Any]:

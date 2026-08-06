@@ -138,7 +138,7 @@ def test_dsn_connect_timeout_is_honoured_inside_the_bounds(
         ("", 10),
         ("0", 10),  # libpq's "wait forever"
         ("not-a-number", 10),
-        ("1", 2),  # below libpq's own floor
+        ("1", 1),  # an aggressive value fails fast, which cannot cause a hang
         ("7", 7),
         ("3600", 30),  # an hour is not a bound
     ],
