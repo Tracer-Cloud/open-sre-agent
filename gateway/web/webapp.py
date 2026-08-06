@@ -16,7 +16,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -76,7 +76,10 @@ app.include_router(investigations_router)
 
 
 @app.middleware("http")
-async def limit_body_size(request: Request, call_next: Any) -> Response:
+async def limit_body_size(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     if request.method == "POST":
         if (size_error := await validate_body_size(request)) is not None:
             return size_error
