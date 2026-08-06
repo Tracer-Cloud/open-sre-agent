@@ -57,3 +57,32 @@ def test_upload_uses_no_org_prefix_when_org_empty(
 
     assert key == "no-org/inv-1/report.json"
     fake.upload_file.assert_called_once()
+
+
+def test_upload_passes_timeout_config_to_boto3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typing import Any
+
+    calls = []
+
+    def mock_client(service_name: str, config: Any = None) -> Any:
+        calls.append((service_name, config))
+        fake = MagicMock()
+        return fake
+
+    import boto3
+
+    monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "bucket")
+    monkeypatch.setattr(boto3, "client", mock_client)
+    local = write_local_report("inv-1", {}, base_dir=tmp_path)
+
+    key = upload_report_to_s3(local, org_id="org", investigation_id="inv-1")
+
+    assert key == "org/inv-1/report.json"
+    assert len(calls) == 1
+    service, config = calls[0]
+    assert service == "s3"
+    assert config is not None
+    assert config.connect_timeout == 5.0
+    assert config.read_timeout == 10.0

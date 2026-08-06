@@ -42,8 +42,10 @@ def upload_report_to_s3(
     key = f"{org_id or 'no-org'}/{investigation_id}/report.json"
     try:
         import boto3
+        from botocore.config import Config
 
-        boto3.client("s3").upload_file(str(local_path), bucket, key)
+        config = Config(connect_timeout=5.0, read_timeout=10.0)
+        boto3.client("s3", config=config).upload_file(str(local_path), bucket, key)
     except Exception:
         logger.warning("[investigations] S3 upload failed for %s", investigation_id, exc_info=True)
         return None

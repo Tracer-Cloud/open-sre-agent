@@ -84,7 +84,11 @@ class PostgresInvestigationStore:
                 from psycopg2.pool import ThreadedConnectionPool
 
                 self._pool = ThreadedConnectionPool(
-                    _POOL_MIN_CONNECTIONS, _POOL_MAX_CONNECTIONS, self._dsn
+                    _POOL_MIN_CONNECTIONS,
+                    _POOL_MAX_CONNECTIONS,
+                    self._dsn,
+                    connect_timeout=5,
+                    options="-c statement_timeout=10000",
                 )
             return self._pool
 

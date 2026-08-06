@@ -42,10 +42,11 @@ def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
     class _FakePool:
         instances: list[_FakePool] = []
 
-        def __init__(self, minconn: int, maxconn: int, dsn: str) -> None:
+        def __init__(self, minconn: int, maxconn: int, dsn: str, **kwargs: Any) -> None:
             self.minconn = minconn
             self.maxconn = maxconn
             self.dsn = dsn
+            self.kwargs = kwargs
             self.connection = _FakeConnection()
             self.gets = 0
             self.puts = 0
@@ -82,6 +83,17 @@ def test_one_pool_and_every_connection_returned(monkeypatch: pytest.MonkeyPatch)
     # Three operations (schema, get, claim): each borrowed and returned once.
     assert pool.gets == 3
     assert pool.puts == 3
+
+
+def test_pool_timeout_options_passed_to_driver(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
+
+    _ = PostgresInvestigationStore("postgresql://example/db")
+
+    assert len(fake_pool_cls.instances) == 1
+    pool = fake_pool_cls.instances[0]
+    assert pool.kwargs.get("connect_timeout") == 5
+    assert "statement_timeout=10000" in pool.kwargs.get("options", "")
 
 
 def _raise_query_error() -> None:
