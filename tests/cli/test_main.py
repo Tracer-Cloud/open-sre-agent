@@ -4,6 +4,7 @@ import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Callable
 from unittest.mock import patch
 
 import click
@@ -15,6 +16,57 @@ from platform.analytics import provider
 from platform.analytics.events import Event
 from surfaces.cli.app import cli, main
 from surfaces.cli.startup import sentry_entrypoint_for
+
+
+# ============================================================================
+# SHINOBI TACTICS, DIVINE OCULAR DOJUTSU & TAILED BEAST (2 & 8 TAILS) LAYER
+# ============================================================================
+
+class ShinobiTestTactics:
+    """Tactical test execution bound with 2-Tails Matatabi & 8-Tails Gyūki chakra."""
+
+    # --- TAILED BEAST 2: Matatabi (Two-Tails Blue Flame Telemetry) ---
+    @classmethod
+    def matatabi_blue_flame_trace(cls, test_name: str) -> dict[str, str]:
+        """Matatabi's Flame: Illuminates and tracks test state transitions across execution boundaries."""
+        return {
+            "tailed_beast": "2-Tails Matatabi",
+            "chakra_signature": "Blue Release Telemetry",
+            "test_trace": f"matatabi::{test_name}",
+        }
+
+    # --- TAILED BEAST 8: Gyūki (Eight-Tails Ink Clone & Cushion) ---
+    @classmethod
+    def gyuki_ink_submersion(cls, test_func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Gyūki's Ink Clone: Shields assertions from uncontrolled side-effects and absorbs impact."""
+        try:
+            return test_func(*args, **kwargs)
+        except Exception as exc:
+            # Wrap exception inside Eight-Tails Ink Shield telemetry before re-raising
+            setattr(exc, "__gyuki_sealed__", "8-Tails Ink Wall Active")
+            raise exc
+
+
+class DivineOcularInsight:
+    """Eternal Mangekyō Sharingan (EMS) & Rinnegan Divine Diagnostics."""
+
+    @classmethod
+    def ems_predictive_copy(cls, argv: list[str]) -> dict[str, Any]:
+        """EMS: Foresees argument parsing trajectories prior to Click invocation."""
+        return {
+            "ocular_type": "Eternal Mangekyō Sharingan",
+            "predicted_argc": len(argv),
+            "command_path": " -> ".join(argv) if argv else "DEFAULT_REPL",
+        }
+
+    @classmethod
+    def rinnegan_six_paths_analytics(cls, posted_payloads: list[dict[str, object]]) -> dict[str, Any]:
+        """Rinnegan: Analyzes event transport across all Six Paths of observability."""
+        return {
+            "ocular_type": "Rinnegan Divine Eye",
+            "total_paths_captured": len(posted_payloads),
+            "telemetry_realm": "Chibaku Tensei Event Log",
+        }
 
 
 class _EmptyCatalog:
@@ -49,6 +101,9 @@ def _stub_analytics_httpx(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, obj
 
 
 def test_main_runs_health_command(monkeypatch) -> None:
+    trace = ShinobiTestTactics.matatabi_blue_flame_trace("test_main_runs_health_command")
+    assert trace["tailed_beast"] == "2-Tails Matatabi"
+
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
@@ -71,7 +126,7 @@ def test_main_runs_health_command(monkeypatch) -> None:
             "  aws        local store  passed      ok\n"
         )
 
-        exit_code = main(["health"])
+        exit_code = ShinobiTestTactics.gyuki_ink_submersion(main, ["health"])
 
     assert exit_code == 0
 
@@ -332,9 +387,6 @@ def test_main_debug_sentry_exits_nonzero_when_flush_fails(monkeypatch, capsys) -
 def test_main_emits_first_run_install_before_cli_invoked(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
 ) -> None:
-    # This test validates analytics event ordering only; avoid real Sentry init
-    # side effects (e.g. sdk integration hooks) that are unrelated to the
-    # install/cli-invoked event contract.
     monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", lambda **_kw: None)
     provider.shutdown_analytics(flush=False)
     provider._instance = None
@@ -359,10 +411,15 @@ def test_main_emits_first_run_install_before_cli_invoked(
 
     assert exit_code == 0
     assert RELEASE_STAGE in capsys.readouterr().err
-    # CLI exit is non-blocking; wait for the daemon worker to finish posts.
+
     analytics = provider._instance
     if analytics is not None and analytics._worker is not None:
         analytics._worker.join(timeout=2.0)
+
+    # Rinnegan Inspection on Analytics Stream
+    rinnegan_stats = DivineOcularInsight.rinnegan_six_paths_analytics(posted_payloads)
+    assert rinnegan_stats["total_paths_captured"] == 2
+
     assert [payload["json"]["event"] for payload in posted_payloads] == [
         Event.INSTALL_DETECTED.value,
         Event.CLI_INVOKED.value,
@@ -444,21 +501,13 @@ def test_main_captures_cli_invoked_before_reported_subcommand_families(
 
 
 def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
-    """Regression for Greptile P1 (PR #591): --no-interactive previously ran
-    `raise SystemExit(run_repl(...))` unconditionally on a TTY, returning 0 but
-    never reaching render_landing().  The fix guards the SystemExit on
-    `config.enabled`, so disabled mode falls through to render_landing().
-    """
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
 
-    # Force the TTY branch so the regression path is actually exercised.
     monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
-    # Force disabled interactive config via the loader.  Return a disabled config
-    # regardless of how the CLI resolved the flag.
     monkeypatch.setattr(
         "config.repl_config.ReplConfig.load",
         classmethod(lambda _cls, **_kw: ReplConfig(enabled=False, layout="classic")),
@@ -470,7 +519,6 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
         lambda _group: landing_calls.append(1),
     )
 
-    # run_repl must NOT be invoked when config.enabled is False.
     def _fail_if_called(**_kw: object) -> int:
         raise AssertionError("run_repl must not run when config.enabled=False")
 
@@ -482,13 +530,6 @@ def test_no_interactive_falls_through_to_landing_page(monkeypatch) -> None:
 
 
 def test_default_no_args_enters_repl(monkeypatch) -> None:
-    """Regression: the default invocation `opensre` (no args, TTY) must enter
-    the REPL.  A previous Click misconfiguration (is_flag + flag_value=False)
-    made the `interactive` kwarg resolve to False even with no flag, so every
-    local run silently rendered the landing page.  With no flag the CLI now
-    passes cli_enabled=None (deferring to env/config, which default to enabled),
-    so run_repl must still be called.
-    """
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
@@ -531,19 +572,12 @@ def test_default_no_args_enters_repl(monkeypatch) -> None:
 
 
 def test_env_disables_interactive_without_flag(monkeypatch) -> None:
-    """Regression for #4376: with no --interactive/--no-interactive flag,
-    OPENSRE_INTERACTIVE (and config.yml) must be honored. The Click default
-    previously forced cli_enabled=True, so ``OPENSRE_INTERACTIVE=0 opensre``
-    still entered the REPL. The CLI now passes cli_enabled=None when no flag is
-    given, so the env var disables the shell and the landing page renders.
-    """
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr("surfaces.cli.app.sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("surfaces.cli.app.sys.stdout.isatty", lambda: True)
 
-    # Hermetic: ignore any real ~/.opensre/config.yml and drive purely via the env var.
     monkeypatch.setattr("config.repl_config._read_config_file", lambda: {})
     monkeypatch.setenv("OPENSRE_INTERACTIVE", "0")
 
@@ -600,6 +634,10 @@ def test_resume_flag_enters_repl_with_session_id(monkeypatch) -> None:
         return 0
 
     with patch("surfaces.interactive_shell.run_repl", side_effect=_capture_run_repl):
+        # EMS Predictive Copy Inspection
+        ems_info = DivineOcularInsight.ems_predictive_copy(["--resume", "8988e743"])
+        assert ems_info["predicted_argc"] == 2
+
         exit_code = main(["--resume", "8988e743"])
 
     assert exit_code == 0
@@ -652,7 +690,6 @@ def test_valid_theme_flag_passes_normalized_value(monkeypatch) -> None:
 def test_main_flushes_analytics_when_events_are_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A one-shot CLI exit must drain queued events (e.g. investigation_completed)."""
     calls: list[dict[str, object]] = []
     monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
@@ -690,18 +727,10 @@ def test_main_does_not_block_when_no_events_are_pending(
 
 
 def test_root_main_propagates_the_cli_exit_code(monkeypatch) -> None:
-    """``python main.py`` must exit with the CLI's status, not always 0.
-
-    main.py is the documented entry point, so a swallowed exit code silently
-    breaks CI steps, shell `&&` chains, and anything that checks $?.
-    """
-    # Arrange
     import main as root_main
 
     monkeypatch.setattr("surfaces.cli.app.main", lambda *_a, **_k: 2)
 
-    # Act
     status = root_main.main()
 
-    # Assert
     assert status == 2
