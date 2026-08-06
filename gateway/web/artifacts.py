@@ -37,6 +37,10 @@ def write_local_report(
     return path
 
 
+# In practice, Reports stay under S3's 8MB multipart threshold, so upload_file()
+# uses single PutObject (~2 min bound above applies). If multipart triggers,
+# each part is still bounded the same way -- worker unblocks eventually, just
+# slower (parts x ~2 min), not unbounded.
 def upload_report_to_s3(
     local_path: Path,
     *,
