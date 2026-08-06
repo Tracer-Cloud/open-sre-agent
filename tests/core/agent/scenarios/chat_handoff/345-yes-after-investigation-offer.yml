@@ -69,3 +69,10 @@ runs: 1
 tool_actions:
 - surface: dispatch
   kind: slash
+  command: /investigate
+  args:
+  - |-
+    alert:why is the database slow?
+
+    Evidence gathered:
+    p95 latency elevated on checkout-db

@@ -701,12 +701,14 @@ def _compose_response(
     # prose would be a second reply to one message ("good morning" twice).
     suppress_final = (
         prefer_tool_response_text
-        or bool(counts.handoff_contents)
         or (
             _self_recording_tools_only(result)
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
         )
+        # A handoff means the assistant answers this turn, so the action's
+        # closing prose would be a second reply to one message.
+        or bool(counts.handoff_contents)
     )
     final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
