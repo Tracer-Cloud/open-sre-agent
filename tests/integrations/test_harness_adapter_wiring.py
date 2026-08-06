@@ -55,6 +55,7 @@ def test_assistant_prompt_fragments_cover_every_registered_vendor() -> None:
 
     # Assert
     assert "sentry" in fragments.lower()
+    assert "posthog" in fragments.lower()
     assert "slack" in fragments.lower()
 
 

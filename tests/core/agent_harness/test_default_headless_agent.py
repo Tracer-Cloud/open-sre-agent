@@ -59,6 +59,48 @@ def test_factory_and_sink_are_package_level_exports() -> None:
     assert "BufferOutputSink" in dir(pkg)
 
 
+def test_builder_uses_supplied_prompts_even_when_falsy() -> None:
+    """``prompts=`` selection is ``is not None``, matching ``HeadlessAgent``."""
+    # Arrange
+    session = SimpleNamespace(
+        configured_integrations=[],
+        resolved_integrations_cache={},
+        session_id="s1",
+    )
+
+    class _FalsyPrompts:
+        def __bool__(self) -> bool:
+            return False
+
+    supplied = _FalsyPrompts()
+
+    # Act
+    agent = build_default_headless_agent(
+        session=session,
+        output=BufferOutputSink(),
+        prompts=supplied,  # type: ignore[arg-type]
+    )
+
+    # Assert
+    assert agent._prompts is supplied  # noqa: SLF001
+
+
+def test_builder_defaults_prompts_when_omitted() -> None:
+    """No ``prompts=`` keeps the built-in grounding provider."""
+    # Arrange
+    session = SimpleNamespace(
+        configured_integrations=[],
+        resolved_integrations_cache={},
+        session_id="s1",
+    )
+
+    # Act
+    agent = build_default_headless_agent(session=session, output=BufferOutputSink())
+
+    # Assert
+    assert type(agent._prompts).__name__ == "DefaultPromptContextProvider"  # noqa: SLF001
+
+
 def test_primary_response_text_prefers_assistant() -> None:
     result = TurnResult(
         final_intent="ok",

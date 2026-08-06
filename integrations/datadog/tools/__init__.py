@@ -406,23 +406,37 @@ def _logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+_DATADOG_LOGS_ANTI = (
+    "Do not call with an empty query; build a Datadog log query (service:/status:error).",
+    "Do not use for metrics timeseries — use query_datadog_metrics.",
+    "Do not paste full alert JSON as the query; extract service, env, and error tokens.",
+)
+
+
 @tool(
     name="query_datadog_logs",
     display_name="Datadog logs",
     source="datadog",
     tags=("logs", "observability"),
-    description="Search Datadog logs for pipeline errors, exceptions, and application events.",
+    description=(
+        "Search Datadog Logs with a concrete query string (required), e.g. "
+        "service:checkout status:error. Prefer scoped queries over bare '*'."
+    ),
     use_cases=[
         "Investigating pipeline errors reported by Datadog monitors",
         "Finding error logs in Kubernetes namespaces",
         "Searching for PIPELINE_ERROR patterns and ETL failures",
         "Correlating log events with Datadog alerts",
     ],
+    anti_examples=list(_DATADOG_LOGS_ANTI),
     requires=[],
     input_schema={
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Datadog log search query"},
+            "query": {
+                "type": "string",
+                "description": "Datadog log search query (service:, status:, @attr:)",
+            },
             "time_range_minutes": {"type": "integer", "default": 60},
             "limit": {"type": "integer", "default": 50},
             "api_key": {"type": "string"},

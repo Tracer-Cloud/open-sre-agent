@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from contextlib import suppress
+from http import HTTPStatus
 from typing import Any
 
 import requests
@@ -24,7 +25,7 @@ def wait_for_loki(timeout_seconds: int = 30) -> None:
     while time.time() < deadline:
         try:
             response = requests.get(f"{LOCAL_LOKI_URL}/ready", timeout=2)
-            if response.status_code == 200:
+            if response.status_code == HTTPStatus.OK:
                 return
             last_error = f"HTTP {response.status_code}"
         except requests.RequestException as exc:

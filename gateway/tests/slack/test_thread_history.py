@@ -140,7 +140,7 @@ def test_empty_session_yes_after_thread_seed_expands_dual_offer(
     investigate onboarding. Seeding from the thread then expanding must yield
     an actionable ``do both`` request.
     """
-    from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+    from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 
     offer = (
         "I found: the team has 12 members in the connected Slack workspace.\n\n"

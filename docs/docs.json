@@ -48,7 +48,8 @@
               "python-api",
               "faq",
               "cloudopsbench",
-              "bi-weekly-giveaway"
+              "bi-weekly-giveaway",
+              "pr-review-flow"
             ]
           }
         ]
@@ -108,6 +109,7 @@
               "sessions",
               "principal-scoped-storage",
               "memory",
+              "work-management",
               "fleet",
               "cron",
               "closed-loop-learning",
@@ -166,6 +168,8 @@
               "ec2",
               "github",
               "github-workflow-tools",
+              "github-security-fix",
+              "github-ci-fix",
               "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",
@@ -190,6 +194,7 @@
               "messaging/discord",
               "messaging/telegram",
               "messaging/rocketchat",
+              "messaging/buzz",
               "messaging/whatsapp",
               "messaging/twilio-sms"
             ]

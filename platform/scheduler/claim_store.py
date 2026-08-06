@@ -9,6 +9,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from config.constants import OPENSRE_HOME_DIR
 from platform.scheduler.types import TaskRun, TaskStatus
@@ -100,6 +101,19 @@ def complete_run(
         conn.close()
 
 
+def _row_to_task_run(row: tuple[Any, ...]) -> TaskRun:
+    return TaskRun(
+        task_id=row[0],
+        fire_time=row[1],
+        started_at=row[2],
+        finished_at=row[3] or None,
+        status=TaskStatus(row[4]),
+        posted_message_id=row[5] or "",
+        error=row[6] or "",
+        provider=row[7] or "",
+    )
+
+
 def get_runs(task_id: str, limit: int = 20, db_path: Path | None = None) -> list[TaskRun]:
     """Return recent runs for a task, newest first."""
     path = db_path or _default_db_path()
@@ -112,21 +126,30 @@ def get_runs(task_id: str, limit: int = 20, db_path: Path | None = None) -> list
             "FROM task_runs WHERE task_id = ? ORDER BY started_at DESC LIMIT ?",
             (task_id, limit),
         )
-        runs: list[TaskRun] = []
-        for row in cursor.fetchall():
-            runs.append(
-                TaskRun(
-                    task_id=row[0],
-                    fire_time=row[1],
-                    started_at=row[2],
-                    finished_at=row[3] or None,
-                    status=TaskStatus(row[4]),
-                    posted_message_id=row[5] or "",
-                    error=row[6] or "",
-                    provider=row[7] or "",
-                )
-            )
-        return runs
+        return [_row_to_task_run(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_latest_finished_run(task_id: str, db_path: Path | None = None) -> TaskRun | None:
+    """Return the most recently completed run for ``task_id``, if any.
+
+    Orders by completion time, not start time, and ignores in-flight rows so a
+    burst of pending claims cannot hide the last delivery outcome.
+    """
+    path = db_path or _default_db_path()
+    conn = _connect(path)
+    try:
+        _ensure_schema(conn)
+        cursor = conn.execute(
+            "SELECT task_id, fire_time, started_at, finished_at, status, "
+            "posted_message_id, error, provider "
+            "FROM task_runs WHERE task_id = ? AND status IN (?, ?) "
+            "ORDER BY COALESCE(finished_at, started_at) DESC LIMIT 1",
+            (task_id, TaskStatus.SUCCESS.value, TaskStatus.FAILED.value),
+        )
+        row = cursor.fetchone()
+        return _row_to_task_run(row) if row is not None else None
     finally:
         conn.close()
 
@@ -156,6 +179,7 @@ def delete_runs(task_id: str, db_path: Path | None = None) -> int:
 __all__ = [
     "complete_run",
     "delete_runs",
+    "get_latest_finished_run",
     "get_runs",
     "try_claim",
 ]

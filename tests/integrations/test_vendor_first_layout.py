@@ -27,6 +27,9 @@ ALLOWED_FLAT_MODULES = frozenset(
         "catalog.py",
         "cli.py",
         "config_models.py",
+        # Package entry point: holds ``main`` for ``python -m integrations``,
+        # so ``__main__.py`` stays a launcher. Not a vendor.
+        "app.py",
         "daily_update.py",
         "effective_models.py",
         "harness_adapters.py",
@@ -38,6 +41,10 @@ ALLOWED_FLAT_MODULES = frozenset(
         "probes.py",
         "registry.py",
         "scheduled_agent_bootstrap.py",
+        # Cross-cutting scheduled-agent runner for user-defined prompt loops
+        # (not a SaaS vendor). Routed by scheduled_agent_bootstrap like the
+        # vendor digests, but owns no vendor package of its own.
+        "manual_loop_runner.py",
         # Cross-cutting credential-resolution infra (hydrates every vendor's org
         # creds from the tenant's Secrets Manager blob), not a vendor — the
         # Secrets Manager peer of webapp_vault.py.

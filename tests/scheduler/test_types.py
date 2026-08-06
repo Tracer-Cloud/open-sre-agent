@@ -39,6 +39,7 @@ class TestScheduledTask:
             chat_id="C123",
         )
         assert task.timezone == "UTC"
+        assert task.name == ""
         assert task.window_hours == 24
         assert task.enabled is True
         assert task.params == {}
@@ -53,12 +54,16 @@ class TestScheduledTask:
         assert TaskKind.CUSTOM_INVESTIGATION == "custom_investigation"
         assert TaskKind.SENTRY_MORNING_DIGEST == "sentry_morning_digest"
         assert TaskKind.SENTRY_UPTIME_WATCH == "sentry_uptime_watch"
+        assert TaskKind.GITHUB_PR_SWEEP == "github_pr_sweep"
+        assert TaskKind.WORK_ITEM_REMINDER == "work_item_reminder"
+        assert TaskKind.WORK_ITEM_CHECKIN == "work_item_checkin"
 
     def test_all_providers(self) -> None:
         assert Provider.TELEGRAM == "telegram"
         assert Provider.SLACK == "slack"
         assert Provider.DISCORD == "discord"
         assert Provider.ROCKETCHAT == "rocketchat"
+        assert Provider.INTERACTIVE_SHELL == "interactive_shell"
 
 
 class TestTaskRun:

@@ -15,8 +15,8 @@ from rich.console import Console
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.ports import OutputSink, TurnAccounting
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.ports import OutputSink, PromptContextProvider, TurnAccounting
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,
@@ -32,6 +32,13 @@ if TYPE_CHECKING:
 LoggerLike = logging.Logger
 
 
+def _default_prompts(session: SessionCore, surface: str | None) -> PromptContextProvider:
+    """The built-in grounding context, when a caller supplies none."""
+    if surface is not None:
+        return DefaultPromptContextProvider(session, surface=surface)
+    return DefaultPromptContextProvider(session)
+
+
 def build_default_headless_agent(
     *,
     session: SessionCore,
@@ -45,7 +52,9 @@ def build_default_headless_agent(
     observer_factory: ActionObserverFactory | None = None,
     subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
     slash_ports_factory: SlashPortsFactory | None = None,
+    prompts: PromptContextProvider | None = None,
     gather_enabled: bool = True,
+    gather_max_iterations: int | None = None,
     is_tty: bool = False,
 ) -> HeadlessAgent:
     """Return a :class:`HeadlessAgent` wired with default harness ports.
@@ -76,11 +85,9 @@ def build_default_headless_agent(
             subprocess_presenter_factory=subprocess_presenter_factory,
             slash_ports_factory=slash_ports_factory,
         ),
-        prompts=(
-            DefaultPromptContextProvider(session, surface=surface)
-            if surface is not None
-            else DefaultPromptContextProvider(session)
-        ),
+        # ``is not None``, not ``or``: a provider defining __bool__ would be
+        # silently replaced. Matches HeadlessAgent's own selection.
+        prompts=prompts if prompts is not None else _default_prompts(session, surface),
         reasoning=DefaultReasoningClientProvider(
             output=output,
             error_reporter=error_reporter,
@@ -90,6 +97,7 @@ def build_default_headless_agent(
         accounting=turn_accounting,
         error_reporter=error_reporter,
         gather_enabled=gather_enabled,
+        gather_max_iterations=gather_max_iterations,
         is_tty=is_tty,
     )
 

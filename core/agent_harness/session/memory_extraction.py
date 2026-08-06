@@ -232,7 +232,7 @@ def _extract_memories_safe(messages: list[tuple[str, str]]) -> None:
 
 
 def _invoke_extraction_llm(messages: list[tuple[str, str]]) -> str:
-    from core.agent_harness.prompts.conversation_memory import format_recent_conversation
+    from core.agent_harness.prompts.memory.conversation import format_recent_conversation
 
     try:
         from core.llm.factory import LLMRole, get_llm

@@ -9,12 +9,12 @@ from core.agent_harness.prompts import (
     build_action_system_prompt,
     build_cli_agent_prompt_from_provider,
 )
-from core.agent_harness.prompts.assistant_agent_prompt import build_handoff_guidance_block
+from core.agent_harness.prompts.assistant import build_handoff_guidance_block
 from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
 )
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
     STALE_PRIOR_INVESTIGATION_NOTE,
 )
@@ -51,6 +51,9 @@ class _StubPrompts:
         return ""
 
     def long_term_memory(self) -> str:
+        return ""
+
+    def setup_state(self) -> str:
         return ""
 
     def suggested_synthetic_prompt(self) -> str:
@@ -280,3 +283,24 @@ def test_explicit_follow_up_answers_from_an_old_investigation_unlabelled() -> No
     # Assert: the findings lead the answer, not flagged as background.
     assert "the-incident-they-asked-about" in answer_prompt
     assert STALE_PRIOR_INVESTIGATION_NOTE not in answer_prompt
+
+
+def test_gather_prompt_is_assembled_in_the_same_layers_as_the_action_prompt() -> None:
+    """Three layers has to mean every prompt, not just the action one.
+
+    A builder that returns a bare string cannot be cached, trimmed or reasoned
+    about by tier, so it silently opts out of the assembly contract.
+    """
+    # Arrange
+    from core.agent_harness.prompts import PromptTier, build_gather_system_prompt_envelope
+
+    session = _SessionView()
+
+    # Act
+    envelope = build_gather_system_prompt_envelope(session)
+    tiers = [block.tier for block in envelope.blocks]
+
+    # Assert
+    assert envelope.render() == build_gather_system_prompt(session)
+    assert PromptTier.STABLE in tiers
+    assert tiers == sorted(tiers, key=lambda tier: list(PromptTier).index(tier))

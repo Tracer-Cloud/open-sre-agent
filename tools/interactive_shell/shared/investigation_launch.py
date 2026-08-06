@@ -27,7 +27,7 @@ from tools.interactive_shell.shared.execution_policy import (
 class ForegroundInvestigationStatus(StrEnum):
     """Terminal outcome of one foreground REPL/UI investigation run.
 
-    Distinct from ``gateway.http.investigation_store.InvestigationStatus``,
+    Distinct from ``gateway.storage.investigations.store.InvestigationStatus``,
     which tracks a different state machine (the async gateway job lifecycle,
     including in-flight ``QUEUED``/``RUNNING`` states this one never has).
     Do not merge the two. Canonical definition lives here (``tools/``, tier 2)
@@ -91,8 +91,9 @@ class InvestigationLaunchPorts(Protocol):
         alert_text: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
-        raise NotImplementedError
+        """Run a free-text investigation, rendering progress through ``console``."""
 
     def run_sample_alert(
         self,
@@ -100,8 +101,9 @@ class InvestigationLaunchPorts(Protocol):
         template_name: str,
         context_overrides: dict[str, Any] | None,
         cancel_requested: Any,
+        console: Console,
     ) -> dict[str, object]:
-        raise NotImplementedError
+        """Run a built-in sample alert, rendering progress through ``console``."""
 
     def start_background_text(
         self,

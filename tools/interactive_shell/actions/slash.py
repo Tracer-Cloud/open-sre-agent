@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from typing import Any
 
 from rich.markup import escape
@@ -84,22 +85,43 @@ def _dispatch_and_translate_exit(command: str, ctx: ActionToolContext, **kwargs:
     return True
 
 
+def _join_slash_command(command: str, parsed_args: list[str]) -> str:
+    """Rebuild a dispatchable slash line without flattening spaced arguments.
+
+    ``slash_invoke`` already carries each CLI token separately (e.g. a five-field
+    cron expression as one arg). A plain ``" ".join`` turns that back into an
+    unquoted line that ``dispatch_slash`` later splits on spaces — ``cron add``
+    then dies with unexpected extra arguments. ``shlex.join`` keeps those tokens
+    whole for both the ``$ …`` banner and the dispatcher.
+    """
+    if not parsed_args:
+        return command
+    return shlex.join([command, *parsed_args])
+
+
+def _slash_line_parts(stripped: str) -> list[str]:
+    """Tokenise a slash line, keeping quoted spans (cron, paths) intact."""
+    try:
+        return shlex.split(stripped, posix=True)
+    except ValueError:
+        return stripped.split()
+
+
 def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:
     if ctx.slash_ports is None:
         raise RuntimeError("slash tool requires slash runtime ports")
     command = str(args.get("command", "")).strip()
     raw_args = args.get("args")
     parsed_args = [str(item).strip() for item in raw_args] if isinstance(raw_args, list) else []
-    full_command = " ".join([command, *parsed_args]) if parsed_args else command
-    stripped = full_command.strip()
+    stripped = _join_slash_command(command, parsed_args).strip()
     if stripped == "/" or not stripped:
         return _dispatch_and_translate_exit(
             stripped or "/",
             ctx,
         )
 
-    parts = stripped.split()
-    name = parts[0].lower()
+    parts = _slash_line_parts(stripped)
+    name = parts[0].lower() if parts else ""
     slash_args = parts[1:]
     if not ctx.slash_ports.command_exists(name):
         return _dispatch_and_translate_exit(

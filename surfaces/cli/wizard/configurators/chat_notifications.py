@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from integrations.buzz.setup import BUZZ_SETUP
 from integrations.discord.setup import DISCORD_SETUP
 from integrations.rocketchat.setup import ROCKETCHAT_SETUP
 from integrations.slack.setup import SLACK_SETUP
@@ -46,6 +47,23 @@ def _configure_rocketchat() -> tuple[str, str]:
             "destination). Leave the fields for the path you are not using blank.\n"
             "Personal Access Token: My Account > Personal Access Tokens (the token page also "
             "shows your user ID). Incoming webhook: Administration > Integrations > Incoming.[/]\n"
+        ),
+    )
+
+
+def _configure_buzz() -> tuple[str, str]:
+    return configure_from_spec(
+        BUZZ_SETUP,
+        title="Buzz",
+        intro=(
+            "\n[bold]Buzz Integration[/bold]\n"
+            f"[{SECONDARY}]Buzz (block/buzz) is a self-hostable, Nostr-based workspace. "
+            "Generate an agent identity with `buzz-admin generate-key`, then paste its "
+            "private key here (kept out of plain .env — stored in the system keyring). "
+            "Channels are UUIDs — run `buzz channels list` to find one.\n"
+            "Requires the `buzz` CLI on PATH (`cargo install --path crates/buzz-cli` from "
+            "https://github.com/block/buzz). Press Ctrl+C to skip and continue onboarding; "
+            "`opensre integrations setup buzz` picks it up later.[/]\n"
         ),
     )
 

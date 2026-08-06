@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from gateway.runtime.manager import GatewayManager
 
 
@@ -51,3 +53,33 @@ def test_manager_stop_never_touches_the_real_gateway_directory() -> None:
     # Assert
     assert real_gateway_dir not in daemon.GATEWAY_COMPONENTS_FILE.parents
     assert real_gateway_dir not in daemon.GATEWAY_PID_FILE.parents
+
+
+def test_manager_reload_scheduler_refreshes_component_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Loop/cron mutations must resync the long-lived gateway scheduler."""
+    from logging import getLogger
+
+    publishes: list[dict[str, str]] = []
+
+    def _refresh(scheduler: object | None, *, task_filter=None):
+        _ = task_filter
+        assert scheduler is None
+        return object(), 3
+
+    monkeypatch.setattr(
+        "platform.scheduler.runner.refresh_background_scheduler",
+        _refresh,
+    )
+    manager = GatewayManager()
+    monkeypatch.setattr(
+        manager,
+        "_publish_status",
+        lambda _logger: publishes.append(dict(manager.components)),
+    )
+
+    manager._reload_scheduler(getLogger("test"))
+
+    assert manager.components["scheduler"] == "running 3 scheduled task(s)"
+    assert publishes == [{"scheduler": "running 3 scheduled task(s)"}]

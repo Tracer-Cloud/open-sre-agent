@@ -101,7 +101,7 @@ jobs:
       - name: Run full tests
         run: >-
           uv run python -m pytest -n auto -v
-          --cov=config --cov=core --cov=platform.deployment_ec2 --cov=platform.deployment_multi_tenant --cov=integrations --cov=platform --cov=surfaces --cov=tools
+          --cov=config --cov=core --cov=platform.deployment_ec2 --cov=integrations --cov=platform --cov=surfaces --cov=tools
           --cov-report=term-missing
           --cov-report=html
           --ignore=tests/e2e/kubernetes_local_alert_simulation

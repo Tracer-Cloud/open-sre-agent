@@ -23,7 +23,6 @@ from typing import Any
 
 from rich.console import Console
 
-from config.constants.organization import organization_id
 from gateway.config.logging_config import configure_logging
 from gateway.discord.background import DiscordGatewayBackground
 from gateway.discord.wiring import start_discord_worker
@@ -42,10 +41,6 @@ from gateway.runtime.daemon import (
 )
 from gateway.runtime.errors import GatewayConfigurationError
 from gateway.runtime.readiness import set_ready
-from gateway.runtime.remote_run_worker import (
-    RemoteRunWorker,
-    build_remote_run_worker,
-)
 from gateway.runtime.turn_handler import GatewayTurnHandler
 from gateway.slack.socket_mode_worker import SlackGatewayBackground
 from gateway.slack.wiring import start_slack_worker
@@ -55,10 +50,6 @@ from gateway.telegram.wiring import start_telegram_worker
 
 SlashPortsFactory = Callable[[], Any]
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
-RemoteRunWorkerFactory = Callable[
-    [str, str, Any, TurnConcurrencyGate, logging.Logger],
-    RemoteRunWorker,
-]
 
 
 class GatewayManager:
@@ -69,7 +60,6 @@ class GatewayManager:
         *,
         slash_ports_factory: SlashPortsFactory | None = None,
         credential_hydrator_factory: CredentialHydratorFactory | None = None,
-        remote_run_worker_factory: RemoteRunWorkerFactory | None = None,
         turn_gate: TurnConcurrencyGate | None = None,
     ) -> None:
         self.settings: GatewaySettings | None = None
@@ -79,13 +69,12 @@ class GatewayManager:
         self.discord_background_worker: DiscordGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
-        self.remote_run_worker: RemoteRunWorker | None = None
+        self._scheduler_reload_thread: threading.Thread | None = None
         self.components: dict[str, str] = {}
         self._slash_ports_factory = slash_ports_factory
         self._credential_hydrator_factory = (
             credential_hydrator_factory or GatewayCredentialHydrator.from_environment
         )
-        self._remote_run_worker_factory = remote_run_worker_factory
         profile = os.getenv("OPENSRE_SIZE_PROFILE", "SMALL").strip().upper()
         self.turn_gate = turn_gate or TurnConcurrencyGate.for_profile(profile)
         self._stopped = threading.Event()
@@ -96,7 +85,7 @@ class GatewayManager:
 
         logger = self.logger = configure_logging()
         set_ready(False)
-        bootstrap = self._load_credentials(logger)
+        self._load_credentials(logger)
         startup.run(logger)
 
         # Compose the transport-agnostic turn handler. Action tools are resolved
@@ -111,9 +100,6 @@ class GatewayManager:
             gate=self.turn_gate,
         )
 
-        # A configured durable worker is mandatory. Start it before components
-        # with externally visible side effects so a bad Neon bootstrap fails closed.
-        self._start_remote_runs(logger, handler, bootstrap)
         self._start_web(logger)
         self._start_telegram(logger, chat_handler)
         self._start_slack(logger, chat_handler)
@@ -135,10 +121,11 @@ class GatewayManager:
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Shut down all components and return whether the chat worker stopped."""
         set_ready(False)
+        self._stopped.set()
         stopped = True
-        if self.remote_run_worker is not None:
-            stopped = self.remote_run_worker.stop(timeout=timeout)
-            self.remote_run_worker = None
+        if self._scheduler_reload_thread is not None:
+            self._scheduler_reload_thread.join(timeout=min(timeout, 2.0))
+            self._scheduler_reload_thread = None
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
@@ -152,7 +139,6 @@ class GatewayManager:
         if self.discord_background_worker is not None:
             stopped = self.discord_background_worker.stop(timeout=timeout) and stopped
         clear_component_status()
-        self._stopped.set()
         return stopped
 
     def _load_credentials(self, logger: logging.Logger) -> GatewayBootstrap | None:
@@ -238,6 +224,7 @@ class GatewayManager:
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""
         from gateway.runtime.bootstrap import install_runtime
+        from platform.scheduler.reload_signal import consume_scheduler_reload_request
         from platform.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
@@ -245,57 +232,58 @@ class GatewayManager:
         from gateway.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 
         gate_registered_scheduler_runners(self.turn_gate)
+        # Drop any reload request queued before this process owned the scheduler.
+        consume_scheduler_reload_request()
         scheduler, task_count = start_background_scheduler()
         if scheduler is None:
             self.components["scheduler"] = "idle (no scheduled tasks)"
+        else:
+            self.scheduler = scheduler
+            self.components["scheduler"] = f"running {task_count} scheduled task(s)"
+        self._start_scheduler_reload_watcher(_logger)
+
+    def _start_scheduler_reload_watcher(self, logger: logging.Logger) -> None:
+        """Poll for cross-process reload requests from `/loops` and cron mutations."""
+        if self._scheduler_reload_thread is not None:
             return
-        self.scheduler = scheduler
-        self.components["scheduler"] = f"running {task_count} scheduled task(s)"
 
-    def _start_remote_runs(
-        self,
-        logger: logging.Logger,
-        handler: Any,
-        bootstrap: GatewayBootstrap | None,
-    ) -> None:
-        """Start the Neon run worker when a bootstrap bundle supplies its DSN."""
-        organization = organization_id()
-        database_url = bootstrap.database_url if bootstrap is not None else None
-        if not organization or not database_url:
-            self.components["api_runs"] = "not configured"
-            return
-        factory = self._remote_run_worker_factory
-        if factory is None:
-
-            def factory(
-                org: str,
-                dsn: str,
-                callback: Any,
-                gate: TurnConcurrencyGate,
-                log: logging.Logger,
-            ) -> RemoteRunWorker:
-                return build_remote_run_worker(
-                    organization_id=org,
-                    database_url=dsn,
-                    handler=callback,
-                    gate=gate,
-                    logger=log,
-                )
-
-        try:
-            worker = factory(
-                organization,
-                database_url,
-                handler,
-                self.turn_gate,
-                logger,
+        def _watch() -> None:
+            from platform.scheduler.reload_signal import (
+                RELOAD_POLL_SECONDS,
+                consume_scheduler_reload_request,
             )
-            worker.start()
-        except Exception as exc:
-            logger.error("remote run worker startup failed (%s)", type(exc).__name__)
-            raise GatewayConfigurationError("Remote run worker startup failed") from None
-        self.remote_run_worker = worker
-        self.components["api_runs"] = "polling"
+
+            while not self._stopped.wait(timeout=RELOAD_POLL_SECONDS):
+                if not consume_scheduler_reload_request():
+                    continue
+                try:
+                    self._reload_scheduler(logger)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Scheduler reload failed (%s)",
+                        type(exc).__name__,
+                    )
+
+        self._scheduler_reload_thread = threading.Thread(
+            target=_watch,
+            name="opensre-scheduler-reload",
+            daemon=True,
+        )
+        self._scheduler_reload_thread.start()
+
+    def _reload_scheduler(self, logger: logging.Logger) -> None:
+        """Resync the live scheduler (or start one) from the current task store."""
+        from platform.scheduler.runner import refresh_background_scheduler
+
+        scheduler, task_count = refresh_background_scheduler(self.scheduler)
+        self.scheduler = scheduler
+        if scheduler is None:
+            self.components["scheduler"] = "idle (no scheduled tasks)"
+            logger.info("Scheduler idle after reload (no enabled tasks)")
+        else:
+            self.components["scheduler"] = f"running {task_count} scheduled task(s)"
+            logger.info("Scheduler reloaded with %d task(s)", task_count)
+        self._publish_status(logger)
 
     def _publish_status(self, logger: logging.Logger) -> None:
         GATEWAY_PID_FILE.parent.mkdir(parents=True, exist_ok=True)

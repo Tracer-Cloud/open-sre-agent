@@ -15,7 +15,11 @@ from platform.scheduler.types import Provider
 # dispatch). Provider has two more members (slack, discord) that cron
 # delivery supports but watchdog does not, so this is a deliberate subset,
 # not the full enum.
-WATCHDOG_SUPPORTED_PROVIDERS: tuple[Provider, ...] = (Provider.TELEGRAM, Provider.ROCKETCHAT)
+WATCHDOG_SUPPORTED_PROVIDERS: tuple[Provider, ...] = (
+    Provider.TELEGRAM,
+    Provider.ROCKETCHAT,
+    Provider.BUZZ,
+)
 
 
 class WatchdogThreshold(StrEnum):

@@ -365,21 +365,35 @@ def _query_grafana_logs_available(sources: dict[str, dict]) -> bool:
     return _grafana_available(sources)
 
 
+_GRAFANA_LOGS_ANTI = (
+    "Do not call without a concrete service_name from query_grafana_service_names.",
+    "Do not use for Mimir metrics — use query_grafana_metrics.",
+    "Do not use for Kubernetes pod logs when the Loki service label is unknown.",
+)
+
+
 @tool(
     name="query_grafana_logs",
     display_name="Grafana Loki",
     source="grafana",
-    description="Query Grafana Loki for pipeline logs.",
+    description=(
+        "Query Grafana Loki log streams for one service_name (required). "
+        "Optionally narrow with execution_run_id or pipeline_name and a lookback window."
+    ),
     use_cases=[
         "Retrieving application logs from Grafana Loki during an incident",
         "Searching for error patterns in pipeline execution logs",
         "Correlating log events with Grafana alert triggers",
     ],
+    anti_examples=list(_GRAFANA_LOGS_ANTI),
     requires=["service_name"],
     input_schema={
         "type": "object",
         "properties": {
-            "service_name": {"type": "string"},
+            "service_name": {
+                "type": "string",
+                "description": "Exact Loki service label (discover via query_grafana_service_names)",
+            },
             "execution_run_id": {"type": "string"},
             "time_range_minutes": {"type": "integer", "default": 60},
             "limit": {"type": "integer", "default": 100},
@@ -473,6 +487,7 @@ def query_grafana_logs(
     result_data = {
         "source": "grafana_loki",
         "available": True,
+        "truncated": result.get("truncated", False),
         "logs": compacted_logs,
         "error_logs": compacted_error_logs,
         "total_logs": result.get("total_logs", 0),
@@ -485,6 +500,13 @@ def query_grafana_logs(
         "account_id": client.account_id,
     }
     summary = summarize_counts(len(logs_data), len(compacted_logs), "logs")
+
+    if result.get("truncated"):
+        cap_warning = (
+            "WARNING: Upstream Loki query hit the maximum line limit; earlier logs were dropped. "
+        )
+        summary = cap_warning + (summary or "")
+
     if summary:
         result_data["truncation_note"] = summary
     return result_data

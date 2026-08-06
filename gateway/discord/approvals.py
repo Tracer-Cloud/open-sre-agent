@@ -47,7 +47,10 @@ class DiscordApprovalPrompter:
         arguments: Mapping[str, Any],
         expiry_seconds: float,
     ) -> tuple[bool, str]:
-        approval_id = self._broker.create()
+        approval_id = self._broker.create(
+            platform="discord",
+            chat_id=self._channel_id,
+        )
         preview = arguments_preview(arguments)
         body = f"**Approval needed — `{tool_name}`**"
         if reason.strip():
@@ -104,7 +107,8 @@ def handle_component_interaction(
     else:
         return False
     user_id = str(interaction.user.id)
-    if not allowed_user_ids or user_id not in allowed_user_ids:
+    allowed_user_ids_set = set(allowed_user_ids)
+    if not allowed_user_ids_set or user_id not in allowed_user_ids_set:
         logger.info("[discord-gateway] approval click from unauthorized user=%s ignored", user_id)
         return False
     return broker.resolve(approval_id, approved=approved, decided_by=user_id)

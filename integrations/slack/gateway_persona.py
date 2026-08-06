@@ -2,7 +2,7 @@
 
 Registered with :func:`platform.harness_ports.register_gateway_persona_fragment`
 from ``integrations/harness_adapters.py``. Applied by
-``core.agent_harness.prompts.assistant_agent_prompt`` only when the turn's
+``core.agent_harness.prompts.assistant`` only when the turn's
 surface is ``"gateway"`` — core owns the CLI persona wording (see
 ``core/agent_harness/prompts/rules.py``); this module owns the Slack wording.
 """

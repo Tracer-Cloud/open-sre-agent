@@ -32,11 +32,9 @@ def _format_tool_calls_line(
         return ""
 
     # Collect all action names across all hypothesis rounds (deduped, order preserved)
-    all_actions: list[str] = []
-    for hyp in executed_hypotheses:
-        for action in hyp.get("actions", []):
-            if action not in all_actions:
-                all_actions.append(action)
+    all_actions = list(
+        dict.fromkeys(action for hyp in executed_hypotheses for action in hyp.get("actions", []))
+    )
 
     if not all_actions:
         return ""

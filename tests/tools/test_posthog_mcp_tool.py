@@ -146,6 +146,54 @@ def test_call_tool_unconfigured_returns_unavailable(monkeypatch) -> None:
     assert "not configured" in str(result["error"])
 
 
+def test_normalize_unwraps_nested_execute_sql_query() -> None:
+    from integrations.posthog_mcp.tools.posthog_mcp_tool import (
+        _normalize_mcp_tool_arguments,
+    )
+
+    nested = {"query": {"query": "SELECT 1"}}
+    assert _normalize_mcp_tool_arguments("execute-sql", nested) == {"query": "SELECT 1"}
+    assert _normalize_mcp_tool_arguments("query-run", nested) == {"query": "SELECT 1"}
+    flat = {"query": "SELECT 1"}
+    assert _normalize_mcp_tool_arguments("execute-sql", flat) is flat
+    other = {"query": {"kind": "HogQLQuery", "query": "SELECT 1"}}
+    assert _normalize_mcp_tool_arguments("execute-sql", other) is other
+
+
+def test_call_tool_unwraps_nested_execute_sql_before_mcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_call(
+        _config: object, tool_name: str, arguments: dict[str, object]
+    ) -> dict[str, object]:
+        captured["tool_name"] = tool_name
+        captured["arguments"] = arguments
+        return {
+            "is_error": False,
+            "text": "ok",
+            "structured_content": {},
+            "content": [],
+            "tool": tool_name,
+            "arguments": arguments,
+        }
+
+    monkeypatch.setattr(
+        "integrations.posthog_mcp.tools.posthog_mcp_tool.call_posthog_mcp_tool",
+        _fake_call,
+    )
+    result = call_posthog_tool(
+        tool_name="execute-sql",
+        arguments={"query": {"query": "SELECT count() FROM events"}},
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode="streamable-http",
+        posthog_token="phx_secret",
+    )
+    assert result["available"] is True
+    assert captured["arguments"] == {"query": "SELECT count() FROM events"}
+
+
 def test_call_tool_passes_through_result() -> None:
     fake_result = {
         "is_error": False,
@@ -169,7 +217,9 @@ def test_call_tool_passes_through_result() -> None:
     mock_invoke.assert_called_once()
     assert result["available"] is True
     assert result["source"] == "posthog_mcp"
-    assert result["structured_content"] == {"results": [1, 2]}
+    # SQL tools compact to results-first so gather truncation keeps the numbers.
+    assert result["results"] == [1, 2]
+    assert result["text"] == "rows"
 
 
 def test_call_tool_surfaces_mcp_error() -> None:
@@ -360,3 +410,36 @@ def test_list_tools_truncates_long_descriptions() -> None:
     description = result["tools"][0]["description"]
     assert len(description) <= 160
     assert description.endswith("\u2026")
+
+
+def test_query_values_survive_gather_truncation() -> None:
+    """Row values must outlive the gather loop's head-first result truncation."""
+    import json
+
+    from core.agent_harness.turns.evidence_driver import _MAX_PER_TOOL_CHARS, _truncate
+    from integrations.posthog_mcp.tools.posthog_mcp_tool import _normalize_tool_result
+
+    long_sql = "SELECT countIf(timestamp >= now() - INTERVAL 7 DAY) AS current " + (
+        "-- padding to blow the per-tool budget\n" * 200
+    )
+    normalized = _normalize_tool_result(
+        {
+            "is_error": False,
+            "tool": "execute-sql",
+            "arguments": {"query": long_sql},
+            "text": "investigations_started=4271",
+            "structured_content": {"results": [[4271, 3900]]},
+            "content": [{"type": "text", "text": "x" * 8000}],
+        }
+    )
+
+    body = json.dumps(normalized, default=str)
+    observation = _truncate(body, _MAX_PER_TOOL_CHARS)
+
+    assert list(normalized.keys())[0] == "results"
+    assert normalized["results"] == [[4271, 3900]]
+    assert "arguments" not in normalized
+    assert "content" not in normalized
+    assert "investigations_started=4271" in observation
+    assert "4271" in observation
+    assert "padding to blow the per-tool budget" not in observation

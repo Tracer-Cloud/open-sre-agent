@@ -378,6 +378,10 @@ def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:  #
     return run_cli_command(console, ["sentry", *args], capture_output=True)
 
 
+def _cmd_posthog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    return run_cli_command(console, ["posthog", *args], capture_output=True)
+
+
 def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
     return run_cli_command(console, ["watchdog", *args])
 
@@ -478,7 +482,13 @@ COMMANDS: list[SlashCommand] = [
         "/cron",
         "Manage cron-driven scheduled deliveries.",
         _cmd_cron,
-        usage=("/cron list", "/cron add", "/cron remove <id>", "/cron run <id>", "/cron logs <id>"),
+        usage=(
+            "/cron list",
+            "/cron add --name <name>",
+            "/cron remove <id>",
+            "/cron run <id>",
+            "/cron logs <id>",
+        ),
     ),
     SlashCommand(
         "/sentry",
@@ -495,6 +505,18 @@ COMMANDS: list[SlashCommand] = [
             "/sentry uptime watch add",
             "/sentry uptime watch run <id>",
             "/sentry uptime watch remove <id>",
+        ),
+    ),
+    SlashCommand(
+        "/posthog",
+        "Schedule and run automated PostHog per-metric summary reports.",
+        _cmd_posthog,
+        usage=(
+            "/posthog report run",
+            "/posthog report schedule list",
+            "/posthog report schedule add",
+            "/posthog report schedule run <id>",
+            "/posthog report schedule remove <id>",
         ),
     ),
     SlashCommand(

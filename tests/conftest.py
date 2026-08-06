@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from importlib.util import find_spec
-from pathlib import Path
 
 import pytest
 
@@ -22,39 +20,13 @@ ensure_project_platform_package()
 
 _ENV_PATH = paths.PROJECT_ROOT / ".env"
 
-# Private opensre-infra-aws submodule paths. Without
-# ``git submodule update --init platform/deployment_multi_tenant``, collection of
-# these trees fails for community/fork CI.
-_OPENSRE_INFRA_AWS_TEST_MARKERS = (
-    "/tests/platform/deployment_multi_tenant",
-    "/tests/deployment/control_plane",
-)
-_OPENSRE_INFRA_AWS_AVAILABLE = (
-    find_spec("platform.deployment_multi_tenant.lambda_control_plane") is not None
-)
-
-if not _OPENSRE_INFRA_AWS_AVAILABLE:
-    # Relative to this conftest — covers directory discovery.
-    collect_ignore_glob = [
-        "platform/deployment_multi_tenant/*",
-        "deployment/control_plane/*",
-    ]
-
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Drop explicit CLI paths that need the private submodule when it is absent."""
+    """Prepare the environment every test run depends on."""
+    _ = config
     _load_env()
     _disable_sentry()
     _mark_tests_for_analytics()
-    if _OPENSRE_INFRA_AWS_AVAILABLE:
-        return
-    kept: list[str] = []
-    for arg in config.args:
-        normalized = Path(arg).resolve().as_posix()
-        if any(marker in normalized for marker in _OPENSRE_INFRA_AWS_TEST_MARKERS):
-            continue
-        kept.append(arg)
-    config.args = kept
 
 
 def _load_env() -> None:

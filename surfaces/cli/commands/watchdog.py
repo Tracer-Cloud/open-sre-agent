@@ -58,8 +58,8 @@ _PROVIDER_CHOICES = [p.value for p in WATCHDOG_SUPPORTED_PROVIDERS]
     "--chat-id",
     type=str,
     default=None,
-    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID or "
-    "ROCKETCHAT_DEFAULT_CHANNEL).",
+    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID, "
+    "ROCKETCHAT_DEFAULT_CHANNEL, or BUZZ_DEFAULT_CHANNEL).",
 )
 @click.option("--verbose", is_flag=True, help="Print one line per sampled process state.")
 def watchdog_command(

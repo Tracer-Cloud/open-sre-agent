@@ -44,7 +44,7 @@ subpackage. Default port implementations live with the concern they serve, not i
     what the turn knows. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather
     than re-resolving. Do NOT reintroduce per-component integration resolution.
-  - `action_driver.py` — `run_action_agent_turn`: one action tool-calling turn
+  - `action_driver.py` — `ActionTurnRunner`: one action tool-calling turn
     over the ports, via a `_build_action_agent` factory that returns an
     `ActionTurnPlan`.
   - `evidence_driver.py` — bounded evidence-gather loop, via a
@@ -65,10 +65,11 @@ subpackage. Default port implementations live with the concern they serve, not i
 - `accounting/` — session-scoped token accounting and LLM run metadata, plus the
   default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
   (`run_record.py`).
-- `prompts/` — action-agent and conversational-assistant prompt builders (pure
-  string assembly; grounding text is supplied via `PromptContextProvider`), plus
-  `prompt_context.py` (`DefaultPromptContextProvider`).
-  `conversation_memory.py` (recent-conversation rendering shared by prompts) lives here.
+- `prompts/` — prompt builders by agent path (pure string assembly; grounding
+  via `PromptContextProvider`). See `prompts/AGENTS.md`. Layout: `kernel/`
+  (envelope + surface Strategy), `assistant/` / `action/` / `gather/` (peer
+  assemblers), `grounding/` (prompt providers), plus leaves `memory/` /
+  `runtime_facts/` / `skills/`.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt

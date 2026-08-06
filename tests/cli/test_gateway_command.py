@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from surfaces.cli.__main__ import cli
+from surfaces.cli.app import cli
 
 
 @pytest.fixture

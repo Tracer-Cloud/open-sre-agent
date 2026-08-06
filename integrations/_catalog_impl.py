@@ -179,11 +179,13 @@ from integrations.azure_sql import classify as _classify_azure_sql
 from integrations.betterstack import build_betterstack_config
 from integrations.betterstack import classify as _classify_betterstack
 from integrations.bitbucket import classify as _classify_bitbucket
+from integrations.buzz import classify as _classify_buzz
 from integrations.config_models import (
     DEFAULT_DATADOG_SITE,
     AlertmanagerIntegrationConfig,
     ArgoCDIntegrationConfig,
     AWSIntegrationConfig,
+    BuzzConfig,
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
     DiscordBotConfig,
@@ -427,6 +429,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "discord": _classify_discord,
     "telegram": _classify_telegram,
     "rocketchat": _classify_rocketchat,
+    "buzz": _classify_buzz,
     "slack": _classify_slack,
     "whatsapp": _classify_whatsapp,
     "twilio": _classify_twilio,
@@ -1129,6 +1132,27 @@ def load_env_integrations() -> list[dict[str, Any]]:
             _report_env_loader_failure(exc, integration="rocketchat")
         else:
             integrations.append(_active_env_record("rocketchat", rocketchat_config.model_dump()))
+
+    # Private key is keyring-backed via wizard sync_env_secret; the rest stay
+    # store/env only (relay_url, default_channel, auth_tag, buzz_path).
+    buzz_private_key = resolve_env_credential("BUZZ_PRIVATE_KEY")
+    if buzz_private_key:
+        try:
+            buzz_config = BuzzConfig.model_validate(
+                {
+                    "relay_url": os.getenv("BUZZ_RELAY_URL", "").strip() or "http://localhost:3000",
+                    "private_key": buzz_private_key,
+                    "default_channel": os.getenv("BUZZ_DEFAULT_CHANNEL", "").strip(),
+                    "auth_tag": os.getenv("BUZZ_AUTH_TAG", "").strip(),
+                    "buzz_path": os.getenv("BUZZ_PATH", "").strip() or "buzz",
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="buzz")
+        else:
+            integrations.append(
+                _active_env_record("buzz", buzz_config.model_dump(exclude={"integration_id"}))
+            )
 
     slack_bot_token = resolve_env_credential(SLACK_BOT_TOKEN_ENV)
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()

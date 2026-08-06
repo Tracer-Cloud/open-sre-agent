@@ -21,7 +21,7 @@ from collections.abc import Callable
 import pytest
 
 from config.runtime_metadata import build_runtime_metadata
-from core.agent_harness.prompts.assistant_agent_prompt import build_environment_block
+from core.agent_harness.prompts.assistant import build_environment_block
 
 _RUNS = 200
 

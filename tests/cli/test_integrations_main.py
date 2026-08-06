@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from integrations import __main__ as integrations_main
+from integrations import app as integrations_main
 
 
 @pytest.fixture(autouse=True)
@@ -106,3 +106,36 @@ def test_main_initialises_sentry(monkeypatch) -> None:
     integrations_main.main()
 
     assert init_calls == [1]
+
+
+def test_command_dispatch_table_is_the_known_set() -> None:
+    """Unknown-command help and handlers share one map — no parallel if-chain."""
+    assert tuple(integrations_main._COMMANDS) == (
+        "setup",
+        "list",
+        "show",
+        "remove",
+        "verify",
+    )
+
+
+def test_setup_dispatches_through_table_and_may_verify(monkeypatch) -> None:
+    captured = _captures(monkeypatch)
+    monkeypatch.setattr("sys.argv", ["python -m integrations", "setup", "slack"])
+
+    with (
+        patch.object(integrations_main, "cmd_setup", return_value="slack") as cmd_setup,
+        patch.object(integrations_main, "cmd_verify", return_value=0) as cmd_verify,
+        patch.object(
+            integrations_main,
+            "SUPPORTED_VERIFY_SERVICES",
+            frozenset({"slack"}),
+        ),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        integrations_main.main()
+
+    assert excinfo.value.code == 0
+    cmd_setup.assert_called_once_with("slack")
+    cmd_verify.assert_called_once_with("slack")
+    assert captured  # analytics still fired before the handler ran

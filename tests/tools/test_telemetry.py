@@ -1044,6 +1044,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "execute_github_issue_mutation",
         "execute_python_code",
         "fetch_failed_run",
+        # fix_github_pr_ci catches only GitHubCiFixError for known states;
+        # unexpected errors escape to the global #1476 wrapper.
+        "fix_github_pr_ci",
+        # fix_github_security_alert catches only GitHubSecurityFixError for
+        # known states; unexpected errors escape to the global #1476 wrapper.
+        "fix_github_security_alert",
         # fix_sentry_issue catches only its own FixIssueError for known states;
         # unexpected errors escape to the global #1476 wrapper.
         "fix_sentry_issue",
@@ -1235,8 +1241,9 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "search_github_issues",
         "search_sentry_issues",
         "shell_run",
+        "skill_view",
+        "propose_scheduled_delivery",
         "slack_add_reaction",
-        "slack_capture_task",
         "slack_join_channel",
         "slack_list_team_members",
         "slack_read_list",
@@ -1249,6 +1256,12 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "summarize_github_pr_status",
         "synthetic_run",
         "task_cancel",
+        "work_task_add",
+        "work_task_complete",
+        "work_task_list",
+        "work_task_prioritize",
+        "work_task_schedule_checkin",
+        "work_task_update",
         # Temporal tools use try/finally only (to close the client); the client
         # returns structured error dicts for handled HTTP failures, and any
         # unexpected exception escapes to the #1476 global wrapper.
@@ -1258,6 +1271,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "temporal_workflows",
         "telegram_send_message",
         "rocketchat_send_message",
+        "buzz_send_message",
         "twilio_notify",
         "vercel_deployment_logs",
         "vercel_deployment_status",
