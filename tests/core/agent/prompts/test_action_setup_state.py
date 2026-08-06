@@ -7,7 +7,7 @@ from core.agent_harness.prompts.kernel.envelope import PromptTier
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 _BLOCK_ID = "action-agent-setup-state"
-_MARKER = "Scheduled tasks configured: 23"
+_MARKER = "Scheduled tasks: 23 configured, 23 able to deliver"
 
 
 def _snapshot(setup_state: str) -> TurnSnapshot:

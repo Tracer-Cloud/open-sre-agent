@@ -57,6 +57,9 @@ response_contract:
   - posthog
   - Windows
   - crash
+  must_contain_all:
+  - Want me to
+  - investigat
   must_not_contain:
   - $ /
   forbidden_actions:

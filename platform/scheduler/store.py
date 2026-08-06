@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from filelock import FileLock
 
@@ -68,12 +70,44 @@ def get_task(task_id: str, store_path: Path | None = None) -> ScheduledTask | No
     return None
 
 
+def _schedule_identity(entry: Mapping[str, Any]) -> tuple[Any, ...]:
+    """What makes two rows the same schedule.
+
+    Full configuration, not just the slot: two rows differing in destination or
+    params are separate reports, and merging them would drop one the user asked
+    for. Identity deliberately excludes ``id``, ``name`` and the run bookkeeping
+    (``created_at``, ``last_run``, ``next_run``), which differ between two
+    confirmations of the same schedule.
+    """
+    return (
+        entry.get("kind"),
+        entry.get("cron"),
+        entry.get("timezone"),
+        entry.get("provider"),
+        entry.get("chat_id"),
+        entry.get("window_hours"),
+        tuple(sorted((entry.get("params") or {}).items())),
+    )
+
+
 def add_task(task: ScheduledTask, store_path: Path | None = None) -> ScheduledTask:
-    """Persist a new scheduled task. Returns the task with its generated ID."""
+    """Persist a scheduled task, or return the identical one already stored.
+
+    Confirming the same schedule twice is one schedule. Without this, every
+    confirmation appended a row — a real install reached 37 byte-identical
+    ``daily_summary`` entries, none of which could deliver.
+    """
     path = store_path or _default_store_path()
     lock = FileLock(_lock_path(path))
     with lock:
         raw = _load_raw(path)
+        wanted = _schedule_identity(task.model_dump(mode="json"))
+        existing = next(
+            (entry for entry in raw if _schedule_identity(entry) == wanted),
+            None,
+        )
+        if existing is not None:
+            return ScheduledTask.model_validate(existing)
         raw.append(task.model_dump(mode="json"))
         _save_raw(path, raw)
     return task

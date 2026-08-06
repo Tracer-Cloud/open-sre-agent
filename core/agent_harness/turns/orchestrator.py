@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from config.llm_reasoning_effort import apply_reasoning_effort
@@ -42,7 +42,15 @@ from core.agent_harness.prompts.assistant import (
 )
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.prompts.memory.prior_investigation import is_prior_investigation_follow_up
+from core.agent_harness.session.pending_offer import (
+    arm_pending_investigation_offer,
+    consume_confirmed_pending_offer,
+    finalize_gather_investigation_offer,
+    first_pending_offer,
+    is_pending_offer_confirmation,
+)
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
+from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
@@ -103,12 +111,14 @@ def _stream_response(
     run_factory: RunRecordFactory,
     error_reporter: ErrorReporter | None,
     session: Any | None = None,
+    defer_want_me_to_closer: bool = False,
 ) -> Any | None:
     try:
         started = time.monotonic()
         text_str = output.stream(
             label=_ASSISTANT_LABEL,
             chunks=client.invoke_stream(turn_prompt.messages()),
+            defer_want_me_to_closer=defer_want_me_to_closer,
         )
     except KeyboardInterrupt:
         output.print("· cancelled")
@@ -199,6 +209,7 @@ def stream_answer(
         run_factory=run_factory,
         error_reporter=error_reporter,
         session=session,
+        defer_want_me_to_closer=req.defer_want_me_to_closer,
     )
     if run is None:
         return None
@@ -291,6 +302,8 @@ class _RouteOutcome:
     final_intent: str
     response_text: str
     llm_run: Any | None = None
+    # Gather / action evidence to arm PendingInvestigationOffer (not session stash).
+    evidence_for_offer: str | None = None
 
 
 def _gather_and_answer(
@@ -301,7 +314,7 @@ def _gather_and_answer(
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
     handoff_requires_gather: bool = True,
-) -> Any | None:
+) -> tuple[Any | None, str | None]:
     # Two cases skip the live gather loop:
     # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
     #    own tool work already produced what the reply needs, and a fresh sweep
@@ -330,16 +343,35 @@ def _gather_and_answer(
 
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
+    # Defer Want-me-to paint only when the gather closer rewrite will flush it.
+    # Follow-ups skip that rewrite; deferring on non-TTY would hold the whole
+    # answer forever (oracle / CI consoles use force_terminal=False).
     observation = gathered if gathered else None
-    return answer(
+    run = answer(
         text,
         AnswerRequest(
             tool_observation=observation,
             tool_observation_on_screen=observation is None,
             handoff_contents=handoff_contents,
             turn_plan=turn_plan,
+            defer_want_me_to_closer=not skip_gather,
         ),
     )
+    return run, observation
+
+
+def _finish_streamed_response(output: OutputSink | None, text: str) -> None:
+    """Flush deferred/rewritten gather paint on surfaces that support it."""
+    if output is None:
+        return
+    finish = getattr(output, "finish_streamed_response", None)
+    if callable(finish):
+        finish(text)
+        return
+    # Gateway sinks expose ``finalize`` for an in-place edit of the answer.
+    finalize = getattr(output, "finalize", None)
+    if callable(finalize):
+        finalize(text)
 
 
 def run_turn(
@@ -353,6 +385,7 @@ def run_turn(
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
     surface: str = "interactive_shell",
+    output: OutputSink | None = None,
 ) -> TurnResult:
     """Run one full turn through three paths, in order:
 
@@ -376,24 +409,19 @@ def run_turn(
 
     # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
     # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
-    # Schedule offers prefer session.pending_schedule_offer (structured) over
-    # scraping prose.
+    # Structured pending offers beat prose scraping.
     prior_messages = getattr(session, "cli_agent_messages", None) or ()
-    pending_schedule = getattr(session, "pending_schedule_offer", None)
+    # Keep the pre-expansion user text for arming a new investigation offer
+    # after this turn's answer (diagnostic gather → Want-me-to).
+    original_user_text = text
     expanded = expand_affirmative_follow_up(
         text,
         prior_messages,
-        pending_schedule=pending_schedule,
+        pending_offer=first_pending_offer(session),
     )
-    # Whether this turn is the confirmation of a pending offer. The offer is
-    # consumed only once the command actually lands — clearing it here would
-    # burn it on a rejected ``cron add``, leaving a second "yes" with nothing
-    # to expand.
-    confirms_schedule = (
-        pending_schedule is not None
-        and expanded.startswith("/cron ")
-        and hasattr(session, "pending_schedule_offer")
-    )
+    # Offer is consumed only once the command lands — clearing here would burn
+    # it on a rejected ``cron add``, leaving a second "yes" with nothing to expand.
+    confirms_pending = is_pending_offer_confirmation(session, expanded)
     text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
@@ -419,12 +447,8 @@ def run_turn(
         turn_plan=turn_plan,
     )
 
-    if (
-        confirms_schedule
-        and action_result.executed_success_count > 0
-        and hasattr(session, "pending_schedule_offer")
-    ):
-        session.pending_schedule_offer = None
+    if confirms_pending and action_result.executed_success_count > 0:
+        consume_confirmed_pending_offer(session, expanded)
     accounting.record_action_result(action_result)
 
     handoff_contents = action_result.handoff_contents
@@ -472,6 +496,7 @@ def run_turn(
                 final_intent="cli_agent_summarized",
                 response_text=_response_text(run),
                 llm_run=run,
+                evidence_for_offer=observation,
             )
         elif route.intent == "handled_without_llm":
             # The one route that never calls the model: the action already
@@ -483,7 +508,7 @@ def run_turn(
             )
         elif route.intent == "gather_and_answer":
             with apply_reasoning_effort(turn_snapshot.reasoning_effort):
-                run = _gather_and_answer(
+                run, gathered = _gather_and_answer(
                     text=text,
                     answer=answer,
                     gather=gather,
@@ -495,9 +520,40 @@ def run_turn(
                 final_intent="cli_agent_fallback",
                 response_text=_response_text(run),
                 llm_run=run,
+                evidence_for_offer=gathered,
             )
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
+
+        # Arm structured investigate-accept. Gather answers force the canonical
+        # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
+        # Skip when this turn already confirmed a pending offer, or when the
+        # surface disabled the investigation capability (gateway) — otherwise
+        # yes expands to /investigate alert:… with no investigation capability.
+        if not confirms_pending and capability_not_explicitly_disabled(session, "investigation"):
+            if (
+                route.intent == "gather_and_answer"
+                and not _is_prior_investigation_follow_up_handoff(handoff_contents)
+            ):
+                response_text, _offer = finalize_gather_investigation_offer(
+                    session,
+                    user_text=original_user_text,
+                    assistant_text=outcome.response_text,
+                    observation=outcome.evidence_for_offer,
+                )
+                outcome = replace(outcome, response_text=response_text)
+                _finish_streamed_response(output, response_text)
+            else:
+                arm_pending_investigation_offer(
+                    session,
+                    user_text=original_user_text,
+                    assistant_text=outcome.response_text,
+                    observation=outcome.evidence_for_offer,
+                )
+                # Follow-up gather answers may still have deferred paint if a
+                # prior path set defer=True; flush so non-TTY hosts see text.
+                if route.intent == "gather_and_answer":
+                    _finish_streamed_response(output, outcome.response_text)
 
         return accounting.finalize(
             TurnResult(

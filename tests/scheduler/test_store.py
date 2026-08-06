@@ -178,3 +178,67 @@ class TestStore:
         tasks = list_tasks(store_path)
         assert len(tasks) == 1
         assert tasks[0].id == "valid1"
+
+
+class TestAddTaskDeduplicates:
+    """One confirmation, one schedule.
+
+    A real install accumulated 37 byte-identical ``daily_summary`` rows because
+    every confirmation inserted instead of matching an existing schedule.
+    """
+
+    @staticmethod
+    def _daily_summary(**overrides: object) -> ScheduledTask:
+        fields: dict[str, object] = {
+            "kind": TaskKind.DAILY_SUMMARY,
+            "cron": "0 8 * * 1-5",
+            "timezone": "UTC",
+            "provider": Provider.SLACK,
+            "chat_id": "C0123ABCD",
+        }
+        fields.update(overrides)
+        return ScheduledTask(**fields)  # type: ignore[arg-type]
+
+    def test_identical_task_is_stored_once(self, store_path: Path) -> None:
+        # Arrange
+        first = add_task(self._daily_summary(), store_path)
+
+        # Act: the user confirms the same schedule again.
+        second = add_task(self._daily_summary(), store_path)
+
+        # Assert: one row, and the caller gets the schedule that already exists
+        # so any id it reports back stays valid.
+        assert len(list_tasks(store_path)) == 1
+        assert second.id == first.id
+
+    def test_repeated_confirmations_do_not_accumulate(self, store_path: Path) -> None:
+        # Arrange / Act: the observed failure, in miniature.
+        for _ in range(10):
+            add_task(self._daily_summary(), store_path)
+
+        # Assert
+        assert len(list_tasks(store_path)) == 1
+
+    def test_a_different_destination_is_a_different_schedule(self, store_path: Path) -> None:
+        # Arrange / Act
+        add_task(self._daily_summary(chat_id="C0000AAA"), store_path)
+        add_task(self._daily_summary(chat_id="C1111BBB"), store_path)
+
+        # Assert: merging these would silently drop a report the user wanted.
+        assert len(list_tasks(store_path)) == 2
+
+    def test_a_different_schedule_time_is_a_different_task(self, store_path: Path) -> None:
+        # Arrange / Act
+        add_task(self._daily_summary(cron="0 8 * * 1-5"), store_path)
+        add_task(self._daily_summary(cron="0 18 * * 1-5"), store_path)
+
+        # Assert
+        assert len(list_tasks(store_path)) == 2
+
+    def test_different_params_stay_separate(self, store_path: Path) -> None:
+        # Arrange / Act: same slot, different report configuration.
+        add_task(self._daily_summary(params={"stats_period": "7d"}), store_path)
+        add_task(self._daily_summary(params={"stats_period": "30d"}), store_path)
+
+        # Assert
+        assert len(list_tasks(store_path)) == 2

@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import re
 
-from core.agent_harness.session.pending_offer import PendingScheduleOffer
+from core.agent_harness.session.pending_offer import (
+    DispatchablePendingOffer,
+    PendingInvestigationOffer,
+    PendingScheduleOffer,
+)
+from core.agent_harness.session.want_me_to import offer_from_assistant_content
 from core.state import MAX_CONVERSATION_TURNS
 from core.state.transcript_window import SESSION_SUMMARY_PREFIX
 from platform.harness_ports import strip_message_context_prefix
@@ -41,7 +46,6 @@ _AFFIRMATIVES = frozenset(
         "do that",
     }
 )
-_WANT_ME_TO_MARKER = "want me to:"
 
 
 def expand_affirmative_follow_up(
@@ -49,6 +53,8 @@ def expand_affirmative_follow_up(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...] | None,
     *,
     pending_schedule: PendingScheduleOffer | None = None,
+    pending_investigation: PendingInvestigationOffer | None = None,
+    pending_offer: DispatchablePendingOffer | None = None,
 ) -> str:
     """Rewrite bare affirmatives into the prior actionable offer.
 
@@ -56,13 +62,13 @@ def expand_affirmative_follow_up(
     offered a next step. Without expansion, the action agent treats that as a
     new vague request and hands off to the investigate-onboarding assistant.
 
-    Schedule offers use :class:`PendingScheduleOffer` on the session (set by
-    ``propose_scheduled_delivery``) — never scraped from Want-me-to prose. A
-    confirmed schedule becomes a literal ``/cron add …`` so the shell dispatches
-    without an LLM round-trip.
+    Structured :class:`~core.agent_harness.session.pending_offer.DispatchablePendingOffer`
+    instances (schedule → ``/cron``, investigation → ``/investigate alert:…``)
+    expand without scraping Want-me-to prose. Pass ``pending_offer`` (preferred) or
+    the typed kwargs; schedule kwargs win over investigation when both are set.
 
-    Non-schedule Want-me-to closers still expand from the newest assistant turn
-    only, so an older remediation offer cannot shadow a fresher one.
+    Other Want-me-to closers still expand from the newest assistant turn only,
+    so an older remediation offer cannot shadow a fresher one.
     """
     raw = text if isinstance(text, str) else ""
     if not raw.strip():
@@ -72,9 +78,10 @@ def expand_affirmative_follow_up(
     if not (_is_affirmative(remainder) or _is_restated_affirmative(remainder)):
         return raw
 
-    if pending_schedule is not None:
-        # Literal slash — no vendor context prefix (would hide the leading /).
-        return pending_schedule.to_slash_command()
+    structured = pending_offer or pending_schedule or pending_investigation
+    if structured is not None:
+        # No vendor context prefix (would hide a leading /cron dispatch).
+        return structured.to_dispatch_message()
 
     if not messages:
         return raw
@@ -115,22 +122,6 @@ def _normalize_offer(offer: str) -> str:
     return offer
 
 
-def _offer_from_assistant_content(content: str) -> str | None:
-    """Extract one actionable offer from a single assistant message, if any."""
-    lowered = content.lower()
-    pos = lowered.rfind(_WANT_ME_TO_MARKER)
-    if pos < 0:
-        return None
-    rest = content[pos + len(_WANT_ME_TO_MARKER) :].lstrip()
-    if rest.startswith("**"):
-        rest = rest[2:].lstrip()
-    blank = rest.find("\n\n")
-    if blank >= 0:
-        rest = rest[:blank]
-    offer = rest.strip().rstrip("?").strip()
-    return offer or None
-
-
 def _latest_actionable_offer(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
 ) -> str | None:
@@ -148,7 +139,7 @@ def _latest_actionable_offer(
         # nobody agreed to.
         if content.startswith(SESSION_SUMMARY_PREFIX):
             return None
-        return _offer_from_assistant_content(content)
+        return offer_from_assistant_content(content)
     return None
 
 
