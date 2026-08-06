@@ -80,6 +80,7 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
             max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
             vertex_project=vertex.get("vertex_project"),
             vertex_location=vertex.get("vertex_location"),
+            vertex_labels=vertex.get("labels"),
             api_key_env=None,
         )
 
@@ -168,6 +169,7 @@ def build_litellm_llm_client(
             max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
             vertex_project=vertex.get("vertex_project"),
             vertex_location=vertex.get("vertex_location"),
+            vertex_labels=vertex.get("labels"),
             api_key_env=None,
             usage_callback=usage_callback,
         )

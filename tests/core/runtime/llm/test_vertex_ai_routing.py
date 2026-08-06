@@ -14,6 +14,7 @@ def _vertex_settings() -> SimpleNamespace:
         provider="vertex-ai",
         vertex_ai_project="my-gcp-project",
         vertex_ai_location="us-central1",
+        vertex_ai_labels='{"team": "sre", "env": "prod"}',
         vertex_ai_reasoning_model="gemini-2.5-pro",
         vertex_ai_classification_model="gemini-2.5-flash",
         vertex_ai_toolcall_model="gemini-2.5-flash-lite",
@@ -31,6 +32,7 @@ def test_build_litellm_agent_client_for_vertex_ai() -> None:
     assert client._litellm_model == "vertex_ai/gemini-2.5-pro"
     assert client._vertex_project == "my-gcp-project"
     assert client._vertex_location == "us-central1"
+    assert client._vertex_labels == {"team": "sre", "env": "prod"}
     assert client._api_key_env is None
 
 
@@ -45,6 +47,7 @@ def test_build_litellm_llm_client_for_vertex_ai() -> None:
     assert client._litellm_model == "vertex_ai/gemini-2.5-pro"
     assert client._vertex_project == "my-gcp-project"
     assert client._vertex_location == "us-central1"
+    assert client._vertex_labels == {"team": "sre", "env": "prod"}
     assert client._model_fallback == "vertex_ai/gemini-2.5-flash-lite"
     assert client._api_key_env is None
 
@@ -67,3 +70,21 @@ def test_vertex_ai_omits_project_when_unset_instead_of_raising() -> None:
     client = build_litellm_agent_client(settings, "vertex-ai")
 
     assert client._vertex_project is None
+
+
+def test_vertex_ai_omits_labels_when_unset() -> None:
+    settings = _vertex_settings()
+    settings.vertex_ai_labels = ""
+
+    client = build_litellm_agent_client(settings, "vertex-ai")
+
+    assert client._vertex_labels is None
+
+
+def test_vertex_ai_omits_labels_when_malformed_json() -> None:
+    settings = _vertex_settings()
+    settings.vertex_ai_labels = "not json"
+
+    client = build_litellm_agent_client(settings, "vertex-ai")
+
+    assert client._vertex_labels is None

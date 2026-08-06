@@ -376,6 +376,7 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
         ).strip()
         or BEDROCK_TOOLCALL_MODEL,
         "vertex_ai_project": os.getenv("VERTEX_AI_PROJECT", "").strip(),
+        "vertex_ai_labels": os.getenv("VERTEX_AI_LABELS", "").strip(),
         "vertex_ai_location": os.getenv("VERTEX_AI_LOCATION", DEFAULT_VERTEX_AI_LOCATION).strip()
         or DEFAULT_VERTEX_AI_LOCATION,
         "vertex_ai_reasoning_model": os.getenv(
@@ -448,6 +449,7 @@ class LLMSettings(StrictConfigModel):
     bedrock_classification_model: str = BEDROCK_CLASSIFICATION_MODEL
     bedrock_toolcall_model: str = BEDROCK_TOOLCALL_MODEL
     vertex_ai_project: str = ""
+    vertex_ai_labels: str = ""
     vertex_ai_location: str = DEFAULT_VERTEX_AI_LOCATION
     vertex_ai_reasoning_model: str = VERTEX_AI_REASONING_MODEL
     vertex_ai_classification_model: str = VERTEX_AI_CLASSIFICATION_MODEL

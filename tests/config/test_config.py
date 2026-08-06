@@ -113,6 +113,7 @@ def test_llm_settings_accepts_vertex_ai_without_project() -> None:
     assert settings.provider == "vertex-ai"
     assert settings.vertex_ai_project == ""
     assert settings.vertex_ai_location == "us-central1"
+    assert settings.vertex_ai_labels == ""
 
 
 def test_llm_settings_from_env_vertex_ai(monkeypatch) -> None:
@@ -137,6 +138,16 @@ def test_llm_settings_from_env_vertex_ai_custom_location(monkeypatch) -> None:
     settings = LLMSettings.from_env()
 
     assert settings.vertex_ai_location == "europe-west1"
+
+
+def test_llm_settings_from_env_vertex_ai_labels(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "vertex-ai")
+    monkeypatch.setenv("VERTEX_AI_PROJECT", "my-gcp-project")
+    monkeypatch.setenv("VERTEX_AI_LABELS", '{"team":"sre","env":"prod"}')
+
+    settings = LLMSettings.from_env()
+
+    assert settings.vertex_ai_labels == '{"team":"sre","env":"prod"}'
 
 
 def test_llm_settings_minimax_provider_accepted() -> None:

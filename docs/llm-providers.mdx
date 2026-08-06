@@ -337,6 +337,8 @@ export VERTEX_AI_LOCATION=us-central1
 # Optional overrides:
 export VERTEX_AI_REASONING_MODEL=gemini-2.5-pro
 export VERTEX_AI_TOOLCALL_MODEL=gemini-2.5-flash-lite
+# Optional cost-tracking labels (JSON object; unset by default):
+export VERTEX_AI_LABELS='{"team":"sre","env":"prod"}'
 ```
 
 No API key — auth uses Google Application Default Credentials (ADC): run
@@ -344,6 +346,11 @@ No API key — auth uses Google Application Default Credentials (ADC): run
 to a service-account key file, or rely on the ambient GCE/GKE metadata server.
 Your principal needs the Vertex AI User IAM role (or equivalent) in the
 configured project.
+
+`VERTEX_AI_LABELS` attaches GCP billing/cost-tracking labels to each Vertex AI
+request. Unset by default — no labels are sent unless configured. Label
+values are not validated locally; malformed labels surface as a Vertex API
+error.
 
 Always routed through LiteLLM (like Azure OpenAI) as `vertex_ai/<model>`. Curated
 model choices are Gemini models served via Vertex; any other Vertex-supported

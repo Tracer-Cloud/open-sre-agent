@@ -58,6 +58,7 @@ class LiteLLMAgentClient:
         temperature: float | None = None,
         vertex_project: str | None = None,
         vertex_location: str | None = None,
+        vertex_labels: dict[str, str] | None = None,
         credential_resolver: Callable[[str], str] | None = None,
         completion_func: Callable[..., Any] | None = None,
     ) -> None:
@@ -70,6 +71,7 @@ class LiteLLMAgentClient:
         self._temperature = temperature
         self._vertex_project = vertex_project
         self._vertex_location = vertex_location
+        self._vertex_labels = vertex_labels
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
 
@@ -120,6 +122,8 @@ class LiteLLMAgentClient:
             kwargs["vertex_project"] = self._vertex_project
         if self._vertex_location is not None:
             kwargs["vertex_location"] = self._vertex_location
+        if self._vertex_labels:
+            kwargs["labels"] = self._vertex_labels
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -166,6 +170,7 @@ class LiteLLMLLMClient:
         api_key_default: str = "",
         vertex_project: str | None = None,
         vertex_location: str | None = None,
+        vertex_labels: dict[str, str] | None = None,
         credential_resolver: Callable[[str], str] | None = None,
         completion_func: Callable[..., Any] | None = None,
         usage_callback: Callable[[str, int | None, int | None], object] | None = None,
@@ -181,6 +186,7 @@ class LiteLLMLLMClient:
         self._api_key_default = api_key_default
         self._vertex_project = vertex_project
         self._vertex_location = vertex_location
+        self._vertex_labels = vertex_labels
         self._credential_resolver = credential_resolver
         self._completion_func = completion_func
         self._usage_callback = usage_callback
@@ -247,6 +253,8 @@ class LiteLLMLLMClient:
             kwargs["vertex_project"] = self._vertex_project
         if self._vertex_location is not None:
             kwargs["vertex_location"] = self._vertex_location
+        if self._vertex_labels:
+            kwargs["labels"] = self._vertex_labels
         return kwargs
 
     def _rebuild_after_model_fallback(self, prompt_or_messages: Any) -> dict[str, Any] | None:

@@ -9,6 +9,7 @@ location that LiteLLM needs to build the Vertex request URL.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -18,6 +19,7 @@ VERTEX_AI_PROVIDER = "vertex-ai"
 
 VERTEX_AI_PROJECT_ENV = "VERTEX_AI_PROJECT"
 VERTEX_AI_LOCATION_ENV = "VERTEX_AI_LOCATION"
+VERTEX_AI_LABELS_ENV = "VERTEX_AI_LABELS"
 
 
 def is_vertex_ai_provider(provider: str) -> bool:
@@ -39,7 +41,29 @@ def select_vertex_ai_model(settings: Any, model_type: ModelType) -> str:
     return str(getattr(settings, attr))
 
 
-def resolve_vertex_ai_request_kwargs(settings: Any, *, model_type: ModelType) -> dict[str, str]:
+def _parse_vertex_ai_labels(value: str) -> dict[str, str]:
+    """Parse a JSON object of Vertex AI labels, e.g. ``{"team": "sre"}``.
+
+    Malformed JSON, a non-object top-level value, or non-string keys/values
+    are treated as "no usable labels" rather than raised on — GCP
+    label-format constraints (charset/length/case) are not validated
+    locally; a malformed label surfaces as a Vertex API error at request
+    time, matching the ``vertex_ai_project`` precedent.
+    """
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {
+        key: item for key, item in parsed.items() if isinstance(key, str) and isinstance(item, str)
+    }
+
+
+def resolve_vertex_ai_request_kwargs(settings: Any, *, model_type: ModelType) -> dict[str, Any]:
     """Resolve LiteLLM request fields for Vertex AI from runtime settings.
 
     ``vertex_project`` is omitted (not raised on) when unset, matching Bedrock's
@@ -48,7 +72,7 @@ def resolve_vertex_ai_request_kwargs(settings: Any, *, model_type: ModelType) ->
     error at request time instead.
     """
     model = select_vertex_ai_model(settings, model_type)
-    kwargs: dict[str, str] = {
+    kwargs: dict[str, Any] = {
         "litellm_model": f"vertex_ai/{model}",
         "vertex_location": resolve_vertex_ai_location(
             str(getattr(settings, "vertex_ai_location", ""))
@@ -57,10 +81,14 @@ def resolve_vertex_ai_request_kwargs(settings: Any, *, model_type: ModelType) ->
     project = str(getattr(settings, "vertex_ai_project", "")).strip()
     if project:
         kwargs["vertex_project"] = project
+    labels = _parse_vertex_ai_labels(str(getattr(settings, "vertex_ai_labels", "")).strip())
+    if labels:
+        kwargs["labels"] = labels
     return kwargs
 
 
 __all__ = [
+    "VERTEX_AI_LABELS_ENV",
     "VERTEX_AI_LOCATION_ENV",
     "VERTEX_AI_PROJECT_ENV",
     "VERTEX_AI_PROVIDER",
