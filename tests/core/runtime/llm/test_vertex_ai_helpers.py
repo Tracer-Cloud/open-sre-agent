@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from core.llm.providers.vertex_ai import resolve_vertex_ai_request_kwargs
-from core.llm.types import ModelType
 
 
 def _settings(**overrides: str) -> SimpleNamespace:
@@ -22,7 +21,7 @@ def _settings(**overrides: str) -> SimpleNamespace:
 def test_resolve_vertex_ai_request_kwargs_parses_labels() -> None:
     kwargs = resolve_vertex_ai_request_kwargs(
         _settings(vertex_ai_labels='{"team": "sre", "env": "prod"}'),
-        model_type=ModelType.REASONING,
+        model_type="reasoning",
     )
 
     assert kwargs["labels"] == {"team": "sre", "env": "prod"}
@@ -31,7 +30,7 @@ def test_resolve_vertex_ai_request_kwargs_parses_labels() -> None:
 def test_resolve_vertex_ai_request_kwargs_omits_labels_when_unset() -> None:
     kwargs = resolve_vertex_ai_request_kwargs(
         _settings(vertex_ai_labels=""),
-        model_type=ModelType.REASONING,
+        model_type="reasoning",
     )
 
     assert "labels" not in kwargs
@@ -40,7 +39,7 @@ def test_resolve_vertex_ai_request_kwargs_omits_labels_when_unset() -> None:
 def test_resolve_vertex_ai_request_kwargs_omits_labels_when_malformed_json() -> None:
     kwargs = resolve_vertex_ai_request_kwargs(
         _settings(vertex_ai_labels="not json"),
-        model_type=ModelType.REASONING,
+        model_type="reasoning",
     )
 
     assert "labels" not in kwargs
@@ -49,7 +48,7 @@ def test_resolve_vertex_ai_request_kwargs_omits_labels_when_malformed_json() -> 
 def test_resolve_vertex_ai_request_kwargs_omits_labels_when_not_an_object() -> None:
     kwargs = resolve_vertex_ai_request_kwargs(
         _settings(vertex_ai_labels="[1, 2, 3]"),
-        model_type=ModelType.REASONING,
+        model_type="reasoning",
     )
 
     assert "labels" not in kwargs
@@ -58,7 +57,7 @@ def test_resolve_vertex_ai_request_kwargs_omits_labels_when_not_an_object() -> N
 def test_resolve_vertex_ai_request_kwargs_drops_non_string_label_values() -> None:
     kwargs = resolve_vertex_ai_request_kwargs(
         _settings(vertex_ai_labels='{"team": "sre", "count": 5}'),
-        model_type=ModelType.REASONING,
+        model_type="reasoning",
     )
 
     assert kwargs["labels"] == {"team": "sre"}
