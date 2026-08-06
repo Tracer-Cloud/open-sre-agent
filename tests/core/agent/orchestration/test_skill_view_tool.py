@@ -14,7 +14,7 @@ def test_skill_view_tool_is_action_surface_read_only() -> None:
     assert skill_view_tool.side_effect_level == "read_only"
 
 
-def test_skill_view_loads_architecture_audit_playbook() -> None:
+def test_skill_view_loads_architecture_audit_skill() -> None:
     result = execute_skill_view_tool({"name": "architecture-audit"}, ctx=None)  # type: ignore[arg-type]
     assert result["ok"] is True
     assert "ARCHITECTURE AUDIT SKILL" in result["content"]

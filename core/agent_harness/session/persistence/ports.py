@@ -66,8 +66,22 @@ class SessionStorage(Protocol):
         result: str,
         ok: bool,
         source: str | None = None,
+        tool_call_id: str | None = None,
+        sidecar: bool = False,
     ) -> None:
-        raise NotImplementedError
+        """Record one executed tool call; with ``tool_call_id`` it commits a WAL intent."""
+
+    def append_tool_intent(
+        self,
+        session_id: str,
+        *,
+        tool: str,
+        arguments: dict[str, Any],
+        tool_call_id: str,
+        seq: int,
+        user_text: str | None = None,
+    ) -> str:
+        """Durably record a tool call about to execute (WAL intent, fsynced)."""
 
     def append_tool_update(
         self,

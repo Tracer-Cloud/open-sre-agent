@@ -224,7 +224,9 @@ which owns the actual think → call-tools → observe algorithm.
   for the `from core.agent import AgentRunResult` path.
 - `core/agent/react_loop.py` — `ReactLoop` (the loop as a method-object, phases
   `_think` / `_handle_conclusion` / `_observe`) and `run_react_loop` (its thin
-  functional entry).
+  functional entry). The conclusion phase delegates to `ConclusionHandler` in
+  `core/agent/handle_conclusion.py` (textual-tool-call bounce, host acceptance,
+  queued follow-ups, nudges).
 - `core/agent/agent.py` — the `Agent` facade: `__init__` (holds config), `run()`
   (builds the per-run `AgentRunInput` via `_build_run_input` and hands it to
   `run_react_loop`), and the `_should_accept_conclusion` override hook.

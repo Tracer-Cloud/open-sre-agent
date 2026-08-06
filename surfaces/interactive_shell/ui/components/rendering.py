@@ -198,7 +198,7 @@ def repl_render_launch_poster(
     theme_notice: str | None = None,
 ) -> None:
     """Render splash + welcome panel using REPL-safe CRLF writes."""
-    from surfaces.interactive_shell.ui import banner as banner_module
+    from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 
     if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
         width = _prepare_tty_for_rich(console)
@@ -211,8 +211,7 @@ def repl_render_launch_poster(
             legacy_windows=False,
             width=width,
         )
-        banner_module.render_splash(buf_console, first_run=False)
-        banner_module.render_ready_box(buf_console, session=session)
+        render_terminal_ui(buf_console, session=session, first_run=False)
         prefix = _theme_notice_line(theme_notice) if theme_notice else ""
         _repl_write_buffer(prefix + buf.getvalue())
         return
@@ -222,8 +221,7 @@ def repl_render_launch_poster(
             console,
             f"[{ui_theme.HIGHLIGHT}]theme set:[/] {escape(theme_notice)}",
         )
-    banner_module.render_splash(console, first_run=False)
-    banner_module.render_ready_box(console, session=session)
+    render_terminal_ui(console, session=session, first_run=False)
 
 
 def refresh_welcome_poster(

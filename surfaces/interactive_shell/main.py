@@ -15,8 +15,9 @@ from surfaces.interactive_shell.runtime.startup.first_launch_github import (
     require_startup_github_login,
 )
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
-from surfaces.interactive_shell.ui.banner import render_ready_box, render_splash
+from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
+from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 # Fallback when a caller does not supply one. Forces a terminal because the
@@ -64,6 +65,10 @@ async def run_repl_async(
                 slash_command=slash_command,
             ):
                 return 1
+        else:
+            # Fresh interactive start with no scheduled loops: offer the
+            # suggested-loops picker before the prompt loop takes stdin.
+            offer_loop_suggestions(session)
 
         await InteractiveShellController(
             runtime_context,
@@ -95,8 +100,7 @@ def run_repl(
 
     try:
         if not initial_input:
-            render_splash(out)
-            render_ready_box(out)
+            render_terminal_ui(out)
             if not require_startup_github_login(out):
                 return 0
 

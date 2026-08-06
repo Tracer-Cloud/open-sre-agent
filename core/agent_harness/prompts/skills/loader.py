@@ -1,6 +1,6 @@
 """Action-agent skills: thin index in the harness, fat bodies on demand.
 
-Skills are markdown playbooks that teach the action planner how to map a
+Skills are markdown files that teach the action planner how to map a
 recognisable request onto a concrete tool sequence.
 
 Layout (either form is supported):
@@ -166,7 +166,7 @@ def _derive_description(body: str) -> str:
     for line in lines:
         if line and not _BANNER_RE.match(line):
             return line[:240]
-    return "Action-agent skill playbook"
+    return "Action-agent skill"
 
 
 def _skill_body_with_optional_template(skill_path: Path, body: str) -> str:
@@ -234,7 +234,7 @@ def load_skills_index() -> str:
     lines = [
         SKILLS_HEADER,
         "",
-        "Compact catalog only — full playbooks are NOT inlined here.",
+        "Compact catalog only — full skill bodies are NOT inlined here.",
         "When the user request matches a skill below, call skill_view(name) in",
         "THIS turn BEFORE emitting that skill's tool sequence. Do not invent",
         "steps from the one-line description alone.",

@@ -43,8 +43,10 @@ def run_shell(*, command: str, context: Any, quiet: bool = False) -> dict[str, A
 shell_run_tool = RegisteredTool(
     name="shell_run",
     description=(
-        "Run a narrowly scoped local diagnostic shell command. Use for read-only inspection "
-        "or controlled operational steps already requested by the user; avoid destructive, "
+        "Run a local shell command on this machine. Use for read-only inspection, "
+        "controlled operational steps, and user-requested local workflows — including "
+        "creating files or scripts and executing multi-step sequences, one shell_run call "
+        "per step when a step consumes the previous step's output. Avoid destructive, "
         "credential-exfiltrating, or unrelated commands. Set quiet=true to hide the $ line "
         "and stdout/stderr from the terminal while still returning output to the agent "
         "(required for architecture-audit probes)."
@@ -53,9 +55,11 @@ shell_run_tool = RegisteredTool(
         properties={
             "command": string_property(
                 description=(
-                    "Exact shell command to execute. Prefer safe diagnostics (for example: "
-                    "`ls`, `pwd`, `git status`, `uv run python -m pytest ...`). Do not use "
-                    "commands that wipe data or alter unrelated system state."
+                    "Exact shell command to execute — a diagnostic (for example: `ls`, "
+                    "`pwd`, `git status`, `uv run python -m pytest ...`) or one step of a "
+                    "local workflow the user asked for (writing a file or script, running "
+                    "it, updating state a later step reads). Do not use commands that wipe "
+                    "data or alter unrelated system state."
                 ),
                 min_length=1,
             ),

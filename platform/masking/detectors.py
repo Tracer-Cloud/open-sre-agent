@@ -61,14 +61,14 @@ _EMAIL_RE = re.compile(r"\b([\w.+-]+@[\w-]+\.[\w.-]+)\b")
 
 
 _BUILTIN_DETECTORS: dict[IdentifierKind, re.Pattern[str]] = {
-    "pod": _POD_RE,
-    "namespace": _NAMESPACE_RE,
-    "cluster": _CLUSTER_RE,
-    "service_name": _SERVICE_NAME_RE,
-    "hostname": _HOSTNAME_RE,
-    "account_id": _ACCOUNT_RE,
-    "ip_address": _IP_RE,
-    "email": _EMAIL_RE,
+    IdentifierKind.POD: _POD_RE,
+    IdentifierKind.NAMESPACE: _NAMESPACE_RE,
+    IdentifierKind.CLUSTER: _CLUSTER_RE,
+    IdentifierKind.SERVICE_NAME: _SERVICE_NAME_RE,
+    IdentifierKind.HOSTNAME: _HOSTNAME_RE,
+    IdentifierKind.ACCOUNT_ID: _ACCOUNT_RE,
+    IdentifierKind.IP_ADDRESS: _IP_RE,
+    IdentifierKind.EMAIL: _EMAIL_RE,
 }
 
 

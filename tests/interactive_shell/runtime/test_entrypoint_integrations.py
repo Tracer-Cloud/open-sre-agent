@@ -345,8 +345,12 @@ def test_run_repl_writes_startup_output_to_the_supplied_console(monkeypatch: Any
     captured = Console(file=StringIO(), force_terminal=False, width=80)
     monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: console.print("SPLASH"))
-    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda console: console.print("READY"))
+
+    def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
+        console.print("SPLASH")
+        console.print("READY")
+
+    monkeypatch.setattr(main_entrypoint, "render_terminal_ui", _fake_terminal_ui)
     # Stop before the event loop; the startup renders are what this pins.
     monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
 
@@ -369,8 +373,11 @@ def test_run_repl_defaults_to_the_module_console(monkeypatch: Any) -> None:
     seen: list[object] = []
     monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: seen.append(console))
-    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+
+    def _record_console(console: Any, **_kwargs: Any) -> None:
+        seen.append(console)
+
+    monkeypatch.setattr(main_entrypoint, "render_terminal_ui", _record_console)
     monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
 
     from config.repl_config import ReplConfig
@@ -447,8 +454,7 @@ def test_run_repl_hands_its_console_to_the_async_half(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(main_entrypoint, "render_splash", lambda _console: None)
-    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+    monkeypatch.setattr(main_entrypoint, "render_terminal_ui", lambda _console, **_kw: None)
     monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: True)
 
     seen: list[object] = []
@@ -507,8 +513,11 @@ def test_console_injection_works_through_the_package_facade(monkeypatch: Any) ->
 
     monkeypatch.setattr(main_entrypoint, "run_startup_sweep", lambda: None)
     monkeypatch.setattr(main_entrypoint.sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(main_entrypoint, "render_splash", lambda console: console.print("SPLASH"))
-    monkeypatch.setattr(main_entrypoint, "render_ready_box", lambda _console: None)
+
+    def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
+        console.print("SPLASH")
+
+    monkeypatch.setattr(main_entrypoint, "render_terminal_ui", _fake_terminal_ui)
     monkeypatch.setattr(main_entrypoint, "require_startup_github_login", lambda _console: False)
     captured = Console(file=StringIO(), force_terminal=False, width=80)
 
@@ -537,8 +546,11 @@ def test_initial_input_replay_uses_the_supplied_console(monkeypatch: Any) -> Non
     from surfaces.interactive_shell.runtime.startup import initial_input as replay
 
     monkeypatch.setattr("platform.analytics.cli.identify_saved_github_username", lambda: None)
-    monkeypatch.setattr(replay, "render_splash", lambda console: console.print("REPLAY-SPLASH"))
-    monkeypatch.setattr(replay, "render_ready_box", lambda _console: None)
+
+    def _fake_terminal_ui(console: Any, **_kwargs: Any) -> None:
+        console.print("REPLAY-SPLASH")
+
+    monkeypatch.setattr(replay, "render_terminal_ui", _fake_terminal_ui)
 
     class _PromptSession:
         history = None

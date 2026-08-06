@@ -7,8 +7,8 @@ from rich.console import Console
 from platform.analytics.repl_context import bound_repl_turn_context
 from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.banner import render_ready_box, render_splash
 from surfaces.interactive_shell.ui.input_prompt.rendering import render_submitted_prompt
+from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 _TURN_KIND = "agent"
@@ -30,8 +30,7 @@ def run_initial_input(
         color_system="truecolor",
         legacy_windows=False,
     )
-    render_splash(console)
-    render_ready_box(console)
+    render_terminal_ui(console)
     for line in initial_input.splitlines():
         stripped = line.strip()
         if not stripped:

@@ -266,7 +266,7 @@ def test_morning_report_skill_closes_with_schedule_offer() -> None:
     """A run-once morning report without an offer cannot drive repeat usage."""
     load_skills_block.cache_clear()
     body = " ".join(
-        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+        (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
     assert "propose_scheduled_delivery" in body
     assert "daily_summary" in body
@@ -360,7 +360,7 @@ def test_skills_loader_bundles_github_security_fix_skill() -> None:
     skill = skills_dir() / "github_security_fix" / "SKILL.md"
     assert skill.is_file()
 
-    # Index carries the one-line catalog; the playbook loads on demand, so the
+    # Index carries the one-line catalog; the skill body loads on demand, so the
     # detailed assertions from #4727 belong against the body, not the block.
     assert "github-security-fix" in load_skills_index()
     body = load_skill_body("github-security-fix")
@@ -650,7 +650,7 @@ def test_scheduling_is_never_offered_without_asking_first() -> None:
     load_skills_block.cache_clear()
     base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(
-        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+        (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
 
     # Assert — structured propose tool; creation waits on confirm / yes
@@ -689,10 +689,79 @@ def test_the_cron_guidance_teaches_structured_schedule_offers() -> None:
 
     base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(
-        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+        (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
 
     assert "propose_scheduled_delivery" in base
     assert "propose_scheduled_delivery" in skill
     assert "omit chat_id" in skill
     assert 'provider="slack"' in skill or "provider='slack'" in skill
+
+
+# ── WAL: interrupted-turn recovery injection ─────────────────────────────────
+
+
+def test_interrupted_turn_recovery_block_rides_the_ephemeral_tier() -> None:
+    """The recovery note lands in the ephemeral half; the cached half is unchanged.
+
+    Cache stability is the design constraint: the note rides exactly one turn,
+    so it must never touch the byte-stable cached system prefix.
+    """
+    import dataclasses
+
+    from core.agent_harness.prompts.action.assemble import (
+        build_action_system_prompt_envelope,
+        interrupted_turn_recovery_block,
+    )
+
+    note = (
+        "A previous turn in this session was interrupted while tool calls were "
+        "still executing (no result was recorded for them):\n"
+        "- shell_run step-2 >> /tmp/demo_state.json (step 2)"
+    )
+    with_note = dataclasses.replace(_ctx(), recovery_note=note)
+
+    assert interrupted_turn_recovery_block(_ctx()) == ""
+    block = interrupted_turn_recovery_block(with_note)
+    assert "INTERRUPTED-TURN RECOVERY" in block
+    assert "shell_run step-2 >> /tmp/demo_state.json (step 2)" in block
+
+    envelope_with = build_action_system_prompt_envelope(with_note)
+    envelope_without = build_action_system_prompt_envelope(_ctx())
+    assert envelope_with.render_cached() == envelope_without.render_cached()
+    assert "INTERRUPTED-TURN RECOVERY" in envelope_with.render_ephemeral()
+    assert "INTERRUPTED-TURN RECOVERY" not in envelope_without.render()
+    assert "INTERRUPTED-TURN RECOVERY" in envelope_with.render()
+
+
+def test_from_session_pops_the_pending_recovery_note() -> None:
+    """The note is consumed by the first snapshot and never rides a second turn."""
+    from types import SimpleNamespace
+
+    session = SimpleNamespace(
+        cli_agent_messages=[],
+        configured_integrations=(),
+        configured_integrations_known=False,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+        pending_recovery_note="previous turn was interrupted while executing shell_run step-2",
+    )
+
+    first = TurnSnapshot.from_session("continue", session, surface=None)
+    second = TurnSnapshot.from_session("next", session, surface=None)
+
+    assert first.recovery_note is not None
+    assert "shell_run step-2" in first.recovery_note
+    assert session.pending_recovery_note is None
+    assert second.recovery_note is None
+
+
+def test_sequential_steps_rule_teaches_two_phase_state_writes() -> None:
+    """Task-level WAL: the state file records started/committed per step."""
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    assert "two-phase" in prompt
+    assert "`step n: started`" in prompt
+    assert "`step n: committed`" in prompt
+    assert "started-but-uncommitted step is re-run" in prompt
+    assert "committed steps are never redone" in prompt

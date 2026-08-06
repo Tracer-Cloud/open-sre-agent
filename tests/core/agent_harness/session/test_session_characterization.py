@@ -28,6 +28,7 @@ _CORE_FIELDS = (
     "last_synthetic_observation_path",
     "pending_schedule_offer",
     "pending_investigation_offer",
+    "pending_recovery_note",
     "integrations",
     "available_capabilities",
     "accumulated_context",
