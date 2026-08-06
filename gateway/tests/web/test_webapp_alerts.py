@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from http import HTTPStatus
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -84,14 +86,27 @@ def test_rejected_alert_does_not_leak_exception_detail(client: TestClient) -> No
 
 def test_oversized_body_returns_413(client: TestClient, inbox: AlertInbox) -> None:
     resp = client.post("/alerts", json={"text": "x" * (webapp.MAX_ALERT_BODY_BYTES + 1)})
-    assert resp.status_code == 413
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+    assert resp.json() == {"error": "payload too large"}
+    assert inbox.pop_nowait() is None
+
+
+def test_oversized_body_chunked_returns_413(client: TestClient, inbox: AlertInbox) -> None:
+    def chunked_payload() -> Iterator[bytes]:
+        yield b'{"text":"'
+        yield b"x" * (webapp.MAX_ALERT_BODY_BYTES // 2)
+        yield b"x" * (webapp.MAX_ALERT_BODY_BYTES // 2 + 10)
+        yield b'"}'
+        
+    resp = client.post("/alerts", content=chunked_payload())
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert resp.json() == {"error": "payload too large"}
     assert inbox.pop_nowait() is None
 
 
 def test_investigate_oversized_body_returns_413(client: TestClient) -> None:
     resp = client.post("/investigate", json={"alert_name": "x" * (webapp.MAX_BODY_BYTES + 1)})
-    assert resp.status_code == 413
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert resp.json() == {"error": "payload too large"}
 
 
@@ -107,7 +122,7 @@ def test_api_investigations_oversized_body_returns_413(client: TestClient, monke
         json={"alert_name": "x" * (webapp.MAX_BODY_BYTES + 1)},
         headers={"Authorization": "Bearer token"},
     )
-    assert resp.status_code == 413
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert resp.json() == {"error": "payload too large"}
 
 

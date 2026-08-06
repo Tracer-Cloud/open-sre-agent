@@ -23,9 +23,15 @@ async def validate_body_size(request: Request, max_bytes: int = MAX_BODY_BYTES) 
             {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
         )
 
-    body = await request.body()
-    if len(body) > max_bytes:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
+    total = 0
+    chunks = []
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            return JSONResponse(
+                {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            )
+        chunks.append(chunk)
+    
+    request._body = b"".join(chunks)
     return None
