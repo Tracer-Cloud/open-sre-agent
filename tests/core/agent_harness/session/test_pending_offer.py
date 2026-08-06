@@ -78,6 +78,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": "slack",
+            "chat_id": "C0123ABCD",
             "briefing_text": briefing,
         },
         ctx,
@@ -100,6 +101,7 @@ def test_propose_alone_without_briefing_work_is_rejected() -> None:
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": "slack",
+            "chat_id": "C0123ABCD",
         },
         ctx,
     )
@@ -417,6 +419,7 @@ def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
             "kind": "daily_summary",
             "cron": "0 8 * * 1-5",
             "provider": "slack",
+            "chat_id": "C0123ABCD",
             "briefing_text": "Good morning! Weather — Amsterdam: +20C\nTop headlines:\n- one",
         },
         ctx,
