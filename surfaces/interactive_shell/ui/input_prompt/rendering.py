@@ -82,7 +82,7 @@ def resolve_prompt_prefix_ansi(*, inline_spinner: str, idle_hint: str) -> str:
 
 def resolve_idle_hint_ansi(session: Session) -> str:
     """Dim hint line above the prompt rule: shortcuts plus connected integrations."""
-    parts = ["/ for commands", "↑↓ history"]
+    parts = ["/ for commands", "tab tool details", "↑↓ history"]
     if session.configured_integrations_known and session.configured_integrations:
         max_shown = 4
         names = [integration_display_name(name) for name in sorted(session.configured_integrations)]

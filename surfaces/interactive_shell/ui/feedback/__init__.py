@@ -11,7 +11,7 @@ Why a custom select menu instead of repl_choose_one() on the CLI path:
 
   The local :func:`_run_select` erases line-by-line with ``\\x1b[2K`` and is
   robust to any cursor state.  Call :func:`restore_stdin_terminal` before
-  entering the menu so investigation progress UI (Ctrl+O watcher) does not
+  entering the menu so investigation progress UI (Tab watcher) does not
   leave stdin in no-echo mode.  The REPL path keeps :func:`repl_choose_one`
   inside prompt_toolkit's stdout patch context.
 """

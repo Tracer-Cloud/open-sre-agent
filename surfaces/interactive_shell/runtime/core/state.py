@@ -213,7 +213,7 @@ class SpinnerState:
 
     def idle_hint_ansi(self) -> str:
         """Dim hint line shown above the rule when no dispatch is running."""
-        hint = "/ for commands  ·  ↑↓ history"
+        hint = "/ for commands  ·  tab tool details  ·  ↑↓ history"
         app = get_app_or_none()
         if app is not None and app.current_buffer.text:
             hint += "  ·  esc to clear"

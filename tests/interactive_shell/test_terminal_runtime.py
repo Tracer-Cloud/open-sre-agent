@@ -844,6 +844,7 @@ class TestSpinnerState:
         spinner = loop_state.SpinnerState()
         rendered = _strip_ansi(spinner.idle_hint_ansi())
         assert "/ for commands" in rendered
+        assert "tab tool details" in rendered
         assert "history" in rendered
         # Hidden — buffer is empty, Esc would be a no-op, so the hint
         # would mislead the user.

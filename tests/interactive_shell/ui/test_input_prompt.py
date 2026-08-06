@@ -99,6 +99,7 @@ class TestResolveIdleHint:
         session.configured_integrations = ("datadog", "github", "grafana")
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
         assert "/ for commands" in rendered
+        assert "tab tool details" in rendered
         assert "Datadog" in rendered
         assert "GitHub" in rendered
         assert "Grafana" in rendered
@@ -110,6 +111,7 @@ class TestResolveIdleHint:
         rendered = _strip_ansi(resolve_idle_hint_ansi(session))
         assert "Datadog" not in rendered
         assert "/ for commands" in rendered
+        assert "tab tool details" in rendered
 
 
 class TestResolvePromptPlaceholder:
