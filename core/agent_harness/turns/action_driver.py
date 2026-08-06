@@ -496,7 +496,9 @@ def _build_action_agent(
         factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
         envelope = build_action_system_prompt_envelope(
-            turn_snapshot or TurnSnapshot.from_session(message, session)
+            # No turn plan means no surface is known here; setup facts are
+            # omitted rather than guessed (see _setup_state_for_surface).
+            turn_snapshot or TurnSnapshot.from_session(message, session, surface=None)
         )
         # Cached half stays byte-identical across turns; ephemeral (conversation,
         # prior-action-facts) rides with the user message so Anthropic's system
@@ -620,7 +622,13 @@ def _compose_response(
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
-    suppress_final = prefer_tool_response_text or _self_recording_tools_only(result)
+    # A handoff means the assistant answers this turn, so the action's closing
+    # prose would be a second reply to one message ("good morning" twice).
+    suppress_final = (
+        prefer_tool_response_text
+        or _self_recording_tools_only(result)
+        or bool(counts.handoff_contents)
+    )
     final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see

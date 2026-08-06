@@ -49,14 +49,10 @@ class DefaultPromptContextProvider:
     def __init__(self, session: Any, *, surface: str = "interactive_shell") -> None:
         self._session = session
         self._surface = surface
-        self._setup_state: str | None = None
-        self._setup_state_key: tuple[Any, ...] | None = None
 
     def bind_session(self, session: Any) -> None:
         """Point this provider at a freshly resolved session (gateway reuse)."""
         self._session = session
-        self._setup_state = None
-        self._setup_state_key = None
 
     def surface(self) -> str:
         return self._surface
@@ -146,25 +142,16 @@ class DefaultPromptContextProvider:
     def setup_state(self) -> str:
         """The install's integrations and schedules, recomputed when they change.
 
-        Keyed on the integration names plus a stat of the scheduler stores, so
-        connecting an integration or adding a schedule mid-session shows up on
-        the next turn instead of serving the first turn's facts all session.
+        Shares the memoized block in :mod:`platform.setup_state`, so connecting
+        an integration or adding a schedule mid-session shows up on the next
+        turn instead of serving the first turn's facts all session.
         """
-        from platform.setup_state import (
-            collect_setup_state,
-            render_setup_state,
-            setup_state_fingerprint,
-        )
+        from platform.setup_state import cached_setup_state
 
         profile = profile_for(self._surface)
         if not profile.setup_state:
             return ""
-        integrations = self._visible_integrations()
-        key = (integrations, setup_state_fingerprint())
-        if self._setup_state is None or self._setup_state_key != key:
-            self._setup_state = render_setup_state(collect_setup_state(integrations))
-            self._setup_state_key = key
-        return self._setup_state
+        return cached_setup_state(self._visible_integrations())
 
     def suggested_synthetic_prompt(self) -> str:
         return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST

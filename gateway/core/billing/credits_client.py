@@ -110,10 +110,9 @@ def consume_credits(
         )
     except Exception as exc:
         logger.warning(
-            "[credits] webapp unreachable for reason=%s (%s: %s)",
+            "[credits] webapp unreachable for reason=%s (%s)",
             reason,
             type(exc).__name__,
-            exc,
         )
         return CreditsOutcome.UNAVAILABLE
 

@@ -951,7 +951,10 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     monkeypatch.setattr(
         "core.agent_harness.turns.action_driver.resolve_and_cache_integrations", _must_not_run
     )
-    snapshot = replace(TurnSnapshot.from_session("q", Session()), resolved_integrations={})
+    snapshot = replace(
+        TurnSnapshot.from_session("q", Session(), surface="interactive_shell"),
+        resolved_integrations={},
+    )
     plan = TurnPlan(snapshot=snapshot)
 
     assert _turn_resolved_integrations(Session(), plan) == {}

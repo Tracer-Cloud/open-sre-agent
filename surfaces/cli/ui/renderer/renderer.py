@@ -123,7 +123,7 @@ class StreamRenderer:
     def _start_toggle_watcher(self) -> None:
         if get_output_format() != "rich" or _repl_progress_active():
             return
-        # ProgressTracker already owns the single Ctrl+O stdin watcher.
+        # ProgressTracker already owns the single Tab stdin watcher.
         # Register our handler so toggle_active_tool_details() routes here.
         self._toggle_unregister = register_tool_detail_toggle(self._toggle_tool_details)
 
@@ -138,7 +138,7 @@ class StreamRenderer:
             self._sync_tool_detail_view(clear=True)
             return
         label = "shown" if self._tool_details_visible else "hidden"
-        self._print_above_renderable(Text(f"  Tool details {label} (ctrl+o)", style="dim"))
+        self._print_above_renderable(Text(f"  Tool details {label} (tab)", style="dim"))
         if self._tool_details_visible:
             self._flush_tool_details()
 

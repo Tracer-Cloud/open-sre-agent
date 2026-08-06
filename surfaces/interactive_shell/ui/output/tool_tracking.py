@@ -119,7 +119,7 @@ class ToolTrackingMixin:
             self._sync_tool_detail_view(clear=True)
             return
         label = "shown" if self._tool_details_visible else "hidden"
-        _safe_print(f"  Tool details {label} (ctrl+o)")
+        _safe_print(f"  Tool details {label} (tab)")
         if self._tool_details_visible:
             self._flush_tool_details()
 

@@ -449,7 +449,9 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
 
     result = Agent(
         llm=llm,
-        system=build_action_system_prompt(TurnSnapshot.from_session(prompt, session)),
+        system=build_action_system_prompt(
+            TurnSnapshot.from_session(prompt, session, surface="interactive_shell")
+        ),
         tools=[_planning_probe_tool(tool) for tool in tools],
         resolved_integrations={},
         max_iterations=_LIVE_PLANNING_MAX_ITERATIONS,
