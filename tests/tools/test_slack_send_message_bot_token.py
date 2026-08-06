@@ -90,3 +90,13 @@ class TestBotTokenDelivery:
         # Assert: it must say so rather than silently sending nowhere.
         assert result["sent"] is False
         assert result["error_type"] == "configuration_error"
+
+
+def test_channel_id_is_accepted_by_the_input_schema() -> None:
+    # Arrange: additionalProperties is False, so a parameter run() accepts but
+    # the schema omits would be rejected before it ever reaches the tool.
+    schema = SlackSendMessageTool.input_schema
+
+    # Act / Assert
+    assert "channel_id" in schema["properties"]
+    assert schema.get("additionalProperties") is False

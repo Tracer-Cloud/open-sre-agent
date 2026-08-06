@@ -22,15 +22,15 @@ from integrations.slack.web_client import (
 
 
 class SlackSendMessageTool(BaseTool):
-    """Send a plain-text message via the configured Slack incoming webhook."""
+    """Send a plain-text message via a Slack incoming webhook or bot token."""
 
     name = "slack_send_message"
     source = SOURCE
     description = (
-        "Send a plain-text message to Slack via the configured incoming webhook. "
-        "Use this for explicit user-requested Slack notifications, status updates, "
-        "or on-demand alerts. The tool resolves the webhook URL internally and "
-        "returns structured delivery status without exposing secrets."
+        "Send a plain-text message to Slack. Uses the configured incoming webhook "
+        "when one exists, otherwise posts to channel_id with the bot token. Use this "
+        "for explicit user-requested Slack notifications, status updates, or on-demand "
+        "alerts. Credentials are resolved internally and never returned."
     )
     use_cases = [
         "Sending a user-requested notification to the configured Slack channel",
@@ -59,6 +59,14 @@ class SlackSendMessageTool(BaseTool):
                 "description": (
                     "Optional Slack incoming webhook URL. Defaults to SLACK_WEBHOOK_URL or "
                     "the configured Slack integration when omitted."
+                ),
+            },
+            "channel_id": {
+                "type": "string",
+                "description": (
+                    "Target channel ID (e.g. C0123ABCD). Required when sending with a bot "
+                    "token; ignored when a webhook is configured, since a webhook posts to "
+                    "the one channel it was created for."
                 ),
             },
         },
