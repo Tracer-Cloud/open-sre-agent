@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from gateway.slack.output_sink import _TurnStream
+from gateway.transports.slack.output_sink import _TurnStream
 
 
 def _stream(*, update_interval_seconds: float = 10_000.0) -> tuple[_TurnStream, MagicMock]:

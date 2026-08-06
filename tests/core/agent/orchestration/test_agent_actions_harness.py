@@ -12,7 +12,7 @@ from rich.console import Console
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import AnswerRequest
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
 from core.agent_harness.turns.action_driver import (
@@ -1117,7 +1117,10 @@ def test_turn_resolved_integrations_trusts_plan_without_reresolving(
     monkeypatch.setattr(
         "core.agent_harness.turns.action_driver.resolve_and_cache_integrations", _must_not_run
     )
-    snapshot = replace(TurnSnapshot.from_session("q", Session()), resolved_integrations={})
+    snapshot = replace(
+        TurnSnapshot.from_session("q", Session(), surface="interactive_shell"),
+        resolved_integrations={},
+    )
     plan = TurnPlan(snapshot=snapshot)
 
     assert _turn_resolved_integrations(Session(), plan) == {}

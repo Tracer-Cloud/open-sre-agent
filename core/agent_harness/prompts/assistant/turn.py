@@ -14,14 +14,14 @@ from core.agent_harness.prompts.assistant.observation import (
     build_observation_block,
 )
 from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
-from core.agent_harness.prompts.conversation_memory import (
+from core.agent_harness.prompts.memory.conversation import (
     format_prior_action_facts,
     format_recent_conversation,
 )
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     build_block as build_prior_investigation_block,
 )
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     is_prior_investigation_follow_up,
 )
 from core.agent_harness.prompts.runtime_facts import build_live_runtime_facts_block

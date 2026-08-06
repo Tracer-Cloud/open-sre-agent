@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from gateway.runtime import bootstrap as gateway_bootstrap
+from gateway.core.runtime import bootstrap as gateway_bootstrap
 from surfaces.shared import runtime_bootstrap as surfaces_bootstrap
 
 

@@ -545,7 +545,9 @@ def _build_action_agent(
         factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
         envelope = build_action_system_prompt_envelope(
-            turn_snapshot or TurnSnapshot.from_session(message, session)
+            # No turn plan means no surface is known here; setup facts are
+            # omitted rather than guessed (see _setup_state_for_surface).
+            turn_snapshot or TurnSnapshot.from_session(message, session, surface=None)
         )
         # Cached half stays byte-identical across turns; ephemeral (conversation,
         # prior-action-facts) rides with the user message so Anthropic's system
@@ -691,10 +693,16 @@ def _compose_response(
     # Exceptions: a multi-step shell/slash chain, whose closing summary is
     # grounded in the output the model observed between steps, and a closing
     # question, which seeks direction instead of restating output.
-    suppress_final = prefer_tool_response_text or (
-        _self_recording_tools_only(result)
-        and not _multi_step_grounded_chain(result)
-        and not _asks_the_user(final_text)
+    # A handoff means the assistant answers this turn, so the action's closing
+    # prose would be a second reply to one message ("good morning" twice).
+    suppress_final = (
+        prefer_tool_response_text
+        or bool(counts.handoff_contents)
+        or (
+            _self_recording_tools_only(result)
+            and not _multi_step_grounded_chain(result)
+            and not _asks_the_user(final_text)
+        )
     )
     final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).

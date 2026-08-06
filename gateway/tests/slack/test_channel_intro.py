@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from gateway.slack.channel_intro import ChannelIntroGreeter
+from gateway.transports.slack.channel_intro import ChannelIntroGreeter
 
 
 class _FakeMessagingClient:

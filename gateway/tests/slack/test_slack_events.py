@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from gateway.slack.events import SlackInboundFile, parse_events_api_payload
+from gateway.transports.slack.events import SlackInboundFile, parse_events_api_payload
 
 
 def _mention_payload(**event_overrides: Any) -> dict[str, Any]:

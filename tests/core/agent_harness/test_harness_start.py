@@ -108,7 +108,7 @@ def test_omitting_prompts_keeps_the_built_in_context() -> None:
 def test_default_prompt_provider_is_exported_from_package() -> None:
     """Embedders import the built-in provider from ``core.agent_harness``."""
     import core.agent_harness as pkg
-    from core.agent_harness.prompts.context import DefaultPromptContextProvider
+    from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 
     assert pkg.DefaultPromptContextProvider is DefaultPromptContextProvider
     assert "DefaultPromptContextProvider" in dir(pkg)

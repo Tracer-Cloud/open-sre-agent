@@ -14,7 +14,7 @@ from core.agent_harness.prompts.gather import (
     build_gather_system_prompt,
     build_gather_system_prompt_from_turn_snapshot,
 )
-from core.agent_harness.prompts.prior_investigation import (
+from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
     STALE_PRIOR_INVESTIGATION_NOTE,
 )
@@ -149,7 +149,7 @@ def test_gather_prompt_from_turn_snapshot_includes_recent_last_state() -> None:
     session.last_state = _investigation()
 
     # Act
-    snapshot = TurnSnapshot.from_session("what happened?", session)
+    snapshot = TurnSnapshot.from_session("what happened?", session, surface="interactive_shell")
     prompt = build_gather_system_prompt_from_turn_snapshot(snapshot)
 
     # Assert
@@ -176,7 +176,7 @@ def test_answer_prompt_keeps_an_old_investigation_and_labels_it() -> None:
         investigation_started_at=time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
         root_cause="aging-root-cause",
     )
-    snapshot = TurnSnapshot.from_session("what happened?", session)
+    snapshot = TurnSnapshot.from_session("what happened?", session, surface="interactive_shell")
 
     # Act
     answer_prompt = build_cli_agent_prompt_from_provider(
@@ -196,7 +196,7 @@ def test_answer_prompt_does_not_label_a_recent_investigation_as_stale() -> None:
     # Arrange
     session = _SnapshotSession()
     session.last_state = _investigation()
-    snapshot = TurnSnapshot.from_session("what happened?", session)
+    snapshot = TurnSnapshot.from_session("what happened?", session, surface="interactive_shell")
 
     # Act
     answer_prompt = build_cli_agent_prompt_from_provider(
@@ -216,7 +216,7 @@ def test_answer_prompt_still_grounds_on_a_recent_investigation() -> None:
     # Arrange
     session = _SnapshotSession()
     session.last_state = _investigation()
-    snapshot = TurnSnapshot.from_session("what happened?", session)
+    snapshot = TurnSnapshot.from_session("what happened?", session, surface="interactive_shell")
 
     # Act
     answer_prompt = build_cli_agent_prompt_from_provider(
@@ -240,7 +240,7 @@ def test_action_prompt_teaches_the_follow_up_handoff_tag() -> None:
     """
     # Arrange / Act
     prompt = build_action_system_prompt(
-        TurnSnapshot.from_session("what happened?", _SnapshotSession())
+        TurnSnapshot.from_session("what happened?", _SnapshotSession(), surface="interactive_shell")
     )
 
     # Assert: the emitted value must satisfy the orchestrator's prefix check.
@@ -268,7 +268,7 @@ def test_explicit_follow_up_answers_from_an_old_investigation_unlabelled() -> No
         investigation_started_at=time.monotonic() - PRIOR_INVESTIGATION_RECALL_SECONDS - 1,
         root_cause="the-incident-they-asked-about",
     )
-    snapshot = TurnSnapshot.from_session("what happened?", session)
+    snapshot = TurnSnapshot.from_session("what happened?", session, surface="interactive_shell")
 
     # Act
     answer_prompt = build_cli_agent_prompt_from_provider(

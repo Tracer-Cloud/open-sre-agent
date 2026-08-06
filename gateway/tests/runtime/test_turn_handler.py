@@ -13,7 +13,7 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
@@ -22,13 +22,13 @@ from tests.core.agent.orchestration.cross_surface_parity_harness import (
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -58,7 +58,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         factory,
     )
     return factory
@@ -241,11 +241,11 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     completed: list[dict[str, object]] = []
 
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_started",
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_started",
         lambda **kwargs: started.append(kwargs),
     )
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_completed",
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed",
         lambda **kwargs: completed.append(kwargs),
     )
     _patch_headless_agent(monkeypatch, _empty_turn_result())

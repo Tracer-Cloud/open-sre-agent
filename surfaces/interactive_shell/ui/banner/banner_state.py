@@ -78,7 +78,7 @@ def _load_integration_health() -> list[tuple[str, str]]:
 def _count_loaded_skills() -> int:
     """Return the number of discovered action-agent skills. Never raises."""
     try:
-        from core.agent_harness.prompts.skills_loader import (  # lazy — avoids circular deps
+        from core.agent_harness.prompts.skills.loader import (  # lazy — avoids circular deps
             list_action_skills,
         )
 

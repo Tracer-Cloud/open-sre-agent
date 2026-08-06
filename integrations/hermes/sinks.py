@@ -50,12 +50,26 @@ from concurrent.futures import CancelledError as FutureCancelledError
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 from integrations.hermes.agent import IncidentSink
 from integrations.hermes.errors import InvestigationOutcome
 from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogRecord
-from integrations.telegram.alarms import AlarmDispatcher
+
+
+class AlarmDispatcherPort(Protocol):
+    """Minimal alarm-dispatch contract this sink depends on.
+
+    Both :class:`integrations.telegram.alarms.AlarmDispatcher` and
+    :class:`integrations.rocketchat.alarms.RocketChatAlarmDispatcher` satisfy
+    this structurally — the sink stays behind a local protocol (matching
+    ``tools.system.watch_dog.monitor.AlarmDispatcherPort``) so it never
+    imports a specific provider's dispatcher.
+    """
+
+    def dispatch(self, threshold_name: str, message: str) -> bool:
+        """Dispatch one alarm; return whether delivery succeeded."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +174,7 @@ class TelegramSink:
 
     def __init__(
         self,
-        dispatcher: AlarmDispatcher,
+        dispatcher: AlarmDispatcherPort,
         *,
         investigation_bridge: InvestigationBridge | None = None,
         config: TelegramSinkConfig | None = None,
@@ -418,7 +432,7 @@ class _InvestigationResult:
 
 
 def make_telegram_sink(
-    dispatcher: AlarmDispatcher,
+    dispatcher: AlarmDispatcherPort,
     *,
     investigation_bridge: InvestigationBridge | None = None,
     config: TelegramSinkConfig | None = None,

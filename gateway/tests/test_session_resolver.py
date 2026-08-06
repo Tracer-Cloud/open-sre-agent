@@ -8,7 +8,7 @@ from config.principal import Principal
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from gateway.storage import FileBindingStore, SessionResolver
+from gateway.core.storage import FileBindingStore, SessionResolver
 
 
 @pytest.fixture
@@ -116,6 +116,7 @@ def test_resolved_telegram_context_is_visible_as_prior_action_facts(
         TurnSnapshot.from_session(
             "No, compute those temperatures and send the nice comparison to Slack",
             resolved,
+            surface="interactive_shell",
         )
     )
 

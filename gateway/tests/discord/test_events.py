@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gateway.discord.events import DM_GUILD_ID, DiscordInboundMessage
+from gateway.transports.discord.events import DM_GUILD_ID, DiscordInboundMessage
 
 
 def _inbound(guild_id: str) -> DiscordInboundMessage:

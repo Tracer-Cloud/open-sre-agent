@@ -165,7 +165,7 @@ def test_count_loaded_skills_survives_loader_failure(monkeypatch: object) -> Non
     real_import = builtins.__import__
 
     def _fail_skills_loader(name: str, *args: object, **kwargs: object) -> object:
-        if name == "core.agent_harness.prompts.skills_loader":
+        if name == "core.agent_harness.prompts.skills.loader":
             raise ImportError("simulated heavy import failure")
         return real_import(name, *args, **kwargs)
 

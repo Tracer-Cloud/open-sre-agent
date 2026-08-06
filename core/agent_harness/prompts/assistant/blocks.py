@@ -24,12 +24,12 @@ from core.agent_harness.prompts.assistant.text import (
     SOURCE_SCOPED_INVESTIGATION_RULE,
     TERMINOLOGY_RULE,
 )
-from core.agent_harness.prompts.envelope import (
+from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
     PromptBlockKind,
     PromptTier,
 )
-from core.agent_harness.prompts.surfaces import SurfaceProfile
+from core.agent_harness.prompts.kernel.surfaces import SurfaceProfile
 from platform.harness_ports import assistant_prompt_vendor_fragments, gateway_persona_fragments
 
 _HERE = "core.agent_harness.prompts.assistant.blocks"
@@ -294,7 +294,7 @@ def contribute_prior_investigation(
             f"--- Prior investigation in this session ---\n{parts.prior_investigation}\n\n",
             kind=PromptBlockKind.CONTEXT,
             tier=PromptTier.VOLATILE,
-            provenance="core.agent_harness.prompts.prior_investigation",
+            provenance="core.agent_harness.prompts.memory.prior_investigation",
         )
     ]
 

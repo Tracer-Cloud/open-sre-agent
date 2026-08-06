@@ -54,7 +54,7 @@ def test_a_silo_can_serve_slack(monkeypatch: pytest.MonkeyPatch) -> None:
     resolved empty, while the same control plane injected its Slack bot token.
     """
     # Arrange
-    from gateway.slack.principal import resolve_slack_principal
+    from gateway.transports.slack.principal import resolve_slack_principal
 
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_fargate")
     monkeypatch.delenv("OPENSRE_SILO_TEAM_IDS", raising=False)
@@ -71,7 +71,7 @@ def test_credits_and_usage_see_the_same_organization(
 ) -> None:
     """Metering and attribution read the same answer as everything else."""
     # Arrange
-    from gateway.billing.credits_client import organization_id_for_silo
+    from gateway.core.billing.credits_client import organization_id_for_silo
     from platform.analytics.usage_context import get_organization_id
 
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_fargate")

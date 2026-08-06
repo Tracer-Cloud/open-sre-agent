@@ -16,7 +16,7 @@ from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.ports import OutputSink, PromptContextProvider, TurnAccounting
-from core.agent_harness.prompts.context import DefaultPromptContextProvider
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,

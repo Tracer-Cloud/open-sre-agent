@@ -141,4 +141,56 @@ def render_setup_state(state: SetupSnapshot) -> str:
     )
 
 
-__all__ = ["SetupSnapshot", "SetupState", "collect_setup_state", "render_setup_state"]
+_CacheKey = tuple[tuple[str, ...], tuple[tuple[int, int], ...]]
+
+
+@dataclass(slots=True)
+class _RenderedCache:
+    """Mutable one-slot memo for :func:`cached_setup_state`.
+
+    A holder object (not a rebound module global) keeps the cache key and block
+    in place so readers and writers share one identity — and static analyzers
+    that treat ``global`` rebinding as unused still see a live object.
+    """
+
+    key: _CacheKey | None = None
+    block: str | None = None
+
+
+#: The last rendered block and the key it was built from: the integrations plus
+#: a stat of the scheduler stores. One entry, not a map — every earlier
+#: fingerprint is dead the moment the stores change, so keeping them would grow
+#: without bound in a long-running gateway.
+_CACHE = _RenderedCache()
+
+
+def clear_setup_state_cache() -> None:
+    """Drop the memoized block. For tests and for a forced re-read."""
+    _CACHE.key = None
+    _CACHE.block = None
+
+
+def cached_setup_state(integrations: Sequence[str]) -> str:
+    """Render the setup block, reusing the last result until the stores change.
+
+    Prompt assembly runs on every turn while the underlying stores change
+    rarely, so this collapses a task-list read plus a run lookup per task down
+    to two ``stat`` calls on the unchanged path.
+    """
+    key: _CacheKey = (tuple(integrations), setup_state_fingerprint())
+    if _CACHE.key == key and _CACHE.block is not None:
+        return _CACHE.block
+    block = render_setup_state(collect_setup_state(integrations))
+    _CACHE.key = key
+    _CACHE.block = block
+    return block
+
+
+__all__ = [
+    "SetupSnapshot",
+    "SetupState",
+    "cached_setup_state",
+    "clear_setup_state_cache",
+    "collect_setup_state",
+    "render_setup_state",
+]

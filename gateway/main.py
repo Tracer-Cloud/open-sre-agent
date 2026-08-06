@@ -8,7 +8,7 @@ boot path without the surfaces glue.
 
 from __future__ import annotations
 
-from gateway.runtime.manager import main
+from gateway.core.runtime.manager import main
 
 __all__ = ["main"]
 

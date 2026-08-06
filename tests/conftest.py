@@ -141,6 +141,19 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "opensre-home")
 
 
+@pytest.fixture(autouse=True)
+def _reset_setup_state_cache() -> None:
+    """Drop the memoized setup block between tests.
+
+    It lives at module scope and is keyed partly on a stat of the scheduler
+    stores, so a test whose stores happen to match an earlier one would read
+    the earlier block and pass or fail for the wrong reason.
+    """
+    from platform.setup_state import clear_setup_state_cache
+
+    clear_setup_state_cache()
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """Fail hard when nothing was selected (pytest-xdist can still exit 0).

@@ -12,7 +12,7 @@ from surfaces.interactive_shell.session import Session
 
 
 def _snapshot(text: str = "q", *, resolved: dict | None = None) -> TurnSnapshot:
-    snapshot = TurnSnapshot.from_session(text, Session())
+    snapshot = TurnSnapshot.from_session(text, Session(), surface="interactive_shell")
     if resolved is not None:
         snapshot = replace(snapshot, resolved_integrations=resolved)
     return snapshot

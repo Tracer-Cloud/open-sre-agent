@@ -40,8 +40,8 @@ from core.agent_harness.prompts.assistant import (
     AssistantTurnPrompt,
     build_cli_agent_turn_prompt,
 )
-from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
-from core.agent_harness.prompts.prior_investigation import is_prior_investigation_follow_up
+from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
+from core.agent_harness.prompts.memory.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
@@ -178,7 +178,9 @@ def stream_answer(
 
     turn_plan = req.turn_plan
     ctx = (
-        turn_plan.snapshot if turn_plan is not None else TurnSnapshot.from_session(message, session)
+        turn_plan.snapshot
+        if turn_plan is not None
+        else TurnSnapshot.from_session(message, session, surface=prompts.surface())
     )
 
     turn_prompt = build_cli_agent_turn_prompt(
@@ -337,6 +339,7 @@ def run_turn(
     accounting: TurnAccounting,
     confirm_fn: ConfirmFn | None = None,
     is_tty: bool | None = None,
+    surface: str = "interactive_shell",
 ) -> TurnResult:
     """Run one full turn through three paths, in order:
 
@@ -348,6 +351,9 @@ def run_turn(
     The path choice is the pure ``_route_turn``; this function performs the
     chosen path's effects. ``execute_actions``, ``answer``, and ``gather`` are
     already bound to the surface (session/output/tools) by the caller.
+
+    ``surface`` selects the prompt :class:`~core.agent_harness.prompts.kernel.surfaces.SurfaceProfile`
+    (e.g. gateway omits setup-state facts).
     """
     # Compact the session's conversation history before the turn if it has
     # grown past the threshold. Runs unconditionally: `auto_compact_if_needed`
@@ -380,7 +386,7 @@ def run_turn(
     # Snapshot session state before any turn mutations. Both the action agent
     # and the conversational assistant read from this frozen context so their
     # prompts reflect a consistent turn-start view rather than live session state.
-    turn_snapshot = TurnSnapshot.from_session(text, session)
+    turn_snapshot = TurnSnapshot.from_session(text, session, surface=surface)
 
     # Assemble the turn plan once: it resolves integrations and composes the
     # snapshot into the single object the action, gather, and answer phases read,

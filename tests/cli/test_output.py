@@ -436,7 +436,7 @@ def test_rich_tracker_tool_details_toggle_replaces_live_view(
     assert hidden["clear"] is True
 
 
-def test_ctrl_o_watcher_disables_terminal_output_discard(
+def test_tool_detail_watcher_disables_terminal_output_discard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _TTY:
@@ -475,7 +475,7 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     monkeypatch.setattr(output_toggles, "termios", _Termios)
     monkeypatch.setattr(output_toggles.os, "fpathconf", lambda _fd, _name: 0)
 
-    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher = output.ToolDetailToggleWatcher(lambda: None)
     watcher.start()
     watcher.stop()
 
@@ -486,7 +486,7 @@ def test_ctrl_o_watcher_disables_terminal_output_discard(
     assert attrs[6][_Termios.VDISCARD] == b"\x00"
 
 
-def test_ctrl_o_watcher_stop_restores_canonical_echo(
+def test_tool_detail_watcher_stop_restores_canonical_echo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _TTY:
@@ -537,7 +537,7 @@ def test_ctrl_o_watcher_stop_restores_canonical_echo(
     monkeypatch.setattr(key_reader, "termios", _Termios, raising=False)
     monkeypatch.setattr(key_reader.sys, "stdin", _TTY())
 
-    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher = output.ToolDetailToggleWatcher(lambda: None)
     watcher.start()
     watcher.stop()
 
@@ -565,7 +565,7 @@ def test_suppressed_stdin_watchers_do_not_touch_terminal_mode(
     monkeypatch.setattr(output_toggles.sys, "stdout", _TTY())
     monkeypatch.setattr(output_toggles, "termios", _Termios)
 
-    watcher = output.CtrlOToggleWatcher(lambda: None)
+    watcher = output.ToolDetailToggleWatcher(lambda: None)
     with suppress_stdin_watchers():
         watcher.start()
 

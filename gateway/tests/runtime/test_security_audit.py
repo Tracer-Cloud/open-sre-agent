@@ -6,8 +6,8 @@ import json
 import stat
 from pathlib import Path
 
-from gateway.runtime import security_audit
-from gateway.runtime.approvals import ApprovalBroker
+from gateway.core.runtime import security_audit
+from gateway.core.runtime.approvals import ApprovalBroker
 
 
 def test_audit_security_action_appends_jsonl(tmp_path: Path, monkeypatch: object) -> None:

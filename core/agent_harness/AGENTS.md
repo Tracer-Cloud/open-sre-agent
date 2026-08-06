@@ -65,11 +65,11 @@ subpackage. Default port implementations live with the concern they serve, not i
 - `accounting/` — session-scoped token accounting and LLM run metadata, plus the
   default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
   (`run_record.py`).
-- `prompts/` — action-agent and conversational-assistant prompt builders (pure
-  string assembly; grounding text is supplied via `PromptContextProvider`).
-  Layout: `assistant/` (parts → contributors → envelope → turn), `context/`
-  (`DefaultPromptContextProvider`), shared `envelope.py` / `surfaces.py`
-  (surface Strategy table), plus `conversation_memory.py` and peer builders.
+- `prompts/` — prompt builders by agent path (pure string assembly; grounding
+  via `PromptContextProvider`). See `prompts/AGENTS.md`. Layout: `kernel/`
+  (envelope + surface Strategy), `assistant/` / `action/` / `gather/` (peer
+  assemblers), `grounding/` (prompt providers), plus leaves `memory/` /
+  `runtime_facts/` / `skills/`.
 - `grounding/` — reusable grounding cache and rendering contracts; surfaces
   inject surface-owned command registries instead of being imported here.
 - `session/` — reusable agent session state (`SessionCore`), JSONL storage, prompt
@@ -92,12 +92,12 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.rebind_for_resume` then :meth:`SessionManager.restore_context`.
   REPL exit calls :meth:`SessionManager.close` via
   :meth:`SessionManager.for_session`.
-- **gateway** — `gateway/runtime/manager.py` bootstraps the process via
+- **gateway** — `gateway/core/runtime/manager.py` bootstraps the process via
   :meth:`SessionManager.create` (``open_storage=False``).
-  `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
+  `gateway/core/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
-  `gateway/runtime/turn_handler.py`'s `GatewayTurnHandler` with
+  `gateway/core/runtime/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.

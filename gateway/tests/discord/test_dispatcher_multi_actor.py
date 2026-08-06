@@ -16,12 +16,12 @@ from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
-from gateway.billing.credits_client import CreditsOutcome
-from gateway.discord.dispatcher import DiscordTurnDispatcher
-from gateway.discord.events import DiscordInboundMessage
-from gateway.discord.security import DiscordInboundDecision
-from gateway.discord.settings import DiscordGatewaySettings
-from gateway.storage import FileBindingStore, SessionResolver
+from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.core.storage import FileBindingStore, SessionResolver
+from gateway.transports.discord.dispatcher import DiscordTurnDispatcher
+from gateway.transports.discord.events import DiscordInboundMessage
+from gateway.transports.discord.security import DiscordInboundDecision
+from gateway.transports.discord.settings import DiscordGatewaySettings
 
 _ORG = "org_discord_concurrency"
 _GUILD = "G_SHARED"
@@ -104,16 +104,24 @@ def test_alice_and_bob_parallel_turns_get_distinct_sessions(
     allow = DiscordInboundDecision(allowed=True)
     with (
         patch(
-            "gateway.discord.dispatcher.enforce_inbound_discord_message_security",
+            "gateway.transports.discord.dispatcher.enforce_inbound_discord_message_security",
             return_value=allow,
         ),
-        patch("gateway.discord.dispatcher.consume_credits", return_value=CreditsOutcome.ALLOWED),
-        patch("gateway.discord.dispatcher.add_reaction", return_value=True),
-        patch("gateway.discord.dispatcher.remove_reaction", return_value=True),
-        patch("gateway.discord.output_sink.send_message", return_value="msg-status"),
-        patch("gateway.discord.output_sink.edit_message", return_value=True),
-        patch("gateway.discord.output_sink.edit_message_with_components", return_value=True),
-        patch("gateway.discord.output_sink.send_message_with_components", return_value="msg-final"),
+        patch(
+            "gateway.transports.discord.dispatcher.consume_credits",
+            return_value=CreditsOutcome.ALLOWED,
+        ),
+        patch("gateway.transports.discord.dispatcher.add_reaction", return_value=True),
+        patch("gateway.transports.discord.dispatcher.remove_reaction", return_value=True),
+        patch("gateway.transports.discord.output_sink.send_message", return_value="msg-status"),
+        patch("gateway.transports.discord.output_sink.edit_message", return_value=True),
+        patch(
+            "gateway.transports.discord.output_sink.edit_message_with_components", return_value=True
+        ),
+        patch(
+            "gateway.transports.discord.output_sink.send_message_with_components",
+            return_value="msg-final",
+        ),
     ):
         threads = [
             threading.Thread(

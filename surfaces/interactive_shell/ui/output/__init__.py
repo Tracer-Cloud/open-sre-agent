@@ -21,7 +21,7 @@ from surfaces.interactive_shell.ui.output.renderers import (
     render_investigation_header,
 )
 from surfaces.interactive_shell.ui.output.toggles import (
-    CtrlOToggleWatcher,
+    ToolDetailToggleWatcher,
     register_tool_detail_toggle,
     suppress_stdin_watchers,
     toggle_active_tool_details,
@@ -53,7 +53,7 @@ __all__ = [
     "stop_display",
     "unregister_live_console",
     # Tool-detail toggle
-    "CtrlOToggleWatcher",
+    "ToolDetailToggleWatcher",
     "register_tool_detail_toggle",
     "suppress_stdin_watchers",
     "toggle_active_tool_details",

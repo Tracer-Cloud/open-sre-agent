@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.runtime.errors import GatewayConfigurationError
-from gateway.slack.settings import load_slack_gateway_settings
+from gateway.core.runtime.errors import GatewayConfigurationError
+from gateway.transports.slack.settings import load_slack_gateway_settings
 
-_STORE_PATH = "gateway.slack.settings.get_integration"
+_STORE_PATH = "gateway.transports.slack.settings.get_integration"
 
 _TOKEN_VARS = {
     "SLACK_BOT_TOKEN": "xoxb-test",

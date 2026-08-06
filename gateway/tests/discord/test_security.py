@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.discord.security import enforce_inbound_discord_message_security
+from gateway.transports.discord.security import enforce_inbound_discord_message_security
 
-_SECURITY = "gateway.discord.security"
+_SECURITY = "gateway.transports.discord.security"
 
 
 @pytest.fixture(autouse=True)

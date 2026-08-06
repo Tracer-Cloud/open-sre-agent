@@ -27,7 +27,7 @@ def flush_stdin_unix() -> None:
 def restore_stdin_terminal() -> None:
     """Return stdin to canonical echo mode after Live/raw investigation UI.
 
-    Investigation progress uses a background Ctrl+O watcher that puts stdin in
+    Investigation progress uses a background Tab watcher that puts stdin in
     non-canonical mode without echo. If nested watchers restore the wrong
     snapshot, the shell prompt appears to accept input but characters are not
     echoed. Call this after investigation UI teardown and before line prompts.

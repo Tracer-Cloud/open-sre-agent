@@ -1,5 +1,5 @@
 id: 314-windows-crash-multisource-query
-title: Windows crash epic dispatches an investigation across Sentry, GitHub, and PostHog
+title: Windows crash diagnostic hands off and gathers across Sentry, GitHub, and PostHog
 intent_class: complex_shell_prompts
 input:
   prompt: Hey OpenSRE figure out why our OpenSRE agent is crashing on Windows machines by querying (a)
@@ -30,44 +30,47 @@ session:
       url: https://mcp.posthog.com/mcp
       auth_token: fixture-token
 notes:
-- Multi-source investigation request with Sentry, GitHub, and PostHog connected. Because at least one
-  integration is connected, the planner DISPATCHES an investigation (investigation_start) with synthesized
-  alert_text instead of handing off. This is the dispatch counterpart to 313 (no integrations -> handoff).
-- 'The investigation alert_text is synthesized from the prompt and varies per run, so planned_actions
-  leaves content empty: the planning test asserts an investigation with non-empty alert_text rather than
-  an exact string.'
-- 'Gather negative control: connected integrations must dispatch investigation_start, not the conversational
-  gather loop on the same turn. not_called on Sentry/GitHub/PostHog gather tools proves dispatch won over
-  handoff fan-out (contrast 338, where the same integrations DO gather).'
+- 'Multi-source DIAGNOSTIC question ("figure out why ... is crashing") with no explicit investigate
+  verb. The planner hands off: the evidence-gather pass makes quick tool calls against the named
+  sources and the assistant answers from that evidence, closing with a full-investigation offer.
+  investigation_start dispatches only on an explicit investigate instruction (336, 340) or after the
+  user accepts that offer.'
+- 'Gather fan-out, auth-independent: the fixture tokens 401 against the live endpoints, so call_any
+  over the three integration tools asserts the gather loop engaged at least one named source — the
+  deterministic, credential-free proof that the turn handed off to integration gathering rather than
+  answering from hallucinated text (same reasoning as 338).'
+- 'Dispatch negative control: forbidden_actions/investigation proves diagnostic phrasing across
+  connected sources does not tip the planner into investigation_start. 313 covers the same prompt
+  shape with no integrations connected.'
 turn:
   expected_kind: agent
 policy:
-  executes_terminal_action: true
+  executes_terminal_action: false
 planned_actions:
-- kind: investigation
+- kind: assistant_handoff
+  content: diagnostic:windows_crash_multisource
   source: llm
-  target_surface: investigation
 response_contract:
   must_contain_any:
-  - investigat
-  - rca
+  - sentry
+  - github
+  - posthog
   - Windows
   - crash
   must_not_contain:
   - $ /
   forbidden_actions:
+  - investigation
   - shell
 history:
   expected:
-  - type: alert
+  - type: cli_agent
     ok: true
 runs: 5
 tool_actions:
-- surface: dispatch
-  kind: investigation
 - surface: gather
   tools:
   - search_sentry_issues
   - search_github_issues
   - list_posthog_tools
-  expect: not_called
+  expect: call_any

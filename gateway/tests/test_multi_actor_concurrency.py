@@ -27,7 +27,7 @@ from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.paths import session_path, sessions_dir
-from gateway.storage.session.file_bindings import FileBindingStore
+from gateway.core.storage.session.file_bindings import FileBindingStore
 
 ACME = Principal.org("org_acme")
 ALICE = "U_ALICE"

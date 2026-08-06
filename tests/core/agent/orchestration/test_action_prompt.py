@@ -17,8 +17,8 @@ from core.agent_harness.prompts.assistant import (
     build_cli_agent_prompt_from_provider,
     build_handoff_guidance_block,
 )
-from core.agent_harness.prompts.conversation_memory import NO_HISTORY_PLACEHOLDER
-from core.agent_harness.prompts.skills_loader import (
+from core.agent_harness.prompts.memory.conversation import NO_HISTORY_PLACEHOLDER
+from core.agent_harness.prompts.skills.loader import (
     SKILLS_HEADER,
     list_action_skills,
     load_skill_body,
@@ -26,7 +26,7 @@ from core.agent_harness.prompts.skills_loader import (
     load_skills_index,
     skills_dir,
 )
-from core.agent_harness.prompts.skills_loader import (
+from core.agent_harness.prompts.skills.loader import (
     load_skills_block as cached_load_skills_block,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -188,24 +188,27 @@ def test_skills_loader_routes_star_history_away_from_github_cli() -> None:
     assert "undercount" in body or "false zeros" in body
 
 
-def test_system_prompt_bans_shell_placeholders_on_multisource_rca() -> None:
-    """Multi-source crash RCA must be investigation_start alone (scenario 314)."""
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert "emit only investigation_start" in prompt
+def test_system_prompt_bans_shell_placeholders_on_multisource_diagnosis() -> None:
+    """Multi-source crash diagnosis is a single assistant_handoff (scenario 314)."""
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    assert "do not emit investigation_start for a diagnostic question" in prompt
     assert "never invent placeholder shell commands" in prompt
     assert "posthog query requested" in prompt
     assert "never use shell_run as a stand-in for querying observability sources" in prompt
     composed = " ".join(build_action_system_prompt(_ctx()).lower().split())
-    assert "investigation_start only" in composed
-    assert "alone or paired with investigation_start" in composed
+    assert "assistant_handoff only" in composed
+    assert "alone or paired with the handoff" in composed
 
 
 def test_system_prompt_keeps_bare_alert_blob_as_handoff() -> None:
-    prompt = _SYSTEM_PROMPT_BASE.lower()
-    assert "a bare pasted alert blob with no instruction remains assistant_handoff" in prompt
+    prompt = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
+    assert (
+        "an implicit diagnostic cause question and a bare pasted alert blob "
+        "remain assistant_handoff" in prompt
+    )
     assert "pasted alert blob / bare incident statement" in prompt
-    assert "with no\ninstruction" in prompt
-    assert "not such a question — hand it off" in prompt
+    assert "with no instruction and no diagnostic question" in prompt
+    assert "is not a diagnostic question; it is also assistant_handoff" in prompt
 
 
 def test_system_prompt_hands_off_when_delivery_tool_unavailable() -> None:
@@ -679,7 +682,7 @@ def test_the_active_instruction_survives_context_truncation() -> None:
 def test_the_cron_guidance_teaches_structured_schedule_offers() -> None:
     """Morning report must propose via tool, not scrape Want-me-to into /cron."""
     # Arrange
-    from core.agent_harness.prompts.skills_loader import skills_dir
+    from core.agent_harness.prompts.skills.loader import skills_dir
 
     base = " ".join(_SYSTEM_PROMPT_BASE.lower().split())
     skill = " ".join(
@@ -703,7 +706,7 @@ def test_interrupted_turn_recovery_block_rides_the_ephemeral_tier() -> None:
     """
     import dataclasses
 
-    from core.agent_harness.prompts.action_agent_prompt import (
+    from core.agent_harness.prompts.action.assemble import (
         build_action_system_prompt_envelope,
         interrupted_turn_recovery_block,
     )
@@ -742,8 +745,8 @@ def test_from_session_pops_the_pending_recovery_note() -> None:
         pending_recovery_note="previous turn was interrupted while executing shell_run step-2",
     )
 
-    first = TurnSnapshot.from_session("continue", session)
-    second = TurnSnapshot.from_session("next", session)
+    first = TurnSnapshot.from_session("continue", session, surface=None)
+    second = TurnSnapshot.from_session("next", session, surface=None)
 
     assert first.recovery_note is not None
     assert "shell_run step-2" in first.recovery_note

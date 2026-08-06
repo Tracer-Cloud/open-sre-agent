@@ -235,7 +235,7 @@ def test_gather_code_scanning_page_url_targets_code_scanning_alerts() -> None:
             "help": "Return a generic error on external surfaces.",
         },
         "most_recent_instance": {
-            "location": {"path": "gateway/http/webapp.py", "start_line": 20},
+            "location": {"path": "gateway/web/webapp.py", "start_line": 20},
             "message": {"text": "Exception details are exposed in an HTTP response."},
         },
     }
@@ -258,7 +258,7 @@ def test_gather_code_scanning_page_url_targets_code_scanning_alerts() -> None:
     assert ctx.alert_type == "code_scanning"
     assert ctx.number == 7
     assert ctx.summary == "Stack trace exposure"
-    assert "gateway/http/webapp.py:20" in ctx.task
+    assert "gateway/web/webapp.py:20" in ctx.task
     assert paths == [
         "/repos/acme/app/code-scanning/alerts",
         "/repos/acme/app/code-scanning/alerts/7/instances",
