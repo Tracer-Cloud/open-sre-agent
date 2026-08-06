@@ -6,8 +6,8 @@ import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.discord import DISCORD_SILO_GUILD_IDS_ENV
-from gateway.discord.events import DM_GUILD_ID
-from gateway.discord.principal import (
+from gateway.transports.discord.events import DM_GUILD_ID
+from gateway.transports.discord.principal import (
     PrincipalResolutionError,
     resolve_discord_principal,
     resolve_discord_scope,

@@ -88,7 +88,7 @@ are no longer part of this repository. They live with the web application, in
 This repository keeps only what the gateway itself needs at runtime: size-profile
 contracts in `platform/deployment_contracts/`, and credential hydration from the
 control-plane bootstrap / integrations secrets
-(`gateway/runtime/credential_hydration.py`). Remote agent-run polling and its
+(`gateway/core/runtime/credential_hydration.py`). Remote agent-run polling and its
 Postgres store are owned by the webapp stack, not the gateway process.
 
 ## Runtime Environment (Hosted / General)

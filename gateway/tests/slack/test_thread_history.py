@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-import gateway.slack.thread_history as thread_history
+import gateway.transports.slack.thread_history as thread_history
 
 
 def test_session_needs_seed_for_bare_yes() -> None:

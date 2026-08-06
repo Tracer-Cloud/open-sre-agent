@@ -26,12 +26,12 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.runtime.manager import GatewayManager, start_gateway
-from gateway.telegram.inbound_handler import (
+from gateway.core.runtime.manager import GatewayManager, start_gateway
+from gateway.transports.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
 )
-from gateway.telegram.inbound_security import InboundDecision
-from gateway.telegram.settings import (
+from gateway.transports.telegram.inbound_security import InboundDecision
+from gateway.transports.telegram.settings import (
     GatewayConfigurationError,
     GatewaySettings,
     TelegramInboundMessage,
@@ -57,16 +57,18 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "config.local_env.bootstrap_opensre_env_once",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
+    monkeypatch.setattr("gateway.core.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
-    monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
     monkeypatch.setattr(
-        "gateway.runtime.manager.signal.signal",
+        "gateway.transports.telegram.wiring.load_gateway_settings", lambda: settings
+    )
+    monkeypatch.setattr(
+        "gateway.core.runtime.manager.signal.signal",
         lambda signum, handler: signal_calls.append((signum, handler)),
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         agent_cls,
     )
 
@@ -75,7 +77,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         return handle
 
     monkeypatch.setattr(
-        "gateway.telegram.wiring.start_telegram_gateway_background",
+        "gateway.transports.telegram.wiring.start_telegram_gateway_background",
         _start_telegram_gateway_background,
     )
 
@@ -115,7 +117,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert ctor.kwargs["session"] is session
     # Session-scoped agent holds a live sink proxy; the transport sink is bound
     # each turn (not passed as the constructor ``output`` identity).
-    from gateway.runtime.live_sink import LiveOutputSink
+    from gateway.core.runtime.live_sink import LiveOutputSink
 
     assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     assert ctor.kwargs["surface"] == "gateway"
@@ -174,21 +176,23 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
         "config.local_env.bootstrap_opensre_env_once",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
+    monkeypatch.setattr("gateway.core.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
-    monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", lambda: settings)
-    monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
+    monkeypatch.setattr(
+        "gateway.transports.telegram.wiring.load_gateway_settings", lambda: settings
+    )
+    monkeypatch.setattr("gateway.core.runtime.manager.signal.signal", lambda *_args: None)
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
         background_kwargs.update(kwargs)
         return handle
 
     monkeypatch.setattr(
-        "gateway.telegram.wiring.start_telegram_gateway_background",
+        "gateway.transports.telegram.wiring.start_telegram_gateway_background",
         _start_telegram_gateway_background,
     )
     monkeypatch.setattr(
-        "gateway.telegram.inbound_handler.enforce_inbound_telegram_message_security",
+        "gateway.transports.telegram.inbound_handler.enforce_inbound_telegram_message_security",
         lambda **_kwargs: InboundDecision(allowed=True),
     )
 
@@ -233,15 +237,15 @@ def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> 
         "config.local_env.bootstrap_opensre_env_once",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr("gateway.runtime.manager.configure_logging", lambda: logger)
-    monkeypatch.setattr("gateway.runtime.manager.signal.signal", lambda *_args: None)
-    monkeypatch.setattr("gateway.runtime.manager.clear_component_status", lambda: None)
+    monkeypatch.setattr("gateway.core.runtime.manager.configure_logging", lambda: logger)
+    monkeypatch.setattr("gateway.core.runtime.manager.signal.signal", lambda *_args: None)
+    monkeypatch.setattr("gateway.core.runtime.manager.clear_component_status", lambda: None)
     _patch_non_telegram_components(monkeypatch)
 
     def _unconfigured() -> GatewaySettings:
         raise GatewayConfigurationError("TELEGRAM_BOT_TOKEN is not set")
 
-    monkeypatch.setattr("gateway.telegram.wiring.load_gateway_settings", _unconfigured)
+    monkeypatch.setattr("gateway.transports.telegram.wiring.load_gateway_settings", _unconfigured)
 
     gateway = GatewayManager().start_gateway(wait=False)
 

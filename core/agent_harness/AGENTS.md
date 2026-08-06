@@ -92,12 +92,12 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.rebind_for_resume` then :meth:`SessionManager.restore_context`.
   REPL exit calls :meth:`SessionManager.close` via
   :meth:`SessionManager.for_session`.
-- **gateway** — `gateway/runtime/manager.py` bootstraps the process via
+- **gateway** — `gateway/core/runtime/manager.py` bootstraps the process via
   :meth:`SessionManager.create` (``open_storage=False``).
-  `gateway/storage/session/resolver.py::SessionResolver` owns per-chat
+  `gateway/core/storage/session/resolver.py::SessionResolver` owns per-chat
   chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
   `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
-  `gateway/runtime/turn_handler.py`'s `GatewayTurnHandler` with
+  `gateway/core/runtime/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.

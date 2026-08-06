@@ -13,8 +13,8 @@ from typing import Any
 import httpx
 import pytest
 
-from gateway.discord import attachments
-from gateway.discord.attachments import is_allowed_attachment_url
+from gateway.transports.discord import attachments
+from gateway.transports.discord.attachments import is_allowed_attachment_url
 
 # A value that would be unmistakable if it ever appeared in an outbound request.
 _TOKEN = "bot-token-must-never-leave-discord"

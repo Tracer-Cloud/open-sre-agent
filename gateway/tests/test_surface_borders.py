@@ -22,10 +22,10 @@ from config.constants.memory import OPENSRE_MEMORY_DIR_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence import paths as session_paths
-from gateway.slack.principal import slack_scope
-from gateway.storage.db import bindings_file_path, gateway_dir
-from gateway.storage.session.binding_store import open_file_binding_store
-from gateway.storage.session.file_bindings import FileBindingStore
+from gateway.core.storage.db import bindings_file_path, gateway_dir
+from gateway.core.storage.session.binding_store import open_file_binding_store
+from gateway.core.storage.session.file_bindings import FileBindingStore
+from gateway.transports.slack.principal import slack_scope
 
 ACME = Principal.org("org_acme")
 GLOBEX = Principal.org("org_globex")
@@ -336,7 +336,7 @@ def test_telegram_runtime_wiring_can_read_and_write_bindings(
     wiring pointed at a database without the bindings table.
     """
     # Arrange: the store the Telegram runtime constructs at startup.
-    from gateway.storage.session.binding_store import open_binding_store
+    from gateway.core.storage.session.binding_store import open_binding_store
 
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
     bindings = open_binding_store()

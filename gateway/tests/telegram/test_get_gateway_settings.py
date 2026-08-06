@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.telegram.settings import (
+from gateway.transports.telegram.settings import (
     GatewayConfigurationError,
     GatewayEnv,
     GatewaySettings,
@@ -20,7 +20,7 @@ from gateway.telegram.settings import (
 )
 from integrations.messaging_security import MessagingIdentityPolicy
 
-_STORE_PATH = "gateway.telegram.settings.get_integration"
+_STORE_PATH = "gateway.transports.telegram.settings.get_integration"
 
 
 @pytest.fixture(autouse=True)

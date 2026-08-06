@@ -13,34 +13,34 @@ transport-specific code.
 |---------------|---------------|-------------------|
 | **Package main** | `gateway/main.py` → `main()` | `python -m gateway.main` (manager only) |
 | **Production entry** | `surfaces/cli/gateway_entry.py` → `main()` | Daemon / `opensre gateway start` (wires slash ports) |
-| **Composition root (impl)** | `gateway/runtime/manager.py` → `GatewayManager` / `main()` | Called by the entry modules |
-| **Background daemon helpers** | `gateway/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
-| **HTTP API (web-only task)** | `gateway/http/webapp.py` → `app` | `uvicorn gateway.http.webapp:app` (`MODE=web` in Docker) |
-| **Telegram transport** | `gateway/telegram/wiring.py` → `start_telegram_worker` | Started by `GatewayManager._start_telegram` |
-| **Slack transport** | `gateway/slack/wiring.py` → `start_slack_worker` | Started by `GatewayManager._start_slack` |
-| **Discord transport** | `gateway/discord/wiring.py` → `start_discord_worker` | Started by `GatewayManager._start_discord` |
-| **Per-message turn** | `gateway/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into both transports as the agent callback |
+| **Composition root (impl)** | `gateway/core/runtime/manager.py` → `GatewayManager` / `main()` | Called by the entry modules |
+| **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
+| **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
+| **Telegram transport** | `gateway/transports/telegram/wiring.py` → `start_telegram_worker` | Started by `GatewayManager._start_telegram` |
+| **Slack transport** | `gateway/transports/slack/wiring.py` → `start_slack_worker` | Started by `GatewayManager._start_slack` |
+| **Discord transport** | `gateway/transports/discord/wiring.py` → `start_discord_worker` | Started by `GatewayManager._start_discord` |
+| **Per-message turn** | `gateway/core/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into both transports as the agent callback |
 
 ```text
 opensre gateway start
         │
         ▼
-gateway.runtime.daemon.start_gateway_daemon
+gateway.core.runtime.daemon.start_gateway_daemon
         │  spawns: python -m surfaces.cli.gateway_entry
         ▼
 surfaces/cli/gateway_entry.py
         │  wires headless slash ports
         ▼
-gateway.runtime.manager.GatewayManager.start_gateway
-        ├── http/web_server  →  http/webapp:app
-        ├── telegram/wiring.start_telegram_worker
-        ├── slack/wiring.start_slack_worker
-        ├── discord/wiring.start_discord_worker
+gateway.core.runtime.manager.GatewayManager.start_gateway
+        ├── web/web_server  →  web/webapp:app
+        ├── transports/telegram/wiring.start_telegram_worker
+        ├── transports/slack/wiring.start_slack_worker
+        ├── transports/discord/wiring.start_discord_worker
         └── scheduler
 ```
 
-Do **not** look for entry modules at the package root — they moved under
-`runtime/`, `http/`, `telegram/`, and `slack/`.
+Layout: `core/` (runtime, storage, …), `transports/` (slack, discord,
+telegram), and `web/` (web surface). See `AGENTS.md`.
 
 ## How the pieces fit (surfaces, gateway, integrations)
 
@@ -62,9 +62,9 @@ Both platforms are symmetric:
 
 | | Inbound (person → agent) | Outbound / teammate tools |
 |---|---|---|
-| **Telegram** | Yes — `gateway/telegram/` | Yes — integration + tool |
-| **Slack** | Yes — `gateway/slack/` (Socket Mode; each thread is a conversation) | Yes — webhook + bot-token tools |
-| **Discord** | Yes — `gateway/discord/` (DMs, mentions, threads; `/investigate`) | Yes — bot-token delivery + slash registration |
+| **Telegram** | Yes — `gateway/transports/telegram/` | Yes — integration + tool |
+| **Slack** | Yes — `gateway/transports/slack/` (Socket Mode; each thread is a conversation) | Yes — webhook + bot-token tools |
+| **Discord** | Yes — `gateway/transports/discord/` (DMs, mentions, threads; `/investigate`) | Yes — bot-token delivery + slash registration |
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
 message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ
@@ -121,21 +121,21 @@ Pairing via `opensre messaging pair` uses the same integration-store policy as t
 The message handler is **transport-agnostic** — it takes
 `(text, session, sink, logger)` and knows nothing about any platform. To add a
 platform you do **not** touch the agent, prompts, or tools. You add one package
-with the same five pieces `gateway/telegram/` and `gateway/slack/` both have:
+with the same five pieces `gateway/transports/telegram/` and `gateway/transports/slack/` both have:
 
 1. **Settings** (`settings.py`): env-backed config, raising
-   `GatewayConfigurationError` (from `gateway/runtime/errors.py`) when missing.
+   `GatewayConfigurationError` (from `gateway/core/runtime/errors.py`) when missing.
 2. **A listener** (`wiring.py` + the transport worker): receives inbound
    messages and calls the shared handler with `(text, session, sink, logger)`.
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
 4. **An output sink** (implement `GatewaySink` from
-   `gateway/runtime/sink_protocol.py`): streams status and delivers the answer.
-5. **Session binding** via `gateway/storage/session/resolver.py` with a new
+   `gateway/core/runtime/sink_protocol.py`): streams status and delivers the answer.
+5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 
 Then wire it in the composition root (`GatewayManager` in
-`gateway/runtime/manager.py`) beside the existing transports. Reuse the handler
+`gateway/core/runtime/manager.py`) beside the existing transports. Reuse the handler
 from `GatewayTurnHandler(...)` as-is.
 
 **What you never change:** `GatewayTurnHandler`, `Agent`, prompts, tools.

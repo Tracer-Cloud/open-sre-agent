@@ -8,7 +8,7 @@ from config.principal import Principal
 from core.agent_harness.prompts import build_action_system_prompt
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from gateway.storage import FileBindingStore, SessionResolver
+from gateway.core.storage import FileBindingStore, SessionResolver
 
 
 @pytest.fixture

@@ -14,6 +14,35 @@ type = independence
 modules =
     config
 
+[importlinter:contract:gateway-core-below-surfaces]
+name = Gateway core sits below transports and web
+type = forbidden
+source_modules =
+    gateway.core
+forbidden_modules =
+    gateway.transports
+    gateway.web
+ignore_imports =
+    # Composition root: wires transports and the web surface together.
+    gateway.core.runtime.manager -> gateway.transports.**
+    gateway.core.runtime.manager -> gateway.web.web_server
+
+[importlinter:contract:gateway-web-no-transports]
+name = Gateway web surface never imports chat transports
+type = forbidden
+source_modules =
+    gateway.web
+forbidden_modules =
+    gateway.transports
+
+[importlinter:contract:gateway-transports-independent]
+name = Gateway transports are peers
+type = independence
+modules =
+    gateway.transports.slack
+    gateway.transports.discord
+    gateway.transports.telegram
+
 # Full layered contracts (core ⊄ tools, integrations ⊄ cli, …) live in
 # ``.importlinter.strict`` for local burn-down. Run: ``make check-layers-strict``
 # Regenerate baselines: ``uv run lint-imports --config .importlinter.strict``

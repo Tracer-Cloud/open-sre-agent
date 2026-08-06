@@ -3,11 +3,11 @@ from __future__ import annotations
 from types import MappingProxyType
 from unittest.mock import MagicMock, patch
 
-from gateway.telegram.poller.client import TelegramBotClient
+from gateway.transports.telegram.poller.client import TelegramBotClient
 from platform.notifications.delivery_transport import DeliveryResponse
 
 
-@patch("gateway.telegram.poller.client.post_json")
+@patch("gateway.transports.telegram.poller.client.post_json")
 def test_send_message_success(mock_post: MagicMock) -> None:
     mock_post.return_value = MagicMock(
         ok=True,
@@ -21,7 +21,7 @@ def test_send_message_success(mock_post: MagicMock) -> None:
     assert message_id == "99"
 
 
-@patch("gateway.telegram.poller.client.post_json")
+@patch("gateway.transports.telegram.poller.client.post_json")
 def test_send_message_success_with_mapping_proxy_data(mock_post: MagicMock) -> None:
     mock_post.return_value = DeliveryResponse(
         ok=True,

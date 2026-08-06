@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
-from gateway.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
 
 _URL_ENV = "OPENSRE_WEBAPP_URL"
 _SECRET_ENV = "AGENT_USAGE_SECRET"
@@ -28,7 +28,7 @@ def test_unconfigured_when_secret_unset(monkeypatch: pytest.MonkeyPatch) -> None
     def fail_if_called(*_a: object, **_k: object) -> httpx.Response:
         raise AssertionError("no network call when metering is unconfigured")
 
-    monkeypatch.setattr("gateway.billing.credits_client.httpx.post", fail_if_called)
+    monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", fail_if_called)
 
     # Act
     outcome = consume_credits(organization_id="org_x", reason="slack_turn")
@@ -53,7 +53,7 @@ def test_unconfigured_when_org_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_402_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: the ledger reports a shortfall.
     monkeypatch.setattr(
-        "gateway.billing.credits_client.httpx.post",
+        "gateway.core.billing.credits_client.httpx.post",
         lambda *_a, **_k: httpx.Response(
             HTTPStatus.PAYMENT_REQUIRED, json={"balance": 0, "required": 1}
         ),
@@ -70,7 +70,7 @@ def test_402_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_2xx_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: the ledger consumes a credit and returns the remaining balance.
     monkeypatch.setattr(
-        "gateway.billing.credits_client.httpx.post",
+        "gateway.core.billing.credits_client.httpx.post",
         lambda *_a, **_k: httpx.Response(HTTPStatus.OK, json={"balance": 41.5, "consumed": 1}),
     )
 
@@ -87,7 +87,7 @@ def test_transport_error_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None
     def unreachable(*_a: object, **_k: object) -> httpx.Response:
         raise httpx.ConnectError("no route to host")
 
-    monkeypatch.setattr("gateway.billing.credits_client.httpx.post", unreachable)
+    monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", unreachable)
 
     # Act
     outcome = consume_credits(organization_id="org_x", reason="slack_turn")
@@ -100,7 +100,7 @@ def test_transport_error_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None
 def test_5xx_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange: a server error from the ledger (any non-402, non-2xx status).
     monkeypatch.setattr(
-        "gateway.billing.credits_client.httpx.post",
+        "gateway.core.billing.credits_client.httpx.post",
         lambda *_a, **_k: httpx.Response(HTTPStatus.INTERNAL_SERVER_ERROR, json={}),
     )
 
@@ -120,7 +120,7 @@ def test_request_matches_webapp_contract(monkeypatch: pytest.MonkeyPatch) -> Non
         calls.append({"url": url, **kwargs})
         return httpx.Response(HTTPStatus.OK, json={"balance": 9, "consumed": 2.5})
 
-    monkeypatch.setattr("gateway.billing.credits_client.httpx.post", capture)
+    monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", capture)
 
     # Act
     outcome = consume_credits(
@@ -150,7 +150,7 @@ def test_metadata_cannot_override_billing_fields(monkeypatch: pytest.MonkeyPatch
         calls.append(kwargs)
         return httpx.Response(HTTPStatus.OK, json={"balance": 1})
 
-    monkeypatch.setattr("gateway.billing.credits_client.httpx.post", capture)
+    monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", capture)
 
     # Act
     consume_credits(

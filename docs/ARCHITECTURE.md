@@ -76,9 +76,10 @@ layers below it.
   REPL), and `surfaces/shared` for code two or more surfaces use. A surface
   owns its own I/O, prompts, and presentation, and composes lower layers to do
   the actual work. Slack is not a surface: its inbound transport lives in
-  `gateway/slack`, outbound delivery in `integrations/slack`.
+  `gateway/transports/slack`, outbound delivery in `integrations/slack`.
 - **`gateway/`** — the standalone messaging gateway for inbound chat platforms
-  (`gateway/telegram`, `gateway/slack`, `gateway/session`, `gateway/storage`). A peer of
+  (`gateway/transports/telegram`, `gateway/transports/slack`,
+  `gateway/core/session`, `gateway/core/storage`). A peer of
   `surfaces`, not a child: the two never import each other.
 
 ### Tier 2 — `tools` and `integrations`
@@ -170,7 +171,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["gateway/telegram + slack\n inbound chat message"] --> B["gateway/session + storage\n resolve conversation state"]
+    A["gateway/transports\n inbound chat message"] --> B["gateway/core session + storage\n resolve conversation state"]
     B --> C["tools + core\n run the requested capability"]
     C --> D["platform\n notifications, observability"]
 ```

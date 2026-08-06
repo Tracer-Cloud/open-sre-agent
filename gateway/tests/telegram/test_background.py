@@ -3,15 +3,15 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-from gateway.telegram.background import start_telegram_gateway_background
-from gateway.telegram.runtime import (
+from gateway.transports.telegram.background import start_telegram_gateway_background
+from gateway.transports.telegram.runtime import (
     initialize_telegram_polling_runtime,
     shutdown_telegram_polling_runtime,
 )
-from gateway.telegram.settings import GatewaySettings
+from gateway.transports.telegram.settings import GatewaySettings
 
 
-@patch("gateway.telegram.background.TelegramPoller")
+@patch("gateway.transports.telegram.background.TelegramPoller")
 def test_start_starts_poll_thread(mock_poller_cls: MagicMock) -> None:
     mock_poller_cls.return_value.poll_once.return_value = []
     logger = logging.getLogger("gateway.test")

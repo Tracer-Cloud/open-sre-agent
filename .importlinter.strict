@@ -38,10 +38,10 @@ ignore_imports =
     platform.scheduler.executor -> integrations.telegram.delivery
     platform.scheduler.executor -> integrations.telegram.formatting
     # surfaces -> gateway (cli + repl gateway commands)
-    surfaces.cli.commands.gateway -> gateway.runtime.daemon
-    surfaces.cli.gateway_entry -> gateway.runtime.manager
-    surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.runtime.daemon
-    surfaces.interactive_shell.controller -> gateway.http.web_server
+    surfaces.cli.commands.gateway -> gateway.core.runtime.daemon
+    surfaces.cli.gateway_entry -> gateway.core.runtime.manager
+    surfaces.interactive_shell.command_registry.gateway_cmds -> gateway.core.runtime.daemon
+    surfaces.interactive_shell.controller -> gateway.web.web_server
     # tools -> integrations (T-4 debt — vendor tools / reporting)
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry
     tools.cross_vendor.fix_sentry_issue.context -> integrations.sentry.issue_url

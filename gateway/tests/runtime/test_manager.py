@@ -1,4 +1,4 @@
-"""Tests for :mod:`gateway.runtime.manager` lifecycle behavior."""
+"""Tests for :mod:`gateway.core.runtime.manager` lifecycle behavior."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.runtime.manager import GatewayManager
+from gateway.core.runtime.manager import GatewayManager
 
 
 def test_wait_blocks_until_stop_not_telegram_thread_exit() -> None:
@@ -43,7 +43,7 @@ def test_manager_stop_never_touches_the_real_gateway_directory() -> None:
     # Arrange
     from pathlib import Path
 
-    from gateway.runtime import daemon
+    from gateway.core.runtime import daemon
 
     real_gateway_dir = Path.home() / ".opensre" / "gateway"
 

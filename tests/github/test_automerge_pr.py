@@ -184,7 +184,7 @@ def test_runtime_and_ci_paths_are_never_auto_merged() -> None:
     protected = [
         "core/agent/react_loop.py",
         "platform/guardrails/engine.py",
-        "gateway/slack/handler.py",
+        "gateway/transports/slack/handler.py",
         ".github/workflows/ci.yml",
         ".github/scripts/automerge_pr.py",
     ]

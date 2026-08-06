@@ -9,9 +9,9 @@ import pytest
 from config.constants import paths
 from config.principal import Actor, Principal
 from config.scope_context import current_scope
-from gateway.storage import FileBindingStore
-from gateway.telegram.inbound_security import InboundDecision
-from gateway.telegram.session_rotation import resolve_or_rotate_session
+from gateway.core.storage import FileBindingStore
+from gateway.transports.telegram.inbound_security import InboundDecision
+from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 
 
 @pytest.fixture(autouse=True)

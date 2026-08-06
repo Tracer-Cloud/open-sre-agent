@@ -22,13 +22,13 @@ from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
-from gateway.billing.credits_client import CreditsOutcome
-from gateway.slack.dispatcher import _SlackTurnDispatcher
-from gateway.slack.events import SlackInboundMessage
-from gateway.slack.principal import slack_scope
-from gateway.slack.security import SlackInboundDecision
-from gateway.slack.settings import SlackGatewaySettings
-from gateway.storage import FileBindingStore, SessionResolver
+from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.core.storage import FileBindingStore, SessionResolver
+from gateway.transports.slack.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.events import SlackInboundMessage
+from gateway.transports.slack.principal import slack_scope
+from gateway.transports.slack.security import SlackInboundDecision
+from gateway.transports.slack.settings import SlackGatewaySettings
 
 _ORG = "org_dispatcher_concurrency"
 _TEAM = "T_CONC"
@@ -140,18 +140,18 @@ def allow_all_security():
     decision = SlackInboundDecision(allowed=True)
     with (
         patch(
-            "gateway.slack.dispatcher.enforce_inbound_slack_message_security",
+            "gateway.transports.slack.dispatcher.enforce_inbound_slack_message_security",
             return_value=decision,
         ),
-        patch("gateway.slack.dispatcher.persist_policy_if_needed"),
-        patch("gateway.slack.dispatcher.session_needs_thread_seed", return_value=False),
+        patch("gateway.transports.slack.dispatcher.persist_policy_if_needed"),
+        patch("gateway.transports.slack.dispatcher.session_needs_thread_seed", return_value=False),
         patch(
-            "gateway.slack.dispatcher.consume_credits",
+            "gateway.transports.slack.dispatcher.consume_credits",
             return_value=CreditsOutcome.UNCONFIGURED,
         ),
-        patch("gateway.slack.dispatcher.mark_turn_working"),
-        patch("gateway.slack.dispatcher.mark_turn_done"),
-        patch("gateway.slack.dispatcher.mark_turn_failed"),
+        patch("gateway.transports.slack.dispatcher.mark_turn_working"),
+        patch("gateway.transports.slack.dispatcher.mark_turn_done"),
+        patch("gateway.transports.slack.dispatcher.mark_turn_failed"),
     ):
         yield
 

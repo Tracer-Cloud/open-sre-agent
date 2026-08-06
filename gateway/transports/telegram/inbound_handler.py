@@ -1,0 +1,85 @@
+"""Handlers for polled inbound Telegram messages."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from concurrent.futures import ThreadPoolExecutor
+
+from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.storage import SessionResolver
+from gateway.transports.telegram.inbound_security import (
+    enforce_inbound_telegram_message_security,
+)
+from gateway.transports.telegram.output_sink import GatewayOutputSink
+from gateway.transports.telegram.poller.client import TelegramBotClient
+from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
+from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
+from platform.analytics.usage_context import SURFACE_TELEGRAM, bound_usage_context
+
+logger = logging.getLogger(__name__)
+
+
+async def handle_polled_inbound_telegram_message(
+    event: TelegramInboundMessage,
+    *,
+    client: TelegramBotClient,
+    session_resolver: SessionResolver,
+    settings: GatewaySettings,
+    executor: ThreadPoolExecutor,
+    chat_locks: dict[str, asyncio.Lock],
+    turn_semaphore: asyncio.Semaphore,
+    loop: asyncio.AbstractEventLoop | None = None,
+    handle_callback_to_gateway_agent: GatewayAgentCallback,
+) -> None:
+    """Process one long-polled inbound Telegram update."""
+    user_lock = chat_locks.setdefault(event.user_id, asyncio.Lock())
+    decision = enforce_inbound_telegram_message_security(
+        user_id=event.user_id,
+        chat_id=event.chat_id,
+        text=event.text,
+        env_allowed_user_ids=settings.allowed_user_ids,
+    )
+    async with user_lock, turn_semaphore:
+        session = resolve_or_rotate_session(
+            event,
+            decision,
+            session_resolver=session_resolver,
+            client=client,
+        )
+        if session is None:
+            return
+
+        preview = event.text.replace("\n", " ").strip()
+        if len(preview) > 80:
+            preview = f"{preview[:77]}..."
+        logger.info(
+            "inbound user=%s chat=%s session=%s text=%r",
+            event.user_id,
+            event.chat_id,
+            session.session_id[:8],
+            preview,
+        )
+
+        sink = GatewayOutputSink(
+            client=client,
+            chat_id=event.chat_id,
+            edit_interval_seconds=settings.stream_edit_interval_seconds,
+        )
+
+        event_loop = loop or asyncio.get_running_loop()
+
+        def _run_turn() -> None:
+            with bound_usage_context(
+                surface=SURFACE_TELEGRAM,
+                session_id=session.session_id,
+                user_id=event.user_id or None,
+            ):
+                handle_callback_to_gateway_agent(
+                    event.text,
+                    session,
+                    sink,
+                    logger,
+                )
+
+        await event_loop.run_in_executor(executor, _run_turn)

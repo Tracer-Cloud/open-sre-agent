@@ -15,7 +15,7 @@ import pytest
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.constants.slack import SLACK_SILO_TEAM_IDS_ENV
 from config.principal import Principal
-from gateway.slack.principal import (
+from gateway.transports.slack.principal import (
     PrincipalResolutionError,
     resolve_slack_principal,
     resolve_slack_scope,

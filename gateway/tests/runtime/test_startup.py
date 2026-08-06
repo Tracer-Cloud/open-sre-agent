@@ -35,7 +35,7 @@ class _StubHarness:
 
 def test_startup_runs_the_steps_in_the_required_order(monkeypatch: Any) -> None:
     # Arrange
-    from gateway.runtime import startup
+    from gateway.core.runtime import startup
 
     order: list[str] = []
     monkeypatch.setattr(startup, "install_runtime", lambda **_kw: order.append("adapters"))
@@ -56,7 +56,7 @@ def test_startup_runs_the_steps_in_the_required_order(monkeypatch: Any) -> None:
 def test_startup_logs_every_capability_warning(monkeypatch: Any) -> None:
     """A missing capability must surface at startup, not mid-turn."""
     # Arrange
-    from gateway.runtime import startup
+    from gateway.core.runtime import startup
 
     monkeypatch.setattr(startup, "install_runtime", lambda **_kw: None)
     monkeypatch.setattr(startup, "init_sentry", lambda **_kw: None)
@@ -85,7 +85,7 @@ def test_startup_logs_every_capability_warning(monkeypatch: Any) -> None:
 
 def test_startup_returns_the_harness_for_the_caller(monkeypatch: Any) -> None:
     """The gateway keeps the harness it booted; boot does not hide it."""
-    from gateway.runtime import startup
+    from gateway.core.runtime import startup
 
     sentinel = _StubHarness()
     monkeypatch.setattr(startup, "install_runtime", lambda **_kw: None)

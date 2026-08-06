@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from gateway.slack.feedback import (
+from gateway.transports.slack.feedback import (
     FEEDBACK_ACTION_ID,
     feedback_block,
     record_feedback_payload,
