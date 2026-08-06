@@ -30,11 +30,32 @@ from core.llm.shared.openai_chat_completions import (  # noqa: E402
     prepend_system_message,
     stream_with_litellm_retries,
 )
-from core.llm.shared.structured_output import StructuredOutputClient  # noqa: E402
+from core.llm.shared.structured_output import (  # noqa: E402
+    StructuredOutputClient,
+    json_schema_for_structured_output,
+)
 from core.llm.shared.tool_schema_normalize import build_openai_tool_specs  # noqa: E402
 from core.llm.types import AgentLLMResponse, LLMResponse, ToolCall  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+
+def _structured_response_format(model: type[BaseModel]) -> dict[str, Any]:
+    """Build the ``response_format`` litellm maps to native schema-constrained decoding.
+
+    For ``vertex_ai/gemini-*`` models, litellm's ``map_openai_params`` /
+    ``apply_response_schema_transformation`` translates this into Gemini's
+    native ``responseSchema``/``responseJsonSchema`` + ``responseMimeType``
+    fields rather than embedding the schema in the prompt text.
+    """
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": model.__name__,
+            "schema": json_schema_for_structured_output(model),
+            "strict": True,
+        },
+    }
 
 
 class LiteLLMAgentClient:
@@ -287,3 +308,36 @@ class LiteLLMLLMClient:
             model=self._litellm_model,
             on_model_fallback=lambda: self._rebuild_after_model_fallback(prompt_or_messages),
         )
+
+    def _build_structured_kwargs(self, prompt: str, model: type[BaseModel]) -> dict[str, Any]:
+        kwargs = self._build_request_kwargs(prompt)
+        kwargs["response_format"] = _structured_response_format(model)
+        return kwargs
+
+    def _rebuild_structured_after_model_fallback(
+        self, prompt: str, model: type[BaseModel]
+    ) -> dict[str, Any] | None:
+        if not self._activate_model_fallback():
+            return None
+        return self._build_structured_kwargs(prompt, model)
+
+    def invoke_structured(self, model: type[BaseModel], prompt: str) -> str:
+        """Constrained JSON via LiteLLM ``response_format`` (native Vertex/Gemini
+        responseSchema, OpenAI json_schema, etc). Same retry/fallback policy and
+        usage accounting as invoke(): this call should not be invisible in cost
+        accounting.
+        """
+        response = invoke_with_litellm_llm_retries(
+            self._completion,
+            self._build_structured_kwargs(prompt, model),
+            provider_label=self._provider_label,
+            api_key_env=self._api_key_env or "",
+            model=self._litellm_model,
+            on_model_fallback=lambda: self._rebuild_structured_after_model_fallback(prompt, model),
+        )
+        return llm_response_from_completion(
+            response,
+            model=self._litellm_model,
+            bound_tools=False,
+            usage_emit=self._usage_callback,
+        ).content

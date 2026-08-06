@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import json
 import types
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 
 from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
+
+
+class _TinySchema(BaseModel):
+    root_cause: str
+    root_cause_category: str
 
 
 class _FakeMessage:
@@ -266,3 +273,82 @@ def test_litellm_llm_client_invoke_stream_retries_before_emit(monkeypatch) -> No
 
     assert chunks == ["ok"]
     assert len(attempts) == 2
+
+
+def test_litellm_llm_client_invoke_structured_passes_response_format() -> None:
+    """Regression guard: Vertex/Gemini must get a real schema, not prompt-only text.
+
+    This is the fix for the bug where Gemini echoed the JSON schema itself
+    back as its answer instead of an instance matching it — the model never
+    received a native ``response_format``, only a schema dump in prompt text.
+    """
+    captured: dict[str, Any] = {}
+
+    def completion(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _fake_response(
+            content=json.dumps({"root_cause": "oom", "root_cause_category": "resource"})
+        )
+
+    client = LiteLLMLLMClient(
+        litellm_model="vertex_ai/gemini-2.0-flash",
+        vertex_project="p",
+        vertex_location="us-central1",
+        credential_resolver=lambda _env: "key",
+        completion_func=completion,
+    )
+
+    client.invoke_structured(_TinySchema, "diagnose this")
+
+    response_format = captured["response_format"]
+    assert response_format["type"] == "json_schema"
+    schema = response_format["json_schema"]["schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]) == {"root_cause", "root_cause_category"}
+    assert captured["vertex_project"] == "p"
+    assert captured["vertex_location"] == "us-central1"
+
+
+def test_litellm_llm_client_invoke_structured_returns_content_string() -> None:
+    payload = {"root_cause": "oom", "root_cause_category": "resource"}
+    client = LiteLLMLLMClient(
+        litellm_model="vertex_ai/gemini-2.0-flash",
+        credential_resolver=lambda _env: "key",
+        completion_func=lambda **_kwargs: _fake_response(content=json.dumps(payload)),
+    )
+
+    result = client.invoke_structured(_TinySchema, "diagnose this")
+
+    assert json.loads(result) == payload
+
+
+def test_litellm_llm_client_invoke_structured_emits_usage() -> None:
+    usage: list[tuple[str, int | None, int | None]] = []
+    client = LiteLLMLLMClient(
+        litellm_model="vertex_ai/gemini-2.0-flash",
+        credential_resolver=lambda _env: "key",
+        completion_func=lambda **_kwargs: _fake_response(
+            content=json.dumps({"root_cause": "oom", "root_cause_category": "resource"})
+        ),
+        usage_callback=lambda model, tokens_in, tokens_out: usage.append(
+            (model, tokens_in, tokens_out)
+        ),
+    )
+
+    client.invoke_structured(_TinySchema, "diagnose this")
+
+    assert usage == [("vertex_ai/gemini-2.0-flash", 11, 7)]
+
+
+def test_litellm_llm_client_invoke_structured_not_found_raises() -> None:
+    def completion(**_kwargs: Any) -> Any:
+        raise NotFoundError("model not found")
+
+    client = LiteLLMLLMClient(
+        litellm_model="vertex_ai/missing-model",
+        credential_resolver=lambda _env: "key",
+        completion_func=completion,
+    )
+
+    with pytest.raises(RuntimeError, match="model 'vertex_ai/missing-model' was not found"):
+        client.invoke_structured(_TinySchema, "diagnose this")
