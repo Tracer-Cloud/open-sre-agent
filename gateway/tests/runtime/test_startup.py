@@ -23,7 +23,6 @@ def test_startup_run_configures_gateway_profile(monkeypatch: Any) -> None:
     )
 
     logger = logging.getLogger("test.startup")
-    result = startup.run(logger)
+    startup.run(logger)
 
-    assert result is None
     assert seen == [(GATEWAY_PROFILE, logger)]

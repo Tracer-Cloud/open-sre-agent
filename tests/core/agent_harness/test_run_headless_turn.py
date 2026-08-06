@@ -108,7 +108,7 @@ def test_run_headless_turn_prepare_session_runs_before_agent_build(
     )
     monkeypatch.setattr(
         "core.agent_harness.turns.headless_adapters.BufferOutputSink",
-        lambda: MagicMock(),
+        MagicMock,
     )
 
     _Harness.run_headless_turn(
