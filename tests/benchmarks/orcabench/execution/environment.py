@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from tests.benchmarks.orcabench.config import RunnerSettings
+from tests.benchmarks.orcabench.config import ModelSettings, RunnerSettings
 
 
 def wait_for_path(path: Path, timeout_seconds: int) -> None:
@@ -18,26 +18,27 @@ def wait_for_path(path: Path, timeout_seconds: int) -> None:
         time.sleep(0.25)
 
 
-def configure_native_environment(settings: RunnerSettings) -> None:
-    """Apply the explicit native OpenSRE route before importing LLM clients."""
-    model = settings.benchmark.model
-    values = {
+def native_environment_values(model: ModelSettings) -> dict[str, str]:
+    """Build OpenSRE's provider-specific, secret-free runtime environment."""
+    model_prefix = model.route.environment_prefix
+    return {
         "LLM_PROVIDER": model.provider,
         "OPENSRE_LLM_TRANSPORT": model.transport,
-        "OPENAI_REASONING_MODEL": model.opensre_model,
-        "OPENAI_CLASSIFICATION_MODEL": model.opensre_model,
-        "OPENAI_TOOLCALL_MODEL": model.opensre_model,
+        f"{model_prefix}_REASONING_MODEL": model.opensre_model,
+        f"{model_prefix}_CLASSIFICATION_MODEL": model.opensre_model,
+        f"{model_prefix}_TOOLCALL_MODEL": model.opensre_model,
         "OPENSRE_REASONING_EFFORT": model.reasoning_effort,
         "OPENSRE_MEMORY_DISABLED": "1",
         "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED": "1",
         "OPENSRE_NO_TELEMETRY": "1",
     }
-    os.environ.update(values)
 
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        raise RuntimeError("OPENAI_API_KEY is required for the native ORCA run")
-    if not os.environ.get("OPENAI_BASE_URL", "").strip():
-        raise RuntimeError(
-            "OPENAI_BASE_URL is required because the pinned ORCA model uses "
-            "Gradient AI's OpenAI-compatible endpoint"
-        )
+
+def configure_native_environment(settings: RunnerSettings) -> None:
+    """Apply the explicit native OpenSRE route before importing LLM clients."""
+    model = settings.benchmark.model
+    os.environ.update(native_environment_values(model))
+
+    for name in model.required_environment_names:
+        if not os.environ.get(name, "").strip():
+            raise RuntimeError(f"{name} is required for the native ORCA run")

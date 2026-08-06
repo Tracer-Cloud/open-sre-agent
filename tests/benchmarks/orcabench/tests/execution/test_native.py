@@ -1,10 +1,48 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
-from tests.benchmarks.orcabench.config import GrafanaSettings
+from tests.benchmarks.orcabench.config import GrafanaSettings, ModelSettings
+from tests.benchmarks.orcabench.execution.environment import native_environment_values
 from tests.benchmarks.orcabench.execution.native_connection import OrcaGrafanaConnection
 from tests.benchmarks.orcabench.execution.native_report import NativeReportPolicy
+
+
+def test_runner_bootstraps_project_platform_when_stdlib_loaded_first(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[5]
+    script = f"""
+import importlib.util
+import sys
+import sysconfig
+from pathlib import Path
+
+stdlib_path = Path(sysconfig.get_path("stdlib")) / "platform.py"
+spec = importlib.util.spec_from_file_location("platform", stdlib_path)
+assert spec is not None and spec.loader is not None
+stdlib_platform = importlib.util.module_from_spec(spec)
+sys.modules["platform"] = stdlib_platform
+spec.loader.exec_module(stdlib_platform)
+
+sys.path.insert(0, {str(repo_root)!r})
+import tests.benchmarks.orcabench.execution.runner
+import platform.terminal
+
+assert hasattr(sys.modules["platform"], "__path__")
+"""
+
+    result = subprocess.run(
+        (sys.executable, "-c", script),
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_grafana_connection_contains_connection_data_only() -> None:
@@ -24,6 +62,21 @@ def test_grafana_connection_contains_connection_data_only() -> None:
     }
     flattened_keys = set(resolved["grafana"])
     assert flattened_keys.isdisjoint({"query", "start", "end", "task", "report"})
+
+
+def test_openrouter_environment_uses_provider_specific_model_names() -> None:
+    values = native_environment_values(
+        ModelSettings(
+            harbor_model="openrouter/openrouter/free",
+            provider="openrouter",
+        )
+    )
+
+    assert values["LLM_PROVIDER"] == "openrouter"
+    assert values["OPENROUTER_REASONING_MODEL"] == "openrouter/free"
+    assert values["OPENROUTER_CLASSIFICATION_MODEL"] == "openrouter/free"
+    assert values["OPENROUTER_TOOLCALL_MODEL"] == "openrouter/free"
+    assert all(not name.startswith("OPENAI_") for name in values)
 
 
 def test_native_report_policy_preserves_exact_utf8_bytes(tmp_path: Path) -> None:

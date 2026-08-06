@@ -6,7 +6,8 @@ orcabench/                           # One-task OpenSRE integration for ORCA-Ben
 ├── __init__.py                         # Public benchmark package exports
 ├── config.py                           # Validated shared configuration and manifests
 ├── configs/                          # Checked-in experiment configurations
-│   └── native_one_task.yml             # Secret-free native one-task configuration
+│   ├── native_one_task.yml             # Scored Gradient AI one-task configuration
+│   └── openrouter_smoke_one_task.yml   # Unscored OpenRouter one-task smoke configuration
 ├── artifacts/                        # Redacted run-artifact schema and persistence
 │   ├── __init__.py                     # Public artifact exports
 │   ├── models.py                       # Run, usage, status, and error models

@@ -21,6 +21,15 @@ _SECRET_KEY_PARTS = (
     "secret",
     "token",
 )
+_NON_SECRET_COUNTER_KEYS = frozenset(
+    {
+        "cache_tokens",
+        "cached_tokens",
+        "input_tokens",
+        "native_max_output_tokens",
+        "output_tokens",
+    }
+)
 
 
 class Redactor:
@@ -73,4 +82,6 @@ class Redactor:
     @staticmethod
     def _is_secret_key(key: str) -> bool:
         normalized = key.lower()
+        if normalized in _NON_SECRET_COUNTER_KEYS:
+            return False
         return any(part in normalized for part in _SECRET_KEY_PARTS)

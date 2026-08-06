@@ -41,10 +41,22 @@ class ErrorRecord(ArtifactModel):
     traceback: str
 
 
+class RunSummary(ArtifactModel):
+    """Small host-facing result used to populate Harbor trial metadata."""
+
+    schema_version: Literal[1] = 1
+    status: Literal["succeeded"] = "succeeded"
+    llm_calls: int = Field(ge=0, strict=True)
+    input_tokens: int = Field(ge=0, strict=True)
+    output_tokens: int = Field(ge=0, strict=True)
+    report_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class RunManifest(ArtifactModel):
     """Stable provenance and completion summary for one task trial."""
 
     schema_version: Literal[1] = 1
+    profile: Literal["benchmark", "smoke"] = "benchmark"
     mode: Literal["native"] = "native"
     status: RunStatus
     integration_version: str

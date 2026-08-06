@@ -13,6 +13,7 @@ from tests.benchmarks.orcabench.host.bundle import validate_bundle
 from tests.benchmarks.orcabench.host.snapshot import stage_snapshot
 
 DEFAULT_SNAPSHOT_IMAGE = "orcabench/sre-otel-snapshot:data-0418-harbor-template"
+DEFAULT_DATASET = "orca-bench/orca-bench@latest"
 AGENT_IMPORT_PATH = "tests.benchmarks.orcabench.host.agent:OpenSRENativeAgent"
 
 
@@ -23,6 +24,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--orca-repo", type=Path, required=True)
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--task-name", required=True)
+    parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument(
         "--config",
         type=Path,
@@ -45,6 +47,11 @@ def _validate_exact_task_name(task_name: str) -> str:
     return value
 
 
+def _environment_flags(flag: str, names: tuple[str, ...]) -> list[str]:
+    """Build Harbor's deferred, secret-safe environment arguments."""
+    return [item for name in names for item in (flag, f"{name}=${{{name}}}")]
+
+
 def build_harbor_command(
     *,
     orca_repo: Path,
@@ -52,6 +59,7 @@ def build_harbor_command(
     config_path: Path,
     task_name: str,
     snapshot_cache: Path,
+    dataset: str = DEFAULT_DATASET,
 ) -> tuple[str, ...]:
     """Build the single-task Harbor command with secret-safe env templates."""
     settings = BenchmarkSettings.from_yaml(config_path)
@@ -67,7 +75,7 @@ def build_harbor_command(
         ],
         separators=(",", ":"),
     )
-    return (
+    command = [
         "uv",
         "run",
         "harbor",
@@ -82,27 +90,37 @@ def build_harbor_command(
         f"benchmark_config_path={config_path}",
         "--agent-kwarg",
         f"bundle_path={bundle}",
-        "--agent-env",
-        "OPENAI_API_KEY=${OPENAI_API_KEY}",
-        "--agent-env",
-        "OPENAI_BASE_URL=${OPENAI_BASE_URL}",
-        "--verifier-env",
-        "OPENAI_API_KEY=${OPENAI_API_KEY}",
-        "--verifier-env",
-        "OPENAI_BASE_URL=${OPENAI_BASE_URL}",
-        "--include-task-name",
-        task_name,
-        "--n-tasks",
-        "1",
-        "--n-concurrent-trials",
-        "1",
-        "--max-retries",
-        "0",
-        "--agent-include-logs",
-        "opensre-orca/**",
-        "--mounts-json",
-        mounts,
+    ]
+    command.extend(
+        _environment_flags("--agent-env", settings.model.required_environment_names)
     )
+    if settings.verifier.enabled:
+        command.extend(
+            _environment_flags(
+                "--verifier-env", settings.verifier.required_environment_names
+            )
+        )
+    else:
+        command.append("--disable-verification")
+    command.extend(
+        [
+            "--dataset",
+            dataset,
+            "--include-task-name",
+            task_name,
+            "--n-tasks",
+            "1",
+            "--n-concurrent",
+            "1",
+            "--max-retries",
+            "0",
+            "--agent-include-logs",
+            "opensre-orca/**",
+            "--mounts-json",
+            mounts,
+        ]
+    )
+    return tuple(command)
 
 
 def run_one(args: argparse.Namespace) -> int:
@@ -115,8 +133,12 @@ def run_one(args: argparse.Namespace) -> int:
     if not (orca_repo / "job-config.yaml").is_file():
         raise FileNotFoundError(f"ORCA job config is missing: {orca_repo / 'job-config.yaml'}")
     validate_bundle(bundle)
-    BenchmarkSettings.from_yaml(config_path)
-    for required in ("OPENAI_API_KEY", "OPENAI_BASE_URL"):
+    settings = BenchmarkSettings.from_yaml(config_path)
+    required_names = dict.fromkeys(
+        settings.model.required_environment_names
+        + settings.verifier.required_environment_names
+    )
+    for required in required_names:
         if not os.environ.get(required, "").strip():
             raise RuntimeError(f"{required} must be set in the host environment")
 
@@ -127,6 +149,7 @@ def run_one(args: argparse.Namespace) -> int:
         config_path=config_path,
         task_name=task_name,
         snapshot_cache=snapshot_cache,
+        dataset=args.dataset,
     )
     if args.print_command:
         print(subprocess.list2cmdline(command))

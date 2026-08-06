@@ -1,0 +1,12 @@
+schema_version: 1
+profile: smoke
+mode: native
+
+model:
+  harbor_model: openrouter/openrouter/free
+  provider: openrouter
+  transport: sdk
+  reasoning_effort: medium
+
+verifier:
+  enabled: false

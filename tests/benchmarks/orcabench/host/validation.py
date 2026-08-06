@@ -54,7 +54,10 @@ def _harbor_check() -> CheckResult:
         from harbor.models.task.task import Task
 
         version = importlib.metadata.version("harbor")
-        source = inspect.getsource(Task.checksum)
+        checksum_getter = Task.checksum.fget
+        if checksum_getter is None:
+            raise RuntimeError("Task.checksum property has no getter")
+        source = inspect.getsource(checksum_getter)
     except Exception as exc:
         return CheckResult("harbor", False, str(exc))
     if version != "0.20.0":

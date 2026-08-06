@@ -11,10 +11,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from config.platform_bootstrap import ensure_project_platform_package
+
+ensure_project_platform_package()
+
 from tests.benchmarks.orcabench.artifacts import (
     ArtifactWriter,
     ErrorRecord,
     RunManifest,
+    RunSummary,
     RunStatus,
     UsageEvent,
     sha256_bytes,
@@ -58,6 +63,7 @@ def _manifest(
 ) -> RunManifest:
     model = settings.benchmark.model
     return RunManifest(
+        profile=settings.benchmark.profile,
         status=RunStatus.RUNNING,
         integration_version=settings.integration_version,
         opensre_commit=settings.build.opensre_commit,
@@ -76,7 +82,13 @@ def run(config_path: Path, instruction_path: Path) -> int:
     """Run one configured native investigation and persist its complete artifacts."""
     settings = RunnerSettings.from_path(config_path)
     runtime = settings.benchmark.runtime
-    known_secrets = tuple(value for value in (os.environ.get("OPENAI_API_KEY", ""),) if value)
+    secret_names = dict.fromkeys(
+        settings.benchmark.model.required_environment_names
+        + settings.benchmark.verifier.required_environment_names
+    )
+    known_secrets = tuple(
+        value for name in secret_names if (value := os.environ.get(name, ""))
+    )
     writer = ArtifactWriter(runtime.artifact_dir, Redactor(known_secrets))
 
     instruction_bytes = instruction_path.read_bytes()
@@ -139,10 +151,11 @@ def run(config_path: Path, instruction_path: Path) -> int:
         writer.write_jsonl("usage.jsonl", usage_events)
 
         finished_at = _utc_now()
+        report_sha256 = sha256_bytes(report_bytes)
         completed = manifest.model_copy(
             update={
                 "status": RunStatus.SUCCEEDED,
-                "report_sha256": sha256_bytes(report_bytes),
+                "report_sha256": report_sha256,
                 "finished_at": finished_at,
                 "duration_seconds": time.monotonic() - started_monotonic,
                 "llm_calls": len(usage_events),
@@ -153,13 +166,12 @@ def run(config_path: Path, instruction_path: Path) -> int:
         writer.write_json("manifest.json", completed)
         writer.write_json(
             "summary.json",
-            {
-                "status": completed.status,
-                "llm_calls": completed.llm_calls,
-                "input_tokens": completed.input_tokens,
-                "output_tokens": completed.output_tokens,
-                "report_sha256": completed.report_sha256,
-            },
+            RunSummary(
+                llm_calls=completed.llm_calls,
+                input_tokens=completed.input_tokens,
+                output_tokens=completed.output_tokens,
+                report_sha256=report_sha256,
+            ),
         )
         return 0
     except Exception as exc:

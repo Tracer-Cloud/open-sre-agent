@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shlex
 from pathlib import Path, PurePosixPath
 from typing import Any, override
@@ -10,7 +9,9 @@ from typing import Any, override
 from harbor.agents.installed.base import BaseInstalledAgent
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
+from pydantic import ValidationError
 
+from tests.benchmarks.orcabench.artifacts import RunSummary
 from tests.benchmarks.orcabench.config import BenchmarkSettings, RunnerSettings
 from tests.benchmarks.orcabench.host.bundle import validate_bundle
 from tests.benchmarks.orcabench.host.pricing import calculate_orca_cost
@@ -118,28 +119,47 @@ class OpenSRENativeAgent(BaseInstalledAgent):
                 f"--instruction {shlex.quote(self._REMOTE_INSTRUCTION.as_posix())}"
             ),
         )
-        self._populate_context(context)
 
-    def _populate_context(self, context: AgentContext) -> None:
-        """Copy usage totals from the mounted artifact summary into Harbor metadata."""
-        summary_path = self.logs_dir / "opensre-orca" / "summary.json"
-        if not summary_path.is_file():
-            return
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        input_tokens = int(summary.get("input_tokens", 0))
-        output_tokens = int(summary.get("output_tokens", 0))
-        context.n_input_tokens = input_tokens
-        context.n_output_tokens = output_tokens
-
-        context.cost_usd = calculate_orca_cost(
-            self._benchmark_settings.model.harbor_model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-        )
-        context.metadata = {
+    @override
+    def populate_context_post_run(self, context: AgentContext) -> None:
+        """Backfill Harbor metadata after it makes mounted logs host-readable."""
+        metadata: dict[str, Any] = {
             "mode": "native",
-            "llm_calls": int(summary.get("llm_calls", 0)),
-            "report_sha256": summary.get("report_sha256"),
+            "profile": self._benchmark_settings.profile,
             "opensre_commit": self._build_manifest.opensre_commit,
-            "cost_basis": "ORCA pricing; usage hook does not expose cache tokens",
         }
+        context.metadata = metadata
+        summary_path = self.logs_dir / "opensre-orca" / "summary.json"
+        try:
+            summary = RunSummary.model_validate_json(
+                summary_path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValidationError) as exc:
+            self.logger.warning(
+                "Could not read OpenSRE run summary %s: %s", summary_path, exc
+            )
+            return
+
+        context.n_input_tokens = summary.input_tokens
+        context.n_output_tokens = summary.output_tokens
+        metadata.update(
+            {
+                "llm_calls": summary.llm_calls,
+                "report_sha256": summary.report_sha256,
+            }
+        )
+        try:
+            context.cost_usd = calculate_orca_cost(
+                self._benchmark_settings.model.harbor_model,
+                input_tokens=summary.input_tokens,
+                output_tokens=summary.output_tokens,
+            )
+        except Exception as exc:  # noqa: BLE001 - metadata must not fail a trial
+            self.logger.warning("Could not calculate ORCA model cost: %s", exc)
+            context.cost_usd = None
+
+        metadata["cost_basis"] = (
+            "ORCA pricing; usage hook does not expose cache tokens"
+            if context.cost_usd is not None
+            else "unavailable for configured model"
+        )

@@ -142,6 +142,7 @@ surfaces/interactive_shell/ui/output/**/__pycache__/
 .bench-results/
 tests/benchmarks/cloudopsbench/benchmark/
 tests/benchmarks/cloudopsbench/.cache/
+.bench-cache/orcabench/
 
 # Vendorized packages in api_ingester
 tests/test_case_upstream_downstream_pipeline/pipeline_code/api_ingester/certifi/

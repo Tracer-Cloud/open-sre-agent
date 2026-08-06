@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Self
 
@@ -10,6 +11,31 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class ProviderRoute:
+    """Names shared by Harbor, OpenSRE, and the host environment."""
+
+    harbor_prefix: str
+    environment_prefix: str
+    api_key_env: str
+    base_url_env: str | None = None
+
+
+PROVIDER_ROUTES = {
+    "openai": ProviderRoute(
+        harbor_prefix="gradient_ai/",
+        environment_prefix="OPENAI",
+        api_key_env="OPENAI_API_KEY",
+        base_url_env="OPENAI_BASE_URL",
+    ),
+    "openrouter": ProviderRoute(
+        harbor_prefix="openrouter/",
+        environment_prefix="OPENROUTER",
+        api_key_env="OPENROUTER_API_KEY",
+    ),
+}
 
 
 class StrictFrozenModel(BaseModel):
@@ -22,26 +48,57 @@ class ModelSettings(StrictFrozenModel):
     """OpenSRE's native LLM route for this experiment."""
 
     harbor_model: str = "gradient_ai/openai-gpt-5.5"
-    provider: Literal["openai"] = "openai"
+    provider: Literal["openai", "openrouter"] = "openai"
     transport: Literal["sdk"] = "sdk"
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
 
     @property
     def opensre_model(self) -> str:
         """Return the provider-facing model identifier used by OpenSRE."""
-        prefix = "gradient_ai/"
-        return self.harbor_model.removeprefix(prefix)
+        return self.harbor_model.removeprefix(self.route.harbor_prefix)
+
+    @property
+    def route(self) -> ProviderRoute:
+        """Return the naming contract for the selected provider."""
+        return PROVIDER_ROUTES[self.provider]
+
+    @property
+    def required_environment_names(self) -> tuple[str, ...]:
+        """Return secret/config names that Harbor must pass to the agent."""
+        names = [self.route.api_key_env]
+        if self.route.base_url_env is not None:
+            names.append(self.route.base_url_env)
+        return tuple(names)
 
     @model_validator(mode="after")
     def validate_native_route(self) -> Self:
         """Reject routes that the first native implementation cannot represent."""
-        model = self.opensre_model
-        if not model or not model.startswith("openai-"):
+        if not self.harbor_model.startswith(self.route.harbor_prefix):
             raise ValueError(
-                "native ORCA mode currently requires an OpenAI model exposed by "
-                "Gradient AI (for example gradient_ai/openai-gpt-5.5)"
+                f"{self.provider} harbor_model must start with "
+                f"{self.route.harbor_prefix!r}"
             )
+        model = self.opensre_model
+        if self.provider == "openai" and not model.startswith("openai-"):
+            raise ValueError("Gradient AI route must identify an OpenAI model")
+        if self.provider == "openrouter" and "/" not in model:
+            raise ValueError("OpenRouter model must use an owner/model identifier")
         return self
+
+
+class VerifierSettings(StrictFrozenModel):
+    """ORCA verifier policy and its independently configured credentials."""
+
+    enabled: bool = True
+    api_key_env: str = "OPENAI_API_KEY"
+    base_url_env: str = "OPENAI_BASE_URL"
+
+    @property
+    def required_environment_names(self) -> tuple[str, ...]:
+        """Return verifier environment names only when verification is enabled."""
+        if not self.enabled:
+            return ()
+        return (self.api_key_env, self.base_url_env)
 
 
 class GrafanaSettings(StrictFrozenModel):
@@ -91,10 +148,19 @@ class BenchmarkSettings(StrictFrozenModel):
     """Checked-in, secret-free settings for the one-task native experiment."""
 
     schema_version: Literal[1] = SCHEMA_VERSION
+    profile: Literal["benchmark", "smoke"] = "benchmark"
     mode: Literal["native"] = "native"
     model: ModelSettings = Field(default_factory=ModelSettings)
+    verifier: VerifierSettings = Field(default_factory=VerifierSettings)
     grafana: GrafanaSettings = Field(default_factory=GrafanaSettings)
     runtime: RuntimeSettings = Field(default_factory=RuntimeSettings)
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> Self:
+        """Keep smoke runs visibly separate from scored benchmark runs."""
+        if self.profile == "smoke" and self.verifier.enabled:
+            raise ValueError("smoke profile must disable ORCA verification")
+        return self
 
     @classmethod
     def from_yaml(cls, path: Path) -> BenchmarkSettings:
