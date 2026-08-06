@@ -132,6 +132,49 @@ def test_prior_success_limits_breaker_to_failing_tool() -> None:
     assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_alerts")) is None
 
 
+def test_success_after_failure_unblocks_source_but_keeps_failing_tool_skipped() -> None:
+    # Arrange: in one concurrent batch the connectivity failure lands first,
+    # then a different grafana tool succeeds.
+    breaker = SourceCircuitBreaker()
+    hooks = breaker.hooks()
+    assert hooks.after_tool_call is not None
+    assert hooks.before_tool_call is not None
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_logs"),
+        _error_result(f"Max retries exceeded: {_TIMEOUT_MARKER}"),
+    )
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_metrics"),
+        ToolExecutionResult(content="cpu=0.2", is_error=False),
+    )
+
+    # Act + Assert: the vendor is reachable again for other tools; only the
+    # tool that failed stays skipped.
+    assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_alerts")) is None
+    logs = hooks.before_tool_call(_request("grafana", tool_name="query_grafana_logs"))
+    assert logs is not None and logs.blocked
+
+
+def test_same_tool_success_after_failure_clears_every_mark() -> None:
+    # Arrange: a tool times out, then the SAME tool succeeds (transient flake).
+    breaker = SourceCircuitBreaker()
+    hooks = breaker.hooks()
+    assert hooks.after_tool_call is not None
+    assert hooks.before_tool_call is not None
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_metrics"),
+        _error_result(f"Max retries exceeded: {_TIMEOUT_MARKER}"),
+    )
+    hooks.after_tool_call(
+        _request("grafana", tool_name="query_grafana_metrics"),
+        ToolExecutionResult(content="cpu=0.2", is_error=False),
+    )
+
+    # Act + Assert: nothing stays blocked — not the source, not the tool.
+    assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_metrics")) is None
+    assert hooks.before_tool_call(_request("grafana", tool_name="query_grafana_logs")) is None
+
+
 def test_downstream_connection_error_does_not_poison_vendor() -> None:
     # Arrange: grafana is up but reports that a datasource backend is down.
     breaker = SourceCircuitBreaker()

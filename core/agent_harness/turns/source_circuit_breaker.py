@@ -67,9 +67,7 @@ def _is_connectivity_error(error_text: str) -> bool:
         return False
     # A reachable service reporting that *its* target is down must not poison
     # the vendor for the rest of the turn.
-    if any(marker in lowered for marker in _DOWNSTREAM_VETO_MARKERS):
-        return False
-    return True
+    return not any(marker in lowered for marker in _DOWNSTREAM_VETO_MARKERS)
 
 
 def _summarize(error_text: str) -> str:
@@ -84,7 +82,9 @@ class SourceCircuitBreaker:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._down: dict[str, str] = {}
+        # Source-level marks remember the tool that tripped them so a later
+        # same-source success can demote the mark to that tool alone.
+        self._down: dict[str, tuple[str, str]] = {}
         self._tool_down: dict[str, str] = {}
         self._source_ok: set[str] = set()
 
@@ -98,7 +98,8 @@ class SourceCircuitBreaker:
     def _skip_if_source_down(self, request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         with self._lock:
             tool_summary = self._tool_down.get(request.tool_call.name)
-            source_summary = self._down.get(request.source)
+            source_mark = self._down.get(request.source)
+        source_summary = source_mark[1] if source_mark is not None else None
         summary = tool_summary if tool_summary is not None else source_summary
         if summary is None:
             return None
@@ -123,8 +124,7 @@ class SourceCircuitBreaker:
     ) -> None:
         if not result.is_error:
             if request.source not in _UNBREAKABLE_SOURCES:
-                with self._lock:
-                    self._source_ok.add(request.source)
+                self._record_source_success(request)
             return None
         if request.source in _UNBREAKABLE_SOURCES:
             return None
@@ -138,7 +138,24 @@ class SourceCircuitBreaker:
             if request.source in self._source_ok:
                 self._tool_down.setdefault(request.tool_call.name, summary)
             else:
-                self._down.setdefault(request.source, summary)
+                self._down.setdefault(request.source, (request.tool_call.name, summary))
+
+    def _record_source_success(self, request: ToolExecutionRequest) -> None:
+        """A success proves the vendor transport works: demote any source mark.
+
+        A concurrent batch can complete a connectivity failure before a
+        success on the same source; without this, the reachable vendor would
+        stay blocked for the rest of the turn. The demoted mark keeps skipping
+        the tool that failed — unless it is the tool that just succeeded.
+        """
+        with self._lock:
+            self._source_ok.add(request.source)
+            demoted = self._down.pop(request.source, None)
+            if demoted is None:
+                return
+            failed_tool_name, summary = demoted
+            if failed_tool_name != request.tool_call.name:
+                self._tool_down.setdefault(failed_tool_name, summary)
         return None
 
 
