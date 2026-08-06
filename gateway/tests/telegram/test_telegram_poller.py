@@ -91,3 +91,26 @@ def test_poll_once_parses_inbound_message(mock_get: MagicMock, mock_sleep: Magic
     assert events[0].text == "hello"
     assert events[0].chat_id == "99"
     mock_sleep.assert_not_called()
+
+
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
+def test_poll_once_exception_omits_bot_token_detail(
+    mock_get: MagicMock,
+    _mock_sleep: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    import logging
+
+    bot_token = "secret_bot_token_12345"
+    mock_get.side_effect = httpx.ConnectError(
+        f"failed to connect to https://api.telegram.org/bot{bot_token}/getUpdates"
+    )
+    poller = TelegramPoller(bot_token)
+    with caplog.at_level(logging.WARNING, logger="gateway.transports.telegram.poller.poller"):
+        assert poller.poll_once() == []
+
+    assert any("[telegram-gateway] getUpdates failed: ConnectError" in r.message for r in caplog.records)
+    for record in caplog.records:
+        assert bot_token not in record.message
+

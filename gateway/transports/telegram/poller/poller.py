@@ -50,7 +50,7 @@ class TelegramPoller:
         try:
             response = httpx.get(url, params=params, timeout=float(self._timeout + 5))
         except Exception as exc:
-            self._log_transient("[telegram-gateway] getUpdates failed: %s", exc)
+            self._log_transient("[telegram-gateway] getUpdates failed: %s", type(exc).__name__)
             time.sleep(_DEFAULT_RETRY_SECONDS)
             return []
 
@@ -85,6 +85,8 @@ class TelegramPoller:
         description = str(
             data.get("description") or response.text.strip() or f"HTTP {response.status_code}"
         )
+        if self._token:
+            description = description.replace(self._token, "[REDACTED]")
         if error_code == _CONFLICT_ERROR_CODE:
             logger.debug(
                 "[telegram-gateway] getUpdates conflict (retry in %.0fs): %s",
