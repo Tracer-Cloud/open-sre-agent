@@ -1,6 +1,6 @@
-"""Characterization: ``AgentHarness.run_headless_turn`` is the scheduled-runner stack.
+"""Characterization: ``AgentSession.run_headless_turn`` is the scheduled-runner stack.
 
-Scheduled digests must not reassemble harness + BufferOutputSink +
+Scheduled digests must not reassemble session + BufferOutputSink +
 ``build_default_headless_agent`` locally. This pins the shared API wiring.
 """
 
@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -47,11 +47,11 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
         built.update(kwargs)
         return agent
 
-    class _Harness(AgentHarness):
+    class _Session(AgentSession):
         def startup(self) -> Any:  # type: ignore[override]
-            from core.agent_harness.harness import HarnessStartupResult
+            from core.agent_harness.harness import SessionStartupResult
 
-            return HarnessStartupResult(session=session, prompts=prompts)
+            return SessionStartupResult(session=session, prompts=prompts)
 
     monkeypatch.setattr(
         "core.agent_harness.turns.default_headless_agent.build_default_headless_agent",
@@ -62,9 +62,9 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
         lambda: sink,
     )
 
-    result = _Harness.run_headless_turn(
+    result = _Session.run_headless_turn(
         "summarize sentry",
-        config=HarnessConfig(load_env=False, open_storage=False),
+        config=SessionConfig(load_env=False, open_storage=False),
         logger=MagicMock(),
         gather_enabled=True,
         is_tty=False,
@@ -96,11 +96,11 @@ def test_run_headless_turn_prepare_session_runs_before_agent_build(
         agent.dispatch.return_value = _answered("ok")
         return agent
 
-    class _Harness(AgentHarness):
+    class _Session(AgentSession):
         def startup(self) -> Any:  # type: ignore[override]
-            from core.agent_harness.harness import HarnessStartupResult
+            from core.agent_harness.harness import SessionStartupResult
 
-            return HarnessStartupResult(session=session, prompts=None)
+            return SessionStartupResult(session=session, prompts=None)
 
     monkeypatch.setattr(
         "core.agent_harness.turns.default_headless_agent.build_default_headless_agent",
@@ -111,9 +111,9 @@ def test_run_headless_turn_prepare_session_runs_before_agent_build(
         MagicMock,
     )
 
-    _Harness.run_headless_turn(
+    _Session.run_headless_turn(
         "hi",
-        config=HarnessConfig(load_env=False, open_storage=False),
+        config=SessionConfig(load_env=False, open_storage=False),
         prepare_session=_prepare,
     )
 
@@ -137,7 +137,7 @@ def test_morning_digest_runner_uses_run_headless_turn(
         "configured_integration_services",
         lambda: {"sentry"},
     )
-    monkeypatch.setattr(AgentHarness, "run_headless_turn", _fake_run)
+    monkeypatch.setattr(AgentSession, "run_headless_turn", _fake_run)
 
     report = runner.run_sentry_morning_digest({"project_slug": "api"})
 

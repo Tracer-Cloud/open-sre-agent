@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentHarness
+from core.agent_harness.harness import AgentSession
 from platform.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def build_manual_loop_prompt(payload: AgentPayload) -> str:
 def run_manual_prompt_loop(payload: AgentPayload) -> str:
     """Run one headless turn that produces only the requested report body."""
     message = build_manual_loop_prompt(payload)
-    result = AgentHarness.run_headless_turn(
+    result = AgentSession.run_headless_turn(
         message,
         logger=logger,
         gather_enabled=True,

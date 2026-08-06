@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentHarness
+from core.agent_harness.harness import AgentSession
 from platform.harness_ports import configured_integration_services
 from platform.scheduler.agent_runner import AgentPayload
 
@@ -31,7 +31,7 @@ def run_github_pr_sweep(payload: AgentPayload) -> str:
     del payload  # reserved for future repo/org scoping
     _require_github_configured()
 
-    result = AgentHarness.run_headless_turn(
+    result = AgentSession.run_headless_turn(
         _PR_SWEEP_PROMPT,
         logger=logger,
         gather_enabled=True,

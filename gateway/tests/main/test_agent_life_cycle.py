@@ -140,7 +140,10 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     assert ctor.kwargs["surface"] == "gateway"
-    assert ctor.kwargs["gather_enabled"] is True
+    from core.agent_harness.turns.gather_ports import GatherPorts
+
+    assert isinstance(ctor.kwargs["gather"], GatherPorts)
+    assert ctor.kwargs["gather"].enabled is True
     assert ctor.kwargs["is_tty"] is False
     assert ctor.kwargs["observer_factory"] is not None
     tool_provider = DefaultToolProvider(

@@ -17,19 +17,23 @@ gateway ``GATEWAY_PROFILE``, the web app ``WEB_PROFILE``.
 Driving the agent from Python instead of the CLI::
 
     from bootstrap.process import EMBEDDED_PROFILE, configure_process
-    from core.agent_harness import AgentHarness
+    from core.agent_harness import AgentSession
 
     configure_process(EMBEDDED_PROFILE)
 
-    harness = AgentHarness.start()
-    result = harness.dispatch_message("why is checkout-api slow?")
+    session = AgentSession.start()
+    result = session.chat("why is checkout-api slow?")
     if result.answered:
         print(result.primary_response_text)
 
+    report = session.investigate({"alert_name": "HighLatency"})
+    print(report.report)
+
 ``configure_process`` comes first and is what registers the harness adapters
-tools resolve through; ``AgentHarness.start()`` only loads the environment, so
-on its own the agent starts but no tool is available. It cannot self-bootstrap —
-``core`` sits below ``bootstrap`` in the layer contract, so the caller wires it.
+tools resolve through (and the investigation payload runner);
+``AgentSession.start()`` only loads the environment, so on its own the agent
+starts but no tool is available. It cannot self-bootstrap — ``core`` sits below
+``bootstrap`` in the layer contract, so the caller wires it.
 ``EMBEDDED_PROFILE`` deliberately leaves Sentry and LLM preloading to the host
 process.
 
@@ -39,7 +43,7 @@ provider is unreachable) the error message itself lands in
 ``primary_response_text``. Surfaces that need their own ports — a live gateway
 sink, a REPL console — build the agent with
 ``core.agent_harness.build_default_headless_agent`` and call ``attach_agent``
-instead.
+instead. ``AgentHarness`` / ``dispatch_message`` remain compatibility aliases.
 """
 
 from __future__ import annotations

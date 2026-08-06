@@ -38,6 +38,10 @@ def registration_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     for target, name in _REGISTRARS.items():
         monkeypatch.setattr(target, _recorder(name))
+    monkeypatch.setattr(
+        "bootstrap.adapters.install_investigation_api",
+        _recorder("investigation_api"),
+    )
     return calls
 
 
@@ -45,9 +49,9 @@ def test_harness_adapters_registers_both_registries(registration_calls: list[str
     # Arrange / Act
     adapters.install_harness_adapters()
 
-    # Assert: a host that installs adapters must not silently pull in scheduler
-    # runners it never asked for.
-    assert registration_calls == ["integrations", "tools"]
+    # Assert: adapters include the AgentSession.investigate payload runner;
+    # they must not silently pull in scheduler runners.
+    assert registration_calls == ["integrations", "tools", "investigation_api"]
 
 
 def test_scheduler_runners_registers_investigation_first(registration_calls: list[str]) -> None:
@@ -66,7 +70,13 @@ def test_steps_compose_without_a_flag_argument(registration_calls: list[str]) ->
     adapters.install_scheduler_runners()
 
     # Assert
-    assert registration_calls == ["integrations", "tools", "investigation", "scheduled"]
+    assert registration_calls == [
+        "integrations",
+        "tools",
+        "investigation_api",
+        "investigation",
+        "scheduled",
+    ]
 
 
 def test_only_the_composition_root_defines_the_steps() -> None:

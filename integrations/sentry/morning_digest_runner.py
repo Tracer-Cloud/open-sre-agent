@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.agent_harness.harness import AgentHarness
+from core.agent_harness.harness import AgentSession
 from core.agent_harness.session.integration_resolution import (
     merge_resolved_integrations,
     resolve_and_cache_integrations,
@@ -59,7 +59,7 @@ def _require_sentry_configured() -> None:
 
 def _dispatch_headless_turn(message: str, payload: AgentPayload) -> TurnResult:
     _require_sentry_configured()
-    return AgentHarness.run_headless_turn(
+    return AgentSession.run_headless_turn(
         message,
         prepare_session=lambda session: _apply_digest_project_scope(session, payload),
         logger=logger,

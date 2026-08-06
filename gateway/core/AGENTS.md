@@ -28,6 +28,5 @@ slack / discord / scheduler. Do not reintroduce a bootstrap essay in the
 manager. Scheduler runners register when the scheduler stage starts
 (:func:`bootstrap.adapters.install_scheduler_runners`).
 
-`runtime/startup.py` is a thin migration wrapper around `configure_process`
-(stable import path for tests); it does not return a harness — the manager
-never used that value.
+Process boot has one entrypoint: :func:`bootstrap.process.configure_process`
+with ``GATEWAY_PROFILE``. Do not add a gateway-local wrapper around it.

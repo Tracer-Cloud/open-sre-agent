@@ -40,21 +40,28 @@ def run_investigation_cli(
 ) -> dict[str, Any]:
     """Run the investigation and return the CLI-facing JSON payload.
 
-    Thin CLI wrapper over :func:`tools.investigation.capability.run_investigation_payload`:
+    Thin CLI wrapper over :meth:`core.agent_harness.AgentSession.investigate`:
     it adds the CLI-only precondition check (LLM settings) and maps runtime failures to
     structured ``OpenSREError`` messages. The run itself and the result shaping live in
-    ``core`` so non-CLI surfaces can reuse them without importing ``cli``.
+    the shared session API so every surface uses the same entry.
 
     ``investigation_metadata`` is an optional ``(alert_name, severity)`` tuple.
     """
     check_llm_settings()
-    from tools.investigation.capability import run_investigation_payload
+    from bootstrap.adapters import install_investigation_api
+    from core.agent_harness import AgentSession
 
+    # CLI_PROFILE boots env only; install the payload runner before investigate.
+    install_investigation_api()
     try:
-        return run_investigation_payload(
-            raw_alert=raw_alert,
-            opensre_evaluate=opensre_evaluate,
-            investigation_metadata=investigation_metadata,
+        return (
+            AgentSession()
+            .investigate(
+                raw_alert,
+                opensre_evaluate=opensre_evaluate,
+                investigation_metadata=investigation_metadata,
+            )
+            .as_dict()
         )
     except Exception as exc:
         _reraise_cli_investigation_failure(exc)

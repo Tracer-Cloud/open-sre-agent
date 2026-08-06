@@ -8,6 +8,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from core.agent_harness.investigation_api import (
+    install_investigation_payload_runner,
+    reset_investigation_payload_runner_for_tests,
+)
 from gateway.web import webapp
 
 _LOOPBACK = ("127.0.0.1", 40000)
@@ -18,6 +22,13 @@ _REMOTE = ("203.0.113.9", 40000)
 def _no_token(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.delenv("OPENSRE_ALERT_LISTENER_TOKEN", raising=False)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _reset_investigation_runner() -> Iterator[None]:
+    reset_investigation_payload_runner_for_tests()
+    yield
+    reset_investigation_payload_runner_for_tests()
 
 
 @pytest.fixture
@@ -39,16 +50,17 @@ def _fake_payload() -> dict[str, Any]:
 def test_investigate_runs_pipeline_and_returns_report(
     monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
+    del monkeypatch  # fixture reserved for env overrides elsewhere
     captured: dict[str, Any] = {}
 
-    def _fake_run_investigation_payload(
+    def _fake_run(
         *, raw_alert: Any, investigation_metadata: Any = None, **_: Any
     ) -> dict[str, Any]:
         captured["raw_alert"] = raw_alert
         captured["investigation_metadata"] = investigation_metadata
         return _fake_payload()
 
-    monkeypatch.setattr(webapp, "run_investigation_payload", _fake_run_investigation_payload)
+    install_investigation_payload_runner(_fake_run)
 
     resp = client.post(
         "/investigate",
@@ -72,17 +84,15 @@ def test_investigate_runs_pipeline_and_returns_report(
 
 
 def test_investigate_resolves_metadata_from_raw_alert_when_overrides_missing(
-    monkeypatch: pytest.MonkeyPatch, client: TestClient
+    client: TestClient,
 ) -> None:
     captured: dict[str, Any] = {}
 
-    def _fake_run_investigation_payload(
-        *, investigation_metadata: Any = None, **_: Any
-    ) -> dict[str, Any]:
+    def _fake_run(*, investigation_metadata: Any = None, **_: Any) -> dict[str, Any]:
         captured["investigation_metadata"] = investigation_metadata
         return _fake_payload()
 
-    monkeypatch.setattr(webapp, "run_investigation_payload", _fake_run_investigation_payload)
+    install_investigation_payload_runner(_fake_run)
 
     resp = client.post(
         "/investigate",
@@ -99,12 +109,12 @@ def test_investigate_missing_raw_alert_returns_422(client: TestClient) -> None:
 
 
 def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text(
-    monkeypatch: pytest.MonkeyPatch, client: TestClient
+    client: TestClient,
 ) -> None:
     def _boom(**_: Any) -> dict[str, Any]:
         raise RuntimeError("llm unavailable at s3://internal-bucket/creds.json")
 
-    monkeypatch.setattr(webapp, "run_investigation_payload", _boom)
+    install_investigation_payload_runner(_boom)
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
@@ -115,15 +125,13 @@ def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text
     assert "s3://internal-bucket" not in body["error"]
 
 
-def test_investigate_malformed_pipeline_result_returns_503(
-    monkeypatch: pytest.MonkeyPatch, client: TestClient
-) -> None:
+def test_investigate_malformed_pipeline_result_returns_503(client: TestClient) -> None:
     """A result dict that fails InvestigateResponse validation is caught too."""
 
     def _malformed(**_: Any) -> dict[str, Any]:
         return {"report": None, "problem_md": "p", "root_cause": "c"}
 
-    monkeypatch.setattr(webapp, "run_investigation_payload", _malformed)
+    install_investigation_payload_runner(_malformed)
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
@@ -131,10 +139,8 @@ def test_investigate_malformed_pipeline_result_returns_503(
     assert resp.json()["error"] == "investigation failed: ValidationError"
 
 
-def test_investigate_non_loopback_without_token_returns_403(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(webapp, "run_investigation_payload", lambda **_: _fake_payload())
+def test_investigate_non_loopback_without_token_returns_403() -> None:
+    install_investigation_payload_runner(lambda **_: _fake_payload())
     remote = TestClient(webapp.app, client=_REMOTE)
 
     resp = remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
@@ -144,7 +150,7 @@ def test_investigate_non_loopback_without_token_returns_403(
 
 def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENSRE_ALERT_LISTENER_TOKEN", "sekret")
-    monkeypatch.setattr(webapp, "run_investigation_payload", lambda **_: _fake_payload())
+    install_investigation_payload_runner(lambda **_: _fake_payload())
     remote = TestClient(webapp.app, client=_REMOTE)
 
     assert remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}}).status_code == 401

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentHarness
+from core.agent_harness.harness import AgentSession
 from core.agent_harness.turns.evidence_driver import MAX_REPORT_GATHER_ITERATIONS
 from core.agent_harness.turns.turn_results import TurnResult
 from integrations.posthog.report_prerequisites import (
@@ -55,7 +55,7 @@ def _require_posthog_configured() -> None:
 
 def _dispatch_headless_turn(message: str) -> TurnResult:
     _require_posthog_configured()
-    return AgentHarness.run_headless_turn(
+    return AgentSession.run_headless_turn(
         message,
         logger=logger,
         gather_enabled=True,

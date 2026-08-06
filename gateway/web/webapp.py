@@ -35,13 +35,11 @@ from core.domain.alerts.inbox import (
 ensure_project_platform_package()
 
 from bootstrap.process import WEB_PROFILE, configure_process  # noqa: E402
+from core.agent_harness import AgentSession  # noqa: E402
 from gateway.core.runtime.readiness import is_gateway_ready  # noqa: E402
 from gateway.web.investigations import router as investigations_router  # noqa: E402
 from platform.observability.errors.sentry import capture_exception  # noqa: E402
-from tools.investigation.capability import (  # noqa: E402
-    resolve_investigation_context,
-    run_investigation_payload,
-)
+from tools.investigation.capability import resolve_investigation_context  # noqa: E402
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
 # Shared boot order lives in bootstrap.process (env → sentry → adapters).
@@ -219,11 +217,11 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
         severity=req.severity,
     )
     try:
-        result = run_investigation_payload(
-            raw_alert=req.raw_alert,
+        result = AgentSession().investigate(
+            req.raw_alert,
             investigation_metadata=investigation_metadata,
         )
-        return InvestigateResponse(**result)
+        return InvestigateResponse(**result.as_dict())
     except Exception as exc:
         # Full detail (which may include internal paths, stack context, or
         # upstream error bodies) goes to logs/Sentry only. The HTTP response

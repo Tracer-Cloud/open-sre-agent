@@ -15,7 +15,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
 from gateway.core.runtime.session_agents import SessionAgentPool
 from gateway.core.runtime.sink_protocol import GatewaySink
@@ -47,7 +47,7 @@ class GatewayTurnHandler:
     One :class:`HeadlessAgent` is kept per logical session and reused across
     turns; per-turn sinks, accounting, and tool hooks are rebound via
     :meth:`HeadlessAgent.bind_turn`. Concurrent turns for different sessions
-    stay isolated.
+    stay isolated. Chat goes through :meth:`AgentSession.chat`.
     """
 
     def __init__(
@@ -61,7 +61,7 @@ class GatewayTurnHandler:
             slash_ports_factory=slash_ports_factory,
         )
         # Gateway already bootstrapped env at process start; turns must not reload.
-        self._harness = AgentHarness(HarnessConfig(load_env=False))
+        self._session_api = AgentSession(SessionConfig(load_env=False))
 
     def __call__(
         self,
@@ -96,7 +96,7 @@ class GatewayTurnHandler:
                     accounting=DefaultTurnAccounting(session, text),
                     tool_hooks=getattr(sink, "tool_hooks", None),
                 )
-                turn_result = self._harness.dispatch_message(text, agent=agent)
+                turn_result = self._session_api.chat(text, agent=agent)
                 outbound_text = turn_result.primary_response_text
                 logger.debug(
                     "gateway_turn done intent=%s answered=%s outbound_chars=%s",

@@ -103,7 +103,7 @@ to it instead of re-implementing bootstrap + persistence:
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
 - **headless / scheduled** — non-TTY hosts use
-  :meth:`AgentHarness.run_headless_turn` (or ``start`` + ``dispatch_message``).
+  :meth:`AgentSession.run_headless_turn` (or ``start`` + ``chat``).
   That is the same ``run_turn`` engine as the shell; do not reassemble
   ``BufferOutputSink`` + ``build_default_headless_agent`` in integrations.
   Ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
@@ -181,10 +181,15 @@ shape; if it answers directly without tools it is the direct-answer shape.
    `EvidenceGatherer`); do not import surface code into `agent_harness/`.
 4. Add or extend guards in `tests/core/agent_harness/test_agent_shapes.py` when
    you introduce a new entrypoint or rename a shape seam.
+5. Public host API is `AgentSession.chat` / `AgentSession.investigate`
+   (`tests/core/agent_harness/test_agent_session_api.py`). Adapters build
+   `ChatTurnBindings` and call `dispatch_chat_turn` internally — never add a
+   new top-level binder that calls `run_turn` directly
+   (`tests/core/agent_harness/test_chat_api.py`).
 
-**Read order for new code:** this file → `turns/orchestrator.py` (`run_turn`) →
-`core/agent/agent.py` (facade + wiring) → `core/agent/react_loop.py`
-(`run_react_loop`, the tool-calling algorithm).
+**Read order for new code:** this file → `harness.py` (`AgentSession`) →
+`turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
+→ `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
 ## Investigation agent — the tool-calling shape with a custom loop
 
@@ -194,17 +199,32 @@ composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
 `run()` (seed calls, evidence collection, duplicate detection, stagnation
 handling). It is still the tool-calling shape — composition, not a forked loop.
 
-## Four hosts, one turn engine
+## Four hosts, one AgentSession API
 
-| Host | Process boot | Turn binder |
-|------|--------------|-------------|
-| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `execute_shell_turn` → `run_turn` (TTY ports) |
-| Gateway chat | `configure_process(GATEWAY_PROFILE)` | `GatewayTurnHandler` → `HeadlessAgent` → `run_turn` |
-| Standalone web | `configure_process(WEB_PROFILE)` | HTTP handlers / investigations |
-| Scheduled digests | adapters via profile; runners via `install_scheduler_runners` | `AgentHarness.run_headless_turn` → `run_turn` |
+**Public host contract:** :class:`~core.agent_harness.harness.AgentSession`
+with ``chat`` and ``investigate``. Compatibility aliases:
+``AgentHarness`` / ``dispatch_message`` / ``HarnessConfig``.
+
+**Internal chat seam:** adapters build
+:class:`~core.agent_harness.turns.chat_api.ChatTurnBindings`, then call
+:func:`~core.agent_harness.turns.chat_api.dispatch_chat_turn` (thin facade
+over ``run_turn``). Do **not** add new top-level chat entrypoints that call
+``run_turn`` directly — adapters only.
+
+**Internal investigate seam:** payload runner installed by
+``bootstrap.adapters.install_investigation_api`` (via harness adapters).
+``agent_harness`` must not import ``tools``.
+
+| Host | Process boot | Host call |
+|------|--------------|-----------|
+| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `execute_shell_turn` → TTY `ChatDispatcher` → `AgentSession.chat` |
+| Gateway chat | `configure_process(GATEWAY_PROFILE)` | `GatewayTurnHandler` → `SessionAgentPool` → `AgentSession.chat` |
+| Standalone web | `configure_process(WEB_PROFILE)` | `AgentSession.investigate` (Path 2) |
+| Scheduled digests | adapters via profile; runners via `install_scheduler_runners` | `AgentSession.run_headless_turn` → `chat` |
 
 Do **not** force the REPL through `HeadlessAgent`. Shell is the TTY adapter of
-the same engine; headless APIs are for non-TTY hosts.
+the same engine; headless agents are for non-TTY hosts. Do **not** invent a
+second public investigate entrypoint beside ``AgentSession.investigate``.
 
 ## Keep the loop primitive in core
 

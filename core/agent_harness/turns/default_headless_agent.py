@@ -24,6 +24,7 @@ from core.agent_harness.tools.tool_provider import (
     SubprocessPresenterFactory,
 )
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 
 if TYPE_CHECKING:
@@ -37,6 +38,19 @@ def _default_prompts(session: SessionCore, surface: str | None) -> PromptContext
     if surface is not None:
         return DefaultPromptContextProvider(session, surface=surface)
     return DefaultPromptContextProvider(session)
+
+
+def _resolve_gather(
+    gather: GatherPorts | None,
+    *,
+    gather_enabled: bool,
+    gather_max_iterations: int | None,
+) -> GatherPorts:
+    if gather is not None:
+        return gather
+    if not gather_enabled:
+        return GATHER_DISABLED
+    return GatherPorts(enabled=True, max_iterations=gather_max_iterations)
 
 
 def build_default_headless_agent(
@@ -53,6 +67,7 @@ def build_default_headless_agent(
     subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
     slash_ports_factory: SlashPortsFactory | None = None,
     prompts: PromptContextProvider | None = None,
+    gather: GatherPorts | None = None,
     gather_enabled: bool = True,
     gather_max_iterations: int | None = None,
     is_tty: bool = False,
@@ -65,6 +80,9 @@ def build_default_headless_agent(
     ``message`` (or an explicit ``accounting``) when the agent should
     account for a single turn at construction time. Gateway reuse binds
     accounting later via :meth:`HeadlessAgent.bind_turn`.
+
+    Prefer ``gather=GatherPorts(...)`` for full control. ``gather_enabled`` /
+    ``gather_max_iterations`` remain as convenience kwargs for scheduled runners.
     """
     if console is None:
         console = Console(force_terminal=False, file=StringIO())
@@ -96,8 +114,11 @@ def build_default_headless_agent(
         run_factory=DefaultRunRecordFactory(session),
         accounting=turn_accounting,
         error_reporter=error_reporter,
-        gather_enabled=gather_enabled,
-        gather_max_iterations=gather_max_iterations,
+        gather=_resolve_gather(
+            gather,
+            gather_enabled=gather_enabled,
+            gather_max_iterations=gather_max_iterations,
+        ),
         is_tty=is_tty,
     )
 

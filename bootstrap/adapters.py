@@ -12,11 +12,24 @@ the scheduler ones.
 from __future__ import annotations
 
 
+def install_investigation_api() -> None:
+    """Wire :meth:`AgentSession.investigate` to the canonical payload runner.
+
+    ``agent_harness`` must not import ``tools``; this composition-root step
+    installs the callable the session API dispatches through.
+    """
+    from core.agent_harness.investigation_api import install_investigation_payload_runner
+    from tools.investigation.capability import run_investigation_payload
+
+    install_investigation_payload_runner(run_investigation_payload)
+
+
 def install_harness_adapters() -> None:
     """Register the integration and tool adapters the harness resolves through.
 
     Without this a harness starts but no tool is available — the ports report
-    nothing until both registries have been installed.
+    nothing until both registries have been installed. Also installs the
+    investigation payload runner used by :meth:`AgentSession.investigate`.
     """
     from integrations.harness_adapters import (
         register_harness_adapters as register_integrations,
@@ -25,6 +38,7 @@ def install_harness_adapters() -> None:
 
     register_integrations()
     register_tools()
+    install_investigation_api()
 
 
 def install_scheduler_runners() -> None:
@@ -41,4 +55,8 @@ def install_scheduler_runners() -> None:
     install_scheduled_agent()
 
 
-__all__ = ["install_harness_adapters", "install_scheduler_runners"]
+__all__ = [
+    "install_harness_adapters",
+    "install_investigation_api",
+    "install_scheduler_runners",
+]
