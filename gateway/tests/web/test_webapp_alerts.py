@@ -89,6 +89,29 @@ def test_oversized_body_returns_413(client: TestClient, inbox: AlertInbox) -> No
     assert inbox.pop_nowait() is None
 
 
+def test_investigate_oversized_body_returns_413(client: TestClient) -> None:
+    resp = client.post("/investigate", json={"alert_name": "x" * (webapp.MAX_BODY_BYTES + 1)})
+    assert resp.status_code == 413
+    assert resp.json() == {"error": "payload too large"}
+
+
+def test_api_investigations_oversized_body_returns_413(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import AsyncMock
+    from platform.auth.jwt_auth import JWTClaims
+    monkeypatch.setattr(
+        "gateway.web.clerk_deps.verify_jwt_async",
+        AsyncMock(return_value=JWTClaims(sub="user_1", organization="org_1", organization_slug="test", email="u@example.com", full_name="Test User", issuer="https://test", exp=9999999999, iat=1)),
+    )
+    resp = client.post(
+        "/api/investigations",
+        json={"alert_name": "x" * (webapp.MAX_BODY_BYTES + 1)},
+        headers={"Authorization": "Bearer token"},
+    )
+    assert resp.status_code == 413
+    assert resp.json() == {"error": "payload too large"}
+
+
+
 def test_non_loopback_without_token_returns_403(inbox: AlertInbox) -> None:
     remote = TestClient(webapp.app, client=_REMOTE)
     resp = remote.post("/alerts", json={"text": "x"})

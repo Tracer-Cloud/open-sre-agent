@@ -55,9 +55,11 @@ init_sentry(entrypoint="webapp")
 
 logger = logging.getLogger(__name__)
 
-# Cap on POST body size accepted from any caller (authed or not). Realistic
-# alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
-MAX_ALERT_BODY_BYTES = 1 * 1024 * 1024
+from gateway.web.body_cap import (  # noqa: E402
+    MAX_ALERT_BODY_BYTES,
+    MAX_BODY_BYTES,
+    validate_body_size,
+)
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
@@ -71,6 +73,14 @@ class HealthResponse(BaseModel):
 
 app = FastAPI()
 app.include_router(investigations_router)
+
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next: Any) -> Response:
+    if request.method == "POST":
+        if (size_error := await validate_body_size(request)) is not None:
+            return size_error
+    return await call_next(request)
 
 
 def get_health_response() -> HealthResponse:
@@ -145,23 +155,7 @@ async def receive_alert(request: Request) -> JSONResponse:
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
-    try:
-        declared_length = int(request.headers.get("content-length", 0))
-    except ValueError:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length < 0:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
-
     body = await request.body()
-    if len(body) > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
-
     try:
         data = json.loads(body)
     except ValueError:
