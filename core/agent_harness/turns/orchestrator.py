@@ -42,6 +42,12 @@ from core.agent_harness.prompts.assistant import (
 )
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.prompts.memory.prior_investigation import is_prior_investigation_follow_up
+from core.agent_harness.session.pending_offer import (
+    arm_pending_investigation_offer,
+    consume_confirmed_pending_offer,
+    first_pending_offer,
+    is_pending_offer_confirmation,
+)
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
@@ -291,6 +297,8 @@ class _RouteOutcome:
     final_intent: str
     response_text: str
     llm_run: Any | None = None
+    # Gather / action evidence to arm PendingInvestigationOffer (not session stash).
+    evidence_for_offer: str | None = None
 
 
 def _gather_and_answer(
@@ -300,7 +308,7 @@ def _gather_and_answer(
     gather: EvidenceGatherer,
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
-) -> Any | None:
+) -> tuple[Any | None, str | None]:
     # Retrospective follow-ups already have grounding in ``last_state`` (injected
     # into the assistant prompt). Running the live gather loop for those turns
     # is wasteful and often violates "do not call integration tools" contracts
@@ -318,7 +326,7 @@ def _gather_and_answer(
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
     observation = gathered if gathered else None
-    return answer(
+    run = answer(
         text,
         AnswerRequest(
             tool_observation=observation,
@@ -327,6 +335,7 @@ def _gather_and_answer(
             turn_plan=turn_plan,
         ),
     )
+    return run, observation
 
 
 def run_turn(
@@ -363,24 +372,19 @@ def run_turn(
 
     # Bare "yes"/"sure" after a Want me to: offer must resolve to that offer —
     # otherwise gateway Slack follow-ups hand off as brand-new vague requests.
-    # Schedule offers prefer session.pending_schedule_offer (structured) over
-    # scraping prose.
+    # Structured pending offers beat prose scraping.
     prior_messages = getattr(session, "cli_agent_messages", None) or ()
-    pending_schedule = getattr(session, "pending_schedule_offer", None)
+    # Keep the pre-expansion user text for arming a new investigation offer
+    # after this turn's answer (diagnostic gather → Want-me-to).
+    original_user_text = text
     expanded = expand_affirmative_follow_up(
         text,
         prior_messages,
-        pending_schedule=pending_schedule,
+        pending_offer=first_pending_offer(session),
     )
-    # Whether this turn is the confirmation of a pending offer. The offer is
-    # consumed only once the command actually lands — clearing it here would
-    # burn it on a rejected ``cron add``, leaving a second "yes" with nothing
-    # to expand.
-    confirms_schedule = (
-        pending_schedule is not None
-        and expanded.startswith("/cron ")
-        and hasattr(session, "pending_schedule_offer")
-    )
+    # Offer is consumed only once the command lands — clearing here would burn
+    # it on a rejected ``cron add``, leaving a second "yes" with nothing to expand.
+    confirms_pending = is_pending_offer_confirmation(session, expanded)
     text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
@@ -406,12 +410,8 @@ def run_turn(
         turn_plan=turn_plan,
     )
 
-    if (
-        confirms_schedule
-        and action_result.executed_success_count > 0
-        and hasattr(session, "pending_schedule_offer")
-    ):
-        session.pending_schedule_offer = None
+    if confirms_pending and action_result.executed_success_count > 0:
+        consume_confirmed_pending_offer(session, expanded)
     accounting.record_action_result(action_result)
 
     handoff_contents = action_result.handoff_contents
@@ -459,6 +459,7 @@ def run_turn(
                 final_intent="cli_agent_summarized",
                 response_text=_response_text(run),
                 llm_run=run,
+                evidence_for_offer=observation,
             )
         elif route.intent == "handled_without_llm":
             # The one route that never calls the model: the action already
@@ -470,7 +471,7 @@ def run_turn(
             )
         elif route.intent == "gather_and_answer":
             with apply_reasoning_effort(turn_snapshot.reasoning_effort):
-                run = _gather_and_answer(
+                run, gathered = _gather_and_answer(
                     text=text,
                     answer=answer,
                     gather=gather,
@@ -481,9 +482,20 @@ def run_turn(
                 final_intent="cli_agent_fallback",
                 response_text=_response_text(run),
                 llm_run=run,
+                evidence_for_offer=gathered,
             )
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
+
+        # Arm structured investigate-accept after a canonical Want-me-to closer.
+        # Skip when this turn already confirmed a pending offer.
+        if not confirms_pending:
+            arm_pending_investigation_offer(
+                session,
+                user_text=original_user_text,
+                assistant_text=outcome.response_text,
+                observation=outcome.evidence_for_offer,
+            )
 
         return accounting.finalize(
             TurnResult(

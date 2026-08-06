@@ -287,7 +287,8 @@ def test_connected_integrations_block_renders_state() -> None:
 
     none_block = connected_integrations_block(_ctx(integrations=(), integrations_known=True))
     assert "none" in none_block
-    assert "explicit investigate instructions still emit investigation_start" in none_block.lower()
+    assert "does not gate diagnostic" in none_block.lower()
+    assert "investigation_start always" in none_block.lower()
 
     listed = connected_integrations_block(
         _ctx(
@@ -296,6 +297,8 @@ def test_connected_integrations_block_renders_state() -> None:
         )
     )
     assert "github, posthog_mcp, sentry" in listed
+    # Connected listing still must not imply auto-investigate on diagnostic asks.
+    assert "does not gate diagnostic" in listed.lower()
 
 
 def test_skills_loader_bundles_architecture_audit_skill() -> None:

@@ -3,12 +3,25 @@
 Schedule confirmation must not scrape Want-me-to prose. The turn that proposes
 the schedule writes a :class:`PendingScheduleOffer` onto the session; ``yes``
 reads that object and becomes a literal ``/cron add …`` with no regex.
+
+Investigation offers follow the same pattern: when the assistant closer matches
+:meth:`PendingInvestigationOffer.want_me_to_body`, the turn arms a
+:class:`PendingInvestigationOffer` (alert_text from the diagnostic turn +
+evidence — not from prose). ``yes`` expands to a deterministic
+``investigation_start`` dispatch.
+
+Both offer types implement :class:`DispatchablePendingOffer` so expand / confirm /
+consume share one path (open for a third offer kind without editing the
+orchestrator).
 """
 
 from __future__ import annotations
 
 import shlex
 from dataclasses import dataclass
+from typing import Any, Protocol, runtime_checkable
+
+from core.agent_harness.session.want_me_to import offer_from_assistant_content
 
 # Common morning-report defaults → human cadence labels (exact cron match only).
 _CADENCE_LABELS: dict[str, str] = {
@@ -16,6 +29,32 @@ _CADENCE_LABELS: dict[str, str] = {
     "0 9 * * 1-5": "every weekday at 9am",
     "0 7 * * 1-5": "every weekday at 7am",
 }
+
+# Expanded yes → this marker + quoted alert_text. action_driver recognizes it
+# before the LLM path and emits investigation_start. Not a real slash command.
+INVESTIGATION_ACCEPT_MARKER = "opensre:investigation_start"
+
+# Canonical Want-me-to body for a full-investigation offer (INTERACTION_RULES).
+_INVESTIGATION_WANT_ME_TO_BODY = "run a full investigation"
+
+# Session attribute names that hold a pending affirmative (priority order for yes).
+_PENDING_OFFER_ATTRS: tuple[str, ...] = (
+    "pending_schedule_offer",
+    "pending_investigation_offer",
+)
+
+
+@runtime_checkable
+class DispatchablePendingOffer(Protocol):
+    """Structured offer that expands a bare yes into a deterministic dispatch."""
+
+    def to_dispatch_message(self) -> str:
+        """User-message form the action driver executes without an LLM."""
+        ...
+
+    def matches_expanded(self, expanded: str) -> bool:
+        """True when ``expanded`` is this offer's dispatch message."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +87,12 @@ class PendingScheduleOffer:
         # and the dispatcher tokenises this text before the CLI ever sees it.
         return "/cron " + " ".join(shlex.quote(arg) for arg in args)
 
+    def to_dispatch_message(self) -> str:
+        return self.to_slash_command()
+
+    def matches_expanded(self, expanded: str) -> bool:
+        return isinstance(expanded, str) and expanded.startswith("/cron ")
+
     def want_me_to_body(self) -> str:
         """Canonical closer body (no leading Want me to:) for the assistant to show."""
         cadence = _CADENCE_LABELS.get(self.cron.strip(), f"on cron {self.cron}")
@@ -58,4 +103,154 @@ class PendingScheduleOffer:
         return f"schedule this as a recurring {self.kind} {cadence} to {dest}"
 
 
-__all__ = ["PendingScheduleOffer"]
+@dataclass(frozen=True, slots=True)
+class PendingInvestigationOffer:
+    """A full investigation the user has been offered and has not yet confirmed."""
+
+    alert_text: str
+
+    def to_dispatch_message(self) -> str:
+        """User-message form that action_driver turns into investigation_start."""
+        alert = self.alert_text.strip()
+        return f"{INVESTIGATION_ACCEPT_MARKER} {shlex.quote(alert)}"
+
+    def matches_expanded(self, expanded: str) -> bool:
+        return isinstance(expanded, str) and expanded.startswith(INVESTIGATION_ACCEPT_MARKER)
+
+    def want_me_to_body(self) -> str:
+        """Canonical closer body (no leading Want me to:)."""
+        return _INVESTIGATION_WANT_ME_TO_BODY
+
+
+def parse_investigation_accept_message(message: str) -> str | None:
+    """Return alert_text when ``message`` is an investigation-accept dispatch."""
+    raw = message if isinstance(message, str) else ""
+    stripped = raw.strip()
+    prefix = INVESTIGATION_ACCEPT_MARKER
+    if not stripped.startswith(prefix):
+        return None
+    rest = stripped[len(prefix) :].strip()
+    if not rest:
+        return None
+    try:
+        parts = shlex.split(rest, posix=True)
+    except ValueError:
+        parts = [rest]
+    if not parts:
+        return None
+    alert = parts[0].strip()
+    return alert or None
+
+
+def assistant_offers_full_investigation(assistant_text: str) -> bool:
+    """True when the assistant closer is the canonical full-investigation offer.
+
+    Matches :meth:`PendingInvestigationOffer.want_me_to_body` via the shared
+    Want-me-to extractor — not a broad ``investigat`` scrape.
+    """
+    offer = offer_from_assistant_content(assistant_text)
+    if not offer:
+        return False
+    return _INVESTIGATION_WANT_ME_TO_BODY in offer.lower()
+
+
+def synthesize_investigation_alert_text(
+    user_text: str,
+    observation: str | None = None,
+    *,
+    max_evidence_chars: int = 800,
+) -> str:
+    """Build alert_text for investigation_start from the diagnostic turn."""
+    base = (user_text or "").strip()
+    evidence = (observation or "").strip()
+    if not evidence:
+        return base
+    snippet = evidence[:max_evidence_chars].rstrip()
+    if len(evidence) > max_evidence_chars:
+        snippet += "\n...[truncated]"
+    if not base:
+        return snippet
+    return f"{base}\n\nEvidence gathered:\n{snippet}"
+
+
+def _session_pending_offers(session: Any) -> list[tuple[str, DispatchablePendingOffer]]:
+    """Return (attr, offer) pairs present on ``session``, in expand priority order."""
+    found: list[tuple[str, DispatchablePendingOffer]] = []
+    for attr in _PENDING_OFFER_ATTRS:
+        offer = getattr(session, attr, None)
+        if isinstance(offer, DispatchablePendingOffer):
+            found.append((attr, offer))
+    return found
+
+
+def first_pending_offer(session: Any) -> DispatchablePendingOffer | None:
+    """Highest-priority pending offer on the session, if any."""
+    pairs = _session_pending_offers(session)
+    return pairs[0][1] if pairs else None
+
+
+def is_pending_offer_confirmation(session: Any, expanded: str) -> bool:
+    """True when ``expanded`` confirms a pending offer currently on ``session``."""
+    for _attr, offer in _session_pending_offers(session):
+        if offer.matches_expanded(expanded):
+            return True
+    return False
+
+
+def consume_confirmed_pending_offer(session: Any, expanded: str) -> bool:
+    """Clear the pending offer that ``expanded`` confirmed. Returns True if cleared."""
+    for attr, offer in _session_pending_offers(session):
+        if offer.matches_expanded(expanded):
+            setattr(session, attr, None)
+            return True
+    return False
+
+
+def clear_competing_pending_offers(session: Any, *, keep_attr: str) -> None:
+    """Clear every pending-offer attr except ``keep_attr`` (one affirmative at a time)."""
+    for attr in _PENDING_OFFER_ATTRS:
+        if attr == keep_attr:
+            continue
+        if hasattr(session, attr):
+            setattr(session, attr, None)
+
+
+def arm_pending_investigation_offer(
+    session: Any,
+    *,
+    user_text: str,
+    assistant_text: str,
+    observation: str | None = None,
+) -> PendingInvestigationOffer | None:
+    """Arm session.pending_investigation_offer after a canonical investigate closer.
+
+    ``alert_text`` is synthesized from the diagnostic user text + gather
+    evidence (structured), not scraped from assistant prose.
+    """
+    if not assistant_offers_full_investigation(assistant_text):
+        return None
+    alert = synthesize_investigation_alert_text(user_text, observation)
+    if not alert:
+        return None
+    if not hasattr(session, "pending_investigation_offer"):
+        return None
+    offer = PendingInvestigationOffer(alert_text=alert)
+    session.pending_investigation_offer = offer
+    clear_competing_pending_offers(session, keep_attr="pending_investigation_offer")
+    return offer
+
+
+__all__ = [
+    "INVESTIGATION_ACCEPT_MARKER",
+    "DispatchablePendingOffer",
+    "PendingInvestigationOffer",
+    "PendingScheduleOffer",
+    "arm_pending_investigation_offer",
+    "assistant_offers_full_investigation",
+    "clear_competing_pending_offers",
+    "consume_confirmed_pending_offer",
+    "first_pending_offer",
+    "is_pending_offer_confirmation",
+    "parse_investigation_accept_message",
+    "synthesize_investigation_alert_text",
+]

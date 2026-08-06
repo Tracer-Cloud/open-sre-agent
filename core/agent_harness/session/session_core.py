@@ -25,7 +25,10 @@ else:
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
-from core.agent_harness.session.pending_offer import PendingScheduleOffer
+from core.agent_harness.session.pending_offer import (
+    PendingInvestigationOffer,
+    PendingScheduleOffer,
+)
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState
@@ -142,6 +145,9 @@ class SessionCore:
 
     pending_schedule_offer: PendingScheduleOffer | None = None
     """Structured schedule awaiting bare yes — set by propose_scheduled_delivery."""
+
+    pending_investigation_offer: PendingInvestigationOffer | None = None
+    """Structured investigation awaiting bare yes — armed after Want-me-to closer."""
 
     # Infra keys pulled from a completed investigation state and carried into the
     # next investigation. A class-level tuple so callers have a single source for
@@ -370,6 +376,7 @@ class SessionCore:
         )
         self.last_synthetic_observation_path = None
         self.pending_schedule_offer = None
+        self.pending_investigation_offer = None
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
             self.session_id = str(uuid.uuid4())

@@ -11,6 +11,7 @@ from platform.scheduler.delivery import (
     rocketchat_delivery_ready,
     slack_can_deliver,
     slack_delivery_ready,
+    task_can_deliver,
     telegram_delivery_ready,
 )
 from platform.scheduler.types import Provider
@@ -138,3 +139,100 @@ class TestDeliveryReadiness:
         )
         assert slack_can_deliver({"webhook_url": "https://hooks.slack.com/x"}, chat_id="") is True
         assert slack_can_deliver({}, chat_id="") is False
+
+
+class TestTaskCanDeliver:
+    def _isolate(self, monkeypatch, *, slack: dict, telegram: dict) -> None:
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_slack_credentials", lambda _p: slack
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_telegram_credentials", lambda _p: telegram
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_rocketchat_credentials", lambda _p: {}
+        )
+
+    def test_slack_task_without_a_destination_cannot_deliver(self, monkeypatch) -> None:
+        # Arrange: bot token but no chat_id — chat.postMessage has no channel
+        # to post to.
+        self._isolate(monkeypatch, slack={"access_token": "xoxb"}, telegram={})
+
+        # Act / Assert
+        assert task_can_deliver("slack", chat_id="") is False
+
+    def test_slack_task_with_a_channel_can_deliver(self, monkeypatch) -> None:
+        # Arrange
+        self._isolate(monkeypatch, slack={"access_token": "xoxb"}, telegram={})
+
+        # Act / Assert
+        assert task_can_deliver("slack", chat_id="C0123ABCD") is True
+
+    def test_webhook_only_slack_delivers_without_a_chat_id(self, monkeypatch) -> None:
+        # Arrange: a webhook carries its own destination, so an empty chat_id is
+        # legitimate here — counting it as broken would understate health.
+        self._isolate(monkeypatch, slack={"webhook_url": "https://hooks.slack.com/x"}, telegram={})
+
+        # Act / Assert
+        assert task_can_deliver("slack", chat_id="") is True
+
+    def test_unconfigured_provider_cannot_deliver(self, monkeypatch) -> None:
+        # Arrange: a chat id is not enough when the transport has no credentials.
+        self._isolate(monkeypatch, slack={}, telegram={})
+
+        # Act / Assert
+        assert task_can_deliver("telegram", chat_id="-1001234567890") is False
+
+    def test_configured_telegram_with_a_chat_id_can_deliver(self, monkeypatch) -> None:
+        # Arrange
+        self._isolate(monkeypatch, slack={}, telegram={"bot_token": "tok"})
+
+        # Act / Assert
+        assert task_can_deliver("telegram", chat_id="-1001234567890") is True
+
+    def test_unsupported_provider_cannot_deliver(self, monkeypatch) -> None:
+        # Arrange: discord is a Provider member with no delivery path here.
+        self._isolate(monkeypatch, slack={}, telegram={"bot_token": "tok"})
+
+        # Act / Assert
+        assert task_can_deliver("discord", chat_id="123") is False
+
+    def test_task_own_credentials_count_toward_deliverability(self, monkeypatch) -> None:
+        # Arrange: no global Telegram credentials, but the task carries its own
+        # bot token in params — the executor resolves params first, so the
+        # readiness check must too.
+        def _params_only(task_params: dict[str, str]) -> dict[str, str]:
+            return dict(task_params)
+
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_telegram_credentials", _params_only
+        )
+
+        # Act / Assert
+        assert (
+            task_can_deliver("telegram", chat_id="-1001234567890", task_params={"bot_token": "tok"})
+            is True
+        )
+        assert task_can_deliver("telegram", chat_id="-1001234567890", task_params={}) is False
+
+    def test_rocketchat_needs_token_trio_and_chat_id(self, monkeypatch) -> None:
+        # Arrange: the executor delivers Rocket.Chat via token credentials only;
+        # a webhook cannot honor the task's explicit chat_id.
+        trio = {"server_url": "https://rc.example", "auth_token": "tok", "user_id": "u1"}
+
+        def _trio(_task_params: dict[str, str]) -> dict[str, str]:
+            return dict(trio)
+
+        def _webhook_only(_task_params: dict[str, str]) -> dict[str, str]:
+            return {"webhook_url": "https://rc.example/hooks/x"}
+
+        monkeypatch.setattr("platform.scheduler.delivery.resolve_rocketchat_credentials", _trio)
+
+        # Act / Assert
+        assert task_can_deliver("rocketchat", chat_id="general") is True
+        assert task_can_deliver("rocketchat", chat_id="") is False
+
+        monkeypatch.setattr(
+            "platform.scheduler.delivery.resolve_rocketchat_credentials", _webhook_only
+        )
+        assert task_can_deliver("rocketchat", chat_id="general") is False
