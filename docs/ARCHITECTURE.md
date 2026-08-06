@@ -98,15 +98,12 @@ must not import each other — yet registering harness adapters needs both
 capability packages. `bootstrap/` is the only package allowed to import `tools`
 **and** `integrations` together.
 
-- **`bootstrap/process.py`** — `configure_process(ProcessProfile)`: shared boot
-  via a fixed `_STEP_ORDER` table (`BootStep`: env → Sentry → harness adapters →
-  scheduler runners → capability warnings → LLM preload). Profiles opt into
-  steps with a `frozenset`; they cannot invent a different sequence. Fixed
-  profiles: `CLI_PROFILE`, `GATEWAY_PROFILE`, `WEB_PROFILE`,
-  `SCHEDULER_WORKER_PROFILE`, `EMBEDDED_PROFILE`.
-- **`bootstrap/adapters.py`** — sole registration step functions:
-  `install_harness_adapters()` and `install_scheduler_runners()`. Surfaces and
-  gateway used to keep peer copies; do not reintroduce them.
+Every entrypoint boots through `configure_process(<profile>)` from
+`bootstrap/process.py`: a profile (CLI, gateway, web, scheduler worker,
+embedded) selects which boot steps run, and the step order is fixed by this
+package — profiles cannot invent a different sequence. Adapter and
+scheduler-runner registration lives in `bootstrap/adapters.py` and nowhere
+else; surfaces and gateway used to keep peer copies — do not reintroduce them.
 
 Host-owned concerns stay out of this package: CLI/gateway logging, Rich product
 ports, CLI’s update-tolerant Sentry init.
