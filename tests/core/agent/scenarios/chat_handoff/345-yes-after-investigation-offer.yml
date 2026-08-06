@@ -29,21 +29,23 @@ session:
       **Want me to:** run a full investigation.
 notes:
 - 'Phase 1b accept path. Session already holds PendingInvestigationOffer (as armed
-  after the diagnostic gather answer). Bare "yes" expands to opensre:investigation_start
-  and dispatches investigation_start with the seeded alert_text — no prose scrape,
-  no onboarding handoff.'
-- 'Planning asserts the deterministic accept path (same as action_driver literal
-  investigation_start). Oracle runs execute_shell_turn which expands via run_turn.'
+  after the diagnostic gather answer). Bare "yes" expands to /investigate alert:…
+  (literal slash → slash_invoke) with the seeded alert_text — no prose scrape,
+  no onboarding handoff, no separate static investigation_start bypass.'
+- 'Planning asserts the deterministic accept slash (same as action_driver literal
+  /slash path). Oracle runs execute_shell_turn which expands via run_turn.'
 turn:
   expected_kind: agent
 policy:
   executes_terminal_action: true
 planned_actions:
-- kind: investigation
+- kind: slash
   source: deterministic
-  target_surface: investigation
-  content: |
-    why is the database slow?
+  target_surface: slash
+  command: /investigate
+  args:
+  - |-
+    alert:why is the database slow?
 
     Evidence gathered:
     p95 latency elevated on checkout-db
@@ -61,9 +63,9 @@ response_contract:
   - shell
 history:
   expected:
-  - type: alert
+  - type: slash
     ok: true
 runs: 1
 tool_actions:
 - surface: dispatch
-  kind: investigation
+  kind: slash

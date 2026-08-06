@@ -448,16 +448,19 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     answer = case.answer
     expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
 
-    # Structured Want-me-to yes → investigation_start (action_driver literal path).
-    # Planning probes skip that driver, so assert the same deterministic outcome.
+    # Structured Want-me-to yes → /investigate alert:… (literal slash path).
+    # Planning probes skip that driver, so assert the same deterministic slash.
     accept_alert = parse_investigation_accept_message(prompt)
     if accept_alert is not None:
+        alert_arg = f"alert:{accept_alert}"
         actual_actions = [
             {
-                "kind": "investigation",
-                "content": accept_alert,
+                "kind": "slash",
+                "content": _slash_content("/investigate", [alert_arg]),
                 "source": "deterministic",
-                "target_surface": "investigation",
+                "target_surface": "slash",
+                "command": "/investigate",
+                "args": [alert_arg],
             }
         ]
         _assert_planned_actions_match(actual_actions, expected_actions)

@@ -227,10 +227,10 @@ just proposed. Resolve the referent against the assistant's previous reply:
   "/integrations remove github" and "/integrations list" and the user says
   "do both" → emit slash_invoke("/integrations", args=["remove", "github"])
   then slash_invoke("/integrations", args=["list"]).
-- If the USER MESSAGE was already expanded to `opensre:investigation_start '…'`
+- If the USER MESSAGE was already expanded to `/investigate alert:…`
   (structured PendingInvestigationOffer after Want me to: run a full
-  investigation), emit investigation_start with that alert_text. That form is
-  normally dispatched without an LLM when the tool is available.
+  investigation), emit slash_invoke for that exact command. That form is
+  normally dispatched without an LLM via the literal-`/slash` path.
 - If that reply ended with Want me to: offering more detail from a vendor tool
   (roster, message history, etc.), call the matching vendor tool for that
   offer — do NOT assistant_handoff and do NOT treat "yes" as an unrelated new

@@ -7,8 +7,9 @@ reads that object and becomes a literal ``/cron add …`` with no regex.
 Investigation offers follow the same pattern: when the assistant closer matches
 :meth:`PendingInvestigationOffer.want_me_to_body`, the turn arms a
 :class:`PendingInvestigationOffer` (alert_text from the diagnostic turn +
-evidence — not from prose). ``yes`` expands to a deterministic
-``investigation_start`` dispatch.
+evidence — not from prose). ``yes`` expands to a literal
+``/investigate alert:…`` slash — the same sanctioned deterministic path as
+schedule ``/cron`` (no separate static tool-call bypass).
 
 Both offer types implement :class:`DispatchablePendingOffer` so expand / confirm /
 consume share one path (open for a third offer kind without editing the
@@ -32,10 +33,6 @@ _CADENCE_LABELS: dict[str, str] = {
     "0 9 * * 1-5": "every weekday at 9am",
     "0 7 * * 1-5": "every weekday at 7am",
 }
-
-# Expanded yes → this marker + quoted alert_text. action_driver recognizes it
-# before the LLM path and emits investigation_start. Not a real slash command.
-INVESTIGATION_ACCEPT_MARKER = "opensre:investigation_start"
 
 # Canonical Want-me-to body for a full-investigation offer (INTERACTION_RULES).
 _INVESTIGATION_WANT_ME_TO_BODY = "run a full investigation"
@@ -119,13 +116,23 @@ class PendingInvestigationOffer:
 
     alert_text: str
 
-    def to_dispatch_message(self) -> str:
-        """User-message form that action_driver turns into investigation_start."""
+    def to_slash_command(self) -> str:
+        """Literal slash the action driver dispatches without an LLM round-trip.
+
+        Uses the existing ``/investigate alert:…`` form (also used by Discord
+        slash payloads) so accept rides the sanctioned literal-``/slash`` path —
+        same reliability bar as :meth:`PendingScheduleOffer.to_slash_command`.
+        """
         alert = self.alert_text.strip()
-        return f"{INVESTIGATION_ACCEPT_MARKER} {shlex.quote(alert)}"
+        # Quote the whole ``alert:…`` token so spaces/quotes in the body survive
+        # ``shlex.split`` in ``_literal_slash_tool_call`` / ``dispatch_slash``.
+        return "/investigate " + shlex.quote(f"alert:{alert}")
+
+    def to_dispatch_message(self) -> str:
+        return self.to_slash_command()
 
     def matches_expanded(self, expanded: str) -> bool:
-        return isinstance(expanded, str) and expanded.startswith(INVESTIGATION_ACCEPT_MARKER)
+        return isinstance(expanded, str) and expanded.startswith("/investigate ")
 
     def want_me_to_body(self) -> str:
         """Canonical closer body (no leading Want me to:)."""
@@ -133,22 +140,21 @@ class PendingInvestigationOffer:
 
 
 def parse_investigation_accept_message(message: str) -> str | None:
-    """Return alert_text when ``message`` is an investigation-accept dispatch."""
+    """Return alert_text when ``message`` is a structured investigate-accept slash."""
     raw = message if isinstance(message, str) else ""
     stripped = raw.strip()
-    prefix = INVESTIGATION_ACCEPT_MARKER
-    if not stripped.startswith(prefix):
-        return None
-    rest = stripped[len(prefix) :].strip()
-    if not rest:
+    if not stripped.startswith("/investigate"):
         return None
     try:
-        parts = shlex.split(rest, posix=True)
+        parts = shlex.split(stripped, posix=True)
     except ValueError:
-        parts = [rest]
-    if not parts:
+        parts = stripped.split()
+    if len(parts) < 2:
         return None
-    alert = parts[0].strip()
+    target = parts[1]
+    if not target.lower().startswith("alert:"):
+        return None
+    alert = target.split(":", 1)[1].strip()
     return alert or None
 
 
@@ -183,7 +189,7 @@ def ensure_canonical_investigation_closer(assistant_text: str) -> str:
     """Force an existing Want-me-to closer to the canonical investigate body.
 
     Dogfood failure: dual paste-alert / ``/integrations setup`` menus left
-    ``yes`` re-gathering or opening setup instead of ``investigation_start``.
+    ``yes`` re-gathering or opening setup instead of ``/investigate alert:…``.
     Non-investigation options are dropped (not rephrased above the closer) so
     the user-visible offer matches what bare ``yes`` accepts. A reply with no
     Want-me-to closer is returned unchanged — the assistant may legitimately
@@ -346,7 +352,6 @@ def _sync_last_assistant_message(session: Any, text: str) -> None:
 
 
 __all__ = [
-    "INVESTIGATION_ACCEPT_MARKER",
     "DispatchablePendingOffer",
     "PendingInvestigationOffer",
     "PendingScheduleOffer",

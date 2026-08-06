@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import (
-    INVESTIGATION_ACCEPT_MARKER,
     DispatchablePendingOffer,
     PendingInvestigationOffer,
     PendingScheduleOffer,
@@ -20,7 +19,7 @@ from core.agent_harness.session.pending_offer import (
     synthesize_investigation_alert_text,
 )
 from core.agent_harness.session.want_me_to import offer_from_assistant_content
-from core.agent_harness.turns.action_driver import _literal_investigation_accept_tool_call
+from core.agent_harness.turns.action_driver import _literal_slash_tool_call
 from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
@@ -29,7 +28,7 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 def test_dispatch_message_quotes_alert_text() -> None:
     offer = PendingInvestigationOffer(alert_text="why is the database slow?")
     msg = offer.to_dispatch_message()
-    assert msg.startswith(INVESTIGATION_ACCEPT_MARKER)
+    assert msg.startswith("/investigate ")
     assert parse_investigation_accept_message(msg) == "why is the database slow?"
 
 
@@ -55,7 +54,7 @@ def test_yes_uses_pending_investigation_not_prose() -> None:
         history,
         pending_investigation=pending,
     )
-    assert expanded.startswith(INVESTIGATION_ACCEPT_MARKER)
+    assert expanded.startswith("/investigate ")
     assert "schedule" not in expanded
     assert parse_investigation_accept_message(expanded) == pending.alert_text
 
@@ -77,13 +76,13 @@ def test_arm_clears_competing_schedule_offer() -> None:
     )
     assert session.pending_investigation_offer is not None
     assert session.pending_schedule_offer is None
-    # With only investigation pending, yes expands to investigation — not /cron.
+    # With only investigation pending, yes expands to /investigate — not /cron.
     expanded = expand_affirmative_follow_up(
         "yes",
         None,
         pending_offer=first_pending_offer(session),
     )
-    assert expanded.startswith(INVESTIGATION_ACCEPT_MARKER)
+    assert expanded.startswith("/investigate ")
 
 
 def test_assistant_offers_full_investigation_detects_canonical_closer() -> None:
@@ -136,15 +135,18 @@ def test_arm_pending_investigation_offer_sets_session() -> None:
     assert session.pending_schedule_offer is None
 
 
-def test_literal_investigation_accept_emits_investigation_start() -> None:
+def test_literal_investigation_accept_dispatches_via_slash_invoke() -> None:
+    """Structured yes → /investigate alert:… rides the sanctioned slash path."""
+
     class _Tool:
-        name = "investigation_start"
+        name = "slash_invoke"
 
     msg = PendingInvestigationOffer(alert_text="orders-api OOM").to_dispatch_message()
-    call = _literal_investigation_accept_tool_call(msg, [_Tool()])
+    call = _literal_slash_tool_call(msg, [_Tool()])
     assert call is not None
-    assert call.name == "investigation_start"
-    assert call.input["alert_text"] == "orders-api OOM"
+    assert call.name == "slash_invoke"
+    assert call.input["command"] == "/investigate"
+    assert call.input["args"] == ["alert:orders-api OOM"]
 
 
 def test_ensure_canonical_closer_rewrites_dogfood_kick_off_variant() -> None:
@@ -252,7 +254,7 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
 
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
         seen.append(text)
-        if not text.startswith(INVESTIGATION_ACCEPT_MARKER):
+        if not text.startswith("/investigate "):
             return ToolCallingTurnResult(
                 planned_count=1,
                 executed_count=1,
@@ -305,7 +307,7 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
         accounting=NoopTurnAccounting(),
     )
     assert len(seen) == 1
-    assert seen[0].startswith(INVESTIGATION_ACCEPT_MARKER)
+    assert seen[0].startswith("/investigate ")
     assert session.pending_investigation_offer is None
 
 
@@ -351,7 +353,7 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
         seen.append(text)
         # Diagnostic turn: hand off so gather+answer runs.
-        if not text.startswith(INVESTIGATION_ACCEPT_MARKER):
+        if not text.startswith("/investigate "):
             return ToolCallingTurnResult(
                 planned_count=1,
                 executed_count=1,
@@ -408,7 +410,7 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
     )
 
     assert len(seen) == 1
-    assert seen[0].startswith(INVESTIGATION_ACCEPT_MARKER)
+    assert seen[0].startswith("/investigate ")
     assert parse_investigation_accept_message(seen[0]) is not None
     assert "why is the database slow?" in (parse_investigation_accept_message(seen[0]) or "")
     assert session.pending_investigation_offer is None
@@ -421,7 +423,7 @@ def test_failed_investigation_keeps_pending_offer() -> None:
     )
 
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
-        assert text.startswith(INVESTIGATION_ACCEPT_MARKER)
+        assert text.startswith("/investigate ")
         return ToolCallingTurnResult(
             planned_count=1,
             executed_count=1,

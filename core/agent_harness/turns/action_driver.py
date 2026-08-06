@@ -413,38 +413,6 @@ def _slash_tokens(stripped: str) -> tuple[str, list[str]]:
     return parts[0], parts[1:]
 
 
-def _literal_investigation_accept_tool_call(
-    message: str, agent_tools: list[Any]
-) -> ToolCall | None:
-    """Deterministic ``investigation_start`` for a structured Want-me-to yes.
-
-    ``expand_affirmative_follow_up`` rewrites bare yes after
-    :class:`~core.agent_harness.session.pending_offer.PendingInvestigationOffer`
-    into ``opensre:investigation_start '<alert>'``. That must not go through the
-    action-agent LLM (same reliability bar as ``/cron`` schedule confirms).
-
-    Sanctioned exception to the "no non-slash deterministic bypass" rule in
-    ``surfaces/interactive_shell/AGENTS.md``: only the structured accept marker
-    (not free-form prose) takes this path, and only when ``investigation_start``
-    is an available tool this turn. Surfaces that disable the investigation
-    capability (gateway) must not arm the pending offer — see ``run_turn``.
-    """
-    from core.agent_harness.session.pending_offer import parse_investigation_accept_message
-    from platform.harness_ports import strip_message_context_prefix
-
-    _, remainder = strip_message_context_prefix(message)
-    alert_text = parse_investigation_accept_message(remainder)
-    if not alert_text:
-        return None
-    if not any(getattr(tool, "name", None) == "investigation_start" for tool in agent_tools):
-        return None
-    return ToolCall(
-        id="direct_investigation_0",
-        name="investigation_start",
-        input={"alert_text": alert_text},
-    )
-
-
 def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall | None:
     """Deterministic ``slash_invoke`` for input the user typed as a literal ``/command``.
 
@@ -455,8 +423,11 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     LLM is unavailable — e.g. a provider with no credit — so users can still run
     ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
 
-    Also accepts schedule affirmatives that ``expand_affirmative_follow_up`` rewrote
-    into a leading ``/cron add …`` (after stripping a vendor context prefix).
+    Also accepts schedule / investigation affirmatives that
+    ``expand_affirmative_follow_up`` rewrote into a leading ``/cron add …`` or
+    ``/investigate alert:…`` (after stripping a vendor context prefix). Those
+    expands are themselves literal slash text — not a separate static tool-call
+    bypass — so they stay inside the repository-mandated action-selection path.
 
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
@@ -494,22 +465,15 @@ def _build_action_agent(
 ) -> ActionTurnPlan:
     """Build the Agent for one action turn; return an ``ActionTurnPlan``.
 
-    Detects the four branches — verbatim ``!shell``, investigation-accept,
-    literal ``/slash``, or LLM-selected — and picks a matching LLM
-    (deterministic tool-call or hosted factory), system prompt, and
-    user-message envelope. The caller only has to invoke ``.run()`` and shape
-    the result.
+    Detects the three branches — verbatim ``!shell``, literal ``/slash``
+    (including Want-me-to yes expanded to ``/cron`` / ``/investigate``), or
+    LLM-selected — and picks a matching LLM (deterministic tool-call or hosted
+    factory), system prompt, and user-message envelope. The caller only has to
+    invoke ``.run()`` and shape the result.
     """
     bang_command = _bang_shell_command(message)
-    investigation_call = (
-        None
-        if bang_command is not None
-        else _literal_investigation_accept_tool_call(message, agent_tools)
-    )
     slash_call = (
-        None
-        if bang_command is not None or investigation_call is not None
-        else _literal_slash_tool_call(message, agent_tools)
+        None if bang_command is not None else _literal_slash_tool_call(message, agent_tools)
     )
 
     if bang_command is not None:
@@ -524,11 +488,6 @@ def _build_action_agent(
             ]
         )
         system = "Execute the explicit shell_run tool call."
-        user_message = message
-    elif investigation_call is not None:
-        # Structured Want-me-to yes → investigation_start (no LLM round-trip).
-        llm = _StaticToolCallLLM([investigation_call])
-        system = "Execute the explicit investigation_start tool call."
         user_message = message
     elif slash_call is not None:
         # Explicit literal `/slash`. Dispatch through the same `slash_invoke`

@@ -512,7 +512,7 @@ def run_turn(
         # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
         # Skip when this turn already confirmed a pending offer, or when the
         # surface disabled the investigation capability (gateway) — otherwise
-        # yes expands to opensre:investigation_start with no tool to run.
+        # yes expands to /investigate alert:… with no investigation capability.
         if not confirms_pending and capability_not_explicitly_disabled(session, "investigation"):
             if (
                 route.intent == "gather_and_answer"

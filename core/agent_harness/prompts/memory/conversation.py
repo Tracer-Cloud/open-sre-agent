@@ -63,7 +63,7 @@ def expand_affirmative_follow_up(
     new vague request and hands off to the investigate-onboarding assistant.
 
     Structured :class:`~core.agent_harness.session.pending_offer.DispatchablePendingOffer`
-    instances (schedule → ``/cron``, investigation → ``opensre:investigation_start``)
+    instances (schedule → ``/cron``, investigation → ``/investigate alert:…``)
     expand without scraping Want-me-to prose. Pass ``pending_offer`` (preferred) or
     the typed kwargs; schedule kwargs win over investigation when both are set.
 

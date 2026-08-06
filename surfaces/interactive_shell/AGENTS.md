@@ -131,12 +131,11 @@ owning area rather than adding more logic to the caller.
        when the action-agent LLM is down). See
        `docs/interactive-shell-action-policy.md` ("Deterministic literal-`/slash`
        dispatch").
-    2. Structured Want-me-to *accept* markers after a pending offer armed this
-       session — schedule yes expands to `/cron …` (path 1); investigation yes
-       expands to `opensre:investigation_start '…'` → static
-       `investigation_start`. Only the marker form is deterministic; surfaces
-       that disable the investigation capability (gateway) must not arm the
-       pending offer.
+    2. Structured Want-me-to *accept* after a pending offer armed this session —
+       schedule yes expands to `/cron …`; investigation yes expands to
+       `/investigate alert:…`. Both are literal slash text and use path 1 only
+       (no separate static `investigation_start` bypass). Surfaces that disable
+       the investigation capability (gateway) must not arm the pending offer.
 - **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
   action agent never denies a turn. Because every terminal action is read-only,
   an unmatched/ambiguous/chatty clause is not a safety risk — the agent executes
