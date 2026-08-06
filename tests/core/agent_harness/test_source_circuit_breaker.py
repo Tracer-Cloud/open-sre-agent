@@ -179,7 +179,7 @@ def test_concurrent_failure_after_success_does_not_poison_siblings() -> None:
     assert hooks.before_tool_call is not None
 
     barrier = threading.Barrier(2)
-    errors: list[BaseException] = []
+    errors: list[Exception] = []
 
     def _succeed() -> None:
         try:
@@ -188,7 +188,7 @@ def test_concurrent_failure_after_success_does_not_poison_siblings() -> None:
                 _request("grafana", tool_name="query_grafana_metrics"),
                 ToolExecutionResult(content="cpu=0.2", is_error=False),
             )
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     def _fail() -> None:
@@ -198,7 +198,7 @@ def test_concurrent_failure_after_success_does_not_poison_siblings() -> None:
                 _request("grafana", tool_name="query_grafana_logs"),
                 _error_result(f"Max retries exceeded: {_TIMEOUT_MARKER}"),
             )
-        except BaseException as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(exc)
 
     threads = [threading.Thread(target=_succeed), threading.Thread(target=_fail)]
