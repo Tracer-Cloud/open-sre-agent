@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from platform.scheduler.delivery import (
+    SUPPORTED_DELIVERY_PROVIDERS,
     any_delivery_ready,
     delivery_provider_ready,
     delivery_setup_hint,
@@ -196,6 +197,17 @@ class TestTaskCanDeliver:
 
         # Act / Assert
         assert task_can_deliver("discord", chat_id="123") is False
+
+    def test_interactive_shell_tasks_always_can_deliver(self, monkeypatch) -> None:
+        # Local loop inbox needs no remote credentials; setup_state must not
+        # mark working interactive-shell schedules as undeliverable.
+        self._isolate(monkeypatch, slack={}, telegram={})
+
+        assert task_can_deliver("interactive_shell", chat_id="") is True
+        assert delivery_provider_ready("interactive_shell") is True
+        # Still not a remote digest channel — any_delivery_ready stays false.
+        assert any_delivery_ready() is False
+        assert Provider.INTERACTIVE_SHELL not in SUPPORTED_DELIVERY_PROVIDERS
 
     def test_task_own_credentials_count_toward_deliverability(self, monkeypatch) -> None:
         # Arrange: no global Telegram credentials, but the task carries its own

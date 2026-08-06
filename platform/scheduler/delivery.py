@@ -161,7 +161,13 @@ def _any_setup_hint() -> str:
 
 def delivery_provider_ready(provider: Provider | str) -> bool:
     """Return True when ``provider`` can deliver scheduled messages."""
-    spec = _SPECS_BY_NAME.get(_provider_name(provider))
+    name = _provider_name(provider)
+    # Local loop inbox — always available (executor ``_deliver_interactive_shell``).
+    # Not listed in ``_DELIVERY_SPECS`` so digest CLIs do not offer it as a
+    # chat/webhook channel and ``any_delivery_ready`` stays about remote sinks.
+    if name == Provider.INTERACTIVE_SHELL.value:
+        return True
+    spec = _SPECS_BY_NAME.get(name)
     return spec.ready() if spec is not None else False
 
 
@@ -180,7 +186,10 @@ def task_can_deliver(
     Slack a webhook carries its own destination, so an empty ``chat_id`` is
     legitimate there; the other providers require one.
     """
-    spec = _SPECS_BY_NAME.get(_provider_name(provider))
+    name = _provider_name(provider)
+    if name == Provider.INTERACTIVE_SHELL.value:
+        return True
+    spec = _SPECS_BY_NAME.get(name)
     if spec is None:
         return False
     return spec.can_deliver(dict(task_params or {}), chat_id)
@@ -195,6 +204,11 @@ def delivery_setup_hint(provider: Provider | str | None = None) -> str:
     """Human-readable setup guidance when delivery is not configured."""
     if provider is not None:
         name = _provider_name(provider)
+        if name == Provider.INTERACTIVE_SHELL.value:
+            return (
+                "Interactive-shell delivery writes to the local loop inbox; "
+                "no remote channel setup is required."
+            )
         spec = _SPECS_BY_NAME.get(name)
         if spec is not None:
             return spec.setup_hint

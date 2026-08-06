@@ -422,6 +422,12 @@ def _literal_investigation_accept_tool_call(
     :class:`~core.agent_harness.session.pending_offer.PendingInvestigationOffer`
     into ``opensre:investigation_start '<alert>'``. That must not go through the
     action-agent LLM (same reliability bar as ``/cron`` schedule confirms).
+
+    Sanctioned exception to the "no non-slash deterministic bypass" rule in
+    ``surfaces/interactive_shell/AGENTS.md``: only the structured accept marker
+    (not free-form prose) takes this path, and only when ``investigation_start``
+    is an available tool this turn. Surfaces that disable the investigation
+    capability (gateway) must not arm the pending offer — see ``run_turn``.
     """
     from core.agent_harness.session.pending_offer import parse_investigation_accept_message
     from platform.harness_ports import strip_message_context_prefix

@@ -309,6 +309,40 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
     assert session.pending_investigation_offer is None
 
 
+def test_run_turn_does_not_arm_investigation_when_capability_disabled() -> None:
+    """Gateway disables investigation — do not arm a pending that cannot dispatch."""
+    session = InMemorySessionStore()
+    session.available_capabilities = {"investigation": ()}
+
+    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        _ = text
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="",
+            handoff_contents=("diagnostic:checkout_502",),
+        )
+
+    class _Run:
+        response_text = "Empty evidence.\n\n**Want me to:** run a full investigation."
+
+    first = run_turn(
+        "why is checkout 502?",
+        session,
+        execute_actions=execute_actions,
+        answer=lambda *_a, **_k: _Run(),
+        gather=lambda *_a, **_k: "connection refused",
+        accounting=NoopTurnAccounting(),
+    )
+
+    assert session.pending_investigation_offer is None
+    # Closer left as the model wrote it — no force-normalize without a tool.
+    assert "run a full investigation" in (first.assistant_response_text or "")
+
+
 def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
     """Multi-turn accept path: diagnostic answer arms offer; yes expands+consumes."""
     session = InMemorySessionStore()

@@ -43,6 +43,7 @@ class InMemorySessionStore:
     resolved_integrations_cache: dict[str, Any] | None = None
     vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     records: list[tuple[str, str, bool]] = field(default_factory=list)
+    available_capabilities: dict[str, Any] = field(default_factory=dict)
 
     def record(
         self,

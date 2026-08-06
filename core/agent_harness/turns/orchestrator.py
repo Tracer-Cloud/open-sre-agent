@@ -50,6 +50,7 @@ from core.agent_harness.session.pending_offer import (
     is_pending_offer_confirmation,
 )
 from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
+from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
@@ -509,8 +510,10 @@ def run_turn(
 
         # Arm structured investigate-accept. Gather answers force the canonical
         # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
-        # Skip when this turn already confirmed a pending offer.
-        if not confirms_pending:
+        # Skip when this turn already confirmed a pending offer, or when the
+        # surface disabled the investigation capability (gateway) — otherwise
+        # yes expands to opensre:investigation_start with no tool to run.
+        if not confirms_pending and capability_not_explicitly_disabled(session, "investigation"):
             if (
                 route.intent == "gather_and_answer"
                 and not _is_prior_investigation_follow_up_handoff(handoff_contents)
