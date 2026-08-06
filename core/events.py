@@ -165,10 +165,14 @@ def runtime_event_from_tuple(kind: str, data: dict[str, Any]) -> RuntimeEvent | 
             data=payload,
         )
     if kind == "message_update":
+        # Tuple payloads (e.g. a ``tuple_payload_from_event`` round-trip of an
+        # event built without an iteration) may carry ``iteration=None`` —
+        # preserve it rather than crash on ``int(None)``.
+        raw_iteration = payload.get("iteration")
         return MessageUpdateEvent(
             message=payload.get("message"),
             delta=str(payload.get("content") or ""),
-            iteration=int(payload.get("iteration", -1)),
+            iteration=None if raw_iteration is None else int(raw_iteration),
             data=payload,
         )
     if kind == "tool_start":

@@ -108,6 +108,25 @@ def test_message_update_round_trips_between_tuple_and_runtime_shapes() -> None:
     assert data["has_tool_calls"] is True
 
 
+def test_message_update_with_none_iteration_round_trips_without_error() -> None:
+    """A tuple payload carrying ``iteration=None`` must map to ``iteration=None``.
+
+    ``tuple_payload_from_event`` writes ``event.iteration`` verbatim, and
+    ``MessageUpdateEvent.iteration`` defaults to ``None`` — the round-trip must
+    not crash on ``int(None)``.
+    """
+    source = MessageUpdateEvent(message=None, delta="hi")
+    payload = tuple_payload_from_event(source)
+    assert payload is not None
+    kind, data = payload
+    assert data["iteration"] is None
+
+    event = runtime_event_from_tuple(kind, data)
+    assert isinstance(event, MessageUpdateEvent)
+    assert event.iteration is None
+    assert event.delta == "hi"
+
+
 def test_emit_routes_mapped_kind_to_runtime() -> None:
     runtime_seen: list[RuntimeEvent] = []
     e = _Emitter()
