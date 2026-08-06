@@ -9,10 +9,10 @@ from urllib.parse import quote
 
 import httpx
 
-from platform.filestorage import BucketExposure, PublicAccessStatus
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.enums import BuiltInProvider, RemoteSyncField
+from platform.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncUnavailableError
+from platform.filestorage.exposure import PublicAccessStatus
 from platform.filestorage.ports import RemoteObject
 from platform.filestorage.providers.registry import SetupExtraField, register_object_store
 
@@ -23,6 +23,11 @@ CREDENTIAL_HINT = (
 EXTRA_FIELDS = (
     SetupExtraField(RemoteSyncField.PROFILE, "Azure Storage Account Name (e.g., opensre)"),
 )
+_API_VERSION = "2026-04-06"
+
+
+def _get_account_name(config: RemoteSyncConfig) -> str:
+    return config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
 
 
 class AzureBlobObjectStore:
@@ -36,13 +41,11 @@ class AzureBlobObjectStore:
         client: httpx.Client | None = None,
     ) -> None:
         self._config = config
-        self._account_name = config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
-
+        self._account_name = _get_account_name(config)
         if not self._account_name:
             raise RemoteSyncUnavailableError(
                 "Azure storage account name is missing. Set it during setup or via AZURE_STORAGE_ACCOUNT_NAME."
             )
-
         self._token = token if token is not None else _get_azure_access_token()
         self._client = client if client is not None else httpx.Client(timeout=30.0)
 
@@ -129,7 +132,7 @@ class AzureBlobObjectStore:
         return quote(self._config.key_for(key), safe="/")
 
     def _auth_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token}", "x-ms-version": "2026-04-06"}
+        return {"Authorization": f"Bearer {self._token}", "x-ms-version": _API_VERSION}
 
     def _strip_prefix(self, full_key: str) -> str:
         prefix = f"{self._config.prefix.rstrip('/')}/"
@@ -218,7 +221,7 @@ def _factory(config: RemoteSyncConfig) -> AzureBlobObjectStore:
 def check_public_access(
     config: RemoteSyncConfig, *, client: httpx.Client | None = None
 ) -> PublicAccessStatus:
-    account_name = config.profile or os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
+    account_name = _get_account_name(config)
     if not account_name:
         return PublicAccessStatus(BucketExposure.UNKNOWN, "AZURE_STORAGE_ACCOUNT_NAME is missing")
 
@@ -235,7 +238,7 @@ def check_public_access(
         response = cl.get(
             url,
             params={"restype": "container"},
-            headers={"Authorization": f"Bearer {token}", "x-ms-version": "2026-04-06"},
+            headers={"Authorization": f"Bearer {token}", "x-ms-version": _API_VERSION},
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -265,4 +268,10 @@ register_object_store(
     public_access_checker=check_public_access,
 )
 
-__all__ = ["CREDENTIAL_HINT", "EXTRA_FIELDS", "PROVIDER_NAME", "AzureBlobObjectStore"]
+__all__ = [
+    "CREDENTIAL_HINT",
+    "EXTRA_FIELDS",
+    "PROVIDER_NAME",
+    "AzureBlobObjectStore",
+    "check_public_access",
+]
