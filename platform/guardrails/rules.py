@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +16,7 @@ from config.constants import OPENSRE_HOME_DIR
 logger = logging.getLogger(__name__)
 
 
-class GuardrailAction(Enum):
+class GuardrailAction(StrEnum):
     """Action to take when a guardrail rule matches."""
 
     REDACT = "redact"
