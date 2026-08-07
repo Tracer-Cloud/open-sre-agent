@@ -19,6 +19,7 @@ from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_dispatch import (
     BufferOutputSink,
     HeadlessAgent,
@@ -317,7 +318,7 @@ def _dispatch_turn(
         prompts=DefaultPromptContextProvider(session),
         reasoning=DefaultReasoningClientProvider(output=output),
         accounting=NoopTurnAccounting(),
-        gather_enabled=gather_enabled,
+        gather=GatherPorts(enabled=gather_enabled),
     )
     return agent.dispatch(message)
 

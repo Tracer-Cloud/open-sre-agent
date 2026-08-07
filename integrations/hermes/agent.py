@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 IncidentSink = Callable[[HermesIncident], None]
 
 DEFAULT_LOG_PATH: Final[Path] = Path.home() / ".hermes" / "logs" / "errors.log"
-_THREAD_JOIN_TIMEOUT_S: Final[float] = 2.0
+_THREAD_JOIN_TIMEOUT_SECONDS: Final[float] = 2.0
 
 
 class HermesAgent:
@@ -102,7 +102,7 @@ class HermesAgent:
         )
         self._thread.start()
 
-    def stop(self, *, timeout: float = _THREAD_JOIN_TIMEOUT_S) -> None:
+    def stop(self, *, timeout: float = _THREAD_JOIN_TIMEOUT_SECONDS) -> None:
         """Signal the polling thread and wait until it has exited.
 
         The poller is joined for up to ``timeout`` seconds first so slow

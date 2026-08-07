@@ -49,7 +49,6 @@ from core.agent_harness.session.pending_offer import (
     first_pending_offer,
     is_pending_offer_confirmation,
 )
-from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
@@ -295,6 +294,20 @@ def _is_prior_investigation_follow_up_handoff(handoff_contents: tuple[str, ...])
     return is_prior_investigation_follow_up(handoff_contents)
 
 
+def _is_non_investigation_handoff(handoff_contents: tuple[str, ...]) -> bool:
+    """True for setup/query handoffs that must not force an investigate Want-me-to.
+
+    ``finalize_gather_investigation_offer`` rewrites any existing Want-me-to
+    closer to "run a full investigation". That is correct for diagnostic gather
+    turns, but wrong for ``database_query:*`` / ``provider:*`` handoffs where the
+    next step is connect/setup guidance.
+    """
+    return any(
+        content.startswith("database_query:") or content.startswith("provider:")
+        for content in handoff_contents
+    )
+
+
 @dataclass(frozen=True)
 class _RouteOutcome:
     """Effects of one routed path, ready to pack into ``TurnResult``."""
@@ -438,7 +451,6 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
-    agent_turn_executed_slashes(session).clear()
 
     action_result = execute_actions(
         text,
@@ -527,13 +539,16 @@ def run_turn(
 
         # Arm structured investigate-accept. Gather answers force the canonical
         # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
-        # Skip when this turn already confirmed a pending offer, or when the
-        # surface disabled the investigation capability (gateway) — otherwise
-        # yes expands to /investigate alert:… with no investigation capability.
+        # Skip when this turn already confirmed a pending offer, when the
+        # surface disabled the investigation capability (gateway), or when the
+        # handoff is setup/query guidance — otherwise yes expands to
+        # /investigate alert:… with no investigation capability (or the wrong
+        # next step for a MySQL/MCP connect request).
         if not confirms_pending and capability_not_explicitly_disabled(session, "investigation"):
             if (
                 route.intent == "gather_and_answer"
                 and not _is_prior_investigation_follow_up_handoff(handoff_contents)
+                and not _is_non_investigation_handoff(handoff_contents)
             ):
                 response_text, _offer = finalize_gather_investigation_offer(
                     session,
@@ -550,8 +565,9 @@ def run_turn(
                     assistant_text=outcome.response_text,
                     observation=outcome.evidence_for_offer,
                 )
-                # Follow-up gather answers may still have deferred paint if a
-                # prior path set defer=True; flush so non-TTY hosts see text.
+                # Follow-up / setup-query gather answers may still have deferred
+                # paint if a prior path set defer=True; flush so non-TTY hosts
+                # see text.
                 if route.intent == "gather_and_answer":
                     _finish_streamed_response(output, outcome.response_text)
 

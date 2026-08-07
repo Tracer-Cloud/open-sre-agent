@@ -11,9 +11,9 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
 from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
 from surfaces.cli.commands.cron import _validate_cron_and_timezone
-from surfaces.shared.runtime_bootstrap import install_runtime
 
 _console = Console()
 _PROVIDER_CHOICES = [p.value for p in SUPPORTED_DELIVERY_PROVIDERS]
@@ -54,7 +54,7 @@ def posthog_report_run(stats_period: str, metrics: str) -> None:
     from platform.scheduler.agent_runner import invoke_agent_runner
 
     require_posthog_integration()
-    install_runtime()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     payload: dict[str, str] = {
         "source": "cli_posthog_metric_report",
         "stats_period": stats_period.strip() or DEFAULT_POSTHOG_PERIOD,
@@ -234,7 +234,7 @@ def posthog_report_schedule_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    install_runtime()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.POSTHOG_METRIC_REPORT:
         _console.print(f"[red]Error: PostHog report task {task_id} not found.[/red]")

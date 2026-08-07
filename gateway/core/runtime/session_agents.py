@@ -16,6 +16,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
+from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.core.runtime.headless_subprocess_presenter import (
     headless_subprocess_presenter_factory,
@@ -126,7 +127,7 @@ class SessionAgentPool:
             observer_factory=lambda _message: observer,
             subprocess_presenter_factory=headless_subprocess_presenter_factory,
             slash_ports_factory=self._slash_ports_factory,
-            gather_enabled=True,
+            gather=GatherPorts(),
             is_tty=False,
         )
         if session_id:

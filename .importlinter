@@ -1,5 +1,6 @@
 [importlinter]
 root_packages =
+    bootstrap
     surfaces
     config
     core

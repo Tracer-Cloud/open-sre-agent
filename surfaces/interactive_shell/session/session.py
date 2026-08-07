@@ -104,7 +104,6 @@ class Session(SessionCore):
         self.terminal.pending_prompt_default = None
         self.terminal.pending_prompt_autosubmit = False
         self.terminal.exclusive_stdin_active = False
-        self.terminal.agent_turn_executed_slashes.clear()
         self.terminal.background_mode_enabled = False
         self.terminal.background_investigations.clear()
         # Preserve notification channel prefs across /new like trust_mode.

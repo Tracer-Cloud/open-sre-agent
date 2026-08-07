@@ -83,6 +83,7 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.slack.tools",
     "integrations.snowflake.tools",
     "integrations.splunk.tools",
+    "integrations.sqs.tools",
     "integrations.supabase.tools",
     "integrations.telegram.tools",
     "integrations.tempo.tools",

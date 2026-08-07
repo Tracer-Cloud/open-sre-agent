@@ -14,11 +14,20 @@ from gateway.web import webapp
 
 
 def test_webapp_module_calls_init_sentry_on_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange: importing the module runs shared process boot, which is idempotent
+    # per profile — an earlier import in this session already consumed it, so a
+    # reload alone would assert against a no-op.
+    from bootstrap.process import reset_process_runtime_for_tests
+
     init_mock = MagicMock()
     monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", init_mock)
+    reset_process_runtime_for_tests()
 
+    # Act
     importlib.reload(webapp)
 
+    # Assert: the web entrypoint still reports crashes, now via WEB_PROFILE
+    # rather than a direct call.
     init_mock.assert_called_once()
 
 

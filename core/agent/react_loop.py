@@ -221,6 +221,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             before_tool_call=self._host._tool_hooks.before_tool_call,
             after_tool_call=self._host._tool_hooks.after_tool_call,
             on_tool_update=on_tool_update,
+            before_tool_batch=self._host._tool_hooks.before_tool_batch,
         )
         results = execute_tool_calls(
             response.tool_calls,

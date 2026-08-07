@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
-from core.agent_harness.turns.headless_adapters import BufferOutputSink
+from core.agent_harness.harness import AgentSession
 from platform.harness_ports import configured_integration_services
 from platform.scheduler.agent_runner import AgentPayload
 
@@ -33,28 +31,12 @@ def run_github_pr_sweep(payload: AgentPayload) -> str:
     del payload  # reserved for future repo/org scoping
     _require_github_configured()
 
-    harness = AgentHarness(
-        HarnessConfig(
-            load_env=True,
-            hydrate_integrations=True,
-            warm_integrations=True,
-            persistent_tasks=False,
-            open_storage=False,
-        )
-    )
-    startup = harness.startup()
-    session = startup.session
-    output = BufferOutputSink()
-    agent = build_default_headless_agent(
-        session=session,
-        output=output,
+    result = AgentSession.run_headless_turn(
+        _PR_SWEEP_PROMPT,
         logger=logger,
-        message=_PR_SWEEP_PROMPT,
         gather_enabled=True,
         is_tty=False,
     )
-    harness.attach_agent(agent)
-    result = harness.dispatch_message(_PR_SWEEP_PROMPT)
     report = result.primary_response_text
     if not result.answered or not report:
         raise RuntimeError(

@@ -92,19 +92,22 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.rebind_for_resume` then :meth:`SessionManager.restore_context`.
   REPL exit calls :meth:`SessionManager.close` via
   :meth:`SessionManager.for_session`.
-- **gateway** — `gateway/core/runtime/manager.py` bootstraps the process via
-  :meth:`SessionManager.create` (``open_storage=False``).
-  `gateway/core/storage/session/resolver.py::SessionResolver` owns per-chat
-  chat-id ↔ session-id binding + metadata; it delegates `create` / `resolve` /
-  `rotate` to `SessionManager`. Turn dispatch uses `HeadlessAgent` via
+- **gateway** — process boot is
+  :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``);
+  `GatewayManager` stays lifecycle-only (credentials → process boot →
+  transports). Per-chat session create/resolve stays on
+  `gateway/core/storage/session/resolver.py::SessionResolver` →
+  `SessionManager`. Turn dispatch uses `HeadlessAgent` via
   `gateway/core/runtime/turn_handler.py`'s `GatewayTurnHandler` with
   :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
   built from the **live per-chat session** each turn (same tool resolution as
   shell). There is no separate gateway-owned ``Agent`` instance.
-- **headless** — ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
-  bypass ``SessionManager`` by design: they never persist to JSONL and do not
-  need create/resolve/rotate/close. Tool-calling turns still run through the
-  shared harness; only session lifecycle is skipped.
+- **headless / scheduled** — non-TTY hosts use
+  :meth:`AgentSession.run_headless_turn` (or ``start`` + ``chat``).
+  That is the same ``run_turn`` engine as the shell; do not reassemble
+  ``BufferOutputSink`` + ``build_default_headless_agent`` in integrations.
+  Ephemeral in-memory sessions (``headless_dispatch.InMemorySessionStore``)
+  bypass ``SessionManager`` by design when tests need no JSONL.
 
 `Session` (formerly `ReplSession`) is the in-memory session object used by every
 surface, including headless gateway — it is not REPL-specific. Do not re-add
@@ -178,10 +181,15 @@ shape; if it answers directly without tools it is the direct-answer shape.
    `EvidenceGatherer`); do not import surface code into `agent_harness/`.
 4. Add or extend guards in `tests/core/agent_harness/test_agent_shapes.py` when
    you introduce a new entrypoint or rename a shape seam.
+5. Public host API is `AgentSession.chat` / `AgentSession.investigate`
+   (`tests/core/agent_harness/test_agent_session_api.py`). Adapters build
+   `ChatTurnBindings` and call `dispatch_chat_turn` internally — never add a
+   new top-level binder that calls `run_turn` directly
+   (`tests/core/agent_harness/test_chat_api.py`).
 
-**Read order for new code:** this file → `turns/orchestrator.py` (`run_turn`) →
-`core/agent/agent.py` (facade + wiring) → `core/agent/react_loop.py`
-(`run_react_loop`, the tool-calling algorithm).
+**Read order for new code:** this file → `harness.py` (`AgentSession`) →
+`turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
+→ `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
 ## Investigation agent — the tool-calling shape with a custom loop
 
@@ -190,6 +198,33 @@ composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
 (`core.agent.mixins`) instead of subclassing `Agent`, with a specialised ReAct
 `run()` (seed calls, evidence collection, duplicate detection, stagnation
 handling). It is still the tool-calling shape — composition, not a forked loop.
+
+## Four hosts, one AgentSession API
+
+**Public host contract:** :class:`~core.agent_harness.harness.AgentSession`
+with ``chat`` and ``investigate``. Compatibility aliases:
+``AgentHarness`` / ``dispatch_message`` / ``HarnessConfig``.
+
+**Internal chat seam:** adapters build
+:class:`~core.agent_harness.turns.chat_api.ChatTurnBindings`, then call
+:func:`~core.agent_harness.turns.chat_api.dispatch_chat_turn` (thin facade
+over ``run_turn``). Do **not** add new top-level chat entrypoints that call
+``run_turn`` directly — adapters only.
+
+**Internal investigate seam:** payload runner installed by
+``bootstrap.adapters.install_investigation_api`` (via harness adapters).
+``agent_harness`` must not import ``tools``.
+
+| Host | Process boot | Host call |
+|------|--------------|-----------|
+| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `execute_shell_turn` → TTY `ChatDispatcher` → `AgentSession.chat` |
+| Gateway chat | `configure_process(GATEWAY_PROFILE)` | `GatewayTurnHandler` → `SessionAgentPool` → `AgentSession.chat` |
+| Standalone web | `configure_process(WEB_PROFILE)` | `AgentSession.investigate` (Path 2) |
+| Scheduled digests | adapters via profile; runners via `install_scheduler_runners` | `AgentSession.run_headless_turn` → `chat` |
+
+Do **not** force the REPL through `HeadlessAgent`. Shell is the TTY adapter of
+the same engine; headless agents are for non-TTY hosts. Do **not** invent a
+second public investigate entrypoint beside ``AgentSession.investigate``.
 
 ## Keep the loop primitive in core
 

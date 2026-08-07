@@ -74,6 +74,30 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "mean, do NOT ask for alert context, and do NOT suggest starting a new "
         "investigation.\n\n"
     ),
+    # Prefix key: ``build_handoff_guidance_block`` matches any
+    # ``database_query:<topic>`` tag (mysql_active_connections, mariadb_dashboard, …).
+    "database_query:": (
+        "The action planner handed off a named database or tool query (MySQL, "
+        "MariaDB, etc.). Name the database/tool the user asked about in your answer "
+        "(do not refer to it only as 'that query'). If it is not connected in this "
+        "session, explain how to connect it: `/mcp connect <server>` for MCP "
+        "database tools, or `/integrations setup <service>` when a first-party "
+        "integration exists. Do NOT offer a full incident investigation for a "
+        "read-only connection or query request. Do NOT answer with only a generic "
+        "'no integrations' line that omits the named database/tool.\n\n"
+    ),
+    # Prefix key: bare incident / symptom statements (oracle 325 family).
+    "incident_description:": (
+        "The action planner handed off a bare incident or symptom description "
+        "(no explicit investigate verb). In your reply, name the user's stated "
+        "service/component and any error codes or rates they gave (for example "
+        "checkout, 502, 30%) before asking for more context or offering a full "
+        "investigation. Do not paraphrase the incident into a generic "
+        "'production error pattern' that drops those specifics. With little or "
+        "no connected evidence, still acknowledge the reported symptoms, say "
+        "what you would check next, and close with **Want me to:** run a full "
+        "investigation — do not claim you cannot help.\n\n"
+    ),
 }
 
 # The short goal contract (shell only). Facts stay in setup_state CONTEXT;
@@ -177,6 +201,10 @@ INTERACTION_RULES = (
     "not invent subcommands. For investigation-flow questions, use the "
     "investigation flow reference below and do not claim the pipeline "
     "definition is unavailable.\n"
+    "When the user stated a concrete service, error code, or rate (for "
+    "example checkout returning 502s for 30% of requests), keep those terms "
+    "in the reply — do not replace them with a vague 'production error "
+    "pattern' when asking for more context or offering investigation.\n"
     "For vague operational questions (for example why a database is slow): "
     "when gathered tool results below contain relevant evidence, lead with "
     "what that evidence shows. Restate the question and ask for the target "

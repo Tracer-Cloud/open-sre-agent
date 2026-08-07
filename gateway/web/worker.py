@@ -22,10 +22,8 @@ InvestigationRunner = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
-    from tools.investigation.capability import (
-        resolve_investigation_context,
-        run_investigation_payload,
-    )
+    from core.agent_harness import AgentSession
+    from tools.investigation.capability import resolve_investigation_context
 
     raw_alert = trigger.get("raw_alert") or {}
     investigation_metadata = resolve_investigation_context(
@@ -33,9 +31,13 @@ def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
         alert_name=trigger.get("alert_name"),
         severity=trigger.get("severity"),
     )
-    return run_investigation_payload(
-        raw_alert=raw_alert,
-        investigation_metadata=investigation_metadata,
+    return (
+        AgentSession()
+        .investigate(
+            raw_alert,
+            investigation_metadata=investigation_metadata,
+        )
+        .as_dict()
     )
 
 

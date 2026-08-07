@@ -17,6 +17,7 @@ import pytest
 
 from core.agent_harness.harness import AgentHarness, HarnessConfig
 from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
+from core.agent_harness.turns.gather_ports import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -114,7 +115,7 @@ def _controlled_agent(
         output=sink,
         prompts=prompts if prompts is not None else EmptyPromptContextProvider(),
         reasoning=StaticReasoningClientProvider(client=_EchoClient()),
-        gather_enabled=False,
+        gather=GATHER_DISABLED,
     )
     return agent, sink
 
@@ -164,7 +165,7 @@ def test_documented_custom_sink_path_captures_streamed_answer(
     agent = build_default_headless_agent(session=startup.session, output=sink)
     agent._tools = NullToolProvider()  # noqa: SLF001
     agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    agent._gather_enabled = False  # noqa: SLF001
+    agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
     harness.attach_agent(agent)
 
     # Act
@@ -184,7 +185,7 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
     assert harness.agent is not None
     harness.agent._tools = NullToolProvider()  # noqa: SLF001
     harness.agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    harness.agent._gather_enabled = False  # noqa: SLF001
+    harness.agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
 
     # Act
     result = harness.dispatch_message("what is our on-call policy?")

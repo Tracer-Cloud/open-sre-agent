@@ -59,10 +59,10 @@ def repl_foreground_renderer(console: Console | None = None) -> session_runner.S
     def _render(events: Iterator[StreamEvent]) -> dict[str, Any]:
         if console is None:
             return dict(StreamRenderer(local=True).render_stream(events))
-        # Stages reach the tracker through ``get_tracker``, so the caller's
-        # console has to be published before the first stage starts.
-        set_tracker_console(console)
-        reset_tracker()
+        # The streamed pipeline silences the global tracker so StreamRenderer
+        # is the only painter; re-arming it here would print every stage a
+        # second time. Restore a fresh tracker only after the stream ends so
+        # later REPL turns get their progress display back.
         try:
             renderer = StreamRenderer(local=True, console=console)
             return dict(renderer.render_stream(events))

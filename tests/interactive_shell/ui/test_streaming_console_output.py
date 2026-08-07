@@ -149,3 +149,36 @@ def test_streaming_console_use_theme_forwards_to_output() -> None:
     assert ctx.console is target
     with ctx:
         pass
+
+
+def test_streaming_console_status_forwards_to_output() -> None:
+    """Status spinners must render on the embedder console, not the adapter."""
+    buf = io.StringIO()
+    target = Console(file=buf, force_terminal=False, highlight=False)
+    console = StreamingConsole(
+        _Spinner(),
+        threading.Event(),
+        output=target,
+        force_terminal=False,
+        highlight=False,
+    )
+    status = console.status("working...")
+    assert status.console is target
+    with status:
+        pass
+
+
+def test_streaming_console_status_without_output_uses_self() -> None:
+    """No output injected: status must render through the adapter itself."""
+    buf = io.StringIO()
+    console = StreamingConsole(
+        _Spinner(),
+        threading.Event(),
+        file=buf,
+        force_terminal=False,
+        highlight=False,
+    )
+    status = console.status("working...")
+    assert status.console is console
+    with status:
+        pass

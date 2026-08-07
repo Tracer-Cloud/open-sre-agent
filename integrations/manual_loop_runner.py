@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
-from core.agent_harness.turns.headless_adapters import BufferOutputSink
+from core.agent_harness.harness import AgentSession
 from platform.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
@@ -39,28 +37,12 @@ def build_manual_loop_prompt(payload: AgentPayload) -> str:
 def run_manual_prompt_loop(payload: AgentPayload) -> str:
     """Run one headless turn that produces only the requested report body."""
     message = build_manual_loop_prompt(payload)
-    harness = AgentHarness(
-        HarnessConfig(
-            load_env=True,
-            hydrate_integrations=True,
-            warm_integrations=True,
-            persistent_tasks=False,
-            open_storage=False,
-        )
-    )
-    startup = harness.startup()
-    session = startup.session
-    output = BufferOutputSink()
-    agent = build_default_headless_agent(
-        session=session,
-        output=output,
+    result = AgentSession.run_headless_turn(
+        message,
         logger=logger,
-        message=message,
         gather_enabled=True,
         is_tty=False,
     )
-    harness.attach_agent(agent)
-    result = harness.dispatch_message(message)
     report = result.primary_response_text
     if not result.answered or not report:
         raise RuntimeError("Manual loop failed: the reasoning client did not produce a report.")

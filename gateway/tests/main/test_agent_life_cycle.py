@@ -45,6 +45,28 @@ def _patch_non_telegram_components(monkeypatch) -> None:
     monkeypatch.setattr(GatewayManager, "_publish_status", lambda *_args: None)
 
 
+def _patch_process_boot(monkeypatch) -> None:
+    """Neutralize shared bootstrap.process side effects during lifecycle tests."""
+    from bootstrap.process import reset_process_runtime_for_tests
+
+    reset_process_runtime_for_tests()
+    monkeypatch.setattr(
+        "bootstrap.process.bootstrap_opensre_env_once",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr("bootstrap.process.install_harness_adapters", lambda: None)
+    monkeypatch.setattr("bootstrap.process.install_scheduler_runners", lambda: None)
+    monkeypatch.setattr(
+        "platform.observability.errors.sentry.init_sentry",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr("core.llm.internal.preload.preload_llm_clients", lambda: None)
+    monkeypatch.setattr(
+        "platform.sandbox.capabilities.boot_capability_warnings",
+        lambda: [],
+    )
+
+
 def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     settings = GatewaySettings(bot_token="tok", auto_start_enabled=False)
     logger = logging.getLogger("gateway.lifecycle.test")
@@ -53,10 +75,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
-    monkeypatch.setattr(
-        "config.local_env.bootstrap_opensre_env_once",
-        lambda **_kwargs: None,
-    )
+    _patch_process_boot(monkeypatch)
     monkeypatch.setattr("gateway.core.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr(
@@ -121,7 +140,10 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     assert ctor.kwargs["surface"] == "gateway"
-    assert ctor.kwargs["gather_enabled"] is True
+    from core.agent_harness.turns.gather_ports import GatherPorts
+
+    assert isinstance(ctor.kwargs["gather"], GatherPorts)
+    assert ctor.kwargs["gather"].enabled is True
     assert ctor.kwargs["is_tty"] is False
     assert ctor.kwargs["observer_factory"] is not None
     tool_provider = DefaultToolProvider(
@@ -172,10 +194,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             assert chat_id == "chat-1"
             return self._session
 
-    monkeypatch.setattr(
-        "config.local_env.bootstrap_opensre_env_once",
-        lambda **_kwargs: None,
-    )
+    _patch_process_boot(monkeypatch)
     monkeypatch.setattr("gateway.core.runtime.manager.configure_logging", lambda: logger)
     _patch_non_telegram_components(monkeypatch)
     monkeypatch.setattr(
@@ -233,10 +252,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> None:
     """The unified daemon keeps its other components when Telegram is unconfigured."""
     logger = logging.getLogger("gateway.lifecycle.test")
-    monkeypatch.setattr(
-        "config.local_env.bootstrap_opensre_env_once",
-        lambda **_kwargs: None,
-    )
+    _patch_process_boot(monkeypatch)
     monkeypatch.setattr("gateway.core.runtime.manager.configure_logging", lambda: logger)
     monkeypatch.setattr("gateway.core.runtime.manager.signal.signal", lambda *_args: None)
     monkeypatch.setattr("gateway.core.runtime.manager.clear_component_status", lambda: None)

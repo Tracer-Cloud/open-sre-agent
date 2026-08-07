@@ -1,21 +1,17 @@
 """Everything the CLI process does once, before the Click group runs.
 
 ``main()`` is an entrypoint: read argv, invoke the group, map the outcome to an
-exit code. The process-level setup underneath it — loading the env file, error
-reporting, observability adapters, terminal prompt behaviour, signal handling —
-is not argument handling and does not belong there.
+exit code. Shared env boot lives in :func:`bootstrap.process.configure_process`;
+this module adds CLI-only terminal hooks after that.
 
 Order is load-bearing:
 
-1. **env variables** first, so the Sentry DSN and the no-telemetry opt-out are
-   visible when error reporting initialises;
-2. **error reporting** next, so a failure in any later step is still captured;
+1. **shared process boot** (env via :data:`CLI_PROFILE`);
+2. **error reporting** next, so a failure in any later step is still captured
+   (CLI owns Sentry — ``update`` tolerates a missing SDK);
 3. **observability adapters** before the group runs, so core code that calls the
    abstractions during a command routes through the Rich-aware implementations
    instead of the no-op defaults.
-
-Mirrors :mod:`gateway.core.runtime.startup`, which does the same job for the gateway
-process. The two differ because a CLI owns a terminal and a gateway does not.
 """
 
 from __future__ import annotations
@@ -63,7 +59,7 @@ def _init_error_reporting(group: Any, argv: list[str], command: str) -> None:
 
 def run(group: Any, argv: list[str]) -> None:
     """Prepare this process for ``argv``. Safe to call once, before the group."""
-    from config.local_env import bootstrap_opensre_env_once
+    from bootstrap.process import CLI_PROFILE, configure_process
     from platform.terminal.prompt_support import (
         install_questionary_ctrl_c_double_exit,
         install_questionary_escape_cancel,
@@ -72,7 +68,7 @@ def run(group: Any, argv: list[str]) -> None:
     from surfaces.interactive_shell.ui.output.boundary import install_product_adapters
 
     command = _first_command(group, argv)
-    bootstrap_opensre_env_once(override=False)
+    configure_process(CLI_PROFILE)
 
     _init_error_reporting(group, argv, command)
 

@@ -1152,6 +1152,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "get_sentry_issue_details",
         "get_sentry_uptime_digest",
         "get_sre_guidance",
+        "get_sqs_queue_attributes",
         "get_supabase_service_health",
         "get_supabase_storage_buckets",
         "get_tracer_run",

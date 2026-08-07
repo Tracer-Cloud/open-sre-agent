@@ -26,9 +26,9 @@ import pytest
 
 from surfaces.cli.app import cli
 
-# Each name is patched where it is defined, because ``run()`` imports it at call
-# time; patching an attribute on ``startup`` would miss the real call.
-_ENV = "config.local_env.bootstrap_opensre_env_once"
+# Env is bound via bootstrap.process; Sentry/adapters are imported
+# inside CLI ``run()`` so those patches target the defining module.
+_ENV = "bootstrap.process.bootstrap_opensre_env_once"
 _SENTRY = "platform.observability.errors.sentry.init_sentry"
 _ADAPTERS = "surfaces.interactive_shell.ui.output.boundary.install_product_adapters"
 _ESCAPE = "platform.terminal.prompt_support.install_questionary_escape_cancel"
@@ -48,8 +48,10 @@ def _silence_all(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_startup_runs_the_steps_in_the_required_order(monkeypatch: pytest.MonkeyPatch) -> None:
     # Arrange
+    from bootstrap.process import reset_process_runtime_for_tests
     from surfaces.cli import startup
 
+    reset_process_runtime_for_tests()
     order: list[str] = []
     monkeypatch.setattr(_ENV, lambda **_kw: order.append("env"))
     monkeypatch.setattr(_SENTRY, lambda **_kw: order.append("sentry"))
@@ -61,7 +63,7 @@ def test_startup_runs_the_steps_in_the_required_order(monkeypatch: pytest.Monkey
     # Act
     startup.run(cli, ["doctor"])
 
-    # Assert
+    # Assert — shared bootstrap.process boots env; CLI owns Sentry then Rich adapters.
     assert order.index("env") < order.index("sentry"), order
     assert order.index("sentry") < order.index("adapters"), order
 
@@ -69,8 +71,10 @@ def test_startup_runs_the_steps_in_the_required_order(monkeypatch: pytest.Monkey
 def test_missing_sentry_module_is_tolerated_during_update(monkeypatch: pytest.MonkeyPatch) -> None:
     """``opensre update`` must still run when sentry_sdk is being replaced."""
     # Arrange
+    from bootstrap.process import reset_process_runtime_for_tests
     from surfaces.cli import startup
 
+    reset_process_runtime_for_tests()
     _silence_all(monkeypatch)
     monkeypatch.setattr(_SENTRY, _raise_missing_sentry)
 
@@ -83,8 +87,10 @@ def test_missing_sentry_module_still_raises_for_other_commands(
 ) -> None:
     """Outside `update`, a missing sentry_sdk is a real broken install."""
     # Arrange
+    from bootstrap.process import reset_process_runtime_for_tests
     from surfaces.cli import startup
 
+    reset_process_runtime_for_tests()
     _silence_all(monkeypatch)
     monkeypatch.setattr(_SENTRY, _raise_missing_sentry)
 

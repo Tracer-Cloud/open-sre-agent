@@ -169,6 +169,7 @@ When opening a PR, fill out the [**PR template**](.github/PULL_REQUEST_TEMPLATE.
 
 | Path                                          | What it does                                                                                                                                                                                                                                                                                                                           |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bootstrap/`                                  | Composition root: shared process boot (`process.py` — env, Sentry, adapters, capability warnings, LLM preload as an ordered `BootStep` table) and the registration steps themselves (`adapters.py`). Every host picks a `ProcessProfile` instead of writing its own boot order. The one package allowed to import `tools` and `integrations` together. |
 | `core/`                                       | Investigation orchestration, context assembly, the shared runtime tool-calling loop, and domain logic (state, types, correlation rules). Includes `core/tool_framework/` — the `BaseTool` base class, `@tool` decorator, registered-tool primitives, error telemetry, skill-guidance helpers, and shared payload utilities (`utils/`). |
 | `surfaces/cli/`                               | Command-line interface, onboarding wizard, local LLM helpers, and CLI tests support. Provider onboarding → `wizard/<provider>.py` (or `wizard/local_llm/`); new subcommands → `commands/<name>.py`. Runtime LLM wiring → [`core/llm/AGENTS.md`](core/llm/AGENTS.md).                                                                                                                                                                                                                                                   |
 | `surfaces/interactive_shell/`                 | Interactive terminal (REPL) loop, slash commands, chat/help surfaces, action-planning harness, and terminal UI.                                                                                                                                                                                                                        |
@@ -305,6 +306,14 @@ Steps:
   when appending to an existing file: **use the import style the file already
   established** (an existing `import core.context_budget as budget` means new
   code calls `budget.name`, not `from core.context_budget import name`).
+- Unused global variable (CodeQL / code-quality "Unused global variable"):
+  CodeQL often **does not credit cross-module imports** as a use of a module-
+  level constant. A `FOO = "..."` in `text.py` that is only read via
+  `from …text import FOO` in another file can still alert. Prefer keeping
+  related copy in a structure that is clearly used in the defining module
+  (e.g. a dict entry under `HANDOFF_GUIDANCE["database_query:"]` with prefix
+  matching in the consumer), or co-locate the constant with its only reader.
+  Do **not** add a no-op self-reference or `# noqa` just to silence the alert.
 - Shared client state under concurrent turns: LLM clients are cached per role
   (`get_llm`) and the gateway runs turns in parallel, so **one client instance
   serves several in-flight requests**. An instance flag mutated inside an error

@@ -6,8 +6,10 @@ import sys
 import threading
 from typing import IO, Any, Protocol
 
-from rich.console import Console, ThemeContext
+from rich.console import Console, RenderableType, ThemeContext
 from rich.file_proxy import FileProxy
+from rich.status import Status
+from rich.style import StyleType
 from rich.theme import Theme
 
 
@@ -85,6 +87,30 @@ class StreamingConsole(Console):
         if self._output is not None:
             return self._output.use_theme(theme, inherit=inherit)
         return super().use_theme(theme, inherit=inherit)
+
+    def status(
+        self,
+        status: RenderableType,
+        *,
+        spinner: str = "dots",
+        spinner_style: StyleType = "status.spinner",
+        speed: float = 1.0,
+        refresh_per_second: float = 12.5,
+    ) -> Status:
+        """Render the spinner on the console this turn renders through.
+
+        Defaults are copied from ``rich.console.Console.status`` — if Rich
+        changes them, this pins the old values silently.
+        """
+        kwargs: dict[str, Any] = {
+            "spinner": spinner,
+            "spinner_style": spinner_style,
+            "speed": speed,
+            "refresh_per_second": refresh_per_second,
+        }
+        if self._output is not None:
+            return self._output.status(status, **kwargs)
+        return super().status(status, **kwargs)
 
     @property
     def record(self) -> bool:

@@ -163,14 +163,33 @@ def test_gateway_integrations_setup_returns_headless_guidance_even_with_tty(
 
 def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
     """Gateway boot must register harness adapters so production turns see slash_invoke."""
-    calls: list[tuple[bool, bool]] = []
+    from bootstrap.process import reset_process_runtime_for_tests
 
-    def _install_runtime(*, harness_adapters: bool = True, scheduler_runners: bool = True) -> None:
-        calls.append((harness_adapters, scheduler_runners))
+    calls: list[str] = []
 
-    # Registration happens in gateway.core.runtime.startup, which imports the helper at
-    # module scope — patch the name it resolved, not the source module.
-    monkeypatch.setattr("gateway.core.runtime.startup.install_runtime", _install_runtime)
+    def _record(name: str):
+        def _step() -> None:
+            calls.append(name)
+
+        return _step
+
+    # Boot runs once per profile; clear it so this test sees the real sequence.
+    reset_process_runtime_for_tests()
+    # Registration happens in bootstrap.process via GATEWAY_PROFILE.
+    monkeypatch.setattr("bootstrap.process.install_harness_adapters", _record("adapters"))
+    monkeypatch.setattr("bootstrap.process.install_scheduler_runners", _record("runners"))
+    monkeypatch.setattr(
+        "platform.observability.errors.sentry.init_sentry",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "core.llm.internal.preload.preload_llm_clients",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "platform.sandbox.capabilities.boot_capability_warnings",
+        lambda: [],
+    )
     monkeypatch.setattr(
         "gateway.core.runtime.manager.start_telegram_worker",
         lambda **_kwargs: (MagicMock(), MagicMock()),
@@ -192,4 +211,9 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     from gateway.core.runtime.manager import GatewayManager
 
     GatewayManager().start_gateway(wait=False)
-    assert (True, False) in calls
+
+    # GATEWAY_PROFILE registers adapters at boot; scheduler runners come later,
+    # when the scheduler stage starts.
+    assert "adapters" in calls
+    assert "runners" not in calls
+    reset_process_runtime_for_tests()
