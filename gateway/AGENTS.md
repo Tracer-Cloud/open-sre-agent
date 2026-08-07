@@ -156,7 +156,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 
 | Concern | Slack | Telegram | Discord | Web |
 |---------|-------|----------|---------|-----|
-| Cancel / stop mid-turn | **partial** — soft timeout UX; handler not cancelled | **no** — no turn timeout / user-stop | **partial** — same as Slack | **partial** — queued investigate cancel only |
+| Cancel / stop mid-turn | **partial** — soft timeout sets `sink.turn_cancel` (ReAct/tools stop); no user `/stop` yet | **partial** — same (`turn_timeout_seconds`) | **partial** — same as Slack | **partial** — queued investigate cancel only |
 | Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — Path-2 |
 | Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
 | Sink redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
@@ -168,7 +168,11 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 - Gateway chat disables `task_cancel` / investigation / llm_provider
   (`GatewayTurnHandler._UNSUPPORTED_GATEWAY_CAPABILITIES`).
 - Path-2 web investigate is ungated and has no chat approval prompter.
-- True mid-turn cancel is still missing on all chat hosts (soft timeout ≠ cancel).
+- Soft turn timeout (Slack/Discord/Telegram) finalizes UX copy **and** sets
+  `sink.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
+  (shell `cancel_requested` parity via `CancelConsole`). The executor thread
+  is not killed; in-flight LLM/provider calls still finish the current request.
+  True mid-turn **user** cancel (`/stop`) is still missing.
 - Telegram write-tool approvals require a non-empty `allowed_user_ids` allowlist
   (same fail-closed posture as Discord).
 
@@ -176,7 +180,8 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 `tests/runtime/test_turn_handler.py` +
 `test_gateway_chat_never_builds_core_agent_or_precomputed_tools`;
 redaction — Slack/Telegram/Discord sink tests + `tests/runtime/test_status_messages.py`;
-Telegram approvals — `tests/telegram/test_approvals.py`.
+Telegram approvals — `tests/telegram/test_approvals.py`;
+Telegram soft timeout — `tests/telegram/test_turn_timeout.py`.
 
 **Dogfood + smoke (turn-engine regressions):**
 

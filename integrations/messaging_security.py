@@ -60,6 +60,7 @@ class MessagingPlatform(StrEnum):
     TELEGRAM = "telegram"
     SLACK = "slack"
     DISCORD = "discord"
+    BUZZ = "buzz"
 
 
 # ---------------------------------------------------------------------------

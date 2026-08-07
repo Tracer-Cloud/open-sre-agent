@@ -28,6 +28,8 @@ Example::
 
 from __future__ import annotations
 
+from typing import Any
+
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
     AnswerRequest,
@@ -167,14 +169,20 @@ class HeadlessAgent:
         accounting: TurnAccounting | None = None,
         tool_hooks: ToolExecutionHooks | None | _Unmentioned = _UNMENTIONED,
         session: SessionStore | None = None,
+        console: Any | None = None,
     ) -> None:
         """Swap turn-scoped ports so one agent can serve many turns.
 
         Gateway sinks, per-message accounting, and (when provided) the current
-        session object are rebound each inbound message.
+        session object are rebound each inbound message. ``console`` rebinds the
+        tool provider so cooperative cancel (``cancel_requested``) is per-turn.
         """
         if session is not None:
             self.bind_session(session)
+        if console is not None:
+            binder = getattr(self._tools, "bind_console", None)
+            if callable(binder):
+                binder(console)
         runner_changed = False
         if output is not None:
             self._output = output

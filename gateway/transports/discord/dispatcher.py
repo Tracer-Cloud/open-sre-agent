@@ -269,7 +269,11 @@ class DiscordTurnDispatcher:
                     outcome_taken = True
                     return True
 
+            turn_cancel = threading.Event()
+            sink.turn_cancel = turn_cancel
+
             def _on_turn_timeout() -> None:
+                turn_cancel.set()
                 if not _claim_terminal_outcome():
                     return
                 try:

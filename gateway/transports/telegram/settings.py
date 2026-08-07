@@ -26,6 +26,7 @@ class GatewaySettings(StrictConfigModel):
     allowed_user_ids: list[str] = Field(default_factory=list)
     max_concurrent_turns: int = Field(default_factory=turn_limit_for_profile, ge=1)
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
+    turn_timeout_seconds: float = Field(default=240.0, gt=0)
     auto_start_enabled: bool = True
 
 
@@ -40,6 +41,7 @@ class GatewayEnv(BaseSettings):
     allowed_users: Annotated[list[str], NoDecode] = Field(default_factory=list)
     gateway_max_concurrent: int = Field(default_factory=turn_limit_for_profile, ge=1)
     gateway_stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
+    gateway_turn_timeout_seconds: float = Field(default=240.0, gt=0)
     gateway_auto_start: bool = True
 
     @field_validator("allowed_users", mode="before")
@@ -154,6 +156,7 @@ def load_gateway_settings() -> GatewaySettings:
             allowed_user_ids=choose_authorized_users(env, credentials),
             max_concurrent_turns=env.gateway_max_concurrent,
             stream_edit_interval_seconds=env.gateway_stream_edit_interval_seconds,
+            turn_timeout_seconds=env.gateway_turn_timeout_seconds,
             auto_start_enabled=env.gateway_auto_start,
         )
     except ValidationError as exc:

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 
 from gateway.transports.telegram.poller.poller import (
-    TelegramPollResult,
     TelegramPoller,
+    TelegramPollResult,
     _decode_telegram_response,
 )
 

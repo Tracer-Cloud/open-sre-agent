@@ -330,10 +330,13 @@ class _SlackTurnDispatcher:
                     outcome_taken = True
                     return True
 
+            turn_cancel = threading.Event()
+            sink.turn_cancel = turn_cancel
+
             def _on_turn_timeout() -> None:
-                # A blocking handler cannot be cancelled, so surface a visible
-                # message and mark the turn failed instead of leaving a frozen
-                # placeholder; the orphaned turn keeps running.
+                # Cooperative cancel stops the ReAct loop / remaining tools; the
+                # sink still needs an explicit finalize for the timeout UX copy.
+                turn_cancel.set()
                 if not _claim_terminal_outcome():
                     return
                 self._logger.warning(

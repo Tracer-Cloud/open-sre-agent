@@ -57,6 +57,7 @@ class _FakeClient:
         parse_mode: str = "",
         reply_markup: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
+        _ = parse_mode  # part of the real client signature; not asserted here
         self.edits.append(
             {
                 "chat_id": chat_id,

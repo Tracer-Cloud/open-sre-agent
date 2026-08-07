@@ -22,6 +22,7 @@ from gateway.core.runtime.errors import (
     GatewayTransportFailedError,
 )
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.transports.buzz.startup import start_buzz_worker
 from gateway.transports.discord.startup import start_discord_worker
 from gateway.transports.slack.startup import start_slack_worker
 from gateway.transports.telegram.startup import start_telegram_worker
@@ -41,6 +42,7 @@ class TransportName(StrEnum):
     TELEGRAM = "telegram"
     SLACK = "slack"
     DISCORD = "discord"
+    BUZZ = "buzz"
 
 
 class TransportWorker(Protocol):
@@ -88,6 +90,7 @@ TRANSPORTS: tuple[TransportSpec, ...] = (
     TransportSpec(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
     TransportSpec(TransportName.SLACK, start_slack_worker, "connected via socket mode"),
     TransportSpec(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
+    TransportSpec(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
 )
 
 

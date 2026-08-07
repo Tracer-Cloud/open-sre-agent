@@ -114,8 +114,28 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                     hit_iteration_cap=self._hit_cap,
                 )
 
+    def _cancel_requested(self) -> bool:
+        """True when a host console (shell / gateway) asked to stop this run.
+
+        Duck-types ``console.cancel_requested`` off tool resources so the loop
+        stays free of ``agent_harness`` imports. Tools already short-circuit the
+        same flag; this stops the next LLM iteration after cancel is set.
+        """
+        resources = self._tool_resources
+        if not isinstance(resources, dict):
+            return False
+        for value in resources.values():
+            console = getattr(value, "console", None)
+            if console is not None and bool(getattr(console, "cancel_requested", False)):
+                return True
+        return False
+
     def _run_iteration(self, iteration: int) -> bool:
         """Run one think -> observe step. Return True when the loop should stop."""
+        if self._cancel_requested():
+            self._hit_cap = False
+            self._terminated_by_tool = True
+            return True
         self._host._drain_steering_messages(self._messages)
         self._host._emit_runtime(
             TurnStartEvent(

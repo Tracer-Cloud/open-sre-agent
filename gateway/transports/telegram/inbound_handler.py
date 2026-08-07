@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from config.scope_context import bound_storage_scope
@@ -25,6 +26,8 @@ from gateway.transports.telegram.settings import GatewaySettings, TelegramInboun
 from platform.analytics.usage_context import SURFACE_TELEGRAM, bound_usage_context
 
 logger = logging.getLogger(__name__)
+
+_TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
 
 
 async def handle_polled_inbound_telegram_message(
@@ -97,6 +100,42 @@ async def handle_polled_inbound_telegram_message(
             )
 
             event_loop = loop or asyncio.get_running_loop()
+            outcome_lock = threading.Lock()
+            outcome_taken = False
+
+            def _claim_terminal_outcome() -> bool:
+                # First of {timeout, error, normal completion} owns the final
+                # message. Soft timeout also sets ``sink.turn_cancel`` so the
+                # ReAct loop stops cooperatively; the executor thread is not killed.
+                nonlocal outcome_taken
+                with outcome_lock:
+                    if outcome_taken:
+                        return False
+                    outcome_taken = True
+                    return True
+
+            turn_cancel = threading.Event()
+            sink.turn_cancel = turn_cancel
+
+            def _on_turn_timeout() -> None:
+                # Signal cooperative cancel so the ReAct loop / tools stop; then
+                # claim the sink terminal message for the timeout UX copy.
+                turn_cancel.set()
+                if not _claim_terminal_outcome():
+                    return
+                logger.warning(
+                    "[telegram-gateway] turn TIMED OUT after %.0fs chat=%s session=%s",
+                    settings.turn_timeout_seconds,
+                    event.chat_id,
+                    session.session_id[:8],
+                )
+                try:
+                    sink.finalize(_TURN_TIMEOUT_MESSAGE)
+                except Exception:
+                    logger.debug(
+                        "[telegram-gateway] timeout finalize failed",
+                        exc_info=True,
+                    )
 
             def _run_turn() -> None:
                 with (
@@ -114,4 +153,30 @@ async def handle_polled_inbound_telegram_message(
                         logger,
                     )
 
-            await event_loop.run_in_executor(executor, _run_turn)
+            timer = threading.Timer(settings.turn_timeout_seconds, _on_turn_timeout)
+            timer.start()
+            try:
+                await event_loop.run_in_executor(executor, _run_turn)
+            except Exception:
+                logger.exception(
+                    "[telegram-gateway] turn ERRORED chat=%s session=%s",
+                    event.chat_id,
+                    session.session_id[:8],
+                )
+                if _claim_terminal_outcome():
+                    try:
+                        sink.render_error("Something went wrong on that request.")
+                    except Exception:
+                        logger.debug(
+                            "[telegram-gateway] error finalize failed",
+                            exc_info=True,
+                        )
+                raise
+            finally:
+                timer.cancel()
+            if _claim_terminal_outcome():
+                logger.info(
+                    "[telegram-gateway] turn done chat=%s session=%s",
+                    event.chat_id,
+                    session.session_id[:8],
+                )

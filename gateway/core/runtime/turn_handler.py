@@ -13,6 +13,7 @@ finalizes outbound text on the sink. Agent reuse is handled by
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -22,6 +23,7 @@ from rich.console import Console
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
+from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cancel
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.session_agents import SessionAgentPool
 from gateway.core.runtime.sink_protocol import GatewaySink
@@ -69,6 +71,7 @@ class GatewayTurnHandler:
         gate: TurnConcurrencyGate | None = None,
         busy_message: str = _DEFAULT_BUSY_MESSAGE,
     ) -> None:
+        self._console = console
         self._pool = SessionAgentPool(
             console=console,
             slash_ports_factory=slash_ports_factory,
@@ -111,6 +114,8 @@ class GatewayTurnHandler:
             surface = None
         started = time.monotonic()
 
+        cancel = ensure_turn_cancel(sink)
+        turn_console = CancelConsole(self._console, cancel)
         with (
             bound_usage_context(session_id=session_id),
             traced_session(session_id, component="gateway_turn"),
@@ -126,6 +131,7 @@ class GatewayTurnHandler:
                     session=session,
                     accounting=DefaultTurnAccounting(session, text),
                     tool_hooks=getattr(sink, "tool_hooks", None),
+                    console=turn_console,
                 )
                 turn_result = self._session_api.chat(text, agent=agent)
                 outbound_text = turn_result.primary_response_text
@@ -135,10 +141,13 @@ class GatewayTurnHandler:
                     turn_result.answered,
                     len(outbound_text),
                 )
+                # Host soft-timeout (or stop) already owns the sink terminal
+                # message — do not overwrite it with empty/fallback finalize.
+                cancelled = isinstance(cancel, threading.Event) and cancel.is_set()
                 # A streamed answer (answered=True) already resolved the placeholder status
                 # via the sink. Otherwise always finalize so the placeholder never hangs —
                 # even when the turn produced no text.
-                if not turn_result.answered:
+                if not turn_result.answered and not cancelled:
                     sink.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
                 if surface:
                     capture_gateway_turn_completed(
