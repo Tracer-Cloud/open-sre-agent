@@ -244,6 +244,31 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install OpenSSL 3.2+ for cryptography (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # cryptography 50's Rust bindings reference SSL_get0_group_name
+          # (OpenSSL >= 3.2). darwin-x64 has no cryptography wheel, so uv builds
+          # from source; PyInstaller must then ship the *same* libssl, not an
+          # older libssl.3.dylib discovered on PATH (smoke failure:
+          # Symbol not found: _SSL_get0_group_name).
+          brew install openssl@3
+          OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          {
+            echo "OPENSSL_DIR=${OPENSSL_PREFIX}"
+            echo "PKG_CONFIG_PATH=${OPENSSL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+            echo "LDFLAGS=-L${OPENSSL_PREFIX}/lib ${LDFLAGS:-}"
+            echo "CFLAGS=-I${OPENSSL_PREFIX}/include ${CFLAGS:-}"
+            echo "DYLD_FALLBACK_LIBRARY_PATH=${OPENSSL_PREFIX}/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+          } >> "$GITHUB_ENV"
+          if ! nm -gU "${OPENSSL_PREFIX}/lib/libssl.3.dylib" | grep -q 'SSL_get0_group_name'; then
+            echo "::error::Homebrew openssl@3 at ${OPENSSL_PREFIX} lacks SSL_get0_group_name (need OpenSSL >= 3.2)" >&2
+            exit 1
+          fi
+          echo "Using OpenSSL from ${OPENSSL_PREFIX}"
+
       - name: Sync binary version
         shell: bash
         run: python platform/packaging/sync_release_version.py --version "$VERSION_NAME"
@@ -282,6 +307,32 @@ jobs:
           --collect-submodules tools
           --add-data "platform:platform"
           --add-data ".stdlib_vendor:_opensre_stdlib_platform"
+
+      - name: Align bundled libssl with cryptography (macOS onedir)
+        if: runner.os == 'macOS' && matrix.pyinstaller_mode == 'onedir'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # PyInstaller's binary dependency scan can still collect a stale
+          # libssl.3.dylib. Force the OpenSSL cryptography was built against.
+          INTERNAL="./dist/opensre/_internal"
+          OPENSSL_PREFIX="${OPENSSL_DIR:-$(brew --prefix openssl@3)}"
+          if [ ! -d "$INTERNAL" ]; then
+            echo "No onedir _internal; skipping libssl alignment"
+            exit 0
+          fi
+          for lib in libssl.3.dylib libcrypto.3.dylib; do
+            src="${OPENSSL_PREFIX}/lib/${lib}"
+            if [ -f "$src" ]; then
+              cp -f "$src" "${INTERNAL}/${lib}"
+              echo "Installed ${lib} from ${src}"
+            fi
+          done
+          if [ -f "${INTERNAL}/libssl.3.dylib" ] \
+            && ! nm -gU "${INTERNAL}/libssl.3.dylib" | grep -q 'SSL_get0_group_name'; then
+            echo "::error::Bundled libssl.3.dylib still lacks SSL_get0_group_name" >&2
+            exit 1
+          fi
 
       - name: Smoke test binary (Unix)
         if: runner.os != 'Windows'
