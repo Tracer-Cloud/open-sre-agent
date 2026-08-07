@@ -47,11 +47,17 @@ def test_request_posts_prompt_registers_and_resolves_on_approve() -> None:
     broker.wait = _wait_and_resolve  # type: ignore[method-assign]
 
     approved, decided_by = prompter.request(
-        tool_name="buzz_send_message", reason="posting a summary", arguments={}, expiry_seconds=30
+        tool_name="buzz_send_message",
+        reason="posting a summary",
+        arguments={"api_key": "sk-should-not-appear", "channel": "opensre-test"},
+        expiry_seconds=30,
     )
 
     assert approved is True
     assert decided_by == REQUESTER
+    posted = client.send_message.call_args.kwargs["content"]
+    assert "sk-should-not-appear" not in posted
+    assert "opensre-test" in posted
     client.edit_message.assert_called_once()
     assert "approved" in client.edit_message.call_args.kwargs["content"]
     # Cleaned up after resolution.
