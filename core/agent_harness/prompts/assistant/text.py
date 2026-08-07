@@ -74,6 +74,18 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "mean, do NOT ask for alert context, and do NOT suggest starting a new "
         "investigation.\n\n"
     ),
+    # Prefix key: ``build_handoff_guidance_block`` matches any
+    # ``database_query:<topic>`` tag (mysql_active_connections, mariadb_dashboard, …).
+    "database_query:": (
+        "The action planner handed off a named database or tool query (MySQL, "
+        "MariaDB, etc.). Name the database/tool the user asked about in your answer "
+        "(do not refer to it only as 'that query'). If it is not connected in this "
+        "session, explain how to connect it: `/mcp connect <server>` for MCP "
+        "database tools, or `/integrations setup <service>` when a first-party "
+        "integration exists. Do NOT offer a full incident investigation for a "
+        "read-only connection or query request. Do NOT answer with only a generic "
+        "'no integrations' line that omits the named database/tool.\n\n"
+    ),
 }
 
 # The short goal contract (shell only). Facts stay in setup_state CONTEXT;

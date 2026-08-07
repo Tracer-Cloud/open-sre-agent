@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,7 +42,14 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
-from core.execution import ToolExecutionHooks, public_tool_input
+from core.execution import (
+    BeforeToolCallResult,
+    ToolExecutionHooks,
+    ToolExecutionPatch,
+    ToolExecutionRequest,
+    ToolExecutionResult,
+    public_tool_input,
+)
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
@@ -51,6 +58,134 @@ from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
+
+# Local REPL tools covered by the duplicate-call guard (oracle 202 / 203).
+# - slash/shell: suppress multi-command *batch* set-replays only (lone OK).
+# - cli_exec: suppress any identical second success (lone accidental replay is
+#   the observed failure mode; intentional "run again" → next turn).
+_DEDUPE_BATCH_REPLAY_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
+_DEDUPE_ONCE_TOOL_NAMES: frozenset[str] = frozenset({"cli_exec"})
+_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = (
+    _DEDUPE_BATCH_REPLAY_TOOL_NAMES | _DEDUPE_ONCE_TOOL_NAMES
+)
+
+# A replayed provider batch must include at least this many distinct guarded
+# calls (a lone slash/shell repeating is not a "set replay").
+_REPLAYED_BATCH_MIN_DISTINCT = 2
+
+# Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
+_ActionCallFingerprint = tuple[Any, ...]
+
+
+def _coerce_fingerprint_quiet(value: Any) -> bool:
+    """Match ``shell_run`` quiet coercion so retries compare equal."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
+    """Stable identity for one guarded action call (schema fields only)."""
+    if not isinstance(args, dict):
+        args = {}
+
+    if name == "slash_invoke":
+        command = str(args.get("command", ""))
+        raw = args.get("args")
+        argv = tuple(str(item) for item in raw) if isinstance(raw, (list, tuple)) else ()
+        return (name, command, argv)
+
+    if name == "cli_exec":
+        return (name, str(args.get("payload", "")).strip())
+
+    # shell_run
+    return (
+        name,
+        str(args.get("command", "")),
+        _coerce_fingerprint_quiet(args.get("quiet", False)),
+    )
+
+
+def with_duplicate_action_call_guard(
+    base: ToolExecutionHooks | None = None,
+) -> ToolExecutionHooks:
+    """Block accidental action-tool replays (oracle 202 slash/shell, 203 cli_exec).
+
+    Slash/shell: when a provider batch has ≥2 distinct guarded calls and every
+    one already succeeded this turn, suppress. Lone repeats and A→B→A stay
+    allowed. Limitation: the same multi-command batch twice in one turn is also
+    suppressed — ask again next turn.
+
+    cli_exec: any identical successful payload is once per turn (oracle 203
+    lone accidental replay). Failed calls may retry.
+    """
+    succeeded: set[_ActionCallFingerprint] = set()
+    current_batch: frozenset[_ActionCallFingerprint] = frozenset()
+    base_before = base.before_tool_call if base is not None else None
+    base_after = base.after_tool_call if base is not None else None
+    base_update = base.on_tool_update if base is not None else None
+    base_batch = base.before_tool_batch if base is not None else None
+
+    def before_batch(tool_calls: Sequence[ToolCall]) -> None:
+        nonlocal current_batch
+        if base_batch is not None:
+            base_batch(tool_calls)
+        keys: list[_ActionCallFingerprint] = []
+        for tool_call in tool_calls:
+            if tool_call.name not in _DEDUPE_BATCH_REPLAY_TOOL_NAMES:
+                continue
+            keys.append(
+                _action_call_fingerprint(tool_call.name, public_tool_input(tool_call.input))
+            )
+        current_batch = frozenset(keys)
+
+    def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
+        name = request.tool_call.name
+        if name in _DEDUPE_ACTION_TOOL_NAMES:
+            key = _action_call_fingerprint(name, public_tool_input(request.arguments))
+            once = name in _DEDUPE_ONCE_TOOL_NAMES and key in succeeded
+            batch_replay = (
+                name in _DEDUPE_BATCH_REPLAY_TOOL_NAMES
+                and key in succeeded
+                and len(current_batch) >= _REPLAYED_BATCH_MIN_DISTINCT
+                and current_batch <= succeeded
+            )
+            if once or batch_replay:
+                return BeforeToolCallResult(
+                    blocked=True,
+                    reason=(
+                        f"Already ran {name} with identical arguments "
+                        "this turn. Do not repeat it; finish with no further tool calls."
+                    ),
+                    metadata={"suppressed_duplicate": True},
+                )
+        if base_before is not None:
+            return base_before(request)
+        return None
+
+    def after(
+        request: ToolExecutionRequest,
+        result: ToolExecutionResult,
+    ) -> ToolExecutionPatch | None:
+        if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES and not result.is_error:
+            succeeded.add(
+                _action_call_fingerprint(
+                    request.tool_call.name, public_tool_input(request.arguments)
+                )
+            )
+        if base_after is not None:
+            return base_after(request, result)
+        return None
+
+    return ToolExecutionHooks(
+        before_tool_call=before,
+        after_tool_call=after,
+        on_tool_update=base_update,
+        before_tool_batch=before_batch,
+    )
+
 
 # Some hosted tool-calling models emit one tool call per assistant turn even when
 # parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
@@ -855,7 +990,7 @@ def _run_action_turn(
             turn_snapshot=turn_snapshot,
             resolved_integrations=resolved_integrations,
             deps=args.deps,
-            tool_hooks=args.tool_hooks,
+            tool_hooks=with_duplicate_action_call_guard(args.tool_hooks),
             tool_resources=tool_resources,
             observer=observer,
         )
@@ -945,4 +1080,5 @@ __all__ = [
     "ActionTurnRunner",
     "SELF_RECORDING_ACTION_TOOL_NAMES",
     "ToolCallingDeps",
+    "with_duplicate_action_call_guard",
 ]

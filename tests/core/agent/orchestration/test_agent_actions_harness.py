@@ -15,6 +15,7 @@ from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
+from core.agent_harness.session.pending_offer import first_pending_offer
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ActionTurnRunner,
@@ -480,6 +481,536 @@ def test_discover_then_act_slash_chain_shows_grounded_closing_summary() -> None:
     assert summary in printed
 
 
+def test_action_turn_allows_interleaved_slash_repeat() -> None:
+    """A → B → A must not lose the final A (batch replay ≠ shared-set membership)."""
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="i1",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "check health, list integrations, then check health again",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list", "/health"]
+
+
+def test_action_turn_allows_identical_single_slash_repeat() -> None:
+    """A lone slash may succeed twice in one turn; only batch set-replays are blocked."""
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "run /health and then run /health again",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/health"]
+
+
+def test_action_turn_allows_identical_single_shell_repeat() -> None:
+    """A lone shell_run may succeed twice; multi-step replays are what we suppress."""
+    runs: list[str] = []
+
+    def _run_counting(command: str, quiet: bool = False) -> dict[str, Any]:
+        del quiet
+        runs.append(command)
+        return {"ok": True, "output": command, "exit_code": 0}
+
+    tool = RegisteredTool(
+        name="shell_run",
+        description="Fake shell.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "quiet": {"type": "boolean"},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="s1",
+                            name="shell_run",
+                            input={"command": "pwd", "quiet": False},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="s2",
+                            name="shell_run",
+                            input={"command": "pwd", "quiet": False},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "print the working directory twice",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["pwd", "pwd"]
+
+
+def test_action_turn_suppresses_duplicate_cli_exec() -> None:
+    """Regression for oracle 203: do not re-run the same cli_exec in one turn.
+
+    Unlike slash/shell (batch set-replay only), cli_exec blocks any identical
+    successful payload the second time — lone accidental replay is the failure.
+    """
+    runs: list[str] = []
+
+    def _run_counting(*, payload: str) -> dict[str, Any]:
+        runs.append(payload)
+        return {"ok": True, "output": f"opensre {payload}"}
+
+    tool = RegisteredTool(
+        name="cli_exec",
+        description="Fake CLI runner.",
+        input_schema={
+            "type": "object",
+            "properties": {"payload": {"type": "string"}},
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c1",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c2",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "please run opensre integrations verify --dry-run",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["integrations verify --dry-run"]
+
+
+def test_action_turn_allows_cli_exec_retry_after_failure() -> None:
+    """Failed cli_exec must not count as succeeded — the model may retry once."""
+    runs: list[str] = []
+
+    def _run_counting(*, payload: str) -> dict[str, Any]:
+        runs.append(payload)
+        if len(runs) == 1:
+            return {"ok": False, "error": "transient", "is_error": True}
+        return {"ok": True, "output": f"opensre {payload}"}
+
+    tool = RegisteredTool(
+        name="cli_exec",
+        description="Fake CLI runner.",
+        input_schema={
+            "type": "object",
+            "properties": {"payload": {"type": "string"}},
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c1",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c2",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "please run opensre integrations verify --dry-run",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == [
+        "integrations verify --dry-run",
+        "integrations verify --dry-run",
+    ]
+
+
+def test_action_turn_suppresses_duplicate_slash_invoke_pair() -> None:
+    """Regression for oracle 202: do not re-run the same slash pair in one turn.
+
+    Models sometimes finish /health + /integrations list, then emit the same
+    pair again. The second pair must not execute (history / console stay once).
+    """
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="i1",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="i2",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "check the health of my opensre and then show me all connected services",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list"]
+
+
+def test_action_turn_same_multi_command_batch_twice_is_out_of_scope() -> None:
+    """Product tradeoff: intentional same-pair-twice is indistinguishable from oracle 202.
+
+    Accidental and intentional multi-command batch replays look identical on the
+    wire, so the second batch is suppressed either way. Repeat next turn instead.
+    """
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="i1",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="i2",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "run /health and /integrations list, then run that same pair again",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list"]
+
+
 def test_literal_slash_command_dispatches_deterministically_without_llm(
     monkeypatch,
 ) -> None:
@@ -675,33 +1206,6 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     assert captured == [("provider:local_llama_connect",)]
 
 
-def test_run_turn_clears_terminal_slash_dedup_at_turn_start() -> None:
-    """Per-turn slash dedup lives on session.terminal; run_turn must clear it each turn."""
-    session = Session()
-    session.terminal.agent_turn_executed_slashes.add("/stale")
-
-    def _noop_execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
-        return ToolCallingTurnResult(
-            planned_count=0,
-            executed_count=0,
-            executed_success_count=0,
-            has_unhandled_clause=False,
-            handled=False,
-            response_text="",
-        )
-
-    run_turn(
-        "hi",
-        session,
-        execute_actions=_noop_execute,
-        gather=lambda *_args, **_kwargs: None,
-        answer=lambda *_args, **_kwargs: None,
-        accounting=DefaultTurnAccounting(session, "hi"),
-    )
-
-    assert session.terminal.agent_turn_executed_slashes == set()
-
-
 def test_stage_turn_error_routes_to_terminal_facet() -> None:
     """Structured error staging lives on session.terminal; stage_turn_error must reach it."""
     from core.agent_harness.turns.orchestrator import stage_turn_error
@@ -805,6 +1309,53 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
     # No gather-closer rewrite on follow-ups — do not defer Want-me-to paint.
     assert answer_kwargs[0].get("defer_want_me_to_closer") is False
     assert result.final_intent == "cli_agent_fallback"
+
+
+def test_database_query_handoff_keeps_connect_want_me_to_closer() -> None:
+    """Oracle 332: database_query handoffs must not force investigate Want-me-to.
+
+    ``finalize_gather_investigation_offer`` rewrites any Want-me-to to
+    "run a full investigation". For a named MySQL/MCP query with no integrations,
+    the correct closer is connect/setup guidance — leave the model's offer alone.
+    """
+    session = Session()
+    prompt = (
+        "Use the MySQL tool (ID: mysql-fcf94503) to query the current number of active connections."
+    )
+    model_reply = (
+        "I can't run that MySQL active-connections query because the tool is "
+        "not connected in this session.\n\n"
+        "**Want me to:** walk you through `/mcp connect mysql`?"
+    )
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("database_query:mysql_active_connections",),
+        )
+
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+        assert request.handoff_contents == ("database_query:mysql_active_connections",)
+        return type("Run", (), {"response_text": model_reply})()
+
+    result = run_turn(
+        prompt,
+        session,
+        execute_actions=_execute,
+        gather=lambda *_a, **_k: "",
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, prompt),
+    )
+
+    assert "mysql" in result.assistant_response_text.lower()
+    assert "active" in result.assistant_response_text.lower()
+    assert "/mcp connect mysql" in result.assistant_response_text
+    assert "run a full investigation" not in result.assistant_response_text.lower()
+    assert first_pending_offer(session) is None
 
 
 def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:

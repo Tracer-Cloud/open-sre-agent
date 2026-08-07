@@ -2,7 +2,7 @@
 
 Gateway and other headless surfaces use :class:`~core.agent_harness.session.SessionCore`,
 which has no REPL terminal facet. Slash dispatch and delegated CLI commands still
-need the small slice of terminal state those paths touch (dedup sets, outcome hints,
+need the small slice of terminal state those paths touch (outcome hints,
 background-mode flags). These helpers read the shell terminal when present and fall
 back to lightweight per-session state on headless sessions.
 """
@@ -14,18 +14,6 @@ from typing import Any
 
 def session_terminal(session: Any) -> Any | None:
     return getattr(session, "terminal", None)
-
-
-def agent_turn_executed_slashes(session: Any) -> set[str]:
-    terminal = session_terminal(session)
-    if terminal is not None:
-        executed_slashes: set[str] = terminal.agent_turn_executed_slashes
-        return executed_slashes
-    executed: set[str] | None = getattr(session, "_headless_agent_turn_executed_slashes", None)
-    if executed is None:
-        executed = set()
-        session._headless_agent_turn_executed_slashes = executed
-    return executed
 
 
 def exclusive_stdin_active(session: Any) -> bool:
@@ -86,7 +74,6 @@ def set_auto_command(session: Any, command: str) -> None:
 
 
 __all__ = [
-    "agent_turn_executed_slashes",
     "background_mode_enabled",
     "exclusive_stdin_active",
     "pop_turn_outcome_hint",

@@ -8,7 +8,6 @@ from typing import Any
 from rich.markup import escape
 
 from core.agent_harness.session.terminal_access import (
-    agent_turn_executed_slashes,
     exclusive_stdin_active,
     session_terminal,
     set_auto_command,
@@ -175,9 +174,6 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool | d
             ctx,
         )
 
-    if stripped in agent_turn_executed_slashes(ctx.session):
-        return True
-
     if _slash_drives_interactive_picker(
         name,
         slash_args,
@@ -223,13 +219,11 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool | d
     # this banner is the only indication of what is about to run.
     if not exclusive_stdin_active(ctx.session):
         ctx.console.print(f"[bold]$ {escape(stripped)}[/bold]")
-    observation = _dispatch_and_translate_exit(
+    return _dispatch_and_translate_exit(
         stripped,
         ctx,
         policy_precleared=True,
     )
-    agent_turn_executed_slashes(ctx.session).add(stripped)
-    return observation
 
 
 def run_slash(*, command: str, args: list[str] | None = None, context: Any) -> dict[str, Any]:
