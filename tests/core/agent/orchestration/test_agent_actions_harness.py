@@ -2320,3 +2320,52 @@ def test_action_turn_suppresses_partial_replay_of_a_succeeded_batch() -> None:
 
     assert result.handled is True
     assert runs == ["/health", "/integrations list"]
+
+
+def test_run_turn_skips_gather_and_answer_when_the_action_turn_was_cancelled() -> None:
+    """A cancelled action turn must not fall through to gather or answer.
+
+    The host already owns the terminal message (soft-timeout notice, or the
+    user's stop), so sweeping integrations and composing an answer would both
+    cost time nobody is waiting for and overwrite that message. This used to be
+    enforced by forcing ``handled=True`` on cancel; the turn result now carries
+    ``cancelled`` explicitly and the router short-circuits on it.
+    """
+    # Arrange: an action turn that ran one action, then was cancelled.
+    session = Session()
+    gather_calls: list[str] = []
+    answer_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=2,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=False,
+            cancelled=True,
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: kubernetes_list_pods\nResult: should-not-run"
+
+    def _answer(text: str, _request: AnswerRequest, **_kwargs: Any) -> None:
+        answer_calls.append(text)
+        return None
+
+    # Act.
+    result = run_turn(
+        "check health and then list integrations",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "check health and then list integrations"),
+    )
+
+    # Assert: neither stage ran, and the turn reports the cancel.
+    assert gather_calls == [], "swept integrations after the user cancelled"
+    assert answer_calls == [], "composed an answer after the user cancelled"
+    assert result.action_result is not None
+    assert result.action_result.cancelled is True

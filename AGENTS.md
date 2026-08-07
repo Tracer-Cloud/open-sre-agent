@@ -266,6 +266,11 @@ Steps:
 
 ## 3. Footguns (common mistakes to avoid)
 
+- Constant-condition toggles: never disable product logic with
+  `if False and …`, `if True or …`, or `if False:` to silence a failing test.
+  That hides real behavior (e.g. cancel short-circuit after action) and ships
+  as dead code. Keep the real condition and fix the test, or delete the branch.
+  Enforced by `tests/quality/test_no_constant_condition_toggles.py`.
 - No planning-stage fail-closed safeguard (v0.1): the interactive-shell action planner never denies a turn — do **not** reintroduce a planner denial, `mark_unhandled`, or the `UNHANDLED:` convention. Full rationale: [docs/interactive-shell-action-policy.md](docs/interactive-shell-action-policy.md); package rule: `surfaces/interactive_shell/AGENTS.md` ("Action Selection And Execution").
 - Docs navigation: Adding an `.mdx` file under `docs/` is not enough — Mintlify only shows pages listed in `docs/docs.json`. Forgetting the `pages` entry leaves the doc unreachable from the site sidebar.
 - Investigation tool schemas: draft-07 JSON Schema (e.g. `"type": ["object", "null"]`) can pass loose checks but fail the LLM API on first invoke because **all** available investigation tools are sent together. Normalize in the provider adapter and extend registry contract tests; see [docs/investigation-tool-calling.md](docs/investigation-tool-calling.md).
