@@ -67,9 +67,22 @@ def initialize_buzz_polling_runtime(settings: GatewaySettings) -> BuzzPollingRun
 
 
 def shutdown_buzz_polling_runtime(runtime: BuzzPollingRuntime) -> None:
-    """Release resources created by :func:`initialize_buzz_polling_runtime`."""
+    """Release resources created by :func:`initialize_buzz_polling_runtime`.
+
+    Executor teardown is non-blocking on purpose. The poll loop already drained
+    asyncio tasks for ``shutdown_drain_seconds`` (default 5s) and cancelled the
+    rest; cancelling an asyncio task does **not** stop the underlying
+    ``run_in_executor`` thread. Waiting for those threads here
+    (``wait=True``) would push the Buzz background thread past the gateway's
+    ~8s ``stop()`` join budget and make ``stop()`` report failure even though
+    unfinished work is intentionally unacked and re-delivered on next start.
+
+    ``cancel_futures=True`` drops work still queued on the pool; in-flight
+    threads may briefly outlive this call (same trade-off as Discord's
+    ``wait=False`` shutdown).
+    """
     try:
-        runtime.executor.shutdown(wait=True, cancel_futures=False)
+        runtime.executor.shutdown(wait=False, cancel_futures=True)
     except Exception:
         logger.debug("[buzz-gateway] executor shutdown failed", exc_info=True)
     try:
