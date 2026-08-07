@@ -183,13 +183,15 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
     assert len(agent._store.cli_agent_messages) == 4
 
 
-def test_provided_accounting_is_reused_across_messages() -> None:
+def test_provided_accounting_is_consumed_once() -> None:
+    """Constructor accounting is take-once — hosts must rebind per message."""
     from core.agent_harness.turns.headless_dispatch import NoopTurnAccounting, NullToolProvider
 
     accounting = NoopTurnAccounting()
     agent = HeadlessAgent(tools=NullToolProvider(), accounting=accounting)
-    assert agent._accounting_for("a") is accounting
-    assert agent._accounting_for("b") is accounting
+    assert agent._take_accounting("a") is accounting
+    # Slot cleared so a forgotten bind_turn cannot leak the prior turn's prompt.
+    assert agent._take_accounting("b") is not accounting
 
 
 def test_default_accounting_is_resolved_fresh_per_message() -> None:
@@ -201,9 +203,10 @@ def test_default_accounting_is_resolved_fresh_per_message() -> None:
 
     agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentStore())
 
-    first = agent._accounting_for("msg-a")
-    second = agent._accounting_for("msg-b")
+    first = agent._take_accounting("msg-a")
+    second = agent._take_accounting("msg-b")
     assert isinstance(first, DefaultTurnAccounting)
+    assert isinstance(second, DefaultTurnAccounting)
     assert first is not second  # resolved per message, not once at construction
 
 

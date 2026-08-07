@@ -158,7 +158,7 @@ def test_the_harness_exposes_one_name_per_concept() -> None:
     compatibility-only paths after a refactor, so this fails if one returns.
     """
     # Arrange / Act.
-    import core.agent_harness as package
+    from core import agent_harness as package
     from core.agent_harness import harness as harness_module
 
     retired = ("AgentHarness", "HarnessConfig", "HarnessStartupResult")
