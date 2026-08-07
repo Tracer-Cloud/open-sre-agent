@@ -108,9 +108,7 @@ def test_telegram_scoped_binding_isolated_from_slack_org_rows(tmp_path: Path) ->
     store.close()
 
 
-def test_telegram_bound_scope_uses_org_nest(
-    _host: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_telegram_bound_scope_uses_org_nest(_host: Path) -> None:
     """With ORGANIZATION_ID and no mount, Telegram turns nest under orgs/<id>/."""
     scope = resolve_telegram_scope(user_id="tg-7")
     with bound_storage_scope(scope):

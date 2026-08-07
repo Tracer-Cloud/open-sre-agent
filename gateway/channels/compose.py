@@ -58,10 +58,13 @@ def start_channels(
     """
     web = start_web_server(logger=logger)
     chat = start_transports(logger=logger, handler=handler)
+    statuses: dict[str, str] = {_WEB_COMPONENT: web.status}
+    for name, status in chat.statuses.items():
+        statuses[name] = status
     return ChannelsHandle(
         web_server=web.server,
         transports={handle.name: handle for handle in chat.handles},
-        statuses={_WEB_COMPONENT: web.status, **chat.statuses},
+        statuses=statuses,
     )
 
 

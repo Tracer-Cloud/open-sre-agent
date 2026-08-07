@@ -39,6 +39,7 @@ from gateway.core.runtime.daemon import (
 )
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.readiness import set_ready
+from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
 
 # The reload watcher only polls a flag, so it should never need the full
@@ -254,9 +255,7 @@ def start_gateway(
     """
     if slash_ports_factory is None:
         raise SystemExit(_BARE_MANAGER_EXIT)
-    return GatewayManager(slash_ports_factory=slash_ports_factory).start_gateway(
-        wait=wait
-    )
+    return GatewayManager(slash_ports_factory=slash_ports_factory).start_gateway(wait=wait)
 
 
 def main() -> None:

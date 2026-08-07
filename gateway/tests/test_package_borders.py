@@ -184,3 +184,32 @@ def test_gateway_never_names_a_surfaces_module_in_executable_code() -> None:
 
     # Assert.
     assert offenders == [], "gateway depends on a surfaces module:\n" + "\n".join(offenders)
+
+
+_QUARANTINED_HANDLER_NAMES = frozenset(
+    {
+        "ConcurrencyLimitedTurnHandler",
+        "gated_callback",
+    }
+)
+
+
+def test_concurrency_limited_handler_stays_out_of_production_gateway() -> None:
+    """Wave C4: capacity wrapper is tests-only; production uses GatewayTurnHandler(gate=)."""
+    offenders: list[str] = []
+    for path in _python_files("gateway"):
+        if "tests" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name in _QUARANTINED_HANDLER_NAMES:
+                        offenders.append(
+                            f"{path.relative_to(REPO_ROOT)} → from {node.module} import {alias.name}"
+                        )
+            elif isinstance(node, ast.Name) and node.id in _QUARANTINED_HANDLER_NAMES:
+                offenders.append(f"{path.relative_to(REPO_ROOT)} → name {node.id}")
+    assert offenders == [], (
+        "quarantined ConcurrencyLimitedTurnHandler leaked into production:\n" + "\n".join(offenders)
+    )

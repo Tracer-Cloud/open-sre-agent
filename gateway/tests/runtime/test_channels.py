@@ -26,8 +26,7 @@ def test_start_channels_boots_web_and_transports(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(
         "gateway.channels.compose.start_web_server",
-        lambda **kwargs: captured.update(kwargs)
-        or WebStartup(server=web_server, status="serving"),
+        lambda **kwargs: captured.update(kwargs) or WebStartup(server=web_server, status="serving"),
     )
 
     def _start_transports(*, logger, handler):
@@ -63,9 +62,7 @@ def test_channels_handle_stop_stops_web_and_transports() -> None:
     handle = ChannelsHandle(
         web_server=web,
         transports={
-            TransportName.TELEGRAM: TransportHandle(
-                TransportName.TELEGRAM, w1, "polling"
-            ),
+            TransportName.TELEGRAM: TransportHandle(TransportName.TELEGRAM, w1, "polling"),
             TransportName.SLACK: TransportHandle(TransportName.SLACK, w2, "connected"),
         },
     )

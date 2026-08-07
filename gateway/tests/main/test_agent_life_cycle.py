@@ -210,7 +210,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
             assert kwargs.get("actor") is not None
             return self._session
 
-        def rotate(self, *, user_id: str, chat_id: str, **kwargs: object) -> SessionCore:
+        def rotate(self, *, user_id: str, chat_id: str, **_kwargs: object) -> SessionCore:
             assert user_id == "user-1"
             assert chat_id == "chat-1"
             return self._session

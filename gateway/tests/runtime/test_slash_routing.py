@@ -192,7 +192,7 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     from gateway.channels import ChannelsHandle
 
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.boot_channels",
+        "gateway.core.runtime.manager.gateway_channels.start_channels",
         lambda **_kwargs: ChannelsHandle(),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).

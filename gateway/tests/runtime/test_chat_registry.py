@@ -43,18 +43,16 @@ def test_start_transports_skips_not_configured_and_failed(
         ),
     )
 
-    components: dict[str, str] = {}
-    handles = chat.start_transports(
+    started = chat.start_transports(
         logger=logging.getLogger("test.chat"),
         handler=MagicMock(),
-        components=components,
     )
 
-    assert [h.name for h in handles] == [TransportName.SLACK]
-    assert handles[0].worker is workers[TransportName.SLACK]
-    assert components[TransportName.TELEGRAM].startswith("not configured")
-    assert components[TransportName.SLACK] == "connected via socket mode"
-    assert components[TransportName.DISCORD].startswith("failed")
+    assert [h.name for h in started.handles] == [TransportName.SLACK]
+    assert started.handles[0].worker is workers[TransportName.SLACK]
+    assert started.statuses[TransportName.TELEGRAM].startswith("not configured")
+    assert started.statuses[TransportName.SLACK] == "connected via socket mode"
+    assert started.statuses[TransportName.DISCORD].startswith("failed")
 
 
 def test_stop_transports_stops_every_handle() -> None:
@@ -63,10 +61,10 @@ def test_stop_transports_stops_every_handle() -> None:
     w2 = MagicMock()
     w2.stop.return_value = False
     handles = [
-        chat.TransportHandle(TransportName.TELEGRAM, w1, MagicMock(), "polling"),
-        chat.TransportHandle(TransportName.SLACK, w2, MagicMock(), "connected"),
+        chat.TransportHandle(TransportName.TELEGRAM, w1, "polling"),
+        chat.TransportHandle(TransportName.SLACK, w2, "connected"),
     ]
 
-    assert chat.stop_transports(handles, timeout=1.5) is False
+    assert chat.stop_transports(handles=handles, timeout=1.5) is False
     w1.stop.assert_called_once_with(timeout=1.5)
     w2.stop.assert_called_once_with(timeout=1.5)

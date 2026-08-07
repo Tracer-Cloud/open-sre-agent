@@ -1,17 +1,14 @@
 """Process-wide turn concurrency shared by every Gateway ingress.
 
 Production chat turns take the gate via :class:`GatewayTurnHandler` (``gate=``).
-:class:`ConcurrencyLimitedTurnHandler` wraps *arbitrary* callbacks (tests,
-scheduler helpers) — it is not a second production turn handler.
+A callback wrapper for arbitrary handlers lives under ``gateway/tests/`` only —
+see ``gateway/tests/runtime/concurrency_limited_handler.py``.
 """
 
 from __future__ import annotations
 
-import logging
 import threading
 
-from core.agent_harness.session import SessionCore
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback, GatewaySink
 from platform.deployment_contracts.models import SizeProfile
 
 _PROFILE_LIMITS = {
@@ -63,51 +60,7 @@ class TurnConcurrencyGate:
         self._semaphore.release()
 
 
-class ConcurrencyLimitedTurnHandler:
-    """Capacity wrapper for arbitrary :data:`GatewayAgentCallback` callables.
-
-    Prefer ``GatewayTurnHandler(gate=…)`` for production chat. Keep this for
-    tests and non-handler callbacks that share the same gate.
-    """
-
-    def __init__(
-        self,
-        *,
-        handler: GatewayAgentCallback,
-        gate: TurnConcurrencyGate,
-        busy_message: str = "OpenSRE is at capacity. Please try again shortly.",
-    ) -> None:
-        self._handler = handler
-        self._gate = gate
-        self._busy_message = busy_message
-
-    def __call__(
-        self,
-        text: str,
-        session: SessionCore,
-        sink: GatewaySink,
-        logger: logging.Logger,
-    ) -> None:
-        if not self._gate.try_acquire():
-            sink.finalize(self._busy_message)
-            return
-        try:
-            self._handler(text, session, sink, logger)
-        finally:
-            self._gate.release()
-
-
-def gated_callback(
-    handler: GatewayAgentCallback,
-    gate: TurnConcurrencyGate,
-) -> GatewayAgentCallback:
-    """Wrap an arbitrary callback with the shared capacity gate."""
-    return ConcurrencyLimitedTurnHandler(handler=handler, gate=gate)
-
-
 __all__ = [
-    "ConcurrencyLimitedTurnHandler",
     "TurnConcurrencyGate",
-    "gated_callback",
     "turn_limit_for_profile",
 ]

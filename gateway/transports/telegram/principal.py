@@ -20,8 +20,7 @@ def resolve_telegram_principal() -> Principal:
     silo_org = organization_id_for_silo()
     if not silo_org:
         raise PrincipalResolutionError(
-            "Telegram turn cannot be resolved: no organization is configured "
-            "for this deployment"
+            "Telegram turn cannot be resolved: no organization is configured for this deployment"
         )
     return Principal.org(silo_org)
 

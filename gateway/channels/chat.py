@@ -116,9 +116,7 @@ def start_transports(
             logger.warning("%s chat failed: %s", spec.name.capitalize(), exc)
             statuses[spec.name] = f"failed ({exc})"
             continue
-        handles.append(
-            TransportHandle(name=spec.name, worker=worker, status=spec.running_status)
-        )
+        handles.append(TransportHandle(name=spec.name, worker=worker, status=spec.running_status))
         statuses[spec.name] = spec.running_status
     return ChatStartup(handles=handles, statuses=statuses)
 

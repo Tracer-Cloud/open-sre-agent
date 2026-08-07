@@ -7,11 +7,11 @@ import threading
 
 import pytest
 
-from gateway.core.runtime.concurrency import (
-    ConcurrencyLimitedTurnHandler,
-    TurnConcurrencyGate,
-)
+from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.scheduler_concurrency import gate_registered_scheduler_runners
+from gateway.tests.runtime.concurrency_limited_handler import (
+    ConcurrencyLimitedTurnHandler,
+)
 from platform.deployment_contracts.models import SizeProfile
 from platform.scheduler.agent_runner import (
     invoke_agent_runner,

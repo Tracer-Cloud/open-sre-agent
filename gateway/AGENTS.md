@@ -137,8 +137,10 @@ POST /investigate + InvestigationWorker ──► AgentSession.investigate (Path
 ```
 
 - Production chat capacity is on `GatewayTurnHandler(gate=manager.turn_gate)`.
-- `ConcurrencyLimitedTurnHandler` is for tests / arbitrary callbacks only — not a
-  second production turn-handler class.
+- `ConcurrencyLimitedTurnHandler` is **quarantined under**
+  `gateway/tests/runtime/concurrency_limited_handler.py` (tests only). Do not
+  reintroduce it under `gateway/core/` — production uses `gate=` on
+  `GatewayTurnHandler` only.
 - **Chat vs investigate:** the process gate covers gateway **chat** and
   **scheduler** runners. Path-2 HTTP investigate (`POST /investigate`,
   `InvestigationWorker`) does **not** take the gate today — do not assume web

@@ -28,9 +28,11 @@ opensre gateway start
         │
         ▼
 gateway.core.runtime.daemon.start_gateway_daemon
-        │  spawns: python -m surfaces.cli.gateway_entry
+        │  spawns surface-owned argv (see surfaces.shared.gateway_entrypoint):
+        │    venv:   python -m surfaces.cli.gateway_entry
+        │    frozen: opensre gateway start --foreground
         ▼
-surfaces/cli/gateway_entry.py
+surfaces/cli/gateway_entry.py  (or Click foreground → same composition root)
         │  wires headless slash ports
         ▼
 gateway.core.runtime.manager.GatewayManager.start_gateway
