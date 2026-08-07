@@ -108,9 +108,10 @@ def with_duplicate_action_call_guard(
 
     - Fully successful batch → replace snapshot with that batch (so A → B → A
       still allows the second A after B replaces the snapshot).
-    - Mixed batch (some suppressed as replays, some newly succeeded) → fold
-      successes into the snapshot with still-relevant suppressed members so a
-      brand-new action is not invisible to the next re-emit.
+    - Mixed batch (suppressed replay + new success) → replace snapshot with
+      *only* the newly succeeded fingerprints. That blocks an immediate re-emit
+      of the new action without retaining suppressed members (which would block
+      a later intentional standalone replay of A after {A suppressed, C ran}).
     - Pure suppress or total failure → leave the snapshot alone (a third
       identical replay stays blocked; failed calls may still retry).
 
@@ -136,11 +137,10 @@ def with_duplicate_action_call_guard(
             if succeeded == current_batch:
                 last_fully_succeeded_batch = current_batch
             elif succeeded:
-                # Mixed suppress/success: keep suppressed members that were
-                # already in the snapshot and add newly succeeded ones.
-                last_fully_succeeded_batch = (
-                    last_fully_succeeded_batch & current_batch
-                ) | succeeded
+                # Mixed suppress/success: snapshot is only what newly ran.
+                # Do not retain suppressed members — that would block a later
+                # intentional standalone A after {A suppressed, C succeeded}.
+                last_fully_succeeded_batch = succeeded
             # else: pure suppress or all-error — leave snapshot intact.
         keys: list[_ActionCallFingerprint] = []
         for tool_call in tool_calls:

@@ -1172,6 +1172,101 @@ def test_action_turn_mixed_replay_and_new_action_enters_snapshot() -> None:
     assert runs == ["/health", "/integrations list", "/remote"]
 
 
+def test_action_turn_mixed_batch_allows_later_standalone_of_suppressed_member() -> None:
+    """After {A,B} then {A suppressed, C ran}, a later standalone A must still run.
+
+    The mixed-batch snapshot is only {C}; retaining A would block the intentional
+    interleaved repeat.
+    """
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="i1",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="r1",
+                            name="slash_invoke",
+                            input={"command": "/remote", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h3",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "check health and integrations, then health with remote, then health again",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list", "/remote", "/health"]
+
+
 def test_action_turn_same_multi_command_batch_twice_is_out_of_scope() -> None:
     """Product tradeoff: intentional same-batch-twice equals accidental consecutive replay.
 
