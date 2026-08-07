@@ -6,7 +6,12 @@ from collections import deque
 from typing import Any
 
 from core.agent.mixins import EventEmitterMixin, SteeringMixin, ToolFilterMixin
-from core.events import RuntimeEvent, runtime_event_from_tuple
+from core.events import (
+    MessageUpdateEvent,
+    RuntimeEvent,
+    runtime_event_from_tuple,
+    tuple_payload_from_event,
+)
 from core.messages import UserRuntimeMessage
 
 
@@ -83,6 +88,43 @@ def test_emit_routes_unmapped_kind_to_tuple() -> None:
     e._emit("zzz_unmapped_kind", {"k": "v"})
     assert tuple_seen == [("zzz_unmapped_kind", {"k": "v"})]
     assert runtime_seen == []
+
+
+def test_message_update_round_trips_between_tuple_and_runtime_shapes() -> None:
+    event = runtime_event_from_tuple(
+        "message_update",
+        {"content": "### [1/8] Prerequisite checks", "iteration": 2, "has_tool_calls": True},
+    )
+    assert isinstance(event, MessageUpdateEvent)
+    assert event.delta == "### [1/8] Prerequisite checks"
+    assert event.iteration == 2
+
+    payload = tuple_payload_from_event(event)
+    assert payload is not None
+    kind, data = payload
+    assert kind == "message_update"
+    assert data["content"] == "### [1/8] Prerequisite checks"
+    assert data["iteration"] == 2
+    assert data["has_tool_calls"] is True
+
+
+def test_message_update_with_none_iteration_round_trips_without_error() -> None:
+    """A tuple payload carrying ``iteration=None`` must map to ``iteration=None``.
+
+    ``tuple_payload_from_event`` writes ``event.iteration`` verbatim, and
+    ``MessageUpdateEvent.iteration`` defaults to ``None`` — the round-trip must
+    not crash on ``int(None)``.
+    """
+    source = MessageUpdateEvent(message=None, delta="hi")
+    payload = tuple_payload_from_event(source)
+    assert payload is not None
+    kind, data = payload
+    assert data["iteration"] is None
+
+    event = runtime_event_from_tuple(kind, data)
+    assert isinstance(event, MessageUpdateEvent)
+    assert event.iteration is None
+    assert event.delta == "hi"
 
 
 def test_emit_routes_mapped_kind_to_runtime() -> None:

@@ -14,7 +14,7 @@ Order is load-bearing:
    abstractions during a command routes through the Rich-aware implementations
    instead of the no-op defaults.
 
-Mirrors :mod:`gateway.runtime.startup`, which does the same job for the gateway
+Mirrors :mod:`gateway.core.runtime.startup`, which does the same job for the gateway
 process. The two differ because a CLI owns a terminal and a gateway does not.
 """
 

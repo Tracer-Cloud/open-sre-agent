@@ -4,13 +4,13 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.slack.security import (
+from gateway.transports.slack.security import (
     enforce_inbound_slack_message_security,
     persist_policy_if_needed,
 )
 from integrations.messaging_security import MessagingIdentityPolicy
 
-_SECURITY = "gateway.slack.security"
+_SECURITY = "gateway.transports.slack.security"
 
 
 @pytest.fixture

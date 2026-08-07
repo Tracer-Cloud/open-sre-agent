@@ -11,7 +11,7 @@ Exports, by pipeline stage:
   the provider-agnostic OpenSRE envelope, never exposing raw MCP protocol frames.
 
 This module lives under ``tools/utils`` (skipped by the tool registry) so it
-is shared infrastructure, not a registered tool.
+is core infrastructure, not a registered tool.
 """
 
 from __future__ import annotations

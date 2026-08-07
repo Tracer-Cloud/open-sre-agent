@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock
 
-from gateway.telegram.output_sink import GatewayOutputSink
-from gateway.telegram.poller.client import TelegramBotClient
+from gateway.transports.telegram.output_sink import GatewayOutputSink
+from gateway.transports.telegram.poller.client import TelegramBotClient
 from platform.notifications.limits import MAX_MESSAGE_SIZE
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gateway.discord.client import split_discord_content
+from gateway.transports.discord.client import split_discord_content
 
 
 def test_split_discord_content_under_limit() -> None:

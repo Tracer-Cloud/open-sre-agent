@@ -16,7 +16,7 @@ from surfaces.interactive_shell.ui.output.environment import (
 from surfaces.interactive_shell.ui.output.events import DisplayProtocol, ProgressEvent
 from surfaces.interactive_shell.ui.output.labels import _humanise_message, _node_label
 from surfaces.interactive_shell.ui.output.toggles import (
-    CtrlOToggleWatcher,
+    ToolDetailToggleWatcher,
     register_tool_detail_toggle,
     toggle_active_tool_details,
 )
@@ -67,13 +67,15 @@ class ProgressTracker(ToolTrackingMixin):
         self._printed_tool_detail_ids: set[int] = set()
         self._tool_summary_counts: dict[str, dict[str, int]] = {}
         self._tool_summary_order: list[tuple[str, str]] = []
-        self._toggle_watcher: CtrlOToggleWatcher | None = None
+        self._toggle_watcher: ToolDetailToggleWatcher | None = None
         self._toggle_unregister: Callable[[], None] | None = None
         if self._rich and not self._silent:
             self._display = _make_event_log_display(t0=self._t0, console=self._output_console)
             self._toggle_unregister = register_tool_detail_toggle(self.toggle_tool_details)
             if not self._repl_append_only:
-                self._toggle_watcher = CtrlOToggleWatcher(_invoke_registered_tool_detail_toggle)
+                self._toggle_watcher = ToolDetailToggleWatcher(
+                    _invoke_registered_tool_detail_toggle
+                )
                 self._toggle_watcher.start()
 
     @property

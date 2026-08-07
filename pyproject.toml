@@ -22,7 +22,7 @@ dependencies = [
     # uv builds on Python 3.14) and changes the model price table (breaks the
     # gpt-5.6 alias pricing). 1.90.0 is the last version verified green here.
     # Lift once the wheel + pricing are resolved upstream.
-    "litellm>=1.90.0,<1.91.0",
+    "litellm>=1.90.0,<1.96.0",
     # Data validation
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
@@ -34,12 +34,12 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     # Authentication
     "PyJWT>=2.13.0",
-    # Cap below 49: cryptography 49.0.0 dropped x86-64 macOS wheels, which breaks
-    # the frozen darwin-x64 release binary (PyInstaller bundles a broken _openssl
-    # extension and the binary crashes at startup). Keep 48.x until the darwin-x64
-    # release target is dropped. Dependabot is told to leave this pin alone in
-    # .github/dependabot.yml.
-    "cryptography>=48.0.1,<49",
+    # 50.0.0 is the first version patched for CVE-2026-69247 (GHSA-g6cj-pr64-35w5,
+    # PKCS#7 Bleichenbacher oracle). cryptography >=49 ships no x86-64 macOS wheel,
+    # so the frozen darwin-x64 release binary builds it from source against
+    # OpenSSL >= 3.2 (SSL_get0_group_name). release.yml pins Homebrew openssl@3
+    # and re-copies those dylibs into the PyInstaller onedir bundle.
+    "cryptography>=50.0.0,<51",
     "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",

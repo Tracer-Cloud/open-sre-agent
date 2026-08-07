@@ -18,12 +18,12 @@ from config.constants.tenancy import (
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
 )
-from gateway.runtime.credential_hydration import (
+from gateway.core.runtime.credential_hydration import (
     CredentialHydrationConfig,
     GatewayCredentialHydrator,
 )
-from gateway.runtime.errors import GatewayConfigurationError
-from gateway.runtime.manager import GatewayManager
+from gateway.core.runtime.errors import GatewayConfigurationError
+from gateway.core.runtime.manager import GatewayManager
 from integrations import store
 from integrations.credentials_api import IntegrationStoreV2
 
@@ -80,7 +80,7 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
     path = tmp_path / "home" / ".opensre" / "integrations.json"
     monkeypatch.setattr(store, "STORE_PATH", path)
     monkeypatch.setattr(
-        "gateway.runtime.credential_hydration.CredentialsApiClient",
+        "gateway.core.runtime.credential_hydration.CredentialsApiClient",
         _ApiClient,
     )
     secrets = _Secrets(json.dumps({"credentials_api_token": "bootstrap-token"}))
@@ -323,7 +323,7 @@ def test_integrations_secret_wins_when_both_routes_are_configured(
     # Arrange: both routes configured, each yielding a distinguishable service.
     monkeypatch.setattr(store, "STORE_PATH", tmp_path / "integrations.json")
     monkeypatch.setattr(
-        "gateway.runtime.credential_hydration.CredentialsApiClient",
+        "gateway.core.runtime.credential_hydration.CredentialsApiClient",
         _ApiClient,
     )
     bootstrap_arn = "arn:aws:secretsmanager:region:account:secret:bootstrap"

@@ -146,7 +146,20 @@ def sanitize_strict_tool_schema(
     for key, value in _flatten_composite_keywords(schema).items():
         if key in unsupported_keys:
             continue
-        if isinstance(value, dict):
+        # Property / patternProperty names are field identifiers, not schema
+        # keywords — do not filter them against unsupported_keys (e.g. a field
+        # named ``title`` must survive even though ``title`` is stripped as a
+        # schema-metadata key elsewhere).
+        if key in {"properties", "patternProperties"} and isinstance(value, dict):
+            cleaned[key] = {
+                prop_name: (
+                    sanitize_strict_tool_schema(prop_schema, unsupported_keys=unsupported_keys)
+                    if isinstance(prop_schema, dict)
+                    else prop_schema
+                )
+                for prop_name, prop_schema in value.items()
+            }
+        elif isinstance(value, dict):
             cleaned[key] = sanitize_strict_tool_schema(value, unsupported_keys=unsupported_keys)
         elif isinstance(value, list):
             cleaned[key] = [

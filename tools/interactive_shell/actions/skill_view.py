@@ -1,10 +1,10 @@
-"""Load one action-agent skill playbook on demand (thin harness / fat skills)."""
+"""Load one action-agent skill body on demand (thin harness / fat skills)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.prompts.skills_loader import list_action_skills, load_skill_body
+from core.agent_harness.prompts.skills.loader import list_action_skills, load_skill_body
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,
@@ -35,11 +35,11 @@ def execute_skill_view_tool(args: dict[str, Any], ctx: ActionToolContext) -> dic
         }
     slug = name.replace("_", "-").lower()
     # ``summary`` is what the user sees; ``content`` is for the model only.
-    # Without it the generic formatter prints the whole playbook on screen.
+    # Without it the generic formatter prints the whole skill body on screen.
     return {
         "ok": True,
         "name": slug,
-        "summary": f"loaded the {slug} playbook",
+        "summary": f"loaded the {slug} skill",
         "content": body,
     }
 
@@ -51,7 +51,7 @@ def run_skill_view(*, name: str, context: Any) -> dict[str, Any]:
 skill_view_tool = RegisteredTool(
     name="skill_view",
     description=(
-        "Load the full playbook for one action-agent skill by name from the "
+        "Load the full body of one action-agent skill by name from the "
         "SKILLS INDEX. Call this in the same turn when the user request matches "
         "an indexed skill, BEFORE emitting that skill's tool sequence. Do not "
         "invent workflow steps from the one-line index description alone."

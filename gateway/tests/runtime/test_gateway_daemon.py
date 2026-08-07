@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from gateway.runtime import daemon
+from gateway.core.runtime import daemon
 
 _SLEEPER = (sys.executable, "-c", "import time; time.sleep(30)")
 _CRASHER = (sys.executable, "-c", "print('boom'); raise SystemExit(1)")

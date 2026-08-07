@@ -99,6 +99,9 @@ class _StubPromptContextProvider:
     def long_term_memory(self) -> str:
         return ""
 
+    def setup_state(self) -> str:
+        return ""
+
     def suggested_synthetic_prompt(self) -> str:
         return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 
@@ -114,6 +117,7 @@ def _agent_ctx(
     configured_integrations_known: bool = False,
     last_state: dict[str, Any] | None = None,
     last_synthetic_observation_path: str | None = None,
+    recovery_note: str | None = None,
 ) -> TurnSnapshot:
     return TurnSnapshot(
         text=text,
@@ -123,6 +127,7 @@ def _agent_ctx(
         last_state=last_state,
         last_synthetic_observation_path=last_synthetic_observation_path,
         reasoning_effort=None,
+        recovery_note=recovery_note,
     )
 
 
@@ -158,6 +163,17 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations=("github", "datadog"),
             configured_integrations_known=True,
             conversation_messages=convo,
+        )
+    )
+    # WAL recovery note (first turn after /resume of an interrupted session).
+    cases["action_system_with_recovery_note"] = build_action_system_prompt(
+        _agent_ctx(
+            recovery_note=(
+                "A previous turn in this session was interrupted while tool "
+                "calls were still executing (no result was recorded for them):\n"
+                "- shell_run step-2 >> /tmp/demo_state.json (step 2)\n"
+                "Whether their side effects landed is unknown."
+            ),
         )
     )
 

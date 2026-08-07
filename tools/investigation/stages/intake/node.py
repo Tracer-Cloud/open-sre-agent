@@ -93,7 +93,9 @@ def extract_alert(state: InvestigationState) -> dict[str, Any]:
 
     details = _extract_alert_details(state)
 
-    if details.is_noise:
+    # An investigation the user explicitly asked for is never noise, whatever
+    # shape its text takes — the gate exists for unsolicited listener messages.
+    if details.is_noise and not state.get("user_requested"):
         return _handle_noise(state, tracker)
 
     _handle_start_reaction(state)

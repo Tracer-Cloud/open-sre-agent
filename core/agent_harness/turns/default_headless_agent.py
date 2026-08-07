@@ -16,7 +16,7 @@ from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.ports import OutputSink, PromptContextProvider, TurnAccounting
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,
@@ -54,6 +54,7 @@ def build_default_headless_agent(
     slash_ports_factory: SlashPortsFactory | None = None,
     prompts: PromptContextProvider | None = None,
     gather_enabled: bool = True,
+    gather_max_iterations: int | None = None,
     is_tty: bool = False,
 ) -> HeadlessAgent:
     """Return a :class:`HeadlessAgent` wired with default harness ports.
@@ -96,6 +97,7 @@ def build_default_headless_agent(
         accounting=turn_accounting,
         error_reporter=error_reporter,
         gather_enabled=gather_enabled,
+        gather_max_iterations=gather_max_iterations,
         is_tty=is_tty,
     )
 

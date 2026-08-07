@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from enum import StrEnum
 
-ToolSurface = Literal["investigation", "chat", "action"]
+
+class ToolSurface(StrEnum):
+    """Closed set of surfaces a registered tool can be exposed on."""
+
+    INVESTIGATION = "investigation"
+    CHAT = "chat"
+    ACTION = "action"

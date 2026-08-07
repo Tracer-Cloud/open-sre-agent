@@ -13,7 +13,7 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.tools.action_tools import get_action_tool
-from gateway.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
     headless_slash_ports,
@@ -168,28 +168,28 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     def _install_runtime(*, harness_adapters: bool = True, scheduler_runners: bool = True) -> None:
         calls.append((harness_adapters, scheduler_runners))
 
-    # Registration happens in gateway.runtime.startup, which imports the helper at
+    # Registration happens in gateway.core.runtime.startup, which imports the helper at
     # module scope — patch the name it resolved, not the source module.
-    monkeypatch.setattr("gateway.runtime.startup.install_runtime", _install_runtime)
+    monkeypatch.setattr("gateway.core.runtime.startup.install_runtime", _install_runtime)
     monkeypatch.setattr(
-        "gateway.runtime.manager.start_telegram_worker",
+        "gateway.core.runtime.manager.start_telegram_worker",
         lambda **_kwargs: (MagicMock(), MagicMock()),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).
     monkeypatch.setattr(
-        "gateway.runtime.manager.GatewayManager._start_scheduler",
+        "gateway.core.runtime.manager.GatewayManager._start_scheduler",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "gateway.runtime.manager.GatewayManager._start_web",
+        "gateway.core.runtime.manager.GatewayManager._start_web",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "gateway.runtime.manager.GatewayManager._publish_status",
+        "gateway.core.runtime.manager.GatewayManager._publish_status",
         lambda *_args, **_kwargs: None,
     )
 
-    from gateway.runtime.manager import GatewayManager
+    from gateway.core.runtime.manager import GatewayManager
 
     GatewayManager().start_gateway(wait=False)
     assert (True, False) in calls

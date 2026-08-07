@@ -7,7 +7,8 @@ agent loop. Subprocess-backed LLM CLIs live under `integrations/llm_cli/`.
 
 | File | Role |
 | --- | --- |
-| `config/config.py` | Declares `LLMProvider`, provider env vars, defaults, and validation requirements. |
+| `config/llm_models.py` | Canonical per-provider model-tier defaults, base URLs, and `*_LLM_CONFIG` shapes. |
+| `config/config.py` | Declares `LLMProvider`, `LLMSettings` validation, and env-backed resolution. |
 | `config/llm_auth/provider_catalog.py` | Canonical `ProviderSpec` metadata shared by wizard, auth, and runtime checks. |
 | `core/llm/factory.py` | Single routing entrypoint: `resolve_llm_route()`, `get_llm(role)`, `reset_llm_clients()`. |
 | `core/llm/client_builders.py` | Construct the client for a resolved route: `build_agent_client()`, `build_reasoning_client()`. |
@@ -61,7 +62,8 @@ and wizard env sync call `reset_llm_clients()` directly.
 ## Adding a Hosted API Provider
 
 1. Add the provider literal to `LLMProvider` and normalization/validation paths in `config/config.py`.
-2. Add `ProviderSpec` in `config/llm_auth/provider_catalog.py` and matching `ProviderOption` in
+2. Add a `ProviderModelDefaults` row in `config/llm_models.py` (model-tier defaults / base URL).
+3. Add `ProviderSpec` in `config/llm_auth/provider_catalog.py` and matching `ProviderOption` in
    `surfaces/cli/wizard/config.py` (model env vars, defaults, `endpoint_env` if needed).
 3. Add runtime construction (routing itself stays in `core/llm/factory.py`; clients are built in `core/llm/client_builders.py`):
    - **First-party provider** (its own SDK models + a LiteLLM prefix): add **one row** to

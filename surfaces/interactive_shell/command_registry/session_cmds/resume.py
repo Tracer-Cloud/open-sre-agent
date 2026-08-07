@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.session import SessionManager
+from core.agent_harness.session.persistence.wal_recovery import format_recovery_note
 from surfaces.interactive_shell.command_registry.session_cmds.resume_rendering import (
     render_resumed_session_history,
 )
@@ -128,6 +129,18 @@ def _apply_resume_data(
         console.print(
             f"[{DIM}]accumulated context restored:[/] "
             + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
+        )
+
+    recovery_note = format_recovery_note(data.get("dangling_tool_intents") or [])
+    if recovery_note:
+        # The full note goes to the next action turn's prompt; the console only
+        # gets a short heads-up so the user knows why the agent may re-check.
+        session.pending_recovery_note = recovery_note
+        interrupted = len(data.get("dangling_tool_intents") or [])
+        console.print(
+            f"[{WARNING}]this session was interrupted mid-turn "
+            f"({interrupted} tool call(s) never finished) — the agent will "
+            "verify state before resuming.[/]"
         )
 
     if slash_command:

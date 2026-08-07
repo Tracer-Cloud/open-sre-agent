@@ -48,8 +48,8 @@ class RejectionBehavior(StrEnum):
 
 class MessagingPlatform(StrEnum):
     """Inbound-identity platforms: which gateways receive messages and run
-    DM-pairing/allow-list security checks (see ``gateway/telegram``,
-    ``gateway/slack``, ``gateway/discord``, and the ``opensre messaging`` CLI).
+    DM-pairing/allow-list security checks (see ``gateway/transports/telegram``,
+    ``gateway/transports/slack``, ``gateway/transports/discord``, and the ``opensre messaging`` CLI).
 
     Distinct from ``platform.scheduler.types.Provider``, the canonical
     *delivery* vocabulary for scheduled outbound messages. Rocket.Chat is a

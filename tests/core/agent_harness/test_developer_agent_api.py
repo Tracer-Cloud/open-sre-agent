@@ -238,8 +238,9 @@ def test_custom_output_sink_protocol_is_enough(stub_action_planner: None) -> Non
             label: str,
             chunks: Any,
             suppress_if_starts_with: str | None = None,
+            defer_want_me_to_closer: bool = False,
         ) -> str:
-            _ = (label, suppress_if_starts_with)
+            _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
             text = "".join(str(c) for c in chunks)
             self.streamed.append(text)
             return text

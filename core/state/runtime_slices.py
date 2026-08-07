@@ -42,6 +42,7 @@ class AlertInputSlice(TypedDict, total=False):
     """Raw alert input and incident time window (``extract_alert``)."""
 
     is_noise: bool
+    user_requested: bool
     alert_name: str
     severity: str
     alert_source: str

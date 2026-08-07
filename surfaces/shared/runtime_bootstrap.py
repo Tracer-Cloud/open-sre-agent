@@ -4,7 +4,7 @@ Composition root: ``tools`` and ``integrations`` are sibling layers and must
 not import each other (``.importlinter.strict``). Call sites in ``surfaces/``
 share this helper so the registration set stays in one place.
 
-Gateway has a peer copy at :mod:`gateway.runtime.bootstrap` — keep the flag
+Gateway has a peer copy at :mod:`gateway.core.runtime.bootstrap` — keep the flag
 matrix and call order in sync.
 
 Typical flags:

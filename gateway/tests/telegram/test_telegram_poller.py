@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from gateway.telegram.poller.poller import TelegramPoller, _decode_telegram_response
+from gateway.transports.telegram.poller.poller import TelegramPoller, _decode_telegram_response
 
 
 def test_decode_telegram_response_parses_non_200_json() -> None:
@@ -21,8 +21,8 @@ def test_decode_telegram_response_parses_non_200_json() -> None:
     assert data["error_code"] == 409
 
 
-@patch("gateway.telegram.poller.poller.time.sleep")
-@patch("gateway.telegram.poller.poller.httpx.get")
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
 def test_poll_once_conflict_is_debug_not_warning(
     mock_get: MagicMock,
     mock_sleep: MagicMock,
@@ -30,7 +30,7 @@ def test_poll_once_conflict_is_debug_not_warning(
 ) -> None:
     import logging
 
-    caplog.set_level(logging.DEBUG, logger="gateway.telegram.poller.poller")
+    caplog.set_level(logging.DEBUG, logger="gateway.transports.telegram.poller.poller")
     mock_get.return_value = httpx.Response(
         409,
         json={
@@ -47,8 +47,8 @@ def test_poll_once_conflict_is_debug_not_warning(
     )
 
 
-@patch("gateway.telegram.poller.poller.time.sleep")
-@patch("gateway.telegram.poller.poller.httpx.get")
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
 def test_poll_once_success_resets_conflict_backoff(
     mock_get: MagicMock, _mock_sleep: MagicMock
 ) -> None:
@@ -66,8 +66,8 @@ def test_poll_once_success_resets_conflict_backoff(
     assert poller._conflict_backoff_seconds == 2.0
 
 
-@patch("gateway.telegram.poller.poller.time.sleep")
-@patch("gateway.telegram.poller.poller.httpx.get")
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
 def test_poll_once_parses_inbound_message(mock_get: MagicMock, mock_sleep: MagicMock) -> None:
     mock_get.return_value = httpx.Response(
         200,

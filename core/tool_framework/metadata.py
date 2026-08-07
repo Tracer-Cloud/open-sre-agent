@@ -9,7 +9,8 @@ evolve independently of the dispatch protocol in ``BaseTool``.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 from pydantic import Field, field_validator
 
@@ -17,18 +18,28 @@ from config.strict_config import StrictConfigModel
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 
-EvidenceType = Literal[
-    "logs",
-    "metrics",
-    "traces",
-    "events",
-    "topology",
-    "deployment_metadata",
-    "query_stats",
-    "artifact",
-    "other",
-]
-SideEffectLevel = Literal["none", "read_only", "mutating", "external"]
+
+class EvidenceType(StrEnum):
+    """Closed set of evidence categories a tool result can contribute."""
+
+    LOGS = "logs"
+    METRICS = "metrics"
+    TRACES = "traces"
+    EVENTS = "events"
+    TOPOLOGY = "topology"
+    DEPLOYMENT_METADATA = "deployment_metadata"
+    QUERY_STATS = "query_stats"
+    ARTIFACT = "artifact"
+    OTHER = "other"
+
+
+class SideEffectLevel(StrEnum):
+    """Closed set of side-effect levels a tool declares."""
+
+    NONE = "none"
+    READ_ONLY = "read_only"
+    MUTATING = "mutating"
+    EXTERNAL = "external"
 
 
 class ToolMetadata(StrictConfigModel):

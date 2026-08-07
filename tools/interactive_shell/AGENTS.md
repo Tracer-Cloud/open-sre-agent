@@ -16,7 +16,7 @@ tools listed in `core/agent_harness/tools/action_tools.py`:
   `run_shell_command`/`run_cd`/`run_pwd` runner behind `actions/shell.py`.
 - `synthetic/` — the synthetic-test runner behind `actions/synthetic.py`.
 - `implementation/` — the `/implement` (Claude Code) launcher.
-- `shared/` — cross-tool helpers (e.g. investigation launch, `allow_tool`).
+- `core/` — cross-tool helpers (e.g. investigation launch, `allow_tool`).
 - `contracts` — imported by `command_registry.slash_catalog` during early import
   wiring; see the `__init__.py` docstring for why tool submodules must be
   imported explicitly rather than eagerly here (circular-import avoidance).

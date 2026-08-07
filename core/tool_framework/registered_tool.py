@@ -26,7 +26,7 @@ from core.tool_framework.schema import (
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -53,9 +53,11 @@ class RegisteredTool:
     run: Callable[..., Any] = field(repr=False)
     display_name: str | None = None
     source_id: str | None = None
-    evidence_type: EvidenceType | None = None
-    side_effect_level: SideEffectLevel | None = None
-    surfaces: tuple[ToolSurface, ...] = _DEFAULT_SURFACES
+    # ``... | str`` keeps plain wire values accepted from callers; the
+    # ``ToolMetadata`` round-trip in ``__post_init__`` coerces them to members.
+    evidence_type: EvidenceType | str | None = None
+    side_effect_level: SideEffectLevel | str | None = None
+    surfaces: tuple[ToolSurface | str, ...] = _DEFAULT_SURFACES
     use_cases: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)
     anti_examples: list[str] = field(default_factory=list)
@@ -288,8 +290,8 @@ class RegisteredTool:
         input_model: type[BaseModel] | None = None,
         source: EvidenceSource | None,
         source_id: str | None = None,
-        evidence_type: EvidenceType | None = None,
-        side_effect_level: SideEffectLevel | None = None,
+        evidence_type: EvidenceType | str | None = None,
+        side_effect_level: SideEffectLevel | str | None = None,
         surfaces: Iterable[str] | None = None,
         use_cases: list[str] | None = None,
         examples: list[str] | None = None,

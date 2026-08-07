@@ -363,7 +363,7 @@ def test_homebrew_sync_script_updates_formula_checksums() -> None:
 def test_dockerfile_installs_runtime_entrypoint() -> None:
     text = DOCKERFILE.read_text(encoding="utf-8")
     assert "FROM python:" in text
-    assert "opensre gateway" in text or "uvicorn gateway.http.webapp" in text
+    assert "opensre gateway" in text or "uvicorn gateway.web.webapp" in text
 
 
 def test_makefile_install_uses_uv_sync() -> None:

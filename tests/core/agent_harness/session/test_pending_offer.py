@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.tools.tool_context import ActionToolContext
 from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
@@ -78,6 +78,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": "slack",
+            "chat_id": "C0123ABCD",
             "briefing_text": briefing,
         },
         ctx,
@@ -100,6 +101,7 @@ def test_propose_alone_without_briefing_work_is_rejected() -> None:
             "cron": "0 8 * * 1-5",
             "timezone": "UTC",
             "provider": "slack",
+            "chat_id": "C0123ABCD",
         },
         ctx,
     )
@@ -296,10 +298,10 @@ def test_the_offer_tool_does_not_advertise_itself_as_the_way_to_run_a_report() -
 def test_the_skill_forbids_offering_before_the_work() -> None:
     """The recipe must state the ordering, not merely imply it by step number."""
     # Arrange
-    from core.agent_harness.prompts.skills_loader import skills_dir
+    from core.agent_harness.prompts.skills.loader import skills_dir
 
     body = " ".join(
-        (skills_dir() / "morning_report.md").read_text(encoding="utf-8").lower().split()
+        (skills_dir() / "morning_report" / "SKILL.md").read_text(encoding="utf-8").lower().split()
     )
 
     # Assert
@@ -417,6 +419,7 @@ def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
             "kind": "daily_summary",
             "cron": "0 8 * * 1-5",
             "provider": "slack",
+            "chat_id": "C0123ABCD",
             "briefing_text": "Good morning! Weather — Amsterdam: +20C\nTop headlines:\n- one",
         },
         ctx,

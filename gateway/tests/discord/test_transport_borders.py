@@ -2,8 +2,8 @@
 
 Borders under test
 ------------------
-* ``gateway.discord`` and ``gateway.slack`` never import each other — the
-  shared approval broker and attention gate live in ``gateway.runtime``.
+* ``gateway.transports.discord`` and ``gateway.transports.slack`` never import each other — the
+  shared approval broker and attention gate live in ``gateway.core.runtime``.
 * Importing the Discord transport pulls in no Slack SDK.
 * Discord is org-scoped like Slack: two members of one org get private
   sessions, and a Discord row never answers a lookup from another transport.
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from config.principal import Principal
-from gateway.storage import FileBindingStore
+from gateway.core.storage import FileBindingStore
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -53,7 +53,7 @@ def _offenders(package: str, banned_prefix: str) -> list[str]:
 
 def test_discord_package_never_imports_slack() -> None:
     # Arrange / Act
-    offenders = _offenders("gateway.discord", "gateway.slack")
+    offenders = _offenders("gateway.transports.discord", "gateway.transports.slack")
 
     # Assert
     assert offenders == [], "Discord reached into the Slack transport:\n" + "\n".join(offenders)
@@ -61,7 +61,7 @@ def test_discord_package_never_imports_slack() -> None:
 
 def test_slack_package_never_imports_discord() -> None:
     # Arrange / Act
-    offenders = _offenders("gateway.slack", "gateway.discord")
+    offenders = _offenders("gateway.transports.slack", "gateway.transports.discord")
 
     # Assert
     assert offenders == [], "Slack reached into the Discord transport:\n" + "\n".join(offenders)
@@ -70,22 +70,32 @@ def test_slack_package_never_imports_discord() -> None:
 def test_shared_approval_module_imports_no_transport() -> None:
     """The extracted broker must not depend on the transports that use it."""
     # Arrange
-    shared = REPO_ROOT / "gateway" / "runtime" / "approvals.py"
+    shared = REPO_ROOT / "gateway" / "core" / "runtime" / "approvals.py"
 
     # Act
     imported = _imported_modules(shared)
 
     # Assert
-    assert not [n for n in imported if n.startswith(("gateway.slack", "gateway.discord"))]
+    assert not [
+        n
+        for n in imported
+        if n.startswith(
+            (
+                "gateway.transports.slack",
+                "gateway.transports.discord",
+                "gateway.transports.telegram",
+            )
+        )
+    ]
 
 
 def test_importing_discord_transport_loads_no_slack_sdk() -> None:
     """A Discord-only deployment must not pay for, or ship, the Slack SDK."""
     # Arrange: a clean interpreter, so nothing another test imported counts.
     probe = (
-        "import sys; import gateway.discord.worker; "
+        "import sys; import gateway.transports.discord.worker; "
         "print(len([m for m in sys.modules if m.startswith('slack_sdk')]), "
-        "len([m for m in sys.modules if m.startswith('gateway.slack')]))"
+        "len([m for m in sys.modules if m.startswith('gateway.transports.slack')]))"
     )
 
     # Act

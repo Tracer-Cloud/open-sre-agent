@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from gateway.config.logging_config import (
+from gateway.core.config.logging_config import (
     _GatewayLogFormatter,
     _GatewayProcessLogFilter,
     _quiet_noisy_loggers,
@@ -36,7 +36,7 @@ def _make_record(*, name: str, level: int, message: str) -> logging.LogRecord:
 def test_gateway_formatter_shortens_package_logger_names() -> None:
     formatter = _GatewayLogFormatter(fmt="%(name)s | %(message)s")
     record = _make_record(
-        name="gateway.telegram.inbound_handler",
+        name="gateway.transports.telegram.inbound_handler",
         level=logging.INFO,
         message="turn complete",
     )

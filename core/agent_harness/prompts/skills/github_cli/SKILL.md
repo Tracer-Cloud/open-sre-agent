@@ -2,7 +2,7 @@
 name: github-cli
 description: >-
   GitHub issues/PRs/repos/releases via github_cli (not star history, not CI
-  fix, not security-alert remediation)
+  fix, not security-alert remediation) and also use it for GitHub analytics
 ---
 ══════════════════════════════════════════════════════════
 GITHUB CLI SKILL — interactive-shell action agent:

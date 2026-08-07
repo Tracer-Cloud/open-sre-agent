@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from gateway.discord import feedback
-from gateway.discord.feedback import FEEDBACK_GOOD_ID, record_feedback_interaction
+from gateway.transports.discord import feedback
+from gateway.transports.discord.feedback import FEEDBACK_GOOD_ID, record_feedback_interaction
 
 
 def _interaction(custom_id: str) -> SimpleNamespace:

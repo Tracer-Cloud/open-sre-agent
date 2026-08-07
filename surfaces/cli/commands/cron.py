@@ -37,6 +37,13 @@ def cron_command() -> None:
 
 @cron_command.command(name="add")
 @click.option(
+    "--name",
+    type=str,
+    default="",
+    show_default=False,
+    help="Human-readable loop name for list output.",
+)
+@click.option(
     "--kind",
     type=click.Choice(_KIND_CHOICES, case_sensitive=False),
     required=True,
@@ -83,6 +90,7 @@ def cron_command() -> None:
     help="Lookback window in hours for the report (must be >= 1).",
 )
 def cron_add(
+    name: str,
     kind: str,
     cron_expr: str,
     timezone: str,
@@ -98,6 +106,7 @@ def cron_add(
     _validate_chat_id_for_provider(provider, chat_id)
 
     task = ScheduledTask(
+        name=name.strip(),
         kind=TaskKind(kind),
         cron=cron_expr,
         timezone=timezone,
@@ -110,6 +119,8 @@ def cron_add(
 
     added = add_task(task)
     _console.print(f"[green]Task {added.id} created.[/green]")
+    if added.name:
+        _console.print(f"  Name: {added.name}")
     _console.print(f"  Kind: {added.kind.value}  Cron: {added.cron}  TZ: {added.timezone}")
     _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
 
@@ -117,31 +128,37 @@ def cron_add(
 @cron_command.command(name="list")
 def cron_list() -> None:
     """List all scheduled delivery tasks."""
-    from platform.scheduler.store import list_tasks
+    from platform.scheduler.loops import list_loop_summaries
 
-    tasks = list_tasks()
-    if not tasks:
+    loops = list_loop_summaries()
+    if not loops:
         _console.print("[dim]No scheduled tasks configured.[/dim]")
         return
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("ID", style="cyan")
+    table.add_column("Name")
     table.add_column("Kind")
     table.add_column("Cron")
     table.add_column("TZ")
     table.add_column("Provider")
+    table.add_column("Channels")
     table.add_column("Enabled")
+    table.add_column("Next Run")
     table.add_column("Last Run")
 
-    for task in tasks:
+    for loop in loops:
         table.add_row(
-            task.display_id(),
-            task.kind.value,
-            task.cron,
-            task.timezone,
-            task.provider.value,
-            "✓" if task.enabled else "✗",
-            task.last_run or "—",
+            loop.id[:12],
+            loop.name,
+            loop.kind.value,
+            loop.cron,
+            loop.timezone,
+            loop.provider.value,
+            ", ".join(loop.channels),
+            "✓" if loop.enabled else "✗",
+            loop.next_run or "—",
+            loop.last_run or "—",
         )
 
     _console.print(table)

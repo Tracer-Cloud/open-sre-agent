@@ -19,6 +19,18 @@ def _terminal_columns() -> int:
         return _DEFAULT_TERMINAL_COLUMNS
 
 
+def _prompt_line_width(cols: int | None = None) -> int:
+    """Visible width for a live prompt-region line.
+
+    Leave the last terminal column empty. A glyph in that column puts the
+    cursor in the pending-wrap state; on shrink-resize the emulator soft-wraps
+    the line, prompt-toolkit's row accounting drifts, and stale hint/rule
+    frames are left in scrollback.
+    """
+    width = _terminal_columns() if cols is None else cols
+    return max(width - 1, 1)
+
+
 def _clip_text(text: str, max_len: int) -> str:
     if max_len <= 0:
         return ""

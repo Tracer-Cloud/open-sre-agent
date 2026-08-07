@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gateway.telegram.poller.parse_telegram_update import parse_update
+from gateway.transports.telegram.poller.parse_telegram_update import parse_update
 
 
 def test_parse_private_text_message() -> None:

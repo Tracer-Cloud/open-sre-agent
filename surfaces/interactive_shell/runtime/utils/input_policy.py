@@ -22,6 +22,9 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
     {
         "/history",
         "/auth",
+        # ``/choose`` renders the pending ask_user_choice arrow-key picker (raw
+        # os.read on stdin), so the turn must own stdin exclusively.
+        "/choose",
         "/help",
         "/integrations",
         "/investigate",
@@ -42,7 +45,9 @@ _EXCLUSIVE_STDIN_MENU_COMMANDS: frozenset[str] = frozenset(
         "/status",
         "/cost",
         "/tasks",
+        "/loops",
         "/watches",
+        "/work",
         "/alerts",
         "/privacy",
         "/context",
@@ -64,6 +69,11 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
         ("/integrations", "remove"),
         ("/mcp", "connect"),
         ("/mcp", "disconnect"),
+        ("/loops", "active"),
+        ("/loops", "all"),
+        ("/loops", "inbox"),
+        ("/loops", "list"),
+        ("/loops", "messages"),
         ("/rca", "history"),
         ("/rca", "list"),
         ("/rca", "ls"),

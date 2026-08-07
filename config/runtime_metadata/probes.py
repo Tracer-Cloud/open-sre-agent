@@ -36,6 +36,7 @@ _TOOLS_TO_PROBE = (
     "curl",
     "bash",
     "sh",
+    "buzz",
 )
 
 _LOCALTIME_LINK = Path("/etc/localtime")

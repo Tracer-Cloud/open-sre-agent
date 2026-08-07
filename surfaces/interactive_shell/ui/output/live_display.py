@@ -74,7 +74,7 @@ def _render_active_steps(
 
     yield Text("")
     yield Text("┄" * (options.max_width - 1), style=DIM)
-    yield _footer(display, now - display._t0, "ctrl+o tool details  ")
+    yield _footer(display, now - display._t0, "tab tool details  ")
 
 
 def _render_tool_detail_view(
@@ -100,7 +100,7 @@ def _render_tool_detail_view(
         yield from _tool_record_rows(record)
 
     yield Text("┄" * (options.max_width - 1), style=DIM)
-    yield _footer(display, elapsed_total, "ctrl+o compact view  ", phase="TOOL DETAILS")
+    yield _footer(display, elapsed_total, "tab compact view  ", phase="TOOL DETAILS")
 
 
 def _tool_record_rows(record: dict[str, Any]) -> RenderResult:

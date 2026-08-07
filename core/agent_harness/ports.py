@@ -42,8 +42,14 @@ class OutputSink(Protocol):
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        """Stream ``chunks`` to the surface under ``label`` and return the text."""
+        """Stream ``chunks`` to the surface under ``label`` and return the text.
+
+        When ``defer_want_me_to_closer`` is true, surfaces may hold the Want-me-to
+        closer until ``finish_streamed_response`` (optional sink method; gather
+        normalize path).
+        """
 
 
 @runtime_checkable
@@ -161,6 +167,9 @@ class PromptContextProvider(Protocol):
     def long_term_memory(self) -> str:
         raise NotImplementedError
 
+    def setup_state(self) -> str:
+        """The operator's connected integrations and schedules, as a fact block."""
+
     def suggested_synthetic_prompt(self) -> str:
         raise NotImplementedError
 
@@ -200,6 +209,9 @@ class AnswerRequest:
     # here, so naming it — even under ``TYPE_CHECKING`` — closes an import cycle
     # this repo's check rejects.
     turn_plan: Any = None
+    # Gather answers defer Want-me-to paint until the harness normalizes the
+    # closer (dual paste/integrations menus must not be what the user sees).
+    defer_want_me_to_closer: bool = False
 
 
 class StreamAnswerFn(Protocol):

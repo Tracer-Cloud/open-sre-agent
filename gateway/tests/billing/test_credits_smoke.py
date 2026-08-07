@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
-from gateway.billing.credits_client import (
+from gateway.core.billing.credits_client import (
     CreditsOutcome,
     consume_credits,
     organization_id_for_silo,
@@ -34,7 +34,7 @@ def test_metering_off_by_default_makes_no_network_call(monkeypatch: pytest.Monke
     def explode(*_a: object, **_k: object) -> httpx.Response:
         raise AssertionError("metering is off — no HTTP call may be made")
 
-    monkeypatch.setattr("gateway.billing.credits_client.httpx.post", explode)
+    monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", explode)
 
     # Act
     outcome = consume_credits(reason="smoke")
@@ -61,7 +61,7 @@ def test_configured_happy_path_charges_and_allows(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv(USAGE_SECRET_ENV, "sekrit")
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_smoke")
     monkeypatch.setattr(
-        "gateway.billing.credits_client.httpx.post",
+        "gateway.core.billing.credits_client.httpx.post",
         lambda *_a, **_k: httpx.Response(HTTPStatus.OK, json={"balance": 10, "consumed": 1}),
     )
 
