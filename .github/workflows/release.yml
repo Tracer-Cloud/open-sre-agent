@@ -265,8 +265,30 @@ jobs:
           # Prefer `openssl version` over `nm | grep -q`: under pipefail, grep -q
           # closes the pipe early → nm SIGPIPE ("Broken pipe") → false negative
           # even when OpenSSL 3.6.x is fine.
+          # Compare with a portable major.minor.patch check — do not use
+          # `sort -V` (GNU); macOS /usr/bin/sort is BSD and may reject -V.
           OPENSSL_VER="$("${OPENSSL_PREFIX}/bin/openssl" version | awk '{print $2}')"
-          if [[ "$(printf '%s\n' "${OPENSSL_VER}" '3.2.0' | sort -V | head -n1)" != '3.2.0' ]]; then
+          openssl_version_ge() {
+            local ver="$1" min="$2" i
+            local -a va vb
+            IFS='.' read -r -a va <<<"${ver}"
+            IFS='.' read -r -a vb <<<"${min}"
+            for i in 0 1 2; do
+              local ai="${va[i]:-0}" bi="${vb[i]:-0}"
+              ai="${ai%%[!0-9]*}"
+              bi="${bi%%[!0-9]*}"
+              ai="${ai:-0}"
+              bi="${bi:-0}"
+              if ((10#${ai} > 10#${bi})); then
+                return 0
+              fi
+              if ((10#${ai} < 10#${bi})); then
+                return 1
+              fi
+            done
+            return 0
+          }
+          if ! openssl_version_ge "${OPENSSL_VER}" '3.2.0'; then
             echo "::error::Homebrew openssl@3 at ${OPENSSL_PREFIX} is ${OPENSSL_VER} (need >= 3.2)" >&2
             exit 1
           fi
