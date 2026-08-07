@@ -41,7 +41,8 @@ if TYPE_CHECKING:
 class ChatDispatcher(Protocol):
     """Anything that can run one chat turn for a message (headless or TTY)."""
 
-    def dispatch(self, message: str) -> TurnResult: ...
+    def dispatch(self, message: str) -> TurnResult:
+        """Run one turn for ``message`` and return its :class:`TurnResult`."""
 
 
 @dataclass(frozen=True)
