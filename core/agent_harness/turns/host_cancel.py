@@ -40,9 +40,13 @@ def cancel_tool_resources(is_cancelled: Callable[[], bool] | None) -> dict[str, 
         return {}
     from core.agent_harness.tools.tool_context import ACTION_TOOL_CONTEXT_RESOURCE_KEY
 
+    # Bind the narrowed callable: inside the nested class body the parameter
+    # widens back to ``| None``.
+    probe = is_cancelled
+
     class _ProbeContext:
         def __init__(self) -> None:
-            self.console = cancel_probe_console(is_cancelled)
+            self.console = cancel_probe_console(probe)
 
     return {ACTION_TOOL_CONTEXT_RESOURCE_KEY: _ProbeContext()}
 

@@ -53,6 +53,9 @@ class SlackOutputSink:
         # Per-turn tool-execution hooks (e.g. the Block Kit approval gate),
         # read duck-typed by GatewayTurnHandler when building the agent.
         self.tool_hooks = tool_hooks
+        # Set per turn by this transport's dispatcher; the turn handler reads it
+        # to give tools a cooperative cancel signal on soft timeout or stop.
+        self.turn_cancel: threading.Event | None = None
         self._client = client
         self._channel_id = channel_id
         self._thread_ts = thread_ts

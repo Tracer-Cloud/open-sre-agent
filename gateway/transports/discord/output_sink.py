@@ -38,6 +38,9 @@ class DiscordOutputSink:
         tool_hooks: object | None = None,
     ) -> None:
         self.tool_hooks = tool_hooks
+        # Set per turn by this transport's dispatcher; the turn handler reads it
+        # to give tools a cooperative cancel signal on soft timeout or stop.
+        self.turn_cancel: threading.Event | None = None
         self._bot_token = bot_token
         self._channel_id = channel_id
         self._edit_interval = edit_interval_seconds

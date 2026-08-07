@@ -42,6 +42,9 @@ class GatewayOutputSink:
         tool_hooks: object | None = None,
     ) -> None:
         self.tool_hooks = tool_hooks
+        # Set per turn by this transport's dispatcher; the turn handler reads it
+        # to give tools a cooperative cancel signal on soft timeout or stop.
+        self.turn_cancel: threading.Event | None = None
         self._client = client
         self._chat_id = chat_id
         self._edit_interval = edit_interval_seconds

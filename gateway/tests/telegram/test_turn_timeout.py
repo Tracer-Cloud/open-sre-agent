@@ -13,8 +13,8 @@ import pytest
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
-from gateway.core.runtime.approvals import ApprovalBroker
 from gateway.core.runtime.active_turns import ActiveTurnCancels
+from gateway.core.runtime.approvals import ApprovalBroker
 from gateway.transports.telegram.inbound_handler import handle_polled_inbound_telegram_message
 from gateway.transports.telegram.inbound_security import InboundDecision
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage

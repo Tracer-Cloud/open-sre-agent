@@ -385,7 +385,10 @@ def test_stop_with_nothing_running_posts_idle_reply() -> None:
         sink.finalize("done")
 
     _dispatcher(
-        settings=_settings(["U1"]), messaging=messaging, resolver=_FakeSessionResolver(), handler=handler
+        settings=_settings(["U1"]),
+        messaging=messaging,
+        resolver=_FakeSessionResolver(),
+        handler=handler,
     ).dispatch(_inbound(text="/stop"))
 
     assert turns == []
