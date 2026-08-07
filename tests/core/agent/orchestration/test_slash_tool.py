@@ -161,7 +161,7 @@ def test_interactive_picker_runs_inline_when_not_a_tty() -> None:
 
 
 def test_duplicate_slash_invoke_alone_may_run_twice() -> None:
-    """A single slash line is not suppressed; only multi-step replays are."""
+    """Slash tool itself does not suppress repeats; the action-turn guard does."""
     ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
     args = {"command": "/integrations", "args": ["list"]}
 
@@ -171,8 +171,8 @@ def test_duplicate_slash_invoke_alone_may_run_twice() -> None:
     assert ports.dispatched == ["/integrations list", "/integrations list"]
 
 
-def test_duplicate_slash_after_multi_step_turn_is_ignored() -> None:
-    """After two distinct slashes succeed, replaying either is ignored."""
+def test_interleaved_slash_invoke_runs_each_time() -> None:
+    """A → B → A must all dispatch (Greptile: shared-set suppress was wrong)."""
     ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
 
     assert slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx) is True
@@ -181,7 +181,7 @@ def test_duplicate_slash_after_multi_step_turn_is_ignored() -> None:
     )
     assert slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx) is True
 
-    assert ports.dispatched == ["/health", "/integrations list"]
+    assert ports.dispatched == ["/health", "/integrations list", "/health"]
 
 
 @pytest.mark.parametrize(

@@ -175,11 +175,9 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool | d
             ctx,
         )
 
-    executed = agent_turn_executed_slashes(ctx.session)
-    # Mirror the action-driver rule: only suppress after a multi-step slash set
-    # has already completed. A single command may run more than once in one turn.
-    if stripped in executed and len(executed) >= 2:
-        return True
+    # Identical-call suppression for multi-step replays lives on the action
+    # turn's ``with_duplicate_action_call_guard`` (batch-aware). Do not block
+    # interleaved repeats (A → B → A) here with a shared set membership check.
 
     if _slash_drives_interactive_picker(
         name,

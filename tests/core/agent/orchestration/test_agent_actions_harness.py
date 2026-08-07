@@ -481,8 +481,89 @@ def test_discover_then_act_slash_chain_shows_grounded_closing_summary() -> None:
     assert summary in printed
 
 
+def test_action_turn_allows_interleaved_slash_repeat() -> None:
+    """A → B → A must not lose the final A (batch replay ≠ shared-set membership)."""
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="i1",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "check health, list integrations, then check health again",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list", "/health"]
+
+
 def test_action_turn_allows_identical_single_slash_repeat() -> None:
-    """A lone slash may succeed twice in one turn; only multi-step replays are blocked."""
+    """A lone slash may succeed twice in one turn; only batch set-replays are blocked."""
     runs: list[str] = []
 
     def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:

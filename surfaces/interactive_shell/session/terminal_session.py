@@ -88,10 +88,10 @@ class TerminalSession:
     turns instead of re-queueing via ``set_auto_command``, which would loop."""
 
     agent_turn_executed_slashes: set[str] = field(default_factory=set, repr=False)
-    """Distinct slash lines that succeeded during the current action-agent turn.
+    """Slash lines that succeeded during the current action-agent turn.
 
-    After two or more distinct lines have run, identical re-dispatch is ignored
-    (oracle 202 pair replay). A single line may still run more than once."""
+    Record-keeping only — identical-call suppression is batch-aware on the
+    action turn (``with_duplicate_action_call_guard``), not here."""
 
     background_mode_enabled: bool = False
     """Whether new investigations should run as session-local background tasks."""

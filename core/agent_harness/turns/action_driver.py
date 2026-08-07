@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -63,9 +63,9 @@ log = logging.getLogger(__name__)
 # turn (oracle 202: model finished /health + /integrations list, then repeated).
 _DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
 
-# Distinct successful calls before an identical re-emission counts as a
-# replayed set rather than a deliberate repeat.
-_REPLAYED_SET_MIN_DISTINCT = 2
+# A replayed provider batch must include at least this many distinct guarded
+# calls (a lone command repeating is not a "set replay").
+_REPLAYED_BATCH_MIN_DISTINCT = 2
 
 # Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
 _ActionCallFingerprint = tuple[Any, ...]
@@ -80,16 +80,10 @@ def _coerce_fingerprint_quiet(value: Any) -> bool:
     return bool(value)
 
 
-def _action_call_fingerprint(request: ToolExecutionRequest) -> _ActionCallFingerprint:
-    """Stable identity for duplicate suppression within one action turn.
-
-    Uses schema fields for the two guarded tools — no ``json.dumps`` on the
-    per-tool-call path (see AGENTS.md Performance).
-    """
-    name = request.tool_call.name
-    args = public_tool_input(request.arguments)
+def _fingerprint_name_args(name: str, args: Any) -> _ActionCallFingerprint:
+    """Stable identity for one guarded slash/shell call."""
     if not isinstance(args, dict):
-        args = dict(request.arguments)
+        args = dict(args) if args else {}
 
     if name == "slash_invoke":
         command = str(args.get("command", ""))
@@ -104,32 +98,63 @@ def _action_call_fingerprint(request: ToolExecutionRequest) -> _ActionCallFinger
             _coerce_fingerprint_quiet(args.get("quiet", False)),
         )
 
-    # Guarded set is only slash/shell today; keep a cheap fallback if it grows.
     items = tuple(sorted((str(key), repr(value)) for key, value in args.items()))
     return (name, items)
+
+
+def _action_call_fingerprint(request: ToolExecutionRequest) -> _ActionCallFingerprint:
+    """Fingerprint a validated tool-execution request."""
+    args = public_tool_input(request.arguments)
+    return _fingerprint_name_args(request.tool_call.name, args)
+
+
+def _fingerprint_tool_call(tool_call: ToolCall) -> _ActionCallFingerprint | None:
+    """Fingerprint a provider tool call when it is in the guarded set."""
+    if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
+        return None
+    return _fingerprint_name_args(tool_call.name, public_tool_input(tool_call.input))
 
 
 def with_duplicate_action_call_guard(
     base: ToolExecutionHooks | None = None,
 ) -> ToolExecutionHooks:
-    """Suppress identical successful slash/shell re-runs within one action turn.
+    """Suppress accidental multi-call slash/shell *batch* replays in one turn.
 
-    Chains with any surface ``before_tool_call`` / ``after_tool_call`` hooks
-    (gateway approvals, etc.). Failures are not remembered, so a retry after an
-    error still runs.
+    Oracle 202: after ``/health`` + ``/integrations list`` succeed, the model
+    re-emits that same pair. Block when the current provider batch is entirely
+    a subset of already-succeeded guarded calls and has ≥2 distinct members.
+
+    Interleaved repeats (A → B → A) and lone-command repeats stay allowed —
+    those batches are not a full replayed set. Failures are not remembered.
+    Chains with surface ``before_tool_call`` / ``after_tool_call`` hooks.
     """
     succeeded: set[_ActionCallFingerprint] = set()
+    current_batch: frozenset[_ActionCallFingerprint] = frozenset()
     base_before = base.before_tool_call if base is not None else None
     base_after = base.after_tool_call if base is not None else None
     base_update = base.on_tool_update if base is not None else None
+    base_batch = base.before_tool_batch if base is not None else None
+
+    def before_batch(tool_calls: Sequence[ToolCall]) -> None:
+        nonlocal current_batch
+        if base_batch is not None:
+            base_batch(tool_calls)
+        keys = [
+            key
+            for tool_call in tool_calls
+            for key in (_fingerprint_tool_call(tool_call),)
+            if key is not None
+        ]
+        current_batch = frozenset(keys)
 
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES:
             key = _action_call_fingerprint(request)
-            # Suppress a replayed *set* (oracle 202: /health + /integrations
-            # re-emitted as a pair). A lone command repeating is left alone —
-            # mirrors the slash tool's rule so the two agree on one turn.
-            if key in succeeded and len(succeeded) >= _REPLAYED_SET_MIN_DISTINCT:
+            if (
+                key in succeeded
+                and len(current_batch) >= _REPLAYED_BATCH_MIN_DISTINCT
+                and current_batch <= succeeded
+            ):
                 return BeforeToolCallResult(
                     blocked=True,
                     reason=(
@@ -156,6 +181,7 @@ def with_duplicate_action_call_guard(
         before_tool_call=before,
         after_tool_call=after,
         on_tool_update=base_update,
+        before_tool_batch=before_batch,
     )
 
 
