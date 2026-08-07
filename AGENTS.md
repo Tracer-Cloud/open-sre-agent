@@ -63,6 +63,35 @@
   - mypy exempts Protocol bodies from "missing return", so `pass` under a
     `-> list[str]` signature passes `make typecheck`.
 
+### Tests (high-signal, not exhaustive)
+
+Prefer a **small suite that pins real failure modes** over broad line coverage.
+One test per distinct bug class; do not multiply cases that exercise the same
+branch with different literals.
+
+**Write / keep tests for:**
+
+- Security and authorization (allowlists, request-scoped authority, cross-actor
+  or cross-channel isolation).
+- Correctness under concurrency, crash, or shutdown (cursors, in-flight work,
+  ack vs replay, drain vs approval wait).
+- Package / transport borders that prevent silent coupling (no peer imports,
+  session key shape unique to the surface).
+- Regressions that already bit review or production (the P1 that forced a fix).
+
+**Skip or thin (unless they are the *only* coverage of a contract):**
+
+- Happy-path “mock was called once” wrappers (client send, init posts status).
+- Pure string / vocabulary tables when approve/deny/leave-open paths already
+  cover the helper.
+- Redundant success variants of an ack or dispatch path already covered by
+  fail / cancel / on_handled cases.
+- Defensive parse / “empty on fetch failure” edges that do not move durable
+  state.
+- Stand-in tests that restate control-flow intent without exercising the real
+  loop or wiring (e.g. “`create_task` does not block the creator”).
+
+
 ### Docs under `docs/`
 
 `docs/` is user-facing. Test every sentence: *does this change what the reader

@@ -145,37 +145,6 @@ def test_reply_that_is_not_a_decision_leaves_the_prompt_open(
     assert _still_pending(resources)
 
 
-@pytest.mark.parametrize(
-    ("text", "expected"),
-    [
-        ("approve", True),
-        ("**approve**", True),
-        ("Yes please", True),
-        ("deny", False),
-        ("no.", False),
-        ("maybe later", None),
-        ("", None),
-    ],
-)
-def test_decision_vocabulary(text: str, expected: bool | None) -> None:
-    assert background._decision(text) is expected
-
-
-def test_dispatch_acknowledges_a_completed_turn() -> None:
-    """A finished turn is what lets the cursor advance past its event."""
-    acked: list[BuzzInboundMessage] = []
-    event = _reply()
-
-    async def _ok_dispatch(_event: object, **_kw: object) -> None:
-        return None
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(background, "handle_polled_inbound_buzz_message", _ok_dispatch)
-        asyncio.run(_run_dispatch(event, acknowledge=acked.append))
-
-    assert acked == [event]
-
-
 def test_dispatch_acknowledges_a_failed_turn() -> None:
     """A turn that reliably crashes must not be redelivered on every poll."""
     acked: list[BuzzInboundMessage] = []
@@ -215,34 +184,6 @@ def test_cancelled_turn_is_not_acknowledged() -> None:
         asyncio.run(_run())
 
     assert acked == []
-
-
-def test_poll_loop_does_not_block_on_a_slow_turn() -> None:
-    """The poll loop must keep polling while a turn is in flight (approval-wait fix)."""
-    turn_started = asyncio.Event()
-    release_turn = asyncio.Event()
-
-    async def _slow_dispatch(_event: object, **_kw: object) -> None:
-        turn_started.set()
-        await release_turn.wait()
-
-    async def _run() -> None:
-        task = asyncio.get_running_loop().create_task(
-            _dispatch_coroutine(_reply(), acknowledge=lambda _event: None)
-        )
-        await asyncio.wait_for(turn_started.wait(), timeout=1)
-        # The turn is blocked, but this coroutine (standing in for the poll
-        # loop) was never awaited on the task itself, so it can keep going —
-        # exactly what `asyncio.create_task` (not `await`) in the real loop buys.
-        assert not task.done()
-        release_turn.set()
-        # Asserted, not a bare ``await task``: CodeQL reads the latter as a
-        # statement with no effect, and a throwaway binding as an unused local.
-        assert await task is None
-
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(background, "handle_polled_inbound_buzz_message", _slow_dispatch)
-        asyncio.run(_run())
 
 
 def _dispatch_coroutine(event: BuzzInboundMessage, *, acknowledge: object) -> object:

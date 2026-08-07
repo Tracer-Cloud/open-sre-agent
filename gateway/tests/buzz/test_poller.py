@@ -94,24 +94,3 @@ def test_acknowledged_events_do_not_replay_at_the_inclusive_cursor() -> None:
 
     assert poller.poll_once() == []
     assert client.get_feed.call_args_list[-1].kwargs["since"] == 100
-
-
-def test_poll_once_returns_empty_list_on_fetch_failure() -> None:
-    client = MagicMock(spec=BuzzClient)
-    client.get_feed.return_value = {"success": False, "error": "relay unreachable", "events": []}
-    poller = BuzzFeedPoller(client)
-
-    assert poller.poll_once() == []
-    assert poller._since == 0
-
-
-def test_poll_once_skips_malformed_events() -> None:
-    client = MagicMock(spec=BuzzClient)
-    client.get_feed.return_value = {
-        "success": True,
-        "error": "",
-        "events": ["not-a-dict", {"id": "no-pubkey", "tags": []}],
-    }
-    poller = BuzzFeedPoller(client)
-
-    assert poller.poll_once() == []

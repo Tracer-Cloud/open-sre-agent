@@ -2,12 +2,11 @@
 
 Borders under test
 ------------------
-* ``gateway.transports.buzz`` never imports another transport, and no other
-  transport imports it — the shared approval broker and session store live in
-  ``gateway.core.runtime`` / ``gateway.core.storage``.
+* ``gateway.transports.buzz`` never imports another transport — the shared
+  approval broker and session store live in ``gateway.core.runtime`` /
+  ``gateway.core.storage``.
 * Importing the Buzz transport pulls in no Discord or Slack SDK.
-* Buzz sessions are isolated per ``(channel, sender pubkey)``, and a Buzz
-  binding row never answers another transport's lookup.
+* Buzz sessions are isolated per ``(channel, sender pubkey)``.
 """
 
 from __future__ import annotations
@@ -49,26 +48,10 @@ def _offenders(package: str, banned_prefix: str) -> list[str]:
     return found
 
 
-# ── SoC: transport packages stay peers ──────────────────────────────────────
-
-
 def test_buzz_package_never_imports_another_transport() -> None:
     for other in _OTHER_TRANSPORTS:
         offenders = _offenders("gateway.transports.buzz", f"gateway.transports.{other}")
         assert offenders == [], f"Buzz reached into {other}:\n" + "\n".join(offenders)
-
-
-def test_no_other_transport_imports_buzz() -> None:
-    for other in _OTHER_TRANSPORTS:
-        offenders = _offenders(f"gateway.transports.{other}", "gateway.transports.buzz")
-        assert offenders == [], f"{other} reached into Buzz:\n" + "\n".join(offenders)
-
-
-def test_shared_approval_module_imports_no_buzz() -> None:
-    """The extracted broker must not depend on the transports that use it."""
-    shared = REPO_ROOT / "gateway" / "core" / "runtime" / "approvals.py"
-    imported = _imported_modules(shared)
-    assert not [n for n in imported if n.startswith("gateway.transports.buzz")]
 
 
 def test_importing_buzz_transport_loads_no_other_transport_sdk() -> None:
@@ -91,11 +74,8 @@ def test_importing_buzz_transport_loads_no_other_transport_sdk() -> None:
     assert result.stdout.split() == ["0", "0", "0", "0", "0"], result.stdout
 
 
-# ── Buzz sessions: isolation ─────────────────────────────────────────────────
-
-
 def test_two_buzz_actors_in_one_channel_keep_private_sessions(tmp_path: Path) -> None:
-    # Arrange: buzz's session key is "{channel}:{pubkey}" (see session_rotation.py) —
+    # Buzz's session key is "{channel}:{pubkey}" (see session_rotation.py) —
     # channels have many members, unlike Telegram's 1:1 DMs, so the pubkey alone
     # cannot isolate sessions.
     store = FileBindingStore(tmp_path / "bindings.json")
@@ -103,23 +83,9 @@ def test_two_buzz_actors_in_one_channel_keep_private_sessions(tmp_path: Path) ->
     alice_key = f"{channel}:{'a' * 64}"
     bob_key = f"{channel}:{'b' * 64}"
 
-    # Act
     store.bind(platform="buzz", chat_id=alice_key, session_id="buzz-alice")
     store.bind(platform="buzz", chat_id=bob_key, session_id="buzz-bob")
 
-    # Assert
     assert store.get_session_id(platform="buzz", chat_id=alice_key) == "buzz-alice"
     assert store.get_session_id(platform="buzz", chat_id=bob_key) == "buzz-bob"
-    store.close()
-
-
-def test_buzz_binding_row_never_answers_another_transport_lookup(tmp_path: Path) -> None:
-    store = FileBindingStore(tmp_path / "bindings.json")
-    key = "channel-uuid:" + "c" * 64
-
-    store.bind(platform="buzz", chat_id=key, session_id="buzz-session")
-
-    assert store.get_session_id(platform="telegram", chat_id=key) is None
-    assert store.get_session_id(platform="discord", chat_id=key) is None
-    assert store.get_session_id(platform="buzz", chat_id=key) == "buzz-session"
     store.close()

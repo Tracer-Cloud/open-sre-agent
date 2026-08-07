@@ -58,28 +58,6 @@ def test_request_posts_prompt_registers_and_resolves_on_approve() -> None:
     assert pending.find(frozenset({"prompt1"})) is None
 
 
-def test_request_returns_false_when_prompt_post_fails() -> None:
-    client = _client()
-    client.send_message.return_value = {"success": False, "error": "relay down", "event_id": ""}
-    broker = ApprovalBroker()
-    pending = PendingApprovals()
-    prompter = BuzzApprovalPrompter(
-        broker=broker,
-        client=client,
-        channel_id="chan-1",
-        requester_pubkey=REQUESTER,
-        pending_approvals=pending,
-    )
-
-    approved, decided_by = prompter.request(
-        tool_name="buzz_send_message", reason="", arguments={}, expiry_seconds=30
-    )
-
-    assert approved is False
-    assert decided_by == ""
-    client.edit_message.assert_not_called()
-
-
 def test_request_expiry_edits_outcome_and_denies() -> None:
     client = _client()
     client.send_message.return_value = {"success": True, "error": "", "event_id": "prompt1"}
