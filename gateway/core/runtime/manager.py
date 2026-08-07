@@ -8,8 +8,8 @@ process lifecycle (signals, ``stop``/``wait``). Component states are published
 through :func:`gateway.core.runtime.daemon.write_component_status` so the CLI and the
 interactive shell can report status. It holds no transport or agent-dispatch
 logic itself — those live in :mod:`gateway.core.runtime.turn_handler`,
-:mod:`gateway.transports.telegram.wiring`, and :mod:`gateway.transports.slack.wiring`, and
-:mod:`gateway.transports.discord.wiring`.
+:mod:`gateway.transports.telegram.wiring`, :mod:`gateway.transports.slack.wiring`,
+:mod:`gateway.transports.discord.wiring`, and :mod:`gateway.transports.buzz.wiring`.
 """
 
 from __future__ import annotations
@@ -40,6 +40,8 @@ from gateway.core.runtime.daemon import (
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.readiness import set_ready
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.transports.buzz.background import BuzzGatewayBackground
+from gateway.transports.buzz.wiring import start_buzz_worker
 from gateway.transports.discord.background import DiscordGatewayBackground
 from gateway.transports.discord.wiring import start_discord_worker
 from gateway.transports.slack.socket_mode_worker import SlackGatewayBackground
@@ -67,6 +69,7 @@ class GatewayManager:
         self.telegram_background_worker: TelegramGatewayBackground | None = None
         self.slack_background_worker: SlackGatewayBackground | None = None
         self.discord_background_worker: DiscordGatewayBackground | None = None
+        self.buzz_background_worker: BuzzGatewayBackground | None = None
         self.web_server: Any = None
         self.scheduler: Any = None
         self._scheduler_reload_thread: threading.Thread | None = None
@@ -104,6 +107,7 @@ class GatewayManager:
         self._start_telegram(logger, chat_handler)
         self._start_slack(logger, chat_handler)
         self._start_discord(logger, chat_handler)
+        self._start_buzz(logger, chat_handler)
         self._start_scheduler(logger)
         self._publish_status(logger)
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
@@ -138,6 +142,8 @@ class GatewayManager:
             stopped = self.slack_background_worker.stop(timeout=timeout) and stopped
         if self.discord_background_worker is not None:
             stopped = self.discord_background_worker.stop(timeout=timeout) and stopped
+        if self.buzz_background_worker is not None:
+            stopped = self.buzz_background_worker.stop(timeout=timeout) and stopped
         clear_component_status()
         return stopped
 
@@ -220,6 +226,17 @@ class GatewayManager:
             return
         self.discord_background_worker = worker
         self.components["discord"] = "connected via gateway"
+
+    def _start_buzz(self, logger: logging.Logger, handler: Any) -> None:
+        """Start the Buzz chat worker; run without it when not configured."""
+        try:
+            worker, _settings = start_buzz_worker(logger=logger, handler=handler)
+        except GatewayConfigurationError as exc:
+            logger.warning("Buzz chat disabled: %s", exc)
+            self.components["buzz"] = f"not configured ({exc})"
+            return
+        self.buzz_background_worker = worker
+        self.components["buzz"] = "polling for messages"
 
     def _start_scheduler(self, _logger: logging.Logger) -> None:
         """Run cron-scheduled tasks inside the daemon (no separate process needed)."""

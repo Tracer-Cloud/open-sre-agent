@@ -24,11 +24,13 @@ def _isolate_gateway_runtime_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     leaving ``opensre gateway status`` blank until the next restart.
     """
     from gateway.core.runtime import daemon
+    from gateway.transports.buzz.poller import cursor as buzz_cursor
 
     runtime_dir = tmp_path / "gateway"
     monkeypatch.setattr(daemon, "GATEWAY_PID_FILE", runtime_dir / "gateway.pid")
     monkeypatch.setattr(daemon, "GATEWAY_LOG_FILE", runtime_dir / "gateway.log")
     monkeypatch.setattr(daemon, "GATEWAY_COMPONENTS_FILE", runtime_dir / "components.json")
+    monkeypatch.setattr(buzz_cursor, "BUZZ_CURSOR_FILE", runtime_dir / "buzz_cursor.json")
 
 
 @pytest.fixture(autouse=True)
