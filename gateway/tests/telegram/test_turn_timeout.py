@@ -14,6 +14,7 @@ import pytest
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.runtime.active_turns import ActiveTurnCancels
 from gateway.transports.telegram.inbound_handler import handle_polled_inbound_telegram_message
 from gateway.transports.telegram.inbound_security import InboundDecision
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
@@ -118,6 +119,7 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
                 chat_locks={},
                 turn_semaphore=asyncio.Semaphore(1),
                 approvals=ApprovalBroker(),
+                active_cancels=ActiveTurnCancels(),
                 handle_callback_to_gateway_agent=hanging_handler,
             )
         finally:
@@ -127,12 +129,12 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
     # Drive the async path from a thread so the hang cannot block pytest forever
     # if the soft timeout fails to fire.
     done = threading.Event()
-    error: list[BaseException] = []
+    error: list[Exception] = []
 
     def _thread() -> None:
         try:
             asyncio.run(_run())
-        except BaseException as exc:  # noqa: BLE001 — surface in main thread
+        except Exception as exc:
             error.append(exc)
         finally:
             done.set()

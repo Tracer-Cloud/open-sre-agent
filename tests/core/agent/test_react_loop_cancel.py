@@ -53,7 +53,81 @@ def test_react_loop_stops_before_llm_when_cancel_requested() -> None:
         max_iterations=3,
     )
     result = agent.run([{"role": "user", "content": "hello"}])
-    assert result.terminated_by_tool is True
+    assert result.cancelled is True
+    assert result.terminated_by_tool is False
     assert result.hit_iteration_cap is False
     assert result.llm_iterations_used == 1
     assert result.final_text == ""
+
+
+def test_react_loop_stops_after_iteration_when_cancel_flips() -> None:
+    """Cancel between iterations must not start another LLM call."""
+    import threading
+
+    from core.llm.types import ToolCall
+
+    cancel = threading.Event()
+
+    class _FlipConsole:
+        @property
+        def cancel_requested(self) -> bool:
+            return cancel.is_set()
+
+    class _NoopTool:
+        name = "noop"
+        description = "noop"
+        parameters: dict[str, Any] = {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        }
+
+        def execute(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            return {"ok": True}
+
+    class _CountingLLM(_BoomLLM):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
+            return [
+                {
+                    "name": getattr(t, "name", "noop"),
+                    "description": "",
+                    "parameters": getattr(t, "parameters", {}),
+                }
+                for t in tools
+            ]
+
+        def invoke(
+            self,
+            _messages: list[dict[str, Any]],
+            *,
+            system: str | None = None,
+            tools: list[dict[str, Any]] | None = None,
+        ) -> AgentLLMResponse:
+            _ = (system, tools)
+            self.calls += 1
+            if self.calls == 1:
+                # After tools run, cancel is set so iteration 2 must not call us.
+                cancel.set()
+                return AgentLLMResponse(
+                    content="",
+                    tool_calls=[ToolCall(id="c1", name="noop", input={})],
+                    raw_content=None,
+                )
+            raise AssertionError("second LLM iteration must not run after cancel")
+
+    llm = _CountingLLM()
+    agent = Agent(
+        llm=llm,
+        system="sys",
+        tools=[_NoopTool()],
+        resolved_integrations={},
+        tool_resources={"action_tool_context": type("Ctx", (), {"console": _FlipConsole()})()},
+        max_iterations=5,
+    )
+    result = agent.run([{"role": "user", "content": "hello"}])
+    assert llm.calls == 1
+    assert result.cancelled is True
+    assert result.terminated_by_tool is False

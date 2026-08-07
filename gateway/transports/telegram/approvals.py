@@ -131,18 +131,26 @@ def handle_callback_query(
     return resolved
 
 
+_TELEGRAM_CALLBACK_DATA_LIMIT = 64
+
+
 def _approval_keyboard(approval_id: str) -> dict[str, Any]:
+    approve = f"{APPROVE_ACTION_ID}:{approval_id}"
+    deny = f"{DENY_ACTION_ID}:{approval_id}"
+    # Telegram Bot API rejects callback_data longer than 64 bytes.
+    if (
+        len(approve.encode("utf-8")) > _TELEGRAM_CALLBACK_DATA_LIMIT
+        or len(deny.encode("utf-8")) > _TELEGRAM_CALLBACK_DATA_LIMIT
+    ):
+        raise ValueError(
+            f"Telegram callback_data exceeds {_TELEGRAM_CALLBACK_DATA_LIMIT} bytes "
+            f"(approve={len(approve.encode('utf-8'))}, deny={len(deny.encode('utf-8'))})"
+        )
     return {
         "inline_keyboard": [
             [
-                {
-                    "text": "Approve",
-                    "callback_data": f"{APPROVE_ACTION_ID}:{approval_id}",
-                },
-                {
-                    "text": "Deny",
-                    "callback_data": f"{DENY_ACTION_ID}:{approval_id}",
-                },
+                {"text": "Approve", "callback_data": approve},
+                {"text": "Deny", "callback_data": deny},
             ]
         ]
     }

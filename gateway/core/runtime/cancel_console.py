@@ -14,12 +14,20 @@ from typing import Any
 
 from rich.console import Console
 
+# Set on the wrapper itself; everything else is proxied to the wrapped console.
+_OWN_ATTRIBUTES = frozenset({"_output", "_cancel_event"})
+
 
 class CancelConsole:
     """Console stand-in that exposes ``cancel_requested`` from a shared Event.
 
     Delegates rendering to the gateway pool's Rich console so tool observers and
     subprocess presenters keep working; only cancellation is added.
+
+    Reads *and writes* are proxied. Slash capture turns recording on
+    (``console.record = True``) and then calls ``export_text`` on the same
+    object: if the write stopped at the wrapper, recording would stay off on
+    the wrapped console and every slash command on a chat transport would fail.
     """
 
     def __init__(self, output: Console, cancel_event: threading.Event) -> None:
@@ -35,6 +43,12 @@ class CancelConsole:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._output, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in _OWN_ATTRIBUTES:
+            super().__setattr__(name, value)
+            return
+        setattr(self._output, name, value)
 
 
 def ensure_turn_cancel(sink: Any) -> threading.Event:

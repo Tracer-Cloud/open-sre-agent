@@ -8,6 +8,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from config.scope_context import bound_storage_scope
+from gateway.core.runtime.active_turns import USER_STOP_MESSAGE, ActiveTurnCancels
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
@@ -40,6 +41,7 @@ async def handle_polled_inbound_telegram_message(
     chat_locks: dict[str, asyncio.Lock],
     turn_semaphore: asyncio.Semaphore,
     approvals: ApprovalBroker,
+    active_cancels: ActiveTurnCancels,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
 ) -> None:
@@ -137,6 +139,14 @@ async def handle_polled_inbound_telegram_message(
                         exc_info=True,
                     )
 
+            def _on_user_stop() -> None:
+                if not _claim_terminal_outcome():
+                    return
+                try:
+                    sink.finalize(USER_STOP_MESSAGE)
+                except Exception:
+                    logger.debug("[telegram-gateway] user-stop finalize failed", exc_info=True)
+
             def _run_turn() -> None:
                 with (
                     bound_storage_scope(scope),
@@ -156,7 +166,8 @@ async def handle_polled_inbound_telegram_message(
             timer = threading.Timer(settings.turn_timeout_seconds, _on_turn_timeout)
             timer.start()
             try:
-                await event_loop.run_in_executor(executor, _run_turn)
+                with active_cancels.track(event.chat_id, turn_cancel, on_user_stop=_on_user_stop):
+                    await event_loop.run_in_executor(executor, _run_turn)
             except Exception:
                 logger.exception(
                     "[telegram-gateway] turn ERRORED chat=%s session=%s",

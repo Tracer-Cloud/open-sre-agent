@@ -233,6 +233,10 @@ class HeadlessAgent:
     def _gather(self, text: str, *, turn_plan: TurnPlan | None = None) -> str | None:
         if not self._gather_ports.enabled:
             return None
+        from core.agent_harness.turns.host_cancel import host_cancel_requested
+
+        if host_cancel_requested(self._output):
+            return None
         resolved = turn_plan.resolved_integrations if turn_plan is not None else None
         return gather_tool_evidence(
             text,
@@ -242,6 +246,7 @@ class HeadlessAgent:
             max_iterations=self._gather_ports.max_iterations,
             on_progress=self._gather_ports.on_progress,
             persist=self._gather_ports.persist,
+            is_cancelled=lambda: host_cancel_requested(self._output),
         )
 
     def dispatch(self, message: str) -> TurnResult:

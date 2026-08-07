@@ -1060,11 +1060,10 @@ def _run_action_turn(
 
     counts = _count_turn(result, session, history_start)
     response_text, display_chunks, use_final_text = _compose_response(result, session, counts)
-    cancelled = _cancel_requested(tool_resources)
+    cancelled = _cancel_requested(tool_resources) or bool(getattr(result, "cancelled", False))
     # Cancelled turns must not fall through to gather/answer: the host already
-    # owns the terminal UX (timeout message / stop). Force handled and drop
-    # handoffs so routing cannot start another LLM phase.
-    handled = True if cancelled else counts.handled
+    # owns the terminal UX (timeout message / stop). Drop handoffs; the
+    # orchestrator short-circuits on ``cancelled`` before routing.
     handoff_contents = () if cancelled else counts.handoff_contents
     # Discovery tools that opt into ``summarize_observation`` (via tool tags)
     # return structured JSON users should not see raw. Stash only those results.
@@ -1082,7 +1081,7 @@ def _run_action_turn(
     if not cancelled:
         _show_response(
             args.output,
-            handled=handled,
+            handled=counts.handled,
             # use_final_text means the composed text *is* the closing message.
             final_text=response_text if use_final_text else "",
             display_chunks=display_chunks,
@@ -1092,7 +1091,7 @@ def _run_action_turn(
         "action_turn done planned=%s executed=%s handled=%s cancelled=%s investigation=%s",
         counts.planned_count,
         counts.executed_count,
-        handled,
+        counts.handled,
         cancelled,
         counts.investigation_dispatched,
     )
@@ -1101,11 +1100,12 @@ def _run_action_turn(
         counts.executed_count,
         counts.executed_success_count,
         False,
-        handled,
+        False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
         handoff_contents=handoff_contents,
         handoff_requires_gather=(False if cancelled else counts.handoff_requires_gather),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
+        cancelled=cancelled,
     )
 
 

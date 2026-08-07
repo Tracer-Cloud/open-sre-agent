@@ -200,3 +200,11 @@ def test_tools_without_requires_approval_skip_prompt() -> None:
     result = hooks.before_tool_call(_request(_FakeTool(requires_approval=False)))
     assert result is None
     assert client.posts == []
+
+
+def test_approval_callback_data_fits_telegram_limit() -> None:
+    from gateway.transports.telegram.approvals import _approval_keyboard
+
+    markup = _approval_keyboard("a" * 32)  # uuid.hex length
+    for button in markup["inline_keyboard"][0]:
+        assert len(button["callback_data"].encode("utf-8")) <= 64

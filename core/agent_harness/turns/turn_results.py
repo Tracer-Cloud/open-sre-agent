@@ -34,6 +34,8 @@ class ToolCallingTurnResult:
     handoff_requires_gather: bool = True
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False
+    #: Host soft-timeout / stop asked the action phase to halt (shell/gateway).
+    cancelled: bool = False
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,11 @@ class TurnResult:
     def answered(self) -> bool:
         """A turn is "answered" exactly when the conversational LLM produced a run."""
         return self.llm_run is not None
+
+    @property
+    def cancelled(self) -> bool:
+        """True when the host cancelled mid-turn (timeout / stop)."""
+        return self.final_intent == "cli_agent_cancelled" or self.action_result.cancelled
 
     @property
     def primary_response_text(self) -> str:

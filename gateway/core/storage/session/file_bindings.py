@@ -218,6 +218,48 @@ class FileBindingStore:
             )
             self._write(path, {"version": _VERSION, "bindings": rows})
 
+    def adopt_unscoped_binding(
+        self,
+        *,
+        platform: str,
+        chat_id: str,
+        principal: Principal,
+        actor: Actor | str,
+    ) -> str | None:
+        """Move a legacy empty-id row onto ``principal``/``actor`` under one lock."""
+        scoped = BindingKey.build(
+            platform=platform, chat_id=chat_id, principal=principal, actor=actor
+        )
+        legacy = BindingKey.build(platform=platform, chat_id=chat_id, principal=None, actor=None)
+        path = self.path
+        with self._locked(path):
+            data = self._load(path)
+            rows = [r for r in data.get("bindings", []) if isinstance(r, dict)]
+            for row in rows:
+                if self._matches(row, scoped):
+                    return str(row.get("session_id", "")) or None
+            session_id: str | None = None
+            kept: list[dict[str, Any]] = []
+            for row in rows:
+                if self._matches(row, legacy):
+                    session_id = str(row.get("session_id", "")) or None
+                    continue
+                kept.append(row)
+            if not session_id:
+                return None
+            kept.append(
+                {
+                    "platform": scoped.platform,
+                    "chat_id": scoped.chat_id,
+                    "principal_id": scoped.principal_id,
+                    "actor_id": scoped.actor_id,
+                    "session_id": session_id,
+                    "updated_at": time.time(),
+                }
+            )
+            self._write(path, {"version": _VERSION, "bindings": kept})
+            return session_id
+
     def rotate(
         self,
         *,

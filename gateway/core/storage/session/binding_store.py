@@ -45,6 +45,21 @@ class BindingStore(Protocol):
     ) -> None:
         """Bind the chat to the provided session id."""
 
+    def adopt_unscoped_binding(
+        self,
+        *,
+        platform: str,
+        chat_id: str,
+        principal: Principal,
+        actor: Actor | str,
+    ) -> str | None:
+        """Move a legacy empty-id row onto ``principal``/``actor`` once.
+
+        Atomic and single-use: the unscoped row is removed so a second actor in
+        the same conversation cannot inherit the same session. Idempotent when
+        the scoped binding already exists.
+        """
+
     def rotate(
         self,
         *,

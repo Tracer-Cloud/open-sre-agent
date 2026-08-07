@@ -218,6 +218,7 @@ def _build_evidence_agent(
     on_progress: ToolEventObserver | None,
     message: str,
     max_iterations: int = _MAX_GATHER_ITERATIONS,
+    tool_resources: dict[str, Any] | None = None,
 ) -> Agent[Any]:
     """Build the Agent for one evidence-gather turn.
 
@@ -238,6 +239,7 @@ def _build_evidence_agent(
         tool_hooks=SourceCircuitBreaker().hooks(),
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
         goal=build_gather_goal_reviewer(llm, message),
+        tool_resources=dict(tool_resources or {}),
     )
     return build_agent(config)
 
@@ -252,6 +254,7 @@ def gather_tool_evidence(
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
     max_iterations: int | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> str | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
@@ -264,8 +267,12 @@ def gather_tool_evidence(
     def _run_gather_turn() -> Any | None:
         # Tool discovery, integration resolution, and LLM load run inside this
         # helper, within the ``_safe_execute`` fallback boundary.
+        from core.agent_harness.turns.host_cancel import cancel_tool_resources
         from platform.harness_ports import get_investigation_tools
 
+        if is_cancelled is not None and is_cancelled():
+            log.debug("gather_evidence skip: host cancelled")
+            return None
         resolved = _resolve_gather_integrations(
             session, message, resolved_integrations=resolved_integrations
         )
@@ -286,16 +293,30 @@ def gather_tool_evidence(
             len(resolved),
             iteration_cap,
         )
-        build_agent_for_turn = agent_factory or _build_evidence_agent
-        agent = build_agent_for_turn(
-            llm=llm,
-            session=session,
-            gather_tools=gather_tools,
-            resolved=resolved,
-            on_progress=on_progress,
-            message=message,
-            max_iterations=iteration_cap,
-        )
+        tool_resources = cancel_tool_resources(is_cancelled)
+        if agent_factory is None:
+            agent = _build_evidence_agent(
+                llm=llm,
+                session=session,
+                gather_tools=gather_tools,
+                resolved=resolved,
+                on_progress=on_progress,
+                message=message,
+                max_iterations=iteration_cap,
+                tool_resources=tool_resources,
+            )
+        else:
+            # Test/custom factories keep the historical signature; cancel probe
+            # still short-circuits before this path via ``is_cancelled`` above.
+            agent = agent_factory(
+                llm=llm,
+                session=session,
+                gather_tools=gather_tools,
+                resolved=resolved,
+                on_progress=on_progress,
+                message=message,
+                max_iterations=iteration_cap,
+            )
         result = run_react_agent_with_telemetry(
             agent,
             [{"role": "user", "content": _build_gather_user_message(session, message)}],

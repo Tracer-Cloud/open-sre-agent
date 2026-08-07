@@ -13,6 +13,11 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.runtime.active_turns import (
+    USER_STOP_MESSAGE,
+    ActiveTurnCancels,
+    is_stop_command,
+)
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
@@ -83,12 +88,18 @@ class _SlackTurnDispatcher:
         self._logger = logger
         self._bot_user_id = bot_user_id
         self._approvals = approvals if approvals is not None else ApprovalBroker()
+        self._active_cancels = ActiveTurnCancels()
         self._attention = ThreadAttentionGate()
         self._conversation_locks: dict[str, _ConversationLock] = {}
         self._locks_guard = threading.Lock()
         self._resolver_lock = threading.Lock()
 
     def dispatch(self, inbound: SlackInboundMessage) -> None:
+        # /stop must not wait on the per-conversation turn lock.
+        if is_stop_command(inbound.text):
+            if not self._active_cancels.request_stop(inbound.conversation_key):
+                self._post(inbound, "Nothing running to stop.")
+            return
         try:
             scope = resolve_slack_scope(team_id=inbound.team_id, user_id=inbound.user_id)
         except PrincipalResolutionError:
@@ -355,6 +366,19 @@ class _SlackTurnDispatcher:
                     timestamp=inbound.ts,
                 )
 
+            def _on_user_stop() -> None:
+                if not _claim_terminal_outcome():
+                    return
+                try:
+                    sink.finalize(USER_STOP_MESSAGE)
+                except Exception:
+                    self._logger.debug("[slack-gateway] user-stop finalize failed", exc_info=True)
+                mark_turn_failed(
+                    self._messaging,
+                    channel=inbound.channel_id,
+                    timestamp=inbound.ts,
+                )
+
             timer = threading.Timer(self._settings.turn_timeout_seconds, _on_turn_timeout)
             timer.start()
             try:
@@ -378,10 +402,17 @@ class _SlackTurnDispatcher:
                     files_context := _slack_files_context(inbound.files, self._logger)
                 ):
                     agent_text = f"{agent_text}\n\n{files_context}"
-                with bound_usage_context(
-                    surface=SURFACE_SLACK,
-                    session_id=session.session_id,
-                    user_id=inbound.user_id or None,
+                with (
+                    self._active_cancels.track(
+                        inbound.conversation_key,
+                        turn_cancel,
+                        on_user_stop=_on_user_stop,
+                    ),
+                    bound_usage_context(
+                        surface=SURFACE_SLACK,
+                        session_id=session.session_id,
+                        user_id=inbound.user_id or None,
+                    ),
                 ):
                     self._handler(agent_text, session, sink, self._logger)
             except Exception:

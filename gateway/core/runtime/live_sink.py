@@ -7,7 +7,8 @@ Transport sinks are per-turn, so this holder stays on the agent and
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import threading
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from gateway.core.runtime.sink_protocol import GatewaySink
@@ -61,10 +62,18 @@ class LiveOutputSink:
     ) -> str:
         return self._require().stream(
             label=label,
-            chunks=chunks,
+            chunks=self._stop_chunks_on_cancel(chunks),
             suppress_if_starts_with=suppress_if_starts_with,
             defer_want_me_to_closer=defer_want_me_to_closer,
         )
+
+    def _stop_chunks_on_cancel(self, chunks: Iterable[str]) -> Iterator[str]:
+        """Stop draining the LLM stream when the host soft-timeout Event fires."""
+        cancel = getattr(self._inner, "turn_cancel", None) if self._inner is not None else None
+        for chunk in chunks:
+            if isinstance(cancel, threading.Event) and cancel.is_set():
+                return
+            yield chunk
 
     def finalize(self, text: str) -> None:
         self._require().finalize(text)

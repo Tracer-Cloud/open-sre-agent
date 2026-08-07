@@ -30,6 +30,8 @@ class AgentRunResult:
     executed: list[tuple[ToolCall, Any]] = field(default_factory=list)
     tool_results: list[tuple[ToolCall, ToolExecutionResult]] = field(default_factory=list)
     terminated_by_tool: bool = False
+    #: Host cooperative cancel (``console.cancel_requested``), not a tool terminate.
+    cancelled: bool = False
     hit_iteration_cap: bool = False
     llm_iterations_used: int = 0
     final_system_prompt: str = ""

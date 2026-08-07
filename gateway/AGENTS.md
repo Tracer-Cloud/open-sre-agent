@@ -118,8 +118,9 @@ Slack, Discord, and Telegram each resolve a `StorageScope` in their own
   on the org mount or `~/.opensre/orgs/<id>/`
 
 CLI / interactive shell stay unbound (legacy empty principal/actor ids).
-`SessionResolver` may adopt a same-document legacy empty-id Telegram row into
-the scoped key on first scoped resolve.
+`SessionResolver` may adopt a same-document legacy empty-id row into the scoped
+key once (`adopt_unscoped_binding` removes the unscoped row) so a second actor
+cannot inherit that session.
 
 ## Capacity (process gate vs transport pools)
 
@@ -156,7 +157,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 
 | Concern | Slack | Telegram | Discord | Web |
 |---------|-------|----------|---------|-----|
-| Cancel / stop mid-turn | **partial** — soft timeout sets `sink.turn_cancel` (ReAct/tools stop); no user `/stop` yet | **partial** — same (`turn_timeout_seconds`) | **partial** — same as Slack | **partial** — queued investigate cancel only |
+| Cancel / stop mid-turn | **yes** — soft timeout + user `/stop` via `ActiveTurnCancels` → `sink.turn_cancel` | **yes** — same | **yes** — same | **partial** — queued investigate cancel only |
 | Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — Path-2 |
 | Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
 | Sink redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
@@ -168,11 +169,14 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 - Gateway chat disables `task_cancel` / investigation / llm_provider
   (`GatewayTurnHandler._UNSUPPORTED_GATEWAY_CAPABILITIES`).
 - Path-2 web investigate is ungated and has no chat approval prompter.
-- Soft turn timeout (Slack/Discord/Telegram) finalizes UX copy **and** sets
+- Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `sink.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
-  (shell `cancel_requested` parity via `CancelConsole`). The executor thread
-  is not killed; in-flight LLM/provider calls still finish the current request.
-  True mid-turn **user** cancel (`/stop`) is still missing.
+  (shell `cancel_requested` parity via `CancelConsole` + `ActiveTurnCancels`).
+  Orchestrator skips gather/answer and reports `final_intent=cli_agent_cancelled`;
+  the live sink stops draining stream chunks when the Event fires. `/stop` is
+  handled **outside** the per-conversation turn lock so it can interrupt an
+  in-flight turn. The executor thread is not killed; in-flight LLM/provider
+  calls still finish the current request.
 - Telegram write-tool approvals require a non-empty `allowed_user_ids` allowlist
   (same fail-closed posture as Discord).
 

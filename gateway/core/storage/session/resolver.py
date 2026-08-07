@@ -68,7 +68,11 @@ class SessionResolver:
         principal: Principal | None,
         actor: Actor | str | None,
     ) -> str | None:
-        """Scoped binding, or adopt a same-document legacy empty-id row once."""
+        """Scoped binding, or adopt a same-document legacy empty-id row once.
+
+        Adoption is single-use (legacy row removed) so a second actor in the
+        same conversation cannot inherit the same persisted session.
+        """
         existing = self._bindings.get_session_id(
             platform=self._platform,
             chat_id=user_id,
@@ -77,30 +81,22 @@ class SessionResolver:
         )
         if existing:
             return existing
-        if principal is None and actor is None:
+        if principal is None or actor is None:
             return None
-        legacy = self._bindings.get_session_id(
+        legacy = self._bindings.adopt_unscoped_binding(
             platform=self._platform,
             chat_id=user_id,
-            principal=None,
-            actor=None,
-        )
-        if not legacy:
-            return None
-        self._bindings.bind(
-            platform=self._platform,
-            chat_id=user_id,
-            session_id=legacy,
             principal=principal,
             actor=actor,
         )
-        logger.info(
-            "[gateway] adopted legacy %s binding conversation=%s → principal=%s actor=%s",
-            self._platform,
-            user_id,
-            principal.id if principal is not None else "",
-            actor.id if actor is not None and hasattr(actor, "id") else (actor or ""),
-        )
+        if legacy:
+            logger.info(
+                "[gateway] adopted legacy %s binding conversation=%s → principal=%s actor=%s",
+                self._platform,
+                user_id,
+                principal.id,
+                actor.id if hasattr(actor, "id") else actor,
+            )
         return legacy
 
     def resolve(

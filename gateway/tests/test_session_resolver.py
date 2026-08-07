@@ -169,6 +169,29 @@ def test_resolve_adopts_legacy_empty_binding_into_scoped_key(
         )
         == "legacy-session"
     )
+    # Single-use: legacy empty-id row must be gone after adoption.
+    assert resolver._bindings.get_session_id(platform="telegram", chat_id="42") is None
+
+
+def test_legacy_adoption_is_single_use_across_actors(resolver: SessionResolver) -> None:
+    """Second actor must not inherit the session the first actor adopted."""
+    org = Principal.org("org_acme")
+    resolver._bindings.bind(
+        platform="telegram",
+        chat_id="T:C:1",
+        session_id="legacy-shared",
+    )
+    resolver._fake_repo.load_session = lambda session_id: {
+        "session_id": session_id,
+        "cli_agent_messages": [],
+    }
+
+    alice = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_ALICE")
+    bob = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_BOB")
+
+    assert alice.session_id == "legacy-shared"
+    assert bob.session_id != alice.session_id
+    assert resolver._bindings.get_session_id(platform="telegram", chat_id="T:C:1") is None
 
 
 def test_slack_actors_get_distinct_sessions(resolver: SessionResolver) -> None:
