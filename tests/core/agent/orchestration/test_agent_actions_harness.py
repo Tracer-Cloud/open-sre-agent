@@ -768,6 +768,84 @@ def test_action_turn_suppresses_duplicate_cli_exec() -> None:
     assert runs == ["integrations verify --dry-run"]
 
 
+
+def test_action_turn_suppresses_third_identical_cli_exec_after_blocked_replay() -> None:
+    """Snapshot must survive a suppressed replay so a third identical batch stays blocked."""
+    runs: list[str] = []
+
+    def _run_counting(*, payload: str) -> dict[str, Any]:
+        runs.append(payload)
+        return {"ok": True, "output": f"opensre {payload}"}
+
+    tool = RegisteredTool(
+        name="cli_exec",
+        description="Fake CLI runner.",
+        input_schema={
+            "type": "object",
+            "properties": {"payload": {"type": "string"}},
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c1",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c2",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c3",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "please run opensre integrations verify --dry-run",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["integrations verify --dry-run"]
+
+
 def test_action_turn_allows_cli_exec_retry_after_failure() -> None:
     """Failed cli_exec does not create a success snapshot — the model may retry."""
     runs: list[str] = []

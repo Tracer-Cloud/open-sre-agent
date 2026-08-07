@@ -107,8 +107,10 @@ def with_duplicate_action_call_guard(
     ``shell_run`` / ``cli_exec``) equals the immediately previous *fully
     successful* guarded batch, suppress every call in the current batch.
 
-    A → B → A stays allowed (last completed batch is B). Partial failures do
-    not create a success snapshot, so retries after errors stay allowed.
+    A → B → A stays allowed (last completed batch is B). Only a fully
+    successful batch replaces the snapshot — suppressed replays and partial
+    failures leave it intact so a third identical batch stays blocked. Failed
+    calls that never succeeded may still retry (they never entered the snapshot).
 
     Limitation (intentional): the same batch twice in one turn — lone or
     multi — is also suppressed; accidental replay and “run that again” are
@@ -127,15 +129,11 @@ def with_duplicate_action_call_guard(
         nonlocal last_fully_succeeded_batch, current_batch, batch_succeeded, has_open_batch
         if base_batch is not None:
             base_batch(tool_calls)
-        if has_open_batch:
-            if not current_batch:
-                # Non-guarded-only batch: leave the last success snapshot alone.
-                pass
-            elif batch_succeeded == set(current_batch):
-                last_fully_succeeded_batch = current_batch
-            else:
-                # Partial failure / suppressed replay — not a success snapshot.
-                last_fully_succeeded_batch = frozenset()
+        if has_open_batch and current_batch and batch_succeeded == set(current_batch):
+            # Only a fully successful batch replaces the snapshot. Suppressed
+            # replays and partial failures must leave it intact — otherwise a
+            # third identical batch runs after the second was blocked.
+            last_fully_succeeded_batch = current_batch
         keys: list[_ActionCallFingerprint] = []
         for tool_call in tool_calls:
             if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
@@ -157,7 +155,7 @@ def with_duplicate_action_call_guard(
         if (
             name in _DEDUPE_ACTION_TOOL_NAMES
             and last_fully_succeeded_batch
-            and _action_call_fingerprint(name, public_tool_input(request.tool_call.input))
+            and _action_call_fingerprint(name, public_tool_input(request.arguments))
             in last_fully_succeeded_batch
         ):
             return BeforeToolCallResult(
