@@ -28,6 +28,10 @@ class ToolCallingTurnResult:
     handled: bool
     response_text: str = ""
     handoff_contents: tuple[str, ...] = ()
+    # False when every handoff this turn declared ``requires_gather=false``:
+    # the action work already produced what the reply needs, so the assistant
+    # answers from it without a live evidence-gather sweep.
+    handoff_requires_gather: bool = True
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False
 

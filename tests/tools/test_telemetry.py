@@ -1031,6 +1031,7 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "architecture_cleanup_repo",
         "architecture_clone_repo",
         "architecture_save_observations",
+        "ask_user_choice",
         "assistant_handoff",
         "argocd_application_diff",
         "argocd_application_status",

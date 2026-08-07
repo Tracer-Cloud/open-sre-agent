@@ -240,6 +240,8 @@ class HeadlessAgent:
             accounting=self._accounting_for(message),
             confirm_fn=self._confirm_fn,
             is_tty=self._is_tty,
+            surface=self._prompts.surface(),
+            output=self._output,
         )
 
 

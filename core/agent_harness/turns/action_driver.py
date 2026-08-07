@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
+from core.agent.goals import Goal
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
@@ -35,9 +36,11 @@ from core.agent_harness.prompts import (
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
+from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
+from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
 from core.execution import ToolExecutionHooks, public_tool_input
 from core.llm.failure_classification import is_context_length_overflow
@@ -84,6 +87,11 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
+# Tools whose user-facing event is rendered live by the surface's tool-event
+# observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
+# must stay silent for them: repeating their summary would double-print, and
+# their payload (e.g. the full skill body) is for the model only.
+_OBSERVER_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
 
 
 @dataclass(frozen=True)
@@ -202,6 +210,8 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
+    if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
+        return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
         return preferred_response
@@ -285,6 +295,47 @@ def _self_recording_tools_only(result: Any) -> bool:
         if tool_call.name != "assistant_handoff"
     ]
     return bool(names) and all(name in SELF_RECORDING_ACTION_TOOL_NAMES for name in names)
+
+
+# Self-recording tools whose result payload carries the real command output
+# back to the model (shell: stdout/stderr/exit_code; slash: the captured
+# console output read back from the history row). A closing summary after a
+# chain of these is grounded in observed output, unlike the bare success flags
+# most self-recording tools return.
+_GROUNDED_CHAIN_TOOL_NAMES: frozenset[str] = frozenset({"shell_run", "slash_invoke"})
+
+
+def _multi_step_grounded_chain(result: Any) -> bool:
+    """True when the turn chained two or more output-carrying tool steps.
+
+    ``_self_recording_tools_only`` suppresses model closings because most
+    self-recording tools hand the model a bare success flag, so closing prose
+    would be invented. ``shell_run`` and ``slash_invoke`` are the exceptions —
+    their tool results carry the real output back to the model — so after a
+    multi-step chain the completion summary is grounded in output the model
+    actually observed, and dropping it left workflow turns ending on raw step
+    output with no wrap-up. Single commands keep the suppression: their one
+    output block is already on screen, and a paraphrase only adds
+    contradiction risk.
+    """
+    names = [
+        tool_call.name
+        for tool_call, _tool_result in getattr(result, "tool_results", [])
+        if tool_call.name != "assistant_handoff"
+    ]
+    return len(names) >= 2 and all(name in _GROUNDED_CHAIN_TOOL_NAMES for name in names)
+
+
+def _asks_the_user(final_text: str) -> bool:
+    """True when the closing message asks the user something.
+
+    A question ("Found 5 loops — remove all of them?") is direction-seeking,
+    not a restatement of tool output, so the invented-summary hazard that
+    justifies suppressing self-recording closings does not apply. Dropping it
+    is worse than any paraphrase risk: the user sees dead air, and their "yes"
+    has no recorded offer to resolve against on the next turn.
+    """
+    return final_text.rstrip().endswith("?")
 
 
 def _response_text_from_generic_results(result: Any) -> str:
@@ -423,8 +474,11 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     LLM is unavailable — e.g. a provider with no credit — so users can still run
     ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
 
-    Also accepts schedule affirmatives that ``expand_affirmative_follow_up`` rewrote
-    into a leading ``/cron add …`` (after stripping a vendor context prefix).
+    Also accepts schedule / investigation affirmatives that
+    ``expand_affirmative_follow_up`` rewrote into a leading ``/cron add …`` or
+    ``/investigate alert:…`` (after stripping a vendor context prefix). Those
+    expands are themselves literal slash text — not a separate static tool-call
+    bypass — so they stay inside the repository-mandated action-selection path.
 
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
@@ -462,7 +516,8 @@ def _build_action_agent(
 ) -> ActionTurnPlan:
     """Build the Agent for one action turn; return an ``ActionTurnPlan``.
 
-    Detects the three branches — verbatim ``!shell``, literal ``/slash``, or
+    Detects the three branches — verbatim ``!shell``, literal ``/slash``
+    (including Want-me-to yes expanded to ``/cron`` / ``/investigate``), or
     LLM-selected — and picks a matching LLM (deterministic tool-call or hosted
     factory), system prompt, and user-message envelope. The caller only has to
     invoke ``.run()`` and shape the result.
@@ -471,6 +526,11 @@ def _build_action_agent(
     slash_call = (
         None if bang_command is not None else _literal_slash_tool_call(message, agent_tools)
     )
+    # Only LLM-selected turns get a goal reviewer: the verbatim `!shell` and
+    # literal `/slash` paths execute exactly one explicit command by design,
+    # so "did the agent reach the goal" is not a meaningful question there.
+    goal: Goal | None = None
+    executed_tool_names: list[str] = []
 
     if bang_command is not None:
         # Explicit `!` shell escape: dispatch the verbatim text as a shell_run call.
@@ -496,13 +556,33 @@ def _build_action_agent(
         factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
         envelope = build_action_system_prompt_envelope(
-            turn_snapshot or TurnSnapshot.from_session(message, session)
+            # No turn plan means no surface is known here; setup facts are
+            # omitted rather than guessed (see _setup_state_for_surface).
+            turn_snapshot or TurnSnapshot.from_session(message, session, surface=None)
         )
         # Cached half stays byte-identical across turns; ephemeral (conversation,
         # prior-action-facts) rides with the user message so Anthropic's system
         # cache_control breakpoint is not invalidated every turn.
         system = envelope.render_cached()
         user_message = build_action_user_message(message, prefix=envelope.render_ephemeral())
+        # Reviewed goal: when the agent concludes after tool work, one LLM
+        # check confirms the user's request was carried out; a NOT_REACHED
+        # verdict nudges the loop to continue instead of stopping short
+        # (e.g. "remove the cron loops" ending after only listing them).
+        # The reviewer reads executed tool names from the shared list the
+        # event tap below fills, so it can stand down on handoff/dispatch
+        # turns whose outcome is not reviewable at conclusion time.
+        goal = build_goal_reviewer(llm, message, executed_tool_names)
+
+    # WAL first, observer second: the tool intent must be on disk before
+    # any surface side effect reacts to the same event.
+    on_runtime_event = with_wal_recording(
+        runtime_event_callback_from_observer(observer),
+        session=session,
+        user_text=message,
+    )
+    if goal is not None:
+        on_runtime_event = tap_executed_tool_names(on_runtime_event, executed_tool_names)
 
     config = AgentConfig(
         llm=llm,
@@ -512,7 +592,8 @@ def _build_action_agent(
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
         tool_resources=tool_resources,
         tool_hooks=tool_hooks,
-        on_runtime_event=runtime_event_callback_from_observer(observer),
+        on_runtime_event=on_runtime_event,
+        goal=goal,
     )
     return ActionTurnPlan(
         agent=build_agent(config),
@@ -596,6 +677,7 @@ class _TurnCounts:
     handled: bool
     investigation_dispatched: bool
     handoff_contents: tuple[str, ...]
+    handoff_requires_gather: bool = True
 
 
 def _compose_response(
@@ -620,7 +702,22 @@ def _compose_response(
     # Self-recording tools (slash/shell/…) already rendered the real output.
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
-    suppress_final = prefer_tool_response_text or _self_recording_tools_only(result)
+    # Exceptions: a multi-step shell/slash chain, whose closing summary is
+    # grounded in the output the model observed between steps, and a closing
+    # question, which seeks direction instead of restating output.
+    # A handoff means the assistant answers this turn, so the action's closing
+    # prose would be a second reply to one message ("good morning" twice).
+    suppress_final = (
+        prefer_tool_response_text
+        or (
+            _self_recording_tools_only(result)
+            and not _multi_step_grounded_chain(result)
+            and not _asks_the_user(final_text)
+        )
+        # A handoff means the assistant answers this turn, so the action's
+        # closing prose would be a second reply to one message.
+        or bool(counts.handoff_contents)
+    )
     final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
@@ -684,6 +781,11 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
     # ``assistant_handoff`` runs like a tool but hands back to conversation, so
     # it must not make the turn look like it did something for the user.
     planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
+    handoff_inputs = [
+        public_tool_input(tc.input)
+        for tc, _output in result.executed
+        if tc.name == "assistant_handoff"
+    ]
     return _TurnCounts(
         executed_entries=executed_entries,
         executed_count=len(executed_entries) + generic_executed_count,
@@ -698,10 +800,18 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
         ),
         handoff_contents=tuple(
             content
-            for tc, _output in result.executed
-            if tc.name == "assistant_handoff"
-            for content in (str(public_tool_input(tc.input).get("content", "")).strip(),)
+            for handoff_input in handoff_inputs
+            for content in (str(handoff_input.get("content", "")).strip(),)
             if content
+        ),
+        # Gather stays required unless every handoff this turn opted out; a
+        # single gather-needing handoff must not be starved by another's opt-out.
+        handoff_requires_gather=(
+            not handoff_inputs
+            or any(
+                handoff_input.get("requires_gather", True) is not False
+                for handoff_input in handoff_inputs
+            )
         ),
     )
 
@@ -825,6 +935,7 @@ def _run_action_turn(
         counts.handled,
         response_text=response_text,
         handoff_contents=counts.handoff_contents,
+        handoff_requires_gather=counts.handoff_requires_gather,
         investigation_dispatched=counts.investigation_dispatched,
     )
 

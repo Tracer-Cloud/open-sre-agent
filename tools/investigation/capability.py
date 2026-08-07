@@ -226,6 +226,7 @@ async def astream_investigation(
     *,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str] | None = None,
+    user_requested: bool = False,
 ) -> AsyncIterator[Any]:
     """Stream investigation events in real time.
 
@@ -239,6 +240,7 @@ async def astream_investigation(
         raw_alert=raw_alert,
         opensre_evaluate=opensre_evaluate,
         investigation_metadata=investigation_metadata,
+        user_requested=user_requested,
     )
 
     # Silence the global ProgressTracker before starting the background thread

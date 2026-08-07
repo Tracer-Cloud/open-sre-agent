@@ -64,6 +64,16 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.prompts.skills",
             )
         )
+    if turn_snapshot.setup_state:
+        blocks.append(
+            PromptBlock(
+                id="action-agent-setup-state",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.CONTEXT,
+                content=turn_snapshot.setup_state,
+                provenance="platform.setup_state",
+            )
+        )
     blocks.append(
         PromptBlock(
             id="connected-integrations",
@@ -106,6 +116,19 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
                 provenance="core.agent_harness.turns.turn_snapshot",
             )
         )
+    recovery = interrupted_turn_recovery_block(turn_snapshot)
+    if recovery:
+        # Ephemeral: the note rides exactly one turn (popped from the session
+        # at snapshot time), so the cached prompt half stays byte-identical.
+        blocks.append(
+            PromptBlock(
+                id="interrupted-turn-recovery",
+                kind=PromptBlockKind.CONTEXT,
+                tier=PromptTier.EPHEMERAL,
+                content=recovery,
+                provenance="core.agent_harness.session.persistence.wal_recovery",
+            )
+        )
     return PromptEnvelope.from_blocks(
         blocks,
         separator="",
@@ -123,13 +146,16 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    gate_note = ""
-    if listing in ("none", "unknown"):
-        gate_note = (
-            "This line gates ONLY implicit diagnostic questions (no explicit "
-            "investigate/RCA/diagnose/analyze/root-cause verb). Explicit "
-            "investigate instructions STILL emit investigation_start regardless.\n"
-        )
+    # Listing does not gate diagnostic→investigation (Phase 1b): why/figure-out
+    # always hand off for gather + Want-me-to; explicit investigate always
+    # dispatches. The list only tells the planner which sources gather can use.
+    gate_note = (
+        "This listing does NOT gate diagnostic→investigation. Cause/why / "
+        "figure-out questions → assistant_handoff + gather + Want-me-to "
+        "investigate offer. Explicit investigate/RCA/diagnose/analyze/"
+        "root-cause verbs → investigation_start ALWAYS (even when this line "
+        "is none).\n"
+    )
     return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
 
 
@@ -161,6 +187,18 @@ def prior_action_facts_block(turn_snapshot: TurnSnapshot) -> str:
         "to previous results, sent messages, comparisons, or 'both/that/them'. "
         "Do NOT ask the user to paste values already listed here):\n"
         f"{facts}\n\n"
+    )
+
+
+def interrupted_turn_recovery_block(turn_snapshot: TurnSnapshot) -> str:
+    """Render the WAL recovery note for the first action turn after ``/resume``."""
+    note = turn_snapshot.recovery_note
+    if not note:
+        return ""
+    return (
+        "INTERRUPTED-TURN RECOVERY (write-ahead log of the resumed session; "
+        "applies to THIS turn):\n"
+        f"{note}\n\n"
     )
 
 
@@ -221,6 +259,7 @@ __all__ = [
     "build_action_system_prompt",
     "build_action_user_message",
     "connected_integrations_block",
+    "interrupted_turn_recovery_block",
     "long_term_memory_block",
     "prior_action_facts_block",
     "recent_conversation_block",

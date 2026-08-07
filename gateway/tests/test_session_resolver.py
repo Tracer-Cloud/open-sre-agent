@@ -116,6 +116,7 @@ def test_resolved_telegram_context_is_visible_as_prior_action_facts(
         TurnSnapshot.from_session(
             "No, compute those temperatures and send the nice comparison to Slack",
             resolved,
+            surface="interactive_shell",
         )
     )
 

@@ -107,8 +107,8 @@ def test_provider_recomputes_when_the_scheduler_store_changes(monkeypatch) -> No
     second = provider.setup_state()
 
     # Assert: adding a schedule shows up on the next turn.
-    assert "configured: 0" in first
-    assert "configured: 7" in second
+    assert "0 configured" in first
+    assert "7 configured" in second
 
 
 def test_headless_provider_reports_no_setup_state() -> None:

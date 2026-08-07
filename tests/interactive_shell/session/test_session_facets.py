@@ -16,8 +16,11 @@ from core.domain.alerts.inbox import IncomingAlert
 from surfaces.interactive_shell.session.session import Session
 
 # Core fields are inherited from SessionCore; the shell adds these two facets.
-# Includes pending_schedule_offer (structured yes → /cron confirmations).
-_CORE_FIELD_COUNT = 20
+# Includes pending_schedule_offer (structured yes → /cron confirmations),
+# pending_investigation_offer (structured yes → investigation dispatch),
+# pending_user_choice (structured decision → /choose selection menu), and
+# pending_recovery_note (WAL recovery note for the first turn after /resume).
+_CORE_FIELD_COUNT = 23
 _FACET_FIELDS = ("alerts", "terminal")
 
 

@@ -38,6 +38,7 @@ def _outcome(result: Any) -> dict[str, Any]:
         "has_unhandled_clause": result.has_unhandled_clause,
         "handled": result.handled,
         "handoff_contents": result.handoff_contents,
+        "handoff_requires_gather": result.handoff_requires_gather,
         "accounting_status": result.accounting_status,
         "investigation_dispatched": result.investigation_dispatched,
     }
@@ -59,6 +60,7 @@ def test_a_turn_with_no_tool_calls_is_unhandled() -> None:
         "has_unhandled_clause": False,
         "handled": False,
         "handoff_contents": (),
+        "handoff_requires_gather": True,
         "accounting_status": "completed",
         "investigation_dispatched": False,
     }
@@ -87,6 +89,36 @@ def test_an_assistant_handoff_is_reported_but_not_counted_as_planned() -> None:
     assert result.planned_count == 0
     assert result.handled is False
     assert result.handoff_contents == ("let me explain instead",)
+    assert result.handoff_requires_gather is True
+
+
+def test_an_answer_only_handoff_opts_out_of_the_gather_pass() -> None:
+    """``requires_gather=false`` on the handoff input reaches the turn result.
+
+    The router reads this flag to skip the live evidence-gather sweep when the
+    turn's own tool work already produced everything the reply needs.
+    """
+    # Arrange
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response(
+                    "assistant_handoff",
+                    {"content": "onboarding checks all passed", "requires_gather": False},
+                ),
+                no_tool_response(""),
+            ]
+        )
+    )
+
+    # Act
+    result = run_action_tool_turn(
+        "onboard me on the CI/CD fix", Session(), harness.console, deps=harness.deps
+    )
+
+    # Assert
+    assert result.handoff_contents == ("onboarding checks all passed",)
+    assert result.handoff_requires_gather is False
 
 
 def test_final_text_that_reads_like_a_reply_becomes_the_response() -> None:

@@ -20,6 +20,9 @@ called per chunk (throttled to ~10/s) so the bottom-toolbar token
 counter updates live, and ``cancel_requested`` is polled between chunks
 so an Esc press in the prompt cancels promptly. The ``getattr``
 indirection keeps this module decoupled from the ``StreamingConsole`` adapter.
+
+Gather answers may set ``defer_want_me_to_closer`` so dual/drifted Want-me-to
+menus are not painted until the harness flushes the canonical closer.
 """
 
 from __future__ import annotations
@@ -27,12 +30,14 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from rich.console import Console
 from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
 from core.agent_harness.prompts.rules import normalize_three_tier_spacing
+from core.agent_harness.session.want_me_to import WANT_ME_TO_MARKER, closer_tail_from
 from surfaces.interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
@@ -56,7 +61,17 @@ _CODE_FENCE = "```"
 # the fence to be at line start anyway, so this is a tighter and
 # more accurate check than a naive substring count.
 _CODE_FENCE_LINE_RE = re.compile(rf"^{re.escape(_CODE_FENCE)}", re.MULTILINE)
-_MARKDOWN_CODE_THEME = "ansi_dark"
+# Rich inserts leading vertical space when these block types start a standalone
+# Markdown render. Other blocks do not, so paragraph-by-paragraph streaming must
+# add the consumed ``\n\n`` before rendering them.
+_SELF_SPACING_BLOCK_TOKEN_TYPES = frozenset(
+    {
+        "blockquote_open",
+        "bullet_list_open",
+        "ordered_list_open",
+        "table_open",
+    }
+)
 
 # Rich Markdown treats ``__init__.py`` as bold emphasis around ``init``, which
 # strips the underscores and restyles that span. Escape dunder filenames so
@@ -73,6 +88,28 @@ STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
 
 
+def _build_markdown_block(text: str) -> Markdown:
+    """Build a Markdown renderable with the shared escaping and code theme."""
+    spaced = normalize_three_tier_spacing(text)
+    return Markdown(
+        _escape_markdown_dunder_filenames(spaced.rstrip()),
+        code_theme=ui_theme.MARKDOWN_CODE_THEME,
+    )
+
+
+def render_markdown_block(console: Console, text: str) -> None:
+    """Render one complete Markdown block using the shared markdown theme.
+
+    The single rendering path for model prose that arrives whole (not
+    chunk-streamed) — e.g. the action agent's intermediate phase headers —
+    so every markdown surface shares one escaping/theme policy.
+    """
+    if not text.strip():
+        return
+    with console.use_theme(ui_theme.MARKDOWN_THEME):
+        console.print(_build_markdown_block(text))
+
+
 def render_response_header(console: Console, label: str) -> None:
     """Print the ``●`` bullet row marker that opens every assistant
     response (Claude Code-style row layout). Shared with
@@ -86,12 +123,27 @@ def _format_tokens(token_count: int) -> str:
     return f"{format_token_count_short(token_count)} tokens"
 
 
+def _paragraph_has_want_me_to(text: str) -> bool:
+    return WANT_ME_TO_MARKER in text.lower()
+
+
+@dataclass(frozen=True)
+class StreamPaintResult:
+    """Accumulated stream text plus whether the Want-me-to closer was held back."""
+
+    text: str
+    deferred_closer: bool = False
+    footer_elapsed_s: float | None = None
+    footer_total_bytes: int | None = None
+
+
 def stream_to_console(
     console: Console,
     *,
     label: str,
     chunks: Iterator[str],
     suppress_if_starts_with: str | None = None,
+    defer_want_me_to_closer: bool = False,
 ) -> str:
     """Stream chunks to ``console`` and return the accumulated text.
 
@@ -99,25 +151,46 @@ def stream_to_console(
     the first non-whitespace token indicates a machine-readable payload
     (e.g. machine-readable payloads). The return value still contains the full
     accumulated text in that case.
+
+    When ``defer_want_me_to_closer`` is true, paragraphs containing a Want-me-to
+    closer are not painted (and the timing footer is held) so the caller can
+    flush a normalized closer via :func:`finish_deferred_closer`.
     """
+    return stream_to_console_state(
+        console,
+        label=label,
+        chunks=chunks,
+        suppress_if_starts_with=suppress_if_starts_with,
+        defer_want_me_to_closer=defer_want_me_to_closer,
+    ).text
+
+
+def stream_to_console_state(
+    console: Console,
+    *,
+    label: str,
+    chunks: Iterator[str],
+    suppress_if_starts_with: str | None = None,
+    defer_want_me_to_closer: bool = False,
+) -> StreamPaintResult:
+    """Like :func:`stream_to_console` but returns paint/defer metadata."""
     if not console.is_terminal:
         text = "".join(chunks)
         if suppress_if_starts_with is not None and text.lstrip().startswith(
             suppress_if_starts_with
         ):
-            return text
-        if text:
-            console.print()
-            render_response_header(console, label)
-            with console.use_theme(ui_theme.MARKDOWN_THEME):
-                console.print(
-                    Markdown(
-                        _escape_markdown_dunder_filenames(normalize_three_tier_spacing(text)),
-                        code_theme=_MARKDOWN_CODE_THEME,
-                    )
-                )
-            console.print()
-        return text
+            return StreamPaintResult(text=text)
+        if not text:
+            return StreamPaintResult(text=text)
+        if defer_want_me_to_closer and _paragraph_has_want_me_to(text):
+            # Non-TTY: hold the whole paint when a closer is present so the
+            # gather path can print the canonical rewrite once.
+            return StreamPaintResult(text=text, deferred_closer=True)
+        console.print()
+        render_response_header(console, label)
+        render_markdown_block(console, text)
+        console.print()
+        return StreamPaintResult(text=text)
 
     chunks_iter = iter(chunks)
     peeked: list[str] = []
@@ -144,7 +217,7 @@ def stream_to_console(
                     if rest is None:
                         break
                     drained.append(rest)
-                return "".join(peeked) + "".join(drained)
+                return StreamPaintResult(text="".join(peeked) + "".join(drained))
             break
 
     console.print()
@@ -165,6 +238,8 @@ def stream_to_console(
     progress_hook = getattr(console, "update_streaming_progress", None)
     total_bytes = sum(len(c) for c in peeked)
     last_progress_at = 0.0
+    rendered_paragraphs = 0
+    deferred_closer = False
 
     def _maybe_update_progress(now: float, *, force: bool = False) -> float:
         nonlocal progress_hook
@@ -185,17 +260,41 @@ def stream_to_console(
         # so this stays False for them.
         return bool(getattr(console, "cancel_requested", False))
 
-    def _render_paragraph(text: str) -> None:
+    def _paint_paragraph_body(text: str) -> None:
+        nonlocal rendered_paragraphs
         if not text.strip():
             return
-        spaced = normalize_three_tier_spacing(text)
+        markdown = _build_markdown_block(text)
+        starts_with_self_spacing_block = bool(
+            markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
+        )
+        if rendered_paragraphs and not starts_with_self_spacing_block:
+            # ``_flush_paragraphs`` consumes the source ``\n\n`` boundary.
+            # Restore it explicitly unless Rich adds equivalent leading space
+            # for the next standalone block. This matters most after lists,
+            # whose renderer adds no trailing blank line.
+            console.print()
         with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(
-                Markdown(
-                    _escape_markdown_dunder_filenames(spaced.rstrip()),
-                    code_theme=_MARKDOWN_CODE_THEME,
-                )
-            )
+            console.print(markdown)
+        rendered_paragraphs += 1
+
+    def _render_paragraph(text: str) -> None:
+        nonlocal deferred_closer
+        if not text.strip():
+            return
+        if defer_want_me_to_closer and _paragraph_has_want_me_to(text):
+            deferred_closer = True
+            # Keep evidence / questions visible; hold only from Want-me-to onward.
+            lowered = text.lower()
+            pos = lowered.find(WANT_ME_TO_MARKER)
+            start = pos
+            if start >= 2 and text[start - 2 : start] == "**":
+                start -= 2
+            head = text[:start].rstrip() if start > 0 else ""
+            if head.strip():
+                _paint_paragraph_body(head)
+            return
+        _paint_paragraph_body(text)
 
     def _flush_paragraphs(*, force: bool = False) -> None:
         nonlocal para_buffer
@@ -290,20 +389,62 @@ def stream_to_console(
         # Render whatever's left in the paragraph buffer so the user
         # sees the full response even if it didn't end on ``\n\n``.
         _flush_paragraphs(force=True)
-        elapsed = time.monotonic() - started
-        if buffer:
-            tokens = _format_tokens(total_bytes // _CHARS_PER_TOKEN)
-            console.print(f"[{ui_theme.DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
-        console.print()
 
-    return "".join(buffer)
+    elapsed = time.monotonic() - started
+    text = "".join(buffer)
+    if deferred_closer:
+        # Footer after the canonical closer is flushed by the caller.
+        return StreamPaintResult(
+            text=text,
+            deferred_closer=True,
+            footer_elapsed_s=elapsed,
+            footer_total_bytes=total_bytes,
+        )
+    if buffer:
+        tokens = _format_tokens(total_bytes // _CHARS_PER_TOKEN)
+        console.print(f"[{ui_theme.DIM}]· {elapsed:.1f}s · ↓ {tokens}[/]")
+    console.print()
+    return StreamPaintResult(text=text, deferred_closer=False)
+
+
+def publish_full_response(console: Console, text: str, *, label: str = "assistant") -> None:
+    """Paint a complete assistant answer (non-TTY deferred gather path)."""
+    body = (text or "").strip()
+    if not body:
+        return
+    console.print()
+    render_response_header(console, label)
+    render_markdown_block(console, body)
+    console.print()
+
+
+def finish_deferred_closer(
+    console: Console,
+    final_text: str,
+    *,
+    footer_elapsed_s: float | None = None,
+    footer_total_bytes: int | None = None,
+) -> None:
+    """Paint the (possibly rewritten) Want-me-to closer + held stream footer."""
+    closer = closer_tail_from(final_text)
+    if closer:
+        render_markdown_block(console, closer)
+    if footer_elapsed_s is not None and footer_total_bytes is not None:
+        tokens = _format_tokens(footer_total_bytes // _CHARS_PER_TOKEN)
+        console.print(f"[{ui_theme.DIM}]· {footer_elapsed_s:.1f}s · ↓ {tokens}[/]")
+    console.print()
 
 
 __all__ = [
     "StreamingConsole",
     "STREAM_LABEL_ANSWER",
     "STREAM_LABEL_ASSISTANT",
+    "StreamPaintResult",
+    "finish_deferred_closer",
     "format_token_count_short",
+    "publish_full_response",
+    "render_markdown_block",
     "render_response_header",
     "stream_to_console",
+    "stream_to_console_state",
 ]

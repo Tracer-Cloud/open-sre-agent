@@ -73,6 +73,7 @@ class AgentStateModel(StrictConfigModel):
     organization_slug: str = ""
     messages: list[ChatMessageModel] = Field(default_factory=list)
     is_noise: bool = False
+    user_requested: bool = False
     alert_name: str = ""
     severity: str = ""
     alert_source: str = ""

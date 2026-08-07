@@ -29,6 +29,8 @@ from core.agent_harness.prompts.memory.conversation import (
     format_recent_conversation,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.goal_review import build_gather_goal_reviewer
+from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
 from core.state import MAX_CONVERSATION_MESSAGES
@@ -40,10 +42,13 @@ from platform.observability.trace.spans import component_span
 log = logging.getLogger(__name__)
 
 # Keep the gathering loop short: this runs inline on a turn, so it must stay
-# responsive. A handful of iterations is enough to fetch the data needed to
-# answer a question; the full multi-stage ReAct budget belongs to investigations.
-# Headless metric reports (PostHog / digests) may raise this via ``max_iterations``.
-_MAX_GATHER_ITERATIONS = 4
+# responsive. The budget must still fit an MCP-bridged source's full path —
+# list tools -> fetch a schema -> call the real tool -> conclude — plus one
+# goal-review nudge; 4 was observed live to cap out on discovery alone, so the
+# PostHog count query never ran. The full multi-stage ReAct budget belongs to
+# investigations. Headless metric reports (PostHog / digests) may raise this
+# via ``max_iterations``.
+_MAX_GATHER_ITERATIONS = 6
 MAX_REPORT_GATHER_ITERATIONS = 12
 
 # Caps so a chatty tool (or many tools) can't blow up the follow-up prompt the
@@ -67,6 +72,7 @@ class GatherAgentFactory(Protocol):
         gather_tools: list[Any],
         resolved: dict[str, Any],
         on_progress: ToolEventObserver | None,
+        message: str,
         max_iterations: int = _MAX_GATHER_ITERATIONS,
     ) -> Agent[Any]:
         """Build and return the evidence-gather agent for one turn."""
@@ -210,16 +216,28 @@ def _build_evidence_agent(
     gather_tools: list[Any],
     resolved: dict[str, Any],
     on_progress: ToolEventObserver | None,
+    message: str,
     max_iterations: int = _MAX_GATHER_ITERATIONS,
 ) -> Agent[Any]:
-    """Build the Agent for one evidence-gather turn."""
+    """Build the Agent for one evidence-gather turn.
+
+    The turn gets a gather-flavored goal reviewer over the user's question:
+    when the loop concludes with only discovery output (e.g. an MCP tool
+    listing but no actual query result), one review verdict nudges it to keep
+    gathering instead of handing the summarizer a dead end. The action-turn
+    reviewer would accept those conclusions — its prompt treats an honest
+    report of findings as reached — so the gather flavor reviews against
+    "did the data actually get fetched" instead.
+    """
     config = AgentConfig(
         llm=llm,
         system=build_gather_system_prompt(session),
         tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=max_iterations,
+        tool_hooks=SourceCircuitBreaker().hooks(),
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
+        goal=build_gather_goal_reviewer(llm, message),
     )
     return build_agent(config)
 
@@ -275,6 +293,7 @@ def gather_tool_evidence(
             gather_tools=gather_tools,
             resolved=resolved,
             on_progress=on_progress,
+            message=message,
             max_iterations=iteration_cap,
         )
         result = run_react_agent_with_telemetry(

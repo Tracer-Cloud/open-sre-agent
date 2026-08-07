@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from typing import Any
 
@@ -94,6 +95,35 @@ def test_transport_error_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None
 
     # Assert: UNAVAILABLE so the gateway can fail open instead of blocking the user.
     assert outcome is CreditsOutcome.UNAVAILABLE
+
+
+@pytest.mark.usefixtures("metering_on")
+def test_transport_error_log_omits_exception_detail(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange: the exception message contains a URL that must never reach the log.
+    sensitive_url = "https://app.opensre.internal/api/credits/consume"
+
+    def unreachable(*_a: object, **_k: object) -> httpx.Response:
+        raise httpx.ConnectError(f"[Errno -2] Name or service not known: {sensitive_url}")
+
+    monkeypatch.setattr("gateway.core.billing.credits_client.httpx.post", unreachable)
+
+    with caplog.at_level(logging.WARNING, logger="gateway.core.billing.credits_client"):
+        consume_credits(organization_id="org_x", reason="slack_turn")
+
+    # Assert: the log record was emitted but contains no part of the exception message.
+    assert any("[credits] webapp unreachable" in r.message for r in caplog.records)
+    for record in caplog.records:
+        if "[credits] webapp unreachable" in record.message:
+            assert sensitive_url not in record.message, (
+                "Log must not expose the exception message (may contain the webapp URL)"
+            )
+            assert "Name or service not known" not in record.message, (
+                "Log must not expose raw exception text"
+            )
+            # Only the exception type name is permitted.
+            assert "ConnectError" in record.message
 
 
 @pytest.mark.usefixtures("metering_on")

@@ -471,6 +471,33 @@ def test_runtime_events_emit_typed_lifecycle_and_streaming_order() -> None:
     assert [event.delta for event in message_updates] == ["final"]
 
 
+def test_message_update_flags_tool_call_iterations() -> None:
+    """Intermediate commentary carries has_tool_calls=True; the final answer False."""
+    llm = FakeLLM(
+        iter(
+            [
+                AgentLLMResponse(
+                    content="### [1/2] Checking logs",
+                    tool_calls=[ToolCall(id="c1", name="query_logs", input={})],
+                    raw_content=None,
+                ),
+                _text_response("final"),
+            ]
+        )
+    )
+    events: list[RuntimeEvent] = []
+
+    _agent(llm, _tools(FakeTool("query_logs")), on_runtime_event=events.append).run(
+        [{"role": "user", "content": "hello"}]
+    )
+
+    updates = [event for event in events if isinstance(event, MessageUpdateEvent)]
+    assert [(event.delta, event.data["has_tool_calls"]) for event in updates] == [
+        ("### [1/2] Checking logs", True),
+        ("final", False),
+    ]
+
+
 def test_legacy_on_event_bridge_emits_kinds_in_order() -> None:
     llm = FakeLLM(
         iter(
@@ -495,6 +522,7 @@ def test_legacy_on_event_bridge_emits_kinds_in_order() -> None:
         "tool_start",
         "tool_end",
         "llm_start",
+        "message_update",
         "agent_end",
     ]
 

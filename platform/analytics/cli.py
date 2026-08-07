@@ -924,6 +924,21 @@ def capture_github_login_completed(username: str, *, variant: str | None = None)
     _capture(Event.GITHUB_LOGIN_COMPLETED, properties)
 
 
+def capture_loop_suggestion_prompted() -> None:
+    """Exposure event: the suggested-loops startup picker was rendered."""
+    _capture(Event.LOOP_SUGGESTION_PROMPTED)
+
+
+def capture_loop_suggestion_selected(*, option: str) -> None:
+    """User picked one of the suggested loop options (ci_cd / task_management / daily_brief)."""
+    _capture(Event.LOOP_SUGGESTION_SELECTED, {"option": option})
+
+
+def capture_loop_suggestion_skipped() -> None:
+    """User dismissed the suggested-loops picker (Escape) without choosing."""
+    _capture(Event.LOOP_SUGGESTION_SKIPPED)
+
+
 def capture_tests_picker_opened() -> None:
     _capture(Event.TESTS_PICKER_OPENED)
 

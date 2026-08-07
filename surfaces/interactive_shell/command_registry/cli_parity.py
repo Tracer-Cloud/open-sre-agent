@@ -70,7 +70,7 @@ def run_cli_command(
     *,
     session: Session | None = None,
     subprocess_timeout: float | None = None,
-    capture_output: bool = False,
+    capture_output: bool = True,
 ) -> bool:
     """Helper to delegate complex or interactive Click commands to a child process.
 
@@ -83,13 +83,15 @@ def run_cli_command(
     real TTY (e.g. the install script's own progress output during an update)
     while still being killed if it hangs.
 
-    ``capture_output`` (default ``False``) makes the helper capture stdout/stderr
-    and replay them through ``console``. Set this for non-interactive delegated
-    commands (e.g. ``opensre tests list``) so their output appears inside the
-    REPL buffer instead of bypassing ``console.print`` via the child's inherited
-    stdout FD. Interactive commands, and commands whose child prints its own
-    terminal-aware progress UI (``onboard``, ``update``), must leave this
-    ``False`` so the child's output stays attached to the real TTY.
+    ``capture_output`` (default ``True``) makes the helper capture stdout/stderr
+    and replay them through ``console``, so delegated command output appears
+    inside the REPL buffer (instead of bypassing ``console.print`` via the
+    child's inherited stdout FD) and lands on the slash history row, where the
+    action agent reads it back as its tool observation. Capture is the default
+    because most delegated commands are non-interactive printers; only commands
+    that prompt on the real TTY (``onboard``, ``login``, ``uninstall``), stream
+    their own progress UI (``update``), or block indefinitely (``cron start``,
+    ``hermes watch``, ``watchdog``) must pass ``capture_output=False``.
 
     **Return value:** Reports subprocess success for headless/gateway sessions
     (``session`` with no terminal facet) so slash analytics can show failure.
@@ -113,6 +115,16 @@ def run_cli_command(
         # Captured child stdout isn't a TTY, so force Rich colour there and parse
         # it back in print_command_output — otherwise its styling would be lost.
         child_env["FORCE_COLOR"] = "1"
+        # Without a terminal (and with no exported COLUMNS) Rich in the child
+        # falls back to 80 columns and truncates table cells with an ellipsis —
+        # `/cron list` task ids come back as `ecf7c2580b…`, which the action
+        # agent cannot chain into `/cron remove <id>`. Render captured output
+        # wide; the REPL re-print re-wraps to the real terminal anyway. On a
+        # "dumb" TERM Rich short-circuits to 80x25 and ignores COLUMNS, so give
+        # the forced-colour child a real TERM as well (headless/CI surfaces).
+        if child_env.get("TERM", "").lower() in {"dumb", "unknown"}:
+            child_env["TERM"] = "xterm-256color"
+        child_env.setdefault("COLUMNS", "200")
     exit_code: int | None = 0
     try:
         if should_capture:
@@ -200,20 +212,23 @@ def _cmd_onboard(session: Session, console: Console, args: list[str]) -> bool:  
     # this handler runs — the wizard subprocess therefore gets exclusive
     # stdin and can drive its own interactive prompts without conflicting
     # with the shell's UI.
-    return run_cli_command(console, ["onboard", *args], session=session)
+    return run_cli_command(console, ["onboard", *args], capture_output=False, session=session)
 
 
 def _cmd_auth(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    # ``login`` (and provider flows) prompt on the real TTY; status/logout print.
     capture_output = not args or args[0].lower() in {"status", "logout"}
     return run_cli_command(console, ["auth", *args], capture_output=capture_output, session=session)
 
 
 def _cmd_login(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["auth", "login", *args], session=session)
+    # Interactive provider login prompts on the real TTY.
+    return run_cli_command(console, ["auth", "login", *args], capture_output=False, session=session)
 
 
 def _cmd_remote(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["remote", *args], session=session)
+    # Remote-sync configuration prompts on the real TTY (click.prompt).
+    return run_cli_command(console, ["remote", *args], capture_output=False, session=session)
 
 
 def _catalog_task_kind(command: list[str]) -> TaskKind:
@@ -312,7 +327,7 @@ def _cmd_tests(session: Session, console: Console, args: list[str]) -> bool:
         return True
 
     if subcommand.startswith("-"):
-        return run_cli_command(console, ["tests", *args], capture_output=True)
+        return run_cli_command(console, ["tests", *args], session=session)
 
     if subcommand not in _TEST_SUBCOMMANDS:
         suggestion = closest_choice(subcommand, _TEST_SUBCOMMANDS)
@@ -330,70 +345,74 @@ def _cmd_tests(session: Session, console: Console, args: list[str]) -> bool:
         session.mark_latest(ok=False, kind="slash")
         return True
 
-    return run_cli_command(console, ["tests", *args], capture_output=True)
+    return run_cli_command(console, ["tests", *args], session=session)
 
 
-def _cmd_guardrails(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    # ``opensre guardrails`` and its subcommands are all non-interactive printers
-    # (init/test/audit/rules just ``click.echo``). Capture so the output — and
-    # Click's usage block when no subcommand is given — reaches the REPL buffer
-    # instead of bypassing ``console.print`` via the child's inherited stdout FD.
-    return run_cli_command(console, ["guardrails", *args], capture_output=True)
+def _cmd_guardrails(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["guardrails", *args], session=session)
 
 
 def _cmd_update(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
+    # The install script streams its own terminal-aware progress UI.
     return run_cli_command(
         console,
         ["update", *args],
         subprocess_timeout=_UPDATE_SUBPROCESS_TIMEOUT_SECONDS,
+        capture_output=False,
         session=session,
     )
 
 
-def _cmd_uninstall(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["uninstall", *args])
+def _cmd_uninstall(session: Session, console: Console, args: list[str]) -> bool:
+    # Confirmation prompt (questionary.confirm) needs the real TTY.
+    return run_cli_command(console, ["uninstall", *args], capture_output=False, session=session)
 
 
-def _cmd_config(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    # Non-interactive click.echo only; capture so output reaches the REPL buffer
-    # instead of the child's inherited stdout while prompt_toolkit redraws.
-    return run_cli_command(console, ["config", *args], capture_output=True)
+def _cmd_config(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["config", *args], session=session)
 
 
 def _cmd_messaging(session: Session, console: Console, args: list[str]) -> bool:
-    # Non-interactive subcommands: capture so output renders through the REPL
-    # (inherited stdout gets clipped by prompt_toolkit's screen management).
-    return run_cli_command(console, ["messaging", *args], capture_output=True, session=session)
+    return run_cli_command(console, ["messaging", *args], session=session)
 
 
-def _cmd_hermes(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["hermes", *args])
+def _cmd_hermes(session: Session, console: Console, args: list[str]) -> bool:
+    # ``hermes watch`` live-tails logs until interrupted; capturing would buffer
+    # its stream forever. Everything else (including bare ``/hermes`` help) prints.
+    capture_output = not args or args[0].lower() != "watch"
+    return run_cli_command(
+        console, ["hermes", *args], capture_output=capture_output, session=session
+    )
 
 
-def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["cron", *args])
+def _cmd_cron(session: Session, console: Console, args: list[str]) -> bool:
+    # ``cron start`` blocks as the scheduler daemon and must stream to the real
+    # TTY. Every other subcommand is a printer; the captured output reaches the
+    # slash history row, where the action agent reads it back (e.g. task ids
+    # from ``/cron list`` to chain a remove).
+    capture_output = not args or args[0].lower() != "start"
+    return run_cli_command(console, ["cron", *args], capture_output=capture_output, session=session)
 
 
-def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["sentry", *args], capture_output=True)
+def _cmd_sentry(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["sentry", *args], session=session)
 
 
-def _cmd_posthog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["posthog", *args], capture_output=True)
+def _cmd_posthog(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["posthog", *args], capture_output=True, session=session)
 
 
-def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["watchdog", *args])
+def _cmd_watchdog(session: Session, console: Console, args: list[str]) -> bool:
+    # Blocking monitor loop; streams sampled state until interrupted.
+    return run_cli_command(console, ["watchdog", *args], capture_output=False, session=session)
 
 
-def _cmd_debug(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    return run_cli_command(console, ["debug", *args])
+def _cmd_debug(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["debug", *args], session=session)
 
 
-def _cmd_misses(session: Session, console: Console, args: list[str]) -> bool:  # noqa: ARG001
-    # Non-interactive printers only (list/stats/export/convert) — capture so the
-    # output reaches the REPL buffer instead of the child's inherited stdout.
-    return run_cli_command(console, ["misses", *args], capture_output=True)
+def _cmd_misses(session: Session, console: Console, args: list[str]) -> bool:
+    return run_cli_command(console, ["misses", *args], session=session)
 
 
 COMMANDS: list[SlashCommand] = [

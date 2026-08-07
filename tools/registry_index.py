@@ -51,6 +51,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.sample_alert",
         ),
         ToolDescriptor(
+            "ask_user_choice",
+            ("action",),
+            "interactive_shell",
+            None,
+            "tools.interactive_shell.actions.ask_choice",
+        ),
+        ToolDescriptor(
             "assistant_handoff",
             ("action",),
             "interactive_shell",
