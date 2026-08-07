@@ -89,6 +89,36 @@ def test_oversized_body_returns_413(client: TestClient, inbox: AlertInbox) -> No
     assert inbox.pop_nowait() is None
 
 
+def test_missing_content_length_oversized_body_returns_413(
+    client: TestClient, inbox: AlertInbox
+) -> None:
+    """Streaming enforcement rejects even when Content-Length is absent."""
+    big_body = b'{"text":"' + b"x" * (webapp.MAX_ALERT_BODY_BYTES + 1) + b'"}'
+    resp = client.post(
+        "/alerts",
+        content=big_body,
+        headers={"content-type": "application/json"},
+    )
+    assert resp.status_code == 413
+    assert resp.json() == {"error": "payload too large"}
+    assert inbox.pop_nowait() is None
+
+
+def test_zero_content_length_with_oversized_body_returns_413(
+    client: TestClient, inbox: AlertInbox
+) -> None:
+    """A lying Content-Length: 0 must not bypass the streaming cap."""
+    big_body = b'{"text":"' + b"y" * (webapp.MAX_ALERT_BODY_BYTES + 1) + b'"}'
+    resp = client.post(
+        "/alerts",
+        content=big_body,
+        headers={"content-type": "application/json", "content-length": "0"},
+    )
+    assert resp.status_code == 413
+    assert resp.json() == {"error": "payload too large"}
+    assert inbox.pop_nowait() is None
+
+
 def test_non_loopback_without_token_returns_403(inbox: AlertInbox) -> None:
     remote = TestClient(webapp.app, client=_REMOTE)
     resp = remote.post("/alerts", json={"text": "x"})

@@ -6,6 +6,13 @@ alert pushes into the process-wide :class:`AlertInbox`), and ``POST /investigate
 (run an investigation synchronously and return the RCA report). Hosted by the
 gateway daemon and the interactive shell via :mod:`gateway.web.web_server`, or
 standalone via ``uvicorn gateway.web.webapp:app``.
+
+Body-size enforcement
+---------------------
+A single :class:`~gateway.http.limits.BodySizeLimitMiddleware` guards all three
+mutating routes (``/alerts``, ``/investigate``, ``/api/investigations``) via
+streaming chunk-counting so the cap is respected even when ``Content-Length`` is
+missing, zero, or spoofed.
 """
 
 from __future__ import annotations
@@ -38,6 +45,10 @@ bootstrap_opensre_env_once(override=False)
 
 from gateway.core.runtime.bootstrap import install_runtime  # noqa: E402
 from gateway.core.runtime.readiness import is_gateway_ready  # noqa: E402
+from gateway.http.limits import (  # noqa: E402
+    MAX_BODY_BYTES,
+    BodySizeLimitMiddleware,
+)
 from gateway.web.investigations import router as investigations_router  # noqa: E402
 from platform.observability.errors.sentry import capture_exception, init_sentry  # noqa: E402
 from tools.investigation.capability import (  # noqa: E402
@@ -55,9 +66,9 @@ init_sentry(entrypoint="webapp")
 
 logger = logging.getLogger(__name__)
 
-# Cap on POST body size accepted from any caller (authed or not). Realistic
-# alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
-MAX_ALERT_BODY_BYTES = 1 * 1024 * 1024
+# Re-export under the legacy name so existing tests that reference
+# ``webapp.MAX_ALERT_BODY_BYTES`` keep working without modification.
+MAX_ALERT_BODY_BYTES = MAX_BODY_BYTES
 
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
@@ -70,6 +81,7 @@ class HealthResponse(BaseModel):
 
 
 app = FastAPI()
+app.add_middleware(BodySizeLimitMiddleware)
 app.include_router(investigations_router)
 
 
@@ -145,17 +157,10 @@ async def receive_alert(request: Request) -> JSONResponse:
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
-    try:
-        declared_length = int(request.headers.get("content-length", 0))
-    except ValueError:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length < 0:
-        return JSONResponse({"error": "invalid Content-Length"}, status_code=HTTPStatus.BAD_REQUEST)
-    if declared_length > MAX_ALERT_BODY_BYTES:
-        return JSONResponse(
-            {"error": "payload too large"}, status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE
-        )
-
+    # Primary enforcement is BodySizeLimitMiddleware (streaming, Content-Length-
+    # agnostic).  The post-read check below is a belt-and-suspenders fallback
+    # for the rare case where the body was already fully buffered by a layer
+    # that bypassed the middleware (e.g. certain test transports).
     body = await request.body()
     if len(body) > MAX_ALERT_BODY_BYTES:
         return JSONResponse(
