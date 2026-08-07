@@ -41,11 +41,14 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 # ---------------------------------------------------------------------------
 
 
-def test_gateway_env_defaults() -> None:
+def test_gateway_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENSRE_SIZE_PROFILE", raising=False)
+    monkeypatch.delenv("TELEGRAM_GATEWAY_MAX_CONCURRENT", raising=False)
     env = GatewayEnv()
     assert env.bot_token == ""
     assert env.allowed_users == []
-    assert env.gateway_max_concurrent == 4
+    # Default pool tracks OPENSRE_SIZE_PROFILE (SMALL → 1).
+    assert env.gateway_max_concurrent == 1
     assert env.gateway_auto_start is True
 
 

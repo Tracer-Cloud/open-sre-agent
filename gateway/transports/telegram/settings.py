@@ -11,6 +11,7 @@ from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from config.strict_config import StrictConfigModel
+from gateway.core.runtime.concurrency import turn_limit_for_profile
 from gateway.core.runtime.errors import GatewayConfigurationError
 from integrations.messaging_security import MessagingIdentityPolicy, MessagingPlatform
 from integrations.store import get_integration
@@ -23,7 +24,7 @@ class GatewaySettings(StrictConfigModel):
 
     bot_token: str
     allowed_user_ids: list[str] = Field(default_factory=list)
-    max_concurrent_turns: int = Field(default=4, ge=1)
+    max_concurrent_turns: int = Field(default_factory=turn_limit_for_profile, ge=1)
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     auto_start_enabled: bool = True
 
@@ -37,7 +38,7 @@ class GatewayEnv(BaseSettings):
     # NoDecode keeps pydantic-settings from JSON-decoding the env value so the
     # CSV validator below can parse "42,99" instead of raising a SettingsError.
     allowed_users: Annotated[list[str], NoDecode] = Field(default_factory=list)
-    gateway_max_concurrent: int = Field(default=4, ge=1)
+    gateway_max_concurrent: int = Field(default_factory=turn_limit_for_profile, ge=1)
     gateway_stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     gateway_auto_start: bool = True
 

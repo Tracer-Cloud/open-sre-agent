@@ -61,6 +61,48 @@ class SessionResolver:
         self._manager = manager or SessionManager()
         self._platform = platform
 
+    def _lookup_or_adopt_session_id(
+        self,
+        *,
+        user_id: str,
+        principal: Principal | None,
+        actor: Actor | str | None,
+    ) -> str | None:
+        """Scoped binding, or adopt a same-document legacy empty-id row once."""
+        existing = self._bindings.get_session_id(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=principal,
+            actor=actor,
+        )
+        if existing:
+            return existing
+        if principal is None and actor is None:
+            return None
+        legacy = self._bindings.get_session_id(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=None,
+            actor=None,
+        )
+        if not legacy:
+            return None
+        self._bindings.bind(
+            platform=self._platform,
+            chat_id=user_id,
+            session_id=legacy,
+            principal=principal,
+            actor=actor,
+        )
+        logger.info(
+            "[gateway] adopted legacy %s binding conversation=%s → principal=%s actor=%s",
+            self._platform,
+            user_id,
+            principal.id if principal is not None else "",
+            actor.id if actor is not None and hasattr(actor, "id") else (actor or ""),
+        )
+        return legacy
+
     def resolve(
         self,
         *,
@@ -71,13 +113,11 @@ class SessionResolver:
     ) -> SessionCore:
         """Return a hydrated session for the platform conversation key ``user_id``.
 
-        Slack team turns pass an org ``principal`` and Slack ``actor``. Other
-        surfaces omit them and keep main-branch binding behavior (legacy empty
-        principal/actor ids).
+        Chat transports pass an org ``principal`` and platform ``actor``. Omitting
+        them keeps legacy empty principal/actor binding keys (CLI / pre-scope rows).
         """
-        existing = self._bindings.get_session_id(
-            platform=self._platform,
-            chat_id=user_id,
+        existing = self._lookup_or_adopt_session_id(
+            user_id=user_id,
             principal=principal,
             actor=actor,
         )
@@ -125,9 +165,8 @@ class SessionResolver:
         """Flush the current session file and start a new binding."""
         from core.domain.memory import gateway_memory_enabled
 
-        existing = self._bindings.get_session_id(
-            platform=self._platform,
-            chat_id=user_id,
+        existing = self._lookup_or_adopt_session_id(
+            user_id=user_id,
             principal=principal,
             actor=actor,
         )

@@ -1,4 +1,4 @@
-"""Slack-specific gateway wiring.
+"""Start the Slack chat worker for the gateway.
 
 Owns everything that is particular to the Slack Socket Mode transport: loading
 Slack settings and starting the background Socket Mode worker. The message

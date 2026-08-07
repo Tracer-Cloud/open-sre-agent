@@ -41,7 +41,11 @@ def main() -> None:
     start_gateway()
 
 
-__all__ = ["gateway_slash_ports_factory", "main", "start_gateway"]
+__all__ = [
+    "gateway_slash_ports_factory",
+    "main",
+    "start_gateway",
+]
 
 
 if __name__ == "__main__":

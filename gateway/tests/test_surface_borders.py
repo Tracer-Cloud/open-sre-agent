@@ -1,12 +1,11 @@
-"""Regression borders: only Slack org turns may change, and only their own data.
+"""Regression borders: scoped chat turns stay on their own org data.
 
-Three surfaces share one process and one filesystem: the local CLI, Telegram,
-and Slack. Scoping was introduced for Slack alone, so each test here fixes one
-edge of that boundary — either "this surface is untouched" or "this Slack turn
-cannot reach anything but its own".
+Chat transports (Slack / Discord / Telegram) bind ``StorageScope``; the local
+CLI stays unbound. Each test fixes one edge — either "unbound surfaces ignore
+the mount" or "an org turn cannot reach another org's data".
 
-The deployed Slack task always has ``OPENSRE_CONTEXT_ROOT`` set, so most tests
-configure the mount and then assert what *does not* reach it.
+Deployed silos set ``OPENSRE_CONTEXT_ROOT``; most tests configure the mount and
+assert what *does not* cross organizations.
 """
 
 from __future__ import annotations
@@ -107,49 +106,56 @@ def test_cli_is_unaffected_by_a_configured_mount(mounted: Path) -> None:
         assert path != mounted
 
 
-# ── Border 2: Telegram is untouched ─────────────────────────────────────────
+# ── Border 2: Telegram is scoped like Slack; platforms stay separate ─────────
 
 
-def test_telegram_bindings_keep_the_unscoped_key(host: Path) -> None:
-    """Telegram passes no principal or actor, exactly as before scoping."""
-    # Arrange
+def test_telegram_bindings_use_scoped_keys(host: Path) -> None:
+    """Telegram production shape: org principal + Telegram user actor."""
     store = FileBindingStore(host / "bindings.json")
-
-    # Act: bind the way gateway/telegram does, then read it back the same way.
-    store.bind(platform=_TELEGRAM, chat_id="42", session_id="tg-1")
-    resolved = store.get_session_id(platform=_TELEGRAM, chat_id="42")
+    store.bind(
+        platform=_TELEGRAM,
+        chat_id="42",
+        session_id="tg-1",
+        principal=ACME,
+        actor="tg-42",
+    )
+    assert (
+        store.get_session_id(platform=_TELEGRAM, chat_id="42", principal=ACME, actor="tg-42")
+        == "tg-1"
+    )
+    assert store.get_session_id(platform=_TELEGRAM, chat_id="42") is None
     store.close()
 
-    # Assert
-    assert resolved == "tg-1"
 
-
-def test_telegram_writes_nothing_to_a_customer_volume(host: Path, mounted: Path) -> None:
-    """Telegram shares the Slack task but names no organization."""
-    # Act: a Telegram turn binds no scope.
+def test_unbound_boot_writes_nothing_to_a_customer_volume(host: Path, mounted: Path) -> None:
+    """With no bound scope (CLI / process boot), paths stay on host storage."""
     sessions = session_paths.sessions_dir()
     bindings = bindings_file_path()
     memory = paths.get_memory_dir()
 
-    # Assert: all of it stays on ephemeral host storage, not the customer's disk.
     for path in (sessions, bindings, memory):
         assert mounted not in path.parents
     assert sessions == host / "sessions"
 
 
 def test_a_slack_org_cannot_hijack_a_telegram_binding(host: Path) -> None:
-    """Same chat id on two platforms and two scopes must stay separate rows."""
-    # Arrange: Telegram binds chat "42" unscoped.
+    """Same chat id on two platforms must stay separate rows."""
     store = FileBindingStore(host / "bindings.json")
-    store.bind(platform=_TELEGRAM, chat_id="42", session_id="tg-session")
-
-    # Act: a Slack org binds the same chat id under its own principal and actor.
+    store.bind(
+        platform=_TELEGRAM,
+        chat_id="42",
+        session_id="tg-session",
+        principal=ACME,
+        actor="tg-42",
+    )
     store.bind(
         platform=_SLACK, chat_id="42", session_id="slack-session", principal=ACME, actor=ALICE
     )
 
-    # Assert: neither read sees the other's session.
-    assert store.get_session_id(platform=_TELEGRAM, chat_id="42") == "tg-session"
+    assert (
+        store.get_session_id(platform=_TELEGRAM, chat_id="42", principal=ACME, actor="tg-42")
+        == "tg-session"
+    )
     assert (
         store.get_session_id(platform=_SLACK, chat_id="42", principal=ACME, actor=ALICE)
         == "slack-session"

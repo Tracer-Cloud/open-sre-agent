@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import logging
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 from rich.console import Console
@@ -190,17 +189,15 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
         "platform.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
+    from gateway.channels import ChannelsHandle
+
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.start_telegram_worker",
-        lambda **_kwargs: (MagicMock(), MagicMock()),
+        "gateway.core.runtime.manager.boot_channels",
+        lambda **_kwargs: ChannelsHandle(),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.GatewayManager._start_scheduler",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "gateway.core.runtime.manager.GatewayManager._start_web",
+        "gateway.core.runtime.manager.GatewayManager.start_scheduler",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(

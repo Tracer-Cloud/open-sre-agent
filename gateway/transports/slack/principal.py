@@ -1,8 +1,8 @@
 """Resolve the owning principal for a Slack team-install turn.
 
-Slack-only. Telegram, CLI, and interactive shell must not import this module —
-they stay unbound on the host home. Border regressions live in
-``gateway/tests/test_storage_surface_borders.py``.
+Slack-only. Telegram has its own ``telegram.principal``; CLI and interactive
+shell must not import this module — they stay unbound on the host home. Border
+regressions live in ``gateway/tests/test_storage_surface_borders.py``.
 """
 
 from __future__ import annotations

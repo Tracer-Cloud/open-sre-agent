@@ -1,4 +1,9 @@
-"""Process-wide turn concurrency shared by every Gateway ingress."""
+"""Process-wide turn concurrency shared by every Gateway ingress.
+
+Production chat turns take the gate via :class:`GatewayTurnHandler` (``gate=``).
+:class:`ConcurrencyLimitedTurnHandler` wraps *arbitrary* callbacks (tests,
+scheduler helpers) — it is not a second production turn handler.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +21,19 @@ _PROFILE_LIMITS = {
 }
 
 
+def turn_limit_for_profile(profile: SizeProfile | str | None = None) -> int:
+    """Process-gate / transport-pool default for ``OPENSRE_SIZE_PROFILE``.
+
+    When ``profile`` is omitted, reads the env (default SMALL). Used by
+    :class:`TurnConcurrencyGate` and as the default for per-transport
+    ``max_concurrent_turns`` when the transport-specific env is unset.
+    """
+    import os
+
+    raw = profile if profile is not None else os.getenv("OPENSRE_SIZE_PROFILE", "SMALL")
+    return _PROFILE_LIMITS[SizeProfile(str(raw).strip().upper())]
+
+
 class TurnConcurrencyGate:
     """A non-blocking process-wide capacity gate for agent turns."""
 
@@ -28,7 +46,7 @@ class TurnConcurrencyGate:
     @classmethod
     def for_profile(cls, profile: SizeProfile | str) -> TurnConcurrencyGate:
         """Build the documented concurrency limit for a Fargate size profile."""
-        return cls(_PROFILE_LIMITS[SizeProfile(profile)])
+        return cls(turn_limit_for_profile(profile))
 
     def try_acquire(self) -> bool:
         """Take one slot without waiting, leaving durable excess work queued."""
@@ -46,7 +64,11 @@ class TurnConcurrencyGate:
 
 
 class ConcurrencyLimitedTurnHandler:
-    """Apply a shared capacity gate without changing ``GatewayTurnHandler``."""
+    """Capacity wrapper for arbitrary :data:`GatewayAgentCallback` callables.
+
+    Prefer ``GatewayTurnHandler(gate=…)`` for production chat. Keep this for
+    tests and non-handler callbacks that share the same gate.
+    """
 
     def __init__(
         self,
@@ -79,7 +101,7 @@ def gated_callback(
     handler: GatewayAgentCallback,
     gate: TurnConcurrencyGate,
 ) -> GatewayAgentCallback:
-    """Return the callback form expected by Telegram and Slack wiring."""
+    """Wrap an arbitrary callback with the shared capacity gate."""
     return ConcurrencyLimitedTurnHandler(handler=handler, gate=gate)
 
 
@@ -87,4 +109,5 @@ __all__ = [
     "ConcurrencyLimitedTurnHandler",
     "TurnConcurrencyGate",
     "gated_callback",
+    "turn_limit_for_profile",
 ]

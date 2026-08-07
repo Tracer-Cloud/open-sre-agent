@@ -24,9 +24,10 @@ forbidden_modules =
     gateway.transports
     gateway.web
 ignore_imports =
-    # Composition root: wires transports and the web surface together.
-    gateway.core.runtime.manager -> gateway.transports.**
-    gateway.core.runtime.manager -> gateway.web.web_server
+    # Composition root: the one edge into the channels composer, which owns all
+    # transport and web wiring. Pinned by gateway/tests/test_package_borders.py
+    # (test_only_manager_imports_channels_module).
+    gateway.core.runtime.manager -> gateway.channels
 
 [importlinter:contract:gateway-web-no-transports]
 name = Gateway web surface never imports chat transports

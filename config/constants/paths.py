@@ -93,8 +93,9 @@ def opensre_home() -> Path:
 
     The mount named by ``OPENSRE_CONTEXT_ROOT`` belongs to one organization, so
     it is used only for a turn that names that organization. Anything unbound —
-    Telegram, boot-time integration reads, the CLI — stays on the host root
-    rather than writing into a customer's volume.
+    boot-time integration reads, the CLI — stays on the host root rather than
+    writing into a customer's volume. Chat transports bind an org scope and
+    therefore use the mount (or ``orgs/<id>/`` nest) when configured.
 
     Without the mount, a bound org principal nests under
     ``~/.opensre/orgs/<org_id>/`` so several organizations can be exercised on

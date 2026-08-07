@@ -6,7 +6,7 @@ per-message handler it drives is transport-agnostic and injected by the
 composition root (:mod:`gateway.core.runtime.manager`). Outbound-only Slack delivery
 (webhooks, RCA reports) lives in :mod:`integrations.slack`.
 
-Transport entry: :mod:`gateway.transports.slack.wiring` (``start_slack_worker``).
+Transport entry: :mod:`gateway.transports.slack.startup` (``start_slack_worker``).
 """
 
 from __future__ import annotations

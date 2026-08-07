@@ -1,5 +1,10 @@
 """Dispatch one inbound gateway message through the shared headless agent.
 
+This is the **only** gateway turn handler. Transport dispatchers
+(Slack/Discord/Telegram) are ingress adapters: they authorize, resolve a
+session, build a sink, then call this callback. Process-wide capacity is an
+optional gate on the same object — not a second handler.
+
 Transport-agnostic: takes ``(text, session, sink, logger)``, runs the turn, and
 finalizes outbound text on the sink. Agent reuse is handled by
 :class:`SessionAgentPool`.
@@ -17,6 +22,7 @@ from rich.console import Console
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
+from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.session_agents import SessionAgentPool
 from gateway.core.runtime.sink_protocol import GatewaySink
 from gateway.core.runtime.status_messages import EMPTY_RESPONSE_MESSAGE
@@ -40,6 +46,8 @@ _UNSUPPORTED_GATEWAY_CAPABILITIES = (
     "task_cancel",
 )
 
+_DEFAULT_BUSY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
+
 
 class GatewayTurnHandler:
     """Services one inbound gateway message per call (a :data:`GatewayAgentCallback`).
@@ -48,6 +56,9 @@ class GatewayTurnHandler:
     turns; per-turn sinks, accounting, and tool hooks are rebound via
     :meth:`HeadlessAgent.bind_turn`. Concurrent turns for different sessions
     stay isolated. Chat goes through :meth:`AgentSession.chat`.
+
+    When ``gate`` is set, capacity is checked here before the turn runs — the
+    manager must not wrap this class in a second "turn handler".
     """
 
     def __init__(
@@ -55,6 +66,8 @@ class GatewayTurnHandler:
         *,
         console: Console,
         slash_ports_factory: SlashPortsFactory | None = None,
+        gate: TurnConcurrencyGate | None = None,
+        busy_message: str = _DEFAULT_BUSY_MESSAGE,
     ) -> None:
         self._pool = SessionAgentPool(
             console=console,
@@ -62,8 +75,26 @@ class GatewayTurnHandler:
         )
         # Gateway already bootstrapped env at process start; turns must not reload.
         self._session_api = AgentSession(SessionConfig(load_env=False))
+        self._gate = gate
+        self._busy_message = busy_message
 
     def __call__(
+        self,
+        text: str,
+        session: SessionCore,
+        sink: GatewaySink,
+        logger: logging.Logger,
+    ) -> None:
+        if self._gate is not None and not self._gate.try_acquire():
+            sink.finalize(self._busy_message)
+            return
+        try:
+            self._run_turn(text, session, sink, logger)
+        finally:
+            if self._gate is not None:
+                self._gate.release()
+
+    def _run_turn(
         self,
         text: str,
         session: SessionCore,

@@ -78,6 +78,49 @@ def test_chat_handler_refuses_excess_turn_without_calling_handler() -> None:
     assert finalized == ["OpenSRE is at capacity. Please try again shortly."]
 
 
+def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Production path: capacity lives on GatewayTurnHandler itself."""
+    from rich.console import Console
+
+    from gateway.core.runtime.turn_handler import GatewayTurnHandler
+
+    gate = TurnConcurrencyGate(1)
+    entered = threading.Event()
+    release = threading.Event()
+    finalized: list[str] = []
+    ran: list[str] = []
+
+    class Sink:
+        def finalize(self, text: str) -> None:
+            finalized.append(text)
+
+    handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
+
+    def _fake_run(self, text, session, sink, logger):  # noqa: ANN001
+        _ = (self, session, sink, logger)
+        ran.append(text)
+        entered.set()
+        release.wait(1)
+
+    monkeypatch.setattr(GatewayTurnHandler, "_run_turn", _fake_run)
+
+    first = threading.Thread(
+        target=handler,
+        args=("one", object(), Sink(), logging.getLogger("test")),
+    )
+    first.start()
+    assert entered.wait(1)
+
+    handler("two", object(), Sink(), logging.getLogger("test"))  # type: ignore[arg-type]
+    release.set()
+    first.join(1)
+
+    assert ran == ["one"]
+    assert finalized == ["OpenSRE is at capacity. Please try again shortly."]
+
+
 def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # active chat turn

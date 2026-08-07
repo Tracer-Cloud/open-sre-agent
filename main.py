@@ -5,9 +5,10 @@ Prefer the ``opensre`` console script in normal use. This module exists so
 ``surfaces.cli.app:main``.
 
 This covers the interactive shell, the landing page, and every one-shot
-subcommand. The gateway daemon is a separate process entry —
-``python -m gateway.main``, managed via ``opensre gateway start`` — because
-``gateway`` and ``surfaces`` are peer packages that must not import each other.
+subcommand. The gateway daemon is a separate process entry managed via
+``opensre gateway start`` (CLI wires slash ports). Bare ``python -m gateway.main``
+fails closed — ``gateway`` and ``surfaces`` are peer packages that must not
+import each other.
 
 Shared process setup — environment, error reporting, adapter registration —
 lives in ``bootstrap.process``. Each host picks a profile rather than repeating

@@ -1,9 +1,9 @@
 # gateway/core/ — process and leaf infrastructure
 
 Gateway core machinery used by every surface. **Must not** import
-`gateway.transports.*` or `gateway.web` (surfaces). Sole exception:
-`runtime/manager.py`, the composition root, which wires the transports and
-the web surface together. Pinned by `gateway/tests/test_package_borders.py`.
+`gateway.transports.*` or `gateway.web` (surfaces). Channel composition lives
+in `gateway.channels`; only `runtime/manager.py` imports that module.
+Pinned by `gateway/tests/test_package_borders.py`.
 
 | Package | Role |
 |---------|------|
@@ -23,9 +23,11 @@ Shared process setup (env → Sentry → harness adapters → capability warning
 LLM preload) lives in
 :func:`bootstrap.process.configure_process` with ``GATEWAY_PROFILE``.
 `GatewayManager.start_gateway` is lifecycle-only after logging + credential
-hydrate: configure process, compose `GatewayTurnHandler`, start web / telegram /
-slack / discord / scheduler. Do not reintroduce a bootstrap essay in the
-manager. Scheduler runners register when the scheduler stage starts
+hydrate: configure process, compose **one** `GatewayTurnHandler(gate=…)`, then
+`start_channels()` (delegates to :func:`gateway.channels.start_channels`) and
+`start_scheduler()` (peer of the channels). Do not wrap the turn handler in a
+second handler class. Do not reintroduce a bootstrap essay in the manager.
+Scheduler runners register when the scheduler stage starts
 (:func:`bootstrap.adapters.install_scheduler_runners`).
 
 Process boot has one entrypoint: :func:`bootstrap.process.configure_process`
