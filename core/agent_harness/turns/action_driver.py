@@ -42,7 +42,14 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.agent_harness.turns.wal_recorder import with_wal_recording
 from core.events import runtime_event_callback_from_observer
-from core.execution import ToolExecutionHooks, public_tool_input
+from core.execution import (
+    BeforeToolCallResult,
+    ToolExecutionHooks,
+    ToolExecutionPatch,
+    ToolExecutionRequest,
+    ToolExecutionResult,
+    public_tool_input,
+)
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
@@ -51,6 +58,69 @@ from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
+
+# Local REPL tools the action agent must not re-run with identical args in one
+# turn (oracle 202: model finished /health + /integrations list, then repeated).
+_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
+
+
+def _action_call_fingerprint(request: ToolExecutionRequest) -> tuple[str, str]:
+    """Stable (name, args) key for duplicate suppression within one action turn."""
+    args = public_tool_input(request.arguments)
+    if not isinstance(args, dict):
+        args = dict(request.arguments)
+    return (
+        request.tool_call.name,
+        json.dumps(args, sort_keys=True, default=str, separators=(",", ":")),
+    )
+
+
+def with_duplicate_action_call_guard(
+    base: ToolExecutionHooks | None = None,
+) -> ToolExecutionHooks:
+    """Suppress identical successful slash/shell re-runs within one action turn.
+
+    Chains with any surface ``before_tool_call`` / ``after_tool_call`` hooks
+    (gateway approvals, etc.). Failures are not remembered, so a retry after an
+    error still runs.
+    """
+    succeeded: set[tuple[str, str]] = set()
+    base_before = base.before_tool_call if base is not None else None
+    base_after = base.after_tool_call if base is not None else None
+    base_update = base.on_tool_update if base is not None else None
+
+    def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
+        if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES:
+            key = _action_call_fingerprint(request)
+            if key in succeeded:
+                return BeforeToolCallResult(
+                    blocked=True,
+                    reason=(
+                        f"Already ran {request.tool_call.name} with identical arguments "
+                        "this turn. Do not repeat it; finish with no further tool calls."
+                    ),
+                    metadata={"suppressed_duplicate": True},
+                )
+        if base_before is not None:
+            return base_before(request)
+        return None
+
+    def after(
+        request: ToolExecutionRequest,
+        result: ToolExecutionResult,
+    ) -> ToolExecutionPatch | None:
+        if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES and not result.is_error:
+            succeeded.add(_action_call_fingerprint(request))
+        if base_after is not None:
+            return base_after(request, result)
+        return None
+
+    return ToolExecutionHooks(
+        before_tool_call=before,
+        after_tool_call=after,
+        on_tool_update=base_update,
+    )
+
 
 # Some hosted tool-calling models emit one tool call per assistant turn even when
 # parallel tool calls are enabled. Keep the tool-calling loop bounded, but leave
@@ -855,7 +925,7 @@ def _run_action_turn(
             turn_snapshot=turn_snapshot,
             resolved_integrations=resolved_integrations,
             deps=args.deps,
-            tool_hooks=args.tool_hooks,
+            tool_hooks=with_duplicate_action_call_guard(args.tool_hooks),
             tool_resources=tool_resources,
             observer=observer,
         )
@@ -945,4 +1015,5 @@ __all__ = [
     "ActionTurnRunner",
     "SELF_RECORDING_ACTION_TOOL_NAMES",
     "ToolCallingDeps",
+    "with_duplicate_action_call_guard",
 ]

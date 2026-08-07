@@ -298,6 +298,8 @@ Example mapping for compound slash commands:
 - Input: "check the health of my opensre and then show me all connected services"
 - Tool calls (in order): slash_invoke("/health"), slash_invoke("/integrations", args=["list"])
   ("connected services/integrations" → /integrations list)
+  After those succeed, STOP — emit no further tool calls. Do NOT re-run the same
+  slash_invoke arguments again in this turn.
 
 For operational REPL requests, prefer slash_invoke and choose the best-matching
 command from the slash_invoke tool description (available command names are listed there).
