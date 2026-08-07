@@ -6,17 +6,28 @@ Telegram's ``getUpdates`` offset is server-owned — a fresh process at
 would either replay all history (``since=0``) or drop messages sent during
 the downtime window (``since=now``). Persisting it avoids both failure modes.
 
-NIP-01 ``since`` is inclusive (``created_at >= since``), so the watermark
-alone is not enough: events already handled at exactly that second must be
-remembered too, or a restart re-dispatches completed work. ``acked_ids`` is
-that per-second dedup set — only IDs at ``since``, not the full history.
+Two facts make a bare watermark insufficient, and both are covered by
+persisting the handled IDs *with* it:
+
+* NIP-01 ``since`` is inclusive (``created_at >= since``), so events already
+  handled at exactly that second must be remembered or a restart re-runs them.
+* Turns run concurrently and finish out of order, so a newer event can be
+  handled while an older one is still in flight. The watermark cannot advance
+  past the older one, which leaves the newer completion recorded nowhere but
+  this file.
+
+So one map is persisted, not a watermark plus a special case: every handled
+event at or above ``since``. Everything strictly below ``since`` is handled by
+definition and needs no IDs, which is what keeps the file small.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import os
+import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from config.constants import OPENSRE_HOME_DIR
@@ -28,36 +39,56 @@ BUZZ_CURSOR_FILE: Path = OPENSRE_HOME_DIR / "gateway" / "buzz_cursor.json"
 
 @dataclass(frozen=True, slots=True)
 class CursorState:
-    """Persisted poll watermark and inclusive-second handled IDs."""
+    """Poll watermark plus every handled event ID at or above it."""
 
     since: int = 0
-    acked_ids: frozenset[str] = frozenset()
+    handled: dict[str, int] = field(default_factory=dict)
 
 
 def load_cursor() -> CursorState:
-    """Return the last handled watermark and acked IDs at that second."""
+    """Return the persisted watermark and handled events at or above it."""
     try:
         payload = json.loads(BUZZ_CURSOR_FILE.read_text())
         since = int(payload["since"])
-        raw_ids = payload.get("acked_ids") or []
-        if not isinstance(raw_ids, list):
-            return CursorState(since=since)
-        acked = frozenset(str(item) for item in raw_ids if isinstance(item, str) and item)
-        return CursorState(since=since, acked_ids=acked)
     except (OSError, ValueError, KeyError, TypeError):
+        # A missing or corrupt cursor replays from scratch rather than
+        # skipping: duplicated work is recoverable, dropped mentions are not.
         return CursorState()
 
+    handled: dict[str, int] = {}
+    raw_handled = payload.get("handled")
+    if isinstance(raw_handled, dict):
+        for event_id, created_at in raw_handled.items():
+            if isinstance(event_id, str) and event_id and isinstance(created_at, int):
+                handled[event_id] = created_at
+    else:
+        # Pre-concurrency format: a flat ID list, all of them at ``since``.
+        raw_ids = payload.get("acked_ids")
+        if isinstance(raw_ids, list):
+            handled = {item: since for item in raw_ids if isinstance(item, str) and item}
+    return CursorState(since=since, handled=handled)
 
-def save_cursor(since: int, acked_ids: set[str] | frozenset[str]) -> None:
-    """Persist the watermark and handled event IDs at that inclusive second."""
+
+def save_cursor(since: int, handled: dict[str, int]) -> None:
+    """Persist the watermark and handled event IDs at or above it.
+
+    Written atomically: a torn write would read back as a corrupt cursor and
+    replay the whole feed, which is exactly what the file exists to prevent.
+    """
     try:
         BUZZ_CURSOR_FILE.parent.mkdir(parents=True, exist_ok=True)
-        # Sorted for stable diffs / readable on-disk state.
-        payload = {
-            "since": int(since),
-            "acked_ids": sorted(acked_ids),
-        }
-        BUZZ_CURSOR_FILE.write_text(json.dumps(payload))
+        payload = {"since": int(since), "handled": dict(handled)}
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            dir=BUZZ_CURSOR_FILE.parent,
+            prefix=f".{BUZZ_CURSOR_FILE.name}.",
+            delete=False,
+        ) as handle:
+            json.dump(payload, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+            staged = Path(handle.name)
+        os.replace(staged, BUZZ_CURSOR_FILE)
     except OSError:
         logger.warning("[buzz-gateway] failed to persist poll cursor", exc_info=True)
 
