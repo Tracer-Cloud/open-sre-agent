@@ -59,19 +59,9 @@ from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
 
-# Local REPL tools covered by the duplicate-call guard (oracle 202 / 203).
-# - slash/shell: suppress multi-command *batch* set-replays only (lone OK).
-# - cli_exec: suppress any identical second success (lone accidental replay is
-#   the observed failure mode; intentional "run again" → next turn).
-_DEDUPE_BATCH_REPLAY_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
-_DEDUPE_ONCE_TOOL_NAMES: frozenset[str] = frozenset({"cli_exec"})
-_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = (
-    _DEDUPE_BATCH_REPLAY_TOOL_NAMES | _DEDUPE_ONCE_TOOL_NAMES
-)
-
-# A replayed provider batch must include at least this many distinct guarded
-# calls (a lone slash/shell repeating is not a "set replay").
-_REPLAYED_BATCH_MIN_DISTINCT = 2
+# Local REPL tools covered by consecutive identical-batch suppress (oracle 202 /
+# 203): slash_invoke, shell_run, cli_exec. One rule — no per-tool carve-outs.
+_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run", "cli_exec"})
 
 # Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
 _ActionCallFingerprint = tuple[Any, ...]
@@ -111,56 +101,73 @@ def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
 def with_duplicate_action_call_guard(
     base: ToolExecutionHooks | None = None,
 ) -> ToolExecutionHooks:
-    """Block accidental action-tool replays (oracle 202 slash/shell, 203 cli_exec).
+    """Block consecutive identical guarded tool batches (oracle 202 / 203).
 
-    Slash/shell: when a provider batch has ≥2 distinct guarded calls and every
-    one already succeeded this turn, suppress. Lone repeats and A→B→A stay
-    allowed. Limitation: the same multi-command batch twice in one turn is also
-    suppressed — ask again next turn.
+    When the current provider batch of guarded calls (``slash_invoke`` /
+    ``shell_run`` / ``cli_exec``) equals the immediately previous *fully
+    successful* guarded batch, suppress every call in the current batch.
 
-    cli_exec: any identical successful payload is once per turn (oracle 203
-    lone accidental replay). Failed calls may retry.
+    A → B → A stays allowed (last completed batch is B). Partial failures do
+    not create a success snapshot, so retries after errors stay allowed.
+
+    Limitation (intentional): the same batch twice in one turn — lone or
+    multi — is also suppressed; accidental replay and “run that again” are
+    indistinguishable without parsing the user message. Ask again next turn.
     """
-    succeeded: set[_ActionCallFingerprint] = set()
+    last_fully_succeeded_batch: frozenset[_ActionCallFingerprint] = frozenset()
     current_batch: frozenset[_ActionCallFingerprint] = frozenset()
+    batch_succeeded: set[_ActionCallFingerprint] = set()
+    has_open_batch = False
     base_before = base.before_tool_call if base is not None else None
     base_after = base.after_tool_call if base is not None else None
     base_update = base.on_tool_update if base is not None else None
     base_batch = base.before_tool_batch if base is not None else None
 
     def before_batch(tool_calls: Sequence[ToolCall]) -> None:
-        nonlocal current_batch
+        nonlocal last_fully_succeeded_batch, current_batch, batch_succeeded, has_open_batch
         if base_batch is not None:
             base_batch(tool_calls)
+        if has_open_batch:
+            if not current_batch:
+                # Non-guarded-only batch: leave the last success snapshot alone.
+                pass
+            elif batch_succeeded == set(current_batch):
+                last_fully_succeeded_batch = current_batch
+            else:
+                # Partial failure / suppressed replay — not a success snapshot.
+                last_fully_succeeded_batch = frozenset()
         keys: list[_ActionCallFingerprint] = []
         for tool_call in tool_calls:
-            if tool_call.name not in _DEDUPE_BATCH_REPLAY_TOOL_NAMES:
+            if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
                 continue
             keys.append(
                 _action_call_fingerprint(tool_call.name, public_tool_input(tool_call.input))
             )
         current_batch = frozenset(keys)
+        batch_succeeded = set()
+        has_open_batch = True
 
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         name = request.tool_call.name
-        if name in _DEDUPE_ACTION_TOOL_NAMES:
-            key = _action_call_fingerprint(name, public_tool_input(request.arguments))
-            once = name in _DEDUPE_ONCE_TOOL_NAMES and key in succeeded
-            batch_replay = (
-                name in _DEDUPE_BATCH_REPLAY_TOOL_NAMES
-                and key in succeeded
-                and len(current_batch) >= _REPLAYED_BATCH_MIN_DISTINCT
-                and current_batch <= succeeded
+        # Membership, not whole-batch equality: a model may re-emit only part of
+        # the batch it just ran ({/health, /integrations} then {/health}), which
+        # repeats a side effect just as surely as replaying the whole pair.
+        # Interleaved A -> B -> A still runs, because the snapshot holds only
+        # the batch that succeeded immediately before this one.
+        if (
+            name in _DEDUPE_ACTION_TOOL_NAMES
+            and last_fully_succeeded_batch
+            and _action_call_fingerprint(name, public_tool_input(request.tool_call.input))
+            in last_fully_succeeded_batch
+        ):
+            return BeforeToolCallResult(
+                blocked=True,
+                reason=(
+                    f"Already ran {name} with identical arguments "
+                    "this turn. Do not repeat it; finish with no further tool calls."
+                ),
+                metadata={"suppressed_duplicate": True},
             )
-            if once or batch_replay:
-                return BeforeToolCallResult(
-                    blocked=True,
-                    reason=(
-                        f"Already ran {name} with identical arguments "
-                        "this turn. Do not repeat it; finish with no further tool calls."
-                    ),
-                    metadata={"suppressed_duplicate": True},
-                )
         if base_before is not None:
             return base_before(request)
         return None
@@ -170,7 +177,7 @@ def with_duplicate_action_call_guard(
         result: ToolExecutionResult,
     ) -> ToolExecutionPatch | None:
         if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES and not result.is_error:
-            succeeded.add(
+            batch_succeeded.add(
                 _action_call_fingerprint(
                     request.tool_call.name, public_tool_input(request.arguments)
                 )

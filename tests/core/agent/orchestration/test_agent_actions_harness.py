@@ -562,8 +562,8 @@ def test_action_turn_allows_interleaved_slash_repeat() -> None:
     assert runs == ["/health", "/integrations list", "/health"]
 
 
-def test_action_turn_allows_identical_single_slash_repeat() -> None:
-    """A lone slash may succeed twice in one turn; only batch set-replays are blocked."""
+def test_action_turn_suppresses_identical_single_slash_repeat() -> None:
+    """Product tradeoff: consecutive identical lone slash batch is suppressed (oracle 203 class)."""
     runs: list[str] = []
 
     def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
@@ -629,11 +629,11 @@ def test_action_turn_allows_identical_single_slash_repeat() -> None:
     )
 
     assert result.handled is True
-    assert runs == ["/health", "/health"]
+    assert runs == ["/health"]
 
 
-def test_action_turn_allows_identical_single_shell_repeat() -> None:
-    """A lone shell_run may succeed twice; multi-step replays are what we suppress."""
+def test_action_turn_suppresses_identical_single_shell_repeat() -> None:
+    """Product tradeoff: consecutive identical lone shell batch is suppressed."""
     runs: list[str] = []
 
     def _run_counting(command: str, quiet: bool = False) -> dict[str, Any]:
@@ -699,15 +699,11 @@ def test_action_turn_allows_identical_single_shell_repeat() -> None:
     )
 
     assert result.handled is True
-    assert runs == ["pwd", "pwd"]
+    assert runs == ["pwd"]
 
 
 def test_action_turn_suppresses_duplicate_cli_exec() -> None:
-    """Regression for oracle 203: do not re-run the same cli_exec in one turn.
-
-    Unlike slash/shell (batch set-replay only), cli_exec blocks any identical
-    successful payload the second time — lone accidental replay is the failure.
-    """
+    """Regression for oracle 203: consecutive identical cli_exec batch is suppressed."""
     runs: list[str] = []
 
     def _run_counting(*, payload: str) -> dict[str, Any]:
@@ -773,7 +769,7 @@ def test_action_turn_suppresses_duplicate_cli_exec() -> None:
 
 
 def test_action_turn_allows_cli_exec_retry_after_failure() -> None:
-    """Failed cli_exec must not count as succeeded — the model may retry once."""
+    """Failed cli_exec does not create a success snapshot — the model may retry."""
     runs: list[str] = []
 
     def _run_counting(*, payload: str) -> dict[str, Any]:
@@ -928,10 +924,9 @@ def test_action_turn_suppresses_duplicate_slash_invoke_pair() -> None:
 
 
 def test_action_turn_same_multi_command_batch_twice_is_out_of_scope() -> None:
-    """Product tradeoff: intentional same-pair-twice is indistinguishable from oracle 202.
+    """Product tradeoff: intentional same-batch-twice equals accidental consecutive replay.
 
-    Accidental and intentional multi-command batch replays look identical on the
-    wire, so the second batch is suppressed either way. Repeat next turn instead.
+    Lone or multi — second identical fully-successful batch is suppressed. Next turn.
     """
     runs: list[str] = []
 
@@ -1900,3 +1895,84 @@ def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:
     )
 
     assert gather_calls, "a question with no prior work still needs evidence"
+
+
+def test_action_turn_suppresses_partial_replay_of_a_succeeded_batch() -> None:
+    """A model may re-emit only part of the batch it just ran.
+
+    The guard compares whole batches, so ``{/health, /integrations list}``
+    followed by ``{/health}`` is not an equal batch — yet /health has already
+    succeeded this turn and running it again is the same duplicate side effect
+    oracles 202/203 exist to prevent.
+    """
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                        ToolCall(
+                            id="i1",
+                            name="slash_invoke",
+                            input={"command": "/integrations", "args": ["list"]},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "check the health of my opensre and then show me all connected services",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list"]
