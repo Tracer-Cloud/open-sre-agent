@@ -11,6 +11,7 @@ class TestRenderSetupState:
         state = setup_state.SetupSnapshot(
             integrations=("posthog_mcp", "slack"),
             schedule_count=2,
+            deliverable_count=2,
             last_delivery_ok=True,
         )
 
@@ -24,7 +25,9 @@ class TestRenderSetupState:
 
     def test_names_the_empty_install_explicitly(self) -> None:
         # Arrange: a first-run user — nothing connected, nothing scheduled.
-        state = setup_state.SetupSnapshot(integrations=(), schedule_count=0, last_delivery_ok=None)
+        state = setup_state.SetupSnapshot(
+            integrations=(), schedule_count=0, deliverable_count=0, last_delivery_ok=None
+        )
 
         # Act
         rendered = setup_state.render_setup_state(state)
@@ -37,7 +40,7 @@ class TestRenderSetupState:
     def test_states_facts_without_instructing_the_model(self) -> None:
         # Arrange: the block is a CONTEXT-tier fact sheet, not a rule block.
         state = setup_state.SetupSnapshot(
-            integrations=("slack",), schedule_count=0, last_delivery_ok=None
+            integrations=("slack",), schedule_count=0, deliverable_count=0, last_delivery_ok=None
         )
 
         # Act
@@ -54,10 +57,10 @@ class TestRenderSetupState:
         # Arrange: a schedule that ran and failed is not the same as one that
         # has never fired — conflating them hides a broken delivery.
         failed = setup_state.SetupSnapshot(
-            integrations=("slack",), schedule_count=1, last_delivery_ok=False
+            integrations=("slack",), schedule_count=1, deliverable_count=1, last_delivery_ok=False
         )
         never = setup_state.SetupSnapshot(
-            integrations=("slack",), schedule_count=1, last_delivery_ok=None
+            integrations=("slack",), schedule_count=1, deliverable_count=1, last_delivery_ok=None
         )
 
         # Act
@@ -311,3 +314,61 @@ class TestCachedSetupState:
         # Assert
         assert "sentry" not in one
         assert "sentry" in two
+
+
+class TestDeliverableHealth:
+    def test_render_names_how_many_can_actually_deliver(self) -> None:
+        # Arrange: many tasks scheduled, none able to reach a destination.
+        snapshot = setup_state.SetupSnapshot(
+            integrations=("slack",),
+            schedule_count=30,
+            deliverable_count=0,
+            last_delivery_ok=False,
+        )
+
+        # Act
+        rendered = setup_state.render_setup_state(snapshot)
+
+        # Assert: a bare schedule count reads as progress, so the rendered line
+        # must expose how many tasks can actually deliver.
+        assert "30" in rendered
+        assert "0" in rendered
+        lowered = rendered.lower()
+        assert "deliver" in lowered
+
+    def test_healthy_install_is_distinguishable_from_broken(self) -> None:
+        # Arrange
+        healthy = setup_state.SetupSnapshot(
+            integrations=("slack",), schedule_count=3, deliverable_count=3, last_delivery_ok=True
+        )
+        broken = setup_state.SetupSnapshot(
+            integrations=("slack",), schedule_count=3, deliverable_count=0, last_delivery_ok=True
+        )
+
+        # Act / Assert: identical counts, opposite health — the block must not
+        # render them the same.
+        assert setup_state.render_setup_state(healthy) != setup_state.render_setup_state(broken)
+
+    def test_collect_counts_only_tasks_that_can_reach_a_destination(self, monkeypatch) -> None:
+        # Arrange: two tasks, one with a channel and one without.
+        class _Task:
+            def __init__(self, task_id: str, chat_id: str) -> None:
+                self.id = task_id
+                self.chat_id = chat_id
+                self.provider = "slack"
+                self.params: dict[str, str] = {}
+
+        monkeypatch.setattr(
+            setup_state, "_scheduled_tasks", lambda: [_Task("a", "C1"), _Task("b", "")]
+        )
+        monkeypatch.setattr(setup_state, "_latest_delivery_ok", lambda _tasks: None)
+        monkeypatch.setattr(
+            setup_state, "_task_can_deliver", lambda task: bool(task.chat_id.strip())
+        )
+
+        # Act
+        snapshot = setup_state.collect_setup_state(("slack",))
+
+        # Assert
+        assert snapshot.schedule_count == 2
+        assert snapshot.deliverable_count == 1

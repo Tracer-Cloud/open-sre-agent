@@ -16,6 +16,7 @@ from core.agent_harness.ports import (
     ConfirmFn,
     EvidenceGatherer,
     ExecuteActions,
+    OutputSink,
     SessionStore,
     StreamAnswerFn,
     TurnAccounting,
@@ -39,6 +40,7 @@ class ChatTurnBindings:
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
     surface: str = "interactive_shell"
+    output: OutputSink | None = None
 
 
 def dispatch_chat_turn(
@@ -61,6 +63,7 @@ def dispatch_chat_turn(
         confirm_fn=bindings.confirm_fn,
         is_tty=bindings.is_tty,
         surface=bindings.surface,
+        output=bindings.output,
     )
 
 

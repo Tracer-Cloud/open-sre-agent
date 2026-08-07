@@ -152,6 +152,8 @@ def fresh_session(
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
     resolved_integrations_override: dict[str, Any] | None = None,
+    pending_investigation_alert: str | None = None,
+    conversation_seed: tuple[tuple[str, str], ...] = (),
 ) -> Session:
     session = Session()
     if with_prior_state:
@@ -170,7 +172,32 @@ def fresh_session(
     # An explicit empty mapping ({}) deliberately forces a no-integration world.
     if resolved_integrations_override is not None:
         session.resolved_integrations_cache = resolved_integrations_override
+    if conversation_seed:
+        session.cli_agent_messages = list(conversation_seed)
+    if pending_investigation_alert:
+        from core.agent_harness.session.pending_offer import PendingInvestigationOffer
+
+        session.pending_investigation_offer = PendingInvestigationOffer(
+            alert_text=pending_investigation_alert.strip()
+        )
     return session
+
+
+def session_from_scenario(
+    scenario_session: Any,
+    *,
+    resolved_integrations_override: dict[str, Any] | None,
+    available_capabilities: dict[str, tuple[str, ...]] | None,
+) -> Session:
+    """Build a fixture session including Phase 1b pending-offer seeds."""
+    return fresh_session(
+        with_prior_state=scenario_session.has_prior_state,
+        configured_integrations=scenario_session.configured_integrations,
+        available_capabilities=available_capabilities,
+        resolved_integrations_override=resolved_integrations_override,
+        pending_investigation_alert=getattr(scenario_session, "pending_investigation_alert", None),
+        conversation_seed=tuple(getattr(scenario_session, "conversation_seed", ()) or ()),
+    )
 
 
 def match_actions(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
@@ -505,11 +532,10 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     resolved_override, _unavailable = resolve_live_integrations(
         case.scenario.session.resolved_integrations
     )
-    session = fresh_session(
-        with_prior_state=case.scenario.session.has_prior_state,
-        configured_integrations=case.scenario.session.configured_integrations,
-        available_capabilities=session_capabilities(case.scenario.available_capabilities),
+    session = session_from_scenario(
+        case.scenario.session,
         resolved_integrations_override=resolved_override,
+        available_capabilities=session_capabilities(case.scenario.available_capabilities),
     )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)

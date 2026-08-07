@@ -39,6 +39,7 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
         confirm_fn: Any = None,
         is_tty: bool | None = None,
         surface: str = "interactive_shell",
+        output: Any = None,
     ) -> TurnResult:
         seen.update(
             {
@@ -51,6 +52,7 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
                 "confirm_fn": confirm_fn,
                 "is_tty": is_tty,
                 "surface": surface,
+                "output": output,
             }
         )
         return expected
@@ -63,6 +65,7 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
     gather = object()
     accounting = object()
     confirm = object()
+    output = object()
     bindings = ChatTurnBindings(
         execute_actions=execute,  # type: ignore[arg-type]
         answer=answer,  # type: ignore[arg-type]
@@ -71,6 +74,7 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
         confirm_fn=confirm,  # type: ignore[arg-type]
         is_tty=False,
         surface="gateway",
+        output=output,  # type: ignore[arg-type]
     )
 
     result = dispatch_chat_turn("hello", session, bindings)  # type: ignore[arg-type]
@@ -86,6 +90,7 @@ def test_dispatch_chat_turn_forwards_bindings_to_run_turn(monkeypatch: Any) -> N
         "confirm_fn": confirm,
         "is_tty": False,
         "surface": "gateway",
+        "output": output,
     }
 
 

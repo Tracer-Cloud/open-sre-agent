@@ -166,6 +166,7 @@ def execute_shell_turn(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
         surface="interactive_shell",
+        output=resolved_output,
     )
     # Shell already owns env/session boot; do not reload env per turn.
     agent_session = AgentSession(SessionConfig(load_env=False))

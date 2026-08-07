@@ -467,8 +467,11 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
     LLM is unavailable — e.g. a provider with no credit — so users can still run
     ``/login``, ``/onboard``, ``/model``, etc. to recover instead of deadlocking.
 
-    Also accepts schedule affirmatives that ``expand_affirmative_follow_up`` rewrote
-    into a leading ``/cron add …`` (after stripping a vendor context prefix).
+    Also accepts schedule / investigation affirmatives that
+    ``expand_affirmative_follow_up`` rewrote into a leading ``/cron add …`` or
+    ``/investigate alert:…`` (after stripping a vendor context prefix). Those
+    expands are themselves literal slash text — not a separate static tool-call
+    bypass — so they stay inside the repository-mandated action-selection path.
 
     Returns ``None`` (so the normal LLM path runs) when the input is not literal
     slash text or when ``slash_invoke`` is not an available tool this turn.
@@ -506,7 +509,8 @@ def _build_action_agent(
 ) -> ActionTurnPlan:
     """Build the Agent for one action turn; return an ``ActionTurnPlan``.
 
-    Detects the three branches — verbatim ``!shell``, literal ``/slash``, or
+    Detects the three branches — verbatim ``!shell``, literal ``/slash``
+    (including Want-me-to yes expanded to ``/cron`` / ``/investigate``), or
     LLM-selected — and picks a matching LLM (deterministic tool-call or hosted
     factory), system prompt, and user-message envelope. The caller only has to
     invoke ``.run()`` and shape the result.
@@ -697,12 +701,14 @@ def _compose_response(
     # prose would be a second reply to one message ("good morning" twice).
     suppress_final = (
         prefer_tool_response_text
-        or bool(counts.handoff_contents)
         or (
             _self_recording_tools_only(result)
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
         )
+        # A handoff means the assistant answers this turn, so the action's
+        # closing prose would be a second reply to one message.
+        or bool(counts.handoff_contents)
     )
     final_text_chunk = "" if suppress_final else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).

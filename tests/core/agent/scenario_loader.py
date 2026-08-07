@@ -83,6 +83,9 @@ class ScenarioSession:
     has_prior_state: bool
     configured_integrations: tuple[str, ...]
     resolved_integrations: dict[str, Any] | None = None
+    # Phase 1b accept path: seed PendingInvestigationOffer + prior Want-me-to turn.
+    pending_investigation_alert: str | None = None
+    conversation_seed: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -362,6 +365,27 @@ def _string_list(raw: object, *, label: str) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _conversation_seed(raw: object, *, label: str) -> tuple[tuple[str, str], ...]:
+    """Parse ``session.conversation_seed`` as ``[{role, content}, …]``."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        msg = f"{label} must be a list, got {type(raw).__name__}."
+        raise ValueError(msg)
+    seed: list[tuple[str, str]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            msg = f"{label}[{index}] must be a mapping with role/content."
+            raise ValueError(msg)
+        role = str(item.get("role", "")).strip()
+        content = str(item.get("content", "")).strip()
+        if role not in {"user", "assistant"} or not content:
+            msg = f"{label}[{index}] requires role user|assistant and non-empty content."
+            raise ValueError(msg)
+        seed.append((role, content))
+    return tuple(seed)
+
+
 def _optional_string_list(raw: object, *, label: str) -> tuple[str, ...] | None:
     """Parse a capability allowlist while preserving the absent-vs-empty split.
 
@@ -530,6 +554,20 @@ def _parse_scenario_yaml(
         data.get("available_capabilities", {}),
         label=f"{scenario_path} available_capabilities",
     )
+    pending_alert_raw = session_raw.get("pending_investigation_alert")
+    pending_investigation_alert = (
+        str(pending_alert_raw).strip() if pending_alert_raw is not None else None
+    ) or None
+    conversation_seed = _conversation_seed(
+        session_raw.get("conversation_seed"),
+        label=f"{scenario_path} session.conversation_seed",
+    )
+    if pending_investigation_alert and not conversation_seed:
+        msg = (
+            f"{scenario_path}: session.pending_investigation_alert requires "
+            "session.conversation_seed (prior Want-me-to turn)."
+        )
+        raise ValueError(msg)
 
     return Scenario(
         id=scenario_id,
@@ -546,6 +584,8 @@ def _parse_scenario_yaml(
                 session_raw.get("resolved_integrations"),
                 label=f"{scenario_path} session.resolved_integrations",
             ),
+            pending_investigation_alert=pending_investigation_alert,
+            conversation_seed=conversation_seed,
         ),
         available_capabilities=ScenarioCapabilities(
             slash_commands=_optional_string_list(

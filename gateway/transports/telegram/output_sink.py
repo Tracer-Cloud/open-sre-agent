@@ -70,6 +70,7 @@ class GatewayOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
         _ = (label, suppress_if_starts_with)
         parts: list[str] = []
@@ -79,11 +80,16 @@ class GatewayOutputSink:
             if now - self._last_edit >= self._edit_interval:
                 self._edit_preview("".join(parts))
         text = "".join(parts)
+        if defer_want_me_to_closer:
+            return text
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
     def set_tool_status(self, text: str) -> None:
         self._set_status(text)
+
+    def finish_streamed_response(self, text: str) -> None:
+        self._finalize(text or EMPTY_RESPONSE_MESSAGE)
 
     def _set_status(self, text: str) -> None:
         self._status_text = normalize_gateway_status(text)

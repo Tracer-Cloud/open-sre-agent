@@ -170,3 +170,28 @@ def test_run_session_alert_payload_does_not_mutate_raw_alert(
     )
 
     assert shared == original
+
+
+def test_session_run_marks_user_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange: capture what the session pump passes to the streaming pipeline.
+    captured: dict[str, Any] = {}
+
+    def _fake_astream(**kwargs: Any):
+        captured.update(kwargs)
+
+        async def _gen():
+            yield StreamEvent(event_type="end", data={"output": {}})
+
+        return _gen()
+
+    monkeypatch.setattr("tools.investigation.session_runner.check_llm_settings", lambda: None)
+    monkeypatch.setattr("tools.investigation.capability.astream_investigation", _fake_astream)
+
+    # Act
+    session_runner.run_investigation_for_session(
+        alert_text="database slow",
+        render_stream=_collecting_renderer(),
+    )
+
+    # Assert: session runs are user-initiated, so the intake noise gate is bypassed.
+    assert captured["user_requested"] is True

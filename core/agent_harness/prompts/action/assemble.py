@@ -146,13 +146,16 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    gate_note = ""
-    if listing in ("none", "unknown"):
-        gate_note = (
-            "This line gates ONLY implicit diagnostic questions (no explicit "
-            "investigate/RCA/diagnose/analyze/root-cause verb). Explicit "
-            "investigate instructions STILL emit investigation_start regardless.\n"
-        )
+    # Listing does not gate diagnostic→investigation (Phase 1b): why/figure-out
+    # always hand off for gather + Want-me-to; explicit investigate always
+    # dispatches. The list only tells the planner which sources gather can use.
+    gate_note = (
+        "This listing does NOT gate diagnostic→investigation. Cause/why / "
+        "figure-out questions → assistant_handoff + gather + Want-me-to "
+        "investigate offer. Explicit investigate/RCA/diagnose/analyze/"
+        "root-cause verbs → investigation_start ALWAYS (even when this line "
+        "is none).\n"
+    )
     return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
 
 

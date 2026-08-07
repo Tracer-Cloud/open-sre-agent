@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.session.pending_offer import PendingScheduleOffer
+from core.agent_harness.session.pending_offer import (
+    PendingScheduleOffer,
+    clear_competing_pending_offers,
+)
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,
@@ -12,6 +15,7 @@ from core.agent_harness.tools.tool_context import (
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
+from platform.scheduler.credentials import requires_explicit_chat_id
 from platform.scheduler.types import Provider, TaskKind
 
 # Match surfaces.cli.commands.cron: Sentry kinds use `opensre sentry`, not cron add.
@@ -93,10 +97,21 @@ def execute_propose_scheduled_delivery_tool(
             "ok": False,
             "error": "cron must have exactly 5 fields (minute hour day month day_of_week)",
         }
-    if provider not in {Provider.SLACK.value, Provider.INTERACTIVE_SHELL.value} and not chat_id:
+    # Slack is not unconditionally exempt: it can skip an explicit channel only
+    # while a webhook supplies one. Asking the scheduler (same check as
+    # `/cron add`) instead of hard-coding the provider keeps the offer from
+    # storing a task that fires into nothing.
+    if (
+        provider != Provider.INTERACTIVE_SHELL.value
+        and not chat_id
+        and requires_explicit_chat_id(provider)
+    ):
         return {
             "ok": False,
-            "error": f"--chat-id is required for provider {provider}",
+            "error": (
+                f"--chat-id is required for provider {provider}: "
+                "it has no configured destination to fall back on."
+            ),
         }
 
     # Refuse the failure mode where "give me a morning report" becomes ONLY a
@@ -131,6 +146,8 @@ def execute_propose_scheduled_delivery_tool(
         chat_id=chat_id,
     )
     ctx.session.pending_schedule_offer = offer
+    # One pending affirmative at a time — schedule wins over investigate.
+    clear_competing_pending_offers(ctx.session, keep_attr="pending_schedule_offer")
     body = offer.want_me_to_body()
     closer = f"**Want me to:** {body}?"
     # Prefer an explicit response_text so the action driver surfaces the

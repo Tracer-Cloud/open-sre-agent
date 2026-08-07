@@ -13,10 +13,14 @@ from rich.markup import escape
 
 from core.agent_harness.ports import OutputSink
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
-from surfaces.interactive_shell.ui import (
+from surfaces.interactive_shell.ui.streaming import (
+    StreamPaintResult,
+    finish_deferred_closer,
+    publish_full_response,
+    render_response_header,
     stream_to_console,
+    stream_to_console_state,
 )
-from surfaces.interactive_shell.ui.streaming import render_response_header
 
 
 class ShellOutputSink:
@@ -29,6 +33,8 @@ class ShellOutputSink:
 
     def __init__(self, console: Console) -> None:
         self._console = console
+        self._paint: StreamPaintResult | None = None
+        self._defer_want_me_to_closer = False
 
     def bind_console(self, console: Console) -> None:
         """Point subsequent output at ``console`` for the current turn."""
@@ -64,12 +70,46 @@ class ShellOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
+        self._defer_want_me_to_closer = defer_want_me_to_closer
+        if defer_want_me_to_closer:
+            paint = stream_to_console_state(
+                self._console,
+                label=label,
+                chunks=iter(chunks),
+                suppress_if_starts_with=suppress_if_starts_with,
+                defer_want_me_to_closer=True,
+            )
+            self._paint = paint
+            return paint.text
+        self._paint = None
         return stream_to_console(
             self._console,
             label=label,
             chunks=iter(chunks),
             suppress_if_starts_with=suppress_if_starts_with,
+        )
+
+    def finish_streamed_response(self, text: str) -> None:
+        """Flush a deferred / rewritten Want-me-to closer after gather normalize."""
+        paint = self._paint
+        defer = self._defer_want_me_to_closer
+        self._paint = None
+        self._defer_want_me_to_closer = False
+        if not defer or paint is None:
+            return
+        if not paint.deferred_closer and text == paint.text:
+            return
+        # Non-TTY deferred holds the entire answer until normalize.
+        if not self._console.is_terminal and paint.deferred_closer:
+            publish_full_response(self._console, text)
+            return
+        finish_deferred_closer(
+            self._console,
+            text,
+            footer_elapsed_s=paint.footer_elapsed_s,
+            footer_total_bytes=paint.footer_total_bytes,
         )
 
 
