@@ -101,16 +101,18 @@ def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
 def with_duplicate_action_call_guard(
     base: ToolExecutionHooks | None = None,
 ) -> ToolExecutionHooks:
-    """Block consecutive identical guarded tool batches (oracle 202 / 203).
+    """Block replaying guarded action calls already covered by the success snapshot.
 
-    When the current provider batch of guarded calls (``slash_invoke`` /
-    ``shell_run`` / ``cli_exec``) equals the immediately previous *fully
-    successful* guarded batch, suppress every call in the current batch.
+    Suppress ``slash_invoke`` / ``shell_run`` / ``cli_exec`` when the call's
+    fingerprint is in ``last_fully_succeeded_batch``. Snapshot updates:
 
-    A → B → A stays allowed (last completed batch is B). Only a fully
-    successful batch replaces the snapshot — suppressed replays and partial
-    failures leave it intact so a third identical batch stays blocked. Failed
-    calls that never succeeded may still retry (they never entered the snapshot).
+    - Fully successful batch → replace snapshot with that batch (so A → B → A
+      still allows the second A after B replaces the snapshot).
+    - Mixed batch (some suppressed as replays, some newly succeeded) → fold
+      successes into the snapshot with still-relevant suppressed members so a
+      brand-new action is not invisible to the next re-emit.
+    - Pure suppress or total failure → leave the snapshot alone (a third
+      identical replay stays blocked; failed calls may still retry).
 
     Limitation (intentional): the same batch twice in one turn — lone or
     multi — is also suppressed; accidental replay and “run that again” are
@@ -129,11 +131,17 @@ def with_duplicate_action_call_guard(
         nonlocal last_fully_succeeded_batch, current_batch, batch_succeeded, has_open_batch
         if base_batch is not None:
             base_batch(tool_calls)
-        if has_open_batch and current_batch and batch_succeeded == set(current_batch):
-            # Only a fully successful batch replaces the snapshot. Suppressed
-            # replays and partial failures must leave it intact — otherwise a
-            # third identical batch runs after the second was blocked.
-            last_fully_succeeded_batch = current_batch
+        if has_open_batch and current_batch:
+            succeeded = frozenset(batch_succeeded)
+            if succeeded == current_batch:
+                last_fully_succeeded_batch = current_batch
+            elif succeeded:
+                # Mixed suppress/success: keep suppressed members that were
+                # already in the snapshot and add newly succeeded ones.
+                last_fully_succeeded_batch = (
+                    last_fully_succeeded_batch & current_batch
+                ) | succeeded
+            # else: pure suppress or all-error — leave snapshot intact.
         keys: list[_ActionCallFingerprint] = []
         for tool_call in tool_calls:
             if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
@@ -150,8 +158,8 @@ def with_duplicate_action_call_guard(
         # Membership, not whole-batch equality: a model may re-emit only part of
         # the batch it just ran ({/health, /integrations} then {/health}), which
         # repeats a side effect just as surely as replaying the whole pair.
-        # Interleaved A -> B -> A still runs, because the snapshot holds only
-        # the batch that succeeded immediately before this one.
+        # Interleaved A -> B -> A still runs, because a fully successful {B}
+        # replaces the snapshot.
         if (
             name in _DEDUPE_ACTION_TOOL_NAMES
             and last_fully_succeeded_batch

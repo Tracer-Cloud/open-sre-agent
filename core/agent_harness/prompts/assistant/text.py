@@ -86,6 +86,18 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "read-only connection or query request. Do NOT answer with only a generic "
         "'no integrations' line that omits the named database/tool.\n\n"
     ),
+    # Prefix key: bare incident / symptom statements (oracle 325 family).
+    "incident_description:": (
+        "The action planner handed off a bare incident or symptom description "
+        "(no explicit investigate verb). In your reply, name the user's stated "
+        "service/component and any error codes or rates they gave (for example "
+        "checkout, 502, 30%) before asking for more context or offering a full "
+        "investigation. Do not paraphrase the incident into a generic "
+        "'production error pattern' that drops those specifics. With little or "
+        "no connected evidence, still acknowledge the reported symptoms, say "
+        "what you would check next, and close with **Want me to:** run a full "
+        "investigation — do not claim you cannot help.\n\n"
+    ),
 }
 
 # The short goal contract (shell only). Facts stay in setup_state CONTEXT;
@@ -189,6 +201,10 @@ INTERACTION_RULES = (
     "not invent subcommands. For investigation-flow questions, use the "
     "investigation flow reference below and do not claim the pipeline "
     "definition is unavailable.\n"
+    "When the user stated a concrete service, error code, or rate (for "
+    "example checkout returning 502s for 30% of requests), keep those terms "
+    "in the reply — do not replace them with a vague 'production error "
+    "pattern' when asking for more context or offering investigation.\n"
     "For vague operational questions (for example why a database is slow): "
     "when gathered tool results below contain relevant evidence, lead with "
     "what that evidence shows. Restate the question and ask for the target "
