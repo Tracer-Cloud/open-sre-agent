@@ -15,6 +15,7 @@ from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
 )
+from core.agent_harness.session.pending_offer import first_pending_offer
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ActionTurnRunner,
@@ -889,6 +890,53 @@ def test_run_turn_skips_gather_for_follow_up_handoff_with_prior_state() -> None:
     # No gather-closer rewrite on follow-ups — do not defer Want-me-to paint.
     assert answer_kwargs[0].get("defer_want_me_to_closer") is False
     assert result.final_intent == "cli_agent_fallback"
+
+
+def test_database_query_handoff_keeps_connect_want_me_to_closer() -> None:
+    """Oracle 332: database_query handoffs must not force investigate Want-me-to.
+
+    ``finalize_gather_investigation_offer`` rewrites any Want-me-to to
+    "run a full investigation". For a named MySQL/MCP query with no integrations,
+    the correct closer is connect/setup guidance — leave the model's offer alone.
+    """
+    session = Session()
+    prompt = (
+        "Use the MySQL tool (ID: mysql-fcf94503) to query the current number of active connections."
+    )
+    model_reply = (
+        "I can't run that MySQL active-connections query because the tool is "
+        "not connected in this session.\n\n"
+        "**Want me to:** walk you through `/mcp connect mysql`?"
+    )
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("database_query:mysql_active_connections",),
+        )
+
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+        assert request.handoff_contents == ("database_query:mysql_active_connections",)
+        return type("Run", (), {"response_text": model_reply})()
+
+    result = run_turn(
+        prompt,
+        session,
+        execute_actions=_execute,
+        gather=lambda *_a, **_k: "",
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, prompt),
+    )
+
+    assert "mysql" in result.assistant_response_text.lower()
+    assert "active" in result.assistant_response_text.lower()
+    assert "/mcp connect mysql" in result.assistant_response_text
+    assert "run a full investigation" not in result.assistant_response_text.lower()
+    assert first_pending_offer(session) is None
 
 
 def test_follow_up_answer_with_want_me_to_paints_on_non_tty_console() -> None:

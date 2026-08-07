@@ -594,8 +594,10 @@ closing with a full-investigation offer.
 When you do hand the whole request off, emit ONLY the assistant_handoff call. The
 planner only forwards actions emitted through tool calls, so always emit a tool
 call rather than relying on plain-text output. Use concise structured content tags
-when the topic is known — for example docs:datadog_setup, chat:greeting, or
-provider:local_llama_connect for vague local-model connection requests.
+when the topic is known — for example docs:datadog_setup, chat:greeting,
+provider:local_llama_connect for vague local-model connection requests, or
+database_query:<topic> when the user asks to query/read a named database tool
+(MySQL, MariaDB, etc.) that is not a first-party setup-wizard target.
 
 assistant_handoff has two modes, chosen with requires_gather:
 - requires_gather=true (the default) — the assistant runs a live evidence-gather
