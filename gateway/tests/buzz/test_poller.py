@@ -94,3 +94,17 @@ def test_acknowledged_events_do_not_replay_at_the_inclusive_cursor() -> None:
 
     assert poller.poll_once() == []
     assert client.get_feed.call_args_list[-1].kwargs["since"] == 100
+
+
+def test_acknowledged_events_do_not_replay_after_restart() -> None:
+    """Inclusive-second IDs are persisted so a restart does not re-run finished work."""
+    client = MagicMock(spec=BuzzClient)
+    client.get_feed.return_value = _feed(_event("ev1", created_at=100))
+    poller = BuzzFeedPoller(client)
+    first = poller.poll_once()
+    poller.acknowledge(first[0])
+
+    restarted = BuzzFeedPoller(client)
+    assert restarted.poll_once() == []
+    assert restarted._since == 100
+    assert "ev1" in restarted._acked_at_cursor

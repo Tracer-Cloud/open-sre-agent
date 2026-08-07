@@ -33,16 +33,20 @@ class BuzzFeedPoller:
     older than the oldest turn still running. A turn that dies mid-flight, or
     that shutdown cuts short, therefore leaves the cursor behind it and is
     re-delivered on the next start instead of being silently skipped.
+
+    Both the watermark and the inclusive-second ID set are persisted so a
+    restart does not re-dispatch work that already completed.
     """
 
     def __init__(self, client: BuzzClient) -> None:
         self._client = client
         self._lock = threading.Lock()
-        self._since = load_cursor()
+        state = load_cursor()
+        self._since = state.since
         # Ids at exactly ``_since`` that are fully handled — the inclusive-since
-        # dedup set. Deliberately not persisted: replaying one event across a
-        # restart is the accepted cost of never skipping one.
-        self._acked_at_cursor: set[str] = set()
+        # dedup set. Persisted with the watermark so a restart does not replay
+        # completed work at the inclusive boundary.
+        self._acked_at_cursor: set[str] = set(state.acked_ids)
         # event_id -> created_at for events dispatched but not yet handled.
         self._inflight: dict[str, int] = {}
         # Handled events the cursor cannot cover yet because an older turn is
@@ -106,7 +110,6 @@ class BuzzFeedPoller:
         if watermark > self._since:
             self._since = watermark
             self._acked_at_cursor = set()
-            save_cursor(self._since)
         self._acked_at_cursor.update(
             event_id
             for event_id, created_at in self._acked_ahead.items()
@@ -117,6 +120,9 @@ class BuzzFeedPoller:
             for event_id, created_at in self._acked_ahead.items()
             if created_at > self._since
         }
+        # Persist after the ID set is updated — a restart must not lose the
+        # inclusive-second dedup and re-run completed turns.
+        save_cursor(self._since, self._acked_at_cursor)
 
     def _log_transient(self, message: str, *args: object) -> None:
         now = time.monotonic()
