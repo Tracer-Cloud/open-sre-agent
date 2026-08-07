@@ -61,7 +61,17 @@ _CODE_FENCE = "```"
 # the fence to be at line start anyway, so this is a tighter and
 # more accurate check than a naive substring count.
 _CODE_FENCE_LINE_RE = re.compile(rf"^{re.escape(_CODE_FENCE)}", re.MULTILINE)
-_MARKDOWN_CODE_THEME = "ansi_dark"
+# Rich inserts leading vertical space when these block types start a standalone
+# Markdown render. Other blocks do not, so paragraph-by-paragraph streaming must
+# add the consumed ``\n\n`` before rendering them.
+_SELF_SPACING_BLOCK_TOKEN_TYPES = frozenset(
+    {
+        "blockquote_open",
+        "bullet_list_open",
+        "ordered_list_open",
+        "table_open",
+    }
+)
 
 # Rich Markdown treats ``__init__.py`` as bold emphasis around ``init``, which
 # strips the underscores and restyles that span. Escape dunder filenames so
@@ -76,6 +86,28 @@ def _escape_markdown_dunder_filenames(text: str) -> str:
 
 STREAM_LABEL_ASSISTANT = "assistant"
 STREAM_LABEL_ANSWER = "answer"
+
+
+def _build_markdown_block(text: str) -> Markdown:
+    """Build a Markdown renderable with the shared escaping and code theme."""
+    spaced = normalize_three_tier_spacing(text)
+    return Markdown(
+        _escape_markdown_dunder_filenames(spaced.rstrip()),
+        code_theme=ui_theme.MARKDOWN_CODE_THEME,
+    )
+
+
+def render_markdown_block(console: Console, text: str) -> None:
+    """Render one complete Markdown block using the shared markdown theme.
+
+    The single rendering path for model prose that arrives whole (not
+    chunk-streamed) — e.g. the action agent's intermediate phase headers —
+    so every markdown surface shares one escaping/theme policy.
+    """
+    if not text.strip():
+        return
+    with console.use_theme(ui_theme.MARKDOWN_THEME):
+        console.print(_build_markdown_block(text))
 
 
 def render_response_header(console: Console, label: str) -> None:
@@ -156,13 +188,7 @@ def stream_to_console_state(
             return StreamPaintResult(text=text, deferred_closer=True)
         console.print()
         render_response_header(console, label)
-        with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(
-                Markdown(
-                    _escape_markdown_dunder_filenames(normalize_three_tier_spacing(text)),
-                    code_theme=_MARKDOWN_CODE_THEME,
-                )
-            )
+        render_markdown_block(console, text)
         console.print()
         return StreamPaintResult(text=text)
 
@@ -212,6 +238,7 @@ def stream_to_console_state(
     progress_hook = getattr(console, "update_streaming_progress", None)
     total_bytes = sum(len(c) for c in peeked)
     last_progress_at = 0.0
+    rendered_paragraphs = 0
     deferred_closer = False
 
     def _maybe_update_progress(now: float, *, force: bool = False) -> float:
@@ -234,14 +261,22 @@ def stream_to_console_state(
         return bool(getattr(console, "cancel_requested", False))
 
     def _paint_paragraph_body(text: str) -> None:
-        spaced = normalize_three_tier_spacing(text)
+        nonlocal rendered_paragraphs
+        if not text.strip():
+            return
+        markdown = _build_markdown_block(text)
+        starts_with_self_spacing_block = bool(
+            markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
+        )
+        if rendered_paragraphs and not starts_with_self_spacing_block:
+            # ``_flush_paragraphs`` consumes the source ``\n\n`` boundary.
+            # Restore it explicitly unless Rich adds equivalent leading space
+            # for the next standalone block. This matters most after lists,
+            # whose renderer adds no trailing blank line.
+            console.print()
         with console.use_theme(ui_theme.MARKDOWN_THEME):
-            console.print(
-                Markdown(
-                    _escape_markdown_dunder_filenames(spaced.rstrip()),
-                    code_theme=_MARKDOWN_CODE_THEME,
-                )
-            )
+            console.print(markdown)
+        rendered_paragraphs += 1
 
     def _render_paragraph(text: str) -> None:
         nonlocal deferred_closer
@@ -372,17 +407,6 @@ def stream_to_console_state(
     return StreamPaintResult(text=text, deferred_closer=False)
 
 
-def _print_markdown_body(console: Console, text: str) -> None:
-    spaced = normalize_three_tier_spacing(text)
-    with console.use_theme(ui_theme.MARKDOWN_THEME):
-        console.print(
-            Markdown(
-                _escape_markdown_dunder_filenames(spaced.rstrip()),
-                code_theme=_MARKDOWN_CODE_THEME,
-            )
-        )
-
-
 def publish_full_response(console: Console, text: str, *, label: str = "assistant") -> None:
     """Paint a complete assistant answer (non-TTY deferred gather path)."""
     body = (text or "").strip()
@@ -390,7 +414,7 @@ def publish_full_response(console: Console, text: str, *, label: str = "assistan
         return
     console.print()
     render_response_header(console, label)
-    _print_markdown_body(console, body)
+    render_markdown_block(console, body)
     console.print()
 
 
@@ -404,7 +428,7 @@ def finish_deferred_closer(
     """Paint the (possibly rewritten) Want-me-to closer + held stream footer."""
     closer = closer_tail_from(final_text)
     if closer:
-        _print_markdown_body(console, closer)
+        render_markdown_block(console, closer)
     if footer_elapsed_s is not None and footer_total_bytes is not None:
         tokens = _format_tokens(footer_total_bytes // _CHARS_PER_TOKEN)
         console.print(f"[{ui_theme.DIM}]· {footer_elapsed_s:.1f}s · ↓ {tokens}[/]")
@@ -419,6 +443,7 @@ __all__ = [
     "finish_deferred_closer",
     "format_token_count_short",
     "publish_full_response",
+    "render_markdown_block",
     "render_response_header",
     "stream_to_console",
     "stream_to_console_state",

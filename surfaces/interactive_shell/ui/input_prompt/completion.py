@@ -16,6 +16,7 @@ from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_intera
 from surfaces.interactive_shell.ui.input_prompt.layout import (
     _DEFAULT_TERMINAL_COLUMNS,
     _clip_text,
+    _prompt_line_width,
     _short_meta,
     _terminal_columns,
 )
@@ -74,7 +75,12 @@ def completion_preview_hint_ansi() -> str:
         cols = app.output.get_size().columns
     except Exception:
         cols = _DEFAULT_TERMINAL_COLUMNS
-    line = _clip_text(f"{label}{_COMPLETION_PREVIEW_SEP}{description}", cols)
+    # Leave the last column empty so this context line cannot soft-wrap on
+    # shrink-resize and orphan stale prompt frames (same budget as the rule).
+    line = _clip_text(
+        f"{label}{_COMPLETION_PREVIEW_SEP}{description}",
+        _prompt_line_width(cols),
+    )
     return f"{ui_theme.ANSI_DIM}{line}{ui_theme.ANSI_RESET}"
 
 

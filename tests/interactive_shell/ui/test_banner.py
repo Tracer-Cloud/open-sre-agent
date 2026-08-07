@@ -153,10 +153,12 @@ def test_ambient_column_shows_skill_count(monkeypatch: object) -> None:
     monkeypatch.setattr(banner_state_module, "_load_integration_health", lambda: [])
     monkeypatch.setattr(banner_state_module, "_is_alert_listener_active", lambda: False)
     monkeypatch.setattr(banner_state_module, "_count_loaded_skills", lambda: 7)
+    monkeypatch.setattr(banner_state_module, "_count_scheduled_tasks", lambda: 3)
 
     text = banner_state_module._build_ambient_right_column().plain
 
     assert "Skills (7) loaded into cyberdeck" in text
+    assert "Scheduled tasks (3)" in text
 
 
 def test_count_loaded_skills_survives_loader_failure(monkeypatch: object) -> None:
@@ -172,6 +174,21 @@ def test_count_loaded_skills_survives_loader_failure(monkeypatch: object) -> Non
     monkeypatch.setattr(builtins, "__import__", _fail_skills_loader)
 
     assert banner_state_module._count_loaded_skills() == 0
+
+
+def test_count_scheduled_tasks_survives_store_failure(monkeypatch: object) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _fail_scheduler_store(name: str, *args: object, **kwargs: object) -> object:
+        if name == "platform.scheduler.store":
+            raise ImportError("simulated scheduler store failure")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fail_scheduler_store)
+
+    assert banner_state_module._count_scheduled_tasks() == 0
 
 
 def test_ready_box_expands_to_console_width() -> None:

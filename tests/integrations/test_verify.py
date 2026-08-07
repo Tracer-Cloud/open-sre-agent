@@ -18,6 +18,7 @@ def clean_slack_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
 
 
+from integrations._table_render import wrap_clauses
 from integrations.aws.verifier import verify_aws as _verify_aws
 from integrations.coralogix.verifier import verify_coralogix as _verify_coralogix
 from integrations.datadog.verifier import verify_datadog as _verify_datadog
@@ -30,6 +31,7 @@ from integrations.telegram.verifier import verify_telegram as _verify_telegram
 from integrations.tracer.verifier import verify_tracer as _verify_tracer
 from integrations.vercel.verifier import verify_vercel as _verify_vercel
 from integrations.verify import (
+    format_verification_results,
     resolve_effective_integrations,
     verification_exit_code,
     verify_integrations,
@@ -896,3 +898,53 @@ def test_resolve_effective_integrations_skips_invalid_slack_store_url(
 
     assert "slack" not in effective
     assert any("Slack webhook" in r.message for r in caplog.records)
+
+
+def test_wrap_clauses_splits_on_semicolon_and_pipe() -> None:
+    detail = (
+        "OK @davincios; repos=30; owners=davincios; "
+        "examples=davincios/tracer-cli, davincios/lostagenticsouls; mcp_tools=62 "
+        "| listing had no parseable repos"
+    )
+
+    wrapped = wrap_clauses(detail)
+
+    assert wrapped.splitlines() == [
+        "OK @davincios",
+        "repos=30",
+        "owners=davincios",
+        "examples=davincios/tracer-cli, davincios/lostagenticsouls",
+        "mcp_tools=62",
+        "listing had no parseable repos",
+    ]
+
+
+def test_wrap_clauses_leaves_plain_text_untouched() -> None:
+    assert wrap_clauses("Connected to Honeycomb dataset prod-api.") == (
+        "Connected to Honeycomb dataset prod-api."
+    )
+
+
+def test_format_verification_results_puts_each_detail_clause_on_its_own_line() -> None:
+    rendered = format_verification_results(
+        [
+            {
+                "service": "github",
+                "source": "local store",
+                "status": "passed",
+                "detail": (
+                    "OK @davincios; repos=30; owners=davincios; "
+                    "examples=davincios/tracer-cli, davincios/lostagenticsouls; mcp_tools=62"
+                ),
+            }
+        ]
+    )
+
+    assert "OK @davincios" in rendered
+    assert "repos=30" in rendered
+    # Regression guard: the repo list must never split mid-word (e.g. the old
+    # "dav" / "incios/..." fold) — only at the comma between full names.
+    assert "davincios/tracer-cli," in rendered
+    assert "davincios/lostagenticsouls" in rendered
+    assert "dav\n" not in rendered
+    assert "\nincios" not in rendered

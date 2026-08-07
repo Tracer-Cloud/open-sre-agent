@@ -16,6 +16,9 @@ from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERT
 from surfaces.interactive_shell.command_registry.background_cmds import (
     COMMANDS as BACKGROUND_COMMANDS,
 )
+from surfaces.interactive_shell.command_registry.choice_prompt import (
+    COMMANDS as CHOICE_COMMANDS,
+)
 from surfaces.interactive_shell.command_registry.cli_parity import (
     COMMANDS as PARITY_COMMANDS,
 )
@@ -81,6 +84,7 @@ _MERGED_SEQUENCE = tuple(
         HELP_COMMANDS,
         SESSION_COMMANDS,
         THEME_COMMANDS,
+        CHOICE_COMMANDS,
         BACKGROUND_COMMANDS,
         SETTINGS_COMMANDS,
         DIAGNOSTICS_COMMANDS,

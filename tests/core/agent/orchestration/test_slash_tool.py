@@ -160,15 +160,28 @@ def test_interactive_picker_runs_inline_when_not_a_tty() -> None:
     assert session.terminal.pending_prompt_autosubmit is False
 
 
-def test_duplicate_slash_invoke_in_same_turn_is_ignored() -> None:
-    """The same slash command must not execute twice in one agent turn."""
+def test_duplicate_slash_invoke_alone_may_run_twice() -> None:
+    """Slash tool itself does not suppress repeats; the action-turn guard does."""
     ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
     args = {"command": "/integrations", "args": ["list"]}
 
     assert slash_tool.execute_slash_tool(args, ctx) is True
     assert slash_tool.execute_slash_tool(args, ctx) is True
 
-    assert ports.dispatched == ["/integrations list"]
+    assert ports.dispatched == ["/integrations list", "/integrations list"]
+
+
+def test_interleaved_slash_invoke_runs_each_time() -> None:
+    """A → B → A must all dispatch (Greptile: shared-set suppress was wrong)."""
+    ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
+
+    assert slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx) is True
+    assert (
+        slash_tool.execute_slash_tool({"command": "/integrations", "args": ["list"]}, ctx) is True
+    )
+    assert slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx) is True
+
+    assert ports.dispatched == ["/health", "/integrations list", "/health"]
 
 
 @pytest.mark.parametrize(

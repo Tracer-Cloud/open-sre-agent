@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import re
 from dataclasses import dataclass
 
 import pytest
 from prompt_toolkit.completion import Completion
+from rich.console import Console
 
 from platform.common.task_types import TaskKind
 from surfaces.interactive_shell.runtime.core import state as loop_state
@@ -14,11 +16,15 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
+from surfaces.interactive_shell.ui.input_prompt.layout import _prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
     _DEFAULT_PLACEHOLDER_TEXT,
     _prompt_counter_text,
+    _prompt_message,
+    _prompt_rule_ansi,
     _prompt_turn_number,
+    render_submitted_prompt,
     resolve_idle_hint_ansi,
     resolve_prompt_placeholder,
     resolve_prompt_prefix_ansi,
@@ -79,17 +85,47 @@ class TestPromptRefreshAutoSubmit:
         assert app.current_buffer.submitted is False
 
 
+def _render_console() -> Console:
+    return Console(file=io.StringIO(), force_terminal=False, highlight=False)
+
+
 class TestPromptTurnCounter:
     def test_first_turn_is_numbered_one(self) -> None:
         session = Session()
         assert _prompt_turn_number(session) == 1
         assert _prompt_counter_text(session) == "[1] "
 
-    def test_counter_advances_with_history(self) -> None:
+    def test_counter_advances_per_submitted_prompt(self) -> None:
         session = Session()
-        session.record("chat", "hello")
+        console = _render_console()
+        render_submitted_prompt(console, session, "hello")
         assert _prompt_turn_number(session) == 2
         assert _prompt_counter_text(session) == "[2] "
+        render_submitted_prompt(console, session, "and again")
+        assert _prompt_turn_number(session) == 3
+
+    def test_history_rows_do_not_advance_counter(self) -> None:
+        """One request that runs many tools adds many history rows but one number.
+
+        Regression: the counter previously derived from ``len(session.history)``,
+        so a single request that executed seven shell commands jumped the next
+        prompt from ``[1]`` to ``[10]``.
+        """
+        session = Session()
+        render_submitted_prompt(_render_console(), session, "onboard me on the CI/CD fix")
+        for _ in range(7):
+            session.record("shell", "gh auth status")
+        session.record("chat", "loaded the skill")
+        session.record("cli_agent", "onboard me on the CI/CD fix")
+        assert _prompt_turn_number(session) == 2
+        assert _prompt_counter_text(session) == "[2] "
+
+    def test_clear_resets_counter(self) -> None:
+        """``/new`` and ``/resume`` go through ``Session.clear`` and restart at [1]."""
+        session = Session()
+        render_submitted_prompt(_render_console(), session, "hello")
+        session.clear()
+        assert _prompt_turn_number(session) == 1
 
 
 class TestResolveIdleHint:
@@ -112,6 +148,40 @@ class TestResolveIdleHint:
         assert "Datadog" not in rendered
         assert "/ for commands" in rendered
         assert "tab tool details" in rendered
+
+    def test_clips_hint_below_terminal_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Leave the last column empty so shrink-resize cannot soft-wrap the hint."""
+        session = Session()
+        session.configured_integrations_known = True
+        session.configured_integrations = (
+            "datadog",
+            "github",
+            "grafana",
+            "posthog_mcp",
+            "sentry",
+            "slack",
+            "vercel",
+            "aws",
+        )
+        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 40)
+        rendered = _strip_ansi(resolve_idle_hint_ansi(session))
+        assert len(rendered) <= 40
+        assert rendered.endswith("…")
+
+
+class TestPromptRuleWidth:
+    def test_rule_leaves_last_column_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A full-width rule soft-wraps on shrink and orphans stale prompt frames."""
+        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 79)
+        rule = _strip_ansi(_prompt_rule_ansi())
+        assert len(rule) == 79
+        assert set(rule) == {"─"}
+
+    def test_prompt_message_rule_uses_safe_width(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(prompt_rendering, "_prompt_line_width", lambda: 79)
+        rendered = _strip_ansi(_prompt_message(Session()).value)
+        rule_line, _prompt_line = rendered.split("\n", 1)
+        assert len(rule_line) == 79
 
 
 class TestResolvePromptPlaceholder:
@@ -307,7 +377,8 @@ class TestCompletionPreviewHint:
 
         rendered = _strip_ansi(completion_preview_hint_ansi())
         assert rendered.endswith("…")
-        assert len(rendered) <= 40
+        # One column short of the terminal width (pending-wrap guard).
+        assert len(rendered) <= _prompt_line_width(40)
         assert rendered.startswith("/plugin-cmd — ")
 
 

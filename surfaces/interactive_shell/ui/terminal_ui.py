@@ -51,17 +51,22 @@ def render_prompt_region(session: Session, state: ReplState, spinner: SpinnerSta
 
     The top line is the pending confirmation prompt when one is active,
     otherwise the spinner, completion preview, or idle hint.
+
+    The region always starts with one blank row so the hint/spinner line never
+    sits flush against whatever output scrolled above it. The row is constant
+    across all prompt states (no height delta between redraws) and is erased
+    with the rest of the region on submit (``erase_when_done=True``).
     """
     base = prompt_rendering._prompt_message(session).value
     if state.is_awaiting_confirmation():
-        return ANSI(f"{state.confirm_prompt_text}\n{base}")
+        return ANSI(f"\n{state.confirm_prompt_text}\n{base}")
     prefix = strip_cpr_sequences(
         prompt_rendering.resolve_prompt_prefix_ansi(
             inline_spinner=spinner.inline_spinner_ansi(),
             idle_hint=prompt_rendering.resolve_idle_hint_ansi(session),
         )
     )
-    return ANSI(f"{prefix}\n{base}")
+    return ANSI(f"\n{prefix}\n{base}")
 
 
 __all__ = ["render_prompt_region", "render_terminal_ui"]

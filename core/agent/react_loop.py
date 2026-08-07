@@ -127,11 +127,15 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         assistant_message = self._msg_formatter.to_assistant_runtime_message(response)
         self._host._emit_runtime(MessageStartEvent(message=assistant_message, iteration=iteration))
         if response.content:
+            # ``has_tool_calls`` lets renderers distinguish intermediate
+            # commentary preceding this iteration's tool calls (render live)
+            # from the final no-tool-call answer (streamed as final_text).
             self._host._emit_runtime(
                 MessageUpdateEvent(
                     message=assistant_message,
                     delta=response.content,
                     iteration=iteration,
+                    data={"has_tool_calls": response.has_tool_calls},
                 )
             )
         self._messages.append(assistant_message)
@@ -217,6 +221,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             before_tool_call=self._host._tool_hooks.before_tool_call,
             after_tool_call=self._host._tool_hooks.after_tool_call,
             on_tool_update=on_tool_update,
+            before_tool_batch=self._host._tool_hooks.before_tool_batch,
         )
         results = execute_tool_calls(
             response.tool_calls,

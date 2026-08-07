@@ -13,6 +13,7 @@ would reintroduce a circular import during interactive-shell startup.
 from __future__ import annotations
 
 TOOL_MODULES = (
+    "actions.ask_choice",
     "actions.assistant_handoff",
     "actions.cli_command",
     "actions.implementation",

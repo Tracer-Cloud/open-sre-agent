@@ -163,6 +163,7 @@
               "s3",
               "kubernetes",
               "cloudtrail_events",
+              "sqs_queues",
               "bitbucket",
               "elb",
               "ec2",

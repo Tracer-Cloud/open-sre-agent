@@ -11,7 +11,11 @@ from platform.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.banner.banner_state import integration_display_name
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
-from surfaces.interactive_shell.ui.input_prompt.layout import _short_meta, _terminal_columns
+from surfaces.interactive_shell.ui.input_prompt.layout import (
+    _clip_text,
+    _prompt_line_width,
+    _short_meta,
+)
 
 _PROMPT_RULE_CHAR = "─"
 _DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
@@ -25,22 +29,31 @@ def _prompt_rule_line(width: int) -> str:
 
 
 def _prompt_rule_ansi() -> str:
+    # One column short of the terminal width so shrink-resize cannot soft-wrap
+    # this line and orphan stale prompt frames in scrollback.
     return (
-        f"{ui_theme.PROMPT_FRAME_ANSI}{_prompt_rule_line(_terminal_columns())}{ui_theme.ANSI_RESET}"
+        f"{ui_theme.PROMPT_FRAME_ANSI}"
+        f"{_prompt_rule_line(_prompt_line_width())}"
+        f"{ui_theme.ANSI_RESET}"
     )
 
 
 def _prompt_turn_number(session: Session) -> int:
-    """1-based index for the turn about to be entered or just submitted."""
-    return len(session.history) + 1
+    """1-based number for the prompt line currently being entered.
+
+    Derived from the count of accepted submissions, never from
+    ``session.history``: one request can append many history rows (shell
+    commands, tool executions) but must advance the ``[N]`` label only once.
+    """
+    return session.terminal.submitted_turn_count + 1
+
+
+def _counter_text(turn_number: int) -> str:
+    return f"[{turn_number}] "
 
 
 def _prompt_counter_text(session: Session) -> str:
-    return f"[{_prompt_turn_number(session)}] "
-
-
-def _prompt_prefix_text(session: Session) -> str:
-    return f"{_prompt_counter_text(session)}❯ "
+    return _counter_text(_prompt_turn_number(session))
 
 
 def _prompt_line_ansi(session: Session) -> ANSI:
@@ -55,11 +68,16 @@ def _prompt_message(session: Session) -> ANSI:
 
 
 def render_submitted_prompt(console: Console, session: Session, text: str) -> None:
-    """Render the submitted user turn above the streamed assistant response."""
+    """Render the submitted user turn above the streamed assistant response.
+
+    Claims the turn's ``[N]`` number: every accepted submission (interactive or
+    startup replay) passes through here exactly once, so the counter advances
+    once per prompt line regardless of what the turn later records in history.
+    """
+    counter = _counter_text(session.terminal.claim_turn_number())
     lines = text.splitlines() or [""]
-    continuation_prefix = " " * len(_prompt_prefix_text(session))
+    continuation_prefix = " " * (len(counter) + len("❯ "))
     rendered = Text()
-    counter = _prompt_counter_text(session)
     # Rich's Style.parse() reads the bare str value of a _LazyRichStyle (""),
     # so resolve to a concrete string at the call site to keep palette colors.
     rendered.append(counter, style=str(ui_theme.DIM))
@@ -95,7 +113,9 @@ def resolve_idle_hint_ansi(session: Session) -> str:
     app = get_app_or_none()
     if app is not None and app.current_buffer.text:
         parts.append("esc to clear")
-    hint = " · ".join(parts)
+    # Clip to the safe prompt-region width so a long integration list cannot
+    # reach the last column and soft-wrap on shrink-resize.
+    hint = _clip_text(" · ".join(parts), _prompt_line_width())
     return f"{ui_theme.DIM_ANSI}{hint}{ui_theme.ANSI_RESET}"
 
 
