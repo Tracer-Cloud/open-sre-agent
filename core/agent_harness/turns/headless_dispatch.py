@@ -34,11 +34,14 @@ from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
     AnswerRequest,
     ConfirmFn,
+    ConsoleBindable,
     ErrorReporter,
+    OutputBindable,
     OutputSink,
     PromptContextProvider,
     ReasoningClientProvider,
     RunRecordFactory,
+    SessionBindable,
     SessionStore,
     ToolProvider,
     TurnAccounting,
@@ -155,12 +158,15 @@ class HeadlessAgent:
         Gateway ``SessionManager.resolve`` returns a new ``SessionCore`` each
         turn (same id, restored state). Cached agents must follow that object
         so tools/prompts see current integrations and chat metadata.
+
+        Only ports that implement :class:`~core.agent_harness.ports.SessionBindable`
+        are rebound — silent ``getattr`` skips are avoided so a missing binder
+        on a session-aware default port is a type/test gap, not a runtime miss.
         """
         self._store = session
         for port in (self._tools, self._prompts, self._reasoning, self._run_factory):
-            binder = getattr(port, "bind_session", None)
-            if callable(binder):
-                binder(session)
+            if isinstance(port, SessionBindable):
+                port.bind_session(session)
 
     def bind_turn(
         self,
@@ -173,19 +179,26 @@ class HeadlessAgent:
     ) -> None:
         """Swap turn-scoped ports so one agent can serve many turns.
 
-        Gateway sinks, per-message accounting, and (when provided) the current
-        session object are rebound each inbound message. ``console`` rebinds the
-        tool provider so cooperative cancel (``cancel_requested``) is per-turn.
+        Per-message accounting and (when provided) the current session object
+        are rebound each inbound message. ``console`` rebinds a
+        :class:`~core.agent_harness.ports.ConsoleBindable` tool provider so
+        cooperative cancel (``cancel_requested``) is per-turn.
+
+        Gateway keeps a stable ``LiveOutputSink`` on the pooled agent and
+        rebinds the outer transport sink via ``LiveOutputSink.bind`` — it does
+        not pass ``output=`` here. Hosts that replace the ``OutputSink`` object
+        itself must pass ``output=`` so :class:`~core.agent_harness.ports.OutputBindable`
+        ports (reasoning error rendering) follow the new sink.
         """
         if session is not None:
             self.bind_session(session)
-        if console is not None:
-            binder = getattr(self._tools, "bind_console", None)
-            if callable(binder):
-                binder(console)
+        if console is not None and isinstance(self._tools, ConsoleBindable):
+            self._tools.bind_console(console)
         runner_changed = False
         if output is not None:
             self._output = output
+            if isinstance(self._reasoning, OutputBindable):
+                self._reasoning.bind_output(output)
             runner_changed = True
         if accounting is not None:
             self._accounting = accounting

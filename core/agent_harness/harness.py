@@ -7,15 +7,24 @@ the installed payload runner (wired at process boot). Session lifecycle
 :class:`~core.agent_harness.session.lifecycle.SessionManager`; the session API
 sits one layer above and adds env resolution and prompt context.
 
-::
+Narrative — construct **one** agent per logical session, then many turns::
 
-    session = AgentSession.start()
-    result = session.chat("why is checkout-api slow?")
-    report = session.investigate({"alert_name": "HighLatency"})
+    session = AgentSession.start()       # or attach_agent(custom_headless)
+    result = session.chat("…")           # turn 1
+    follow = session.chat("…")           # turn 2 — same attached agent
+    report = session.investigate({…})    # Path-2 (no attached chat agent required)
 
-Compatibility aliases: :class:`AgentHarness` (= ``AgentSession``),
-:class:`HarnessConfig` (= ``SessionConfig``),
-:meth:`AgentSession.dispatch_message` (= ``chat``).
+Custom ports (live gateway sink, REPL)::
+
+    session = AgentSession(SessionConfig(load_env=False))
+    session.startup()
+    session.attach_agent(build_default_headless_agent(session=…, output=sink, …))
+    session.chat(text)                   # reuse the same agent across messages
+
+Gateway chat reuses one ``HeadlessAgent`` per session via ``SessionAgentPool``
+(``bind_turn`` each message). Scheduled **one-shots** may use
+:meth:`run_headless_turn`; multi-turn loops should keep one agent for the loop.
+There is no ``dispatch_message_to_headless_agent`` free function.
 
 Must not import ``surfaces.interactive_shell`` (enforced by
 ``tests/core/agent/test_import_boundaries.py``). Surfaces inject prompt
@@ -34,7 +43,6 @@ if TYPE_CHECKING:
     from core.agent_harness.investigation_api import AlertInput, InvestigationResult
     from core.agent_harness.ports import OutputSink, PromptContextProvider
     from core.agent_harness.session.session_core import SessionCore
-    from core.agent_harness.turns.headless_dispatch import HeadlessAgent
     from core.agent_harness.turns.turn_results import TurnResult
 
 
@@ -67,8 +75,15 @@ class SessionConfig:
     session_manager: SessionManager | None = None
 
 
-# Compatibility alias — prefer SessionConfig.
-HarnessConfig = SessionConfig
+# Scheduled/one-shot runs: a fresh warm session that leaves no persisted task
+# registry or open storage behind.
+SCHEDULED_RUN_CONFIG = SessionConfig(
+    load_env=True,
+    hydrate_integrations=True,
+    warm_integrations=True,
+    persistent_tasks=False,
+    open_storage=False,
+)
 
 
 @dataclass(frozen=True)
@@ -77,10 +92,6 @@ class SessionStartupResult:
 
     session: SessionCore
     prompts: PromptContextProvider | None
-
-
-# Compatibility alias — prefer SessionStartupResult.
-HarnessStartupResult = SessionStartupResult
 
 
 class AgentSession:
@@ -148,44 +159,78 @@ class AgentSession:
         """Return the surface's grounding-context provider, if any."""
         return self._config.prompts
 
-    @classmethod
-    def start(
-        cls,
-        config: SessionConfig | None = None,
+    def _attach_default_headless(
+        self,
+        *,
+        session: SessionCore,
+        output: OutputSink,
+        prompts: PromptContextProvider | None,
+        message: str | None = None,
         **agent_kwargs: Any,
-    ) -> AgentSession:
-        """Return a session that is ready to :meth:`chat`.
+    ) -> None:
+        """Attach the shared default headless port stack (one construction recipe).
 
-        Runs startup and attaches a default agent, so the common case is two
-        lines rather than assembling a console, logger, sink and factory call::
-
-            session = AgentSession.start()
-            result = session.chat("why is checkout-api slow?")
-
-        Extra ``agent_kwargs`` are forwarded to
-        :func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`
-        (e.g. ``logger=``, ``gather_max_iterations=``). Surfaces that need their
-        own ports (a live gateway sink, a REPL console) still build the agent
-        themselves and call :meth:`attach_agent`.
+        Used by :meth:`start` and :meth:`run_headless_turn`. Custom hosts
+        (gateway pool, REPL) still call :func:`build_default_headless_agent` or
+        assemble :class:`HeadlessAgent` and :meth:`attach_agent` themselves —
+        they must not re-copy this wiring ad hoc.
         """
         from core.agent_harness.turns.default_headless_agent import (
             build_default_headless_agent,
         )
+
+        agent_kwargs.pop("message", None)
+        self.attach_agent(
+            build_default_headless_agent(
+                session=session,
+                output=output,
+                prompts=prompts,
+                message=message,
+                **agent_kwargs,
+            )
+        )
+
+    @classmethod
+    def start(
+        cls,
+        config: SessionConfig | None = None,
+        *,
+        output: OutputSink | None = None,
+        prompts: PromptContextProvider | None = None,
+        prepare_session: Callable[[SessionCore], None] | None = None,
+        message: str | None = None,
+        **agent_kwargs: Any,
+    ) -> AgentSession:
+        """Return a session that is ready to :meth:`chat`.
+
+        The single headless bootstrap: create the session, run ``prepare_session``,
+        resolve the sink and prompt context, and attach the default agent. Build
+        it once and dispatch as many turns as the caller needs::
+
+            session = AgentSession.start()
+            for prompt in prompts:
+                result = session.chat(prompt)
+
+        ``prepare_session`` runs after session create (e.g. pin a project scope)
+        and before the agent is built. ``message`` is the first turn's text when
+        it is already known, for ports that size themselves to it. Remaining
+        keyword arguments reach
+        :func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`.
+        Surfaces that need their own ports (a live gateway sink, a REPL console)
+        build the agent themselves and call :meth:`attach_agent`.
+        """
         from core.agent_harness.turns.headless_adapters import BufferOutputSink
 
         agent_session = cls(config)
         startup = agent_session.startup()
-        output = agent_kwargs.pop("output", None)
-        if output is None:
-            output = BufferOutputSink()
-        prompts = agent_kwargs.pop("prompts", startup.prompts)
-        agent_session.attach_agent(
-            build_default_headless_agent(
-                session=startup.session,
-                output=output,
-                prompts=prompts,
-                **agent_kwargs,
-            )
+        if prepare_session is not None:
+            prepare_session(startup.session)
+        agent_session._attach_default_headless(
+            session=startup.session,
+            output=output if output is not None else BufferOutputSink(),
+            prompts=prompts if prompts is not None else startup.prompts,
+            message=message,
+            **agent_kwargs,
         )
         return agent_session
 
@@ -199,43 +244,20 @@ class AgentSession:
         prepare_session: Callable[[SessionCore], None] | None = None,
         **agent_kwargs: Any,
     ) -> TurnResult:
-        """Boot a default headless agent and run one turn for ``message``.
+        """Run exactly one turn for ``message`` on a throwaway session.
 
-        Collapses the session + BufferOutputSink + ``build_default_headless_agent``
-        stack shared by scheduled digests and report runners. Optional
-        ``prepare_session`` runs after session create (e.g. pin a project scope)
-        and before the agent is built. Extra kwargs forward to
-        :func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`.
+        Convenience for scheduled digests and report runners that fire once. A
+        loop that runs several turns must call :meth:`start` once and
+        :meth:`chat` per turn instead — this rebuilds the session, re-hydrates
+        integrations, and discards every warm cache on each call.
         """
-        from core.agent_harness.turns.default_headless_agent import (
-            build_default_headless_agent,
-        )
-        from core.agent_harness.turns.headless_adapters import BufferOutputSink
-
-        session_config = config or SessionConfig(
-            load_env=True,
-            hydrate_integrations=True,
-            warm_integrations=True,
-            persistent_tasks=False,
-            open_storage=False,
-        )
-        agent_session = cls(session_config)
-        startup = agent_session.startup()
-        session = startup.session
-        if prepare_session is not None:
-            prepare_session(session)
-        sink = output if output is not None else BufferOutputSink()
-        prompts = agent_kwargs.pop("prompts", startup.prompts)
-        agent_kwargs.pop("message", None)
-        agent = build_default_headless_agent(
-            session=session,
-            output=sink,
-            prompts=prompts,
+        return cls.start(
+            config or SCHEDULED_RUN_CONFIG,
+            output=output,
+            prepare_session=prepare_session,
             message=message,
             **agent_kwargs,
-        )
-        agent_session.attach_agent(agent)
-        return agent_session.chat(message)
+        ).chat(message)
 
     @property
     def agent(self) -> ChatDispatcher | None:
@@ -274,15 +296,6 @@ class AgentSession:
             )
         return target.dispatch(message)
 
-    def dispatch_message(
-        self,
-        message: str,
-        *,
-        agent: ChatDispatcher | HeadlessAgent | None = None,
-    ) -> TurnResult:
-        """Compatibility alias for :meth:`chat`."""
-        return self.chat(message, agent=agent)
-
     def investigate(
         self,
         alert: AlertInput,
@@ -305,16 +318,10 @@ class AgentSession:
         )
 
 
-# Compatibility alias — prefer AgentSession.
-AgentHarness = AgentSession
-
-
 __all__ = [
-    "AgentHarness",
+    "SCHEDULED_RUN_CONFIG",
     "AgentSession",
     "ChatDispatcher",
-    "HarnessConfig",
-    "HarnessStartupResult",
     "SessionConfig",
     "SessionStartupResult",
 ]

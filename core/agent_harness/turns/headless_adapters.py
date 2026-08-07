@@ -109,6 +109,10 @@ class BufferOutputSink:
 class EmptyPromptContextProvider:
     """Grounding provider that supplies no corpora (headless)."""
 
+    def bind_session(self, session: Any) -> None:
+        """No session state — Goal B reuse is a no-op for empty grounding."""
+        _ = session
+
     def surface(self) -> str:
         return "interactive_shell"
 
@@ -148,6 +152,14 @@ class EmptyPromptContextProvider:
 
 class NullToolProvider:
     """Provides no action tools and a no-op tool-event observer."""
+
+    def bind_session(self, session: Any) -> None:
+        """No tools to retarget."""
+        _ = session
+
+    def bind_console(self, console: Any) -> None:
+        """No console-backed tools."""
+        _ = console
 
     def action_tools(
         self,
@@ -200,6 +212,10 @@ class SimpleRunRecord:
 class SimpleRunRecordFactory:
     """Builds :class:`SimpleRunRecord` values."""
 
+    def bind_session(self, session: Any) -> None:
+        """Records are ephemeral — no session handle to update."""
+        _ = session
+
     def build(
         self, *, client: Any, prompt: str, response_text: str, started: float
     ) -> SimpleRunRecord:
@@ -212,6 +228,14 @@ class StaticReasoningClientProvider:
     """Provides a fixed reasoning client (or None to skip the assistant)."""
 
     client: Any | None = None
+
+    def bind_session(self, session: Any) -> None:
+        """Client is fixed at construction — ignore session retargets."""
+        _ = session
+
+    def bind_output(self, output: Any) -> None:
+        """No sink of its own — accept rebind for :class:`OutputBindable` parity."""
+        _ = output
 
     def get(self) -> Any | None:
         return self.client

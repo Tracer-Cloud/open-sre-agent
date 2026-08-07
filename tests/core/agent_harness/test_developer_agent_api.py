@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
@@ -73,9 +73,9 @@ class _RecordingPrompts(EmptyPromptContextProvider):
         return ""
 
 
-def _headless_config(**overrides: Any) -> HarnessConfig:
+def _headless_config(**overrides: Any) -> SessionConfig:
     """No env / storage / integrations — embedder unit-test shape."""
-    return HarnessConfig(
+    return SessionConfig(
         load_env=False,
         hydrate_integrations=False,
         persistent_tasks=False,
@@ -121,14 +121,14 @@ def _controlled_agent(
 
 
 def test_two_line_api_dispatches_an_answer(stub_action_planner: None) -> None:
-    """``AgentHarness`` + ``dispatch_message`` is the documented happy path."""
+    """``AgentSession`` + ``chat`` is the documented happy path."""
     # Arrange
-    harness = AgentHarness(_headless_config())
+    harness = AgentSession(_headless_config())
     agent, _sink = _controlled_agent()
     harness.attach_agent(agent)
 
     # Act
-    result = harness.dispatch_message("why is checkout-api slow?")
+    result = harness.chat("why is checkout-api slow?")
 
     # Assert
     assert isinstance(result, TurnResult)
@@ -137,15 +137,15 @@ def test_two_line_api_dispatches_an_answer(stub_action_planner: None) -> None:
 
 
 def test_follow_up_reuses_the_same_attached_agent(stub_action_planner: None) -> None:
-    """Each ``dispatch_message`` is one turn on the same agent/session."""
+    """Each ``chat`` is one turn on the same agent/session."""
     # Arrange
-    harness = AgentHarness(_headless_config())
+    harness = AgentSession(_headless_config())
     agent, _sink = _controlled_agent()
     harness.attach_agent(agent)
 
     # Act
-    first = harness.dispatch_message("list open incidents")
-    second = harness.dispatch_message("which affect checkout?")
+    first = harness.chat("list open incidents")
+    second = harness.chat("which affect checkout?")
 
     # Assert
     assert harness.agent is agent
@@ -159,7 +159,7 @@ def test_documented_custom_sink_path_captures_streamed_answer(
 ) -> None:
     """``startup`` → ``build_default_headless_agent(output=…)`` → ``attach_agent``."""
     # Arrange
-    harness = AgentHarness(_headless_config())
+    harness = AgentSession(_headless_config())
     startup = harness.startup()
     sink = BufferOutputSink()
     agent = build_default_headless_agent(session=startup.session, output=sink)
@@ -169,7 +169,7 @@ def test_documented_custom_sink_path_captures_streamed_answer(
     harness.attach_agent(agent)
 
     # Act
-    result = harness.dispatch_message("summarize open incidents")
+    result = harness.chat("summarize open incidents")
 
     # Assert
     assert result.answered
@@ -178,17 +178,17 @@ def test_documented_custom_sink_path_captures_streamed_answer(
 
 
 def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> None:
-    """``HarnessConfig.prompts`` must be the provider the answer path uses."""
+    """``SessionConfig.prompts`` must be the provider the answer path uses."""
     # Arrange
     prompts = _RecordingPrompts()
-    harness = AgentHarness.start(_headless_config(prompts=prompts))
+    harness = AgentSession.start(_headless_config(prompts=prompts))
     assert harness.agent is not None
     harness.agent._tools = NullToolProvider()  # noqa: SLF001
     harness.agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
     harness.agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
 
     # Act
-    result = harness.dispatch_message("what is our on-call policy?")
+    result = harness.chat("what is our on-call policy?")
 
     # Assert
     assert harness.agent._prompts is prompts  # noqa: SLF001
@@ -200,7 +200,7 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
 def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
     """The explicit ``build_default_headless_agent`` path must take ``prompts=``."""
     # Arrange
-    harness = AgentHarness(_headless_config())
+    harness = AgentSession(_headless_config())
     startup = harness.startup()
     prompts = _RecordingPrompts()
     sink = BufferOutputSink()
@@ -248,12 +248,12 @@ def test_custom_output_sink_protocol_is_enough(stub_action_planner: None) -> Non
 
     # Arrange
     sink = _ListSink()
-    harness = AgentHarness(_headless_config())
+    harness = AgentSession(_headless_config())
     agent, _ = _controlled_agent(output=sink)
     harness.attach_agent(agent)
 
     # Act
-    result = harness.dispatch_message("ping")
+    result = harness.chat("ping")
 
     # Assert
     assert result.answered
@@ -263,7 +263,7 @@ def test_custom_output_sink_protocol_is_enough(stub_action_planner: None) -> Non
 def test_start_without_prompts_keeps_default_grounding() -> None:
     """Omitting ``prompts`` must not leave the agent ungrounded."""
     # Arrange / Act
-    harness = AgentHarness.start(_headless_config())
+    harness = AgentSession.start(_headless_config())
 
     # Assert
     assert harness.agent is not None
@@ -271,7 +271,7 @@ def test_start_without_prompts_keeps_default_grounding() -> None:
 
 
 def test_resume_config_reaches_session_manager() -> None:
-    """``HarnessConfig.session_id`` is how a developer resumes a conversation."""
+    """``SessionConfig.session_id`` is how a developer resumes a conversation."""
     # Arrange
     from surfaces.interactive_shell.session import Session
 
@@ -288,8 +288,8 @@ def test_resume_config_reaches_session_manager() -> None:
             return self.session
 
     manager = _FakeSessionManager()
-    harness = AgentHarness(
-        HarnessConfig(
+    harness = AgentSession(
+        SessionConfig(
             session_id="abc123",
             load_env=False,
             hydrate_integrations=False,

@@ -7,6 +7,43 @@ It was extracted out of `interactive_shell` so the same harness can run the
 interactive terminal and be invoked headlessly via
 `agent_harness.turns.headless_dispatch`.
 
+## Canonical narrative (teach this)
+
+Prefer `AgentSession.start()` → `.chat` / `.investigate` — not free-function
+turn dumps. **Goal B:** construct one agent per logical session (or scheduled
+loop), then many turns — do not rebuild every message. Full Goal A/B + scaling +
+**bootstrap vs headless layers:**
+`opensre-notes/agent-session-api-scaling-aug2026.md`
+([#layers](../../opensre-notes/agent-session-api-scaling-aug2026.html#layers)).
+Also: `opensre-notes/agent-harness-guide.md`.
+
+| Path | Call |
+|------|------|
+| Process boot (once) | `configure_process(PROFILE)` — adapters only; not agent construction |
+| Happy path | `AgentSession.start()` → repeated `.chat` / `.investigate` |
+| Custom host | **`build_default_headless_agent(...)`** (only factory) → `attach_agent` once → many `.chat` |
+| Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `.chat` |
+| Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
+
+Do **not** duplicate the default port stack outside `build_default_headless_agent`.
+Shell uses a TTY `ChatDispatcher` (same `AgentSession.chat` / `run_turn`) —
+intentional, not a second headless factory. Do not reintroduce peer
+`bootstrap.adapters` copies under surfaces or gateway.
+
+**Goal B bind ports:** session-aware defaults implement
+`SessionBindable` / `ConsoleBindable` / `OutputBindable` (`ports.py`).
+`HeadlessAgent.bind_session` / `bind_turn(console=…, output=…)` only call ports
+that match those Protocols. Gateway usually keeps a stable `LiveOutputSink` and
+rebinds the transport via `LiveOutputSink.bind` (no `output=` each turn).
+
+**Host cancel:** one `threading.Event` on the output sink
+(`ensure_turn_cancel` / `host_cancel_requested` in `turns/host_cancel.py`) —
+tools (console `cancel_requested`), orchestrator/gather, and stream guards all
+read that same Event. Do not invent a second cancel channel.
+
+**Cloud “infinite” scale:** more Fargate tasks (fleet), not unbound in-process
+concurrency or a new `chat` API — see notes `#fargate`.
+
 ## Hard boundary (enforced by tests)
 
 - **No `import interactive_shell` anywhere under `agent_harness/`.** This is the whole
@@ -144,9 +181,10 @@ agent = build_agent(config)
 Action (`turns/action_driver.py::_build_action_agent`) and evidence
 (`turns/evidence_driver.py::_build_evidence_agent`) assemble an
 ``AgentConfig`` and call ``build_agent``. The gateway turn path does not
-construct a persistent ``Agent`` — it builds a fresh ``HeadlessAgent`` per turn with
-:class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`
-from the live chat session. When ``Agent.__init__``'s signature changes,
+construct a persistent ``core.agent.Agent`` — gateway chat reuses one
+``HeadlessAgent`` per logical session via ``SessionAgentPool`` (each turn
+``bind_turn`` + live ``DefaultToolProvider`` from the chat session). When
+``Agent.__init__``'s signature changes,
 ``agent_builder.py`` is the single edit site for harness surfaces that call
 ``build_agent``.
 
@@ -199,11 +237,64 @@ composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
 `run()` (seed calls, evidence collection, duplicate detection, stagnation
 handling). It is still the tool-calling shape — composition, not a forked loop.
 
+## Canonical narrative (construct once → many turns)
+
+The technology is already object-shaped. Prefer this story in docs, samples,
+and new call sites — do **not** invent a second top-level free function that
+dumps the turn stack, and do **not** rebuild a headless agent on every message
+for the same logical session.
+
+**Goal A — host API shape**
+
+```python
+from bootstrap.process import EMBEDDED_PROFILE, configure_process
+from core.agent_harness import AgentSession
+
+configure_process(EMBEDDED_PROFILE)   # adapters / investigation runner
+session = AgentSession.start()        # construct once (session + default agent)
+result = session.chat("…")            # turn 1
+result = session.chat("…")            # turn 2 — same attached agent
+report = session.investigate({…})     # Path-2 verb (separate stage machine)
+```
+
+**Goal B — one agent per logical session (or scheduled loop)**
+
+| Lifetime | Construct | Then |
+|----------|-----------|------|
+| Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds outer sink via `LiveOutputSink.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
+| Embedder / script | `AgentSession.start()` or `attach_agent(HeadlessAgent…)` once | repeated `chat` / `dispatch` |
+| Scheduled loop | Prefer one agent for the loop’s lifetime when multi-turn; `run_headless_turn` is OK for true one-shot digests | do not treat one-shot as the multi-turn pattern |
+| Interactive shell | TTY `ChatDispatcher` bound for the REPL lifetime (not `HeadlessAgent`) | `AgentSession.chat` per submission |
+
+Same-session turns must not overlap on one pooled agent (gateway holds a
+per-session lock). Different sessions stay concurrent under the capacity gate.
+
+| Name | Use |
+|------|-----|
+| **`AgentSession`** + **`chat` / `investigate`** | **Public host API** — prefer in all new code |
+| **`HeadlessAgent`** + **`dispatch`** | Non-TTY `ChatDispatcher` (ports object); gateway / embedders / tests |
+| **`SessionAgentPool`** | Gateway: one headless agent per logical session across turns |
+| **`build_default_headless_agent`** | Factory for the standard port stack when a surface supplies its own sink |
+| **`run_headless_turn`** | One-shot convenience for scheduler digests — not the multi-turn pattern |
+| **`dispatch_chat_turn`** | **Internal** seam over `run_turn` — adapters only |
+
+There is no `dispatch_message_to_headless_agent` — that free-function dump was
+replaced by `HeadlessAgent.dispatch` / `AgentSession.chat`.
+
+**Scaling is a separate track** from this narrative: local concurrency
+(`TurnConcurrencyGate` / transport pools / `OPENSRE_SIZE_PROFILE`) and cloud
+Fargate scale-out (spin more tasks; same API per task) sit *around*
+`chat`/`investigate`. Construct-once-per-session is the reuse story;
+process/task scale-out is deploy. Do not redesign the host API to “enable
+scaling.” See `opensre-notes/agent-session-api-scaling-aug2026.md` (#fargate).
+
 ## Four hosts, one AgentSession API
 
 **Public host contract:** :class:`~core.agent_harness.harness.AgentSession`
-with ``chat`` and ``investigate``. Compatibility aliases:
-``AgentHarness`` / ``dispatch_message`` / ``HarnessConfig``.
+with ``chat`` and ``investigate``. One name per concept — the former
+``AgentHarness`` / ``HarnessConfig`` / ``HarnessStartupResult`` /
+``dispatch_message`` aliases are deleted, pinned by
+``tests/core/agent_harness/test_agent_session_api.py``.
 
 **Internal chat seam:** adapters build
 :class:`~core.agent_harness.turns.chat_api.ChatTurnBindings`, then call

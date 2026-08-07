@@ -22,10 +22,11 @@ Driving the agent from Python instead of the CLI::
 
     configure_process(EMBEDDED_PROFILE)
 
-    session = AgentSession.start()
+    session = AgentSession.start()  # one agent for this logical session
     result = session.chat("why is checkout-api slow?")
     if result.answered:
         print(result.primary_response_text)
+    follow = session.chat("what should we check next?")  # same agent, next turn
 
     report = session.investigate({"alert_name": "HighLatency"})
     print(report.report)
@@ -42,9 +43,14 @@ process.
 ``result.answered`` before trusting the text — on a failed turn (e.g. the LLM
 provider is unreachable) the error message itself lands in
 ``primary_response_text``. Surfaces that need their own ports — a live gateway
-sink, a REPL console — build the agent with
-``core.agent_harness.build_default_headless_agent`` and call ``attach_agent``
-instead. ``AgentHarness`` / ``dispatch_message`` remain compatibility aliases.
+sink, a REPL console — build a ``HeadlessAgent`` (or
+``build_default_headless_agent``) and call ``attach_agent``, then ``chat``.
+
+Canonical story (Goal A + B): construct **one** agent per logical session
+(or scheduled loop), then many ``chat`` / ``investigate`` turns — do not
+rebuild every message. Gateway does this via ``SessionAgentPool`` +
+``bind_turn``. There is no ``dispatch_message_to_headless_agent`` free
+function, and no ``AgentHarness`` alias — ``AgentSession`` is the only name.
 """
 
 from __future__ import annotations

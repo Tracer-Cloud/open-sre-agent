@@ -124,7 +124,14 @@ cannot inherit that session.
 
 ## Capacity (process gate vs transport pools)
 
-Two different limits — do not conflate them:
+**Cloud scale-out** (“infinite” via new Fargate tasks) is a **third** layer
+above these two: each task is one gateway process with its own gate; raise
+fleet size / workers when saturated — do not unbound the in-process gate or
+redesign `AgentSession.chat`. Narrative:
+`opensre-notes/agent-session-api-scaling-aug2026.md` (#fargate). Infra topology:
+`opensre-notes/silo-aws.html` / scalable-silos notes.
+
+Two different **in-process** limits — do not conflate them:
 
 | Layer | Mechanism | Behavior when full |
 |-------|-----------|-------------------|
@@ -148,6 +155,25 @@ POST /investigate + InvestigationWorker ──► AgentSession.investigate (Path
   investigations are capped by `OPENSRE_SIZE_PROFILE`. Analytics: chat uses
   `gateway_turn_*` with `surface` ∈ {slack,telegram,discord}; investigate uses
   separate `investigation_*` events (no capacity-reject event yet).
+
+## Agent lifetime (Goal B)
+
+Construct **one** `HeadlessAgent` per logical chat session
+(`SessionAgentPool`), then many turns. Each inbound message:
+
+1. `LiveOutputSink.bind(outer_gateway_sink)` — stable live sink on the agent;
+   outer transport sink changes per turn.
+2. `bind_turn(session=…, accounting=…, console=…, tool_hooks=…)` — session /
+   cancel / approvals. Do **not** pass `output=` here unless replacing the
+   `OutputSink` object itself (then `OutputBindable` ports, e.g. reasoning,
+   must follow).
+3. `AgentSession.chat` → `dispatch`.
+
+Do **not** build a fresh headless agent on every message. Same-session turns
+serialize on the pool’s per-session lock; different sessions stay concurrent
+under the capacity gate. Multi-turn scheduled loops should keep one agent for
+the loop; true one-shot digests may use `AgentSession.run_headless_turn`.
+Narrative SoT: `opensre-notes/agent-session-api-scaling-aug2026.md`.
 
 ## Host parity (channels)
 

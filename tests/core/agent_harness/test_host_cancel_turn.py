@@ -50,9 +50,11 @@ class _CancelSink:
 
 
 def test_host_cancel_requested_reads_sink_event() -> None:
+    from core.agent_harness.turns.host_cancel import ensure_turn_cancel
+
     sink = _CancelSink()
     assert host_cancel_requested(sink) is False
-    sink.turn_cancel.set()
+    ensure_turn_cancel(sink).set()
     assert host_cancel_requested(sink) is True
     assert host_cancel_requested(None) is False
 

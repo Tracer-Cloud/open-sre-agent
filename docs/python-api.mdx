@@ -55,14 +55,6 @@ Always check `result.answered` before trusting chat text: when a turn fails (for
 example the LLM provider is unreachable), the error message itself lands in
 `result.primary_response_text`.
 
-### Compatibility aliases
-
-| Prefer | Alias (still works) |
-| --- | --- |
-| `AgentSession` | `AgentHarness` |
-| `SessionConfig` | `HarnessConfig` |
-| `session.chat(...)` | `session.dispatch_message(...)` |
-
 ### Internal seams (not for hosts)
 
 Chat hosts terminate at `dispatch_chat_turn` → `run_turn`. Investigation

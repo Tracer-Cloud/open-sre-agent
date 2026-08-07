@@ -5,17 +5,19 @@ One Event per turn (``sink.turn_cancel``). Soft timeout and ``/stop``
 it. :class:`GatewayTurnHandler` binds this wrapper so tools and ReAct see
 ``cancel_requested`` like the interactive shell's ``StreamingConsole``.
 
-See also ``core.agent_harness.turns.host_cancel`` for the orchestrator /
-gather side of the same Event.
+The Event itself is created/attached by
+:func:`core.agent_harness.turns.host_cancel.ensure_turn_cancel` — re-exported
+here so transport call sites keep a stable import path.
 """
 
 from __future__ import annotations
 
-import contextlib
 import threading
 from typing import Any
 
 from rich.console import Console
+
+from core.agent_harness.turns.host_cancel import ensure_turn_cancel
 
 # Set on the wrapper itself; everything else is proxied to the wrapped console.
 _OWN_ATTRIBUTES = frozenset({"_output", "_cancel_event"})
@@ -52,20 +54,6 @@ class CancelConsole:
             super().__setattr__(name, value)
             return
         setattr(self._output, name, value)
-
-
-def ensure_turn_cancel(sink: Any) -> threading.Event:
-    """Return the Event on ``sink.turn_cancel``, creating one when missing."""
-    existing = getattr(sink, "turn_cancel", None)
-    if isinstance(existing, threading.Event):
-        return existing
-    event = threading.Event()
-    # Protocol sinks may reject dynamic attrs; the handler still holds
-    # ``event`` for CancelConsole, and transports that own the concrete
-    # sink set ``turn_cancel`` before calling the handler.
-    with contextlib.suppress(Exception):
-        sink.turn_cancel = event
-    return event
 
 
 __all__ = ["CancelConsole", "ensure_turn_cancel"]

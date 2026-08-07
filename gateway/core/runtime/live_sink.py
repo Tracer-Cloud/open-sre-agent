@@ -33,6 +33,20 @@ class LiveOutputSink:
         """Currently bound transport sink, if any."""
         return self._inner
 
+    @property
+    def turn_cancel(self) -> threading.Event | None:
+        """Same cancel Event as the bound transport sink (one signal, many readers).
+
+        Explicit (not only ``__getattr__``) so
+        :func:`~core.agent_harness.turns.host_cancel.host_cancel_requested` and
+        the stream guard see cancel without depending on attribute forwarding.
+        """
+        inner = self._inner
+        if inner is None:
+            return None
+        cancel = getattr(inner, "turn_cancel", None)
+        return cancel if isinstance(cancel, threading.Event) else None
+
     def _require(self) -> GatewaySink:
         inner = self._inner
         if inner is None:
@@ -69,8 +83,8 @@ class LiveOutputSink:
 
     def _stop_chunks_on_cancel(self, chunks: Iterable[str]) -> Iterator[str]:
         """Stop draining the LLM stream when the host soft-timeout Event fires."""
-        cancel = getattr(self._inner, "turn_cancel", None) if self._inner is not None else None
         for chunk in chunks:
+            cancel = self.turn_cancel
             if isinstance(cancel, threading.Event) and cancel.is_set():
                 return
             yield chunk

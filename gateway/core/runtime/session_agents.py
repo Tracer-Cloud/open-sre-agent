@@ -1,7 +1,9 @@
 """Session-scoped :class:`HeadlessAgent` pool for the gateway turn handler.
 
 Keeps agent construction out of :class:`GatewayTurnHandler` so the handler
-stays a thin dispatch/finalize orchestrator.
+stays a thin dispatch/finalize orchestrator. Construction goes through
+:func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`
+once per session — not a second port-wiring stack (Goal B / narrative layers).
 """
 
 from __future__ import annotations

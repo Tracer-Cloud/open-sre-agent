@@ -6,6 +6,12 @@ and a profile cannot invent a different sequence.
 
 Does **not** configure gateway or CLI logging — that stays with the surface
 composition root (``GatewayManager.configure_logging``, CLI stderr).
+
+Does **not** construct :class:`~core.agent_harness.turns.headless_dispatch.HeadlessAgent`
+or run turns — that is ``build_default_headless_agent`` /
+:class:`~core.agent_harness.harness.AgentSession` after boot. Bootstrap and
+headless construction are two layers of one narrative, not duplicated stacks
+(see ``opensre-notes/agent-session-api-scaling-aug2026.md``).
 """
 
 from __future__ import annotations

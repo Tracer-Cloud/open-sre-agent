@@ -161,10 +161,10 @@ opensre hermes watch
 **From Python** — drive the agent in-process from your own code (source checkout required):
 
 ```python
-from core.agent_harness import AgentHarness
+from core.agent_harness import AgentSession
 
-harness = AgentHarness.start()
-result = harness.dispatch_message("why is checkout-api slow?")
+session = AgentSession.start()
+result = session.chat("why is checkout-api slow?")
 if result.answered:
     print(result.primary_response_text)
 ```

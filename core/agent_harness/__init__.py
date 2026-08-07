@@ -18,11 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.agent_harness.harness import (
-        AgentHarness,
         AgentSession,
         ChatDispatcher,
-        HarnessConfig,
-        HarnessStartupResult,
         SessionConfig,
         SessionStartupResult,
     )
@@ -49,11 +46,8 @@ if TYPE_CHECKING:
 # import graph. This keeps interactive-shell boot cheap.
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "AgentSession": ("core.agent_harness.harness", "AgentSession"),
-    "AgentHarness": ("core.agent_harness.harness", "AgentHarness"),
     "SessionConfig": ("core.agent_harness.harness", "SessionConfig"),
-    "HarnessConfig": ("core.agent_harness.harness", "HarnessConfig"),
     "SessionStartupResult": ("core.agent_harness.harness", "SessionStartupResult"),
-    "HarnessStartupResult": ("core.agent_harness.harness", "HarnessStartupResult"),
     "ChatDispatcher": ("core.agent_harness.harness", "ChatDispatcher"),
     "InvestigationResult": ("core.agent_harness.investigation_api", "InvestigationResult"),
     "TurnResult": ("core.agent_harness.turns.turn_results", "TurnResult"),
@@ -102,15 +96,12 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "ActionTurnRunner",
-    "AgentHarness",
     "AgentRuntimeRequest",
     "AgentSession",
     "BufferOutputSink",
     "ChatDispatcher",
     "ChatTurnBindings",
     "DefaultPromptContextProvider",
-    "HarnessConfig",
-    "HarnessStartupResult",
     "HeadlessAgent",
     "InvestigationResult",
     "SessionConfig",

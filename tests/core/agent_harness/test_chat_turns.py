@@ -1,10 +1,10 @@
-"""Characterization tests for ``AgentHarness.dispatch_message``."""
+"""Characterization tests for ``AgentSession.chat``."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.turns.headless_dispatch import (
     HeadlessAgent,
     NullToolProvider,
@@ -28,17 +28,17 @@ def _empty_action() -> ToolCallingTurnResult:
     )
 
 
-def test_dispatch_message_requires_attached_agent() -> None:
-    harness = AgentHarness(HarnessConfig(load_env=False, open_storage=False))
+def test_chat_requires_attached_agent() -> None:
+    harness = AgentSession(SessionConfig(load_env=False, open_storage=False))
     try:
-        harness.dispatch_message("hi")
+        harness.chat("hi")
     except RuntimeError as exc:
         assert "attach_agent" in str(exc)
     else:
         raise AssertionError("expected RuntimeError")
 
 
-def test_dispatch_message_reuses_attached_agent(monkeypatch: Any) -> None:
+def test_chat_reuses_attached_agent(monkeypatch: Any) -> None:
     calls: list[str] = []
 
     class _Agent:
@@ -51,10 +51,10 @@ def test_dispatch_message_reuses_attached_agent(monkeypatch: Any) -> None:
                 llm_run=object(),
             )
 
-    harness = AgentHarness(HarnessConfig(load_env=False))
+    harness = AgentSession(SessionConfig(load_env=False))
     harness.attach_agent(_Agent())  # type: ignore[arg-type]
-    first = harness.dispatch_message("one")
-    second = harness.dispatch_message("two")
+    first = harness.chat("one")
+    second = harness.chat("two")
 
     assert calls == ["one", "two"]
     assert first.assistant_response_text == "ok:one"

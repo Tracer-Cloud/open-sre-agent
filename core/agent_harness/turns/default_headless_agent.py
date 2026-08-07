@@ -1,7 +1,15 @@
 """Build a :class:`HeadlessAgent` with the standard default port stack.
 
-Gateway, scheduled digests, and other headless surfaces share this wiring so
-tool/prompt/reasoning defaults stay aligned.
+**This is the single headless construction seam.** Gateway
+``SessionAgentPool``, ``AgentSession.start``, and ``AgentSession.run_headless_turn``
+all call here — they are not parallel stacks. Surfaces pass host-specific kwargs
+(``output``, ``slash_ports_factory``, ``subprocess_presenter_factory``, …);
+they must not re-assemble ``DefaultToolProvider`` / reasoning / accounting by
+hand.
+
+Process boot (``configure_process``) is a **different layer** — adapters and
+env — and does not build agents. Narrative:
+``opensre-notes/agent-session-api-scaling-aug2026.md`` (§ Bootstrap vs HeadlessAgent).
 """
 
 from __future__ import annotations
