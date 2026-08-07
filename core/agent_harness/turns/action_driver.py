@@ -63,16 +63,46 @@ log = logging.getLogger(__name__)
 # turn (oracle 202: model finished /health + /integrations list, then repeated).
 _DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
 
+# Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
+_ActionCallFingerprint = tuple[Any, ...]
 
-def _action_call_fingerprint(request: ToolExecutionRequest) -> tuple[str, str]:
-    """Stable (name, args) key for duplicate suppression within one action turn."""
+
+def _coerce_fingerprint_quiet(value: Any) -> bool:
+    """Match ``shell_run`` quiet coercion so retries compare equal."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _action_call_fingerprint(request: ToolExecutionRequest) -> _ActionCallFingerprint:
+    """Stable identity for duplicate suppression within one action turn.
+
+    Uses schema fields for the two guarded tools — no ``json.dumps`` on the
+    per-tool-call path (see AGENTS.md Performance).
+    """
+    name = request.tool_call.name
     args = public_tool_input(request.arguments)
     if not isinstance(args, dict):
         args = dict(request.arguments)
-    return (
-        request.tool_call.name,
-        json.dumps(args, sort_keys=True, default=str, separators=(",", ":")),
-    )
+
+    if name == "slash_invoke":
+        command = str(args.get("command", ""))
+        raw = args.get("args")
+        argv = tuple(str(item) for item in raw) if isinstance(raw, (list, tuple)) else ()
+        return (name, command, argv)
+
+    if name == "shell_run":
+        return (
+            name,
+            str(args.get("command", "")),
+            _coerce_fingerprint_quiet(args.get("quiet", False)),
+        )
+
+    # Guarded set is only slash/shell today; keep a cheap fallback if it grows.
+    items = tuple(sorted((str(key), repr(value)) for key, value in args.items()))
+    return (name, items)
 
 
 def with_duplicate_action_call_guard(
@@ -84,7 +114,7 @@ def with_duplicate_action_call_guard(
     (gateway approvals, etc.). Failures are not remembered, so a retry after an
     error still runs.
     """
-    succeeded: set[tuple[str, str]] = set()
+    succeeded: set[_ActionCallFingerprint] = set()
     base_before = base.before_tool_call if base is not None else None
     base_after = base.after_tool_call if base is not None else None
     base_update = base.on_tool_update if base is not None else None

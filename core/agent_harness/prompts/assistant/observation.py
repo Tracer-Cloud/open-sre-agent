@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.assistant.text import (
-    DATABASE_QUERY_HANDOFF_GUIDANCE,
-    HANDOFF_GUIDANCE,
-)
+from core.agent_harness.prompts.assistant.text import HANDOFF_GUIDANCE
+
+# Prefix keys in ``HANDOFF_GUIDANCE`` (trailing ``:``) match any tag with that prefix.
+_HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = ("database_query:",)
 
 
 def _guidance_for_handoff_tag(tag: str) -> str | None:
     """Resolve exact handoff tags, then known prefixes (e.g. ``database_query:``)."""
     if tag in HANDOFF_GUIDANCE:
         return HANDOFF_GUIDANCE[tag]
-    if tag.startswith("database_query:"):
-        return DATABASE_QUERY_HANDOFF_GUIDANCE
+    for prefix in _HANDOFF_GUIDANCE_PREFIXES:
+        if tag.startswith(prefix):
+            return HANDOFF_GUIDANCE.get(prefix)
     return None
 
 
