@@ -53,6 +53,9 @@ class SlackOutputSink:
         # Per-turn tool-execution hooks (e.g. the Block Kit approval gate),
         # read duck-typed by GatewayTurnHandler when building the agent.
         self.tool_hooks = tool_hooks
+        # Set per turn by this transport's dispatcher; the turn handler reads it
+        # to give tools a cooperative cancel signal on soft timeout or stop.
+        self.turn_cancel: threading.Event | None = None
         self._client = client
         self._channel_id = channel_id
         self._thread_ts = thread_ts
@@ -100,6 +103,7 @@ class SlackOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
         _ = (label, suppress_if_starts_with)
         parts: list[str] = []
@@ -113,6 +117,10 @@ class SlackOutputSink:
             if now - self._last_update >= self._update_interval:
                 self._edit_preview("".join(parts))
         text = "".join(parts)
+        if defer_want_me_to_closer:
+            # Preview may show a drifted closer; finish_streamed_response
+            # publishes the canonical rewrite after gather normalize.
+            return text
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
@@ -121,6 +129,9 @@ class SlackOutputSink:
 
     def finalize(self, text: str) -> None:
         self._finalize(text)
+
+    def finish_streamed_response(self, text: str) -> None:
+        self._finalize(text or EMPTY_RESPONSE_MESSAGE)
 
     def _set_status(self, text: str) -> None:
         status = normalize_gateway_status(text)

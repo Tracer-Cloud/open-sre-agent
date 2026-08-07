@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from core.agent_harness.session import SessionCore, SessionManager
 from core.agent_harness.session.integration_resolution import has_resolved_integrations
+from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.session.gateway_chat_context import inject_gateway_chat_context
 
 if TYPE_CHECKING:
@@ -37,13 +38,14 @@ def _ensure_integrations(session: SessionCore) -> SessionCore:
 
 
 def _inject_chat_context(session: SessionCore, *, chat_id: str, platform: str = "") -> SessionCore:
-    """Attach per-turn gateway chat metadata to the session's integration cache."""
+    """Attach per-turn gateway chat metadata and host capability policy."""
     _ensure_integrations(session)
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
         chat_id,
         platform,
     )
+    ensure_gateway_capability_policy(session)
     return session
 
 
@@ -61,6 +63,44 @@ class SessionResolver:
         self._manager = manager or SessionManager()
         self._platform = platform
 
+    def _lookup_or_adopt_session_id(
+        self,
+        *,
+        user_id: str,
+        principal: Principal | None,
+        actor: Actor | str | None,
+    ) -> str | None:
+        """Scoped binding, or adopt a same-document legacy empty-id row once.
+
+        Adoption is single-use (legacy row removed) so a second actor in the
+        same conversation cannot inherit the same persisted session.
+        """
+        existing = self._bindings.get_session_id(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=principal,
+            actor=actor,
+        )
+        if existing:
+            return existing
+        if principal is None or actor is None:
+            return None
+        legacy = self._bindings.adopt_unscoped_binding(
+            platform=self._platform,
+            chat_id=user_id,
+            principal=principal,
+            actor=actor,
+        )
+        if legacy:
+            logger.info(
+                "[gateway] adopted legacy %s binding conversation=%s → principal=%s actor=%s",
+                self._platform,
+                user_id,
+                principal.id,
+                actor.id if hasattr(actor, "id") else actor,
+            )
+        return legacy
+
     def resolve(
         self,
         *,
@@ -71,13 +111,11 @@ class SessionResolver:
     ) -> SessionCore:
         """Return a hydrated session for the platform conversation key ``user_id``.
 
-        Slack team turns pass an org ``principal`` and Slack ``actor``. Other
-        surfaces omit them and keep main-branch binding behavior (legacy empty
-        principal/actor ids).
+        Chat transports pass an org ``principal`` and platform ``actor``. Omitting
+        them keeps legacy empty principal/actor binding keys (CLI / pre-scope rows).
         """
-        existing = self._bindings.get_session_id(
-            platform=self._platform,
-            chat_id=user_id,
+        existing = self._lookup_or_adopt_session_id(
+            user_id=user_id,
             principal=principal,
             actor=actor,
         )
@@ -125,9 +163,8 @@ class SessionResolver:
         """Flush the current session file and start a new binding."""
         from core.domain.memory import gateway_memory_enabled
 
-        existing = self._bindings.get_session_id(
-            platform=self._platform,
-            chat_id=user_id,
+        existing = self._lookup_or_adopt_session_id(
+            user_id=user_id,
             principal=principal,
             actor=actor,
         )

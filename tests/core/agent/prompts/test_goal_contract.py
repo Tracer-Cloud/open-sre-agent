@@ -90,7 +90,7 @@ def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
             setup_state=(
                 "--- Setup state ---\n"
                 "Integrations connected: slack\n"
-                "Scheduled tasks configured: 0\n"
+                "Scheduled tasks: 0 configured, 0 able to deliver\n"
                 "Last scheduled delivery: never run\n\n"
             ),
         )
@@ -103,7 +103,7 @@ def test_action_capacity_rule_is_wired_into_stable_system_prompt() -> None:
     assert "propose_scheduled_delivery" in stable
     # Facts stay CONTEXT; guidance stays STABLE.
     context = "".join(b.content for b in envelope.blocks if b.tier is PromptTier.CONTEXT)
-    assert "Scheduled tasks configured: 0" in context
+    assert "Scheduled tasks: 0 configured, 0 able to deliver" in context
     assert ACTION_SETUP_CAPACITY_SCHEDULE_RULE not in context
 
 
@@ -113,7 +113,9 @@ def test_goal_contract_does_not_belong_in_setup_state_facts() -> None:
 
     # Act
     facts = render_setup_state(
-        SetupSnapshot(integrations=("slack",), schedule_count=0, last_delivery_ok=None)
+        SetupSnapshot(
+            integrations=("slack",), schedule_count=0, deliverable_count=0, last_delivery_ok=None
+        )
     )
 
     # Assert

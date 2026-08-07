@@ -14,9 +14,9 @@ from typing import Any
 def test_start_returns_a_ready_harness() -> None:
     """One call: env resolved, session created, default agent attached."""
     # Arrange / Act
-    from core.agent_harness.harness import AgentHarness
+    from core.agent_harness.harness import AgentSession
 
-    harness = AgentHarness.start()
+    harness = AgentSession.start()
 
     # Assert: dispatch works without any further wiring.
     assert harness.agent is not None
@@ -25,10 +25,10 @@ def test_start_returns_a_ready_harness() -> None:
 def test_start_accepts_a_config_for_callers_that_need_one() -> None:
     """Surfaces that resume a session must still be able to pass config."""
     # Arrange
-    from core.agent_harness.harness import AgentHarness, HarnessConfig
+    from core.agent_harness.harness import AgentSession, SessionConfig
 
     # Act
-    harness = AgentHarness.start(HarnessConfig())
+    harness = AgentSession.start(SessionConfig())
 
     # Assert
     assert harness.agent is not None
@@ -37,9 +37,9 @@ def test_start_accepts_a_config_for_callers_that_need_one() -> None:
 def test_started_harness_dispatches_without_extra_wiring(monkeypatch: Any) -> None:
     """The documented two-liner must actually run end to end."""
     # Arrange
-    from core.agent_harness.harness import AgentHarness
+    from core.agent_harness.harness import AgentSession
 
-    harness = AgentHarness.start()
+    harness = AgentSession.start()
     captured: list[str] = []
 
     def _fake_dispatch(message: str) -> Any:
@@ -49,7 +49,7 @@ def test_started_harness_dispatches_without_extra_wiring(monkeypatch: Any) -> No
     monkeypatch.setattr(harness.agent, "dispatch", _fake_dispatch)
 
     # Act
-    harness.dispatch_message("why is checkout-api slow?")
+    harness.chat("why is checkout-api slow?")
 
     # Assert
     assert captured == ["why is checkout-api slow?"]
@@ -57,9 +57,9 @@ def test_started_harness_dispatches_without_extra_wiring(monkeypatch: Any) -> No
 
 def _headless_config(**overrides: Any) -> Any:
     """A config that touches no env, no storage, no integrations."""
-    from core.agent_harness.harness import HarnessConfig
+    from core.agent_harness.harness import SessionConfig
 
-    return HarnessConfig(
+    return SessionConfig(
         load_env=False,
         hydrate_integrations=False,
         persistent_tasks=False,
@@ -77,7 +77,7 @@ def test_configured_prompts_reach_the_agent() -> None:
     ``_prompts`` pins the wiring directly; there is no public accessor yet.
     """
     # Arrange
-    from core.agent_harness.harness import AgentHarness
+    from core.agent_harness.harness import AgentSession
 
     class _CallerPrompts:
         """Stands in for a caller's own grounding-context provider."""
@@ -85,7 +85,7 @@ def test_configured_prompts_reach_the_agent() -> None:
     supplied = _CallerPrompts()
 
     # Act
-    harness = AgentHarness.start(_headless_config(prompts=supplied))
+    harness = AgentSession.start(_headless_config(prompts=supplied))
 
     # Assert
     assert harness.agent is not None
@@ -95,10 +95,10 @@ def test_configured_prompts_reach_the_agent() -> None:
 def test_omitting_prompts_keeps_the_built_in_context() -> None:
     """No provider configured must still ground the agent, not leave it bare."""
     # Arrange
-    from core.agent_harness.harness import AgentHarness
+    from core.agent_harness.harness import AgentSession
 
     # Act
-    harness = AgentHarness.start(_headless_config())
+    harness = AgentSession.start(_headless_config())
 
     # Assert
     assert harness.agent is not None
@@ -137,7 +137,7 @@ def test_a_falsy_prompts_provider_is_still_used() -> None:
     one — the same quiet substitution this seam already suffered once.
     """
     # Arrange
-    from core.agent_harness.harness import AgentHarness
+    from core.agent_harness.harness import AgentSession
 
     class _FalsyPrompts:
         def __bool__(self) -> bool:
@@ -146,7 +146,7 @@ def test_a_falsy_prompts_provider_is_still_used() -> None:
     supplied = _FalsyPrompts()
 
     # Act
-    harness = AgentHarness.start(_headless_config(prompts=supplied))
+    harness = AgentSession.start(_headless_config(prompts=supplied))
 
     # Assert
     assert harness.agent is not None

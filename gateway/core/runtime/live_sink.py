@@ -7,7 +7,8 @@ Transport sinks are per-turn, so this holder stays on the agent and
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import threading
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from gateway.core.runtime.sink_protocol import GatewaySink
@@ -31,6 +32,20 @@ class LiveOutputSink:
     def bound(self) -> GatewaySink | None:
         """Currently bound transport sink, if any."""
         return self._inner
+
+    @property
+    def turn_cancel(self) -> threading.Event | None:
+        """Same cancel Event as the bound transport sink (one signal, many readers).
+
+        Explicit (not only ``__getattr__``) so
+        :func:`~core.agent_harness.turns.host_cancel.host_cancel_requested` and
+        the stream guard see cancel without depending on attribute forwarding.
+        """
+        inner = self._inner
+        if inner is None:
+            return None
+        cancel = getattr(inner, "turn_cancel", None)
+        return cancel if isinstance(cancel, threading.Event) else None
 
     def _require(self) -> GatewaySink:
         inner = self._inner
@@ -57,15 +72,32 @@ class LiveOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
         return self._require().stream(
             label=label,
-            chunks=chunks,
+            chunks=self._stop_chunks_on_cancel(chunks),
             suppress_if_starts_with=suppress_if_starts_with,
+            defer_want_me_to_closer=defer_want_me_to_closer,
         )
+
+    def _stop_chunks_on_cancel(self, chunks: Iterable[str]) -> Iterator[str]:
+        """Stop draining the LLM stream when the host soft-timeout Event fires."""
+        for chunk in chunks:
+            cancel = self.turn_cancel
+            if isinstance(cancel, threading.Event) and cancel.is_set():
+                return
+            yield chunk
 
     def finalize(self, text: str) -> None:
         self._require().finalize(text)
+
+    def finish_streamed_response(self, text: str) -> None:
+        finish = getattr(self._require(), "finish_streamed_response", None)
+        if callable(finish):
+            finish(text)
+            return
+        self.finalize(text)
 
     def set_tool_status(self, status: str) -> None:
         set_status = getattr(self._require(), "set_tool_status", None)

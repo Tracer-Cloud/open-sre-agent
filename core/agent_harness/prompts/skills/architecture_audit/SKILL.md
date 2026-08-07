@@ -34,6 +34,20 @@ HARD RULES (violating any = failed turn):
   Budget: clone + ≤3 agent-scan shell_run + 4 heuristic shell passes + cleanup
   + save observations + final report.
 
+STEP LABELING RULES (UX) — this skill hides its shell output (quiet=true), so
+narrate the 9 steps of the compact sequence:
+- Before every step's tool calls, emit this exact header format as assistant
+  text in the SAME response as the tool calls, then one short status sentence:
+    ### [n/9] <step name>
+    <One-sentence status.>
+- Never start tool calls for a new step without its header.
+- After a step's tool results are in, state its outcome in one line (start it
+  with ✓ on success, ✗ plus what failed otherwise) before the next step's
+  header.
+- Use the step's own number as n and a short name (e.g. `### [2/9] Agent
+  scan`, `### [3/9] Import pass`), even when a step is skipped or trivial
+  (a ✓ line with no tool calls is fine); never renumber mid-run.
+
 Compact sequence:
 1) architecture_clone_repo(owner, repo, ref?)
    → workspace_root = <system-temp>/opensre/workspace

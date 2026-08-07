@@ -6,10 +6,10 @@ from dataclasses import dataclass
 
 from config.principal import Actor, Principal
 
-# The id a turn gets when it names no organization or no member: Telegram, the
-# local CLI, and every row written before scoping existed. Empty string rather
-# than None so it is a real key a lookup can match, and so a pre-scoping row
-# adopted from the old index still resolves for the surface that wrote it.
+# The id a turn gets when it names no organization or no member: the local CLI,
+# and every row written before scoping existed. Empty string rather than None so
+# it is a real key a lookup can match, and so a pre-scoping row adopted from the
+# old index still resolves for the surface that wrote it.
 #
 # It is deliberately not a valid organization or Slack user id, so an unscoped
 # lookup can never collide with a real one.

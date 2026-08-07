@@ -2,8 +2,8 @@
 
 Discord guild/DM turns attribute data to the silo organization
 (``ORGANIZATION_ID``) and key per-actor sessions by Discord user id —
-same border as Slack org + actor. Telegram/CLI stay unbound and must not import
-this module.
+same border as Slack/Telegram org + actor. CLI stays unbound and must not
+import this module; Telegram uses ``telegram.principal``.
 """
 
 from __future__ import annotations

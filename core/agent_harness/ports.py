@@ -42,8 +42,14 @@ class OutputSink(Protocol):
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        """Stream ``chunks`` to the surface under ``label`` and return the text."""
+        """Stream ``chunks`` to the surface under ``label`` and return the text.
+
+        When ``defer_want_me_to_closer`` is true, surfaces may hold the Want-me-to
+        closer until ``finish_streamed_response`` (optional sink method; gather
+        normalize path).
+        """
 
 
 @runtime_checkable
@@ -54,7 +60,7 @@ class SessionStore(Protocol):
     action driver, the three-path engine, and the gather loop touch.
     """
 
-    # --- turn-context snapshot fields (see core.agent_harness.turns.turn_snapshot.TurnSnapshotSource) ---
+    # --- turn-context snapshot fields ---
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 
@@ -79,6 +85,48 @@ class SessionStore(Protocol):
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append a record of an executed action/turn to the session log."""
+
+
+@runtime_checkable
+class SessionBindable(Protocol):
+    """Port that can retarget a session when the agent is reused across turns.
+
+    Pooled / multi-turn hosts call :meth:`bind_session` when
+    ``SessionManager.resolve`` returns a fresh session object for the same id.
+    Ports that ignore session identity need not implement this; ``HeadlessAgent``
+    only invokes it when the port structurally matches.
+    """
+
+    def bind_session(self, session: SessionStore) -> None:
+        """Point this port at ``session`` (same logical session, new object)."""
+
+
+@runtime_checkable
+class ConsoleBindable(Protocol):
+    """Tool port that can retarget the turn console (cancel / TTY observers).
+
+    Gateway binds a per-turn ``CancelConsole`` so ``cancel_requested`` tracks
+    the shared ``sink.turn_cancel`` Event for that message.
+    """
+
+    def bind_console(self, console: Any) -> None:
+        """Point tool UI / cancel probes at ``console`` for this turn."""
+
+
+@runtime_checkable
+class OutputBindable(Protocol):
+    """Port that holds an :class:`OutputSink` and can retarget it across turns.
+
+    ``HeadlessAgent.bind_turn(output=…)`` updates the agent's sink and must
+    retarget every port that cached the previous sink (e.g. reasoning error
+    rendering). Gateway usually keeps a stable ``LiveOutputSink`` and rebinds
+    the outer transport sink via ``LiveOutputSink.bind`` — that path does not
+    need ``bind_turn(output=)``. Hosts that swap the ``OutputSink`` object
+    itself must pass ``output=`` so :class:`OutputBindable` ports follow.
+    """
+
+    def bind_output(self, output: OutputSink) -> None:
+        """Point this port at ``output`` for the current turn."""
 
 
 @runtime_checkable
@@ -203,6 +251,9 @@ class AnswerRequest:
     # here, so naming it — even under ``TYPE_CHECKING`` — closes an import cycle
     # this repo's check rejects.
     turn_plan: Any = None
+    # Gather answers defer Want-me-to paint until the harness normalizes the
+    # closer (dual paste/integrations menus must not be what the user sees).
+    defer_want_me_to_closer: bool = False
 
 
 class StreamAnswerFn(Protocol):
@@ -248,6 +299,7 @@ __all__ = [
     "AnswerRequest",
     "StreamAnswerFn",
     "ConfirmFn",
+    "ConsoleBindable",
     "ErrorReporter",
     "EvidenceGatherer",
     "ExecuteActions",
@@ -255,6 +307,7 @@ __all__ = [
     "PromptContextProvider",
     "ReasoningClientProvider",
     "RunRecordFactory",
+    "SessionBindable",
     "SessionStore",
     "ToolEventObserver",
     "ToolProvider",

@@ -35,6 +35,9 @@ response_contract:
   must_contain_any:
   - database
   - slow
+  must_contain_all:
+  - Want me to
+  - investigat
   must_not_contain:
   - $ /
   - can't help

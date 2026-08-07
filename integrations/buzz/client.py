@@ -197,5 +197,59 @@ class BuzzClient:
             }
         return {"success": True, "error": "", "event_id": event_id}
 
+    def edit_message(self, *, event_id: str, content: str) -> dict[str, Any]:
+        """Edit a previously-sent message via ``buzz messages edit``.
+
+        Returns ``{"success": bool, "error": str}``. ``messages edit`` submits a
+        stored event (kind 40003) over the same HTTP path as ``send`` — unlike
+        ephemeral events (e.g. presence), it is not rejected over HTTP.
+        """
+        eid = event_id.strip()
+        if not eid:
+            return {"success": False, "error": "event_id is required"}
+        code, out, err = self._run(["messages", "edit", "--event", eid, "--content", content])
+        if code != _EXIT_OK:
+            return {
+                "success": False,
+                "error": _parse_stderr_error(err) or (out or "").strip() or f"exit {code}",
+            }
+        return {"success": True, "error": ""}
+
+    def get_feed(self, *, since: int, types: str = "mentions", limit: int = 50) -> dict[str, Any]:
+        """Fetch activity-feed events via ``buzz feed get``.
+
+        The relay filters server-side on ``#p: [my_pubkey]`` for ``types="mentions"``
+        across every channel in one call — no per-channel polling needed.
+        Returns ``{"success": bool, "error": str, "events": list[dict]}``.
+        """
+        args = [
+            "feed",
+            "get",
+            "--since",
+            str(since),
+            "--types",
+            types,
+            "--limit",
+            str(limit),
+        ]
+        code, out, err = self._run(args)
+        if code != _EXIT_OK:
+            return {
+                "success": False,
+                "error": _parse_stderr_error(err) or (out or "").strip() or f"exit {code}",
+                "events": [],
+            }
+        try:
+            payload = json.loads(out or "[]")
+        except json.JSONDecodeError:
+            return {"success": False, "error": "invalid JSON from buzz feed get", "events": []}
+        if not isinstance(payload, list):
+            return {
+                "success": False,
+                "error": "unexpected buzz feed get response shape",
+                "events": [],
+            }
+        return {"success": True, "error": "", "events": payload}
+
 
 __all__ = ["BuzzClient", "resolve_buzz_binary"]

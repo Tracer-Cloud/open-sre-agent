@@ -1,10 +1,10 @@
 """Compose one interactive-shell turn from its action/gather/answer adapters.
 
 Adapter-only: binds the shell's action-turn (``action_turn``), gather pass
-(``integration_tool_gathering``), and answer (``answer_turn``) adapters to the
-surface-agnostic ``run_turn`` engine. Each adapter owns its own binding; this
-file only composes them and attaches turn accounting. The injection contracts
-live in ``turn_seams``.
+(``integration_tool_gathering``), and answer (``answer_turn``) adapters, then
+calls the public host API (:meth:`AgentSession.chat`). Each adapter owns its
+own binding; this file only composes them and attaches turn accounting.
+The injection contracts live in ``turn_seams``.
 """
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ from dataclasses import dataclass
 
 from rich.console import Console
 
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.ports import AnswerRequest, OutputSink
-from core.agent_harness.turns.orchestrator import run_turn
+from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
@@ -97,6 +98,17 @@ class _ShellTurnBindings:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _ShellChatDispatcher:
+    """TTY adapter: satisfies :class:`ChatDispatcher` for :meth:`AgentSession.chat`."""
+
+    session: Session
+    bindings: ChatTurnBindings
+
+    def dispatch(self, message: str) -> TurnResult:
+        return dispatch_chat_turn(message, self.session, self.bindings)
+
+
 def execute_shell_turn(
     text: str,
     session: Session,
@@ -113,7 +125,7 @@ def execute_shell_turn(
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
-    """Execute one submitted interactive-shell turn.
+    """Execute one submitted interactive-shell turn via :meth:`AgentSession.chat`.
 
     The action driver, gather pass, and conversational assistant default to the
     shell adapters but are overridable via ``execute_actions`` / ``gather_evidence``
@@ -146,15 +158,21 @@ def execute_shell_turn(
         request_exit=request_exit,
         tool_hooks=tool_hooks,
     )
-    return run_turn(
-        text,
-        session,
+    chat_bindings = ChatTurnBindings(
         execute_actions=bindings.execute_actions,
         answer=bindings.answer_question,
         gather=bindings.gather_evidence,
         accounting=ShellTurnAccounting(session=session, text=text, recorder=recorder),
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        surface="interactive_shell",
+        output=resolved_output,
+    )
+    # Shell already owns env/session boot; do not reload env per turn.
+    agent_session = AgentSession(SessionConfig(load_env=False))
+    return agent_session.chat(
+        text,
+        agent=_ShellChatDispatcher(session=session, bindings=chat_bindings),
     )
 
 

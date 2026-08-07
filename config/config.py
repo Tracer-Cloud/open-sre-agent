@@ -305,12 +305,19 @@ def _llm_api_key_payload(provider: str) -> dict[str, str]:
 
 
 def _resolve_model_env(primary: str, default: str, legacy: str | None = None) -> str:
-    """Resolve a model id from primary env, optional legacy env, then *default*."""
-    if legacy:
-        raw = os.getenv(primary, os.getenv(legacy, default))
-    else:
-        raw = os.getenv(primary, default)
-    return (raw or "").strip() or default
+    """Resolve a model id from primary env, optional legacy env, then *default*.
+
+    An empty primary falls through to ``legacy``. Both ``bootstrap_opensre_env``
+    (exports known names as empty strings when unset) and a ``.env`` copied from
+    ``.env.example`` (blank tier entries per provider) make the primary name
+    present-but-empty, and ``os.getenv(primary, fallback)`` evaluates its
+    fallback only when the key is *absent* — leaving anyone who set just
+    ``<PROVIDER>_MODEL`` on the built-in default.
+    """
+    raw = os.getenv(primary, "").strip()
+    if not raw and legacy:
+        raw = os.getenv(legacy, "").strip()
+    return raw or default
 
 
 def _tiered_model_env_payload() -> dict[str, str]:

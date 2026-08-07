@@ -5,12 +5,19 @@ from __future__ import annotations
 import json
 import logging
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
-from gateway.transports.telegram.poller.parse_telegram_update import parse_update
-from gateway.transports.telegram.settings import TelegramInboundMessage
+from gateway.transports.telegram.poller.parse_telegram_update import (
+    parse_callback_query,
+    parse_update,
+)
+from gateway.transports.telegram.settings import (
+    TelegramCallbackQuery,
+    TelegramInboundMessage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +26,14 @@ _CONFLICT_ERROR_CODE = 409
 _DEFAULT_RETRY_SECONDS = 2.0
 _MAX_CONFLICT_BACKOFF_SECONDS = 30.0
 _WARNING_COOLDOWN_SECONDS = 60.0
+
+
+@dataclass(slots=True)
+class TelegramPollResult:
+    """One getUpdates batch split into DM messages and callback clicks."""
+
+    messages: list[TelegramInboundMessage] = field(default_factory=list)
+    callbacks: list[TelegramCallbackQuery] = field(default_factory=list)
 
 
 def _decode_telegram_response(response: httpx.Response) -> dict[str, Any]:
@@ -31,7 +46,7 @@ def _decode_telegram_response(response: httpx.Response) -> dict[str, Any]:
 
 
 class TelegramPoller:
-    """Poll Telegram getUpdates and yield normalized inbound messages."""
+    """Poll Telegram getUpdates and yield normalized inbound events."""
 
     def __init__(self, bot_token: str, *, timeout: int = 30) -> None:
         self._token = bot_token
@@ -40,31 +55,32 @@ class TelegramPoller:
         self._conflict_backoff_seconds = _DEFAULT_RETRY_SECONDS
         self._last_warning_monotonic = 0.0
 
-    def poll_once(self) -> list[TelegramInboundMessage]:
+    def poll_once(self) -> TelegramPollResult:
         url = _API.format(token=self._token)
         params: dict[str, str | int | list[str]] = {
             "timeout": self._timeout,
             "offset": self._offset + 1,
-            "allowed_updates": ["message"],
+            "allowed_updates": ["message", "callback_query"],
         }
         try:
             response = httpx.get(url, params=params, timeout=float(self._timeout + 5))
         except Exception as exc:
             self._log_transient("[telegram-gateway] getUpdates failed: %s", exc)
             time.sleep(_DEFAULT_RETRY_SECONDS)
-            return []
+            return TelegramPollResult()
 
         data = _decode_telegram_response(response)
         if not data.get("ok"):
             self._handle_poll_error(data=data, response=response)
-            return []
+            return TelegramPollResult()
 
         self._conflict_backoff_seconds = _DEFAULT_RETRY_SECONDS
         result = data.get("result")
         if not isinstance(result, list):
-            return []
+            return TelegramPollResult()
 
-        events: list[TelegramInboundMessage] = []
+        messages: list[TelegramInboundMessage] = []
+        callbacks: list[TelegramCallbackQuery] = []
         for raw in result:
             if not isinstance(raw, dict):
                 continue
@@ -72,8 +88,12 @@ class TelegramPoller:
             self._offset = max(self._offset, update_id)
             parsed = parse_update(raw)
             if parsed is not None:
-                events.append(parsed)
-        return events
+                messages.append(parsed)
+                continue
+            callback = parse_callback_query(raw)
+            if callback is not None:
+                callbacks.append(callback)
+        return TelegramPollResult(messages=messages, callbacks=callbacks)
 
     def _handle_poll_error(
         self,

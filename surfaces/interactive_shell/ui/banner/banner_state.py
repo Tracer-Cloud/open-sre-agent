@@ -87,6 +87,16 @@ def _count_loaded_skills() -> int:
         return 0
 
 
+def _count_scheduled_tasks() -> int:
+    """Return the number of persisted scheduled tasks. Never raises."""
+    try:
+        from platform.scheduler.store import list_tasks
+
+        return len(list_tasks())
+    except Exception:
+        return 0
+
+
 def _is_alert_listener_active() -> bool:
     """Return True if the alert listener is enabled in config. Never raises."""
     try:
@@ -140,10 +150,13 @@ def _build_ambient_right_column(session: object = None) -> Text:
 
     parts.append(Text("───", style=DIM))
 
-    # Skills — count of action-agent skills discovered by the harness.
+    # Skills and scheduled tasks.
     skills_line = Text(overflow="fold")
     skills_line.append("Skills", style=f"bold {BRAND}")
     skills_line.append(f" ({_count_loaded_skills()}) loaded into cyberdeck", style=SECONDARY)
+    skills_line.append("  ·  ", style=DIM)
+    skills_line.append("Scheduled tasks", style=f"bold {BRAND}")
+    skills_line.append(f" ({_count_scheduled_tasks()})", style=SECONDARY)
     parts.append(skills_line)
 
     # Session summary — only shown when /clear is used mid-session with history
@@ -164,6 +177,7 @@ __all__ = [
     "integration_display_name",
     "_build_ambient_right_column",
     "_count_loaded_skills",
+    "_count_scheduled_tasks",
     "_is_alert_listener_active",
     "_load_integration_health",
 ]

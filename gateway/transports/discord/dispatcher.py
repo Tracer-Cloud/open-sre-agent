@@ -13,12 +13,17 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.runtime.active_turns import (
+    USER_STOP_MESSAGE,
+    ActiveTurnCancels,
+    is_stop_command,
+)
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
 from gateway.transports.discord.approvals import DiscordApprovalPrompter
-from gateway.transports.discord.client import add_reaction, remove_reaction
+from gateway.transports.discord.client import add_reaction, remove_reaction, send_message
 from gateway.transports.discord.events import DiscordInboundMessage
 from gateway.transports.discord.output_sink import DiscordOutputSink
 from gateway.transports.discord.principal import PrincipalResolutionError, resolve_discord_scope
@@ -73,6 +78,7 @@ class DiscordTurnDispatcher:
         self._logger = logger
         self._bot_user_id = bot_user_id
         self._approvals = approvals or ApprovalBroker()
+        self._active_cancels = ActiveTurnCancels()
         self._attention = ThreadAttentionGate()
         self._conversation_locks: dict[str, _ConversationLock] = {}
         self._locks_guard = threading.Lock()
@@ -86,6 +92,15 @@ class DiscordTurnDispatcher:
         self._bot_user_id = bot_user_id
 
     def dispatch(self, inbound: DiscordInboundMessage) -> None:
+        # /stop must not wait on the per-conversation turn lock.
+        if is_stop_command(inbound.text):
+            if not self._active_cancels.request_stop(inbound.conversation_key):
+                send_message(
+                    channel_id=inbound.channel_id,
+                    content="Nothing running to stop.",
+                    bot_token=self._bot_token,
+                )
+            return
         try:
             scope = resolve_discord_scope(guild_id=inbound.guild_id, user_id=inbound.user_id)
         except PrincipalResolutionError:
@@ -269,13 +284,37 @@ class DiscordTurnDispatcher:
                     outcome_taken = True
                     return True
 
+            turn_cancel = threading.Event()
+            sink.turn_cancel = turn_cancel
+
             def _on_turn_timeout() -> None:
+                turn_cancel.set()
                 if not _claim_terminal_outcome():
                     return
                 try:
                     sink.finalize(_TURN_TIMEOUT_MESSAGE)
                 except Exception:
                     self._logger.debug("[discord-gateway] timeout finalize failed", exc_info=True)
+                remove_reaction(
+                    channel_id=inbound.channel_id,
+                    message_id=inbound.message_id,
+                    emoji=_WORKING_EMOJI,
+                    bot_token=self._bot_token,
+                )
+                add_reaction(
+                    channel_id=inbound.channel_id,
+                    message_id=inbound.message_id,
+                    emoji=_FAILED_EMOJI,
+                    bot_token=self._bot_token,
+                )
+
+            def _on_user_stop() -> None:
+                if not _claim_terminal_outcome():
+                    return
+                try:
+                    sink.finalize(USER_STOP_MESSAGE)
+                except Exception:
+                    self._logger.debug("[discord-gateway] user-stop finalize failed", exc_info=True)
                 remove_reaction(
                     channel_id=inbound.channel_id,
                     message_id=inbound.message_id,
@@ -310,10 +349,17 @@ class DiscordTurnDispatcher:
                     )
                     if ctx:
                         agent_text = f"{agent_text}\n\n{ctx}"
-                with bound_usage_context(
-                    surface=SURFACE_DISCORD,
-                    session_id=session.session_id,
-                    user_id=inbound.user_id or None,
+                with (
+                    self._active_cancels.track(
+                        inbound.conversation_key,
+                        turn_cancel,
+                        on_user_stop=_on_user_stop,
+                    ),
+                    bound_usage_context(
+                        surface=SURFACE_DISCORD,
+                        session_id=session.session_id,
+                        user_id=inbound.user_id or None,
+                    ),
                 ):
                     self._handler(agent_text, session, sink, self._logger)
             except Exception:

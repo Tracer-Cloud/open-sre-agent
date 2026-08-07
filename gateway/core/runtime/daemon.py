@@ -1,10 +1,13 @@
 """Background (daemon) lifecycle for the OpenSRE gateway process.
 
-The CLI and the interactive shell both drive the daemon through these helpers:
-a detached ``python -m surfaces.cli.gateway_entry`` child whose output is captured in
+Supervises a detached child process whose output is captured in
 ``~/.opensre/gateway/gateway.log`` and whose PID is tracked in ``gateway.pid``.
-The running process reports per-component state (web app, Telegram chat, task
+The running process reports per-component state (web app, chat transports, task
 scheduler) through ``components.json``.
+
+The caller supplies the child's ``argv``: each surface owns its own composition
+root, so this module names no entrypoint and stays free of any ``surfaces``
+dependency.
 """
 
 from __future__ import annotations
@@ -14,7 +17,6 @@ import json
 import os
 import signal
 import subprocess
-import sys
 import time
 from collections import deque
 from collections.abc import Sequence
@@ -39,10 +41,11 @@ def gateway_daemon_pid() -> int | None:
     return None
 
 
-def start_gateway_daemon(
-    *, startup_wait: float = 2.0, argv: Sequence[str] | None = None
-) -> tuple[bool, str]:
-    """Spawn the gateway as a detached background process.
+def start_gateway_daemon(*, argv: Sequence[str], startup_wait: float = 2.0) -> tuple[bool, str]:
+    """Spawn ``argv`` as a detached background gateway process.
+
+    ``argv`` is required: the surface starting the gateway owns which
+    composition root runs, so this module never names one.
 
     Returns ``(ok, message)``. Starting an already-running gateway is a no-op
     success; a child that dies during ``startup_wait`` is a failure and the
@@ -54,7 +57,7 @@ def start_gateway_daemon(
     GATEWAY_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with GATEWAY_LOG_FILE.open("ab") as log:
         process = subprocess.Popen(
-            argv or (sys.executable, "-m", "surfaces.cli.gateway_entry"),
+            argv,
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,

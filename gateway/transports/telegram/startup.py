@@ -1,4 +1,4 @@
-"""Telegram-specific gateway wiring.
+"""Start the Telegram chat worker for the gateway.
 
 Owns everything that is particular to the Telegram long-poll transport: loading
 Telegram settings and starting the background poller with the Telegram polling

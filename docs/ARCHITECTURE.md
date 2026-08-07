@@ -1,23 +1,24 @@
 # OpenSRE architecture
 
-How the OpenSRE codebase is structured: the seven first-party packages, what
+How the OpenSRE codebase is structured: the eight first-party packages, what
 each is responsible for, and which may depend on which. These dependency rules
 are CI-enforced (`make check-imports`), so they are real invariants rather than
 aspirations.
 
 ## The layer stack
 
-The packages sit in four tiers. **Higher tiers may import lower tiers; a lower
+The packages sit in five tiers. **Higher tiers may import lower tiers; a lower
 tier may never import a higher one.** Packages on the same tier are peers — the
 last column says whether peers may import each other.
 
 | Tier | Packages | May import | Must never import | Peer rule |
 | --- | --- | --- | --- | --- |
-| 1 (top) | `surfaces`, `gateway` | `tools`, `integrations`, `core`, `platform`, `config` | — | Independent: must not import each other. |
-| 2 | `tools` | `integrations`, `core`, `platform`, `config` | `surfaces`, `gateway` | May use an integration's client, so `integrations` effectively sits below it. |
-| 2 | `integrations` | `core`, `platform`, `config` | `tools`, `surfaces`, `gateway` | Must never import `tools`; stays reusable below the tool layer. |
-| 3 | `core`, `platform` | `config` | `surfaces`, `gateway`, `tools`, `integrations` | Siblings: **may** cross-import each other. |
-| 4 (bottom) | `config` | — (nothing first-party) | everything above | Independent — imports no other first-party package. |
+| 1 (top) | `surfaces`, `gateway` | `bootstrap`, `tools`, `integrations`, `core`, `platform`, `config` | — | Independent: must not import each other. |
+| 2 | `bootstrap` | `tools`, `integrations`, `core`, `platform`, `config` | `surfaces`, `gateway` | Composition root. The only package that may import `tools` **and** `integrations` together, because wiring needs both. |
+| 3 | `tools` | `core`, `platform`, `config` | `surfaces`, `gateway`, `bootstrap` | Peer of `integrations`: must not import it. Existing edges are listed as debt in `.importlinter.strict`. |
+| 3 | `integrations` | `core`, `platform`, `config` | `tools`, `surfaces`, `gateway`, `bootstrap` | Peer of `tools`: must not import it. |
+| 4 | `core`, `platform` | `config` | `surfaces`, `gateway`, `bootstrap`, `tools`, `integrations` | Siblings: **may** cross-import each other. |
+| 5 (bottom) | `config` | — (nothing first-party) | everything above | Independent — imports no other first-party package. |
 
 The shortcut: **dependencies point downward only.** A surface can reach all the
 way down; `config` can reach nothing. The single deliberate exception is
@@ -25,26 +26,33 @@ way down; `config` can reach nothing. The single deliberate exception is
 
 ```mermaid
 flowchart TD
-    subgraph T1["Tier 1 — surfaces"]
+    subgraph T1["Tier 1 — hosts"]
         SURFACES[surfaces]
         GATEWAY[gateway]
     end
-    subgraph T2["Tier 2 — capability"]
+    subgraph T2["Tier 2 — composition root"]
+        BOOT[bootstrap]
+    end
+    subgraph T3["Tier 3 — capability"]
         TOOLS[tools]
         INTEGRATIONS[integrations]
     end
-    subgraph T3["Tier 3 — runtime + platform"]
+    subgraph T4["Tier 4 — runtime + platform"]
         CORE[core]
         PLATFORM[platform]
     end
-    subgraph T4["Tier 4 — config"]
+    subgraph T5["Tier 5 — config"]
         CONFIG[config]
     end
 
+    SURFACES --> BOOT
+    GATEWAY --> BOOT
     SURFACES --> TOOLS
     SURFACES --> INTEGRATIONS
     GATEWAY --> TOOLS
     GATEWAY --> INTEGRATIONS
+    BOOT --> TOOLS
+    BOOT --> INTEGRATIONS
 
     TOOLS --> CORE
     TOOLS --> PLATFORM
@@ -82,7 +90,25 @@ layers below it.
   `gateway/core/session`, `gateway/core/storage`). A peer of
   `surfaces`, not a child: the two never import each other.
 
-### Tier 2 — `tools` and `integrations`
+### Tier 2 — `bootstrap`
+
+The **composition root** for process and harness wiring. Hosts (`surfaces`,
+`gateway`) cannot import each other, and `tools` / `integrations` are peers that
+must not import each other — yet registering harness adapters needs both
+capability packages. `bootstrap/` is the only package allowed to import `tools`
+**and** `integrations` together.
+
+Every entrypoint boots through `configure_process(<profile>)` from
+`bootstrap/process.py`: a profile (CLI, gateway, web, scheduler worker,
+embedded) selects which boot steps run, and the step order is fixed by this
+package — profiles cannot invent a different sequence. Adapter and
+scheduler-runner registration lives in `bootstrap/adapters.py` and nowhere
+else; surfaces and gateway used to keep peer copies — do not reintroduce them.
+
+Host-owned concerns stay out of this package: CLI/gateway logging, Rich product
+ports, CLI’s update-tolerant Sentry init.
+
+### Tier 3 — `tools` and `integrations`
 
 The capability layer — "do a thing against the outside world" — split by
 responsibility:
@@ -112,7 +138,7 @@ effectively sits one step below `tools` in the dependency graph. Do **not**
 reintroduce top-level `vendors/` or `services/` packages — external-system code
 belongs in `integrations/`, agent-callable code in `tools/`.
 
-### Tier 3 — `core` and `platform`
+### Tier 4 — `core` and `platform`
 
 The shared runtime and cross-cutting services the capability layer is built on.
 
@@ -132,7 +158,7 @@ for guardrails, masking, observability, and evidence/log compaction, while
 (`core.state`, `core.agent_harness.session`). Splitting them into
 separate tiers would forbid that edge, so they share a tier as siblings.
 
-### Tier 4 — `config`
+### Tier 5 — `config`
 
 The floor: shared constants, prompts, and UI theme. Everything above may
 read from `config`, but `config`
@@ -177,8 +203,9 @@ flowchart LR
 ```
 
 `gateway` receives a message, resolves session state from its own storage, then
-composes the same tier-2/tier-3 capability code a surface would — without ever
-importing `surfaces`, since the two are independent tier-1 peers.
+composes the same tier-3 capability code a surface would (after shared
+`bootstrap` process boot) — without ever importing `surfaces`, since the two
+are independent tier-1 peers.
 
 ## Related docs
 

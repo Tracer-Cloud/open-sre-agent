@@ -145,6 +145,55 @@ def test_rotate_flushes_old_and_binds_new(resolver: SessionResolver) -> None:
     )
 
 
+def test_resolve_adopts_legacy_empty_binding_into_scoped_key(
+    resolver: SessionResolver,
+) -> None:
+    """Same-document legacy Telegram rows are re-keyed on first scoped resolve."""
+    org = Principal.org("org_acme")
+    resolver._bindings.bind(
+        platform="telegram",
+        chat_id="42",
+        session_id="legacy-session",
+    )
+    resolver._fake_repo.load_session = lambda session_id: {
+        "session_id": session_id,
+        "cli_agent_messages": [],
+    }
+
+    resolved = resolver.resolve(user_id="42", chat_id="99", principal=org, actor="tg-42")
+
+    assert resolved.session_id == "legacy-session"
+    assert (
+        resolver._bindings.get_session_id(
+            platform="telegram", chat_id="42", principal=org, actor="tg-42"
+        )
+        == "legacy-session"
+    )
+    # Single-use: legacy empty-id row must be gone after adoption.
+    assert resolver._bindings.get_session_id(platform="telegram", chat_id="42") is None
+
+
+def test_legacy_adoption_is_single_use_across_actors(resolver: SessionResolver) -> None:
+    """Second actor must not inherit the session the first actor adopted."""
+    org = Principal.org("org_acme")
+    resolver._bindings.bind(
+        platform="telegram",
+        chat_id="T:C:1",
+        session_id="legacy-shared",
+    )
+    resolver._fake_repo.load_session = lambda session_id: {
+        "session_id": session_id,
+        "cli_agent_messages": [],
+    }
+
+    alice = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_ALICE")
+    bob = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_BOB")
+
+    assert alice.session_id == "legacy-shared"
+    assert bob.session_id != alice.session_id
+    assert resolver._bindings.get_session_id(platform="telegram", chat_id="T:C:1") is None
+
+
 def test_slack_actors_get_distinct_sessions(resolver: SessionResolver) -> None:
     org = Principal.org("org_acme")
     alice = resolver.resolve(user_id="T:C:1", chat_id="C1", principal=org, actor="U_ALICE")

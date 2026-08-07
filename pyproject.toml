@@ -36,8 +36,9 @@ dependencies = [
     "PyJWT>=2.13.0",
     # 50.0.0 is the first version patched for CVE-2026-69247 (GHSA-g6cj-pr64-35w5,
     # PKCS#7 Bleichenbacher oracle). cryptography >=49 ships no x86-64 macOS wheel,
-    # so the frozen darwin-x64 release binary builds it from source — verify that
-    # release target before shipping.
+    # so the frozen darwin-x64 release binary builds it from source against
+    # OpenSSL >= 3.2 (SSL_get0_group_name). release.yml pins Homebrew openssl@3
+    # and re-copies those dylibs into the PyInstaller onedir bundle.
     "cryptography>=50.0.0,<51",
     "keyring>=23.0.1",
     # AWS
@@ -151,6 +152,7 @@ cdk = [
 
 [tool.setuptools.packages.find]
 include = [
+  "bootstrap*",
   "config*",
   "core*",
   "gateway*",
@@ -172,6 +174,7 @@ data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
 paths = [
+  "bootstrap",
   "config",
   "core",
   "gateway",

@@ -1,4 +1,4 @@
-"""Telegram gateway stays unbound — Slack org scoping must not touch it."""
+"""Telegram binds org scope + actor; must not import Slack principal modules."""
 
 from __future__ import annotations
 
@@ -7,10 +7,12 @@ from pathlib import Path
 import pytest
 
 from config.constants import paths
+from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal
-from config.scope_context import current_scope
+from config.scope_context import bound_storage_scope, current_scope
 from gateway.core.storage import FileBindingStore
 from gateway.transports.telegram.inbound_security import InboundDecision
+from gateway.transports.telegram.principal import resolve_telegram_scope
 from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 
 
@@ -18,6 +20,7 @@ from gateway.transports.telegram.session_rotation import resolve_or_rotate_sessi
 def _host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.delenv(paths.CONTEXT_ROOT_ENV, raising=False)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_tg")
     return tmp_path
 
 
@@ -35,8 +38,9 @@ class _Client:
         self.sent.append((chat_id, text))
 
 
-def test_telegram_resolve_never_passes_principal_or_actor() -> None:
+def test_telegram_resolve_passes_principal_and_actor() -> None:
     calls: list[dict[str, object]] = []
+    scope = resolve_telegram_scope(user_id="tg-7")
 
     class _Resolver:
         def resolve(self, *, user_id: str, chat_id: str, **kwargs: object) -> object:
@@ -52,12 +56,19 @@ def test_telegram_resolve_never_passes_principal_or_actor() -> None:
         InboundDecision(allowed=True),
         session_resolver=_Resolver(),  # type: ignore[arg-type]
         client=_Client(),  # type: ignore[arg-type]
+        scope=scope,
     )
     assert session is not None
-    assert calls == [{"user_id": "tg-7", "chat_id": "chat-7", "kwargs": {}}]
+    assert calls == [
+        {
+            "user_id": "tg-7",
+            "chat_id": "chat-7",
+            "kwargs": {"principal": scope.principal, "actor": scope.actor},
+        }
+    ]
 
 
-def test_telegram_legacy_binding_unaffected_by_slack_org_rows(tmp_path: Path) -> None:
+def test_telegram_scoped_binding_isolated_from_slack_org_rows(tmp_path: Path) -> None:
     store = FileBindingStore(tmp_path / "bindings.json")
     org = Principal.org("org_acme")
     store.bind(
@@ -67,32 +78,41 @@ def test_telegram_legacy_binding_unaffected_by_slack_org_rows(tmp_path: Path) ->
         principal=org,
         actor=Actor(id="U_ALICE"),
     )
-    store.bind(platform="telegram", chat_id="chat-7", session_id="tg-sess")
+    store.bind(
+        platform="telegram",
+        chat_id="chat-7",
+        session_id="tg-sess",
+        principal=org,
+        actor=Actor(id="tg-7"),
+    )
 
-    assert store.get_session_id(platform="telegram", chat_id="chat-7") == "tg-sess"
     assert (
         store.get_session_id(
             platform="telegram",
             chat_id="chat-7",
             principal=org,
+            actor="tg-7",
+        )
+        == "tg-sess"
+    )
+    assert store.get_session_id(platform="telegram", chat_id="chat-7") is None
+    assert (
+        store.get_session_id(
+            platform="slack",
+            chat_id="T:C:1",
+            principal=org,
             actor="U_ALICE",
         )
-        is None
+        == "slack-sess"
     )
-    assert store.get_session_id(platform="slack", chat_id="T:C:1") is None
     store.close()
 
 
-def test_telegram_paths_stay_flat_when_slack_mount_is_configured(
-    _host: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Same ECS task may have OPENSRE_CONTEXT_ROOT; Telegram must ignore it."""
-    mount = _host / "workspace" / "memories"
-    mount.mkdir(parents=True)
-    monkeypatch.setenv(paths.CONTEXT_ROOT_ENV, str(mount))
-
-    assert current_scope() is None
-    assert paths.opensre_home() == _host
-    assert paths.session_home() == _host
-    assert paths.integrations_store_path() == _host / "integrations.json"
-    assert mount not in paths.session_home().parents
+def test_telegram_bound_scope_uses_org_nest(_host: Path) -> None:
+    """With ORGANIZATION_ID and no mount, Telegram turns nest under orgs/<id>/."""
+    scope = resolve_telegram_scope(user_id="tg-7")
+    with bound_storage_scope(scope):
+        assert current_scope() is scope
+        home = paths.opensre_home()
+        assert home == _host / "orgs" / "org_tg"
+        assert paths.integrations_store_path() == home / "integrations.json"

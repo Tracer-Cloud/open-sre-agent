@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 
-from gateway.transports.telegram.poller.poller import TelegramPoller, _decode_telegram_response
+from gateway.transports.telegram.poller.poller import (
+    TelegramPoller,
+    TelegramPollResult,
+    _decode_telegram_response,
+)
 
 
 def test_decode_telegram_response_parses_non_200_json() -> None:
@@ -40,7 +44,7 @@ def test_poll_once_conflict_is_debug_not_warning(
         },
     )
     poller = TelegramPoller("tok")
-    assert poller.poll_once() == []
+    assert poller.poll_once() == TelegramPollResult()
     mock_sleep.assert_called_once_with(2.0)
     assert not any(
         "[telegram-gateway] getUpdates not ok" in record.message for record in caplog.records
@@ -61,8 +65,8 @@ def test_poll_once_success_resets_conflict_backoff(
     ]
     poller = TelegramPoller("tok")
     poller._conflict_backoff_seconds = 8.0
-    assert poller.poll_once() == []
-    assert poller.poll_once() == []
+    assert poller.poll_once() == TelegramPollResult()
+    assert poller.poll_once() == TelegramPollResult()
     assert poller._conflict_backoff_seconds == 2.0
 
 
@@ -86,8 +90,42 @@ def test_poll_once_parses_inbound_message(mock_get: MagicMock, mock_sleep: Magic
             ],
         },
     )
-    events = TelegramPoller("tok").poll_once()
-    assert len(events) == 1
-    assert events[0].text == "hello"
-    assert events[0].chat_id == "99"
+    batch = TelegramPoller("tok").poll_once()
+    assert len(batch.messages) == 1
+    assert batch.messages[0].text == "hello"
+    assert batch.messages[0].chat_id == "99"
+    assert batch.callbacks == []
+    mock_sleep.assert_not_called()
+
+
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
+def test_poll_once_parses_callback_query(mock_get: MagicMock, mock_sleep: MagicMock) -> None:
+    mock_get.return_value = httpx.Response(
+        200,
+        json={
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 8,
+                    "callback_query": {
+                        "id": "cq-9",
+                        "from": {"id": 42},
+                        "data": "opensre_approval_approve:abc",
+                        "message": {
+                            "message_id": 3,
+                            "chat": {"id": 99, "type": "private"},
+                        },
+                    },
+                }
+            ],
+        },
+    )
+    batch = TelegramPoller("tok").poll_once()
+    assert batch.messages == []
+    assert len(batch.callbacks) == 1
+    assert batch.callbacks[0].data == "opensre_approval_approve:abc"
+    assert batch.callbacks[0].chat_id == "99"
+    # Ensure getUpdates asked for callback_query updates.
+    assert "callback_query" in mock_get.call_args.kwargs["params"]["allowed_updates"]
     mock_sleep.assert_not_called()

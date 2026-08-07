@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from config.constants.discord import DISCORD_ALLOW_OPEN_GUILD_ENV, DISCORD_ALLOWED_USERS_ENV
 from config.strict_config import StrictConfigModel
+from gateway.core.runtime.concurrency import turn_limit_for_profile
 from gateway.core.runtime.errors import GatewayConfigurationError
 from integrations.messaging_security import MessagingIdentityPolicy, MessagingPlatform
 from integrations.store import get_integration
@@ -24,7 +25,7 @@ class DiscordGatewaySettings(StrictConfigModel):
     bot_token: str
     allowed_user_ids: list[str] = Field(default_factory=list)
     allow_open_guild: bool = False
-    max_concurrent_turns: int = Field(default=4, ge=1)
+    max_concurrent_turns: int = Field(default_factory=turn_limit_for_profile, ge=1)
     status_update_interval_seconds: float = Field(default=2.0, gt=0)
     turn_timeout_seconds: float = Field(default=240.0, gt=0)
     startup_timeout_seconds: float = Field(default=30.0, gt=0)
@@ -38,7 +39,7 @@ class DiscordGatewayEnv(BaseSettings):
     bot_token: str = ""
     allowed_users: Annotated[list[str], NoDecode] = Field(default_factory=list)
     allow_open_guild: bool = False
-    gateway_max_concurrent: int = Field(default=4, ge=1)
+    gateway_max_concurrent: int = Field(default_factory=turn_limit_for_profile, ge=1)
     gateway_status_update_interval_seconds: float = Field(default=2.0, gt=0)
     gateway_turn_timeout_seconds: float = Field(default=240.0, gt=0)
     gateway_startup_timeout_seconds: float = Field(default=30.0, gt=0)

@@ -9,7 +9,8 @@ This module holds the parts that do not depend on a chat transport: the broker
 that connects a click to the waiting tool call, the button identifiers, and the
 harness hooks. Each transport supplies its own :class:`ApprovalPrompter` — Block
 Kit in ``gateway.transports.slack.approvals``, message components in
-``gateway.transports.discord.approvals``.
+``gateway.transports.discord.approvals``, inline keyboard in
+``gateway.transports.telegram.approvals``.
 """
 
 from __future__ import annotations
@@ -159,13 +160,27 @@ def approval_tool_hooks(prompter: ApprovalPrompter) -> ToolExecutionHooks:
 
 
 def arguments_preview(arguments: Mapping[str, Any]) -> str:
-    """Render tool arguments for a prompt, truncated to a readable length."""
+    """Render tool arguments for a chat approval prompt.
+
+    Approval prompts land in multi-member channels (Buzz rooms, Slack
+    channels, Discord). Values must be redacted before serialization so a
+    bystander cannot read credentials, tokens, or other secrets that the
+    tool call carried — even when only the requester can click/reply to
+    approve.
+    """
     if not arguments:
         return ""
+    # Key-name redaction first (api_key, token, password, …), then pattern
+    # scrub on the serialized form for secrets that ride under neutral keys.
+    from gateway.core.attachments.inline import scrub_secrets
+    from platform.observability.trace.redaction import redact_sensitive
+
+    safe = redact_sensitive(dict(arguments))
     try:
-        preview = json.dumps(dict(arguments), ensure_ascii=False, default=str)
+        preview = json.dumps(safe, ensure_ascii=False, default=str)
     except Exception:
-        preview = str(dict(arguments))
+        preview = str(safe)
+    preview = scrub_secrets(preview)
     if len(preview) > ARGS_PREVIEW_LIMIT:
         preview = preview[: ARGS_PREVIEW_LIMIT - 1] + "…"
     return preview

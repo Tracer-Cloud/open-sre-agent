@@ -19,6 +19,7 @@ from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_dispatch import (
     BufferOutputSink,
     HeadlessAgent,
@@ -199,11 +200,15 @@ class RecordingGatewaySink:
         label: str,
         chunks: Iterator[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with)
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
         text = "".join(str(chunk) for chunk in chunks)
         self.streamed.append(text)
         return text
+
+    def finish_streamed_response(self, text: str) -> None:
+        self.finalize(text)
 
     def finalize(self, text: str) -> None:
         self.finalized = text
@@ -313,7 +318,7 @@ def _dispatch_turn(
         prompts=DefaultPromptContextProvider(session),
         reasoning=DefaultReasoningClientProvider(output=output),
         accounting=NoopTurnAccounting(),
-        gather_enabled=gather_enabled,
+        gather=GatherPorts(enabled=gather_enabled),
     )
     return agent.dispatch(message)
 

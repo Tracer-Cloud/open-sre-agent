@@ -22,10 +22,8 @@ InvestigationRunner = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
-    from tools.investigation.capability import (
-        resolve_investigation_context,
-        run_investigation_payload,
-    )
+    from core.agent_harness import AgentSession
+    from tools.investigation.capability import resolve_investigation_context
 
     raw_alert = trigger.get("raw_alert") or {}
     investigation_metadata = resolve_investigation_context(
@@ -33,9 +31,13 @@ def _run_pipeline(trigger: dict[str, Any]) -> dict[str, Any]:
         alert_name=trigger.get("alert_name"),
         severity=trigger.get("severity"),
     )
-    return run_investigation_payload(
-        raw_alert=raw_alert,
-        investigation_metadata=investigation_metadata,
+    return (
+        AgentSession()
+        .investigate(
+            raw_alert,
+            investigation_metadata=investigation_metadata,
+        )
+        .as_dict()
     )
 
 
@@ -74,6 +76,12 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
+        from gateway.core.runtime.concurrency import process_turn_gate
+
+        # Already claimed from the queue — block like scheduler runners so the
+        # work waits for a chat/Path-2 slot instead of racing the process gate.
+        gate = process_turn_gate()
+        gate.acquire()
         try:
             from platform.analytics.cli import track_investigation
             from platform.analytics.source import EntrypointSource, TriggerMode
@@ -117,6 +125,8 @@ class InvestigationWorker:
                 status=InvestigationStatus.FAILED,
                 error=type(exc).__name__,
             )
+        finally:
+            gate.release()
         return True
 
     def start(self) -> threading.Thread:

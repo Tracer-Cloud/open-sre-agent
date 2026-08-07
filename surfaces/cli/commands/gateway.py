@@ -14,6 +14,7 @@ from gateway.core.runtime.daemon import (
     start_gateway_daemon,
     stop_gateway_daemon,
 )
+from surfaces.shared.gateway_entrypoint import gateway_entry_argv
 
 
 def _echo_components() -> None:
@@ -42,7 +43,7 @@ def gateway_start_command(foreground: bool) -> None:
         start_gateway()
         return
 
-    ok, message = start_gateway_daemon()
+    ok, message = start_gateway_daemon(argv=gateway_entry_argv())
     click.echo(message)
     click.echo(f"Logs: {GATEWAY_LOG_FILE}")
     if not ok:

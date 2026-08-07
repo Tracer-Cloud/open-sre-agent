@@ -24,6 +24,7 @@ from surfaces.interactive_shell.ui.components.rendering import (
     _prepare_tty_for_rich,
     print_repl_table,
     repl_print,
+    repl_print_continue,
     repl_table,
 )
 from surfaces.interactive_shell.ui.tables.provider import resolve_provider_models
@@ -211,7 +212,10 @@ def print_command_output(console: Console, output: str, *, style: str | None = N
     # Parse any ANSI the captured child emitted so its Rich styling (bold, colour)
     # survives being re-printed here instead of showing as raw escape codes.
     rendered = Text.from_ansi(text) if style is None else Text.from_ansi(text, style=style)
-    repl_print(console, rendered)
+    # Continue the current block: output must sit directly under its `$ command`
+    # header, not detached from it by a blank line (which makes it read as if it
+    # belonged to the next command).
+    repl_print_continue(console, rendered)
 
 
 __all__ = [

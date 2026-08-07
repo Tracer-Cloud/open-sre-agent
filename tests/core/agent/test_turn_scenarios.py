@@ -29,11 +29,11 @@ from tests.core.agent._oracle_normalize import cli_command_payload_matches
 from tests.core.agent._oracle_runtime import (
     LIVE_INTEGRATION_SENTINEL,
     OracleRunResult,
-    fresh_session,
     normalize_executed_actions_for_oracle_match,
     resolve_live_integrations,
     run_oracle_once,
     session_capabilities,
+    session_from_scenario,
 )
 from tests.core.agent._planned_action import default_target_surface
 from tests.core.agent.scenario_loader import (
@@ -426,17 +426,45 @@ def test_shard_selection_is_non_empty() -> None:
 
 
 def _assert_live_action_planning_once(case: ScenarioCase) -> None:
+    from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
+    from core.agent_harness.session.pending_offer import (
+        first_pending_offer,
+        parse_investigation_accept_message,
+    )
+
     resolved_override, _unavailable = resolve_live_integrations(
         case.scenario.session.resolved_integrations
     )
-    session = fresh_session(
-        with_prior_state=case.scenario.session.has_prior_state,
-        configured_integrations=case.scenario.session.configured_integrations,
-        available_capabilities=session_capabilities(case.scenario.available_capabilities),
+    session = session_from_scenario(
+        case.scenario.session,
         resolved_integrations_override=resolved_override,
+        available_capabilities=session_capabilities(case.scenario.available_capabilities),
     )
-    prompt = case.scenario.input.prompt
+    prompt = expand_affirmative_follow_up(
+        case.scenario.input.prompt,
+        session.cli_agent_messages,
+        pending_offer=first_pending_offer(session),
+    )
     answer = case.answer
+    expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
+
+    # Structured Want-me-to yes → /investigate alert:… (literal slash path).
+    # Planning probes skip that driver, so assert the same deterministic slash.
+    accept_alert = parse_investigation_accept_message(prompt)
+    if accept_alert is not None:
+        alert_arg = f"alert:{accept_alert}"
+        actual_actions = [
+            {
+                "kind": "slash",
+                "content": _slash_content("/investigate", [alert_arg]),
+                "source": "deterministic",
+                "target_surface": "slash",
+                "command": "/investigate",
+                "args": [alert_arg],
+            }
+        ]
+        _assert_planned_actions_match(actual_actions, expected_actions)
+        return
 
     ctx = ActionToolContext(
         session=session, console=Console(file=io.StringIO(), force_terminal=False)
@@ -458,7 +486,6 @@ def _assert_live_action_planning_once(case: ScenarioCase) -> None:
     ).run([{"role": "user", "content": build_action_user_message(prompt)}])
     actions = [tool_call for tool_call, _output in result.executed]
     actual_actions = [_build_actual_action(action) for action in actions]
-    expected_actions = cast("list[ExpectedAction]", [dict(item) for item in answer.planned_actions])
     actual_actions_for_match = _planning_actions_for_match(actual_actions, expected_actions)
 
     for action_idx, expected in enumerate(expected_actions):

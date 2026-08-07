@@ -287,7 +287,8 @@ def test_connected_integrations_block_renders_state() -> None:
 
     none_block = connected_integrations_block(_ctx(integrations=(), integrations_known=True))
     assert "none" in none_block
-    assert "explicit investigate instructions still emit investigation_start" in none_block.lower()
+    assert "does not gate diagnostic" in none_block.lower()
+    assert "investigation_start always" in none_block.lower()
 
     listed = connected_integrations_block(
         _ctx(
@@ -296,6 +297,8 @@ def test_connected_integrations_block_renders_state() -> None:
         )
     )
     assert "github, posthog_mcp, sentry" in listed
+    # Connected listing still must not imply auto-investigate on diagnostic asks.
+    assert "does not gate diagnostic" in listed.lower()
 
 
 def test_skills_loader_bundles_architecture_audit_skill() -> None:
@@ -389,6 +392,21 @@ def test_skills_loader_bundles_github_ci_fix_skill() -> None:
     assert "output exactly that text and stop" in body
     assert '"next steps"' in body
     assert "pushes to the existing PR head branch" in body
+    cached_load_skills_block.cache_clear()
+
+
+def test_skill_matches_take_priority_over_generic_docs_handoff() -> None:
+    cached_load_skills_block.cache_clear()
+
+    index = load_skills_index()
+    body = load_skill_body("github-ci-fix-onboarding")
+    prompt = build_action_system_prompt(_ctx())
+
+    assert "Skill matches outrank the generic docs/how-to assistant handoff" in index
+    assert '"onboard me"' in index
+    assert "Can you onboard me on the CI/CD flow?" in body
+    assert "Generic docs routing is a fallback, not the first choice" in prompt
+    assert "Action-shaped wording" in prompt
     cached_load_skills_block.cache_clear()
 
 
@@ -492,6 +510,47 @@ def test_local_llama_handoff_guidance_block() -> None:
     assert "opensre onboard local_llm" in block
     assert "/model set ollama" in block
     assert build_handoff_guidance_block(("docs:datadog_setup",)) == ""
+
+
+def test_database_query_handoff_guidance_block_matches_prefix() -> None:
+    """Oracle 332/331: ``database_query:*`` tags inject connect/query guidance."""
+    block = build_handoff_guidance_block(("database_query:mysql_active_connections",))
+    assert "database" in block.lower()
+    assert "/mcp connect" in block
+    assert "investigation" in block.lower()
+    assert build_handoff_guidance_block(("database_query:mariadb_dashboard",)) == block
+
+
+def test_incident_description_handoff_guidance_keeps_user_symptoms() -> None:
+    """Oracle 325: bare incident handoffs must not drop service/error specifics."""
+    block = build_handoff_guidance_block(("incident_description:checkout_502_rate",))
+    assert "checkout" in block.lower()
+    assert "502" in block
+    assert "production error pattern" in block.lower()
+    assert build_handoff_guidance_block(("incident_description:orders_cpu_99",)) == block
+
+
+def test_database_query_handoff_injects_guidance_into_assistant_prompt() -> None:
+    turn_snapshot = TurnSnapshot(
+        text="Use the MySQL tool to query active connections.",
+        conversation_messages=(),
+        configured_integrations=(),
+        configured_integrations_known=True,
+        last_state=None,
+        last_synthetic_observation_path=None,
+        reasoning_effort=None,
+    )
+    prompt = build_cli_agent_prompt_from_provider(
+        message="Use the MySQL tool to query active connections.",
+        prompts=_FakePrompts(),
+        tool_observation=None,
+        tool_observation_on_screen=True,
+        handoff_contents=("database_query:mysql_active_connections",),
+        turn_snapshot=turn_snapshot,
+    )
+
+    assert "/mcp connect" in prompt
+    assert "named database" in prompt.lower() or "database/tool" in prompt.lower()
 
 
 def test_local_llama_handoff_injects_setup_guidance_into_assistant_prompt() -> None:

@@ -52,7 +52,8 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     assert ctor.kwargs["session"] is session
     assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     assert ctor.kwargs["output"].bound is sink
-    assert ctor.kwargs["gather_enabled"] is True
+    # Gateway turns gather live evidence; the ports object carries that now.
+    assert ctor.kwargs["gather"].enabled is True
     assert ctor.kwargs["surface"] == "gateway"
     tool_provider = DefaultToolProvider(
         ctor.kwargs["session"],

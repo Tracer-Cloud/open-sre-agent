@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
+from core.agent_harness.harness import AgentSession
 from core.agent_harness.turns.evidence_driver import MAX_REPORT_GATHER_ITERATIONS
-from core.agent_harness.turns.headless_adapters import BufferOutputSink
 from core.agent_harness.turns.turn_results import TurnResult
 from integrations.posthog.report_prerequisites import (
     DEFAULT_POSTHOG_PERIOD,
@@ -57,32 +55,15 @@ def _require_posthog_configured() -> None:
 
 def _dispatch_headless_turn(message: str) -> TurnResult:
     _require_posthog_configured()
-
-    harness = AgentHarness(
-        HarnessConfig(
-            load_env=True,
-            hydrate_integrations=True,
-            warm_integrations=True,
-            persistent_tasks=False,
-            open_storage=False,
-        )
-    )
-    startup = harness.startup()
-    session = startup.session
-    output = BufferOutputSink()
-    agent = build_default_headless_agent(
-        session=session,
-        output=output,
+    return AgentSession.run_headless_turn(
+        message,
         logger=logger,
-        message=message,
         gather_enabled=True,
         # Schema discover + one HogQL call per metric needs more than the
         # default chat gather budget (4), or later funnel rows never run.
         gather_max_iterations=MAX_REPORT_GATHER_ITERATIONS,
         is_tty=False,
     )
-    harness.attach_agent(agent)
-    return harness.dispatch_message(message)
 
 
 def run_posthog_report(payload: AgentPayload) -> str:

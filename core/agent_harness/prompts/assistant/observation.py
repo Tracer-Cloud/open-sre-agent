@@ -4,10 +4,30 @@ from __future__ import annotations
 
 from core.agent_harness.prompts.assistant.text import HANDOFF_GUIDANCE
 
+# Prefix keys in ``HANDOFF_GUIDANCE`` (trailing ``:``) match any tag with that prefix.
+_HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = (
+    "database_query:",
+    "incident_description:",
+)
+
+
+def _guidance_for_handoff_tag(tag: str) -> str | None:
+    """Resolve exact handoff tags, then known prefixes (e.g. ``database_query:``)."""
+    if tag in HANDOFF_GUIDANCE:
+        return HANDOFF_GUIDANCE[tag]
+    for prefix in _HANDOFF_GUIDANCE_PREFIXES:
+        if tag.startswith(prefix):
+            return HANDOFF_GUIDANCE.get(prefix)
+    return None
+
 
 def build_handoff_guidance_block(handoff_contents: tuple[str, ...]) -> str:
     """Render topic-specific assistant guidance from action-planner handoff tags."""
-    blocks = [HANDOFF_GUIDANCE[tag] for tag in handoff_contents if tag in HANDOFF_GUIDANCE]
+    blocks = [
+        guidance
+        for tag in handoff_contents
+        if (guidance := _guidance_for_handoff_tag(tag)) is not None
+    ]
     return "".join(blocks)
 
 

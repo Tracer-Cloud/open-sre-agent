@@ -11,36 +11,41 @@ transport-specific code.
 
 | What you want | File / symbol | How it is started |
 |---------------|---------------|-------------------|
-| **Package main** | `gateway/main.py` → `main()` | `python -m gateway.main` (manager only) |
-| **Production entry** | `surfaces/cli/gateway_entry.py` → `main()` | Daemon / `opensre gateway start` (wires slash ports) |
-| **Composition root (impl)** | `gateway/core/runtime/manager.py` → `GatewayManager` / `main()` | Called by the entry modules |
+| **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
+| **Package main** | `gateway/main.py` → `main()` | Fails closed — no slash-port glue |
+| **Composition root (impl)** | `gateway/core/runtime/manager.py` → `GatewayManager` | Injected `slash_ports_factory` from CLI; bare `manager.main` fails closed |
 | **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
-| **Telegram transport** | `gateway/transports/telegram/wiring.py` → `start_telegram_worker` | Started by `GatewayManager._start_telegram` |
-| **Slack transport** | `gateway/transports/slack/wiring.py` → `start_slack_worker` | Started by `GatewayManager._start_slack` |
-| **Discord transport** | `gateway/transports/discord/wiring.py` → `start_discord_worker` | Started by `GatewayManager._start_discord` |
-| **Per-message turn** | `gateway/core/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into both transports as the agent callback |
+| **Channels** | `gateway/channels/` → `start_channels` / `ChannelsHandle` | Called by `GatewayManager.start_channels` |
+| **Chat transport registry** | `gateway/channels/chat.py` → `start_transports` | Used by `gateway.channels.compose` |
+| **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via channels chat registry |
+| **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via channels chat registry |
+| **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via channels (includes readiness wait) |
+| **Per-message turn** | `gateway/core/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
 opensre gateway start
         │
         ▼
 gateway.core.runtime.daemon.start_gateway_daemon
-        │  spawns: python -m surfaces.cli.gateway_entry
+        │  spawns surface-owned argv (see surfaces.shared.gateway_entrypoint):
+        │    venv:   python -m surfaces.cli.gateway_entry
+        │    frozen: opensre gateway start --foreground
         ▼
-surfaces/cli/gateway_entry.py
+surfaces/cli/gateway_entry.py  (or Click foreground → same composition root)
         │  wires headless slash ports
         ▼
 gateway.core.runtime.manager.GatewayManager.start_gateway
-        ├── web/web_server  →  web/webapp:app
-        ├── transports/telegram/wiring.start_telegram_worker
-        ├── transports/slack/wiring.start_slack_worker
-        ├── transports/discord/wiring.start_discord_worker
-        └── scheduler
+        ├── start_channels()  →  gateway.channels.start_channels
+        │     ├── web/web_server  →  web/webapp:app
+        │     └── channels/chat.start_transports
+        │           (telegram / slack / discord startup)
+        └── start_scheduler()   # peer of channels, not a transport
 ```
 
-Layout: `core/` (runtime, storage, …), `transports/` (slack, discord,
-telegram), and `web/` (web surface). See `AGENTS.md`.
+Layout: `core/` (runtime, storage, …), `channels/` (consumer composer),
+`transports/` (slack, discord, telegram peers), and `web/` (web surface). See
+`AGENTS.md`.
 
 ## How the pieces fit (surfaces, gateway, integrations)
 
@@ -125,7 +130,7 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
 
 1. **Settings** (`settings.py`): env-backed config, raising
    `GatewayConfigurationError` (from `gateway/core/runtime/errors.py`) when missing.
-2. **A listener** (`wiring.py` + the transport worker): receives inbound
+2. **A listener** (`startup.py` + the transport worker): receives inbound
    messages and calls the shared handler with `(text, session, sink, logger)`.
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).

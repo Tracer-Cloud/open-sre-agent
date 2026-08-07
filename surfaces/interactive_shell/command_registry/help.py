@@ -43,6 +43,9 @@ def _raw_help_sections() -> list[HelpSection]:
     from surfaces.interactive_shell.command_registry.background_cmds import (
         COMMANDS as BACKGROUND_CMDS,
     )
+    from surfaces.interactive_shell.command_registry.choice_prompt import (
+        COMMANDS as CHOICE_CMDS,
+    )
     from surfaces.interactive_shell.command_registry.cli_parity import (
         COMMANDS as PARITY_COMMANDS,
     )
@@ -85,6 +88,7 @@ def _raw_help_sections() -> list[HelpSection]:
         (
             "Session",
             list(SESSION_CMDS)
+            + list(CHOICE_CMDS)
             + list(BACKGROUND_CMDS)
             + list(SETTINGS_CMDS)
             + list(DIAGNOSTICS_CMDS),

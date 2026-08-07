@@ -7,4 +7,8 @@ class GatewayConfigurationError(RuntimeError):
     """Raised when a gateway transport's configuration is missing or invalid."""
 
 
-__all__ = ["GatewayConfigurationError"]
+class GatewayTransportFailedError(RuntimeError):
+    """Raised when a transport starts but fails readiness or a runtime check."""
+
+
+__all__ = ["GatewayConfigurationError", "GatewayTransportFailedError"]

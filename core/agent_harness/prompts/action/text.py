@@ -267,9 +267,10 @@ just proposed. Resolve the referent against the assistant's previous reply:
   "/integrations remove github" and "/integrations list" and the user says
   "do both" → emit slash_invoke("/integrations", args=["remove", "github"])
   then slash_invoke("/integrations", args=["list"]).
-- If that reply ended with Want me to: offering a full investigation, emit
-  investigation_start with alert_text synthesized from the prior conversation
-  (the original question plus the key evidence that reply reported).
+- If the USER MESSAGE was already expanded to `/investigate alert:…`
+  (structured PendingInvestigationOffer after Want me to: run a full
+  investigation), emit slash_invoke for that exact command. That form is
+  normally dispatched without an LLM via the literal-`/slash` path.
 - If that reply ended with Want me to: offering more detail from a vendor tool
   (roster, message history, etc.), call the matching vendor tool for that
   offer — do NOT assistant_handoff and do NOT treat "yes" as an unrelated new
@@ -297,6 +298,8 @@ Example mapping for compound slash commands:
 - Input: "check the health of my opensre and then show me all connected services"
 - Tool calls (in order): slash_invoke("/health"), slash_invoke("/integrations", args=["list"])
   ("connected services/integrations" → /integrations list)
+  After those succeed, STOP — emit no further tool calls. Do NOT re-run the same
+  slash_invoke arguments again in this turn.
 
 For operational REPL requests, prefer slash_invoke and choose the best-matching
 command from the slash_invoke tool description (available command names are listed there).
@@ -564,14 +567,25 @@ to the assistant to suggest it. The command must be read-only and single-step.
 Do NOT apply this to questions that require judgment, summarization, or
 multi-step reasoning beyond the raw command output.
 
-If the entire request is informational or conversational — a how-to/docs question
-(including "what is supported?" / "what can I add?"), a greeting like
-"hi"/"hello"/"hey", or a pasted alert blob / bare incident statement with no
-instruction and no diagnostic question — ALWAYS call the assistant_handoff tool
-with a concise handoff content. Two exceptions take precedence over this handoff:
-1. A factual question about the current state that a read-only discovery command
+Generic docs routing is a fallback, not the first choice. Before classifying a
+request as informational/how-to, inspect the SKILLS INDEX. Action-shaped wording
+such as "set this up", "install it", "onboard me/us", "demo it", "audit it", or
+"fix it" is a request to do the work, even when phrased as "can you ...?" and
+even when the target is called a "flow". If an indexed skill plausibly owns that
+request, call skill_view and follow it. Do not use assistant_handoff merely
+because the same topic also has documentation.
+
+Use assistant_handoff when the entire request is genuinely informational or
+conversational — an explicit explanation/how-to question such as "what is ...?",
+"how does ... work?", "explain ...", "show me the docs for ...", "what is
+supported?", or "what can I add?"; a greeting like "hi"/"hello"/"hey"; or a
+pasted alert blob / bare incident statement with no instruction and no diagnostic
+question. Three exceptions take precedence over this fallback:
+1. An action-shaped request that matches the SKILLS INDEX: call skill_view and
+   run the skill.
+2. A factual question about the current state that a read-only discovery command
    would answer (the discovery rule above): emit that discovery action.
-2. An EXPLICIT investigate/analyze/diagnose/RCA/root-cause instruction (the first
+3. An EXPLICIT investigate/analyze/diagnose/RCA/root-cause instruction (the first
    investigation rule above): ALWAYS emit investigation_start, regardless of
    CONNECTED INTEGRATIONS.
 A diagnostic cause question without such an explicit verb is a handoff like any
@@ -580,7 +594,21 @@ closing with a full-investigation offer.
 When you do hand the whole request off, emit ONLY the assistant_handoff call. The
 planner only forwards actions emitted through tool calls, so always emit a tool
 call rather than relying on plain-text output. Use concise structured content tags
-when the topic is known — for example docs:datadog_setup, chat:greeting, or
-provider:local_llama_connect for vague local-model connection requests.
+when the topic is known — for example docs:datadog_setup, chat:greeting,
+provider:local_llama_connect for vague local-model connection requests, or
+database_query:<topic> when the user asks to query/read a named database tool
+(MySQL, MariaDB, etc.) that is not a first-party setup-wizard target.
+
+assistant_handoff has two modes, chosen with requires_gather:
+- requires_gather=true (the default) — the assistant runs a live evidence-gather
+  pass before answering. Use it for the ordinary case: an informational or
+  diagnostic request handed off with no tool work behind it.
+- requires_gather=false — answer-only: the assistant composes the reply from
+  this turn's tool outputs and the handoff content, with NO fresh integration
+  sweep. Use it ONLY when your tool calls this turn already produced everything
+  the reply needs and the handoff merely explains that outcome (for example, a
+  skill workflow whose checks all ran, or a completed report whose delivery
+  failed). Never set it false for a request you did not do the work for —
+  that starves the reply of evidence.
 """
 )

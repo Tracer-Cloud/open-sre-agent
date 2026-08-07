@@ -5,6 +5,7 @@
 
 [importlinter]
 root_packages =
+    bootstrap
     surfaces
     config
     core
@@ -18,6 +19,7 @@ name = OpenSRE package layers (transitive)
 type = layers
 layers =
     surfaces | gateway
+    bootstrap
     tools | integrations
     # ``:`` = siblings may cross-import (import-linter multi-item layers).
     # ``|`` would forbid core <-> platform, but both packages depend on each other.

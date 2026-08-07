@@ -8,6 +8,7 @@ import pytest
 from rich.console import Console
 
 from surfaces.interactive_shell.command_registry.gateway_cmds import _cmd_gateway
+from surfaces.shared.gateway_entrypoint import gateway_entry_argv
 
 _MODULE = "surfaces.interactive_shell.command_registry.gateway_cmds"
 
@@ -49,16 +50,21 @@ def test_bare_gateway_defaults_to_status(monkeypatch: pytest.MonkeyPatch, consol
 def test_start_reports_outcome_and_log_path(
     monkeypatch: pytest.MonkeyPatch, console: Console
 ) -> None:
-    monkeypatch.setattr(
-        f"{_MODULE}.start_gateway_daemon",
-        lambda: (True, "OpenSRE gateway started (pid 7)."),
-    )
+    spawned: dict[str, object] = {}
+
+    def _start(*, argv):
+        spawned["argv"] = argv
+        return True, "OpenSRE gateway started (pid 7)."
+
+    monkeypatch.setattr(f"{_MODULE}.start_gateway_daemon", _start)
 
     assert _cmd_gateway(MagicMock(), console, ["start"]) is True
 
     out = _output(console)
     assert "started (pid 7)" in out
     assert "gateway.log" in out
+    # The shell supplies the entrypoint; the daemon never picks one itself.
+    assert spawned["argv"] == gateway_entry_argv()
 
 
 def test_logs_prints_tail(monkeypatch: pytest.MonkeyPatch, console: Console) -> None:

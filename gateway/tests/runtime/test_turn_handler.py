@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import contextmanager
 from typing import Any
 from unittest.mock import MagicMock
@@ -148,6 +149,42 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
     sink.finalize.assert_not_called()
 
 
+def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> None:
+    """Soft timeout / stop owns the sink; do not overwrite with empty finalize."""
+    from gateway.core.runtime.cancel_console import CancelConsole
+
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = MagicMock()
+
+    def _dispatch(_message: str) -> TurnResult:
+        cancel = sink.turn_cancel
+        assert isinstance(cancel, threading.Event)
+        cancel.set()
+        return _empty_turn_result()
+
+    agent_cls.return_value.dispatch.side_effect = _dispatch
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
+    sink.finalize.assert_not_called()
+    console = agent_cls.return_value.bind_turn.call_args.kwargs["console"]
+    assert isinstance(console, CancelConsole)
+    assert console.cancel_requested is True
+
+
+def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
+    """Each turn rebinds a CancelConsole so timeout Events stay turn-scoped."""
+    from gateway.core.runtime.cancel_console import CancelConsole
+
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    sink = MagicMock()
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("hi", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
+    console = agent_cls.return_value.bind_turn.call_args.kwargs["console"]
+    assert isinstance(console, CancelConsole)
+    assert console.cancel_requested is False
+    assert isinstance(sink.turn_cancel, threading.Event)
+
+
 def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> None:
     """A sink carrying tool hooks (Slack's approval gate) rebinds them each turn."""
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
@@ -161,7 +198,7 @@ def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> Non
 
 
 def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
-    """Sinks without the attribute (Telegram) run unhooked, as before."""
+    """Sinks without tool_hooks (Telegram today) run unhooked — documented host gap."""
 
     class _BareSink:
         def finalize(self, text: str) -> None:
@@ -176,7 +213,8 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     assert agent.bind_turn.call_args.kwargs["tool_hooks"] is None
 
 
-def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
+def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any) -> None:
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(storage=InMemorySessionStorage())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
 
@@ -192,7 +230,8 @@ def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
     assert session.available_capabilities["task_cancel"] == ()
 
 
-def test_turn_handler_preserves_supported_capabilities() -> None:
+def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None:
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(storage=InMemorySessionStorage())
     session.available_capabilities.update(
         {
@@ -220,7 +259,8 @@ def test_turn_handler_preserves_supported_capabilities() -> None:
     assert session.available_capabilities["custom_gateway_capability"] == ("enabled",)
 
 
-def test_turn_handler_capability_gating_is_stable_across_turns() -> None:
+def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any) -> None:
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(storage=InMemorySessionStorage())
     session.available_capabilities["shell_commands"] = ("shell",)
 

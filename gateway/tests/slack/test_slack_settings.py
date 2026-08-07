@@ -50,6 +50,7 @@ def _store_record(credentials: dict[str, Any]) -> dict[str, Any]:
 def test_loads_tokens_with_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_tokens(monkeypatch)
     monkeypatch.setenv("SLACK_ALLOWED_USERS", "U111")
+    monkeypatch.delenv("OPENSRE_SIZE_PROFILE", raising=False)
 
     settings = load_slack_gateway_settings()
 
@@ -57,7 +58,8 @@ def test_loads_tokens_with_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.app_token == "xapp-test"
     assert settings.allowed_user_ids == ["U111"]
     assert settings.allow_open_workspace is False
-    assert settings.max_concurrent_turns == 4
+    # Default pool tracks OPENSRE_SIZE_PROFILE (SMALL → 1) unless env overrides.
+    assert settings.max_concurrent_turns == 1
 
 
 def test_parses_allowed_users_csv(monkeypatch: pytest.MonkeyPatch) -> None:

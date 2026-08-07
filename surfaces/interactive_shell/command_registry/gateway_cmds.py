@@ -16,6 +16,7 @@ from gateway.core.runtime.daemon import (
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
+from surfaces.shared.gateway_entrypoint import gateway_entry_argv
 
 _USAGE = "/gateway [start|stop|status|logs [lines]]"
 
@@ -28,7 +29,7 @@ def _cmd_gateway(_session: Session, console: Console, args: list[str]) -> bool:
     sub = args[0].lower() if args else "status"
 
     if sub == "start":
-        _print_outcome(console, *start_gateway_daemon())
+        _print_outcome(console, *start_gateway_daemon(argv=gateway_entry_argv()))
         console.print(f"[{DIM}]logs: {GATEWAY_LOG_FILE} — /gateway logs to tail[/]")
     elif sub == "stop":
         _print_outcome(console, *stop_gateway_daemon())
