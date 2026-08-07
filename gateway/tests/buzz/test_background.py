@@ -207,8 +207,8 @@ def test_cancelled_turn_is_not_acknowledged() -> None:
         )
         await asyncio.wait_for(started.wait(), timeout=1)
         task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
+        outcomes = await asyncio.gather(task, return_exceptions=True)
+        assert isinstance(outcomes[0], asyncio.CancelledError)
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(background, "handle_polled_inbound_buzz_message", _hanging_dispatch)
@@ -236,9 +236,9 @@ def test_poll_loop_does_not_block_on_a_slow_turn() -> None:
         # exactly what `asyncio.create_task` (not `await`) in the real loop buys.
         assert not task.done()
         release_turn.set()
-        # Bound, not a bare ``await task``: CodeQL reads the latter as a
-        # statement with no effect (see AGENTS.md).
-        _finished = await task
+        # Asserted, not a bare ``await task``: CodeQL reads the latter as a
+        # statement with no effect, and a throwaway binding as an unused local.
+        assert await task is None
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(background, "handle_polled_inbound_buzz_message", _slow_dispatch)
@@ -294,3 +294,34 @@ def test_shutdown_denies_pending_approvals_before_draining() -> None:
 
     assert waited == [(False, "")]
     assert not _still_pending(resources)
+
+
+def test_turn_finishing_under_a_cancelled_await_is_still_acknowledged() -> None:
+    """Shutdown cancels the await, not the executor thread — finished work must not replay."""
+    acked: list[BuzzInboundMessage] = []
+    event = _reply()
+    handed_off = asyncio.Event()
+
+    async def _completes_then_hangs(_event: object, **kw: object) -> None:
+        # Stands in for run_in_executor: the turn body runs to completion on
+        # its own thread (side effects landed) while the await never returns.
+        on_handled = kw["on_handled"]
+        assert callable(on_handled)
+        on_handled()
+        handed_off.set()
+        await asyncio.Event().wait()
+
+    async def _run() -> None:
+        task = asyncio.get_running_loop().create_task(
+            _dispatch_coroutine(event, acknowledge=acked.append)
+        )
+        await asyncio.wait_for(handed_off.wait(), timeout=1)
+        task.cancel()
+        outcomes = await asyncio.gather(task, return_exceptions=True)
+        assert isinstance(outcomes[0], asyncio.CancelledError)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(background, "handle_polled_inbound_buzz_message", _completes_then_hangs)
+        asyncio.run(_run())
+
+    assert acked == [event]

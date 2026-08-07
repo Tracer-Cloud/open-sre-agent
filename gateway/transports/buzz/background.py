@@ -242,10 +242,18 @@ async def _dispatch_turn(
 ) -> None:
     """Run one turn, then acknowledge it so the poller's cursor may advance.
 
+    Acknowledgement is wired two ways on purpose. ``on_handled`` fires on the
+    executor thread as soon as the turn body returns, which is what keeps a
+    turn that finished during a cancelled shutdown from being replayed — the
+    thread outlives the cancelled ``await``, so waiting for that ``await`` to
+    return would drop the acknowledgement for work whose side effects already
+    landed. The trailing call covers the paths that never reach the executor
+    at all, such as an unauthorized sender. Both are idempotent: the poller
+    only counts the first.
+
     A turn that raises is still acknowledged: the failure is logged, and a
     message that reliably crashes its own turn would otherwise be redelivered
-    on every poll forever. Cancellation is different — ``CancelledError`` is
-    not an ``Exception``, so it skips the acknowledgement below and the event
+    on every poll forever. A turn cancelled *before* its body ran is not, and
     is correctly re-delivered after restart.
     """
     try:
@@ -261,6 +269,7 @@ async def _dispatch_turn(
             pending_approvals=pending_approvals,
             loop=loop,
             handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
+            on_handled=lambda: acknowledge(event),
         )
     except Exception:
         logger.error(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
@@ -34,8 +35,18 @@ async def handle_polled_inbound_buzz_message(
     pending_approvals: PendingApprovals,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
+    on_handled: Callable[[], None] | None = None,
 ) -> None:
-    """Process one long-polled inbound Buzz mention/reply."""
+    """Process one long-polled inbound Buzz mention/reply.
+
+    *on_handled* fires on the executor thread the moment the turn body
+    returns, not when the awaiting coroutine resumes. Shutdown cancels the
+    task awaiting :func:`run_in_executor`, which does not stop the thread
+    underneath it — so a turn can run to completion, post its answer and
+    apply its tool side effects while the cancelled `await` never comes back.
+    Acknowledging from inside the executor keeps that finished work off the
+    replay path; re-running it would duplicate those side effects.
+    """
     key = conversation_key(event)
     user_lock = chat_locks.setdefault(key, asyncio.Lock())
     decision = enforce_inbound_buzz_message_security(
@@ -83,17 +94,21 @@ async def handle_polled_inbound_buzz_message(
         event_loop = loop or asyncio.get_running_loop()
 
         def _run_turn() -> None:
-            with bound_usage_context(
-                surface=SURFACE_BUZZ,
-                session_id=session.session_id,
-                user_id=event.pubkey or None,
-            ):
-                handle_callback_to_gateway_agent(
-                    event.content,
-                    session,
-                    sink,
-                    logger,
-                )
+            try:
+                with bound_usage_context(
+                    surface=SURFACE_BUZZ,
+                    session_id=session.session_id,
+                    user_id=event.pubkey or None,
+                ):
+                    handle_callback_to_gateway_agent(
+                        event.content,
+                        session,
+                        sink,
+                        logger,
+                    )
+            finally:
+                if on_handled is not None:
+                    on_handled()
 
         await event_loop.run_in_executor(executor, _run_turn)
 
