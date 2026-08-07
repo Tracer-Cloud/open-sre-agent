@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 from gateway.transports.buzz.poller.poller import BuzzFeedPoller
@@ -16,58 +17,83 @@ def _event(event_id: str, *, created_at: int, channel: str = "chan-1", pubkey: s
     }
 
 
-def test_poll_once_parses_events_and_commit_advances_cursor() -> None:
+def _feed(*events: dict[str, Any]) -> dict[str, Any]:
+    return {"success": True, "error": "", "events": list(events)}
+
+
+def test_acknowledging_every_event_advances_the_cursor() -> None:
     client = MagicMock(spec=BuzzClient)
-    client.get_feed.return_value = {
-        "success": True,
-        "error": "",
-        "events": [_event("ev1", created_at=100), _event("ev2", created_at=200)],
-    }
+    client.get_feed.return_value = _feed(
+        _event("ev1", created_at=100), _event("ev2", created_at=200)
+    )
     poller = BuzzFeedPoller(client)
 
     events = poller.poll_once()
 
     assert [e.event_id for e in events] == ["ev1", "ev2"]
     client.get_feed.assert_called_once_with(since=0, types="mentions")
-    assert poller._since == 0  # not yet committed
+    assert poller._since == 0  # fetched is not handled
 
-    poller.commit()
+    for event in events:
+        poller.acknowledge(event)
 
+    assert poller._since == 200
+    assert poller.inflight_count() == 0
+
+
+def test_cursor_waits_for_the_oldest_unfinished_turn() -> None:
+    """A slow older turn must hold the cursor back even once newer ones finish."""
+    client = MagicMock(spec=BuzzClient)
+    client.get_feed.return_value = _feed(
+        _event("slow", created_at=100), _event("fast", created_at=200)
+    )
+    poller = BuzzFeedPoller(client)
+    slow, fast = poller.poll_once()
+
+    poller.acknowledge(fast)
+    assert poller._since == 0  # `slow` is still running
+
+    poller.acknowledge(slow)
     assert poller._since == 200
 
 
-def test_poll_once_without_commit_does_not_advance_cursor() -> None:
-    """A crash between poll_once() and commit() must re-fetch, not skip, the batch."""
+def test_unacknowledged_events_are_not_refetched_while_in_flight() -> None:
+    """Re-polling mid-turn must not dispatch the same mention twice."""
     client = MagicMock(spec=BuzzClient)
-    client.get_feed.return_value = {
-        "success": True,
-        "error": "",
-        "events": [_event("ev1", created_at=100)],
-    }
-    poller = BuzzFeedPoller(client)
-
-    poller.poll_once()
-    poller.poll_once()  # simulates a restart before the first batch was committed
-
-    assert client.get_feed.call_args_list[0].kwargs["since"] == 0
-    assert client.get_feed.call_args_list[1].kwargs["since"] == 0
-
-
-def test_poll_once_dedupes_events_at_the_same_inclusive_cursor() -> None:
-    """``since`` is inclusive, so the same event would replay forever without this."""
-    client = MagicMock(spec=BuzzClient)
-    client.get_feed.side_effect = [
-        {"success": True, "error": "", "events": [_event("ev1", created_at=100)]},
-        {"success": True, "error": "", "events": [_event("ev1", created_at=100)]},
-    ]
+    client.get_feed.return_value = _feed(_event("ev1", created_at=100))
     poller = BuzzFeedPoller(client)
 
     first = poller.poll_once()
-    poller.commit()
     second = poller.poll_once()
 
     assert [e.event_id for e in first] == ["ev1"]
     assert second == []
+    assert poller.inflight_count() == 1
+
+
+def test_never_acknowledged_events_replay_on_a_fresh_poller() -> None:
+    """The crash/shutdown guarantee: unfinished work is re-delivered, not skipped."""
+    client = MagicMock(spec=BuzzClient)
+    client.get_feed.return_value = _feed(_event("ev1", created_at=100))
+    poller = BuzzFeedPoller(client)
+    poller.poll_once()  # dispatched, never acknowledged
+
+    restarted = BuzzFeedPoller(client)
+
+    assert [e.event_id for e in restarted.poll_once()] == ["ev1"]
+
+
+def test_acknowledged_events_do_not_replay_at_the_inclusive_cursor() -> None:
+    """``since`` is inclusive, so a handled event would replay forever without dedup."""
+    client = MagicMock(spec=BuzzClient)
+    client.get_feed.return_value = _feed(_event("ev1", created_at=100))
+    poller = BuzzFeedPoller(client)
+
+    first = poller.poll_once()
+    poller.acknowledge(first[0])
+
+    assert poller.poll_once() == []
+    assert client.get_feed.call_args_list[-1].kwargs["since"] == 100
 
 
 def test_poll_once_returns_empty_list_on_fetch_failure() -> None:

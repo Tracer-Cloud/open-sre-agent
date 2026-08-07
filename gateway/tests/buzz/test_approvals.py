@@ -7,6 +7,8 @@ from gateway.transports.buzz.approvals import BuzzApprovalPrompter
 from gateway.transports.buzz.pending_approvals import PendingApprovals
 from integrations.buzz.client import BuzzClient
 
+REQUESTER = "a" * 64
+
 
 def _client() -> MagicMock:
     return MagicMock(spec=BuzzClient)
@@ -19,18 +21,21 @@ def test_request_posts_prompt_registers_and_resolves_on_approve() -> None:
     broker = ApprovalBroker()
     pending = PendingApprovals()
     prompter = BuzzApprovalPrompter(
-        broker=broker, client=client, channel_id="chan-1", pending_approvals=pending
+        broker=broker,
+        client=client,
+        channel_id="chan-1",
+        requester_pubkey=REQUESTER,
+        pending_approvals=pending,
     )
 
     # Simulate the poll loop resolving the approval before request() waits.
-    approval_id = pending.pop_match(frozenset())  # no-op, sanity check empty state
-    assert approval_id is None
+    assert pending.find(frozenset()) is None  # sanity check empty state
 
     def _resolve_soon() -> None:
         # request() registers under client.send_message's return; grab it via the broker.
-        matched = pending.pop_match(frozenset({"prompt1"}))
+        matched = pending.claim(frozenset({"prompt1"}), pubkey=REQUESTER, channel_id="chan-1")
         assert matched is not None
-        broker.resolve(matched, approved=True, decided_by="human-pubkey")
+        broker.resolve(matched, approved=True, decided_by=REQUESTER)
 
     # Patch broker.wait to trigger resolution synchronously instead of a real thread race.
     original_wait = broker.wait
@@ -46,11 +51,11 @@ def test_request_posts_prompt_registers_and_resolves_on_approve() -> None:
     )
 
     assert approved is True
-    assert decided_by == "human-pubkey"
+    assert decided_by == REQUESTER
     client.edit_message.assert_called_once()
     assert "approved" in client.edit_message.call_args.kwargs["content"]
     # Cleaned up after resolution.
-    assert pending.pop_match(frozenset({"prompt1"})) is None
+    assert pending.find(frozenset({"prompt1"})) is None
 
 
 def test_request_returns_false_when_prompt_post_fails() -> None:
@@ -59,7 +64,11 @@ def test_request_returns_false_when_prompt_post_fails() -> None:
     broker = ApprovalBroker()
     pending = PendingApprovals()
     prompter = BuzzApprovalPrompter(
-        broker=broker, client=client, channel_id="chan-1", pending_approvals=pending
+        broker=broker,
+        client=client,
+        channel_id="chan-1",
+        requester_pubkey=REQUESTER,
+        pending_approvals=pending,
     )
 
     approved, decided_by = prompter.request(
@@ -78,7 +87,11 @@ def test_request_expiry_edits_outcome_and_denies() -> None:
     broker = ApprovalBroker()
     pending = PendingApprovals()
     prompter = BuzzApprovalPrompter(
-        broker=broker, client=client, channel_id="chan-1", pending_approvals=pending
+        broker=broker,
+        client=client,
+        channel_id="chan-1",
+        requester_pubkey=REQUESTER,
+        pending_approvals=pending,
     )
 
     approved, decided_by = prompter.request(
@@ -88,4 +101,4 @@ def test_request_expiry_edits_outcome_and_denies() -> None:
     assert approved is False
     assert decided_by == ""
     assert "expired" in client.edit_message.call_args.kwargs["content"]
-    assert pending.pop_match(frozenset({"prompt1"})) is None
+    assert pending.find(frozenset({"prompt1"})) is None

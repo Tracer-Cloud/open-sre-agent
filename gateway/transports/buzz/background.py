@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from gateway.core.runtime.approvals import ApprovalBroker
@@ -23,6 +24,9 @@ from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
 
 logger = logging.getLogger(__name__)
+
+_APPROVE_WORDS = frozenset({"approve", "approved", "approves", "yes", "y", "ok", "okay", "lgtm"})
+_DENY_WORDS = frozenset({"deny", "denied", "denies", "no", "n", "reject", "rejected", "cancel"})
 
 
 class BuzzGatewayBackground:
@@ -127,6 +131,10 @@ async def _poll_buzz_until_stopped(
     can ever deliver the reply that unblocks it. Awaiting the turn here would
     stall polling for the duration of every approval wait, so the reply that
     resolves it could never arrive.
+
+    Because dispatch is detached, the poller's cursor is advanced by the turn
+    task itself (:meth:`BuzzFeedPoller.acknowledge`), never by this loop —
+    fetching an event is not evidence anybody handled it.
     """
     poller = BuzzFeedPoller(resources.client)
     turn_semaphore = asyncio.Semaphore(settings.max_concurrent_turns)
@@ -139,6 +147,7 @@ async def _poll_buzz_until_stopped(
 
             for event in events:
                 if _resolve_if_approval_reply(event, resources, settings):
+                    poller.acknowledge(event)
                     continue
                 task = asyncio.create_task(
                     _dispatch_turn(
@@ -154,20 +163,65 @@ async def _poll_buzz_until_stopped(
                         loop=loop,
                         handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                         logger=logger,
+                        acknowledge=poller.acknowledge,
                     )
                 )
                 pending_tasks.add(task)
                 task.add_done_callback(pending_tasks.discard)
-
-            poller.commit()
 
         except Exception:
             logger.error("Error while polling Buzz mentions", exc_info=True)
 
         await asyncio.to_thread(stop_event.wait, settings.poll_interval_seconds)
 
+    await _drain_active_turns(
+        pending_tasks,
+        resources=resources,
+        settings=settings,
+        logger=logger,
+        poller=poller,
+    )
+
+
+async def _drain_active_turns(
+    pending_tasks: set[asyncio.Task[None]],
+    *,
+    resources: BuzzPollingRuntime,
+    settings: GatewaySettings,
+    logger: logging.Logger,
+    poller: BuzzFeedPoller,
+) -> None:
+    """Let in-flight turns finish before the event loop closes under them.
+
+    Polling has stopped, so nothing can deliver an approval reply any more —
+    a turn parked in ``ApprovalBroker.wait`` would otherwise sit there until
+    the full ``MAX_APPROVAL_WAIT_SECONDS`` expiry, far past any sane shutdown
+    budget. Every outstanding request is therefore resolved as denied first,
+    which returns those turns to the loop immediately and lets them post the
+    "action skipped" outcome they owe the channel.
+
+    The remaining wait is deliberately bounded rather than generous: whatever
+    does not finish was never acknowledged, so the cursor still sits behind it
+    and the next start re-delivers the mention. Shutdown stays prompt, and the
+    work is deferred rather than dropped.
+    """
+    for approval_id in resources.pending_approvals.drain():
+        resources.approvals.resolve(approval_id, approved=False, decided_by="")
+
     if pending_tasks:
-        await asyncio.wait(pending_tasks, timeout=8.0)
+        _done, still_running = await asyncio.wait(
+            pending_tasks, timeout=settings.shutdown_drain_seconds
+        )
+        for task in still_running:
+            task.cancel()
+
+    unhandled = poller.inflight_count()
+    if unhandled:
+        logger.warning(
+            "[buzz-gateway] shutting down with %d unfinished turn(s); "
+            "their mentions stay uncommitted and are re-delivered on next start",
+            unhandled,
+        )
 
 
 async def _dispatch_turn(
@@ -184,8 +238,16 @@ async def _dispatch_turn(
     loop: asyncio.AbstractEventLoop,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
     logger: logging.Logger,
+    acknowledge: Callable[[BuzzInboundMessage], None],
 ) -> None:
-    """Run one turn, logging (not raising) so a bad turn can't kill the poll loop."""
+    """Run one turn, then acknowledge it so the poller's cursor may advance.
+
+    A turn that raises is still acknowledged: the failure is logged, and a
+    message that reliably crashes its own turn would otherwise be redelivered
+    on every poll forever. Cancellation is different — ``CancelledError`` is
+    not an ``Exception``, so it skips the acknowledgement below and the event
+    is correctly re-delivered after restart.
+    """
     try:
         await handle_polled_inbound_buzz_message(
             event,
@@ -207,6 +269,7 @@ async def _dispatch_turn(
             event.channel_id,
             exc_info=True,
         )
+    acknowledge(event)
 
 
 def _resolve_if_approval_reply(
@@ -214,16 +277,26 @@ def _resolve_if_approval_reply(
 ) -> bool:
     """Resolve *event* against a pending approval if its reply targets one.
 
+    Returns whether the event was consumed here — a reply aimed at a live
+    prompt never falls through to start a chat turn, decided or not.
+
     Runs on the poll loop's own thread — never the turn executor, so a
     waiting turn's ``ApprovalBroker.wait`` never contends with the same
-    lock/semaphore it is blocked on. Checks authorization *before* popping
-    the pending-approval slot: an unauthorized participant must not be able
-    to approve or deny a protected action just by replying to its prompt, and
-    popping first would let them consume the slot and lock out the real
-    responder.
+    lock/semaphore it is blocked on. Three checks gate the decision, and none
+    of them consume the prompt when they fail:
+
+    1. the responder is still an authorized Buzz identity *now*, not merely
+       when the turn started;
+    2. they are the member whose own turn raised the request, replying in the
+       channel it was posted to (:meth:`PendingApprovals.claim`) — a shared
+       channel must not let one member approve another's protected write;
+    3. the reply actually says approve or deny, so an unrelated "hold on, let
+       me check" is not silently read as a denial.
     """
-    if resources.pending_approvals.peek_match(event.reply_event_ids) is None:
+    pending = resources.pending_approvals.find(event.reply_event_ids)
+    if pending is None:
         return False
+
     if not is_pubkey_authorized(
         pubkey=event.pubkey,
         channel_id=event.channel_id,
@@ -234,19 +307,44 @@ def _resolve_if_approval_reply(
             event.pubkey,
             event.channel_id,
         )
-        return False
-    approval_id = resources.pending_approvals.pop_match(event.reply_event_ids)
-    if approval_id is None:
-        return False
-    resources.approvals.resolve(
-        approval_id, approved=_is_approve(event.content), decided_by=event.pubkey
+        return True
+
+    approved = _decision(event.content)
+    if approved is None:
+        logger.info(
+            "[buzz-gateway] approval reply was not a decision pubkey=%s channel=%s",
+            event.pubkey,
+            event.channel_id,
+        )
+        return True
+
+    approval_id = resources.pending_approvals.claim(
+        event.reply_event_ids, pubkey=event.pubkey, channel_id=event.channel_id
     )
+    if approval_id is None:
+        logger.warning(
+            "[buzz-gateway] ignoring approval reply from a member who did not "
+            "raise the request pubkey=%s channel=%s",
+            event.pubkey,
+            event.channel_id,
+        )
+        return True
+
+    resources.approvals.resolve(approval_id, approved=approved, decided_by=event.pubkey)
     return True
 
 
-def _is_approve(text: str) -> bool:
-    first_word = text.strip().split(maxsplit=1)
-    return bool(first_word) and first_word[0].lower().startswith(("approve", "yes"))
+def _decision(text: str) -> bool | None:
+    """Read a reply as approve/deny, or ``None`` when it is neither."""
+    words = text.strip().lower().split(maxsplit=1)
+    if not words:
+        return None
+    first = words[0].strip("*_`.!,:")
+    if first in _APPROVE_WORDS:
+        return True
+    if first in _DENY_WORDS:
+        return False
+    return None
 
 
 __all__ = ["BuzzGatewayBackground", "start_buzz_gateway_background"]

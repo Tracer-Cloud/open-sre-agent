@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 
 from gateway.transports.buzz.poller.cursor import load_cursor, save_cursor
@@ -20,64 +21,102 @@ class BuzzFeedPoller:
     """Poll the mention feed and yield normalized inbound messages.
 
     ``feed get --since <ts>`` is inclusive (NIP-01 ``since`` semantics: events
-    with ``created_at >= since`` match), so re-polling at the same cursor would
-    replay the most recent event forever if the cursor advanced to its exact
-    timestamp. ``_seen_at_cursor`` dedupes within that one timestamp instead of
-    advancing the cursor past it, which would risk skipping a different event
-    that happens to share the same second.
+    with ``created_at >= since`` match), so the cursor cannot simply track the
+    newest event seen — re-polling would replay it forever. It instead names
+    the oldest second still worth asking for, with ``_acked_at_cursor`` deduping
+    within that one second rather than advancing past it, which would risk
+    skipping a different event sharing the same timestamp.
 
-    ``poll_once``/``commit`` are deliberately two steps: persisting the cursor
-    only after the caller has finished dispatching the whole batch means a
-    crash mid-batch re-fetches and re-dispatches it on restart, instead of
-    silently skipping whatever events this process didn't get to.
+    **The cursor tracks handled work, not fetched work.** ``poll_once`` marks
+    what it returns as in flight; only :meth:`acknowledge` — called once a turn
+    has actually run — lets the cursor move, and only past events strictly
+    older than the oldest turn still running. A turn that dies mid-flight, or
+    that shutdown cuts short, therefore leaves the cursor behind it and is
+    re-delivered on the next start instead of being silently skipped.
     """
 
     def __init__(self, client: BuzzClient) -> None:
         self._client = client
+        self._lock = threading.Lock()
         self._since = load_cursor()
-        self._seen_at_cursor: set[str] = set()
+        # Ids at exactly ``_since`` that are fully handled — the inclusive-since
+        # dedup set. Deliberately not persisted: replaying one event across a
+        # restart is the accepted cost of never skipping one.
+        self._acked_at_cursor: set[str] = set()
+        # event_id -> created_at for events dispatched but not yet handled.
+        self._inflight: dict[str, int] = {}
+        # Handled events the cursor cannot cover yet because an older turn is
+        # still running. Bounded by in-flight concurrency, not by feed volume.
+        self._acked_ahead: dict[str, int] = {}
         self._last_warning_monotonic = 0.0
-        self._pending_latest: int | None = None
-        self._pending_events: list[BuzzInboundMessage] = []
 
     def poll_once(self) -> list[BuzzInboundMessage]:
-        """Fetch new events. Call :meth:`commit` once the batch is dispatched."""
+        """Fetch events not yet dispatched, and mark them in flight."""
         result = self._client.get_feed(since=self._since, types=_FEED_TYPES)
         if not result["success"]:
             self._log_transient("[buzz-gateway] feed get failed: %s", result["error"])
             return []
 
-        events: list[BuzzInboundMessage] = []
-        latest = self._since
-        for raw in result["events"]:
-            if not isinstance(raw, dict):
-                continue
-            parsed = parse_feed_event(raw)
-            if parsed is None:
-                continue
-            if parsed.created_at == self._since and parsed.event_id in self._seen_at_cursor:
-                continue
-            events.append(parsed)
-            latest = max(latest, parsed.created_at)
+        fresh: list[BuzzInboundMessage] = []
+        with self._lock:
+            for raw in result["events"]:
+                if not isinstance(raw, dict):
+                    continue
+                parsed = parse_feed_event(raw)
+                if parsed is None or self._already_seen(parsed):
+                    continue
+                self._inflight[parsed.event_id] = parsed.created_at
+                fresh.append(parsed)
+        return fresh
 
-        self._pending_latest = latest
-        self._pending_events = events
-        return events
+    def acknowledge(self, event: BuzzInboundMessage) -> None:
+        """Mark one dispatched event handled and advance the cursor if safe."""
+        with self._lock:
+            created_at = self._inflight.pop(event.event_id, None)
+            if created_at is None:
+                return
+            self._acked_ahead[event.event_id] = created_at
+            self._advance_cursor()
 
-    def commit(self) -> None:
-        """Persist cursor progress for the batch last returned by :meth:`poll_once`."""
-        if self._pending_latest is None:
+    def inflight_count(self) -> int:
+        """How many dispatched events have not been acknowledged yet."""
+        with self._lock:
+            return len(self._inflight)
+
+    def _already_seen(self, event: BuzzInboundMessage) -> bool:
+        if event.event_id in self._inflight or event.event_id in self._acked_ahead:
+            return True
+        return event.created_at == self._since and event.event_id in self._acked_at_cursor
+
+    def _advance_cursor(self) -> None:
+        """Move the cursor to the newest handled second no in-flight turn needs."""
+        oldest_inflight = min(self._inflight.values(), default=None)
+        coverable = [
+            created_at
+            for created_at in self._acked_ahead.values()
+            # Strictly older: ``since`` has one-second resolution, so covering
+            # the same second as a running turn would skip it on restart.
+            if oldest_inflight is None or created_at < oldest_inflight
+        ]
+        if not coverable:
             return
-        latest, events = self._pending_latest, self._pending_events
-        self._pending_latest = None
-        self._pending_events = []
-
-        if latest > self._since:
-            self._since = latest
-            self._seen_at_cursor = {e.event_id for e in events if e.created_at == latest}
+        watermark = max(coverable)
+        if watermark < self._since:
+            return
+        if watermark > self._since:
+            self._since = watermark
+            self._acked_at_cursor = set()
             save_cursor(self._since)
-        else:
-            self._seen_at_cursor.update(e.event_id for e in events)
+        self._acked_at_cursor.update(
+            event_id
+            for event_id, created_at in self._acked_ahead.items()
+            if created_at == self._since
+        )
+        self._acked_ahead = {
+            event_id: created_at
+            for event_id, created_at in self._acked_ahead.items()
+            if created_at > self._since
+        }
 
     def _log_transient(self, message: str, *args: object) -> None:
         now = time.monotonic()

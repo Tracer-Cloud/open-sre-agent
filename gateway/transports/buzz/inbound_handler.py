@@ -74,6 +74,7 @@ async def handle_polled_inbound_buzz_message(
                     broker=approvals,
                     client=client,
                     channel_id=event.channel_id,
+                    requester_pubkey=event.pubkey,
                     pending_approvals=pending_approvals,
                 )
             ),

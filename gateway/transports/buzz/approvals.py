@@ -7,6 +7,10 @@ a pending approval prompt — via ``pending_approvals``, shared through
 directly instead of starting a new turn. A plain "approve"/"deny" reply is
 enough: Buzz Desktop auto-tags the prompt's author (this agent) on any reply
 to it, so it still surfaces in the mention feed with no explicit @mention.
+
+The prompt is answerable only by the member whose turn raised it, in the
+channel it was posted to — see
+:class:`gateway.transports.buzz.pending_approvals.PendingApprovals`.
 """
 
 from __future__ import annotations
@@ -35,11 +39,13 @@ class BuzzApprovalPrompter:
         broker: ApprovalBroker,
         client: BuzzClient,
         channel_id: str,
+        requester_pubkey: str,
         pending_approvals: PendingApprovals,
     ) -> None:
         self._broker = broker
         self._client = client
         self._channel_id = channel_id
+        self._requester_pubkey = requester_pubkey
         self._pending_approvals = pending_approvals
 
     def request(
@@ -57,7 +63,10 @@ class BuzzApprovalPrompter:
             body += f"\n{reason.strip()}"
         if preview:
             body += f"\n```\n{preview}\n```"
-        body += "\n\nReply **approve** or **deny** to this message."
+        body += (
+            f"\n\n`{self._requester_pubkey[:8]}…` — reply **approve** or **deny** "
+            "to this message. Only you can answer it."
+        )
         result = self._client.send_message(channel=self._channel_id, content=body)
         if not result["success"]:
             logger.warning(
@@ -69,7 +78,12 @@ class BuzzApprovalPrompter:
             return (False, "")
 
         event_id = result["event_id"]
-        self._pending_approvals.register(event_id, approval_id)
+        self._pending_approvals.register(
+            event_id,
+            approval_id=approval_id,
+            requester_pubkey=self._requester_pubkey,
+            channel_id=self._channel_id,
+        )
         try:
             timeout = min(float(expiry_seconds), MAX_APPROVAL_WAIT_SECONDS)
             approved, decided_by = self._broker.wait(approval_id, timeout=timeout)

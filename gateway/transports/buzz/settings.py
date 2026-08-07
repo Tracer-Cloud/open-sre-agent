@@ -30,6 +30,11 @@ class GatewaySettings(StrictConfigModel):
     poll_interval_seconds: float = Field(default=15.0, gt=0)
     stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
     max_concurrent_turns: int = Field(default=4, ge=1)
+    # How long shutdown lets in-flight turns finish. Kept under the gateway's
+    # own 8s thread join: pending approvals are denied before the drain starts,
+    # so turns return promptly, and anything slower is re-delivered next start
+    # rather than waited on.
+    shutdown_drain_seconds: float = Field(default=5.0, gt=0)
     auto_start_enabled: bool = True
 
 
