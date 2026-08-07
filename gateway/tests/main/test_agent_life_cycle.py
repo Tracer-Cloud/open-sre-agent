@@ -247,6 +247,8 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     async def _run_message() -> None:
         executor = ThreadPoolExecutor(max_workers=1)
         try:
+            from gateway.core.runtime.approvals import ApprovalBroker
+
             await handle_polled_inbound_telegram_message(
                 TelegramInboundMessage(
                     update_id=1,
@@ -261,6 +263,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
                 executor=executor,
                 chat_locks={},
                 turn_semaphore=asyncio.Semaphore(1),
+                approvals=ApprovalBroker(),
                 handle_callback_to_gateway_agent=callback,
             )
         finally:

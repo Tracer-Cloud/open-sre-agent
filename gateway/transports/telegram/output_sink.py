@@ -39,7 +39,9 @@ class GatewayOutputSink:
         client: TelegramBotClient,
         chat_id: str,
         edit_interval_seconds: float = 1.5,
+        tool_hooks: object | None = None,
     ) -> None:
+        self.tool_hooks = tool_hooks
         self._client = client
         self._chat_id = chat_id
         self._edit_interval = edit_interval_seconds

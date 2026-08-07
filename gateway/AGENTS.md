@@ -148,6 +148,45 @@ POST /investigate + InvestigationWorker ──► AgentSession.investigate (Path
   `gateway_turn_*` with `surface` ∈ {slack,telegram,discord}; investigate uses
   separate `investigation_*` events (no capacity-reject event yet).
 
+## Host parity (channels)
+
+Same turn engine for Slack / Telegram / Discord: ingress → `GatewayTurnHandler`
+→ `SessionAgentPool` → `AgentSession.chat`. Web investigate is Path-2 (separate
+verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
+
+| Concern | Slack | Telegram | Discord | Web |
+|---------|-------|----------|---------|-----|
+| Cancel / stop mid-turn | **partial** — soft timeout UX; handler not cancelled | **no** — no turn timeout / user-stop | **partial** — same as Slack | **partial** — queued investigate cancel only |
+| Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — Path-2 |
+| Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
+| Sink redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
+| Principal / actor | **yes** — `slack/principal.py` | **yes** — `telegram/principal.py` | **yes** — `discord/principal.py` | **partial** — Clerk org audit; no `StorageScope` |
+| Capacity gate | **yes** — process gate + transport pool | **yes** — same + TG semaphore | **yes** — same + executor | **no** — Path-2 ungated |
+
+**Documented exceptions (do not “fix” by forking a second loop):**
+
+- Gateway chat disables `task_cancel` / investigation / llm_provider
+  (`GatewayTurnHandler._UNSUPPORTED_GATEWAY_CAPABILITIES`).
+- Path-2 web investigate is ungated and has no chat approval prompter.
+- True mid-turn cancel is still missing on all chat hosts (soft timeout ≠ cancel).
+- Telegram write-tool approvals require a non-empty `allowed_user_ids` allowlist
+  (same fail-closed posture as Discord).
+
+**Characterization:** live-session tools —
+`tests/runtime/test_turn_handler.py` +
+`test_gateway_chat_never_builds_core_agent_or_precomputed_tools`;
+redaction — Slack/Telegram/Discord sink tests + `tests/runtime/test_status_messages.py`;
+Telegram approvals — `tests/telegram/test_approvals.py`.
+
+**Dogfood + smoke (turn-engine regressions):**
+
+| Check | How |
+|-------|-----|
+| Borders + capacity | `pytest gateway/tests/test_package_borders.py gateway/tests/runtime/test_concurrency_gate.py -q` |
+| Smoke gateway wiring | `./trace smoke --suite gateway` (or tags covering `cli.gateway_*`) |
+| Dogfood (dev silo only) | `@mention` on **dev** Slack — thread continuity, Digging in…, `Want me to:` → `yes`; one Socket Mode consumer. See notes `ops-dogfood.html#glossary`. |
+| Not a substitute | Laptop `opensre gateway` + smoke ≠ dogfood |
+
 ## Testing
 
 Gateway E2E regression tests should drive a normalized polled Telegram message

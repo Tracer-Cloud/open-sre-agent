@@ -35,11 +35,18 @@ class TelegramBotClient:
         return True, dict(result) if isinstance(result, Mapping) else {}, ""
 
     def send_message(
-        self, chat_id: str, text: str, *, parse_mode: str = ""
+        self,
+        chat_id: str,
+        text: str,
+        *,
+        parse_mode: str = "",
+        reply_markup: Mapping[str, Any] | None = None,
     ) -> tuple[bool, str, str]:
         payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if parse_mode:
             payload["parse_mode"] = parse_mode
+        if reply_markup is not None:
+            payload["reply_markup"] = dict(reply_markup)
         ok, result, error = self._call("sendMessage", payload)
         if not ok:
             logger.warning("[telegram-gateway] sendMessage failed: %s", error)
@@ -53,6 +60,7 @@ class TelegramBotClient:
         text: str,
         *,
         parse_mode: str = "",
+        reply_markup: Mapping[str, Any] | None = None,
     ) -> tuple[bool, str]:
         payload: dict[str, Any] = {
             "chat_id": chat_id,
@@ -61,10 +69,20 @@ class TelegramBotClient:
         }
         if parse_mode:
             payload["parse_mode"] = parse_mode
+        if reply_markup is not None:
+            payload["reply_markup"] = dict(reply_markup)
         ok, _, error = self._call("editMessageText", payload)
         if not ok:
             logger.debug("[telegram-gateway] editMessageText failed: %s", error)
         return ok, error
+
+    def answer_callback_query(self, callback_query_id: str, *, text: str = "") -> None:
+        payload: dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+        ok, _, error = self._call("answerCallbackQuery", payload)
+        if not ok:
+            logger.debug("[telegram-gateway] answerCallbackQuery failed: %s", error)
 
     def send_chat_action(self, chat_id: str, action: str = "typing") -> None:
         self._call("sendChatAction", {"chat_id": chat_id, "action": action})

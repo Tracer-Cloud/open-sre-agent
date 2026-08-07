@@ -161,7 +161,7 @@ def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> Non
 
 
 def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
-    """Sinks without the attribute (Telegram) run unhooked, as before."""
+    """Sinks without tool_hooks (Telegram today) run unhooked — documented host gap."""
 
     class _BareSink:
         def finalize(self, text: str) -> None:

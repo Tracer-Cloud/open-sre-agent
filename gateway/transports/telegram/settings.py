@@ -61,13 +61,24 @@ class GatewayEnv(BaseSettings):
 
 @dataclass(frozen=True)
 class TelegramInboundMessage:
-    """Normalized inbound Telegram DM text or callback."""
+    """Normalized inbound Telegram DM text."""
 
     update_id: int
     user_id: str
     chat_id: str
     message_id: str
     text: str
+
+
+@dataclass(frozen=True)
+class TelegramCallbackQuery:
+    """Normalized Approve/Deny (or other) inline-keyboard callback."""
+
+    update_id: int
+    user_id: str
+    chat_id: str
+    callback_query_id: str
+    data: str
 
 
 def load_telegram_credentials() -> Mapping[str, Any]:

@@ -7,6 +7,7 @@ import logging
 import threading
 
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.transports.telegram.approvals import handle_callback_query
 from gateway.transports.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
 )
@@ -118,10 +119,18 @@ async def _poll_telegram_until_stopped(
 
     while not stop_event.is_set():
         try:
-            events = await asyncio.to_thread(poller.poll_once)
+            batch = await asyncio.to_thread(poller.poll_once)
             loop = asyncio.get_running_loop()
 
-            for event in events:
+            for callback in batch.callbacks:
+                handle_callback_query(
+                    callback,
+                    broker=resources.approvals,
+                    client=resources.client,
+                    allowed_user_ids=settings.allowed_user_ids,
+                )
+
+            for event in batch.messages:
                 await handle_polled_inbound_telegram_message(
                     event,
                     client=resources.client,
@@ -130,6 +139,7 @@ async def _poll_telegram_until_stopped(
                     executor=resources.executor,
                     chat_locks=resources.chat_locks,
                     turn_semaphore=turn_semaphore,
+                    approvals=resources.approvals,
                     loop=loop,
                     handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                 )

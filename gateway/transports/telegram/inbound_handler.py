@@ -7,8 +7,10 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from config.scope_context import bound_storage_scope
+from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
+from gateway.transports.telegram.approvals import TelegramApprovalPrompter
 from gateway.transports.telegram.inbound_security import (
     enforce_inbound_telegram_message_security,
 )
@@ -34,6 +36,7 @@ async def handle_polled_inbound_telegram_message(
     executor: ThreadPoolExecutor,
     chat_locks: dict[str, asyncio.Lock],
     turn_semaphore: asyncio.Semaphore,
+    approvals: ApprovalBroker,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
 ) -> None:
@@ -84,6 +87,13 @@ async def handle_polled_inbound_telegram_message(
                 client=client,
                 chat_id=event.chat_id,
                 edit_interval_seconds=settings.stream_edit_interval_seconds,
+                tool_hooks=approval_tool_hooks(
+                    TelegramApprovalPrompter(
+                        client=client,
+                        broker=approvals,
+                        chat_id=event.chat_id,
+                    )
+                ),
             )
 
             event_loop = loop or asyncio.get_running_loop()

@@ -13,7 +13,9 @@ from gateway.transports.telegram.settings import GatewaySettings
 
 @patch("gateway.transports.telegram.background.TelegramPoller")
 def test_start_starts_poll_thread(mock_poller_cls: MagicMock) -> None:
-    mock_poller_cls.return_value.poll_once.return_value = []
+    from gateway.transports.telegram.poller.poller import TelegramPollResult
+
+    mock_poller_cls.return_value.poll_once.return_value = TelegramPollResult()
     logger = logging.getLogger("gateway.test")
     handle = start_telegram_gateway_background(
         settings=GatewaySettings(bot_token="tok"),

@@ -213,3 +213,85 @@ def test_concurrency_limited_handler_stays_out_of_production_gateway() -> None:
     assert offenders == [], (
         "quarantined ConcurrencyLimitedTurnHandler leaked into production:\n" + "\n".join(offenders)
     )
+
+
+def test_production_gateway_never_subclasses_core_agent() -> None:
+    """Wave D4: gateway hosts HeadlessAgent; it must not own a core.agent.Agent subclass.
+
+    Chat turns reuse SessionAgentPool → build_default_headless_agent. A production
+    ``class …(Agent)`` under gateway/ would be a second brain beside the harness.
+    """
+    offenders: list[str] = []
+    for path in _python_files("gateway"):
+        if "tests" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        agent_aliases: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module in {
+                "core.agent",
+                "core.agent.agent",
+            }:
+                for alias in node.names:
+                    if alias.name == "Agent":
+                        agent_aliases.add(alias.asname or "Agent")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name in {"core.agent", "core.agent.agent"}:
+                        # ``import core.agent`` — subclass would be Attribute on that name.
+                        agent_aliases.add(f"{alias.asname or alias.name}.Agent")
+        if not agent_aliases:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for base in node.bases:
+                base_name = _ast_name(base)
+                if base_name in agent_aliases or base_name == "Agent":
+                    offenders.append(
+                        f"{path.relative_to(REPO_ROOT)} → class {node.name}({base_name})"
+                    )
+    assert offenders == [], "production gateway subclasses core.agent.Agent:\n" + "\n".join(
+        offenders
+    )
+
+
+def _ast_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        left = _ast_name(node.value)
+        return f"{left}.{node.attr}" if left else node.attr
+    return ""
+
+
+def test_gateway_chat_never_builds_core_agent_or_precomputed_tools() -> None:
+    """Wave D4: chat uses SessionAgentPool → HeadlessAgent; no gateway-owned Agent."""
+    offenders: list[str] = []
+    for path in _python_files("gateway"):
+        if "tests" in path.parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                mod = node.module
+                if mod == "core.agent" or (
+                    mod.startswith("core.agent.") and not mod.startswith("core.agent_harness")
+                ):
+                    offenders.append(f"{path.relative_to(REPO_ROOT)} → import {mod}")
+                for alias in node.names:
+                    if alias.name == "build_agent":
+                        offenders.append(
+                            f"{path.relative_to(REPO_ROOT)} → from {mod} import build_agent"
+                        )
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id == "build_agent":
+                    offenders.append(f"{path.relative_to(REPO_ROOT)} → build_agent(...)")
+                if isinstance(func, ast.Attribute) and func.attr == "build_agent":
+                    offenders.append(f"{path.relative_to(REPO_ROOT)} → *.build_agent(...)")
+            elif isinstance(node, ast.keyword) and node.arg == "precomputed_action_tools":
+                offenders.append(f"{path.relative_to(REPO_ROOT)} → precomputed_action_tools=")
+    assert offenders == [], (
+        "gateway must not own a ReAct Agent or precomputed tools:\n" + "\n".join(offenders)
+    )
