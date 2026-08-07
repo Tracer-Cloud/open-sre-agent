@@ -702,6 +702,147 @@ def test_action_turn_allows_identical_single_shell_repeat() -> None:
     assert runs == ["pwd", "pwd"]
 
 
+def test_action_turn_suppresses_duplicate_cli_exec() -> None:
+    """Regression for oracle 203: do not re-run the same cli_exec in one turn.
+
+    Unlike slash/shell (batch set-replay only), cli_exec blocks any identical
+    successful payload the second time — lone accidental replay is the failure.
+    """
+    runs: list[str] = []
+
+    def _run_counting(*, payload: str) -> dict[str, Any]:
+        runs.append(payload)
+        return {"ok": True, "output": f"opensre {payload}"}
+
+    tool = RegisteredTool(
+        name="cli_exec",
+        description="Fake CLI runner.",
+        input_schema={
+            "type": "object",
+            "properties": {"payload": {"type": "string"}},
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c1",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c2",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "please run opensre integrations verify --dry-run",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["integrations verify --dry-run"]
+
+
+def test_action_turn_allows_cli_exec_retry_after_failure() -> None:
+    """Failed cli_exec must not count as succeeded — the model may retry once."""
+    runs: list[str] = []
+
+    def _run_counting(*, payload: str) -> dict[str, Any]:
+        runs.append(payload)
+        if len(runs) == 1:
+            return {"ok": False, "error": "transient", "is_error": True}
+        return {"ok": True, "output": f"opensre {payload}"}
+
+    tool = RegisteredTool(
+        name="cli_exec",
+        description="Fake CLI runner.",
+        input_schema={
+            "type": "object",
+            "properties": {"payload": {"type": "string"}},
+            "required": ["payload"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c1",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="c2",
+                            name="cli_exec",
+                            input={"payload": "integrations verify --dry-run"},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "please run opensre integrations verify --dry-run",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == [
+        "integrations verify --dry-run",
+        "integrations verify --dry-run",
+    ]
+
+
 def test_action_turn_suppresses_duplicate_slash_invoke_pair() -> None:
     """Regression for oracle 202: do not re-run the same slash pair in one turn.
 
