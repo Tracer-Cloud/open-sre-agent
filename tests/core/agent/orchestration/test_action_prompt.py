@@ -521,6 +521,15 @@ def test_database_query_handoff_guidance_block_matches_prefix() -> None:
     assert build_handoff_guidance_block(("database_query:mariadb_dashboard",)) == block
 
 
+def test_incident_description_handoff_guidance_keeps_user_symptoms() -> None:
+    """Oracle 325: bare incident handoffs must not drop service/error specifics."""
+    block = build_handoff_guidance_block(("incident_description:checkout_502_rate",))
+    assert "checkout" in block.lower()
+    assert "502" in block
+    assert "production error pattern" in block.lower()
+    assert build_handoff_guidance_block(("incident_description:orders_cpu_99",)) == block
+
+
 def test_database_query_handoff_injects_guidance_into_assistant_prompt() -> None:
     turn_snapshot = TurnSnapshot(
         text="Use the MySQL tool to query active connections.",

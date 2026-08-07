@@ -5,7 +5,10 @@ from __future__ import annotations
 from core.agent_harness.prompts.assistant.text import HANDOFF_GUIDANCE
 
 # Prefix keys in ``HANDOFF_GUIDANCE`` (trailing ``:``) match any tag with that prefix.
-_HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = ("database_query:",)
+_HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = (
+    "database_query:",
+    "incident_description:",
+)
 
 
 def _guidance_for_handoff_tag(tag: str) -> str | None:

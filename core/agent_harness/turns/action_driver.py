@@ -59,19 +59,9 @@ from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
 
-# Local REPL tools covered by the duplicate-call guard (oracle 202 / 203).
-# - slash/shell: suppress multi-command *batch* set-replays only (lone OK).
-# - cli_exec: suppress any identical second success (lone accidental replay is
-#   the observed failure mode; intentional "run again" → next turn).
-_DEDUPE_BATCH_REPLAY_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
-_DEDUPE_ONCE_TOOL_NAMES: frozenset[str] = frozenset({"cli_exec"})
-_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = (
-    _DEDUPE_BATCH_REPLAY_TOOL_NAMES | _DEDUPE_ONCE_TOOL_NAMES
-)
-
-# A replayed provider batch must include at least this many distinct guarded
-# calls (a lone slash/shell repeating is not a "set replay").
-_REPLAYED_BATCH_MIN_DISTINCT = 2
+# Local REPL tools covered by consecutive identical-batch suppress (oracle 202 /
+# 203): slash_invoke, shell_run, cli_exec. One rule — no per-tool carve-outs.
+_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run", "cli_exec"})
 
 # Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
 _ActionCallFingerprint = tuple[Any, ...]
@@ -111,48 +101,72 @@ def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
 def with_duplicate_action_call_guard(
     base: ToolExecutionHooks | None = None,
 ) -> ToolExecutionHooks:
-    """Block accidental action-tool replays (oracle 202 slash/shell, 203 cli_exec).
+    """Block replaying guarded action calls already covered by the success snapshot.
 
-    Slash/shell: when a provider batch has ≥2 distinct guarded calls and every
-    one already succeeded this turn, suppress. Lone repeats and A→B→A stay
-    allowed. Limitation: the same multi-command batch twice in one turn is also
-    suppressed — ask again next turn.
+    Suppress ``slash_invoke`` / ``shell_run`` / ``cli_exec`` when the call's
+    fingerprint is in ``last_fully_succeeded_batch`` *or* already succeeded
+    earlier in the current provider batch (same-batch duplicates). Guarded
+    tools are sequential, so ``batch_succeeded`` is visible to the next
+    ``before()`` in the batch.
 
-    cli_exec: any identical successful payload is once per turn (oracle 203
-    lone accidental replay). Failed calls may retry.
+    Snapshot updates at the next batch boundary:
+
+    - Fully successful batch → replace snapshot with that batch (so A → B → A
+      still allows the second A after B replaces the snapshot).
+    - Mixed batch (suppressed replay + new success) → replace snapshot with
+      *only* the newly succeeded fingerprints. That blocks an immediate re-emit
+      of the new action without retaining suppressed members (which would block
+      a later intentional standalone replay of A after {A suppressed, C ran}).
+    - Pure suppress or total failure → leave the snapshot alone (a third
+      identical replay stays blocked; failed calls may still retry).
+
+    Limitation (intentional): the same batch twice in one turn — lone or
+    multi — is also suppressed; accidental replay and “run that again” are
+    indistinguishable without parsing the user message. Ask again next turn.
     """
-    succeeded: set[_ActionCallFingerprint] = set()
+    last_fully_succeeded_batch: frozenset[_ActionCallFingerprint] = frozenset()
     current_batch: frozenset[_ActionCallFingerprint] = frozenset()
+    batch_succeeded: set[_ActionCallFingerprint] = set()
+    has_open_batch = False
     base_before = base.before_tool_call if base is not None else None
     base_after = base.after_tool_call if base is not None else None
     base_update = base.on_tool_update if base is not None else None
     base_batch = base.before_tool_batch if base is not None else None
 
     def before_batch(tool_calls: Sequence[ToolCall]) -> None:
-        nonlocal current_batch
+        nonlocal last_fully_succeeded_batch, current_batch, batch_succeeded, has_open_batch
         if base_batch is not None:
             base_batch(tool_calls)
+        if has_open_batch and current_batch:
+            succeeded = frozenset(batch_succeeded)
+            if succeeded == current_batch:
+                last_fully_succeeded_batch = current_batch
+            elif succeeded:
+                # Mixed suppress/success: snapshot is only what newly ran.
+                # Do not retain suppressed members — that would block a later
+                # intentional standalone A after {A suppressed, C succeeded}.
+                last_fully_succeeded_batch = succeeded
+            # else: pure suppress or all-error — leave snapshot intact.
         keys: list[_ActionCallFingerprint] = []
         for tool_call in tool_calls:
-            if tool_call.name not in _DEDUPE_BATCH_REPLAY_TOOL_NAMES:
+            if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
                 continue
             keys.append(
                 _action_call_fingerprint(tool_call.name, public_tool_input(tool_call.input))
             )
         current_batch = frozenset(keys)
+        batch_succeeded = set()
+        has_open_batch = True
 
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         name = request.tool_call.name
+        # Membership across the prior success snapshot *and* earlier successes
+        # in this batch. Interleaved A -> B -> A still runs, because a fully
+        # successful {B} replaces the snapshot. Same-batch duplicates (two
+        # identical cli_exec in one provider response) hit batch_succeeded.
         if name in _DEDUPE_ACTION_TOOL_NAMES:
             key = _action_call_fingerprint(name, public_tool_input(request.arguments))
-            once = name in _DEDUPE_ONCE_TOOL_NAMES and key in succeeded
-            batch_replay = (
-                name in _DEDUPE_BATCH_REPLAY_TOOL_NAMES
-                and key in succeeded
-                and len(current_batch) >= _REPLAYED_BATCH_MIN_DISTINCT
-                and current_batch <= succeeded
-            )
-            if once or batch_replay:
+            if key in last_fully_succeeded_batch or key in batch_succeeded:
                 return BeforeToolCallResult(
                     blocked=True,
                     reason=(
@@ -170,7 +184,7 @@ def with_duplicate_action_call_guard(
         result: ToolExecutionResult,
     ) -> ToolExecutionPatch | None:
         if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES and not result.is_error:
-            succeeded.add(
+            batch_succeeded.add(
                 _action_call_fingerprint(
                     request.tool_call.name, public_tool_input(request.arguments)
                 )
