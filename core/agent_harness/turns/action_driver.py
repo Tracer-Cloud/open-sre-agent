@@ -106,6 +106,10 @@ def with_duplicate_action_call_guard(
 
     When a provider batch has ≥2 distinct guarded calls and every one already
     succeeded this turn, suppress. Lone repeats and A→B→A stay allowed.
+
+    Limitation (intentional): the same multi-command batch twice in one turn
+    is also suppressed — accidental replay and “run that pair again” are
+    indistinguishable without parsing the user message. Ask again next turn.
     """
     succeeded: set[_ActionCallFingerprint] = set()
     current_batch: frozenset[_ActionCallFingerprint] = frozenset()
