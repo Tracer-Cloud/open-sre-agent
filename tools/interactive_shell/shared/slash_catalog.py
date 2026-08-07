@@ -86,6 +86,13 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to cancel a specific task when they provide or imply a task id",
         anti_examples=("User asks to stop everything without an id (use /stop guidance first)",),
     ),
+    "/choose": _mcp(
+        "Open the pending interactive selection menu queued by the ask_user_choice tool.",
+        "Queued automatically after ask_user_choice; users rarely type it directly",
+        anti_examples=(
+            "Presenting a new set of options to the user (call ask_user_choice instead)",
+        ),
+    ),
     "/clear": _mcp(
         "Clear the terminal screen and re-render the OpenSRE banner.",
         "User asks to clear the screen or terminal",
