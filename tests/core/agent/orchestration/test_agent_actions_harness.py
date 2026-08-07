@@ -981,33 +981,6 @@ def test_run_turn_passes_handoff_contents_to_assistant() -> None:
     assert captured == [("provider:local_llama_connect",)]
 
 
-def test_run_turn_clears_terminal_slash_dedup_at_turn_start() -> None:
-    """Per-turn slash dedup lives on session.terminal; run_turn must clear it each turn."""
-    session = Session()
-    session.terminal.agent_turn_executed_slashes.add("/stale")
-
-    def _noop_execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
-        return ToolCallingTurnResult(
-            planned_count=0,
-            executed_count=0,
-            executed_success_count=0,
-            has_unhandled_clause=False,
-            handled=False,
-            response_text="",
-        )
-
-    run_turn(
-        "hi",
-        session,
-        execute_actions=_noop_execute,
-        gather=lambda *_args, **_kwargs: None,
-        answer=lambda *_args, **_kwargs: None,
-        accounting=DefaultTurnAccounting(session, "hi"),
-    )
-
-    assert session.terminal.agent_turn_executed_slashes == set()
-
-
 def test_stage_turn_error_routes_to_terminal_facet() -> None:
     """Structured error staging lives on session.terminal; stage_turn_error must reach it."""
     from core.agent_harness.turns.orchestrator import stage_turn_error

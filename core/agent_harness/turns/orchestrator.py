@@ -49,7 +49,6 @@ from core.agent_harness.session.pending_offer import (
     first_pending_offer,
     is_pending_offer_confirmation,
 )
-from core.agent_harness.session.terminal_access import agent_turn_executed_slashes
 from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
@@ -452,7 +451,6 @@ def run_turn(
     # Clear any observation left by a prior turn so only this turn's discovery
     # output can trigger a summary pass.
     session.last_command_observation = None
-    agent_turn_executed_slashes(session).clear()
 
     action_result = execute_actions(
         text,

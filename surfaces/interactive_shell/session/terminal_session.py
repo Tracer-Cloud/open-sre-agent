@@ -87,12 +87,6 @@ class TerminalSession:
     Inline picker/wizard slash commands must dispatch immediately during these
     turns instead of re-queueing via ``set_auto_command``, which would loop."""
 
-    agent_turn_executed_slashes: set[str] = field(default_factory=set, repr=False)
-    """Slash lines that succeeded during the current action-agent turn.
-
-    Record-keeping only — identical-call suppression is batch-aware on the
-    action turn (``with_duplicate_action_call_guard``), not here."""
-
     background_mode_enabled: bool = False
     """Whether new investigations should run as session-local background tasks."""
 

@@ -80,10 +80,10 @@ def _coerce_fingerprint_quiet(value: Any) -> bool:
     return bool(value)
 
 
-def _fingerprint_name_args(name: str, args: Any) -> _ActionCallFingerprint:
-    """Stable identity for one guarded slash/shell call."""
+def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
+    """Stable identity for one guarded slash/shell call (schema fields only)."""
     if not isinstance(args, dict):
-        args = dict(args) if args else {}
+        args = {}
 
     if name == "slash_invoke":
         command = str(args.get("command", ""))
@@ -91,42 +91,21 @@ def _fingerprint_name_args(name: str, args: Any) -> _ActionCallFingerprint:
         argv = tuple(str(item) for item in raw) if isinstance(raw, (list, tuple)) else ()
         return (name, command, argv)
 
-    if name == "shell_run":
-        return (
-            name,
-            str(args.get("command", "")),
-            _coerce_fingerprint_quiet(args.get("quiet", False)),
-        )
-
-    items = tuple(sorted((str(key), repr(value)) for key, value in args.items()))
-    return (name, items)
-
-
-def _action_call_fingerprint(request: ToolExecutionRequest) -> _ActionCallFingerprint:
-    """Fingerprint a validated tool-execution request."""
-    args = public_tool_input(request.arguments)
-    return _fingerprint_name_args(request.tool_call.name, args)
-
-
-def _fingerprint_tool_call(tool_call: ToolCall) -> _ActionCallFingerprint | None:
-    """Fingerprint a provider tool call when it is in the guarded set."""
-    if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
-        return None
-    return _fingerprint_name_args(tool_call.name, public_tool_input(tool_call.input))
+    # shell_run (guarded set is only slash/shell)
+    return (
+        name,
+        str(args.get("command", "")),
+        _coerce_fingerprint_quiet(args.get("quiet", False)),
+    )
 
 
 def with_duplicate_action_call_guard(
     base: ToolExecutionHooks | None = None,
 ) -> ToolExecutionHooks:
-    """Suppress accidental multi-call slash/shell *batch* replays in one turn.
+    """Block accidental slash/shell batch replays (oracle 202).
 
-    Oracle 202: after ``/health`` + ``/integrations list`` succeed, the model
-    re-emits that same pair. Block when the current provider batch is entirely
-    a subset of already-succeeded guarded calls and has ≥2 distinct members.
-
-    Interleaved repeats (A → B → A) and lone-command repeats stay allowed —
-    those batches are not a full replayed set. Failures are not remembered.
-    Chains with surface ``before_tool_call`` / ``after_tool_call`` hooks.
+    When a provider batch has ≥2 distinct guarded calls and every one already
+    succeeded this turn, suppress. Lone repeats and A→B→A stay allowed.
     """
     succeeded: set[_ActionCallFingerprint] = set()
     current_batch: frozenset[_ActionCallFingerprint] = frozenset()
@@ -139,17 +118,20 @@ def with_duplicate_action_call_guard(
         nonlocal current_batch
         if base_batch is not None:
             base_batch(tool_calls)
-        keys = [
-            key
-            for tool_call in tool_calls
-            for key in (_fingerprint_tool_call(tool_call),)
-            if key is not None
-        ]
+        keys: list[_ActionCallFingerprint] = []
+        for tool_call in tool_calls:
+            if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
+                continue
+            keys.append(
+                _action_call_fingerprint(tool_call.name, public_tool_input(tool_call.input))
+            )
         current_batch = frozenset(keys)
 
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES:
-            key = _action_call_fingerprint(request)
+            key = _action_call_fingerprint(
+                request.tool_call.name, public_tool_input(request.arguments)
+            )
             if (
                 key in succeeded
                 and len(current_batch) >= _REPLAYED_BATCH_MIN_DISTINCT
@@ -172,7 +154,11 @@ def with_duplicate_action_call_guard(
         result: ToolExecutionResult,
     ) -> ToolExecutionPatch | None:
         if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES and not result.is_error:
-            succeeded.add(_action_call_fingerprint(request))
+            succeeded.add(
+                _action_call_fingerprint(
+                    request.tool_call.name, public_tool_input(request.arguments)
+                )
+            )
         if base_after is not None:
             return base_after(request, result)
         return None

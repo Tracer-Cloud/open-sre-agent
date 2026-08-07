@@ -66,7 +66,6 @@ def test_terminal_facet_holds_the_pending_prompt_cluster() -> None:
         "pending_prompt_default",
         "pending_prompt_autosubmit",
         "exclusive_stdin_active",
-        "agent_turn_executed_slashes",
     ):
         assert hasattr(terminal, f)
 
