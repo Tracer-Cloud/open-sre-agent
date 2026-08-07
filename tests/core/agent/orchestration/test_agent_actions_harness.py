@@ -768,7 +768,6 @@ def test_action_turn_suppresses_duplicate_cli_exec() -> None:
     assert runs == ["integrations verify --dry-run"]
 
 
-
 def test_action_turn_suppresses_third_identical_cli_exec_after_blocked_replay() -> None:
     """Snapshot must survive a suppressed replay so a third identical batch stays blocked."""
     runs: list[str] = []
@@ -997,6 +996,83 @@ def test_action_turn_suppresses_duplicate_slash_invoke_pair() -> None:
         is_tty=False,
     )
 
+    assert result.handled is True
+    assert runs == ["/health", "/integrations list"]
+
+
+def test_action_turn_suppresses_a_third_identical_slash_pair() -> None:
+    """Suppressing a replay must not re-arm the guard for the batch after it.
+
+    A blocked batch executes nothing, so a guard that tracked only the last
+    *successful* batch would forget the pair and let the third one through.
+    """
+    # Arrange: the model emits the same successful pair three times running.
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+
+    def _identical_pair(attempt: int) -> AgentLLMResponse:
+        return AgentLLMResponse(
+            content="",
+            tool_calls=[
+                ToolCall(
+                    id=f"h{attempt}",
+                    name="slash_invoke",
+                    input={"command": "/health", "args": []},
+                ),
+                ToolCall(
+                    id=f"i{attempt}",
+                    name="slash_invoke",
+                    input={"command": "/integrations", "args": ["list"]},
+                ),
+            ],
+            raw_content=None,
+        )
+
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                _identical_pair(1),
+                _identical_pair(2),
+                _identical_pair(3),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    # Act.
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "check the health of my opensre and then show me all connected services",
+        Session(),
+        is_tty=False,
+    )
+
+    # Assert: only the first pair reached the tool.
     assert result.handled is True
     assert runs == ["/health", "/integrations list"]
 
