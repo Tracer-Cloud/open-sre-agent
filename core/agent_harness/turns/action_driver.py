@@ -104,7 +104,12 @@ def with_duplicate_action_call_guard(
     """Block replaying guarded action calls already covered by the success snapshot.
 
     Suppress ``slash_invoke`` / ``shell_run`` / ``cli_exec`` when the call's
-    fingerprint is in ``last_fully_succeeded_batch``. Snapshot updates:
+    fingerprint is in ``last_fully_succeeded_batch`` *or* already succeeded
+    earlier in the current provider batch (same-batch duplicates). Guarded
+    tools are sequential, so ``batch_succeeded`` is visible to the next
+    ``before()`` in the batch.
+
+    Snapshot updates at the next batch boundary:
 
     - Fully successful batch → replace snapshot with that batch (so A → B → A
       still allows the second A after B replaces the snapshot).
@@ -155,25 +160,21 @@ def with_duplicate_action_call_guard(
 
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         name = request.tool_call.name
-        # Membership, not whole-batch equality: a model may re-emit only part of
-        # the batch it just ran ({/health, /integrations} then {/health}), which
-        # repeats a side effect just as surely as replaying the whole pair.
-        # Interleaved A -> B -> A still runs, because a fully successful {B}
-        # replaces the snapshot.
-        if (
-            name in _DEDUPE_ACTION_TOOL_NAMES
-            and last_fully_succeeded_batch
-            and _action_call_fingerprint(name, public_tool_input(request.arguments))
-            in last_fully_succeeded_batch
-        ):
-            return BeforeToolCallResult(
-                blocked=True,
-                reason=(
-                    f"Already ran {name} with identical arguments "
-                    "this turn. Do not repeat it; finish with no further tool calls."
-                ),
-                metadata={"suppressed_duplicate": True},
-            )
+        # Membership across the prior success snapshot *and* earlier successes
+        # in this batch. Interleaved A -> B -> A still runs, because a fully
+        # successful {B} replaces the snapshot. Same-batch duplicates (two
+        # identical cli_exec in one provider response) hit batch_succeeded.
+        if name in _DEDUPE_ACTION_TOOL_NAMES:
+            key = _action_call_fingerprint(name, public_tool_input(request.arguments))
+            if key in last_fully_succeeded_batch or key in batch_succeeded:
+                return BeforeToolCallResult(
+                    blocked=True,
+                    reason=(
+                        f"Already ran {name} with identical arguments "
+                        "this turn. Do not repeat it; finish with no further tool calls."
+                    ),
+                    metadata={"suppressed_duplicate": True},
+                )
         if base_before is not None:
             return base_before(request)
         return None
