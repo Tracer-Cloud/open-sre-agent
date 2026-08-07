@@ -481,6 +481,146 @@ def test_discover_then_act_slash_chain_shows_grounded_closing_summary() -> None:
     assert summary in printed
 
 
+def test_action_turn_allows_identical_single_slash_repeat() -> None:
+    """A lone slash may succeed twice in one turn; only multi-step replays are blocked."""
+    runs: list[str] = []
+
+    def _run_counting(command: str, args: list[str] | None = None) -> dict[str, Any]:
+        line = " ".join([command, *(args or [])])
+        runs.append(line)
+        return {"ok": True, "output": f"{line} output"}
+
+    tool = RegisteredTool(
+        name="slash_invoke",
+        description="Fake slash dispatcher.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h1",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="h2",
+                            name="slash_invoke",
+                            input={"command": "/health", "args": []},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "run /health and then run /health again",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["/health", "/health"]
+
+
+def test_action_turn_allows_identical_single_shell_repeat() -> None:
+    """A lone shell_run may succeed twice; multi-step replays are what we suppress."""
+    runs: list[str] = []
+
+    def _run_counting(command: str, quiet: bool = False) -> dict[str, Any]:
+        del quiet
+        runs.append(command)
+        return {"ok": True, "output": command, "exit_code": 0}
+
+    tool = RegisteredTool(
+        name="shell_run",
+        description="Fake shell.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "quiet": {"type": "boolean"},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+        source="interactive_shell",
+        surfaces=("action",),
+        parallel_safe=False,
+        run=_run_counting,
+    )
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="s1",
+                            name="shell_run",
+                            input={"command": "pwd", "quiet": False},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                AgentLLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="s2",
+                            name="shell_run",
+                            input={"command": "pwd", "quiet": False},
+                        ),
+                    ],
+                    raw_content=None,
+                ),
+                no_tool_response("done"),
+            ]
+        )
+    )
+
+    result = ActionTurnRunner(
+        output=_OutputSink(harness.console),
+        tools=_GenericActionToolProvider(tool),
+        deps=harness.deps,
+    ).run(
+        "print the working directory twice",
+        Session(),
+        is_tty=False,
+    )
+
+    assert result.handled is True
+    assert runs == ["pwd", "pwd"]
+
+
 def test_action_turn_suppresses_duplicate_slash_invoke_pair() -> None:
     """Regression for oracle 202: do not re-run the same slash pair in one turn.
 

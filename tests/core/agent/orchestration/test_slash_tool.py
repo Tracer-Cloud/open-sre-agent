@@ -160,15 +160,28 @@ def test_interactive_picker_runs_inline_when_not_a_tty() -> None:
     assert session.terminal.pending_prompt_autosubmit is False
 
 
-def test_duplicate_slash_invoke_in_same_turn_is_ignored() -> None:
-    """The same slash command must not execute twice in one agent turn."""
+def test_duplicate_slash_invoke_alone_may_run_twice() -> None:
+    """A single slash line is not suppressed; only multi-step replays are."""
     ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
     args = {"command": "/integrations", "args": ["list"]}
 
     assert slash_tool.execute_slash_tool(args, ctx) is True
     assert slash_tool.execute_slash_tool(args, ctx) is True
 
-    assert ports.dispatched == ["/integrations list"]
+    assert ports.dispatched == ["/integrations list", "/integrations list"]
+
+
+def test_duplicate_slash_after_multi_step_turn_is_ignored() -> None:
+    """After two distinct slashes succeed, replaying either is ignored."""
+    ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
+
+    assert slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx) is True
+    assert (
+        slash_tool.execute_slash_tool({"command": "/integrations", "args": ["list"]}, ctx) is True
+    )
+    assert slash_tool.execute_slash_tool({"command": "/health", "args": []}, ctx) is True
+
+    assert ports.dispatched == ["/health", "/integrations list"]
 
 
 @pytest.mark.parametrize(

@@ -63,6 +63,10 @@ log = logging.getLogger(__name__)
 # turn (oracle 202: model finished /health + /integrations list, then repeated).
 _DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run"})
 
+# Distinct successful calls before an identical re-emission counts as a
+# replayed set rather than a deliberate repeat.
+_REPLAYED_SET_MIN_DISTINCT = 2
+
 # Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
 _ActionCallFingerprint = tuple[Any, ...]
 
@@ -122,7 +126,10 @@ def with_duplicate_action_call_guard(
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES:
             key = _action_call_fingerprint(request)
-            if key in succeeded:
+            # Suppress a replayed *set* (oracle 202: /health + /integrations
+            # re-emitted as a pair). A lone command repeating is left alone —
+            # mirrors the slash tool's rule so the two agree on one turn.
+            if key in succeeded and len(succeeded) >= _REPLAYED_SET_MIN_DISTINCT:
                 return BeforeToolCallResult(
                     blocked=True,
                     reason=(

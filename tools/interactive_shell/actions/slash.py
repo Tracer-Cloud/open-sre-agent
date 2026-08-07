@@ -175,7 +175,10 @@ def execute_slash_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool | d
             ctx,
         )
 
-    if stripped in agent_turn_executed_slashes(ctx.session):
+    executed = agent_turn_executed_slashes(ctx.session)
+    # Mirror the action-driver rule: only suppress after a multi-step slash set
+    # has already completed. A single command may run more than once in one turn.
+    if stripped in executed and len(executed) >= 2:
         return True
 
     if _slash_drives_interactive_picker(
