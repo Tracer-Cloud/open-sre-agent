@@ -16,7 +16,7 @@ def _event(event_id: str, *, created_at: int, channel: str = "chan-1", pubkey: s
     }
 
 
-def test_poll_once_parses_events_and_advances_cursor() -> None:
+def test_poll_once_parses_events_and_commit_advances_cursor() -> None:
     client = MagicMock(spec=BuzzClient)
     client.get_feed.return_value = {
         "success": True,
@@ -29,7 +29,28 @@ def test_poll_once_parses_events_and_advances_cursor() -> None:
 
     assert [e.event_id for e in events] == ["ev1", "ev2"]
     client.get_feed.assert_called_once_with(since=0, types="mentions")
+    assert poller._since == 0  # not yet committed
+
+    poller.commit()
+
     assert poller._since == 200
+
+
+def test_poll_once_without_commit_does_not_advance_cursor() -> None:
+    """A crash between poll_once() and commit() must re-fetch, not skip, the batch."""
+    client = MagicMock(spec=BuzzClient)
+    client.get_feed.return_value = {
+        "success": True,
+        "error": "",
+        "events": [_event("ev1", created_at=100)],
+    }
+    poller = BuzzFeedPoller(client)
+
+    poller.poll_once()
+    poller.poll_once()  # simulates a restart before the first batch was committed
+
+    assert client.get_feed.call_args_list[0].kwargs["since"] == 0
+    assert client.get_feed.call_args_list[1].kwargs["since"] == 0
 
 
 def test_poll_once_dedupes_events_at_the_same_inclusive_cursor() -> None:
@@ -42,6 +63,7 @@ def test_poll_once_dedupes_events_at_the_same_inclusive_cursor() -> None:
     poller = BuzzFeedPoller(client)
 
     first = poller.poll_once()
+    poller.commit()
     second = poller.poll_once()
 
     assert [e.event_id for e in first] == ["ev1"]

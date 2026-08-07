@@ -25,6 +25,11 @@ class BuzzFeedPoller:
     timestamp. ``_seen_at_cursor`` dedupes within that one timestamp instead of
     advancing the cursor past it, which would risk skipping a different event
     that happens to share the same second.
+
+    ``poll_once``/``commit`` are deliberately two steps: persisting the cursor
+    only after the caller has finished dispatching the whole batch means a
+    crash mid-batch re-fetches and re-dispatches it on restart, instead of
+    silently skipping whatever events this process didn't get to.
     """
 
     def __init__(self, client: BuzzClient) -> None:
@@ -32,8 +37,11 @@ class BuzzFeedPoller:
         self._since = load_cursor()
         self._seen_at_cursor: set[str] = set()
         self._last_warning_monotonic = 0.0
+        self._pending_latest: int | None = None
+        self._pending_events: list[BuzzInboundMessage] = []
 
     def poll_once(self) -> list[BuzzInboundMessage]:
+        """Fetch new events. Call :meth:`commit` once the batch is dispatched."""
         result = self._client.get_feed(since=self._since, types=_FEED_TYPES)
         if not result["success"]:
             self._log_transient("[buzz-gateway] feed get failed: %s", result["error"])
@@ -52,13 +60,24 @@ class BuzzFeedPoller:
             events.append(parsed)
             latest = max(latest, parsed.created_at)
 
+        self._pending_latest = latest
+        self._pending_events = events
+        return events
+
+    def commit(self) -> None:
+        """Persist cursor progress for the batch last returned by :meth:`poll_once`."""
+        if self._pending_latest is None:
+            return
+        latest, events = self._pending_latest, self._pending_events
+        self._pending_latest = None
+        self._pending_events = []
+
         if latest > self._since:
             self._since = latest
             self._seen_at_cursor = {e.event_id for e in events if e.created_at == latest}
             save_cursor(self._since)
         else:
             self._seen_at_cursor.update(e.event_id for e in events)
-        return events
 
     def _log_transient(self, message: str, *args: object) -> None:
         now = time.monotonic()

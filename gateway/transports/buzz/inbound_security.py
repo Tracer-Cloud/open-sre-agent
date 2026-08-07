@@ -158,4 +158,32 @@ def persist_policy_if_needed(decision: InboundDecision) -> None:
     _save_policy(record, decision.updated_policy)
 
 
-__all__ = ["InboundDecision", "enforce_inbound_buzz_message_security", "persist_policy_if_needed"]
+def is_pubkey_authorized(*, pubkey: str, channel_id: str, env_allowed_pubkeys: list[str]) -> bool:
+    """Whether *pubkey* is an authorized Buzz identity right now.
+
+    Gates approval-reply resolution the same way a regular inbound message is
+    gated: a participant who is not on the identity allowlist must not be
+    able to approve or deny a pending write-tool action just by replying to
+    its prompt message.
+    """
+    _, policy = _load_policy()
+    if env_allowed_pubkeys and not policy.allowed_user_ids:
+        policy.allowed_user_ids = list(env_allowed_pubkeys)
+        policy.inbound_enabled = True
+    result = authorize_inbound_message(policy=policy, user_id=pubkey, chat_id=channel_id)
+    audit_log_inbound_message(
+        platform=MessagingPlatform.BUZZ.value,
+        user_id=pubkey,
+        chat_id=channel_id,
+        authorized=bool(result),
+        reason=f"approval-reply: {result.reason}",
+    )
+    return bool(result)
+
+
+__all__ = [
+    "InboundDecision",
+    "enforce_inbound_buzz_message_security",
+    "is_pubkey_authorized",
+    "persist_policy_if_needed",
+]

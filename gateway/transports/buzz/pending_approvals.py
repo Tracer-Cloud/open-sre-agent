@@ -27,6 +27,20 @@ class PendingApprovals:
         with self._lock:
             self._pending.pop(event_id, None)
 
+    def peek_match(self, reply_event_ids: frozenset[str]) -> str | None:
+        """Return the approval id one of *reply_event_ids* resolves, without popping it.
+
+        Used to check authorization before committing to resolve — popping
+        first would let an unauthorized reply consume the slot and lock out
+        the real, authorized responder.
+        """
+        with self._lock:
+            for target in reply_event_ids:
+                approval_id = self._pending.get(target)
+                if approval_id is not None:
+                    return approval_id
+        return None
+
     def pop_match(self, reply_event_ids: frozenset[str]) -> str | None:
         """Pop and return the approval id one of *reply_event_ids* resolves, if any."""
         with self._lock:
