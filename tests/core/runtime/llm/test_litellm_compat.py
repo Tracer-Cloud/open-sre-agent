@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from core.llm.shared.structured_output import OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV
 from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 
 
@@ -352,3 +353,34 @@ def test_litellm_llm_client_invoke_structured_not_found_raises() -> None:
 
     with pytest.raises(RuntimeError, match="model 'vertex_ai/missing-model' was not found"):
         client.invoke_structured(_TinySchema, "diagnose this")
+
+
+def test_litellm_llm_client_with_structured_output_uses_native_response_format(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end regression guard: with_structured_output() — what every real
+    caller (diagnose/intake stages) actually uses — must reach invoke_structured's
+    native response_format when opted in, not silently keep using the
+    prompt-embedded schema.
+    """
+    monkeypatch.setenv(OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV, "1")
+    captured: dict[str, Any] = {}
+
+    def completion(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return _fake_response(
+            content=json.dumps({"root_cause": "oom", "root_cause_category": "resource"})
+        )
+
+    client = LiteLLMLLMClient(
+        litellm_model="vertex_ai/gemini-2.0-flash",
+        vertex_project="p",
+        vertex_location="us-central1",
+        credential_resolver=lambda _env: "key",
+        completion_func=completion,
+    )
+
+    result = client.with_structured_output(_TinySchema).invoke("diagnose this")
+
+    assert result.root_cause == "oom"
+    assert "response_format" in captured
