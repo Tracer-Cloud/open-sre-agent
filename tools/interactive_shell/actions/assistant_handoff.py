@@ -21,9 +21,11 @@ def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext)
     return True
 
 
-def run_assistant_handoff(*, content: str, context: Any) -> dict[str, Any]:
+def run_assistant_handoff(
+    *, content: str, context: Any, requires_gather: bool = True
+) -> dict[str, Any]:
     return execute_with_action_context(
-        {"content": content},
+        {"content": content, "requires_gather": requires_gather},
         context,
         execute_assistant_handoff_tool,
     )
@@ -48,7 +50,17 @@ assistant_handoff_tool = RegisteredTool(
                     "provider:local_llama_connect for vague local-model setup."
                 ),
                 min_length=1,
-            )
+            ),
+            "requires_gather": {
+                "type": "boolean",
+                "description": (
+                    "Whether the assistant needs a live evidence-gather pass before "
+                    "answering. Default true. Set false ONLY when this turn's tool "
+                    "work already produced everything the reply needs and the "
+                    "handoff merely explains that outcome — fetching fresh data "
+                    "would answer a different question."
+                ),
+            },
         },
         required=("content",),
     ),

@@ -1233,18 +1233,6 @@ def test_run_turn_skips_gather_for_follow_up_even_when_investigation_is_old() ->
     assert gather_calls == []
 
 
-@pytest.mark.skip(
-    reason=(
-        "Known defect, no principled signal yet: a handoff after a completed "
-        "action turn sweeps every integration (~106s observed after a morning "
-        "report whose Slack delivery failed). Gating on "
-        "executed_success_count breaks "
-        "test_run_turn_still_gathers_for_non_follow_up_handoff_with_prior_state, "
-        "which runs a tool successfully and legitimately needs the gather. "
-        "Distinguishing 'already answered' from 'did a side effect, now needs "
-        "evidence' requires a signal the turn result does not carry."
-    )
-)
 def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -> None:
     """A handoff explaining a completed turn must not trigger a live sweep.
 
@@ -1252,8 +1240,11 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
     handed off to explain that Slack delivery had failed. Because a handoff was
     present the turn fell through to gather-and-answer, which queried every
     connected integration for 106 seconds — after the user already had their
-    answer. The assistant still speaks; it just composes from what the turn
-    produced instead of probing Datadog, Kubernetes and Grafana afresh.
+    answer. The planner now carries the signal explicitly: a handoff emitted
+    with ``requires_gather=false`` sets ``handoff_requires_gather=False`` on
+    the turn result, and the router skips the sweep. The assistant still
+    speaks; it just composes from what the turn produced instead of probing
+    Datadog, Kubernetes and Grafana afresh.
     """
     session = Session()
     gather_calls: list[str] = []
@@ -1267,6 +1258,7 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
             has_unhandled_clause=False,
             handled=True,
             handoff_contents=("Slack webhook is not configured in this environment.",),
+            handoff_requires_gather=False,
         )
 
     def _gather(text: str, *_args: object, **_kwargs: object) -> str:
@@ -1289,6 +1281,43 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
     assert gather_calls == [], "swept integrations after the turn already answered"
     assert answer_kwargs, "the assistant must still explain the handoff"
     assert answer_kwargs[0]["handoff_contents"]
+
+
+def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out() -> None:
+    """Completed actions alone do not skip the gather — only an explicit opt-out does.
+
+    Mirror of the answer-only case above: a turn that ran a tool and handed
+    off with the default ``requires_gather`` still needs the live gather pass
+    (the handoff may be asking the assistant to look something up the action
+    tools could not).
+    """
+    session = Session()
+    gather_calls: list[str] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("provider:local_llama_connect",),
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: x\nArguments: {}\nResult: y"
+
+    run_turn(
+        "connect local llama",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=lambda *_a, **_k: None,
+        accounting=DefaultTurnAccounting(session, "connect local llama"),
+    )
+
+    assert gather_calls == ["connect local llama"]
 
 
 def test_run_turn_still_gathers_when_the_action_turn_executed_nothing() -> None:

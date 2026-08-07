@@ -163,6 +163,19 @@ def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     _console_print_prepared(console, *objects, **kwargs)
 
 
+def repl_print_continue(console: Console, *objects: Any, **kwargs: Any) -> None:
+    """Print via Rich at column zero without inserting a blank line.
+
+    Use for output that continues the current block (e.g. a command's stdout
+    directly under its ``$ command`` header). :func:`repl_print` would prepend
+    a ``\\r\\n``, visually detaching the output from its header.
+    """
+    from surfaces.interactive_shell.ui.components.choice_menu import ensure_tty_column_zero
+
+    ensure_tty_column_zero()
+    _console_print_prepared(console, *objects, **kwargs)
+
+
 def _repl_write_buffer(rendered: str) -> None:
     """Flush pre-rendered Rich output with CRLF line endings (patch_stdout safe)."""
     from surfaces.interactive_shell.ui.components.cpr_stdin import strip_cpr_escape_sequences
@@ -259,6 +272,7 @@ __all__ = [
     "refresh_welcome_poster",
     "repl_clear_screen",
     "repl_print",
+    "repl_print_continue",
     "repl_render_launch_poster",
     "repl_table",
 ]

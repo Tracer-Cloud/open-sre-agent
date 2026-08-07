@@ -129,6 +129,10 @@ class ReplSubprocessPresenter:
         self._console.print(_escape_markup_message(message))
 
     def print_bold_command(self, display_command: str) -> None:
+        # Blank line *before* the header so each `$ command` + its output reads
+        # as one block; a blank between header and output would visually attach
+        # the output to the following command instead.
+        self._console.print()
         self._console.print(f"[bold]$ {escape(display_command)}[/bold]")
 
     def print_command_output(self, text: str, *, style: str | None = None) -> None:

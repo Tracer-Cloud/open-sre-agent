@@ -87,6 +87,11 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
+# Tools whose user-facing event is rendered live by the surface's tool-event
+# observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
+# must stay silent for them: repeating their summary would double-print, and
+# their payload (e.g. the full skill body) is for the model only.
+_OBSERVER_RENDERED_TOOL_NAMES: frozenset[str] = frozenset({"skill_view"})
 
 
 @dataclass(frozen=True)
@@ -205,6 +210,8 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
 
 def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     """Build a user-visible summary for one non-self-recording tool result."""
+    if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
+        return ""
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
         return preferred_response
@@ -670,6 +677,7 @@ class _TurnCounts:
     handled: bool
     investigation_dispatched: bool
     handoff_contents: tuple[str, ...]
+    handoff_requires_gather: bool = True
 
 
 def _compose_response(
@@ -773,6 +781,11 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
     # ``assistant_handoff`` runs like a tool but hands back to conversation, so
     # it must not make the turn look like it did something for the user.
     planned_count = sum(1 for tc, _output in result.executed if tc.name != "assistant_handoff")
+    handoff_inputs = [
+        public_tool_input(tc.input)
+        for tc, _output in result.executed
+        if tc.name == "assistant_handoff"
+    ]
     return _TurnCounts(
         executed_entries=executed_entries,
         executed_count=len(executed_entries) + generic_executed_count,
@@ -787,10 +800,18 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
         ),
         handoff_contents=tuple(
             content
-            for tc, _output in result.executed
-            if tc.name == "assistant_handoff"
-            for content in (str(public_tool_input(tc.input).get("content", "")).strip(),)
+            for handoff_input in handoff_inputs
+            for content in (str(handoff_input.get("content", "")).strip(),)
             if content
+        ),
+        # Gather stays required unless every handoff this turn opted out; a
+        # single gather-needing handoff must not be starved by another's opt-out.
+        handoff_requires_gather=(
+            not handoff_inputs
+            or any(
+                handoff_input.get("requires_gather", True) is not False
+                for handoff_input in handoff_inputs
+            )
         ),
     )
 
@@ -914,6 +935,7 @@ def _run_action_turn(
         counts.handled,
         response_text=response_text,
         handoff_contents=counts.handoff_contents,
+        handoff_requires_gather=counts.handoff_requires_gather,
         investigation_dispatched=counts.investigation_dispatched,
     )
 

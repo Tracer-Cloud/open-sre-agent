@@ -313,20 +313,33 @@ def _gather_and_answer(
     gather: EvidenceGatherer,
     handoff_contents: tuple[str, ...],
     turn_plan: TurnPlan,
+    handoff_requires_gather: bool = True,
 ) -> tuple[Any | None, str | None]:
-    # Retrospective follow-ups already have grounding in ``last_state`` (injected
-    # into the assistant prompt). Running the live gather loop for those turns
-    # is wasteful and often violates "do not call integration tools" contracts
-    # by probing Datadog/Sentry for a question the prior RCA already answered.
-    # Not age-gated: the planner emitting the tag *is* the judgement that the
-    # user means that incident, so a clock must not override it and answer with
-    # current conditions instead of what happened.
-    skip_gather = _is_prior_investigation_follow_up_handoff(handoff_contents) and (
-        turn_plan.snapshot.last_state is not None
+    # Two cases skip the live gather loop:
+    # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
+    #    own tool work already produced what the reply needs, and a fresh sweep
+    #    would answer a different question (observed live: a completed CI
+    #    onboarding turn re-read GitHub issues/PRs as a status report).
+    # 2. Retrospective follow-ups, which already have grounding in
+    #    ``last_state`` (injected into the assistant prompt). Running the live
+    #    gather loop for those turns is wasteful and often violates "do not
+    #    call integration tools" contracts by probing Datadog/Sentry for a
+    #    question the prior RCA already answered. Not age-gated: the planner
+    #    emitting the tag *is* the judgement that the user means that incident,
+    #    so a clock must not override it and answer with current conditions
+    #    instead of what happened.
+    skip_gather = not handoff_requires_gather or (
+        _is_prior_investigation_follow_up_handoff(handoff_contents)
+        and turn_plan.snapshot.last_state is not None
     )
     gathered = None if skip_gather else gather(text, turn_plan=turn_plan)
     if skip_gather:
-        log.debug("gather skipped: follow_up handoff with prior investigation state")
+        log.debug(
+            "gather skipped: %s",
+            "answer-only handoff (requires_gather=false)"
+            if not handoff_requires_gather
+            else "follow_up handoff with prior investigation state",
+        )
 
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
@@ -501,6 +514,7 @@ def run_turn(
                     gather=gather,
                     handoff_contents=handoff_contents,
                     turn_plan=turn_plan,
+                    handoff_requires_gather=action_result.handoff_requires_gather,
                 )
             outcome = _RouteOutcome(
                 final_intent="cli_agent_fallback",

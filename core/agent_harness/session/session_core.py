@@ -25,6 +25,7 @@ else:
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
+from core.agent_harness.session.pending_choice import PendingUserChoice
 from core.agent_harness.session.pending_offer import (
     PendingInvestigationOffer,
     PendingScheduleOffer,
@@ -148,6 +149,11 @@ class SessionCore:
 
     pending_investigation_offer: PendingInvestigationOffer | None = None
     """Structured investigation awaiting bare yes — armed after Want-me-to closer."""
+
+    pending_user_choice: PendingUserChoice | None = None
+    """Structured multiple-choice question queued for the ``/choose`` selection
+    menu — set by the ``ask_user_choice`` action tool, consumed once by the
+    ``/choose`` handler."""
     pending_recovery_note: str | None = None
     """WAL recovery note for the next action turn — set on ``/resume`` when the
     resumed session log holds tool intents that never committed (the process
@@ -381,6 +387,7 @@ class SessionCore:
         self.last_synthetic_observation_path = None
         self.pending_schedule_offer = None
         self.pending_investigation_offer = None
+        self.pending_user_choice = None
         self.pending_recovery_note = None
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
