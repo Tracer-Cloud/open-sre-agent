@@ -1,9 +1,12 @@
-"""Cooperative turn cancel for gateway hosts (shell ``StreamingConsole`` parity).
+"""Gateway console wrapper: Rich console + ``cancel_requested`` (shell parity).
 
-Transports attach a ``threading.Event`` as ``sink.turn_cancel`` and set it on
-soft timeout (or later user stop). The turn handler wraps the pool console in
-:class:`CancelConsole` so action tools and the ReAct loop see
-``cancel_requested`` the same way the interactive shell does.
+One Event per turn (``sink.turn_cancel``). Soft timeout and ``/stop``
+(:class:`~gateway.core.runtime.active_turns.ActiveTurnCancels`) both ``set()``
+it. :class:`GatewayTurnHandler` binds this wrapper so tools and ReAct see
+``cancel_requested`` like the interactive shell's ``StreamingConsole``.
+
+See also ``core.agent_harness.turns.host_cancel`` for the orchestrator /
+gather side of the same Event.
 """
 
 from __future__ import annotations

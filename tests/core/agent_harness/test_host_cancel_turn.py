@@ -9,7 +9,11 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStorage
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import run_turn
-from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from core.agent_harness.turns.turn_results import (
+    FINAL_INTENT_CANCELLED,
+    ToolCallingTurnResult,
+    TurnResult,
+)
 
 
 class _Accounting:
@@ -84,7 +88,7 @@ def test_run_turn_cancelled_action_skips_gather_and_answer() -> None:
         accounting=_Accounting(),
         output=_CancelSink(),
     )
-    assert result.final_intent == "cli_agent_cancelled"
+    assert result.final_intent == FINAL_INTENT_CANCELLED
     assert result.cancelled is True
     assert result.answered is False
     assert answer_calls == []
@@ -115,7 +119,7 @@ def test_run_turn_cancel_during_gather_skips_answer() -> None:
         accounting=_Accounting(),
         output=sink,
     )
-    assert result.final_intent == "cli_agent_cancelled"
+    assert result.final_intent == FINAL_INTENT_CANCELLED
     assert answer_calls == []
 
 

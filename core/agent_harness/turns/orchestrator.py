@@ -54,7 +54,11 @@ from core.agent_harness.turns.conversation_recording import record_conversation_
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
-from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from core.agent_harness.turns.turn_results import (
+    FINAL_INTENT_CANCELLED,
+    ToolCallingTurnResult,
+    TurnResult,
+)
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
 from platform.observability.trace.spans import component_span, emit_route
@@ -332,12 +336,23 @@ def _cancelled_turn_result(
     )
     return accounting.finalize(
         TurnResult(
-            final_intent="cli_agent_cancelled",
+            final_intent=FINAL_INTENT_CANCELLED,
             action_result=cancelled_action,
             assistant_response_text="",
             llm_run=None,
         )
     )
+
+
+def _abort_if_cancelled(
+    accounting: TurnAccounting,
+    action_result: ToolCallingTurnResult,
+    output: OutputSink | None,
+) -> TurnResult | None:
+    """Return a cancelled :class:`TurnResult` when the host asked to stop."""
+    if action_result.cancelled or host_cancel_requested(output):
+        return _cancelled_turn_result(accounting, action_result)
+    return None
 
 
 def _gather_and_answer(
@@ -492,9 +507,10 @@ def run_turn(
         consume_confirmed_pending_offer(session, expanded)
     accounting.record_action_result(action_result)
 
-    if action_result.cancelled or host_cancel_requested(output):
+    aborted = _abort_if_cancelled(accounting, action_result, output)
+    if aborted is not None:
         log.debug("turn cancelled after action; skipping gather/answer")
-        return _cancelled_turn_result(accounting, action_result)
+        return aborted
 
     handoff_contents = action_result.handoff_contents
     observation = session.last_command_observation
@@ -527,8 +543,9 @@ def run_turn(
         # if/elif + raise (not match/assert_never): CodeQL does not model
         # ``assert_never`` as noreturn, so locals bound only inside match arms
         # and read after the match trip py/uninitialized-local-variable.
-        if host_cancel_requested(output):
-            return _cancelled_turn_result(accounting, action_result)
+        aborted = _abort_if_cancelled(accounting, action_result, output)
+        if aborted is not None:
+            return aborted
         if route.intent == "summarize_observation":
             with apply_reasoning_effort(turn_snapshot.reasoning_effort):
                 run = answer(
@@ -539,8 +556,9 @@ def run_turn(
                         turn_plan=turn_plan,
                     ),
                 )
-            if host_cancel_requested(output):
-                return _cancelled_turn_result(accounting, action_result)
+            aborted = _abort_if_cancelled(accounting, action_result, output)
+            if aborted is not None:
+                return aborted
             outcome = _RouteOutcome(
                 final_intent="cli_agent_summarized",
                 response_text=_response_text(run),

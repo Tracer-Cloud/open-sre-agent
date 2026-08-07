@@ -1,15 +1,26 @@
-"""Detect cooperative host cancel (gateway ``sink.turn_cancel`` Event).
+"""Host cancel signal for chat turns (gateway ``sink.turn_cancel``).
 
-Shell cancel still flows through ``console.cancel_requested`` on the action /
-gather tool context. Chat hosts attach a ``threading.Event`` on the turn sink;
-``LiveOutputSink`` forwards it so the orchestrator can skip gather/answer.
+Mental model (one Event, three readers)::
+
+    transport timeout / ``/stop``
+            │
+            ▼
+    sink.turn_cancel  ──►  CancelConsole.cancel_requested  ──►  ReAct + tools
+            │
+            ├──────────►  host_cancel_requested(output)   ──►  orchestrator
+            └──────────►  LiveOutputSink stream guard
+
+Shell cancel stays on ``StreamingConsole``; it never needs ``turn_cancel``.
 """
 
 from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
+
+from core.agent_harness.tools.tool_context import ACTION_TOOL_CONTEXT_RESOURCE_KEY
 
 
 def host_cancel_requested(output: Any | None) -> bool:
@@ -20,39 +31,41 @@ def host_cancel_requested(output: Any | None) -> bool:
     return isinstance(cancel, threading.Event) and cancel.is_set()
 
 
-def cancel_probe_console(is_cancelled: Callable[[], bool]) -> Any:
-    """Minimal console stand-in for gather ReAct ``cancel_requested`` checks."""
+@dataclass(frozen=True, slots=True)
+class CancelProbeConsole:
+    """Minimal console so gather ReAct sees the same ``cancel_requested`` flag."""
 
-    class _ProbeConsole:
-        @property
-        def cancel_requested(self) -> bool:
-            return bool(is_cancelled())
+    is_cancelled: Callable[[], bool]
 
-        def print(self, *args: Any, **kwargs: Any) -> None:
-            _ = (args, kwargs)
+    @property
+    def cancel_requested(self) -> bool:
+        return bool(self.is_cancelled())
 
-    return _ProbeConsole()
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        _ = (args, kwargs)
+
+
+@dataclass(frozen=True, slots=True)
+class CancelProbeContext:
+    """Stand-in ``ActionToolContext`` carrying only the cancel console."""
+
+    console: CancelProbeConsole
 
 
 def cancel_tool_resources(is_cancelled: Callable[[], bool] | None) -> dict[str, Any]:
     """``tool_resources`` so :class:`~core.agent.react_loop.ReactLoop` sees cancel."""
     if is_cancelled is None:
         return {}
-    from core.agent_harness.tools.tool_context import ACTION_TOOL_CONTEXT_RESOURCE_KEY
-
-    # Bind the narrowed callable: inside the nested class body the parameter
-    # widens back to ``| None``.
-    probe = is_cancelled
-
-    class _ProbeContext:
-        def __init__(self) -> None:
-            self.console = cancel_probe_console(probe)
-
-    return {ACTION_TOOL_CONTEXT_RESOURCE_KEY: _ProbeContext()}
+    return {
+        ACTION_TOOL_CONTEXT_RESOURCE_KEY: CancelProbeContext(
+            console=CancelProbeConsole(is_cancelled=is_cancelled)
+        )
+    }
 
 
 __all__ = [
-    "cancel_probe_console",
+    "CancelProbeConsole",
+    "CancelProbeContext",
     "cancel_tool_resources",
     "host_cancel_requested",
 ]

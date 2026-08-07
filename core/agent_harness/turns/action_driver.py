@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
+from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
@@ -965,17 +966,6 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
     )
 
 
-def _cancel_requested(tool_resources: Any) -> bool:
-    """True when the turn console asked to stop (shell / gateway cancel Event)."""
-    if not isinstance(tool_resources, dict):
-        return False
-    for value in tool_resources.values():
-        console = getattr(value, "console", None)
-        if console is not None and bool(getattr(console, "cancel_requested", False)):
-            return True
-    return False
-
-
 def _run_action_turn(
     message: str,
     session: SessionStore,
@@ -1060,7 +1050,9 @@ def _run_action_turn(
 
     counts = _count_turn(result, session, history_start)
     response_text, display_chunks, use_final_text = _compose_response(result, session, counts)
-    cancelled = _cancel_requested(tool_resources) or bool(getattr(result, "cancelled", False))
+    cancelled = tool_resources_cancel_requested(tool_resources) or bool(
+        getattr(result, "cancelled", False)
+    )
     # Cancelled turns must not fall through to gather/answer: the host already
     # owns the terminal UX (timeout message / stop). Drop handoffs; the
     # orchestrator short-circuits on ``cancelled`` before routing.
