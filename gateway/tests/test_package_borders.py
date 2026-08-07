@@ -18,21 +18,26 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_TRANSPORTS = (
-    "gateway.transports.slack",
-    "gateway.transports.discord",
-    "gateway.transports.telegram",
-)
+
+def _discover_transport_packages() -> tuple[str, ...]:
+    """Every chat transport package on disk.
+
+    Discovered rather than listed: a hand-maintained list silently exempts a
+    newly added transport from every border rule below.
+    """
+    root = REPO_ROOT / "gateway" / "transports"
+    return tuple(
+        f"gateway.transports.{child.name}"
+        for child in sorted(root.iterdir())
+        if child.is_dir() and (child / "__init__.py").is_file()
+    )
+
+
+_TRANSPORTS = _discover_transport_packages()
 
 _CHANNELS_COMPOSER = "gateway/core/runtime/manager.py"
 
-_TRANSPORT_STARTUP_MODULES = frozenset(
-    {
-        "gateway.transports.slack.startup",
-        "gateway.transports.discord.startup",
-        "gateway.transports.telegram.startup",
-    }
-)
+_TRANSPORT_STARTUP_MODULES = frozenset(f"{package}.startup" for package in _TRANSPORTS)
 
 
 def _python_files(package: str) -> list[Path]:
@@ -294,4 +299,25 @@ def test_gateway_chat_never_builds_core_agent_or_precomputed_tools() -> None:
                 offenders.append(f"{path.relative_to(REPO_ROOT)} → precomputed_action_tools=")
     assert offenders == [], (
         "gateway must not own a ReAct Agent or precomputed tools:\n" + "\n".join(offenders)
+    )
+
+
+def test_every_transport_package_is_registered_in_the_chat_table() -> None:
+    """A transport package on disk must appear in the registry, and vice versa.
+
+    Adding a transport used to mean editing the manager; now it means adding a
+    ``TransportSpec`` row. This fails if someone ships the package without the
+    row (the transport never starts) or the row without the package.
+    """
+    # Arrange / Act.
+    from gateway.channels.chat import TRANSPORTS
+
+    on_disk = {package.rsplit(".", 1)[-1] for package in _TRANSPORTS}
+    registered = {spec.name.value for spec in TRANSPORTS}
+
+    # Assert.
+    assert on_disk == registered, (
+        f"transport packages and registry rows disagree: "
+        f"only on disk={sorted(on_disk - registered)}, "
+        f"only registered={sorted(registered - on_disk)}"
     )
