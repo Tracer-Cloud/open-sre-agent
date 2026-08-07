@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from core.agent_harness.session import SessionCore, SessionManager
 from core.agent_harness.session.integration_resolution import has_resolved_integrations
+from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.session.gateway_chat_context import inject_gateway_chat_context
 
 if TYPE_CHECKING:
@@ -37,13 +38,14 @@ def _ensure_integrations(session: SessionCore) -> SessionCore:
 
 
 def _inject_chat_context(session: SessionCore, *, chat_id: str, platform: str = "") -> SessionCore:
-    """Attach per-turn gateway chat metadata to the session's integration cache."""
+    """Attach per-turn gateway chat metadata and host capability policy."""
     _ensure_integrations(session)
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
         chat_id,
         platform,
     )
+    ensure_gateway_capability_policy(session)
     return session
 
 

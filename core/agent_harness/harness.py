@@ -7,7 +7,7 @@ the installed payload runner (wired at process boot). Session lifecycle
 :class:`~core.agent_harness.session.lifecycle.SessionManager`; the session API
 sits one layer above and adds env resolution and prompt context.
 
-Narrative — construct **one** agent per logical session, then many turns::
+Construct **one** agent per logical session, then many turns::
 
     session = AgentSession.start()       # or attach_agent(custom_headless)
     result = session.chat("…")           # turn 1
@@ -26,8 +26,7 @@ Gateway chat reuses one ``HeadlessAgent`` per session via ``SessionAgentPool``
 :meth:`run_headless_turn`; multi-turn loops should keep one agent for the loop.
 There is no ``dispatch_message_to_headless_agent`` free function.
 
-Must not import ``surfaces.interactive_shell`` (enforced by
-``tests/core/agent/test_import_boundaries.py``). Surfaces inject prompt
+Must not import ``surfaces.interactive_shell``. Surfaces inject prompt
 context through :class:`SessionConfig`.
 """
 

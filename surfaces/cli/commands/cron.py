@@ -254,10 +254,11 @@ def cron_logs(task_id: str, limit: int) -> None:
 @cron_command.command(name="start")
 def cron_start() -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
-    from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
+    from bootstrap.process import SCHEDULER_WORKER_PROFILE, configure_process
     from platform.scheduler.runner import start_scheduler
 
-    configure_process(SCHEDULED_COMMAND_PROFILE)
+    # Dedicated scheduler process — not SCHEDULED_COMMAND (one-shot CLI helpers).
+    configure_process(SCHEDULER_WORKER_PROFILE)
 
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")

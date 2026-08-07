@@ -1,6 +1,6 @@
 """Prompt builders for the decoupled agentic turn engine.
 
-Subpackages (by agent path — see ``prompts/AGENTS.md``):
+Subpackages (by agent path):
 
 * ``kernel/`` — shared types: ``PromptEnvelope``, tiers, ``SurfaceProfile``
   (no agent-path knowledge)

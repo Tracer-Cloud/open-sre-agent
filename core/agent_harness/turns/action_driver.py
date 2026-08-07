@@ -64,7 +64,7 @@ log = logging.getLogger(__name__)
 # 203): slash_invoke, shell_run, cli_exec. One rule — no per-tool carve-outs.
 _DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run", "cli_exec"})
 
-# Hashable identity for one guarded call (no hot-path json.dumps — AGENTS.md).
+# Hashable identity for one guarded call (no hot-path json.dumps).
 _ActionCallFingerprint = tuple[Any, ...]
 
 
@@ -913,7 +913,7 @@ def _show_response(
         output.print()
         output.render_response_header("assistant")
         # Literal text: the sink decides how to render it safely. The harness
-        # must not reach for terminal-markup helpers (agent_harness/AGENTS.md).
+        # must not reach for terminal-markup helpers.
         output.print("\n".join(display_chunks))
         return
     if handled:

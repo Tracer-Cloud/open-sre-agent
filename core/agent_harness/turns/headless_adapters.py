@@ -110,7 +110,7 @@ class EmptyPromptContextProvider:
     """Grounding provider that supplies no corpora (headless)."""
 
     def bind_session(self, session: Any) -> None:
-        """No session state — Goal B reuse is a no-op for empty grounding."""
+        """No session state — session retarget is a no-op for empty grounding."""
         _ = session
 
     def surface(self) -> str:

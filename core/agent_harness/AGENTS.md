@@ -7,15 +7,13 @@ It was extracted out of `interactive_shell` so the same harness can run the
 interactive terminal and be invoked headlessly via
 `agent_harness.turns.headless_dispatch`.
 
-## Canonical narrative (teach this)
+## Host API (teach this)
 
 Prefer `AgentSession.start()` → `.chat` / `.investigate` — not free-function
-turn dumps. **Goal B:** construct one agent per logical session (or scheduled
-loop), then many turns — do not rebuild every message. Full Goal A/B + scaling +
-**bootstrap vs headless layers:**
-`opensre-notes/agent-session-api-scaling-aug2026.md`
-([#layers](../../opensre-notes/agent-session-api-scaling-aug2026.html#layers)).
-Also: `opensre-notes/agent-harness-guide.md`.
+turn dumps. Construct one agent per logical session (or scheduled loop), then
+many turns — do not rebuild every message. Process boot
+(`configure_process`) and headless construction (`build_default_headless_agent`)
+are separate layers.
 
 | Path | Call |
 |------|------|
@@ -30,7 +28,7 @@ Shell uses a TTY `ChatDispatcher` (same `AgentSession.chat` / `run_turn`) —
 intentional, not a second headless factory. Do not reintroduce peer
 `bootstrap.adapters` copies under surfaces or gateway.
 
-**Goal B bind ports:** session-aware defaults implement
+**Bind ports:** session-aware defaults implement
 `SessionBindable` / `ConsoleBindable` / `OutputBindable` (`ports.py`).
 `HeadlessAgent.bind_session` / `bind_turn(console=…, output=…)` only call ports
 that match those Protocols. Gateway usually keeps a stable `LiveOutputSink` and
@@ -41,19 +39,17 @@ rebinds the transport via `LiveOutputSink.bind` (no `output=` each turn).
 tools (console `cancel_requested`), orchestrator/gather, and stream guards all
 read that same Event. Do not invent a second cancel channel.
 
-**Cloud “infinite” scale:** more Fargate tasks (fleet), not unbound in-process
-concurrency or a new `chat` API — see notes `#fargate`.
+**Cloud scale-out:** more Fargate tasks (fleet), not unbound in-process
+concurrency or a new `chat` API.
 
-## Hard boundary (enforced by tests)
+## Hard boundary
 
-- **No `import interactive_shell` anywhere under `agent_harness/`.** This is the whole
-  point of the package and is checked by
-  `tests/core/agent/test_import_boundaries.py`. The dependency direction is strictly
-  one-way: `interactive_shell -> agent_harness -> core`.
+- **No `import interactive_shell` anywhere under `agent_harness/`.** The dependency
+  direction is strictly one-way: `interactive_shell -> agent_harness -> core`.
 - `agent_harness/` may depend on `core/`, `config/`, and `platform/`. It must not
   import `integrations/`, `tools/`, `surfaces/`, or `gateway/`. Integration and tool
   behavior reaches the harness through ports in `platform/harness_ports.py`, wired at
-  startup via `install_harness_ports()` in `surfaces/interactive_shell/ui/output/boundary.py`.
+  startup via `install_harness_ports()` in the interactive-shell output boundary.
   It must not depend on terminal UI concerns (Rich rendering, prompt-toolkit
   mutable UI state, slash dispatch, the shell `REGISTRY`).
 
@@ -103,7 +99,7 @@ subpackage. Default port implementations live with the concern they serve, not i
   default `TurnAccounting` (`turn_accounting.py`) and `RunRecordFactory`
   (`run_record.py`).
 - `prompts/` — prompt builders by agent path (pure string assembly; grounding
-  via `PromptContextProvider`). See `prompts/AGENTS.md`. Layout: `kernel/`
+  via `PromptContextProvider`). Layout: `kernel/`
   (envelope + surface Strategy), `assistant/` / `action/` / `gather/` (peer
   assemblers), `grounding/` (prompt providers), plus leaves `memory/` /
   `runtime_facts/` / `skills/`.
@@ -217,13 +213,11 @@ shape; if it answers directly without tools it is the direct-answer shape.
 2. Update this file when harness rules change.
 3. Inject through `ports.py` callables (`StreamAnswerFn`, `ExecuteActions`,
    `EvidenceGatherer`); do not import surface code into `agent_harness/`.
-4. Add or extend guards in `tests/core/agent_harness/test_agent_shapes.py` when
-   you introduce a new entrypoint or rename a shape seam.
-5. Public host API is `AgentSession.chat` / `AgentSession.investigate`
-   (`tests/core/agent_harness/test_agent_session_api.py`). Adapters build
-   `ChatTurnBindings` and call `dispatch_chat_turn` internally — never add a
-   new top-level binder that calls `run_turn` directly
-   (`tests/core/agent_harness/test_chat_api.py`).
+4. Add or extend shape-guard tests when you introduce a new entrypoint or
+   rename a shape seam.
+5. Public host API is `AgentSession.chat` / `AgentSession.investigate`.
+   Adapters build `ChatTurnBindings` and call `dispatch_chat_turn` internally —
+   never add a new top-level binder that calls `run_turn` directly.
 
 **Read order for new code:** this file → `harness.py` (`AgentSession`) →
 `turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
@@ -237,14 +231,13 @@ composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
 `run()` (seed calls, evidence collection, duplicate detection, stagnation
 handling). It is still the tool-calling shape — composition, not a forked loop.
 
-## Canonical narrative (construct once → many turns)
+## Construct once → many turns
 
-The technology is already object-shaped. Prefer this story in docs, samples,
-and new call sites — do **not** invent a second top-level free function that
-dumps the turn stack, and do **not** rebuild a headless agent on every message
-for the same logical session.
+Prefer this shape in docs, samples, and new call sites — do **not** invent a
+second top-level free function that dumps the turn stack, and do **not** rebuild
+a headless agent on every message for the same logical session.
 
-**Goal A — host API shape**
+**Host API shape**
 
 ```python
 from bootstrap.process import EMBEDDED_PROFILE, configure_process
@@ -257,7 +250,7 @@ result = session.chat("…")            # turn 2 — same attached agent
 report = session.investigate({…})     # Path-2 verb (separate stage machine)
 ```
 
-**Goal B — one agent per logical session (or scheduled loop)**
+**One agent per logical session (or scheduled loop)**
 
 | Lifetime | Construct | Then |
 |----------|-----------|------|
@@ -281,20 +274,19 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 There is no `dispatch_message_to_headless_agent` — that free-function dump was
 replaced by `HeadlessAgent.dispatch` / `AgentSession.chat`.
 
-**Scaling is a separate track** from this narrative: local concurrency
+**Scaling** is separate from the host API: local concurrency
 (`TurnConcurrencyGate` / transport pools / `OPENSRE_SIZE_PROFILE`) and cloud
 Fargate scale-out (spin more tasks; same API per task) sit *around*
 `chat`/`investigate`. Construct-once-per-session is the reuse story;
 process/task scale-out is deploy. Do not redesign the host API to “enable
-scaling.” See `opensre-notes/agent-session-api-scaling-aug2026.md` (#fargate).
+scaling.”
 
 ## Four hosts, one AgentSession API
 
 **Public host contract:** :class:`~core.agent_harness.harness.AgentSession`
 with ``chat`` and ``investigate``. One name per concept — the former
 ``AgentHarness`` / ``HarnessConfig`` / ``HarnessStartupResult`` /
-``dispatch_message`` aliases are deleted, pinned by
-``tests/core/agent_harness/test_agent_session_api.py``.
+``dispatch_message`` aliases are deleted.
 
 **Internal chat seam:** adapters build
 :class:`~core.agent_harness.turns.chat_api.ChatTurnBindings`, then call
@@ -324,8 +316,7 @@ it does not re-implement it. Do not fork the loop here.
 
 ## core/agent package (Agent is a facade, not the algorithm owner)
 
-`core/agent/` is a package with one file per responsibility (see
-[docs/NAMING.md](../../docs/NAMING.md) for the naming convention). `Agent`
+`core/agent/` is a package with one file per responsibility. `Agent`
 (in `agent.py`) is a thin facade: `__init__` stores construction-time config
 and `run()` resolves per-run context (from `runtime_request=` or
 `initial_messages=`) and hands it to `core.agent.react_loop.run_react_loop`,

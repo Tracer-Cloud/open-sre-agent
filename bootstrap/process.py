@@ -10,8 +10,7 @@ composition root (``GatewayManager.configure_logging``, CLI stderr).
 Does **not** construct :class:`~core.agent_harness.turns.headless_dispatch.HeadlessAgent`
 or run turns — that is ``build_default_headless_agent`` /
 :class:`~core.agent_harness.harness.AgentSession` after boot. Bootstrap and
-headless construction are two layers of one narrative, not duplicated stacks
-(see ``opensre-notes/agent-session-api-scaling-aug2026.md``).
+headless construction are separate layers, not duplicated stacks.
 """
 
 from __future__ import annotations
@@ -98,6 +97,10 @@ WEB_PROFILE: Final = ProcessProfile(
 )
 SCHEDULER_WORKER_PROFILE: Final = ProcessProfile(
     name=ProcessName.SCHEDULER_WORKER,
+    # Dedicated blocking scheduler process (`opensre cron start`). Owns its
+    # Sentry entrypoint and installs runners at boot. Gateway co-hosts the
+    # scheduler differently: GATEWAY_PROFILE + late install_scheduler_runners
+    # in GatewayManager.start_scheduler — do not confuse the two.
     steps=frozenset(
         {
             BootStep.ENV,
@@ -110,9 +113,10 @@ SCHEDULER_WORKER_PROFILE: Final = ProcessProfile(
 )
 SCHEDULED_COMMAND_PROFILE: Final = ProcessProfile(
     name=ProcessName.SCHEDULED_COMMAND,
-    # A CLI command that creates or dispatches scheduled work (cron, digests,
+    # A CLI command that creates or dispatches scheduled work (cron add, digests,
     # metric reports). It runs inside an already-booted CLI process, so Sentry
     # stays with the CLI; it needs the runners scheduled tasks dispatch through.
+    # Not the long-running daemon — that is SCHEDULER_WORKER_PROFILE.
     steps=frozenset({BootStep.ENV, BootStep.HARNESS_ADAPTERS, BootStep.SCHEDULER_RUNNERS}),
 )
 EMBEDDED_PROFILE: Final = ProcessProfile(

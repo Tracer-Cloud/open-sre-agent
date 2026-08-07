@@ -8,8 +8,7 @@ they must not re-assemble ``DefaultToolProvider`` / reasoning / accounting by
 hand.
 
 Process boot (``configure_process``) is a **different layer** — adapters and
-env — and does not build agents. Narrative:
-``opensre-notes/agent-session-api-scaling-aug2026.md`` (§ Bootstrap vs HeadlessAgent).
+env — and does not build agents.
 """
 
 from __future__ import annotations

@@ -177,8 +177,7 @@ def stream_answer(
     """Stream one grounded conversational answer (guidance only, no tools).
 
     The **direct answer** path (no tools): a single ``invoke_stream`` call with
-    no ReAct loop. The **tool-calling** agent is ``core.agent.Agent`` — see
-    ``core/agent_harness/AGENTS.md``.
+    no ReAct loop. The **tool-calling** agent is ``core.agent.Agent``.
 
     ``request.turn_plan`` is the turn-wide assembly built at turn start. Its
     snapshot (conversation history, integration state, prior investigation,

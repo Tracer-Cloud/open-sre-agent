@@ -1,9 +1,7 @@
 # Gateway Package Guidance
 
-Gateway tests live in `gateway/tests/`, not the repo-wide `tests/` tree — add
-new gateway unit tests there. `pytest.ini` discovers them and
-`.github/ci/test_scope_rules.py` scopes CI to that path when only `gateway/`
-changes.
+Gateway unit tests live under this package’s `tests/` tree, not the repo-wide
+tests tree.
 
 ## Entry points (open these first)
 
@@ -52,21 +50,19 @@ start_gateway()
 ## Layout
 
 Packages are split like `core/agent_harness/prompts/`: **core infra** vs
-**peer surfaces** vs **composer**. See `gateway/core/AGENTS.md`,
-`gateway/channels/AGENTS.md`, and `gateway/transports/AGENTS.md`.
+**peer surfaces** vs **composer**.
 
 - `core/` — process and leaf infrastructure (`runtime`, `storage`,
   `billing`, `attachments`, `session`, `config`). No imports from transports
   or `web`. Only `core/runtime/manager.py` imports `gateway.channels`.
 - `channels/` — starts/stops web + chat transports as one consumer set.
-  Imports `web/` and each peer's `startup` only. See `channels/AGENTS.md`.
+  Imports `web/` and each peer's `startup` only.
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
   settings, inbound worker, security, output sink, and `startup.py`. Peers
   never import each other or `channels`/`web`; anything two need belongs in
-  `core/` (usually `gateway.core.runtime`). See `transports/AGENTS.md`.
+  `core/` (usually `gateway.core.runtime`).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
-  May import `core/`; must not import chat transports or `channels`. See
-  `web/AGENTS.md`.
+  May import `core/`; must not import chat transports or `channels`.
 - `core/storage/session/resolver.py` — per-conversation session binding
   keyed by platform; delegates create / resolve / rotate to `SessionManager`.
 
@@ -79,12 +75,8 @@ peer transports · web  →  core leaves
 (peers never import each other, channels, or each other's packages)
 ```
 
-Package DAG pinned by `tests/test_package_borders.py` (plus discord↔slack
-isolation in `tests/discord/test_transport_borders.py`).
-
-Tests stay flat under `gateway/tests/{runtime,web,slack,discord,telegram,…}/`
-(nesting `tests/transports/discord` collides with the `discord` PyPI package
-name during collection).
+Package DAG and peer isolation are pinned by border tests. Keep gateway tests
+flat by surface (do not nest a directory named after the Discord PyPI package).
 
 ## Gateway turn dispatch
 
@@ -127,36 +119,32 @@ cannot inherit that session.
 **Cloud scale-out** (“infinite” via new Fargate tasks) is a **third** layer
 above these two: each task is one gateway process with its own gate; raise
 fleet size / workers when saturated — do not unbound the in-process gate or
-redesign `AgentSession.chat`. Narrative:
-`opensre-notes/agent-session-api-scaling-aug2026.md` (#fargate). Infra topology:
-`opensre-notes/silo-aws.html` / scalable-silos notes.
+redesign `AgentSession.chat`.
 
 Two different **in-process** limits — do not conflate them:
 
 | Layer | Mechanism | Behavior when full |
 |-------|-----------|-------------------|
-| **Process** | `TurnConcurrencyGate` from `OPENSRE_SIZE_PROFILE` (SMALL=1, MEDIUM=2, LARGE=4) | Chat turns: non-blocking `try_acquire` on `GatewayTurnHandler`; reply with busy message and drop the turn. Scheduler runners: **blocking** `acquire` (already-claimed work waits for a slot). |
+| **Process** | `TurnConcurrencyGate` / `process_turn_gate()` from `OPENSRE_SIZE_PROFILE` (SMALL=1, MEDIUM=2, LARGE=4) | Chat + sync `/investigate`: non-blocking `try_acquire` (busy drop / 503). Scheduler + `InvestigationWorker`: **blocking** `acquire` (already-claimed work waits). |
 | **Per-transport** | `max_concurrent_turns` (defaults to the same profile limit via `turn_limit_for_profile`; override with `*_GATEWAY_MAX_CONCURRENT`) | Caps how many inbound messages that transport may process in parallel *before* they hit the shared turn handler. Does not replace the process gate. |
 
 ```text
-Telegram/Slack/Discord ──► GatewayTurnHandler.try_acquire ──► TurnConcurrencyGate
+Telegram/Slack/Discord ──► GatewayTurnHandler.try_acquire ──► process_turn_gate()
 Scheduler (agent + investigate runners) ──► blocking acquire ──► same gate
-POST /investigate + InvestigationWorker ──► AgentSession.investigate (Path-2) ──► ungated today
+POST /investigate ──► try_acquire (busy → 503) ──► same gate
+InvestigationWorker ──► blocking acquire (already claimed) ──► same gate
 ```
 
 - Production chat capacity is on `GatewayTurnHandler(gate=manager.turn_gate)`.
-- `ConcurrencyLimitedTurnHandler` is **quarantined under**
-  `gateway/tests/runtime/concurrency_limited_handler.py` (tests only). Do not
-  reintroduce it under `gateway/core/` — production uses `gate=` on
-  `GatewayTurnHandler` only.
-- **Chat vs investigate:** the process gate covers gateway **chat** and
-  **scheduler** runners. Path-2 HTTP investigate (`POST /investigate`,
-  `InvestigationWorker`) does **not** take the gate today — do not assume web
-  investigations are capped by `OPENSRE_SIZE_PROFILE`. Analytics: chat uses
-  `gateway_turn_*` with `surface` ∈ {slack,telegram,discord}; investigate uses
-  separate `investigation_*` events (no capacity-reject event yet).
+- `GatewayManager` and Path-2 share :func:`~gateway.core.runtime.concurrency.process_turn_gate`.
+- `ConcurrencyLimitedTurnHandler` is tests-only. Do not reintroduce it under
+  `gateway/core/` — production uses `gate=` on `GatewayTurnHandler` only.
+- **Chat + Path-2:** HTTP `/investigate` busy-drops like chat; the investigation
+  worker blocks like scheduler runners. Analytics: chat uses `gateway_turn_*`
+  with `surface` ∈ {slack,telegram,discord}; investigate uses separate
+  `investigation_*` events (no dedicated capacity-reject event yet).
 
-## Agent lifetime (Goal B)
+## Agent lifetime
 
 Construct **one** `HeadlessAgent` per logical chat session
 (`SessionAgentPool`), then many turns. Each inbound message:
@@ -173,7 +161,6 @@ Do **not** build a fresh headless agent on every message. Same-session turns
 serialize on the pool’s per-session lock; different sessions stay concurrent
 under the capacity gate. Multi-turn scheduled loops should keep one agent for
 the loop; true one-shot digests may use `AgentSession.run_headless_turn`.
-Narrative SoT: `opensre-notes/agent-session-api-scaling-aug2026.md`.
 
 ## Host parity (channels)
 
@@ -188,13 +175,13 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 | Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
 | Sink redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
 | Principal / actor | **yes** — `slack/principal.py` | **yes** — `telegram/principal.py` | **yes** — `discord/principal.py` | **partial** — Clerk org audit; no `StorageScope` |
-| Capacity gate | **yes** — process gate + transport pool | **yes** — same + TG semaphore | **yes** — same + executor | **no** — Path-2 ungated |
+| Capacity gate | **yes** — process gate + transport pool | **yes** — same + TG semaphore | **yes** — same + executor | **yes** — same `process_turn_gate` (HTTP try_acquire / worker blocking) |
 
 **Documented exceptions (do not “fix” by forking a second loop):**
 
 - Gateway chat disables `task_cancel` / investigation / llm_provider
-  (`GatewayTurnHandler._UNSUPPORTED_GATEWAY_CAPABILITIES`).
-- Path-2 web investigate is ungated and has no chat approval prompter.
+  (`gateway.core.runtime.capability_policy.ensure_gateway_capability_policy`).
+- Path-2 web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `sink.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
   (shell `cancel_requested` parity via `CancelConsole` + `ActiveTurnCancels`).
@@ -206,20 +193,16 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 - Telegram write-tool approvals require a non-empty `allowed_user_ids` allowlist
   (same fail-closed posture as Discord).
 
-**Characterization:** live-session tools —
-`tests/runtime/test_turn_handler.py` +
-`test_gateway_chat_never_builds_core_agent_or_precomputed_tools`;
-redaction — Slack/Telegram/Discord sink tests + `tests/runtime/test_status_messages.py`;
-Telegram approvals — `tests/telegram/test_approvals.py`;
-Telegram soft timeout — `tests/telegram/test_turn_timeout.py`.
+**Characterization:** cover live-session tools, sink redaction, Telegram
+approvals, and soft timeout in the gateway test suite.
 
 **Dogfood + smoke (turn-engine regressions):**
 
 | Check | How |
 |-------|-----|
-| Borders + capacity | `pytest gateway/tests/test_package_borders.py gateway/tests/runtime/test_concurrency_gate.py -q` |
-| Smoke gateway wiring | `./trace smoke --suite gateway` (or tags covering `cli.gateway_*`) |
-| Dogfood (dev silo only) | `@mention` on **dev** Slack — thread continuity, Digging in…, `Want me to:` → `yes`; one Socket Mode consumer. See notes `ops-dogfood.html#glossary`. |
+| Borders + capacity | Gateway border + concurrency gate tests |
+| Smoke gateway wiring | Local smoke suite for gateway / `cli.gateway_*` tags |
+| Dogfood (dev silo only) | `@mention` on **dev** Slack — thread continuity, Digging in…, `Want me to:` → `yes`; one Socket Mode consumer. |
 | Not a substitute | Laptop `opensre gateway` + smoke ≠ dogfood |
 
 ## Testing

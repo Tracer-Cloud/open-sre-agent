@@ -162,3 +162,23 @@ def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
         ).status_code
         == 200
     )
+
+
+def test_investigate_at_capacity_returns_503(client: TestClient) -> None:
+    from gateway.core.runtime.concurrency import (
+        TurnConcurrencyGate,
+        reset_process_turn_gate_for_tests,
+        set_process_turn_gate,
+    )
+
+    install_investigation_payload_runner(lambda **_: _fake_payload())
+    gate = TurnConcurrencyGate(1)
+    assert gate.try_acquire() is True  # occupy the only slot
+    set_process_turn_gate(gate)
+    try:
+        resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
+        assert resp.status_code == 503
+        assert "at capacity" in resp.json()["error"]
+    finally:
+        gate.release()
+        reset_process_turn_gate_for_tests()

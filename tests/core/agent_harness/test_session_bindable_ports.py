@@ -1,4 +1,4 @@
-"""Goal B reuse: session/console bind ports are Protocol-visible."""
+"""Session/console/output bind ports are Protocol-visible for agent reuse."""
 
 from __future__ import annotations
 

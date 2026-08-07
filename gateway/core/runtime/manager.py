@@ -27,7 +27,11 @@ from rich.console import Console
 
 from gateway import channels as gateway_channels
 from gateway.core.config.logging_config import configure_logging
-from gateway.core.runtime.concurrency import TurnConcurrencyGate
+from gateway.core.runtime.concurrency import (
+    TurnConcurrencyGate,
+    process_turn_gate,
+    set_process_turn_gate,
+)
 from gateway.core.runtime.credential_hydration import (
     GatewayBootstrap,
     GatewayCredentialHydrator,
@@ -69,8 +73,12 @@ class GatewayManager:
         self._credential_hydrator_factory = (
             credential_hydrator_factory or GatewayCredentialHydrator.from_environment
         )
-        profile = os.getenv("OPENSRE_SIZE_PROFILE", "SMALL").strip().upper()
-        self.turn_gate = turn_gate or TurnConcurrencyGate.for_profile(profile)
+        if turn_gate is not None:
+            set_process_turn_gate(turn_gate)
+            self.turn_gate = turn_gate
+        else:
+            # Same instance Path-2 investigate / InvestigationWorker use.
+            self.turn_gate = process_turn_gate()
         self._stopped = threading.Event()
 
     def start_gateway(self, *, wait: bool = True) -> GatewayManager:

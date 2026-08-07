@@ -213,7 +213,8 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     assert agent.bind_turn.call_args.kwargs["tool_hooks"] is None
 
 
-def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
+def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any) -> None:
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(storage=InMemorySessionStorage())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
 
@@ -229,7 +230,8 @@ def test_turn_handler_disables_unsupported_gateway_capabilities() -> None:
     assert session.available_capabilities["task_cancel"] == ()
 
 
-def test_turn_handler_preserves_supported_capabilities() -> None:
+def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None:
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(storage=InMemorySessionStorage())
     session.available_capabilities.update(
         {
@@ -257,7 +259,8 @@ def test_turn_handler_preserves_supported_capabilities() -> None:
     assert session.available_capabilities["custom_gateway_capability"] == ("enabled",)
 
 
-def test_turn_handler_capability_gating_is_stable_across_turns() -> None:
+def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any) -> None:
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
     session = SessionCore(storage=InMemorySessionStorage())
     session.available_capabilities["shell_commands"] = ("shell",)
 

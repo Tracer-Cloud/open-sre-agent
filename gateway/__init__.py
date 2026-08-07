@@ -1,6 +1,6 @@
 """Standalone messaging gateway for inbound chat platforms.
 
-Subpackages (see ``gateway/AGENTS.md``):
+Subpackages:
 
 * ``core/`` — process + leaf infrastructure (``runtime``, ``storage``,
   ``billing``, ``attachments``, ``session``, ``config``)
@@ -17,8 +17,6 @@ Entry points:
 * Telegram — :mod:`gateway.transports.telegram.startup`
 * Slack — :mod:`gateway.transports.slack.startup`
 * Discord — :mod:`gateway.transports.discord.startup`
-
-See ``gateway/README.md`` § Entry points.
 """
 
 from __future__ import annotations

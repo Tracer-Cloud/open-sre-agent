@@ -7,8 +7,7 @@ terminal, gateway, and embedders share one entry.
 
 Hard boundary: nothing under ``agent_harness/`` may import from
 ``interactive_shell``, ``tools``, or ``integrations``. The dependency direction
-is one-way: ``interactive_shell -> agent_harness -> core``. See
-``agent_harness/AGENTS.md``.
+is one-way: ``interactive_shell -> agent_harness -> core``.
 """
 
 from __future__ import annotations

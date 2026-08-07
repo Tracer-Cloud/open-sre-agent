@@ -46,11 +46,11 @@ provider is unreachable) the error message itself lands in
 sink, a REPL console — build a ``HeadlessAgent`` (or
 ``build_default_headless_agent``) and call ``attach_agent``, then ``chat``.
 
-Canonical story (Goal A + B): construct **one** agent per logical session
-(or scheduled loop), then many ``chat`` / ``investigate`` turns — do not
-rebuild every message. Gateway does this via ``SessionAgentPool`` +
-``bind_turn``. There is no ``dispatch_message_to_headless_agent`` free
-function, and no ``AgentHarness`` alias — ``AgentSession`` is the only name.
+Construct **one** agent per logical session (or scheduled loop), then many
+``chat`` / ``investigate`` turns — do not rebuild every message. Gateway does
+this via ``SessionAgentPool`` + ``bind_turn``. There is no
+``dispatch_message_to_headless_agent`` free function, and no ``AgentHarness``
+alias — ``AgentSession`` is the only name.
 """
 
 from __future__ import annotations

@@ -22,3 +22,11 @@ embedded web both get Path-2 investigate wiring without a CLI/manager boot. Do
 `bootstrap.adapters` only. In a full gateway process, `GATEWAY_PROFILE` already
 ran; `WEB_PROFILE` may still run (separate idempotency key) — steps must stay
 safe to re-enter, not invent a divergent registry.
+
+## Capacity (Path-2)
+
+`POST /investigate` and `InvestigationWorker` take
+:func:`~gateway.core.runtime.concurrency.process_turn_gate` — the same
+process gate as chat/scheduler (`OPENSRE_SIZE_PROFILE`). Sync HTTP
+`try_acquire` → 503 when full; the worker `acquire`s (blocking) after claim.
+Capacity is process gate + transport pools + Fargate fleet (same rules as the gateway package).

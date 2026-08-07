@@ -24,6 +24,7 @@ from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
 from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cancel
+from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.session_agents import SessionAgentPool
 from gateway.core.runtime.sink_protocol import GatewaySink
@@ -41,12 +42,6 @@ from platform.analytics.usage_context import (
 from platform.observability.trace.spans import traced_session
 
 SlashPortsFactory = Callable[[], Any]
-
-_UNSUPPORTED_GATEWAY_CAPABILITIES = (
-    "investigation",
-    "llm_provider",
-    "task_cancel",
-)
 
 _DEFAULT_BUSY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
 
@@ -104,7 +99,8 @@ class GatewayTurnHandler:
         sink: GatewaySink,
         logger: logging.Logger,
     ) -> None:
-        session.available_capabilities.update(dict.fromkeys(_UNSUPPORTED_GATEWAY_CAPABILITIES, ()))
+        # Idempotent host policy (also applied in SessionResolver for production).
+        ensure_gateway_capability_policy(session)
         session_id = getattr(session, "session_id", None)
         surface = get_surface()
         if surface not in CANONICAL_SURFACES:

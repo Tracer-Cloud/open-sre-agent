@@ -76,6 +76,12 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
+        from gateway.core.runtime.concurrency import process_turn_gate
+
+        # Already claimed from the queue — block like scheduler runners so the
+        # work waits for a chat/Path-2 slot instead of racing the process gate.
+        gate = process_turn_gate()
+        gate.acquire()
         try:
             from platform.analytics.cli import track_investigation
             from platform.analytics.source import EntrypointSource, TriggerMode
@@ -119,6 +125,8 @@ class InvestigationWorker:
                 status=InvestigationStatus.FAILED,
                 error=type(exc).__name__,
             )
+        finally:
+            gate.release()
         return True
 
     def start(self) -> threading.Thread:

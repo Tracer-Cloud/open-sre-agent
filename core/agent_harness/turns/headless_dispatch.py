@@ -208,9 +208,17 @@ class HeadlessAgent:
         if runner_changed:
             self._action_runner = self._new_action_runner()
 
-    def _accounting_for(self, message: str) -> TurnAccounting:
-        if self._accounting is not None:
-            return self._accounting
+    def _take_accounting(self, message: str) -> TurnAccounting:
+        """Return turn accounting and clear the slot (consume-once).
+
+        A prior turn's ``DefaultTurnAccounting`` (which captures that turn's
+        prompt text) must not leak into the next ``dispatch`` when a host
+        forgets ``bind_turn(accounting=…)``.
+        """
+        accounting = self._accounting
+        self._accounting = None
+        if accounting is not None:
+            return accounting
         if hasattr(self._store, "storage"):
             return DefaultTurnAccounting(self._store, message)
         return NoopTurnAccounting()
@@ -271,7 +279,7 @@ class HeadlessAgent:
                 execute_actions=self._execute_actions,
                 answer=self._answer,
                 gather=self._gather,
-                accounting=self._accounting_for(message),
+                accounting=self._take_accounting(message),
                 confirm_fn=self._confirm_fn,
                 is_tty=self._is_tty,
                 surface=self._prompts.surface(),

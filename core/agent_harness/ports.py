@@ -60,7 +60,7 @@ class SessionStore(Protocol):
     action driver, the three-path engine, and the gather loop touch.
     """
 
-    # --- turn-context snapshot fields (see core.agent_harness.turns.turn_snapshot.TurnSnapshotSource) ---
+    # --- turn-context snapshot fields ---
     cli_agent_messages: list[tuple[str, str]]
     configured_integrations_known: bool
 
@@ -89,7 +89,7 @@ class SessionStore(Protocol):
 
 @runtime_checkable
 class SessionBindable(Protocol):
-    """Port that can retarget a session for Goal B agent reuse.
+    """Port that can retarget a session when the agent is reused across turns.
 
     Pooled / multi-turn hosts call :meth:`bind_session` when
     ``SessionManager.resolve`` returns a fresh session object for the same id.
@@ -115,7 +115,7 @@ class ConsoleBindable(Protocol):
 
 @runtime_checkable
 class OutputBindable(Protocol):
-    """Port that holds an :class:`OutputSink` and can retarget it for Goal B reuse.
+    """Port that holds an :class:`OutputSink` and can retarget it across turns.
 
     ``HeadlessAgent.bind_turn(output=…)`` updates the agent's sink and must
     retarget every port that cached the previous sink (e.g. reasoning error

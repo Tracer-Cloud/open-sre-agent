@@ -191,6 +191,33 @@ def test_gateway_reports_missing_capabilities_at_boot(monkeypatch: pytest.Monkey
     assert warned == ["gateway kubectl missing"]
 
 
+def test_scheduler_worker_profile_boots_runners_with_scheduler_sentry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``opensre cron start`` uses SCHEDULER_WORKER_PROFILE (dedicated daemon)."""
+    from bootstrap import process
+
+    ran: list[str] = []
+
+    def _record(name: str):
+        def _step() -> None:
+            ran.append(name)
+
+        return _step
+
+    monkeypatch.setattr(process, "bootstrap_opensre_env_once", lambda **_kw: ran.append("env"))
+    monkeypatch.setattr(process, "install_harness_adapters", _record("adapters"))
+    monkeypatch.setattr(process, "install_scheduler_runners", _record("runners"))
+    monkeypatch.setattr(
+        "platform.observability.errors.sentry.init_sentry",
+        lambda **_kw: ran.append(f"sentry:{_kw.get('entrypoint')}"),
+    )
+
+    process.configure_process(process.SCHEDULER_WORKER_PROFILE)
+
+    assert ran == ["env", "sentry:scheduler", "adapters", "runners"]
+
+
 def test_scheduled_command_profile_dispatches_without_touching_sentry(monkeypatch) -> None:
     # Arrange: cron / digest / report commands run inside an already-booted CLI
     # process. They need the runners that dispatch scheduled work, but Sentry is
