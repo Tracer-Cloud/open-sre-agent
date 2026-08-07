@@ -1,73 +1,10 @@
-"""Evidence source type — the canonical set of data source identifiers."""
+"""Evidence source type — a vendor/integration key identifying a data source.
+
+Not a closed enum: each ``integrations/<vendor>/`` package owns its own
+source string(s) (the value passed as ``source=`` when registering a tool).
+Core only declares the type alias; it must not hardcode the set of vendors.
+"""
 
 from __future__ import annotations
 
-from typing import Literal
-
-EvidenceSource = Literal[
-    "storage",
-    "batch",
-    "tracer_web",
-    "cloudwatch",
-    "aws_sdk",
-    "knowledge",
-    "grafana",
-    "dagster",
-    "datadog",
-    "groundcover",
-    "honeycomb",
-    "coralogix",
-    "eks",
-    "github",
-    "sentry",
-    "mongodb",
-    "postgresql",
-    "mongodb_atlas",
-    "mariadb",
-    "kafka",
-    "clickhouse",
-    "azure_sql",
-    "google_docs",
-    "vercel",
-    "opsgenie",
-    "incident_io",
-    "pagerduty",
-    "jira",
-    "elasticsearch",
-    "prefect",
-    "gitlab",
-    "jenkins",
-    "bitbucket",
-    "openclaw",
-    "posthog_mcp",
-    "sentry_mcp",
-    "x_mcp",
-    "mysql",
-    "rabbitmq",
-    "betterstack",
-    "snowflake",
-    "azure",
-    "openobserve",
-    "opensearch",
-    "alertmanager",
-    "signoz",
-    "tempo",
-    "splunk",
-    "supabase",
-    "airflow",
-    "argocd",
-    "helm",
-    "victoria_logs",
-    "rds",
-    "cloudtrail",
-    "ec2",
-    "hermes",
-    "slack",
-    "twilio",
-    "telegram",
-    "rocketchat",
-    "redis",
-    "temporal",
-    "kubernetes",
-    "interactive_shell",
-]
+EvidenceSource = str

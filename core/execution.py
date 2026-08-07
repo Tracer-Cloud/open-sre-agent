@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -19,15 +19,6 @@ logger = logging.getLogger(__name__)
 
 _TOOL_EXECUTOR_WORKERS = 10
 _UNSET: object = object()
-_INJECTED_CREDENTIAL_KEYS = frozenset(
-    {
-        "github_url",
-        "github_mode",
-        "github_token",
-        "github_command",
-        "github_args",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -88,6 +79,7 @@ class BeforeToolCallResult:
 BeforeToolCallHook = Callable[[ToolExecutionRequest], BeforeToolCallResult | None]
 AfterToolCallHook = Callable[[ToolExecutionRequest, ToolExecutionResult], ToolExecutionPatch | None]
 ToolUpdateHook = Callable[[ToolExecutionRequest, Any], None]
+BeforeToolBatchHook = Callable[[Sequence[ToolCall]], None]
 
 
 @dataclass(frozen=True)
@@ -97,6 +89,8 @@ class ToolExecutionHooks:
     before_tool_call: BeforeToolCallHook | None = None
     after_tool_call: AfterToolCallHook | None = None
     on_tool_update: ToolUpdateHook | None = None
+    # Fired once per provider tool-call list before any call runs (batch replay guards).
+    before_tool_batch: BeforeToolBatchHook | None = None
 
 
 def execute_tool_calls(
@@ -115,6 +109,8 @@ def execute_tool_calls(
     """
 
     hooks = hooks or ToolExecutionHooks()
+    if hooks.before_tool_batch is not None:
+        hooks.before_tool_batch(tool_calls)
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
     runtime_resources = dict(tool_resources or {})
@@ -124,7 +120,6 @@ def execute_tool_calls(
             return _execute_one_tool_call(
                 tc,
                 tool_map=tool_map,
-                tools=tools,
                 tool_sources=tool_sources,
                 resolved_integrations=resolved_integrations,
                 runtime_resources=runtime_resources,
@@ -191,11 +186,29 @@ def execute_tools(
     ]
 
 
+def _unavailable_tool_message(name: str, tool_map: Mapping[str, Any]) -> str:
+    """Explain a missing tool so the caller can recover on the next iteration.
+
+    A tool absent from the map is usually configured-but-unavailable (its
+    integration lacks a credential this session), not nonexistent — so say
+    "not available" and name the siblings that are, rather than leaving the
+    model to guess and the user to read a bare identifier.
+    """
+    family = name.split("_", 1)[0]
+    siblings = sorted(
+        other for other in tool_map if other != name and other.split("_", 1)[0] == family
+    )
+    if not siblings:
+        return f"tool {name!r} is not available in this session"
+    return (
+        f"tool {name!r} is not available in this session; available instead: {', '.join(siblings)}"
+    )
+
+
 def _execute_one_tool_call(
     tc: ToolCall,
     *,
     tool_map: dict[str, RuntimeTool],
-    tools: Sequence[RuntimeTool],
     tool_sources: dict[str, Any],
     resolved_integrations: dict[str, Any],
     runtime_resources: dict[str, Any],
@@ -207,7 +220,9 @@ def _execute_one_tool_call(
     if tool is None:
         mark_span_outcome(span_attrs, "unknown_tool", error=True)
         logger.debug("tool_call unknown name=%s id=%s", tc.name, tc.id)
-        return _error_result(f"unknown tool: {tc.name}", metadata={"tool_name": tc.name})
+        return _error_result(
+            _unavailable_tool_message(tc.name, tool_map), metadata={"tool_name": tc.name}
+        )
 
     try:
         validation_error = tool.validate_public_input(tc.input)
@@ -216,7 +231,7 @@ def _execute_one_tool_call(
             logger.debug("tool_call validation_error name=%s id=%s", tc.name, tc.id)
             return _error_result(validation_error, metadata={"tool_name": tc.name})
 
-        source = tool_source(tools, tc.name)
+        source = str(getattr(tool, "source", "unknown"))
         span_attrs["source"] = source
         request = ToolExecutionRequest(
             tool_call=tc,
@@ -292,8 +307,11 @@ def _invoke_runtime_tool(
 
     injected = tool.extract_params(tool_sources)
     kwargs = {**injected, **tc.input}
+    # Vendor-agnostic: each tool declares which extract_params keys must win
+    # over model input (secrets / connection fields). See ``injected_params``.
+    protected = frozenset(getattr(tool, "injected_params", ()) or ())
     for key, value in injected.items():
-        if key in _INJECTED_CREDENTIAL_KEYS and value not in (None, "", []):
+        if key in protected and value not in (None, "", []):
             kwargs[key] = value
     if getattr(tool, "accepts_runtime_context", False):
         context = AgentToolContext(
@@ -430,11 +448,9 @@ def public_tool_input(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def tool_source(tools: Sequence[RuntimeTool], tool_name: str) -> str:
-    for tool in tools:
-        if tool.name == tool_name:
-            return str(getattr(tool, "source", "unknown"))
-    return "unknown"
+def tool_source(tools: Mapping[str, RuntimeTool], tool_name: str) -> str:
+    tool = tools.get(tool_name)
+    return str(getattr(tool, "source", "unknown")) if tool else "unknown"
 
 
 def summarise(output: Any) -> str:

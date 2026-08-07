@@ -14,6 +14,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from core.agent_harness.session.history_entry import build_history_entry
+
 if TYPE_CHECKING:
     from core.agent_harness.grounding.context import GroundingContext
     from core.agent_harness.session.integration_resolution import IntegrationResolutionResult
@@ -23,10 +25,20 @@ else:
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
+from core.agent_harness.session.pending_choice import PendingUserChoice
+from core.agent_harness.session.pending_offer import (
+    PendingInvestigationOffer,
+    PendingScheduleOffer,
+)
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.ports import SessionStorage
 from core.state import MutableAgentState
 from platform.common.task_registry import TaskRegistry
+
+#: How many recent history rows keep their full response body. Sized above
+#: the conversation window so anything a prompt or a ``*_latest_*`` lookup
+#: reads is still intact, while a long session stops holding every reply.
+RESPONSE_TEXT_WINDOW = 20
 
 
 def _default_grounding() -> GroundingContext:
@@ -132,6 +144,21 @@ class SessionCore:
     last_synthetic_observation_path: str | None = None
     """Absolute path to ``latest.json`` for the last finished synthetic run (set on failure)."""
 
+    pending_schedule_offer: PendingScheduleOffer | None = None
+    """Structured schedule awaiting bare yes — set by propose_scheduled_delivery."""
+
+    pending_investigation_offer: PendingInvestigationOffer | None = None
+    """Structured investigation awaiting bare yes — armed after Want-me-to closer."""
+
+    pending_user_choice: PendingUserChoice | None = None
+    """Structured multiple-choice question queued for the ``/choose`` selection
+    menu — set by the ``ask_user_choice`` action tool, consumed once by the
+    ``/choose`` handler."""
+    pending_recovery_note: str | None = None
+    """WAL recovery note for the next action turn — set on ``/resume`` when the
+    resumed session log holds tool intents that never committed (the process
+    died mid-execution). Consumed once by ``TurnSnapshot.from_session``."""
+
     # Infra keys pulled from a completed investigation state and carried into the
     # next investigation. A class-level tuple so callers have a single source for
     # "what counts as accumulated context".
@@ -178,15 +205,32 @@ class SessionCore:
         ``unknown_command`` or ``invalid_subcommand``) so analytics can
         distinguish them from handler failures.
         """
-        entry: dict[str, Any] = {"type": kind, "text": text, "ok": ok}
-        if response_text:
-            entry["response_text"] = response_text
-        if slash_outcome:
-            entry["slash_outcome"] = slash_outcome
+        entry = build_history_entry(
+            kind,
+            text,
+            ok=ok,
+            response_text=response_text,
+            slash_outcome=slash_outcome,
+        )
 
         self.history.append(entry)
+        self._shed_stale_response_text()
 
         self.storage.append_turn(self, kind, text)
+
+    def _shed_stale_response_text(self) -> None:
+        """Drop the response body from the entry just aged out of the window.
+
+        Entries are never removed — ``len(history)`` is a turn counter and one
+        caller slices by a captured index — so the list itself has to keep
+        growing. The response bodies are the weight: a full agent reply dwarfs
+        the type/text/ok fields beside it, and only the newest rows of a kind
+        are ever read back. Shedding one entry per append keeps this O(1).
+        """
+        aged_out = len(self.history) - RESPONSE_TEXT_WINDOW - 1
+        if aged_out < 0:
+            return
+        self.history[aged_out].pop("response_text", None)
 
     def mark_latest(self, *, ok: bool, kind: str | None = None) -> None:
         """Update the latest history entry, optionally scanning for a matching kind."""
@@ -261,28 +305,27 @@ class SessionCore:
         self.integrations.resolved_cache = value
 
     @property
-    def github_repo_scope(self) -> tuple[str, str] | None:
-        """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
-        return self.integrations.github_repo_scope
+    def vcs_repo_scopes(self) -> dict[str, tuple[str, ...]]:
+        """Sticky per-vendor repo scopes inferred from chat, env, or git remote."""
+        return self.integrations.vcs_repo_scopes
 
-    @github_repo_scope.setter
-    def github_repo_scope(self, value: tuple[str, str] | None) -> None:
-        self.integrations.github_repo_scope = value
-
-    @property
-    def gitlab_repo_scope(self) -> tuple[str, str, str] | None:
-        """Sticky project/ref/file inferred from chat, env, or git remote for GitLab tools."""
-        return self.integrations.gitlab_repo_scope
-
-    @gitlab_repo_scope.setter
-    def gitlab_repo_scope(self, value: tuple[str, str, str] | None) -> None:
-        self.integrations.gitlab_repo_scope = value
+    @vcs_repo_scopes.setter
+    def vcs_repo_scopes(self, value: dict[str, tuple[str, ...]]) -> None:
+        self.integrations.vcs_repo_scopes = value
 
     def refresh_runtime_metadata(self) -> None:
-        """Repopulate :attr:`runtime_metadata` from current process facts."""
+        """Rebuild :attr:`runtime_metadata`, including merged capability warnings."""
         from config.runtime_metadata import build_runtime_metadata
+        from platform.sandbox.capabilities import boot_capability_warnings
 
-        self.runtime_metadata = build_runtime_metadata()
+        meta = build_runtime_metadata()
+        tools = meta.get("tools")
+        installed = tools if isinstance(tools, dict) else None
+        meta["capability_warnings"] = boot_capability_warnings(
+            include_path_facts=True,
+            installed_tools=installed,
+        )
+        self.runtime_metadata = meta
 
     def hydrate_configured_integrations(self) -> None:
         """Load configured integration names (env + local store); metadata-only."""
@@ -342,6 +385,10 @@ class SessionCore:
             else TaskRegistry()
         )
         self.last_synthetic_observation_path = None
+        self.pending_schedule_offer = None
+        self.pending_investigation_offer = None
+        self.pending_user_choice = None
+        self.pending_recovery_note = None
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
             self.session_id = str(uuid.uuid4())

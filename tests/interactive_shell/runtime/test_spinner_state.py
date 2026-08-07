@@ -34,14 +34,14 @@ def test_spinner_frame_is_a_function_of_elapsed_time_not_call_count() -> None:
     assert all(_glyph(spinner) == first for _ in range(10))
 
     # A frame interval later the glyph must have advanced.
-    spinner.started_at -= SpinnerState._FRAME_INTERVAL_S * 1.01
+    spinner.started_at -= SpinnerState._FRAME_INTERVAL_SECONDS * 1.01
     assert _glyph(spinner) != first
 
     # Over a full cycle of elapsed time, every frame is visited in order.
     spinner.start()
     seen = []
     for step in range(len(_GLYPHS)):
-        spinner.started_at = time.monotonic() - step * SpinnerState._FRAME_INTERVAL_S * 1.001
+        spinner.started_at = time.monotonic() - step * SpinnerState._FRAME_INTERVAL_SECONDS * 1.001
         seen.append(_glyph(spinner))
     assert seen == list(_GLYPHS)
 

@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-from integrations.slack.bot_api import SlackBotTarget, fetch_channel_messages
 from integrations.slack.tools.slack_read_messages_tool import (
     SlackReadMessagesTool,
     slack_read_messages,
@@ -15,6 +14,7 @@ from integrations.slack.tools.slack_read_messages_tool.validation import (
     clamp_limit,
     validate_channel_id,
 )
+from integrations.slack.web_client import SlackBotTarget, fetch_channel_messages
 
 
 class _FakeResponse:
@@ -42,7 +42,9 @@ class _FakeClient:
 
 
 def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
-    monkeypatch.setattr("integrations.slack.bot_api._shared_client", lambda: _FakeClient(responder))
+    monkeypatch.setattr(
+        "integrations.slack.web_client._shared_client", lambda: _FakeClient(responder)
+    )
 
 
 def test_metadata_declares_read_only_slack_source() -> None:
@@ -65,7 +67,7 @@ def test_is_available_with_bot_token_in_sources(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
     # Isolate from the developer's local Slack store / env fallback.
     monkeypatch.setattr(
-        "integrations.slack.bot_api.resolve_bot_token",
+        "integrations.slack.web_client.resolve_bot_token",
         lambda: (None, "not configured"),
     )
     assert slack_read_messages.is_available({"slack": {"bot_token": "xoxb-x"}}) is True
@@ -77,7 +79,7 @@ def test_is_available_falls_back_to_store_when_sources_empty(
 ) -> None:
     monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
     monkeypatch.setattr(
-        "integrations.slack.bot_api.resolve_bot_token",
+        "integrations.slack.web_client.resolve_bot_token",
         lambda: (SlackBotTarget(bot_token="xoxb-from-store"), ""),
     )
     assert slack_read_messages.is_available({}) is True

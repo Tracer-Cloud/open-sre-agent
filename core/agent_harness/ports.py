@@ -10,13 +10,11 @@ Nothing here imports ``interactive_shell``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Protocol, runtime_checkable
 
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
-
-if TYPE_CHECKING:
-    pass
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
@@ -44,8 +42,14 @@ class OutputSink(Protocol):
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        """Stream ``chunks`` to the surface under ``label`` and return the text."""
+        """Stream ``chunks`` to the surface under ``label`` and return the text.
+
+        When ``defer_want_me_to_closer`` is true, surfaces may hold the Want-me-to
+        closer until ``finish_streamed_response`` (optional sink method; gather
+        normalize path).
+        """
 
 
 @runtime_checkable
@@ -77,8 +81,7 @@ class SessionStore(Protocol):
 
     # --- gather caches ---
     resolved_integrations_cache: dict[str, Any] | None
-    github_repo_scope: tuple[str, str] | None
-    gitlab_repo_scope: tuple[str, str, str] | None
+    vcs_repo_scopes: dict[str, tuple[str, ...]]
 
     def record(self, kind: str, text: str, *, ok: bool = True) -> None:
         """Append a record of an executed action/turn to the session log."""
@@ -153,8 +156,19 @@ class PromptContextProvider(Protocol):
     def investigation_flow(self) -> str:
         raise NotImplementedError
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> Mapping[str, Any]:
+        """Runtime facts for this turn: session metadata plus fresh live values."""
         raise NotImplementedError
+
+    def environment_block(self, runtime: Mapping[str, Any] | None = None) -> str:
+        """Static environment block; ``runtime`` reuses the turn's capture."""
+        raise NotImplementedError
+
+    def long_term_memory(self) -> str:
+        raise NotImplementedError
+
+    def setup_state(self) -> str:
+        """The operator's connected integrations and schedules, as a fact block."""
 
     def suggested_synthetic_prompt(self) -> str:
         raise NotImplementedError
@@ -179,17 +193,53 @@ class RunRecordFactory(Protocol):
         raise NotImplementedError
 
 
-# Bound direct-answer callable (no tools):
-# ``answer(text, *, confirm_fn, is_tty, tool_observation, turn_plan) -> LLM-run record | None``.
-StreamAnswerFn = Callable[..., Any]
+@dataclass(frozen=True)
+class AnswerRequest:
+    """Per-turn inputs for the direct-answer (no tools) path.
 
-# Bound evidence-gather callable:
-# ``gather(text, *, is_tty, turn_plan) -> str | None``.
-EvidenceGatherer = Callable[..., "str | None"]
+    Surface-bound ports (session, output, prompts, …) live on the caller;
+    only what varies per turn goes here. Confirm/TTY stay on the action path —
+    the direct answer never prompts or branches on them.
+    """
 
-# Bound action tool-calling driver:
-# ``execute_actions(text, *, confirm_fn, is_tty, turn_plan) -> ToolCallingTurnResult``.
-ExecuteActions = Callable[..., ToolCallingTurnResult]
+    tool_observation: str | None = None
+    tool_observation_on_screen: bool = True
+    handoff_contents: tuple[str, ...] = ()
+    # ``Any`` rather than ``TurnPlan``: that type imports ``SessionStore`` from
+    # here, so naming it — even under ``TYPE_CHECKING`` — closes an import cycle
+    # this repo's check rejects.
+    turn_plan: Any = None
+    # Gather answers defer Want-me-to paint until the harness normalizes the
+    # closer (dual paste/integrations menus must not be what the user sees).
+    defer_want_me_to_closer: bool = False
+
+
+class StreamAnswerFn(Protocol):
+    """Bound direct-answer callable (no tools) handed to ``run_turn``."""
+
+    def __call__(self, text: str, request: AnswerRequest) -> Any:
+        """Stream one grounded answer; return the LLM-run record or None."""
+
+
+class EvidenceGatherer(Protocol):
+    """Bound evidence-gather callable handed to ``run_turn``."""
+
+    def __call__(self, text: str, *, turn_plan: Any = None) -> str | None:
+        """Gather read-only evidence for ``text``, or return None."""
+
+
+class ExecuteActions(Protocol):
+    """Bound action tool-calling driver handed to ``run_turn``."""
+
+    def __call__(
+        self,
+        text: str,
+        *,
+        confirm_fn: ConfirmFn | None = None,
+        is_tty: bool | None = None,
+        turn_plan: Any = None,
+    ) -> ToolCallingTurnResult:
+        """Run the action tool-calling turn for ``text``."""
 
 
 @runtime_checkable
@@ -199,11 +249,12 @@ class TurnAccounting(Protocol):
     def record_action_result(self, action_result: ToolCallingTurnResult) -> None:
         raise NotImplementedError
 
-    def finalize(self, result: ShellTurnResult) -> ShellTurnResult:
+    def finalize(self, result: TurnResult) -> TurnResult:
         raise NotImplementedError
 
 
 __all__ = [
+    "AnswerRequest",
     "StreamAnswerFn",
     "ConfirmFn",
     "ErrorReporter",

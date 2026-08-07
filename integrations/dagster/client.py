@@ -7,6 +7,7 @@ on transport, HTTP, or GraphQL-level errors, so callers don't branch on exceptio
 from __future__ import annotations
 
 import logging
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -82,7 +83,7 @@ class DagsterClient:
         except httpx.RequestError as exc:
             return {"error": f"Request to Dagster failed: {exc}"}
 
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             body_preview = response.text[:200] if response.text else ""
             return {"error": f"HTTP {response.status_code}: {body_preview}"}
 

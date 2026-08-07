@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable
+from enum import StrEnum
+from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 from core.types import RuntimeTool
 
 ResolvedIntegrations: TypeAlias = dict[str, Any]  # noqa: UP040
 
-ModelType: TypeAlias = Literal["reasoning", "classification", "toolcall"]  # noqa: UP040
+
+class ModelType(StrEnum):
+    """Configured model tiers for non-agent LLM clients."""
+
+    REASONING = "reasoning"
+    CLASSIFICATION = "classification"
+    TOOLCALL = "toolcall"
 
 
 @dataclass(frozen=True)
@@ -28,6 +35,10 @@ class LLMResponse:
     content: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    #: Prompt-cache counters from the provider usage payload, when reported.
+    #: ``None`` means the provider sent no cache fields — distinct from 0.
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
 
 
 @dataclass
@@ -53,6 +64,10 @@ class AgentLLMResponse:
     # preserved; otherwise None and the assistant message is reconstructed via
     # build_assistant_message.
     raw_content: Any = None
+    #: Prompt-cache counters from the provider usage payload, when reported.
+    #: ``None`` means the provider sent no cache fields — distinct from 0.
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
 
     @property
     def has_tool_calls(self) -> bool:

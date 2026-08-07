@@ -173,8 +173,7 @@ def read_latest_release_tag(commondir: Path) -> str | None:
             ranked.append((key, name))
     if not ranked:
         return None
-    ranked.sort(reverse=True)
-    return ranked[0][1]
+    return max(ranked)[1]
 
 
 def detect_build_info() -> str:

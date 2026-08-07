@@ -5,8 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from tests.tools.conftest import BaseToolContract, mock_agent_state
-from tools.git_deploy_timeline_tool import (
+from integrations.github.tools.git_deploy_timeline_tool import (
     DEFAULT_WINDOW_MINUTES,
     MAX_PER_PAGE,
     MAX_WINDOW_MINUTES,
@@ -14,6 +13,7 @@ from tools.git_deploy_timeline_tool import (
     _summarize_commit,
     get_git_deploy_timeline,
 )
+from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
 class TestGitDeployTimelineToolContract(BaseToolContract):
@@ -82,7 +82,10 @@ def test_run_happy_path_summarizes_commits() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            return_value=fake_result,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -124,7 +127,10 @@ def test_run_passes_time_window_and_branch_to_mcp() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            side_effect=_fake_call,
+        ),
     ):
         get_git_deploy_timeline(
             owner="org",
@@ -162,7 +168,10 @@ def test_run_empty_result_returns_zero_commits() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            return_value=fake_result,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -197,7 +206,10 @@ def test_run_defensive_against_non_list_structured_content() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            return_value=fake_result,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -224,7 +236,10 @@ def test_run_passes_per_page_to_mcp() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            side_effect=_fake_call,
+        ),
     ):
         get_git_deploy_timeline(
             owner="org",
@@ -256,7 +271,10 @@ def test_run_clamps_per_page_to_api_maximum() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            side_effect=_fake_call,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -300,7 +318,10 @@ def test_run_flags_window_truncated_when_page_is_full() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            return_value=fake_result,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -339,7 +360,10 @@ def test_run_flags_window_not_truncated_when_fewer_than_page() -> None:
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", return_value=fake_result),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            return_value=fake_result,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",
@@ -391,7 +415,10 @@ def _run_with_shared_window(
             "integrations.github.helpers.build_github_mcp_config",
             return_value=mock_config,
         ),
-        patch("tools.git_deploy_timeline_tool.call_github_mcp_tool", side_effect=_fake_call),
+        patch(
+            "integrations.github.tools.git_deploy_timeline_tool.call_github_mcp_tool",
+            side_effect=_fake_call,
+        ),
     ):
         result = get_git_deploy_timeline(
             owner="org",

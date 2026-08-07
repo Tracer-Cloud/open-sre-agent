@@ -28,12 +28,16 @@ class ToolCallingTurnResult:
     handled: bool
     response_text: str = ""
     handoff_contents: tuple[str, ...] = ()
+    # False when every handoff this turn declared ``requires_gather=false``:
+    # the action work already produced what the reply needs, so the assistant
+    # answers from it without a live evidence-gather sweep.
+    handoff_requires_gather: bool = True
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False
 
 
 @dataclass(frozen=True)
-class ShellTurnResult:
+class TurnResult:
     """Outcome of a full turn: the action phase plus the conversational answer."""
 
     final_intent: str
@@ -49,9 +53,14 @@ class ShellTurnResult:
         """A turn is "answered" exactly when the conversational LLM produced a run."""
         return self.llm_run is not None
 
+    @property
+    def primary_response_text(self) -> str:
+        """Assistant text, falling back to the action-phase response when empty."""
+        return (self.assistant_response_text or self.action_result.response_text).strip()
+
 
 __all__ = [
-    "ShellTurnResult",
     "ToolCallingAccountingStatus",
     "ToolCallingTurnResult",
+    "TurnResult",
 ]

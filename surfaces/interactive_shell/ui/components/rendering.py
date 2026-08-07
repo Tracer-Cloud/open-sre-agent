@@ -64,6 +64,16 @@ def _normalize_repl_line_endings(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\n", "\r\n")
 
 
+def _console_retains_output(console: Console) -> bool:
+    """True when the console keeps its own copy of what it prints.
+
+    ``record`` and an open ``capture()`` both buffer inside the ``Console``
+    object rather than at its file, so the direct ``sys.stdout`` write below
+    would be invisible to them even though the console targets stdout.
+    """
+    return bool(console.record) or console._buffer_index > 0
+
+
 def _write_repl_tty_buffered(
     *,
     width: int,
@@ -107,7 +117,7 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     """
     leading_blank = width is None
     width = width if width is not None else _prepare_tty_for_rich(console)
-    if console.file is sys.stdout and sys.stdout.isatty():
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
         _write_repl_tty_buffered(
             width=width,
             leading_blank=leading_blank,
@@ -131,7 +141,7 @@ def print_repl_json(console: Console, json_str: str) -> None:
     sequence being left in stdin by a prompt_toolkit toolbar flush.
     """
     width = _prepare_tty_for_rich(console)
-    if console.file is sys.stdout and sys.stdout.isatty():
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
         _write_repl_tty_buffered(
             width=width,
             leading_blank=True,
@@ -150,6 +160,19 @@ def repl_print(console: Console, *objects: Any, **kwargs: Any) -> None:
     from surfaces.interactive_shell.ui.components.choice_menu import prepare_repl_output_line
 
     prepare_repl_output_line()
+    _console_print_prepared(console, *objects, **kwargs)
+
+
+def repl_print_continue(console: Console, *objects: Any, **kwargs: Any) -> None:
+    """Print via Rich at column zero without inserting a blank line.
+
+    Use for output that continues the current block (e.g. a command's stdout
+    directly under its ``$ command`` header). :func:`repl_print` would prepend
+    a ``\\r\\n``, visually detaching the output from its header.
+    """
+    from surfaces.interactive_shell.ui.components.choice_menu import ensure_tty_column_zero
+
+    ensure_tty_column_zero()
     _console_print_prepared(console, *objects, **kwargs)
 
 
@@ -188,9 +211,9 @@ def repl_render_launch_poster(
     theme_notice: str | None = None,
 ) -> None:
     """Render splash + welcome panel using REPL-safe CRLF writes."""
-    from surfaces.interactive_shell.ui import banner as banner_module
+    from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 
-    if console.file is sys.stdout and sys.stdout.isatty():
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
         width = _prepare_tty_for_rich(console)
         buf = io.StringIO()
         buf_console = Console(
@@ -201,8 +224,7 @@ def repl_render_launch_poster(
             legacy_windows=False,
             width=width,
         )
-        banner_module.render_splash(buf_console, first_run=False)
-        banner_module.render_ready_box(buf_console, session=session)
+        render_terminal_ui(buf_console, session=session, first_run=False)
         prefix = _theme_notice_line(theme_notice) if theme_notice else ""
         _repl_write_buffer(prefix + buf.getvalue())
         return
@@ -212,8 +234,7 @@ def repl_render_launch_poster(
             console,
             f"[{ui_theme.HIGHLIGHT}]theme set:[/] {escape(theme_notice)}",
         )
-    banner_module.render_splash(console, first_run=False)
-    banner_module.render_ready_box(console, session=session)
+    render_terminal_ui(console, session=session, first_run=False)
 
 
 def refresh_welcome_poster(
@@ -251,6 +272,7 @@ __all__ = [
     "refresh_welcome_poster",
     "repl_clear_screen",
     "repl_print",
+    "repl_print_continue",
     "repl_render_launch_poster",
     "repl_table",
 ]

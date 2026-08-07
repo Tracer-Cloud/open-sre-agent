@@ -45,9 +45,11 @@
               "interactive-shell-assistant",
               "deployment",
               "api",
+              "python-api",
               "faq",
               "cloudopsbench",
-              "bi-weekly-giveaway"
+              "bi-weekly-giveaway",
+              "pr-review-flow"
             ]
           }
         ]
@@ -86,7 +88,8 @@
           {
             "group": "Configuration",
             "pages": [
-              "configuration/environment-variables"
+              "configuration/environment-variables",
+              "configuration/remote-sync"
             ]
           }
         ]
@@ -104,6 +107,9 @@
               "masking",
               "interactive-shell-privacy",
               "sessions",
+              "principal-scoped-storage",
+              "memory",
+              "work-management",
               "fleet",
               "cron",
               "closed-loop-learning",
@@ -127,6 +133,7 @@
               "datadog",
               "grafana",
               "grafana_annotations",
+              "grafana-log-sink",
               "groundcover",
               "hermes",
               "honeycomb",
@@ -152,11 +159,17 @@
             "pages": [
               "argocd",
               "aws",
+              "aws_lambda",
+              "s3",
               "kubernetes",
               "cloudtrail_events",
               "bitbucket",
+              "elb",
+              "ec2",
               "github",
               "github-workflow-tools",
+              "github-security-fix",
+              "github-ci-fix",
               "architecture-audit-tool",
               "integrations/github-actions",
               "gitlab",
@@ -167,6 +180,7 @@
               "integrations/trello",
               "pi-coding",
               "fix-sentry-issue",
+              "railway",
               "vercel"
             ]
           },
@@ -180,6 +194,7 @@
               "messaging/discord",
               "messaging/telegram",
               "messaging/rocketchat",
+              "messaging/buzz",
               "messaging/whatsapp",
               "messaging/twilio-sms"
             ]
@@ -192,6 +207,7 @@
               "azure-sql",
               "clickhouse",
               "dagster",
+              "elasticsearch",
               "kafka",
               "mariadb",
               "mongodb",

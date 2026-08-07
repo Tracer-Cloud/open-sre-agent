@@ -37,7 +37,19 @@ from core.llm.shared.openai_responses import (
     uses_responses_api,
 )
 from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
-from core.llm.shared.usage import emit_provider_usage
+from core.llm.shared.usage import emit_provider_usage, extract_cache_tokens
+from core.llm.transports.sdk.anthropic_cache import (
+    cached_system as _anthropic_cached_system,
+)
+from core.llm.transports.sdk.anthropic_cache import (
+    is_cache_unsupported_error as _is_cache_unsupported_error,
+)
+from core.llm.transports.sdk.anthropic_cache import (
+    messages_with_cache as _anthropic_messages_with_cache,
+)
+from core.llm.transports.sdk.anthropic_cache import (
+    tools_with_cache as _anthropic_tools_with_cache,
+)
 from core.llm.types import AgentLLMResponse, ToolCall
 
 logger = logging.getLogger(__name__)
@@ -52,11 +64,19 @@ def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
     }
 
 
+# Anthropic prompt-caching breakpoint (ephemeral, 5-minute TTL by default).
+# Prefix match order is tools → system → messages; mark the last tool and the
+# system block so ReAct iterations can reuse the stable prefix.
 class AnthropicAgentClient:
     """Anthropic client with native tool-calling for the agent loop."""
 
     provider_name = "Anthropic"
     auth_error_hint = "Check ANTHROPIC_API_KEY."
+    # Best-effort prompt caching: a class default so every instance starts
+    # marking; flipped to an instance False for the client's lifetime the
+    # first time the provider rejects the cache markers with a 400 (e.g.
+    # Bedrock-hosted Claude models that predate prompt caching).
+    _cache_markers_enabled = True
 
     def __init__(
         self,
@@ -86,6 +106,44 @@ class AnthropicAgentClient:
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return [_anthropic_tool_schema(t) for t in tools]
 
+    def describe_image(
+        self,
+        image_bytes: bytes,
+        mimetype: str,
+        *,
+        prompt: str,
+        max_tokens: int,
+        timeout: float,
+    ) -> str | None:
+        """Return a text description of an image via this provider's vision model."""
+        import base64
+
+        messages: Any = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mimetype,
+                            "data": base64.b64encode(image_bytes).decode("ascii"),
+                        },
+                    },
+                ],
+            }
+        ]
+        response = self._client.messages.create(
+            model=self._model, max_tokens=max_tokens, timeout=timeout, messages=messages
+        )
+        parts = [
+            block.text
+            for block in getattr(response, "content", [])
+            if getattr(block, "type", "") == "text" and getattr(block, "text", "")
+        ]
+        return "\n".join(parts).strip() or None
+
     def invoke(
         self,
         messages: list[dict[str, Any]],
@@ -102,15 +160,17 @@ class AnthropicAgentClient:
             RateLimitError,
         )
 
+        cache = self._cache_markers_enabled
+        clean_messages = strip_internal_message_markers(messages)
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
-            "messages": strip_internal_message_markers(messages),
+            "messages": _anthropic_messages_with_cache(clean_messages) if cache else clean_messages,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = _anthropic_cached_system(system) if cache else system
         if tools:
-            kwargs["tools"] = tools
+            kwargs["tools"] = _anthropic_tools_with_cache(tools) if cache else tools
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
@@ -129,6 +189,19 @@ class AnthropicAgentClient:
                 # distinguish credit exhaustion (fatal) from real schema
                 # errors before wrapping into a generic RuntimeError.
                 maybe_raise_credit_exhausted(self.provider_name, err)
+                if cache and _is_cache_unsupported_error(err):
+                    # Keyed on what *this* request carried, not the shared
+                    # flag: a concurrent turn may already have cleared it, and
+                    # this request still went out marked. Rebuilding with the
+                    # flag off guards the recursion.
+                    self._cache_markers_enabled = False
+                    logger.warning(
+                        "%s model '%s' rejected prompt-cache markers; retrying without "
+                        "prompt caching (requests will pay full input price).",
+                        self.provider_name,
+                        self._model,
+                    )
+                    return self.invoke(messages, system=system, tools=tools)
                 raise RuntimeError(self._bad_request_error_message(err)) from err
             except RateLimitError as err:
                 # OpenAI's insufficient_quota lands here too, dressed as 429
@@ -214,11 +287,14 @@ class AnthropicAgentClient:
             elif block_type == "tool_use":
                 tool_calls.append(ToolCall(id=block.id, name=block.name, input=dict(block.input)))
 
+        cache_read, cache_write = extract_cache_tokens(getattr(response, "usage", None))
         return AgentLLMResponse(
             content="".join(text_parts),
             tool_calls=tool_calls,
             stop_reason=str(getattr(response, "stop_reason", "end_turn")),
             raw_content=content_blocks,
+            cache_read_tokens=cache_read,
+            cache_creation_tokens=cache_write,
         )
 
     @staticmethod
@@ -485,6 +561,37 @@ class OpenAIAgentClient:
 
     def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:
         return build_openai_tool_specs(tools)
+
+    def describe_image(
+        self,
+        image_bytes: bytes,
+        mimetype: str,
+        *,
+        prompt: str,
+        max_tokens: int,
+        timeout: float,
+    ) -> str | None:
+        """Return a text description of an image via this provider's vision model."""
+        import base64
+
+        data_url = f"data:{mimetype};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+        messages: Any = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            }
+        ]
+        response = self._client.chat.completions.create(
+            model=self._model, max_tokens=max_tokens, timeout=timeout, messages=messages
+        )
+        choices = getattr(response, "choices", [])
+        if not choices:
+            return None
+        content = getattr(choices[0].message, "content", "") or ""
+        return content.strip() or None
 
     def invoke(
         self,

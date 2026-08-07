@@ -4,12 +4,15 @@ from __future__ import annotations
 
 TOOL_MODULES = (
     "actions",
+    "ci_fix",
     "commits",
     "file_contents",
     "issues",
     "repository",
     "repository_tree",
     "search_code",
+    "security_fix",
+    "stargazers",
     "work_status",
 )
 

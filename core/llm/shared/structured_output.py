@@ -2,10 +2,11 @@
 
 Default path: prompt-injected JSON Schema + Pydantic validate.
 
-Provider-native constrained decoding (e.g. Vertex/Gemini ``responseSchema``)
-is **opt-in** via ``OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT=1``. It stays off
-until a live diagnose turn has verified the request shape — a failing native
-call would otherwise silently fall back and double-invoke on every turn.
+Provider-native constrained decoding (OpenAI ``parse`` / Anthropic
+``output_config`` / Vertex-Gemini ``responseSchema``) is **opt-in** via
+``OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT=1``. It stays off until a live diagnose
+turn has verified the request shape — a failing native call would otherwise
+silently fall back and double-invoke on every turn.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 
-OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV = "OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT"
+from config.constants.llm import OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,29 @@ logger = logging.getLogger(__name__)
 def native_structured_output_enabled() -> bool:
     """True when native structured outputs are explicitly opted in."""
     return os.environ.get(OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV, "").strip() == "1"
+
+
+def json_schema_for_structured_output(model: type[BaseModel]) -> dict[str, Any]:
+    """JSON Schema suitable for provider structured-output APIs.
+
+    Ensures every object sets ``additionalProperties: false`` (required by
+    OpenAI strict mode and by Anthropic/Gemini's native structured-output
+    APIs to reject stray fields rather than silently returning a permissive
+    object).
+    """
+    schema = model.model_json_schema()
+    return cast(dict[str, Any], _force_additional_properties_false(schema))
+
+
+def _force_additional_properties_false(node: Any) -> Any:
+    if isinstance(node, dict):
+        out = {key: _force_additional_properties_false(value) for key, value in node.items()}
+        if out.get("type") == "object" or "properties" in out:
+            out["additionalProperties"] = False
+        return out
+    if isinstance(node, list):
+        return [_force_additional_properties_false(item) for item in node]
+    return node
 
 
 class StructuredOutputClient:
@@ -82,28 +106,6 @@ class StructuredOutputClient:
                 fallback = {"actions": payload, "rationale": "LLM returned actions only."}
                 return self._model.model_validate(fallback)
             raise
-
-
-def json_schema_for_structured_output(model: type[BaseModel]) -> dict[str, Any]:
-    """JSON Schema suitable for provider structured-output APIs.
-
-    Ensures every object sets ``additionalProperties: false`` (required by
-    OpenAI strict mode and by Gemini's native ``responseSchema`` to reject
-    stray fields rather than silently returning a permissive object).
-    """
-    schema = model.model_json_schema()
-    return cast(dict[str, Any], _force_additional_properties_false(schema))
-
-
-def _force_additional_properties_false(node: Any) -> Any:
-    if isinstance(node, dict):
-        out = {key: _force_additional_properties_false(value) for key, value in node.items()}
-        if out.get("type") == "object" or "properties" in out:
-            out["additionalProperties"] = False
-        return out
-    if isinstance(node, list):
-        return [_force_additional_properties_false(item) for item in node]
-    return node
 
 
 def safe_json_loads(payload: str) -> Any:

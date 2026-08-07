@@ -50,12 +50,26 @@ from concurrent.futures import CancelledError as FutureCancelledError
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 from integrations.hermes.agent import IncidentSink
 from integrations.hermes.errors import InvestigationOutcome
 from integrations.hermes.incident import HermesIncident, IncidentSeverity, LogRecord
-from integrations.telegram.alarms import AlarmDispatcher
+
+
+class AlarmDispatcherPort(Protocol):
+    """Minimal alarm-dispatch contract this sink depends on.
+
+    Both :class:`integrations.telegram.alarms.AlarmDispatcher` and
+    :class:`integrations.rocketchat.alarms.RocketChatAlarmDispatcher` satisfy
+    this structurally — the sink stays behind a local protocol (matching
+    ``tools.system.watch_dog.monitor.AlarmDispatcherPort``) so it never
+    imports a specific provider's dispatcher.
+    """
+
+    def dispatch(self, threshold_name: str, message: str) -> bool:
+        """Dispatch one alarm; return whether delivery succeeded."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +100,7 @@ _DEFAULT_BRIDGE_WORKERS: Final[int] = 2
 # than a typical investigation pipeline but well under the
 # AlarmDispatcher cooldown (300s default) so a retry on the next
 # matching incident gets a fresh shot.
-_DEFAULT_BRIDGE_TIMEOUT_S: Final[float] = 45.0
+_DEFAULT_BRIDGE_TIMEOUT_SECONDS: Final[float] = 45.0
 
 _SEVERITY_EMOJI: Final[dict[IncidentSeverity, str]] = {
     IncidentSeverity.LOW: "🟢",
@@ -118,7 +132,7 @@ class TelegramSinkConfig:
     max_inlined_records: int = _MAX_INLINED_RECORDS
     max_record_chars: int = _MAX_RECORD_CHARS
     max_summary_chars: int = _MAX_SUMMARY_CHARS
-    bridge_timeout_s: float = _DEFAULT_BRIDGE_TIMEOUT_S
+    bridge_timeout_s: float = _DEFAULT_BRIDGE_TIMEOUT_SECONDS
     bridge_workers: int = _DEFAULT_BRIDGE_WORKERS
     # Run bridge synchronously on the calling thread instead of offloading
     # to the executor. Used by unit tests that want deterministic
@@ -160,7 +174,7 @@ class TelegramSink:
 
     def __init__(
         self,
-        dispatcher: AlarmDispatcher,
+        dispatcher: AlarmDispatcherPort,
         *,
         investigation_bridge: InvestigationBridge | None = None,
         config: TelegramSinkConfig | None = None,
@@ -418,7 +432,7 @@ class _InvestigationResult:
 
 
 def make_telegram_sink(
-    dispatcher: AlarmDispatcher,
+    dispatcher: AlarmDispatcherPort,
     *,
     investigation_bridge: InvestigationBridge | None = None,
     config: TelegramSinkConfig | None = None,

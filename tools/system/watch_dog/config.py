@@ -4,13 +4,31 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal
+from enum import StrEnum
 
 from pydantic import Field, field_validator, model_validator
 
 from config.strict_config import StrictConfigModel
+from platform.scheduler.types import Provider
 
-ThresholdName = Literal["max_cpu", "max_runtime", "max_rss"]
+# Providers the watchdog alarm sender actually implements (see runner.py's
+# dispatch). Provider has two more members (slack, discord) that cron
+# delivery supports but watchdog does not, so this is a deliberate subset,
+# not the full enum.
+WATCHDOG_SUPPORTED_PROVIDERS: tuple[Provider, ...] = (
+    Provider.TELEGRAM,
+    Provider.ROCKETCHAT,
+    Provider.BUZZ,
+)
+
+
+class WatchdogThreshold(StrEnum):
+    """Closed set of watchdog thresholds."""
+
+    MAX_CPU = "max_cpu"
+    MAX_RUNTIME = "max_runtime"
+    MAX_RSS = "max_rss"
+
 
 _DURATION_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[smh]?)$")
 _BYTE_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[kmgt]?b?)$", re.IGNORECASE)
@@ -20,7 +38,7 @@ _BYTE_RE = re.compile(r"^(?P<value>\d+(?:\.\d+)?)(?P<unit>[kmgt]?b?)$", re.IGNOR
 class Threshold:
     """A configured watchdog threshold."""
 
-    name: ThresholdName
+    name: WatchdogThreshold
     limit: float
 
 
@@ -83,6 +101,7 @@ class WatchdogConfig(StrictConfigModel):
     interval: float = Field(default=5.0, gt=0)
     cooldown: float = Field(default=300.0, gt=0)
     once: bool = False
+    provider: Provider = Provider.TELEGRAM
     chat_id: str | None = None
     verbose: bool = False
 
@@ -104,6 +123,16 @@ class WatchdogConfig(StrictConfigModel):
             return parse_byte_size(value)
         return value
 
+    @field_validator("provider")
+    @classmethod
+    def _validate_provider_supported(cls, value: Provider) -> Provider:
+        if value not in WATCHDOG_SUPPORTED_PROVIDERS:
+            supported = ", ".join(p.value for p in WATCHDOG_SUPPORTED_PROVIDERS)
+            raise ValueError(
+                f"watchdog delivery does not support '{value}'; use one of: {supported}"
+            )
+        return value
+
     @model_validator(mode="after")
     def _validate_process_selector_and_thresholds(self) -> WatchdogConfig:
         has_pid = self.pid is not None
@@ -120,9 +149,9 @@ class WatchdogConfig(StrictConfigModel):
         """Return thresholds in stable evaluation order."""
         thresholds: list[Threshold] = []
         if self.max_cpu is not None:
-            thresholds.append(Threshold("max_cpu", self.max_cpu))
+            thresholds.append(Threshold(WatchdogThreshold.MAX_CPU, self.max_cpu))
         if self.max_runtime is not None:
-            thresholds.append(Threshold("max_runtime", self.max_runtime))
+            thresholds.append(Threshold(WatchdogThreshold.MAX_RUNTIME, self.max_runtime))
         if self.max_rss is not None:
-            thresholds.append(Threshold("max_rss", float(self.max_rss)))
+            thresholds.append(Threshold(WatchdogThreshold.MAX_RSS, float(self.max_rss)))
         return tuple(thresholds)

@@ -65,14 +65,19 @@ def merge_resolved_integrations(
 
 
 def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
-    """True when a cache holds resolved configs and need not be re-resolved.
+    """True when a cache holds a resolved view and need not be re-resolved.
 
-    An empty ``{}`` is *not* usable — that shape appears when gateway chat
-    metadata is about to be merged onto a still-unresolved session, and must
-    not freeze the turn on "no integrations".
+    ``None`` means unresolved (resolve live). An explicit ``{}`` is a known
+    empty view — oracle fixtures and callers that force a no-integration world
+    rely on that distinction, so it must not trigger a live re-resolve.
+    Metadata-only maps (underscore keys such as ``_gateway_chat_id``) are not
+    a hit and still trigger resolve.
     """
-    if not cache:
+    if cache is None:
         return False
+    if not cache:
+        # Explicit empty dict: known "no integrations", not a cache miss.
+        return True
     return has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
 
 
@@ -108,10 +113,9 @@ class IntegrationState:
     conversational assistant and investigations can call registered tools without
     waiting for the first user message to trigger a visible "Loading integrations"
     pass. Cleared by :meth:`refresh` when integrations change."""
-    github_repo_scope: tuple[str, str] | None = None
-    """Sticky owner/repo inferred from chat, env, or git remote for GitHub tools."""
-    gitlab_repo_scope: tuple[str, str, str] | None = None
-    """Sticky project/ref/file inferred from chat, env, or git remote for GitLab tools."""
+    vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Sticky per-vendor repo scopes (owner/repo, project/ref/file, …) keyed by
+    vendor name, inferred from chat, env, or git remote for VCS tools."""
 
     _warm_lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
     _warm_generation: int = field(default=0, repr=False, compare=False)
@@ -200,7 +204,6 @@ class IntegrationState:
             self._warm_task = None
             if drop_cache:
                 self.resolved_cache = None
-                self.github_repo_scope = None
-                self.gitlab_repo_scope = None
+                self.vcs_repo_scopes = {}
         if pending is not None and not pending.done():
             pending.cancel()

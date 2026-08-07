@@ -6,7 +6,7 @@ from typing import Any
 
 from slack_sdk.errors import SlackApiError
 
-from gateway.slack.client import SlackWebApiClient
+from gateway.transports.slack.client import SlackWebApiClient
 
 
 class _FakeWebClient:

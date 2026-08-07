@@ -74,7 +74,7 @@ def _render_active_steps(
 
     yield Text("")
     yield Text("┄" * (options.max_width - 1), style=DIM)
-    yield _footer(display, now - display._t0, "ctrl+o tool details  ")
+    yield _footer(display, now - display._t0, "tab tool details  ")
 
 
 def _render_tool_detail_view(
@@ -100,7 +100,7 @@ def _render_tool_detail_view(
         yield from _tool_record_rows(record)
 
     yield Text("┄" * (options.max_width - 1), style=DIM)
-    yield _footer(display, elapsed_total, "ctrl+o compact view  ", phase="TOOL DETAILS")
+    yield _footer(display, elapsed_total, "tab compact view  ", phase="TOOL DETAILS")
 
 
 def _tool_record_rows(record: dict[str, Any]) -> RenderResult:
@@ -145,7 +145,13 @@ def _footer(
 class _EventLogDisplay:
     """Rich Live-backed animated event log. One instance per investigation."""
 
-    def __init__(self, model: str = "", mode: str = "local", t0: float | None = None) -> None:
+    def __init__(
+        self,
+        model: str = "",
+        mode: str = "local",
+        t0: float | None = None,
+        console: Console | None = None,
+    ) -> None:
         from rich.live import Live
 
         from surfaces.interactive_shell.ui.output.console_state import (
@@ -162,7 +168,7 @@ class _EventLogDisplay:
         self._tool_detail_records: list[dict[str, Any]] = []
         self._tool_summary = ""
         self._lock = threading.Lock()
-        self._console = Console(highlight=False)
+        self._console = console if console is not None else Console(highlight=False)
         self._live = Live(
             _LiveRenderable(self),
             console=self._console,

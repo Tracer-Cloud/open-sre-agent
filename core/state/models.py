@@ -64,7 +64,7 @@ class AgentStateModel(StrictConfigModel):
 
     model_config = ConfigDict(extra="forbid", protected_namespaces=(), populate_by_name=True)
 
-    mode: AgentMode = "chat"
+    mode: AgentMode = AgentMode.CHAT
     route: str = ""
     org_id: str = ""
     user_id: str = ""
@@ -73,6 +73,7 @@ class AgentStateModel(StrictConfigModel):
     organization_slug: str = ""
     messages: list[ChatMessageModel] = Field(default_factory=list)
     is_noise: bool = False
+    user_requested: bool = False
     alert_name: str = ""
     severity: str = ""
     alert_source: str = ""
@@ -123,12 +124,7 @@ class AgentStateModel(StrictConfigModel):
     incident_window: dict[str, Any] | None = None
     incident_window_history: list[dict[str, Any]] | None = None
     masking_map: dict[str, str] = Field(default_factory=dict)
-    slack_context: dict[str, Any] = Field(default_factory=dict)
-    discord_context: dict[str, Any] = Field(default_factory=dict)
-    telegram_context: dict[str, Any] = Field(default_factory=dict)
-    whatsapp_context: dict[str, Any] = Field(default_factory=dict)
-    twilio_sms_context: dict[str, Any] = Field(default_factory=dict)
-    openclaw_context: dict[str, Any] = Field(default_factory=dict)
+    channel_contexts: dict[str, dict[str, Any]] = Field(default_factory=dict)
     thread_id: str = ""
     run_id: str = ""
     auth_token: str = Field(default="", alias="_auth_token", exclude=True)
@@ -146,7 +142,9 @@ def model_default_payload(*exclude: str) -> dict[str, Any]:
     """Return default field values from ``AgentStateModel``, omitting ``exclude`` keys."""
     skip = frozenset(exclude)
     model = AgentStateModel()
-    dumped = model.model_dump(mode="python", by_alias=True, exclude_none=True)
+    # ``mode="json"`` so ``AgentMode`` (and any future StrEnums) dump as plain
+    # strings — the runtime ``AgentState`` dict keeps a JSON-stable shape.
+    dumped = model.model_dump(mode="json", by_alias=True, exclude_none=True)
     return {key: value for key, value in dumped.items() if key not in skip}
 
 
@@ -171,7 +169,7 @@ def make_chat_state(
             "context": {},
         }
     )
-    return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
+    return cast(AgentState, state.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 
 __all__ = [

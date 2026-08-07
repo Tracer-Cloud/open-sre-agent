@@ -3,7 +3,7 @@
 Naming convention:
 
 - ``alert_source`` — vendor/format key on the incoming alert payload (e.g.
-  ``"grafana"``, ``"eks"``). Keys ``ALERT_SOURCE_ROUTING``.
+  ``"grafana"``, ``"eks"``). Keys the :func:`alert_source_routing` table.
 - ``tool source`` — integration key matching ``tool.source`` (e.g.
   ``"grafana"``, ``"ec2"``, ``"cloudtrail"``). Values in routing tuples.
 
@@ -12,15 +12,42 @@ Each ``AlertSourceRouting`` entry carries two tool-source lists:
 - ``relevance_tool_sources`` — broad prioritization during tool planning.
 - ``seed_tool_sources`` — narrower subset auto-invoked before the LLM loop.
   Expensive or context-dependent tools stay out of seeding.
+
+Core owns only the mechanism (the dataclass, the registries, and the
+resolver functions). The actual table — which alert source routes to which
+tool sources, and which keywords alias to which source — is vendor/catalog
+data registered by :mod:`integrations.alert_source_catalog` from
+``integrations/harness_adapters.py``.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
 from core.domain.alerts.fields import iter_alert_blocks
+
+AlertSourceDetector = Callable[[dict[str, Any]], "str | None"]
+"""A detector inspects the raw alert dict and returns a vendor key, if any.
+
+Vendor-specific sniffing (label heuristics, URL patterns, etc.) lives in the
+owning ``integrations/<vendor>/`` package and is wired in via
+:func:`register_alert_source_detector` from ``integrations/harness_adapters.py``
+— core stays free of hardcoded vendor heuristics.
+"""
+
+_alert_source_detectors: list[AlertSourceDetector] = []
+
+
+def register_alert_source_detector(detector: AlertSourceDetector) -> None:
+    """Register a vendor alert-source detector, run in registration order."""
+    _alert_source_detectors.append(detector)
+
+
+def clear_alert_source_detectors() -> None:
+    """Remove all registered detectors (tests)."""
+    _alert_source_detectors.clear()
 
 
 @dataclass(frozen=True)
@@ -29,121 +56,85 @@ class AlertSourceRouting:
     seed_tool_sources: tuple[str, ...]
 
 
-def _routing(
+def routing(
     relevance_tool_sources: tuple[str, ...],
     seed_tool_sources: tuple[str, ...],
 ) -> AlertSourceRouting:
+    """Build an :class:`AlertSourceRouting` entry (factory for catalog modules)."""
     return AlertSourceRouting(
         relevance_tool_sources=relevance_tool_sources,
         seed_tool_sources=seed_tool_sources,
     )
 
 
-# Single registry — relevance and seed lists are intentionally different per entry.
-ALERT_SOURCE_ROUTING: dict[str, AlertSourceRouting] = {
-    "grafana": _routing(("grafana",), ("grafana",)),
-    "datadog": _routing(("datadog",), ("datadog",)),
-    # ec2/rds/cloudtrail stay relevance-only — context-dependent pre-LLM seeding.
-    "cloudwatch": _routing(("cloudwatch", "ec2", "rds", "cloudtrail"), ("cloudwatch",)),
-    # ec2/cloudtrail stay relevance-only — seed eks + kubernetes.
-    "eks": _routing(("eks", "ec2", "cloudtrail", "kubernetes"), ("eks", "kubernetes")),
-    # eks/cloudtrail stay relevance-only — seed grafana + cloudwatch dashboards/logs.
-    "alertmanager": _routing(
-        ("eks", "cloudwatch", "grafana", "cloudtrail", "kubernetes"),
-        ("grafana", "cloudwatch"),
-    ),
-    "kubernetes": _routing(("kubernetes",), ("kubernetes",)),
-    "sentry": _routing(("sentry",), ("sentry",)),
-    "honeycomb": _routing(("honeycomb",), ("honeycomb",)),
-    "coralogix": _routing(("coralogix",), ("coralogix",)),
-    # tracer_web stays relevance-only — secondary web context, not pre-LLM seed.
-    "airflow": _routing(("airflow", "tracer_web"), ("airflow",)),
-    "hermes": _routing(("hermes",), ("hermes",)),
-    "kafka": _routing(("kafka",), ("kafka",)),
-    "postgresql": _routing(("postgresql",), ("postgresql",)),
-    "mysql": _routing(("mysql",), ("mysql",)),
-    "mariadb": _routing(("mariadb",), ("mariadb",)),
-    "mongodb": _routing(("mongodb", "mongodb_atlas"), ("mongodb", "mongodb_atlas")),
-    "redis": _routing(("redis",), ("redis",)),
-    "snowflake": _routing(("snowflake",), ("snowflake",)),
-    "clickhouse": _routing(("clickhouse",), ("clickhouse",)),
-    "dagster": _routing(("dagster",), ("dagster",)),
-    "rabbitmq": _routing(("rabbitmq",), ("rabbitmq",)),
-    "supabase": _routing(("supabase",), ("supabase",)),
-    "opensearch": _routing(("opensearch",), ("opensearch",)),
-    "openobserve": _routing(("openobserve",), ("openobserve",)),
-    "betterstack": _routing(("betterstack",), ("betterstack",)),
-    "azure": _routing(("azure", "azure_sql"), ("azure", "azure_sql")),
-    "github": _routing(("github",), ("github",)),
-    "gitlab": _routing(("gitlab",), ("gitlab",)),
-    "bitbucket": _routing(("bitbucket",), ("bitbucket",)),
-    # ArgoCD deploys to any Kubernetes cluster, not just EKS — seed both.
-    "argocd": _routing(("eks", "kubernetes"), ("eks", "kubernetes")),
-    "splunk": _routing(("splunk",), ("splunk",)),
-    "signoz": _routing(("signoz",), ("signoz",)),
-    "jenkins": _routing(("jenkins",), ("jenkins",)),
-    "tempo": _routing(("tempo",), ("tempo",)),
-    "temporal": _routing(("temporal",), ("temporal",)),
-}
+# Populated by vendor/cross-vendor catalogs (e.g.
+# ``integrations/alert_source_catalog.py``) registered from
+# ``integrations/harness_adapters.py`` — core has no hardcoded vendor table.
+_alert_source_routing: dict[str, AlertSourceRouting] = {}
+
+
+def register_alert_source_routing(source: str, routing: AlertSourceRouting) -> None:
+    """Register (or replace) the routing entry for one alert-source key."""
+    _alert_source_routing[source.strip().lower()] = routing
+
+
+def clear_alert_source_routing() -> None:
+    """Remove all registered alert-source routing entries (tests)."""
+    _alert_source_routing.clear()
+
+
+def alert_source_routing() -> dict[str, AlertSourceRouting]:
+    """Return a snapshot of the currently registered routing table."""
+    return dict(_alert_source_routing)
+
 
 # Generic fallback sources: useful, but never primary when incident-specific
-# integrations match.
-SECONDARY_TOOL_SOURCES = frozenset({"knowledge", "openclaw", "google_docs"})
+# integrations match. Vendor packages register their own source string(s)
+# from integrations/harness_adapters.py — core has no hardcoded vendor list.
+_secondary_tool_sources: set[str] = set()
+
+
+def register_secondary_tool_source(source: str) -> None:
+    """Register a tool source as a generic fallback (never primary)."""
+    _secondary_tool_sources.add(source)
+
+
+def clear_secondary_tool_sources() -> None:
+    """Remove all registered secondary tool sources (tests)."""
+    _secondary_tool_sources.clear()
+
+
+def secondary_tool_sources() -> frozenset[str]:
+    """Return the currently registered generic fallback tool sources."""
+    return frozenset(_secondary_tool_sources)
+
 
 DB_KEYWORDS: tuple[str, ...] = ("database", "db connection", "connection pool")
 
-SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
-    "datadog": ("datadog", "datadoghq", "dd monitor"),
-    "sentry": ("sentry", "exception", "stack trace", "stacktrace", "error tracking"),
-    "vercel": ("vercel", "deploy", "deployment", "build failed"),
-    "github": ("github", "commit", "pull request", "merge"),
-    "gitlab": ("gitlab", "merge request"),
-    "grafana": ("grafana", "loki", "mimir", "prometheus"),
-    "honeycomb": ("honeycomb", "span", "trace latency"),
-    "coralogix": ("coralogix",),
-    "splunk": ("splunk",),
-    "cloudwatch": ("cloudwatch", "lambda", "log group"),
-    # Generic k8s/pod/kubectl terms live under "kubernetes" below — keeping them
-    # here too would make eks look "relevant" for any Kubernetes alert even
-    # when no EKS cluster is configured.
-    "eks": ("eks",),
-    "kubernetes": (
-        "kubernetes",
-        "k8s",
-        "kubectl",
-        "pod",
-        "crashloopbackoff",
-        "oomkilled",
-        "kubepod",
-    ),
-    "ec2": ("ec2", "instance"),
-    "rds": ("rds", "aurora", *DB_KEYWORDS),
-    "postgresql": ("postgres", "postgresql", "psql", *DB_KEYWORDS),
-    "mysql": ("mysql", *DB_KEYWORDS),
-    "mariadb": ("mariadb", *DB_KEYWORDS),
-    "mongodb": ("mongodb", "mongo", *DB_KEYWORDS),
-    "redis": ("redis", "cache"),
-    "snowflake": ("snowflake",),
-    "clickhouse": ("clickhouse",),
-    "dagster": ("dagster",),
-    "airflow": ("airflow", "dag"),
-    "kafka": ("kafka",),
-    "rabbitmq": ("rabbitmq", "amqp"),
-    "supabase": ("supabase",),
-    "opensearch": ("opensearch", "elasticsearch"),
-    "openobserve": ("openobserve",),
-    "betterstack": ("betterstack", "better stack"),
-    "azure": ("azure",),
-    "signoz": ("signoz",),
-    "jenkins": ("jenkins",),
-    "tempo": ("tempo",),
-    "temporal": ("temporal", "temporal workflow", "task queue"),
-}
+# Populated by vendor/cross-vendor catalogs (e.g.
+# ``integrations/alert_source_catalog.py``) registered from
+# ``integrations/harness_adapters.py`` — core has no hardcoded vendor keywords.
+_source_aliases: dict[str, tuple[str, ...]] = {}
+
+
+def register_source_aliases(source: str, aliases: tuple[str, ...]) -> None:
+    """Register (or replace) the keyword-alias set for one tool source."""
+    _source_aliases[source.strip().lower()] = aliases
+
+
+def clear_source_aliases() -> None:
+    """Remove all registered source-alias entries (tests)."""
+    _source_aliases.clear()
+
+
+def source_aliases() -> dict[str, tuple[str, ...]]:
+    """Return a snapshot of the currently registered alias table."""
+    return dict(_source_aliases)
 
 
 def routing_for_alert_source(alert_source: str) -> AlertSourceRouting | None:
     """Return routing config for a resolved alert vendor key, if known."""
-    return ALERT_SOURCE_ROUTING.get(alert_source.strip().lower())
+    return _alert_source_routing.get(alert_source.strip().lower())
 
 
 def primary_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
@@ -152,14 +143,14 @@ def primary_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
     Used for broad alert-driven tool prioritization; callers surface these
     as ``primary_sources`` in plan audits and prompts.
     """
-    routing = routing_for_alert_source(resolve_alert_source(state))
-    return routing.relevance_tool_sources if routing is not None else ()
+    entry = routing_for_alert_source(resolve_alert_source(state))
+    return entry.relevance_tool_sources if entry is not None else ()
 
 
 def seed_tool_sources_for_alert(state: dict[str, Any]) -> tuple[str, ...]:
     """Return tool sources auto-called before the investigation LLM loop."""
-    routing = routing_for_alert_source(resolve_alert_source(state))
-    return routing.seed_tool_sources if routing is not None else ()
+    entry = routing_for_alert_source(resolve_alert_source(state))
+    return entry.seed_tool_sources if entry is not None else ()
 
 
 def declared_context_sources(state: dict[str, Any]) -> set[str]:
@@ -203,9 +194,8 @@ def relevant_sources_for_alert(
     candidate_sources: Iterable[str],
 ) -> list[str]:
     """Select candidate sources relevant to the alert content."""
-    candidates = sorted(
-        source for source in candidate_sources if source not in SECONDARY_TOOL_SOURCES
-    )
+    secondary = secondary_tool_sources()
+    candidates = sorted(source for source in candidate_sources if source not in secondary)
     if not candidates:
         return []
 
@@ -219,20 +209,24 @@ def relevant_sources_for_alert(
     if not text:
         return []
 
+    keyword_map = {source: {source, *_source_aliases.get(source, ())} for source in candidates}
     matched: list[str] = []
-    for source in candidates:
-        keywords = {source, *SOURCE_ALIASES.get(source, ())}
+
+    for source, keywords in keyword_map.items():
         if any(keyword in text for keyword in keywords):
             matched.append(source)
+
     return matched
 
 
 def resolve_alert_source(state: dict[str, Any]) -> str:
     """Return the alert vendor key used to look up tool-source routing.
 
-    Grafana managed alerts reuse the Alertmanager webhook schema, so
-    ``alert_source`` is often missing from the payload — we sniff
-    ``grafana_folder`` / ``datasource_uid`` labels and ``externalURL`` below.
+    Some vendors (e.g. Grafana managed alerts, which reuse the Alertmanager
+    webhook schema) omit ``alert_source`` from the payload and must be
+    sniffed from other fields. That sniffing is vendor-specific and lives in
+    registered detectors (see :func:`register_alert_source_detector`) rather
+    than here, so core has no hardcoded vendor heuristics.
     """
     source = str(state.get("alert_source") or "").lower().strip()
     if source:
@@ -242,27 +236,34 @@ def resolve_alert_source(state: dict[str, Any]) -> str:
         source = str(raw.get("alert_source") or "").lower().strip()
         if source:
             return source
-        labels = raw.get("commonLabels") or raw.get("labels") or {}
-        if isinstance(labels, dict) and (
-            labels.get("grafana_folder") or labels.get("datasource_uid")
-        ):
-            return "grafana"
-        ext_url = raw.get("externalURL", "")
-        if isinstance(ext_url, str) and "grafana" in ext_url.lower():
-            return "grafana"
+        for detector in _alert_source_detectors:
+            detected = detector(raw)
+            if detected:
+                return detected
     return ""
 
 
 __all__ = [
-    "ALERT_SOURCE_ROUTING",
+    "DB_KEYWORDS",
+    "AlertSourceDetector",
     "AlertSourceRouting",
-    "SECONDARY_TOOL_SOURCES",
-    "SOURCE_ALIASES",
+    "alert_source_routing",
+    "clear_alert_source_detectors",
+    "clear_alert_source_routing",
+    "clear_secondary_tool_sources",
+    "clear_source_aliases",
     "collect_alert_text",
     "declared_context_sources",
     "primary_sources_for_alert",
+    "register_alert_source_detector",
+    "register_alert_source_routing",
+    "register_secondary_tool_source",
+    "register_source_aliases",
     "relevant_sources_for_alert",
     "resolve_alert_source",
+    "routing",
     "routing_for_alert_source",
+    "secondary_tool_sources",
     "seed_tool_sources_for_alert",
+    "source_aliases",
 ]

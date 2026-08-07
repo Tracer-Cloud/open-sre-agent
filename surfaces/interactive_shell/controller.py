@@ -35,6 +35,10 @@ from surfaces.interactive_shell.runtime.input.actions import (
     InputAction,
     SubmitTurn,
 )
+from surfaces.interactive_shell.runtime.loop_scheduler import (
+    shutdown_loop_scheduler,
+    start_loop_scheduler,
+)
 from surfaces.interactive_shell.runtime.turn_host import (
     AgentTurnRuntime,
     run_agent_turn,
@@ -79,7 +83,7 @@ def _alert_listener(
         yield None
         return
 
-    from gateway.http.web_server import WebAppServerHandle, serve_webapp_in_thread
+    from gateway.web.web_server import WebAppServerHandle, serve_webapp_in_thread
 
     inbox: _alert_inbox.AlertInbox | None = None
     handle: WebAppServerHandle | None = None
@@ -169,14 +173,26 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
+        from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+
         self.turn_runtime = AgentTurnRuntime(
             session=self.session,
             state=self.state,
             spinner=self.spinner,
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
+            console=self.service_console,
+            action_runner=ShellActionRunner(
+                session=self.session,
+                console=self.service_console,
+                request_exit=self.prompt.request_exit,
+            ),
         )
-        self.echo_console = Console(highlight=False, force_terminal=True, color_system="truecolor")
+        # Prompt echoes belong in the same stream as everything else this turn
+        # writes, so an embedding caller captures the whole conversation.
+        self.echo_console = console or Console(
+            highlight=False, force_terminal=True, color_system="truecolor"
+        )
         self.input_reader = PromptInputReader(
             self.prompt,
             self.state,
@@ -224,6 +240,10 @@ class InteractiveShellController:
         )
         # Fleet sampler is lazy: /fleet triggers it on first live use.
         self.session.terminal.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
+        try:
+            start_loop_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Loop scheduler could not start: %s", exc)
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:
@@ -263,6 +283,7 @@ class InteractiveShellController:
         for (label, _task), result in zip(self.tasks, shutdown_results, strict=True):
             if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                 log.debug("%s task shutdown raised exception: %s", label, result)
+        shutdown_loop_scheduler()
 
 
 __all__ = ["InteractiveShellController"]

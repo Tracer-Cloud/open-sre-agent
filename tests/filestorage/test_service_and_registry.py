@@ -1,0 +1,259 @@
+"""Shared service + provider registry contracts used by all surfaces."""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+import pytest
+
+from config.constants.filestorage import (
+    REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENV,
+    REMOTE_SYNC_PROVIDER_ENV,
+)
+from platform.filestorage.config import RemoteSyncConfig
+from platform.filestorage.engine import SyncReport, content_tag
+from platform.filestorage.enums import RemoteSyncField, SyncDirection, SyncRootName
+from platform.filestorage.errors import RemoteSyncConfigError
+from platform.filestorage.messages import (
+    DISABLED_HELP,
+    direction_label,
+    format_report_lines,
+    format_status_lines,
+    sanitize_terminal_text,
+)
+from platform.filestorage.operations import get_sync_status, run_remote_sync
+from platform.filestorage.ports import RemoteObject
+from platform.filestorage.providers import build_object_store as surface_build
+from platform.filestorage.providers.registry import (
+    SetupExtraField,
+    build_object_store,
+    provider_extra_fields,
+    register_object_store,
+    registered_providers,
+    unregister_object_store,
+)
+from platform.filestorage.syncable import SyncRoot
+
+
+class _MemStore:
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def list_objects(self, prefix: str) -> list[RemoteObject]:
+        from datetime import UTC, datetime
+
+        return [
+            RemoteObject(
+                key=k,
+                size=len(v),
+                last_modified=datetime.now(tz=UTC),
+                etag=content_tag(v),
+            )
+            for k, v in self.objects.items()
+            if k.startswith(prefix)
+        ]
+
+    def get_object(self, key: str) -> bytes:
+        return self.objects[key]
+
+    def put_object(self, key: str, data: bytes) -> None:
+        self.objects[key] = data
+
+    def describe(self) -> str:
+        return "mem://t"
+
+
+@pytest.fixture(autouse=True)
+def _restore_registry() -> None:
+    from platform.filestorage.providers import registry as reg
+
+    with reg._REGISTRY_LOCK:
+        snap = dict(reg._REGISTRY)
+    yield
+    with reg._REGISTRY_LOCK:
+        reg._REGISTRY.clear()
+        reg._REGISTRY.update(snap)
+
+
+def test_formatters_return_immutable_tuples() -> None:
+    off = format_status_lines(get_sync_status())
+    assert isinstance(off, tuple)
+    assert DISABLED_HELP in off
+
+    report = SyncReport(uploaded=["a"], downloaded=["b"], kept_remote=["c"], skipped=2)
+    lines = format_report_lines(report)
+    assert isinstance(lines, tuple)
+    assert lines[0] == "Sync complete — 1 downloaded, 1 uploaded, 2 already current."
+    report.uploaded.append("mutated")
+    # Prior tuple is unchanged; a new format call snapshots the mutated lists.
+    assert lines[0] == "Sync complete — 1 downloaded, 1 uploaded, 2 already current."
+    assert "2 uploaded" in format_report_lines(report)[0]
+
+
+def test_format_report_lines_marks_a_dry_run_as_a_preview() -> None:
+    report = SyncReport(uploaded=["a"], downloaded=["b"], skipped=2)
+    lines = format_report_lines(report, dry_run=True)
+    assert lines[0] == "Dry run — 1 would be downloaded, 1 would be uploaded, 2 already current."
+
+
+def test_format_report_lines_shows_nonzero_byte_sizes() -> None:
+    report = SyncReport(
+        uploaded=["a"],
+        downloaded=["b"],
+        uploaded_bytes=4500,
+        downloaded_bytes=1200,
+        skipped=2,
+    )
+    lines = format_report_lines(report)
+    assert "4.4 KiB" in lines[0]
+    assert "1.2 KiB" in lines[0]
+    assert "5.6 KiB total" in lines[0]
+
+
+def test_format_report_lines_omits_size_when_no_bytes_moved() -> None:
+    report = SyncReport(
+        uploaded=["a"], downloaded=[], uploaded_bytes=0, downloaded_bytes=0, skipped=1
+    )
+    lines = format_report_lines(report)
+    assert lines[0] == "Sync complete — 0 downloaded, 1 uploaded, 1 already current."
+
+
+def test_format_report_lines_shows_only_download_size_when_upload_is_zero() -> None:
+    report = SyncReport(
+        uploaded=[], downloaded=["b"], uploaded_bytes=0, downloaded_bytes=2048, skipped=1
+    )
+    lines = format_report_lines(report)
+    assert "2.0 KiB" in lines[0]
+    assert "2.0 KiB total" in lines[0]
+
+
+def test_format_report_lines_shows_small_byte_count_in_bytes() -> None:
+    report = SyncReport(
+        uploaded=["a"], downloaded=[], uploaded_bytes=500, downloaded_bytes=0, skipped=0
+    )
+    lines = format_report_lines(report)
+    assert "500 B" in lines[0]
+    assert "500 B total" in lines[0]
+
+
+def test_format_report_lines_handles_megabyte_boundary() -> None:
+    report = SyncReport(
+        uploaded=[], downloaded=[], uploaded_bytes=0, downloaded_bytes=2_500_000, skipped=3
+    )
+    lines = format_report_lines(report)
+    assert "2.4 MiB" in lines[0]
+    assert "2.4 MiB total" in lines[0]
+
+
+def test_direction_label_is_distinct_and_shared_by_both_surfaces() -> None:
+    """One source of truth for the label, so CLI and REPL cannot drift apart."""
+    assert direction_label(SyncDirection.PULL) == "Pulling"
+    assert direction_label(SyncDirection.PUSH) == "Pushing"
+    assert direction_label(SyncDirection.PULL) != direction_label(SyncDirection.PUSH)
+
+
+def test_sanitize_terminal_text_leaves_ordinary_paths_untouched() -> None:
+    assert sanitize_terminal_text("sessions/a.jsonl") == "sessions/a.jsonl"
+    assert sanitize_terminal_text("sessions/日本語.jsonl") == "sessions/日本語.jsonl"
+
+
+def test_sanitize_terminal_text_replaces_escape_and_control_characters() -> None:
+    # ESC (CSI/OSC lead-in), a C0 control char, and a C1 control char.
+    crafted = "sessions/\x1b[2K\x1b]0;pwned\x07\x07\x9bwhoami.jsonl"
+    cleaned = sanitize_terminal_text(crafted)
+    assert "\x1b" not in cleaned
+    assert "\x07" not in cleaned
+    assert "\x9b" not in cleaned
+    assert "sessions/" in cleaned
+    assert "whoami.jsonl" in cleaned
+
+
+def test_format_report_lines_sanitizes_kept_remote_keys() -> None:
+    report = SyncReport(kept_remote=["sessions/\x1b[2Kspoofed.jsonl"])
+    lines = format_report_lines(report)
+    assert not any("\x1b" in line for line in lines)
+
+
+def test_factory_delegates_to_registry() -> None:
+    store = _MemStore()
+    register_object_store("factory-test", lambda _cfg: store)
+    built = surface_build(RemoteSyncConfig(bucket="b", provider="factory-test"))
+    assert built is store
+
+
+def test_registry_unregister_and_unknown() -> None:
+    register_object_store("temp-prov", lambda _cfg: _MemStore())
+    assert "temp-prov" in registered_providers()
+    unregister_object_store("temp-prov")
+    with pytest.raises(RemoteSyncConfigError, match="unknown remote-sync provider"):
+        build_object_store(RemoteSyncConfig(bucket="b", provider="temp-prov"))
+
+
+def test_aws_declares_region_and_profile() -> None:
+    # Loading the built-in aws module (via provider_extra_fields) must not
+    # require boto3 to have built a client — this only reads the declaration.
+    fields = {extra.field for extra in provider_extra_fields("aws")}
+    assert fields == {RemoteSyncField.REGION, RemoteSyncField.PROFILE}
+
+
+def test_vercel_declares_no_extra_fields() -> None:
+    assert provider_extra_fields("vercel") == ()
+
+
+def test_unknown_provider_declares_no_extra_fields() -> None:
+    assert provider_extra_fields("does-not-exist") == ()
+
+
+def test_provider_extra_fields_registered_and_cleaned_up() -> None:
+    register_object_store(
+        "extra-fields-test",
+        lambda _cfg: _MemStore(),
+        extra_fields=(SetupExtraField(RemoteSyncField.REGION, "Region"),),
+    )
+    assert provider_extra_fields("extra-fields-test") == (
+        SetupExtraField(RemoteSyncField.REGION, "Region"),
+    )
+    unregister_object_store("extra-fields-test")
+    assert provider_extra_fields("extra-fields-test") == ()
+
+
+def test_registry_safe_under_concurrent_register_and_build() -> None:
+    def _work(i: int) -> str:
+        name = f"conc-{i % 4}"
+        register_object_store(name, lambda _cfg: _MemStore())
+        store = build_object_store(RemoteSyncConfig(bucket="b", provider=name))
+        assert store.describe() == "mem://t"
+        return name
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = [pool.submit(_work, i) for i in range(32)]
+        assert len({f.result() for f in as_completed(futs)}) == 4
+
+
+def test_run_remote_sync_uses_scoped_roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.filestorage import operations as sync_service
+
+    sessions = tmp_path / "sessions"
+    memory = tmp_path / "memory"
+    sessions.mkdir()
+    memory.mkdir()
+    (sessions / "x.jsonl").write_text("{}\n", encoding="utf-8")
+    roots = (
+        SyncRoot(name=SyncRootName.SESSIONS, path=sessions),
+        SyncRoot(name=SyncRootName.MEMORY, path=memory),
+    )
+    register_object_store("scoped", lambda _cfg: _MemStore())
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "scoped")
+    monkeypatch.setattr(sync_service, "syncable_roots", lambda: roots)
+
+    report = run_remote_sync()
+    assert report is not None
+    assert "sessions/x.jsonl" in report.uploaded
+    # Service does not cache reports — each call returns a fresh object.
+    report2 = run_remote_sync()
+    assert report2 is not None
+    assert report2 is not report

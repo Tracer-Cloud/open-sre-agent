@@ -29,12 +29,13 @@ from rich.table import Table
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 from platform.terminal.theme import BRAND, DIM, ERROR, HIGHLIGHT
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
-DEFAULT_GITHUB_MCP_MODE = "streamable-http"
+DEFAULT_GITHUB_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 DEFAULT_GITHUB_MCP_TOOLSETS = ("repos", "issues", "pull_requests", "actions", "search")
 
 # Non-transport metadata persisted alongside MCP credentials in the integration store.
@@ -135,7 +136,7 @@ class GitHubMCPConfig(StrictConfigModel):
     """Normalized GitHub MCP connection settings."""
 
     url: str = DEFAULT_GITHUB_MCP_URL
-    mode: Literal["stdio", "sse", "streamable-http"] = "streamable-http"
+    mode: McpTransportMode = DEFAULT_GITHUB_MCP_MODE
     auth_token: str = ""
     command: str = ""
     args: tuple[str, ...] = ()
@@ -161,6 +162,8 @@ class GitHubMCPConfig(StrictConfigModel):
     def _normalize_args(cls, value: Any) -> tuple[str, ...]:
         if value is None:
             return ()
+        if isinstance(value, str):
+            return tuple(part for part in value.split() if part.strip())
         return tuple(str(arg).strip() for arg in value if str(arg).strip())
 
     @field_validator("headers", mode="before")
@@ -175,6 +178,9 @@ class GitHubMCPConfig(StrictConfigModel):
     def _normalize_toolsets(cls, value: Any) -> tuple[str, ...]:
         if value is None:
             return DEFAULT_GITHUB_MCP_TOOLSETS
+        if isinstance(value, str):
+            parts = [part.strip() for part in value.split(",") if part.strip()]
+            return tuple(parts) or DEFAULT_GITHUB_MCP_TOOLSETS
         toolsets = tuple(str(toolset).strip() for toolset in value if str(toolset).strip())
         return toolsets or DEFAULT_GITHUB_MCP_TOOLSETS
 
@@ -885,7 +891,7 @@ def _validation_result_from_get_me_profile_counts(
     scope_me = (user_name,) if user_name else ()
     success_detail = (
         f"OK @{user_name or 'unknown'}; repos={profile_count}; "
-        f"owners={','.join(scope_me) if scope_me else '-'}; "
+        f"owners={', '.join(scope_me) if scope_me else '-'}; "
         f"examples=-; mcp_tools={len(tool_names)} | {note}"
     )
     return GitHubMCPValidationResult(
@@ -952,8 +958,8 @@ def _validation_success_from_repo_probe_result(
             f" | listing had no parseable repos ({repo_tool} empty or unexpected response shape)"
         )
     success_detail = (
-        f"OK @{user_name or 'unknown'}; repos={repo_count}; owners={','.join(scope) if scope else '-'}; "
-        f"examples={','.join(samples[:3]) if samples else '-'}; mcp_tools={len(tool_names)}"
+        f"OK @{user_name or 'unknown'}; repos={repo_count}; owners={', '.join(scope) if scope else '-'}; "
+        f"examples={', '.join(samples[:3]) if samples else '-'}; mcp_tools={len(tool_names)}"
         f"{suffix}"
     )
     return GitHubMCPValidationResult(

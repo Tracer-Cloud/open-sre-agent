@@ -3,10 +3,25 @@
 from __future__ import annotations
 
 import time
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from integrations.grafana.base import GrafanaClientBase
+
+_MAX_LOKI_LOG_LINES = 5000
+
+
+def _describe_status(status: int) -> str:
+    """Human-readable reason for a failed Loki response status."""
+    if status == HTTPStatus.TOO_MANY_REQUESTS:
+        return (
+            f"Loki rate-limited the query ({status}). "
+            "Retry later, shorten the time range, or lower the limit."
+        )
+    if status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        return f"Loki is unavailable ({status}). Server-side failure, retry later."
+    return f"Loki query failed: {status}"
 
 
 class LokiMixin:
@@ -33,6 +48,7 @@ class LokiMixin:
                 "success": False,
                 "error": f"Grafana client not configured for account '{self.account_id}'",
                 "logs": [],
+                "truncated": False,
             }
 
         url = self._build_datasource_url(
@@ -43,6 +59,9 @@ class LokiMixin:
         end_ns = int(time.time() * 1e9)
         start_ns = end_ns - (time_range_minutes * 60 * int(1e9))
 
+        if limit > _MAX_LOKI_LOG_LINES:
+            limit = _MAX_LOKI_LOG_LINES + 1
+
         params: dict[str, str] = {
             "query": query,
             "limit": str(limit),
@@ -51,15 +70,21 @@ class LokiMixin:
         }
 
         try:
-            data = self._make_request(url, params=params)
+            data = self._make_get_request(url, params=params)
             result = data.get("data", {}).get("result", [])
 
-            logs = []
+            logs: list[dict[str, Any]] = []
+            truncated: bool = False
+
             for stream in result:
                 stream_labels = stream.get("stream", {})
                 values = stream.get("values", [])
 
                 for timestamp_ns, log_line in values:
+                    if len(logs) >= _MAX_LOKI_LOG_LINES:
+                        truncated = True
+                        break
+
                     logs.append(
                         {
                             "timestamp": timestamp_ns,
@@ -68,9 +93,13 @@ class LokiMixin:
                         }
                     )
 
+                if truncated:
+                    break
+
             return {
                 "success": True,
                 "logs": logs,
+                "truncated": truncated,
                 "total_streams": len(result),
                 "total_logs": len(logs),
                 "query": query,
@@ -81,11 +110,12 @@ class LokiMixin:
             response_text = ""
             if hasattr(e, "response") and e.response is not None:
                 response_text = e.response.text[:300]
-                error_msg = f"Loki query failed: {e.response.status_code}"
+                error_msg = _describe_status(e.response.status_code)
 
             return {
                 "success": False,
                 "error": error_msg,
                 "response": response_text,
                 "logs": [],
+                "truncated": False,
             }

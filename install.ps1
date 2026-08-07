@@ -307,7 +307,10 @@ function Write-OpenSreProgressLine {
         $content = $content.Substring(0, $clearWidth)
     }
 
-    [System.Console]::Write("`r{0}`r{1}" -f (" " * $clearWidth), $content)
+    # Parenthesize the entire -f expression. Without that, PowerShell treats the
+    # comma as a Console.Write argument separator, so -f only receives one value
+    # and "{1}" raises: "Error formatting a string: Index ... argument list."
+    [System.Console]::Write(("`r{0}`r{1}" -f (" " * $clearWidth), $content))
 }
 
 function Clear-OpenSreProgressLine {

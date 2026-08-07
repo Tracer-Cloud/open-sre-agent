@@ -5,19 +5,23 @@ from __future__ import annotations
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-from tests.tools.conftest import BaseToolContract
-from tools import registry as registry_module
-from tools.architecture_issue_tool.report_persistence import (
+import pytest
+
+from integrations.github.tools.architecture_issue_tool.repo_workspace import WorkspaceError
+from integrations.github.tools.architecture_issue_tool.report_persistence import (
     ReportPersistenceError,
     sanitize_repo_name,
     save_architecture_observations,
 )
-from tools.architecture_issue_tool.tool import (
+from integrations.github.tools.architecture_issue_tool.tool import (
     architecture_cleanup_repo,
     architecture_clone_repo,
     architecture_save_observations,
 )
+from tests.tools.conftest import BaseToolContract
+from tools import registry as registry_module
 
 
 class TestArchitectureCloneRepoContract(BaseToolContract):
@@ -71,6 +75,61 @@ def test_architecture_clone_repo_local_path(tmp_path: Path) -> None:
     assert result["workspace_root"] == str(tmp_path.resolve())
 
 
+def test_architecture_clone_repo_prefers_injected_token_over_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: env token set alongside an injected (configured-source) token
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
+    monkeypatch.setattr(
+        "integrations.github.tools.architecture_issue_tool.tool.clone_github_repo", clone_mock
+    )
+
+    # Act
+    architecture_clone_repo(owner="org", repo="repo", github_token="store-token")
+
+    # Assert: the configured-source token reaches the clone, not the env token
+    assert clone_mock.call_args.kwargs["token"] == "store-token"
+
+
+def test_architecture_clone_repo_falls_back_to_env_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: no injected token, env-only local setup
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
+    monkeypatch.setattr(
+        "integrations.github.tools.architecture_issue_tool.tool.clone_github_repo", clone_mock
+    )
+
+    # Act
+    architecture_clone_repo(owner="org", repo="repo")
+
+    # Assert: the env token is used for the clone
+    assert clone_mock.call_args.kwargs["token"] == "env-token"
+
+
+def test_architecture_clone_repo_no_token_clones_unauthenticated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: neither an injected token nor env vars
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    clone_mock = MagicMock(side_effect=WorkspaceError("stop before network"))
+    monkeypatch.setattr(
+        "integrations.github.tools.architecture_issue_tool.tool.clone_github_repo", clone_mock
+    )
+
+    # Act
+    architecture_clone_repo(owner="org", repo="repo")
+
+    # Assert: clone proceeds with no token (public-repo path)
+    assert clone_mock.call_args.kwargs["token"] is None
+
+
 def test_architecture_cleanup_refuses_outside_path(tmp_path: Path) -> None:
     result = architecture_cleanup_repo(workspace_root=str(tmp_path))
     assert result["ok"] is False
@@ -116,7 +175,7 @@ def test_architecture_save_observations_tool_uses_explicit_session(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setattr(
-        "tools.architecture_issue_tool.tool.save_architecture_observations",
+        "integrations.github.tools.architecture_issue_tool.tool.save_architecture_observations",
         partial(save_architecture_observations, home_dir=tmp_path),
     )
     result = architecture_save_observations(
@@ -142,7 +201,7 @@ def test_architecture_save_observations_tool_reads_session_from_context(
     from core.types import AgentToolContext
 
     monkeypatch.setattr(
-        "tools.architecture_issue_tool.tool.save_architecture_observations",
+        "integrations.github.tools.architecture_issue_tool.tool.save_architecture_observations",
         partial(save_architecture_observations, home_dir=tmp_path),
     )
     session = SimpleNamespace(session_id="ctx-session-id")

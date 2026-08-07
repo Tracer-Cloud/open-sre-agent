@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gateway.session.gateway_chat_context import inject_gateway_chat_context
+from gateway.core.session.gateway_chat_context import inject_gateway_chat_context
 
 
 def test_slack_turn_hides_other_transports_not_slack() -> None:

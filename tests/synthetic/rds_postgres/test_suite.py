@@ -16,6 +16,7 @@ from tests.synthetic.rds_postgres.scenario_loader import (
 )
 from tests.synthetic.rds_postgres.scoring import score_result
 from tests.synthetic.schemas import VALID_EVIDENCE_SOURCES
+from tests.synthetic.score_artifacts import record_scenario_score
 
 
 def test_load_all_scenarios_reads_benchmark_cases() -> None:
@@ -316,6 +317,16 @@ def _run_scenario_test(fixture) -> None:
     failures: list[str] = []
     for attempt in range(1, _LLM_ATTEMPTS + 1):
         final_state, score = run_scenario(fixture, use_mock_grafana=True)
+        record_scenario_score(
+            suite="rds_postgres",
+            scenario_id=fixture.scenario_id,
+            attempt=attempt,
+            passed=bool(score.passed),
+            score=score,
+            final_state=final_state,
+            difficulty=getattr(fixture.metadata, "scenario_difficulty", None),
+            failure_mode=getattr(fixture.metadata, "failure_mode", "") or "",
+        )
 
         try:
             assert final_state["root_cause"]

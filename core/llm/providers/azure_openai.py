@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from config.constants.llm import (
+    AZURE_OPENAI_API_KEY_ENV,
+    AZURE_OPENAI_API_VERSION_ENV,
+    AZURE_OPENAI_BASE_URL_ENV,
+)
 from core.llm.types import ModelType
 
 AZURE_OPENAI_PROVIDER = "azure-openai"
-
-AZURE_OPENAI_BASE_URL_ENV = "AZURE_OPENAI_BASE_URL"
-AZURE_OPENAI_API_VERSION_ENV = "AZURE_OPENAI_API_VERSION"
-AZURE_OPENAI_API_KEY_ENV = "AZURE_OPENAI_API_KEY"
 
 
 def is_azure_openai_provider(provider: str) -> bool:
@@ -105,7 +106,7 @@ def azure_deployment_not_found_remediation_steps() -> list[str]:
     return [
         (
             "Set AZURE_OPENAI_*_MODEL to your deployment name from the Azure portal, "
-            "not a model ID from /openai/models."
+            + "not a model ID from /openai/models."
         ),
         f"List deployments: {azure_deployments_list_curl_command()}",
         "Create or rename the deployment in Azure AI Foundry if needed.",
@@ -185,9 +186,6 @@ def resolve_azure_openai_request_kwargs(settings: Any, *, model_type: ModelType)
 
 
 __all__ = [
-    "AZURE_OPENAI_API_KEY_ENV",
-    "AZURE_OPENAI_API_VERSION_ENV",
-    "AZURE_OPENAI_BASE_URL_ENV",
     "AZURE_OPENAI_PROVIDER",
     "azure_deployment_not_found_remediation_steps",
     "azure_deployments_list_curl_command",

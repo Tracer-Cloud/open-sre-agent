@@ -225,6 +225,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=55,
     ),
     IntegrationSpec(
+        service="buzz",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=52,
+        verify_order=58,
+    ),
+    IntegrationSpec(
         service="whatsapp",
         has_verifier=True,
         direct_effective=True,
@@ -359,6 +366,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=8,
     ),
     IntegrationSpec(
+        service="railway",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=43,
+        verify_order=57,
+    ),
+    IntegrationSpec(
         service="smtp",
         has_verifier=True,
         direct_effective=True,
@@ -480,7 +494,8 @@ def family_key(service_key: str) -> str:
 
 # Wire the concrete resolver into the platform-level seam so callers in
 # ``tools/`` can normalize service keys without importing from
-# ``integrations/`` directly (T-4 layering audit, issue #3352, item 27).
+# ``integrations/`` directly, keeping ``platform/`` free of a reverse
+# dependency on ``integrations/``.
 # Kept at import time so any consumer that has already imported the
 # ``integrations`` package (every CLI entry point does so during startup)
 # sees the real mapping instead of the identity fallback.

@@ -256,9 +256,11 @@ def test_validate_ollama_returns_success_on_valid_inference(monkeypatch) -> None
     ],
 )
 def test_validate_ollama_exact_tag_matching(monkeypatch, model, available, should_pass) -> None:
+    # Stub both calls unconditionally. Stubbing the POST only in the passing case
+    # let the failing case reach a real Ollama on localhost, so the test passed or
+    # failed depending on whether the developer happened to be running one.
     monkeypatch.setattr(httpx, "get", lambda *_a, **_kw: _tags_response(available))
-    if should_pass:
-        monkeypatch.setattr(httpx, "post", lambda *_a, **_kw: _chat_response("OpenSRE ready"))
+    monkeypatch.setattr(httpx, "post", lambda *_a, **_kw: _chat_response("OpenSRE ready"))
 
     result = validate_provider_credentials(
         provider=PROVIDER_BY_VALUE["ollama"],

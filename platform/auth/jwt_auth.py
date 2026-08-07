@@ -12,6 +12,7 @@ import base64
 import binascii
 import json
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,7 @@ from config.config import (
     JWKS_CACHE_TTL_SECONDS,
     JWT_ALGORITHM,
     Environment,
+    get_clerk_config_override,
     get_environment,
 )
 
@@ -97,7 +99,6 @@ class AsyncJWKSCache:
     _cache_ttl: int = JWKS_CACHE_TTL_SECONDS
 
     def _get_lock(self, jwks_url: str) -> asyncio.Lock:
-        """Get or create a lock for the given URL."""
         if jwks_url not in self._locks:
             self._locks[jwks_url] = asyncio.Lock()
         return self._locks[jwks_url]
@@ -115,7 +116,6 @@ class AsyncJWKSCache:
             if now - cached.fetched_at < self._cache_ttl:
                 return cached.keys
 
-        # Need to fetch - use lock to prevent thundering herd
         lock = self._get_lock(jwks_url)
         async with lock:
             # Double-check cache after acquiring lock
@@ -124,13 +124,11 @@ class AsyncJWKSCache:
                 if now - cached.fetched_at < self._cache_ttl:
                     return cached.keys
 
-            # Fetch JWKS asynchronously
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(jwks_url)
                 response.raise_for_status()
                 jwks_data = response.json()
 
-            # Cache the result
             self._cache[jwks_url] = CachedJWKS(keys=jwks_data, fetched_at=now)
             from typing import cast
 
@@ -148,17 +146,27 @@ _async_jwks_cache = AsyncJWKSCache()
 def get_valid_issuers() -> list[str]:
     """Get list of valid JWT issuers.
 
-    In production, only accept production issuer.
-    In development, accept both dev and prod issuers for flexibility.
+    The CLERK_ISSUER / CLERK_JWKS_URL override (infra-injected per org silo)
+    is accepted in every environment. Otherwise production only accepts the
+    production issuer; development accepts both hardcoded issuers for
+    flexibility.
     """
     env = get_environment()
     if env == Environment.PRODUCTION:
-        return [CLERK_CONFIG_PROD.issuer]
-    return [CLERK_CONFIG_DEV.issuer, CLERK_CONFIG_PROD.issuer]
+        issuers = [CLERK_CONFIG_PROD.issuer]
+    else:
+        issuers = [CLERK_CONFIG_DEV.issuer, CLERK_CONFIG_PROD.issuer]
+    override = get_clerk_config_override()
+    if override and override.issuer not in issuers:
+        issuers.insert(0, override.issuer)
+    return issuers
 
 
 def get_jwks_url_for_issuer(issuer: str) -> str | None:
     """Get the JWKS URL for a given issuer."""
+    override = get_clerk_config_override()
+    if override and issuer.rstrip("/") == override.issuer:
+        return override.jwks_url
     if issuer == CLERK_CONFIG_DEV.issuer:
         return CLERK_CONFIG_DEV.jwks_url
     if issuer == CLERK_CONFIG_PROD.issuer:
@@ -225,33 +233,27 @@ async def verify_jwt_async(token: str) -> JWTClaims:
         JWTInvalidIssuerError: If the issuer is not valid.
         JWTMissingClaimError: If required claims are missing.
     """
-    # Decode without verification to get the issuer
     unverified_payload = decode_jwt_payload_unverified(token)
     issuer = unverified_payload.get("iss")
 
     if not issuer:
         raise JWTMissingClaimError("JWT missing required 'iss' claim")
 
-    # Validate issuer
     valid_issuers = get_valid_issuers()
     if issuer not in valid_issuers:
         raise JWTInvalidIssuerError(f"Invalid issuer '{issuer}'. Expected one of: {valid_issuers}")
 
-    # Get JWKS URL for this issuer
     jwks_url = get_jwks_url_for_issuer(issuer)
     if not jwks_url:
         raise JWTInvalidIssuerError(f"No JWKS URL configured for issuer: {issuer}")
 
-    # Fetch JWKS asynchronously
     try:
         jwks_data = await _async_jwks_cache.get_jwks(jwks_url)
     except httpx.HTTPError as e:
         raise JWTVerificationError(f"Failed to fetch JWKS: {e}") from e
 
-    # Get signing key
     signing_key = get_signing_key_from_jwks(jwks_data, token)
 
-    # Verify the token
     try:
         payload = jwt.decode(
             token,
@@ -272,7 +274,6 @@ async def verify_jwt_async(token: str) -> JWTClaims:
     except jwt.InvalidTokenError as e:
         raise JWTVerificationError(f"Invalid JWT: {e}") from e
 
-    # Validate required claims
     if not payload.get("sub"):
         raise JWTMissingClaimError("JWT missing required 'sub' claim")
 
@@ -285,9 +286,15 @@ async def verify_jwt_async(token: str) -> JWTClaims:
 def verify_jwt(token: str) -> JWTClaims:
     """Synchronous wrapper for verify_jwt_async.
 
-    DEPRECATED: Use verify_jwt_async directly in async contexts.
-    This exists for backwards compatibility but will block the event loop.
+    .. deprecated::
+       Use :func:`verify_jwt_async` directly in async contexts.
+       This exists for backwards compatibility but will block the event loop.
     """
+    warnings.warn(
+        "verify_jwt is deprecated, use verify_jwt_async instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():

@@ -1,12 +1,15 @@
-"""``opensre hermes`` command group: live-tail Hermes logs and dispatch to Telegram.
+"""``opensre hermes`` command group: live-tail Hermes logs and dispatch alarms.
 
 The ``opensre hermes watch`` command wires the existing detection
-backbone (:class:`~integrations.hermes.HermesAgent`) to the
+backbone (:class:`~integrations.hermes.HermesAgent`) to a
 :class:`~integrations.hermes.TelegramSink` and blocks until ``SIGINT`` /
-``SIGTERM``. Credentials are loaded via
-:func:`~integrations.telegram.credentials.load_credentials_from_env`, so the
-``TELEGRAM_BOT_TOKEN`` env var must be set; ``--chat-id`` overrides the
-``TELEGRAM_DEFAULT_CHAT_ID`` env var when both are present.
+``SIGTERM``. ``--provider`` selects the delivery channel (``telegram``
+default, or ``rocketchat``); credentials are loaded via
+:func:`~integrations.telegram.credentials.load_credentials_from_env` or
+:func:`~integrations.rocketchat.credentials.load_credentials_from_env`
+respectively. ``--chat-id`` overrides the provider's default
+chat/channel (``TELEGRAM_DEFAULT_CHAT_ID`` or ``ROCKETCHAT_DEFAULT_CHANNEL``)
+when both are present.
 
 This command intentionally does *not* run an OpenSRE investigation by
 default. Pass ``--investigate`` (or set ``OPENSRE_HERMES_INVESTIGATE=1``)
@@ -27,7 +30,11 @@ from integrations.hermes.agent import DEFAULT_LOG_PATH, HermesAgent
 from integrations.hermes.correlating_sink import CorrelatingSink
 from integrations.hermes.correlator import IncidentCorrelator, RouteDestination
 from integrations.hermes.investigation import run_incident_investigation
-from integrations.hermes.sinks import TelegramSink
+from integrations.hermes.sinks import AlarmDispatcherPort, TelegramSink
+from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
+from integrations.rocketchat.credentials import (
+    load_credentials_from_env as load_rocketchat_credentials_from_env,
+)
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
 from tools.investigation.capability import run_investigation
@@ -53,13 +60,21 @@ def hermes_command(ctx: click.Context) -> None:
     ),
 )
 @click.option(
+    "--provider",
+    type=click.Choice(["telegram", "rocketchat"], case_sensitive=False),
+    default="telegram",
+    show_default=True,
+    help="Messaging provider for incident delivery.",
+)
+@click.option(
     "--chat-id",
     "chat_id",
     type=str,
     default=None,
     help=(
-        "Telegram chat ID to deliver incidents to. Overrides "
-        "TELEGRAM_DEFAULT_CHAT_ID when both are set."
+        "Chat/channel to deliver incidents to. Overrides the provider's "
+        "default (TELEGRAM_DEFAULT_CHAT_ID or ROCKETCHAT_DEFAULT_CHANNEL) "
+        "when both are set."
     ),
 )
 @click.option(
@@ -133,6 +148,7 @@ def hermes_command(ctx: click.Context) -> None:
 )
 def hermes_watch(
     log_path: Path | None,
+    provider: str,
     chat_id: str | None,
     cooldown_seconds: float,
     from_start: bool,
@@ -144,12 +160,19 @@ def hermes_watch(
 ) -> None:
     """Start the Hermes log watcher and block until interrupted.
 
-    Loads Telegram credentials from the environment, constructs a
-    :class:`HermesAgent` wired to a :class:`TelegramSink`, then waits
-    for ``SIGINT``/``SIGTERM`` before shutting the agent down cleanly.
+    Loads the selected provider's credentials from the environment,
+    constructs a :class:`HermesAgent` wired to a :class:`TelegramSink`
+    (delivering via Telegram or Rocket.Chat depending on ``--provider``),
+    then waits for ``SIGINT``/``SIGTERM`` before shutting the agent down
+    cleanly.
     """
-    creds = load_credentials_from_env(chat_id_override=chat_id)
-    dispatcher = AlarmDispatcher(creds, cooldown_seconds=cooldown_seconds)
+    dispatcher: AlarmDispatcherPort
+    if provider == "rocketchat":
+        rc_creds = load_rocketchat_credentials_from_env(channel_override=chat_id)
+        dispatcher = RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=cooldown_seconds)
+    else:
+        creds = load_credentials_from_env(chat_id_override=chat_id)
+        dispatcher = AlarmDispatcher(creds, cooldown_seconds=cooldown_seconds)
 
     investigate_enabled = _resolve_investigate_flag(investigate)
     bridge = (
@@ -195,7 +218,7 @@ def hermes_watch(
 
     click.echo(
         f"hermes-watch: tailing {resolved_log_path} "
-        f"(cooldown={cooldown_seconds:.0f}s, "
+        f"(provider={provider}, cooldown={cooldown_seconds:.0f}s, "
         f"investigate={'on' if investigate_enabled else 'off'}, "
         f"correlate={'on' if correlate else 'off'})"
     )

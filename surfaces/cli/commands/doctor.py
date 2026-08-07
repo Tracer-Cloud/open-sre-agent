@@ -101,6 +101,27 @@ def _check_integrations() -> tuple[bool, str]:
     return True, f"{len(items)} configured: {', '.join(names)}"
 
 
+def _check_buzz_cli() -> tuple[bool, str]:
+    """Surface the ``buzz`` CLI's PATH status, but only when Buzz is configured.
+
+    Buzz is an optional integration and ``buzz-cli`` has no package-manager
+    distribution (cargo build only), so this check would otherwise warn every
+    user who has never touched Buzz.
+    """
+    from integrations.buzz.client import resolve_buzz_binary
+    from integrations.catalog import resolve_effective_integrations
+
+    if not resolve_effective_integrations().get("buzz"):
+        return True, "not configured (optional)"
+    path = resolve_buzz_binary()
+    if path:
+        return True, f"buzz CLI found ({path})"
+    return False, (
+        "Buzz is configured but the buzz CLI is not on PATH — install with "
+        "`cargo install --path crates/buzz-cli` (see docs/messaging/buzz)"
+    )
+
+
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_opensre_version()
     from surfaces.cli.lifecycle.update import (
@@ -122,11 +143,26 @@ def _check_version_freshness() -> tuple[bool, str]:
         return True, f"{current} (could not check: {exc})"
 
 
+def _check_agent_capabilities() -> tuple[bool, str]:
+    """Warn when the environment withholds something the agent is told it can do."""
+    from platform.sandbox.capabilities import (
+        probe_capabilities,
+        unavailable_capability_warnings,
+    )
+
+    warnings = unavailable_capability_warnings(probe_capabilities())
+    if warnings:
+        return False, "; ".join(warnings)
+    return True, "python, shell, file reading and network are all available"
+
+
 _CHECKS = [
     ("python", _check_python_version),
     ("env_file", _check_env_file),
     ("llm_provider", _check_llm_provider),
     ("integrations", _check_integrations),
+    ("agent_capabilities", _check_agent_capabilities),
+    ("buzz_cli", _check_buzz_cli),
     ("version", _check_version_freshness),
 ]
 

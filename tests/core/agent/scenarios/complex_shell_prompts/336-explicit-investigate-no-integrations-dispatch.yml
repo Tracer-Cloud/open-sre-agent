@@ -8,19 +8,15 @@ session:
   configured_integrations: []
   resolved_integrations: {}
 notes:
-- 'Pins the EXPLICIT-INVESTIGATE rule that the diagnostic-question scenarios (313 handoff / 314 dispatch)
-  deliberately do NOT exercise. 313 and 314 use a bare diagnostic question ("figure out why X is crashing")
-  whose dispatch-vs-handoff outcome is GATED on the CONNECTED INTEGRATIONS line: no integrations -> handoff,
-  >=1 integration -> investigation_start. This scenario removes that gate: the prompt carries an explicit
-  "investigate" verb, which the planner system prompt says maps to investigation_start ALWAYS, regardless
-  of which integrations are connected ("EXPLICIT investigate instruction -> investigation_start, ALWAYS").'
-- 'Negative control on the gate itself: configured_integrations and resolved_integrations are BOTH empty,
-  so if the planner were (incorrectly) gating an explicit "investigate" on connected data sources it would
-  hand off here and the test would fail. A passing run proves the explicit verb overrides the gate -- the
-  planner dispatches investigation_start with synthesized alert_text even when a root-cause run would have
-  no live data source to read.'
+- 'Pins the EXPLICIT-INVESTIGATE rule that diagnostic-question scenarios (313/314/344 handoff) deliberately
+  do NOT exercise. Bare "why" / "figure out why" → assistant_handoff + gather + Want-me-to investigate
+  offer (PendingInvestigationOffer). Explicit "investigate why…" → investigation_start ALWAYS, even when
+  CONNECTED INTEGRATIONS is none.'
+- 'Negative control: configured_integrations and resolved_integrations are BOTH empty, so if the planner
+  incorrectly required connected sources for an explicit investigate verb it would hand off here. A
+  passing run proves the explicit verb dispatches investigation_start with synthesized alert_text.'
 - 'The synthesized alert_text varies per run, so planned_actions leaves content empty: the planning test
-  asserts an investigation with non-empty alert_text rather than an exact string (same convention as 314).'
+  asserts an investigation with non-empty alert_text rather than an exact string.'
 turn:
   expected_kind: agent
 policy:

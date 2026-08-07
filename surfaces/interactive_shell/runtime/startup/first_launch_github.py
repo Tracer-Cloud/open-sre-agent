@@ -16,6 +16,7 @@ Variant assignment is sticky per install anonymous id (see
 Escape hatch: ``OPENSRE_SKIP_GITHUB_LOGIN=1`` bypasses the gate so a GitHub
 outage or a disabled device flow can never permanently lock anyone out. The gate
 is also auto-bypassed in CI/test environments and when stdin is not a TTY.
+Bypasses never emit ``github_login_skipped`` — only real user choices do.
 """
 
 from __future__ import annotations
@@ -24,15 +25,24 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
+from typing import Literal
 
 from rich.console import Console
 from rich.markup import escape
 
 from config.repl_config import read_github_login_deferred, write_github_login_deferred
 from platform.analytics.cli import (
+    GITHUB_FAIL_DEVICE_FLOW,
+    GITHUB_FAIL_TRANSPORT,
+    GITHUB_FAIL_VERIFY,
     GITHUB_GATE_VARIANT_CONTROL,
+    GITHUB_SKIP_SOURCE_DECLINE_RETRY,
+    GITHUB_SKIP_SOURCE_ESCAPE,
+    GITHUB_SKIP_SOURCE_MENU,
     capture_github_login_abandoned,
     capture_github_login_completed,
+    capture_github_login_failed,
     capture_github_login_prompted,
     capture_github_login_skipped,
     resolve_github_gate_variant,
@@ -49,6 +59,15 @@ _SKIP_CHOICE = "skip"
 _RETRY_CHOICE = "retry"
 _DECLINE_RETRY_CHOICE = "declined_retry"
 _CANCEL_RETRY_CHOICE = "cancelled"
+
+OfferDecision = Literal["sign_in", "skip_menu", "skip_escape"]
+AttemptOutcome = Literal[
+    "success",
+    "skipped_escape",
+    "failed_device_flow",
+    "failed_transport",
+    "failed_verify",
+]
 
 
 def _skip_requested() -> bool:
@@ -108,10 +127,11 @@ def clear_github_login_deferral() -> None:
 
 
 def _propagate_username(username: str, *, variant: str) -> None:
+    # ``authenticate_and_configure_github`` already calls identify_github_username
+    # when a username is present; only emit the one-time login lifecycle event
+    # when we have a non-empty username so PostHog completed cohorts stay clean.
     if not username:
         return
-    # ``authenticate_and_configure_github`` already calls identify_github_username;
-    # only emit the one-time login lifecycle event here.
     capture_github_login_completed(username, variant=variant)
 
 
@@ -217,14 +237,14 @@ def _sleep_until_or_cancel(seconds: float) -> None:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)  # type: ignore[attr-defined]
 
 
-def _offer_github_login(_console: Console, *, allow_skip: bool) -> bool:
-    """Return True when the user wants to start browser sign-in.
+def _offer_github_login(_console: Console, *, allow_skip: bool) -> OfferDecision:
+    """Return the user's pre-device-flow choice.
 
     When ``allow_skip`` is False (forced variant), there is no skip choice — the
     gate proceeds straight into device-flow sign-in.
     """
     if not allow_skip:
-        return True
+        return "sign_in"
 
     import questionary
 
@@ -241,10 +261,12 @@ def _offer_github_login(_console: Console, *, allow_skip: bool) -> bool:
             default=_SIGN_IN_CHOICE,
         ).ask()
     except (EOFError, KeyboardInterrupt):
-        return False
+        return "skip_escape"
     if choice is None:
-        return False
-    return bool(choice == _SIGN_IN_CHOICE)
+        return "skip_escape"
+    if choice == _SKIP_CHOICE:
+        return "skip_menu"
+    return "sign_in"
 
 
 def _ask_retry(_console: Console) -> str:
@@ -259,8 +281,8 @@ def _ask_retry(_console: Console) -> str:
     return _RETRY_CHOICE if answer else _DECLINE_RETRY_CHOICE
 
 
-def _attempt_login(console: Console, *, allow_skip: bool, variant: str) -> str:
-    """Run one login attempt. Returns ``"success"``, ``"failed"``, or ``"skipped"``."""
+def _attempt_login(console: Console, *, allow_skip: bool, variant: str) -> AttemptOutcome:
+    """Run one login attempt."""
     from integrations.github.login import authenticate_and_configure_github
     from integrations.github.mcp_oauth import GitHubDeviceFlowError
 
@@ -274,13 +296,13 @@ def _attempt_login(console: Console, *, allow_skip: bool, variant: str) -> str:
             console.print("\nSkipped GitHub sign-in.")
         else:
             console.print("\nGitHub sign-in cancelled.")
-        return "skipped"
+        return "skipped_escape"
     except GitHubDeviceFlowError as err:
         console.print(f"[yellow]GitHub sign-in is unavailable:[/yellow] {err}")
-        return "failed"
+        return "failed_device_flow"
     except Exception as err:  # network/transport issues
         console.print(f"[yellow]GitHub sign-in failed:[/yellow] {err}")
-        return "failed"
+        return "failed_transport"
 
     if result.ok:
         clear_github_login_deferral()
@@ -293,7 +315,17 @@ def _attempt_login(console: Console, *, allow_skip: bool, variant: str) -> str:
         return "success"
 
     console.print(f"[yellow]Could not verify GitHub access:[/yellow] {result.detail}")
-    return "failed"
+    return "failed_verify"
+
+
+def _failure_category(outcome: AttemptOutcome) -> str | None:
+    if outcome == "failed_device_flow":
+        return GITHUB_FAIL_DEVICE_FLOW
+    if outcome == "failed_transport":
+        return GITHUB_FAIL_TRANSPORT
+    if outcome == "failed_verify":
+        return GITHUB_FAIL_VERIFY
+    return None
 
 
 def require_github_login_on_first_launch(console: Console | None = None) -> bool:
@@ -302,16 +334,44 @@ def require_github_login_on_first_launch(console: Console | None = None) -> bool
     Returns True when the caller should proceed into the REPL (login succeeded, or
     the user skipped in the ``control`` variant), and False when startup must abort
     (forced-variant abandonment / decline).
+
+    Variant is resolved and stamped **before** the gate UI renders. At most one
+    terminal outcome event (completed / skipped / abandoned) is emitted per gate
+    run; ``github_login_failed`` may fire per failed attempt.
     """
     con = console or Console(highlight=False)
     variant = resolve_github_gate_variant()
     stamp_github_gate_variant(variant)
     allow_skip = variant == GITHUB_GATE_VARIANT_CONTROL
+    # Exposure: eligible interactive install saw the gate.
     capture_github_login_prompted(variant=variant)
     _print_intro(con, allow_skip=allow_skip)
 
-    if allow_skip and not _offer_github_login(con, allow_skip=True):
-        capture_github_login_skipped(variant=variant)
+    terminal_emitted = False
+
+    def emit_terminal(action: Callable[[], None]) -> None:
+        nonlocal terminal_emitted
+        if terminal_emitted:
+            return
+        terminal_emitted = True
+        action()
+
+    offer = _offer_github_login(con, allow_skip=allow_skip)
+    if offer == "skip_menu":
+        emit_terminal(
+            lambda: capture_github_login_skipped(
+                variant=variant, skip_source=GITHUB_SKIP_SOURCE_MENU
+            )
+        )
+        _defer_github_login()
+        _print_skip_guidance(con)
+        return True
+    if offer == "skip_escape":
+        emit_terminal(
+            lambda: capture_github_login_skipped(
+                variant=variant, skip_source=GITHUB_SKIP_SOURCE_ESCAPE
+            )
+        )
         _defer_github_login()
         _print_skip_guidance(con)
         return True
@@ -319,26 +379,48 @@ def require_github_login_on_first_launch(console: Console | None = None) -> bool
     while True:
         outcome = _attempt_login(con, allow_skip=allow_skip, variant=variant)
         if outcome == "success":
+            # completed already emitted inside _propagate_username
+            terminal_emitted = True
             return True
-        if outcome == "skipped":
+        if outcome == "skipped_escape":
             if allow_skip:
-                capture_github_login_skipped(variant=variant)
+                emit_terminal(
+                    lambda: capture_github_login_skipped(
+                        variant=variant, skip_source=GITHUB_SKIP_SOURCE_ESCAPE
+                    )
+                )
                 _defer_github_login()
                 _print_skip_guidance(con)
                 return True
-            capture_github_login_abandoned(variant=variant, reason="cancelled")
+            emit_terminal(
+                lambda: capture_github_login_abandoned(variant=variant, reason="cancelled")
+            )
             _print_forced_abort_guidance(con)
             return False
+
+        reason_category = _failure_category(outcome)
+        if reason_category is not None:
+            capture_github_login_failed(variant=variant, reason_category=reason_category)
+
         retry_decision = _ask_retry(con)
-        if retry_decision != _RETRY_CHOICE:
-            if allow_skip:
-                capture_github_login_skipped(variant=variant)
-                _defer_github_login()
-                _print_skip_guidance(con)
-                return True
-            capture_github_login_abandoned(variant=variant, reason=retry_decision)
-            _print_forced_abort_guidance(con)
-            return False
+        if retry_decision == _RETRY_CHOICE:
+            continue
+        if allow_skip:
+            emit_terminal(
+                lambda: capture_github_login_skipped(
+                    variant=variant, skip_source=GITHUB_SKIP_SOURCE_DECLINE_RETRY
+                )
+            )
+            _defer_github_login()
+            _print_skip_guidance(con)
+            return True
+
+        def _abandon(reason: str = retry_decision) -> None:
+            capture_github_login_abandoned(variant=variant, reason=reason)
+
+        emit_terminal(_abandon)
+        _print_forced_abort_guidance(con)
+        return False
 
 
 def require_startup_github_login(console: Console) -> bool:
@@ -347,6 +429,10 @@ def require_startup_github_login(console: Console) -> bool:
     On an unexpected gate error we deliberately do NOT fail open into the REPL:
     that would let a gate bug silently skip sign-in. Instead we only allow
     startup when an explicit, documented bypass applies.
+
+    CI / test / non-TTY / ``OPENSRE_SKIP_GITHUB_LOGIN`` paths return True without
+    emitting skip analytics — they never reach
+    :func:`require_github_login_on_first_launch`.
     """
     try:
         if not should_require_github_login():

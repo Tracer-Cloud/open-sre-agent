@@ -109,7 +109,7 @@ Findings should appear in the configured channel.
 ## Agent Slack tools
 
 Teammate tools (bot token) plus webhook blast. Credentials resolve inside the
-tools (never in tool-call traces). Shared client: `integrations/slack/bot_api.py`.
+tools (never in tool-call traces). Shared client: `integrations/slack/web_client.py`.
 
 | Tool | What it does | Needs | Approval |
 |---|---|---|---|
@@ -120,11 +120,14 @@ tools (never in tool-call traces). Shared client: `integrations/slack/bot_api.py
 | `slack_list_team_members` | List workspace members | bot token, `users:read` | No |
 | `slack_join_channel` | Join a public channel | bot token, `channels:join` | Yes |
 | `slack_add_reaction` | React to a message ts | bot token, `reactions:write` | No |
-| `slack_capture_task` | Persist “add task …” / “remind me …” locally | none (writes `~/.opensre/slack_captured_tasks.jsonl`) | No |
 
 Prefer `slack_reply_message` / `slack_read_messages` when the bot token is
 configured and the user names a channel or thread. Use `slack_send_message` only
 for the fixed webhook channel.
+
+For "add task", "remind me", and "what should we focus on next" requests, use
+OpenSRE work management. Gateway turns can default reminders and recurring
+check-ins to the current Slack channel.
 
 Example prompts:
 
@@ -198,16 +201,33 @@ HTTPS URL is required — the gateway holds an outbound websocket.
 | `app_mentions:read` | Gateway `@mention` inbound |
 | `chat:write` | Gateway replies + `slack_reply_message` |
 | `im:history` | Gateway DMs + reading DM history |
-| `channels:history` | `slack_read_messages` in public channels |
+| `channels:history` | `slack_read_messages` + thread seeding in public channels |
 | `groups:history` | `slack_read_messages` in private channels |
 | `mpim:history` | `slack_read_messages` in multi-party DMs |
-| `channels:read` | Resolve `#channel-name` → ID |
 | `groups:read` | Resolve private channel names |
-| `im:read` / `mpim:read` | List DMs when resolving names |
-| `users:read` | `slack_list_team_members` |
-| `search:read` | `slack_search_messages` |
-| `channels:join` | `slack_join_channel` (public channels) |
-| `reactions:write` | Gateway ack reactions + `slack_add_reaction` |
+| `groups:write` | Manage / create private channels |
+| `files:read` | Inbound file-attachment downloads + discover Slack Lists (`files.list`) |
+| `files:write` | Upload files as the bot |
+| `lists:read` | `slack_read_list` — read Slack List rows (`slackLists.items.list`) |
+| `search:read.public` | `slack_search_messages` in public channels |
+| `search:read.private` | Search private channels |
+| `search:read.im` | Search DMs |
+| `search:read.mpim` | Search group DMs |
+| `search:read.files` | Search files |
+| `search:read.users` | Search users |
+| `usergroups:read` | View workspace user groups |
+| `users.profile:read` | Speaker profile details |
+| `users:read` | `slack_list_team_members` + user lookup |
+
+<Note>
+Add these only if you use the feature — they are not in the current app config:
+`reactions:write` (gateway ack 👀 / ✓ reactions + `slack_add_reaction`),
+`channels:read` / `im:read` / `mpim:read` (resolve `#channel-name` and DM names
+→ ID), and `channels:join` (`slack_join_channel`).
+</Note>
+
+Optional env: `SLACK_TEAM_TASKS_LIST_ID` (`F…`) so `slack_read_list` can open the
+default team-tasks List without a name search.
 
 Reinstall the app after adding scopes so the bot token picks them up.
 
@@ -295,7 +315,7 @@ The Slack gateway backend is deployed and operated separately — not from this
 repo. Configure the integration here (tokens and scopes above); provisioning the
 hosted backend is out of scope for this repo.
 
-The EC2 paths (`make deploy` / `make deploy-gateway`) are **Telegram-only** and
+The EC2 gateway path (`make deploy-gateway`) is **Telegram-only** and
 ignore `SLACK_*` variables with a validation warning: Slack Socket Mode is
 single-consumer, so a second gateway holding the same tokens would split events.
 

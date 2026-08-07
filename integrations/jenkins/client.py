@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -299,7 +300,7 @@ class JenkinsClient:
 
         try:
             resp = self._get_client().get(f"/{_job_api_path(safe_name)}/{number}/wfapi/describe")
-            if resp.status_code == 404:
+            if resp.status_code == HTTPStatus.NOT_FOUND:
                 # Not a Pipeline job, or the Stage View plugin is absent.
                 return {
                     "success": True,
@@ -414,8 +415,9 @@ def make_jenkins_client(
 
     Returns None unless URL, username, and token are all present. Jenkins Basic
     auth sends ``username:api_token``; an empty username yields a ``:token`` pair
-    that Jenkins rejects with 401, so the factory refuses to build such a client
-    — every caller gets a clean "not configured" path instead of a 401.
+    that Jenkins rejects with HTTPStatus.UNAUTHORIZED, so the factory refuses
+    to build such a client—every caller gets a clean "not configured" path
+    instead of an HTTPStatus.UNAUTHORIZED response.
     """
     url = (base_url or "").strip()
     user = (username or "").strip()

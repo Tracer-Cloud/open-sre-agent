@@ -6,7 +6,7 @@ sampler now keeps input/output/cache buckets, so pricing applies the
 right rate to each bucket instead of using the legacy 70/30 blend.
 
 Rates come from litellm's bundled community-maintained price table
-(~2.8k models) rather than a hand-vendored dict — see issue #4035. We
+(~2.8k models) rather than a hand-vendored dict. We
 read litellm's *local* snapshot directly from its packaged JSON file
 instead of the shared ``litellm.model_cost`` global: that global is a
 process-wide singleton populated from a live network fetch on
@@ -37,8 +37,8 @@ from typing import Any, TypeGuard
 
 # litellm imports tiktoken and resolves an encoding at module load time; under
 # a frozen (PyInstaller) build that lookup fails unless this bootstrap runs
-# first. See core/llm/transports/litellm/frozen_tiktoken_bootstrap.py and
-# issue #3631 — this module now hits the same import path unconditionally.
+# first. This module imports from the bootstrap module unconditionally,
+# so the encoding lookup is always resolved before litellm needs it.
 from core.llm.transports.litellm.frozen_tiktoken_bootstrap import (
     ensure_tiktoken_encodings_discoverable,
 )
@@ -135,13 +135,12 @@ def _price(
     )
 
 
-# Models confirmed absent from litellm's bundled price table (checked at
-# migration time — see issue #4035). This is an escape hatch for the rare
-# model litellm's table hasn't (yet, or ever again) picked up, not a general
-# config surface: entries here are only consulted after a direct litellm
-# lookup misses.
+# Models confirmed absent from litellm's bundled price table. This is an
+# escape hatch for the rare model litellm's table hasn't (yet, or ever again)
+# picked up, not a general config surface: entries here are only consulted
+# after a direct litellm lookup misses.
 _LOCAL_MODEL_PRICES: dict[str, ModelPrice] = {
-    # GPT-5.6 (GA 2026-07-09, #3931) — too new for litellm's bundled
+    # GPT-5.6 (GA 2026-07-09) — too new for litellm's bundled
     # snapshot. Per 1M tokens, from
     # https://developers.openai.com/api/docs/pricing: sol 5/30, terra
     # 2.50/15, luna 1/6. Cached input is 90% off.
@@ -274,6 +273,21 @@ def _is_canonical_candidate(candidate: str) -> bool:
     )
 
 
+def _local_family_alias_canonical(candidate: str) -> str | None:
+    """Map bare alias ids (prefix != canonical) over a litellm hit on the alias."""
+    for prefix, canonical_id in _LOCAL_FAMILY_FALLBACKS:
+        if candidate == prefix and prefix != canonical_id:
+            return canonical_id
+    return None
+
+
+def _local_family_fallback_canonical(candidate: str) -> str | None:
+    for prefix, canonical_id in _LOCAL_FAMILY_FALLBACKS:
+        if candidate.startswith(prefix):
+            return canonical_id
+    return None
+
+
 def normalize_model_name(model: str | None) -> str | None:
     if model is None:
         return None
@@ -284,15 +298,19 @@ def normalize_model_name(model: str | None) -> str | None:
         if _litellm_price(candidate) is not None or candidate in _LOCAL_MODEL_PRICES
     ]
     if resolving:
-        canonical = [candidate for candidate in resolving if _is_canonical_candidate(candidate)]
+        canonical_candidates = [
+            candidate for candidate in resolving if _is_canonical_candidate(candidate)
+        ]
         # Prefer the most specific canonical match (keeps a date suffix over
         # the bare family alias); fall back to any resolving candidate if
         # every match still carries a routing artifact.
-        return max(canonical or resolving, key=len)
+        resolved = max(canonical_candidates or resolving, key=len)
+        alias = _local_family_alias_canonical(resolved)
+        return alias if alias is not None else resolved
     for candidate in candidates:
-        for prefix, canonical_id in _LOCAL_FAMILY_FALLBACKS:
-            if candidate.startswith(prefix):
-                return canonical_id
+        fallback = _local_family_fallback_canonical(candidate)
+        if fallback is not None:
+            return fallback
     return candidates[0] if candidates else None
 
 
@@ -350,14 +368,19 @@ def _lookup_price(model: str) -> ModelPrice | None:
     for candidate in candidates:
         price = _litellm_price(candidate)
         if price is not None:
+            alias = _local_family_alias_canonical(candidate)
+            if alias is not None:
+                local = _LOCAL_MODEL_PRICES.get(alias)
+                if local is not None:
+                    return local
             return price
         local = _LOCAL_MODEL_PRICES.get(candidate)
         if local is not None:
             return local
     for candidate in candidates:
-        for prefix, canonical_id in _LOCAL_FAMILY_FALLBACKS:
-            if candidate.startswith(prefix):
-                return _LOCAL_MODEL_PRICES.get(canonical_id)
+        fallback = _local_family_fallback_canonical(candidate)
+        if fallback is not None:
+            return _LOCAL_MODEL_PRICES.get(fallback)
     for candidate in candidates:
         for provider_prefix in _COMPAT_PROVIDER_PREFIXES:
             price = _litellm_price(f"{provider_prefix}{candidate}")

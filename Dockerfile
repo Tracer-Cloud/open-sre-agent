@@ -3,8 +3,6 @@
 #   MODE=web      - FastAPI web API (health, alerts, async investigations)
 #   MODE=gateway  - Two-way messaging gateway (Slack Socket Mode + Telegram)
 #
-# EC2 deploy (make deploy) runs both as separate containers on one instance.
-#
 # Web mode usage:
 #   docker build -t opensre:latest .
 #   docker run -p 8000:8000 --env-file .env opensre:latest
@@ -23,7 +21,11 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
+    && apt-get install -y --no-install-recommends \
+        bash \
+        build-essential \
+        ca-certificates \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
@@ -54,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 USER opensre
 
-CMD ["sh", "-c", "if [ \"$MODE\" = \"gateway\" ]; then exec opensre gateway start --foreground; else exec uvicorn gateway.http.webapp:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
+CMD ["sh", "-c", "if [ \"$MODE\" = \"gateway\" ]; then exec opensre gateway start --foreground; else exec uvicorn gateway.web.webapp:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]

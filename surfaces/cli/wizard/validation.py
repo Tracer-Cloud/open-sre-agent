@@ -28,27 +28,18 @@ def _load_anthropic_client() -> tuple[Any, type[Exception]]:
 
 def _get_provider_base_url(provider_value: str) -> str | None:
     """Get the base_url for OpenAI-compatible non-OpenAI providers, or None for native OpenAI."""
-    if provider_value == "openrouter":
-        from config.config import OPENROUTER_BASE_URL
+    # Lazy imports keep config loading out of the validation module import graph.
+    from config import config as llm_config
 
-        return OPENROUTER_BASE_URL
-    if provider_value == "deepseek":
-        from config.config import DEEPSEEK_BASE_URL
-
-        return DEEPSEEK_BASE_URL
-    if provider_value == "gemini":
-        from config.config import GEMINI_BASE_URL
-
-        return GEMINI_BASE_URL
-    if provider_value == "nvidia":
-        from config.config import NVIDIA_BASE_URL
-
-        return NVIDIA_BASE_URL
-    if provider_value == "groq":
-        from config.config import GROQ_BASE_URL
-
-        return GROQ_BASE_URL
-    return None
+    base_urls = {
+        "openrouter": llm_config.OPENROUTER_BASE_URL,
+        "deepseek": llm_config.DEEPSEEK_BASE_URL,
+        "gemini": llm_config.GEMINI_BASE_URL,
+        "nvidia": llm_config.NVIDIA_BASE_URL,
+        "groq": llm_config.GROQ_BASE_URL,
+        "minimax": llm_config.MINIMAX_BASE_URL,
+    }
+    return base_urls.get(provider_value)
 
 
 def _provider_validation_label(provider: ProviderOption) -> str:
@@ -76,7 +67,13 @@ def _check_ollama(host: str, model: str) -> ValidationResult:
 
     normalized_model = normalize_model_tag(model)
     base_name = model.split(":")[0]
-    matched = normalized_model in available or any(m.split(":")[0] == base_name for m in available)
+    # An explicit tag must match exactly: asking for llama3.1:8b and silently
+    # accepting llama3.1:latest would validate a different model than the one
+    # that then gets used. Only an untagged request falls back to the base name.
+    asked_for_a_tag = ":" in model
+    matched = normalized_model in available or (
+        not asked_for_a_tag and any(m.split(":")[0] == base_name for m in available)
+    )
     if not matched:
         listed = ", ".join(available) or "none pulled yet"
         return ValidationResult(
@@ -149,7 +146,9 @@ def validate_provider_credentials(
                 ok=True, detail="Anthropic API key validated.", sample_response=sample_text
             )
 
-        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia)
+        # All OpenAI-compatible providers (openai, openrouter, deepseek, gemini, nvidia,
+        # groq, minimax) — a provider missing from _get_provider_base_url silently falls
+        # back to api.openai.com and its (valid) key is reported as rejected.
         base_url = _get_provider_base_url(provider.value)
         openai_client = openai_client_cls(api_key=api_key, base_url=base_url, timeout=30.0)
         # Only native OpenAI reasoning models use max_completion_tokens; others use max_tokens

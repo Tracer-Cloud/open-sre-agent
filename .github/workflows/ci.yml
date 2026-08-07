@@ -7,10 +7,11 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment/**"
+      - "platform/deployment_fargate/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
+      - "gateway/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -23,41 +24,61 @@ on:
       - ".github/ci/**"
       - ".github/workflows/ci.yml"
 
+  # No path filter: a filtered workflow never starts, so its gate never
+  # reports and a PR that needs it can wait forever. The `changes` job
+  # below decides what actually runs.
   pull_request:
     branches: [main]
-    paths:
-      - "surfaces/**"
-      - "config/**"
-      - "core/**"
-      - "platform/deployment/**"
-      - "integrations/**"
-      - "platform/**"
-      - "tools/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - "pytest.ini"
-      - "ruff.toml"
-      - "mypy.ini"
-      - "Makefile"
-      - ".importlinter"
-      - ".importlinter.strict"
-      - ".github/ci/**"
-      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PYTHON_SOURCE_PATHS: "config core integrations platform surfaces tools"
+  PYTHON_SOURCE_PATHS: "config core gateway integrations platform surfaces tools"
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      source: ${{ steps.filter.outputs.source }}
+    steps:
+      - uses: actions/checkout@v5
+      # Pin to immutable SHA (dorny/paths-filter@v4.0.2). A movable tag here
+      # could repoint and skip quality/standard/thorough while CI Gate still passes.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        with:
+          filters: |
+            source:
+              - "surfaces/**"
+              - "config/**"
+              - "core/**"
+              - "platform/deployment_fargate/**"
+              - "integrations/**"
+              - "platform/**"
+              - "tools/**"
+              - "gateway/**"
+              - "tests/**"
+              - "pyproject.toml"
+              - "uv.lock"
+              - "pytest.ini"
+              - "ruff.toml"
+              - "mypy.ini"
+              - "Makefile"
+              - ".importlinter"
+              - ".importlinter.strict"
+              - ".github/ci/**"
+              - ".github/workflows/ci.yml"
+
   quality:
+    needs: [changes]
+    if: needs.changes.outputs.source == 'true'
     name: quality (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -96,6 +117,9 @@ jobs:
       - name: Typecheck
         run: uv run python -m mypy $PYTHON_SOURCE_PATHS
 
+      - name: Verify integration registry (smoke)
+        run: make verify-integrations-smoke
+
       - name: Import graph
         run: uv run python .github/ci/check_imports.py --strict
 
@@ -105,6 +129,8 @@ jobs:
         run: uv run lint-imports --config .importlinter.strict
 
   test:
+    needs: [changes]
+    if: needs.changes.outputs.source == 'true'
     name: test (${{ matrix.shard }})
     strategy:
       fail-fast: false
@@ -160,6 +186,7 @@ jobs:
               tests/packaging
               tests/scheduler
               gateway/tests
+          # install/ + quickstart/ are opt-in live (CDN/brew/LLM); not PR CI.
           - os: ubuntu-latest
             shard: e2e-general
             pytest_paths: >-
@@ -170,6 +197,8 @@ jobs:
               --ignore=tests/e2e/upstream_lambda
               --ignore=tests/e2e/upstream_prefect_ecs_fargate
               --ignore=tests/e2e/upstream_apache_flink_ecs
+              --ignore=tests/e2e/install
+              --ignore=tests/e2e/quickstart
           - os: ubuntu-latest
             shard: e2e-provider-and-openclaw
             pytest_paths: >-
@@ -247,11 +276,12 @@ jobs:
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=platform.deployment.aws --cov=platform.deployment
+          --cov=platform.deployment_ec2 --cov=platform.deployment_fargate
           --cov=integrations
           --cov=platform
           --cov=surfaces
           --cov=tools
+          --cov=gateway
           --cov-report=
           --ignore=tests/e2e/kubernetes_local_alert_simulation
           --ignore=tests/synthetic
@@ -275,10 +305,13 @@ jobs:
     name: coverage-report
     runs-on: ubuntu-latest
     needs: [test]
+    # Do not use always(): when test is cancelled (concurrency) or failed,
+    # there are no coverage-data-* artifacts and ``coverage combine`` exits 1
+    # with "No data to combine". Skip instead; CI Gate treats skipped as OK.
     if: >-
-      always() &&
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success'
     timeout-minutes: 15
 
     steps:
@@ -370,7 +403,8 @@ jobs:
       thorough: ${{ steps.filter.outputs.thorough }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4
+      # Same pin as Detect relevant changes — see comment there.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -378,7 +412,7 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "platform/deployment/**"
+              - "platform/deployment_fargate/**"
               - "integrations/**"
               - "tools/investigation/**"
               - "tools/**"
@@ -466,3 +500,46 @@ jobs:
       - name: Run test
         run: uv run ${{ matrix.command }}
         timeout-minutes: 30
+
+  ci-gate:
+    name: CI Gate
+    needs: [changes, quality, test, coverage-report]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # Single required check: branch protection points here instead of at every
+      # matrix leg. `always()` is what lets this run when an upstream job failed
+      # or was skipped — without it the gate would be skipped too, and a skipped
+      # required check reads as passing.
+      - name: Require green upstream jobs
+        run: |
+          set -euo pipefail
+          changes='${{ needs.changes.result }}'
+          quality='${{ needs.quality.result }}'
+          test_result='${{ needs.test.result }}'
+          coverage='${{ needs.coverage-report.result }}'
+          echo "changes=$changes quality=$quality test=$test_result coverage-report=$coverage"
+
+          # If the decision job itself failed we cannot tell whether the suite
+          # was needed, so refuse rather than pass a PR nothing checked.
+          [ "$changes" = success ] || { echo "::error::changes is $changes"; exit 1; }
+
+          # quality/test are skipped when a PR touches no source path (docs
+          # only). That is not a failure — but it must be the only reason.
+          case "$quality" in
+            success) ;;
+            skipped) echo "quality skipped: no source paths changed" ;;
+            *) echo "::error::quality is $quality"; exit 1 ;;
+          esac
+          case "$test_result" in
+            success) ;;
+            skipped) echo "test skipped: no source paths changed" ;;
+            *) echo "::error::test is $test_result"; exit 1 ;;
+          esac
+
+          # coverage-report only runs on pushes to main; on pull requests it is
+          # skipped, which is not a failure.
+          case "$coverage" in
+            success|skipped) ;;
+            *) echo "::error::coverage-report is $coverage"; exit 1 ;;
+          esac

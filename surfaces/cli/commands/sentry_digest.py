@@ -11,21 +11,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
 from surfaces.cli.commands.cron import _validate_cron_and_timezone
+from surfaces.shared.runtime_bootstrap import install_runtime
 
 _console = Console()
-
-
-def _install_scheduler_runners() -> None:
-    from integrations.harness_adapters import register_harness_adapters as register_integrations
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
-    from tools.harness_adapters import register_harness_adapters as register_tools
-    from tools.investigation.scheduler_bootstrap import install as install_investigation_runner
-
-    register_integrations()
-    register_tools()
-    install_investigation_runner()
-    install_scheduled_agent()
+_PROVIDER_CHOICES = [p.value for p in SUPPORTED_DELIVERY_PROVIDERS]
 
 
 @click.group(name="sentry")
@@ -91,7 +82,7 @@ def sentry_uptime_check(project_slug: str) -> None:
 
 @sentry_uptime_command.group(name="watch")
 def sentry_uptime_watch_command() -> None:
-    """Schedule polling that pings Slack/Telegram on uptime transitions."""
+    """Schedule polling that pings Slack/Telegram/Rocket.Chat on uptime transitions."""
 
 
 @sentry_uptime_watch_command.command(name="add")
@@ -113,7 +104,7 @@ def sentry_uptime_watch_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )
@@ -251,7 +242,7 @@ def sentry_uptime_watch_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    _install_scheduler_runners()
+    install_runtime()
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_UPTIME_WATCH:
         _console.print(f"[red]Error: Sentry uptime watch task {task_id} not found.[/red]")
@@ -280,7 +271,7 @@ def sentry_digest_run(project_slug: str) -> None:
     """Run the morning digest once and print the report to stdout."""
     from platform.scheduler.agent_runner import invoke_agent_runner
 
-    _install_scheduler_runners()
+    install_runtime()
     payload: dict[str, str] = {
         "source": "cli_sentry_morning_digest",
         "stats_period": "24h",
@@ -321,7 +312,7 @@ def sentry_digest_schedule_command() -> None:
 )
 @click.option(
     "--provider",
-    type=click.Choice(["telegram", "slack"], case_sensitive=False),
+    type=click.Choice(_PROVIDER_CHOICES, case_sensitive=False),
     required=True,
     help="Messaging provider for delivery.",
 )
@@ -443,7 +434,7 @@ def sentry_digest_schedule_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    _install_scheduler_runners()
+    install_runtime()
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_MORNING_DIGEST:
         _console.print(f"[red]Error: Sentry digest task {task_id} not found.[/red]")

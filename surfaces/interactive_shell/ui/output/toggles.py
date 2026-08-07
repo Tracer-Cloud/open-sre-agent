@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - Windows fallback
 _stdin_watcher_suppression_depth = 0
 _stdin_watcher_lock = threading.Lock()
 _tool_detail_toggle_callbacks: list[Callable[[], None]] = []
-_TOOL_DETAIL_TOGGLE_BYTES = {b"\x0f", b"\x00"}  # ctrl+o; ctrl+0/space on some terminals
+_TOOL_DETAIL_TOGGLE_BYTES = {b"\t"}  # Tab toggles tool-detail view during progress
 
 
 @contextlib.contextmanager
@@ -39,7 +39,7 @@ def _stdin_watchers_suppressed() -> bool:
 
 
 def register_tool_detail_toggle(callback: Callable[[], None]) -> Callable[[], None]:
-    """Register a process-local Ctrl+O handler for the active progress view."""
+    """Register a process-local Tab handler for the active progress view."""
     with _stdin_watcher_lock:
         _tool_detail_toggle_callbacks.append(callback)
 
@@ -79,8 +79,8 @@ def _disable_control_char(fd: int, existing: Any) -> Any:
     return _control_char(disabled, existing)
 
 
-class CtrlOToggleWatcher:
-    """Background stdin watcher for Ctrl+O without triggering terminal discard."""
+class ToolDetailToggleWatcher:
+    """Background stdin watcher for Tab without triggering terminal discard."""
 
     def __init__(self, callback: Callable[[], None]) -> None:
         self._callback = callback

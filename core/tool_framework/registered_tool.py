@@ -6,6 +6,7 @@ import inspect
 from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, cast
 
 from pydantic import BaseModel
@@ -25,7 +26,7 @@ from core.tool_framework.schema import (
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -52,9 +53,11 @@ class RegisteredTool:
     run: Callable[..., Any] = field(repr=False)
     display_name: str | None = None
     source_id: str | None = None
-    evidence_type: EvidenceType | None = None
-    side_effect_level: SideEffectLevel | None = None
-    surfaces: tuple[ToolSurface, ...] = _DEFAULT_SURFACES
+    # ``... | str`` keeps plain wire values accepted from callers; the
+    # ``ToolMetadata`` round-trip in ``__post_init__`` coerces them to members.
+    evidence_type: EvidenceType | str | None = None
+    side_effect_level: SideEffectLevel | str | None = None
+    surfaces: tuple[ToolSurface | str, ...] = _DEFAULT_SURFACES
     use_cases: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)
     anti_examples: list[str] = field(default_factory=list)
@@ -137,9 +140,11 @@ class RegisteredTool:
             for param, info in props.items()
         }
 
-    @property
-    def public_input_schema(self) -> dict[str, Any]:
-        """Return a schema exposed to the model (without injected params)."""
+    @cached_property
+    def _public_input_schema(self) -> dict[str, Any]:
+        """Deepcopy + prune injected params once; the shared cache behind
+        ``public_input_schema``. ``input_schema`` / ``injected_params`` are fixed
+        at construction, so this is invariant."""
         schema = deepcopy(self.input_schema)
         properties = schema.get("properties")
         if not isinstance(properties, dict):
@@ -150,6 +155,16 @@ class RegisteredTool:
         if isinstance(required, list):
             schema["required"] = [name for name in required if name not in self.injected_params]
         return schema
+
+    @property
+    def public_input_schema(self) -> dict[str, Any]:
+        """Return the schema exposed to the model (without injected params).
+
+        The pruned schema is computed once (the expensive recursive deepcopy is
+        cached); a shallow copy is returned so callers may reassign or pop
+        top-level keys without corrupting the shared cache.
+        """
+        return dict(self._public_input_schema)
 
     def validate_public_input(self, payload: dict[str, Any]) -> str | None:
         """Validate model-provided input against this tool's public schema."""
@@ -275,8 +290,8 @@ class RegisteredTool:
         input_model: type[BaseModel] | None = None,
         source: EvidenceSource | None,
         source_id: str | None = None,
-        evidence_type: EvidenceType | None = None,
-        side_effect_level: SideEffectLevel | None = None,
+        evidence_type: EvidenceType | str | None = None,
+        side_effect_level: SideEffectLevel | str | None = None,
         surfaces: Iterable[str] | None = None,
         use_cases: list[str] | None = None,
         examples: list[str] | None = None,

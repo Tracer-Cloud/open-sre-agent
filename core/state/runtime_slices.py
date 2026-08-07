@@ -42,6 +42,7 @@ class AlertInputSlice(TypedDict, total=False):
     """Raw alert input and incident time window (``extract_alert``)."""
 
     is_noise: bool
+    user_requested: bool
     alert_name: str
     severity: str
     alert_source: str
@@ -110,14 +111,13 @@ class MaskingSlice(TypedDict, total=False):
 
 
 class DeliveryContextSlice(TypedDict, total=False):
-    """Channel-specific delivery metadata from the triggering surface."""
+    """Channel-specific delivery metadata from the triggering surface.
 
-    slack_context: dict[str, Any]
-    discord_context: dict[str, Any]
-    telegram_context: dict[str, Any]
-    whatsapp_context: dict[str, Any]
-    twilio_sms_context: dict[str, Any]
-    openclaw_context: dict[str, Any]
+    Keys of ``channel_contexts`` are channel names (``slack``, ``telegram``,
+    ``discord``, ``whatsapp``, ``twilio_sms``, ``openclaw``, ``rocketchat``, …).
+    """
+
+    channel_contexts: dict[str, dict[str, Any]]
 
 
 class DeliveryOutputSlice(TypedDict, total=False):

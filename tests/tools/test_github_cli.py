@@ -5,11 +5,18 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from core.tool_framework.registered_tool import RegisteredTool
+from integrations.github.tools.github_cli.credentials import resolve_github_token
+from integrations.github.tools.github_cli.runner import build_gh_argv, denied_gh_command, run_gh
+from integrations.github.tools.github_cli.summary import summarize_gh_result
+from integrations.github.tools.github_cli.tool import (
+    _github_cli_available,
+    _github_cli_extract_params,
+    github_cli,
+)
 from tests.tools.conftest import BaseToolContract
-from tools.github_cli.runner import build_gh_argv, denied_gh_command, run_gh
-from tools.github_cli.summary import summarize_gh_result
-from tools.github_cli.tool import github_cli
 from tools.registry import clear_tool_registry_cache, get_registered_tools
 
 
@@ -49,8 +56,8 @@ def test_build_gh_argv_skips_repo_flag_for_api_after_global_flags() -> None:
 
 def test_run_gh_blocks_auth_token_before_spawn() -> None:
     with (
-        patch("tools.github_cli.runner.resolve_github_token") as resolve_mock,
-        patch("tools.github_cli.runner.subprocess.run") as run_mock,
+        patch("integrations.github.tools.github_cli.runner.resolve_github_token") as resolve_mock,
+        patch("integrations.github.tools.github_cli.runner.subprocess.run") as run_mock,
     ):
         result = run_gh(args=["auth", "token"])
     assert result["ok"] is False
@@ -61,7 +68,7 @@ def test_run_gh_blocks_auth_token_before_spawn() -> None:
 
 
 def test_run_gh_blocks_extension_install_after_global_flags() -> None:
-    with patch("tools.github_cli.runner.subprocess.run") as run_mock:
+    with patch("integrations.github.tools.github_cli.runner.subprocess.run") as run_mock:
         result = run_gh(args=["--hostname", "github.com", "extension", "install", "evil/x"])
     assert result["ok"] is False
     assert result["error_type"] == "policy_error"
@@ -73,7 +80,7 @@ def test_help_flag_does_not_mask_blocked_command() -> None:
     """``-h`` is ``--help``, not a value flag; must not skip the next token."""
     assert denied_gh_command(["-h", "auth", "token"]) == "auth"
     assert denied_gh_command(["-h", "extension", "install", "evil/x"]) == "extension"
-    with patch("tools.github_cli.runner.subprocess.run") as run_mock:
+    with patch("integrations.github.tools.github_cli.runner.subprocess.run") as run_mock:
         result = run_gh(args=["-h", "auth", "token"])
     assert result["ok"] is False
     assert result["error_type"] == "policy_error"
@@ -88,7 +95,7 @@ def test_run_gh_blocks_ci_and_secret_mutation_commands() -> None:
         (["secret", "set", "TOKEN"], "secret"),
     )
     for args, blocked in cases:
-        with patch("tools.github_cli.runner.subprocess.run") as run_mock:
+        with patch("integrations.github.tools.github_cli.runner.subprocess.run") as run_mock:
             result = run_gh(args=list(args))
         assert result["ok"] is False, args
         assert result["error_type"] == "policy_error", args
@@ -99,9 +106,14 @@ def test_run_gh_blocks_ci_and_secret_mutation_commands() -> None:
 def test_run_gh_redacts_token_echo_in_stdout() -> None:
     completed = MagicMock(returncode=0, stdout="token=secret-token\n", stderr="")
     with (
-        patch("tools.github_cli.runner.resolve_github_token", return_value="secret-token"),
-        patch("tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"),
-        patch("tools.github_cli.runner.subprocess.run", return_value=completed),
+        patch(
+            "integrations.github.tools.github_cli.runner.resolve_github_token",
+            return_value="secret-token",
+        ),
+        patch(
+            "integrations.github.tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"
+        ),
+        patch("integrations.github.tools.github_cli.runner.subprocess.run", return_value=completed),
     ):
         result = run_gh(args=["issue", "view", "1"])
     assert result["ok"] is True
@@ -110,7 +122,7 @@ def test_run_gh_redacts_token_echo_in_stdout() -> None:
 
 
 def test_run_gh_missing_token() -> None:
-    with patch("tools.github_cli.runner.resolve_github_token", return_value=""):
+    with patch("integrations.github.tools.github_cli.runner.resolve_github_token", return_value=""):
         result = run_gh(args=["issue", "list"])
     assert result["ok"] is False
     assert result["error_type"] == "configuration_error"
@@ -118,8 +130,10 @@ def test_run_gh_missing_token() -> None:
 
 def test_run_gh_missing_binary() -> None:
     with (
-        patch("tools.github_cli.runner.resolve_github_token", return_value="tok"),
-        patch("tools.github_cli.runner.shutil.which", return_value=None),
+        patch(
+            "integrations.github.tools.github_cli.runner.resolve_github_token", return_value="tok"
+        ),
+        patch("integrations.github.tools.github_cli.runner.shutil.which", return_value=None),
     ):
         result = run_gh(args=["issue", "list"])
     assert result["ok"] is False
@@ -129,9 +143,16 @@ def test_run_gh_missing_binary() -> None:
 def test_run_gh_injects_token_env() -> None:
     completed = MagicMock(returncode=0, stdout="https://github.com/o/r/issues/1\n", stderr="")
     with (
-        patch("tools.github_cli.runner.resolve_github_token", return_value="secret-token"),
-        patch("tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"),
-        patch("tools.github_cli.runner.subprocess.run", return_value=completed) as run_mock,
+        patch(
+            "integrations.github.tools.github_cli.runner.resolve_github_token",
+            return_value="secret-token",
+        ),
+        patch(
+            "integrations.github.tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"
+        ),
+        patch(
+            "integrations.github.tools.github_cli.runner.subprocess.run", return_value=completed
+        ) as run_mock,
     ):
         result = run_gh(args=["issue", "create", "--title", "t"], repo="o/r")
 
@@ -151,6 +172,121 @@ def test_run_gh_injects_token_env() -> None:
     ]
 
 
+def test_resolve_github_token_prefers_explicit_over_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "mcp-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "env-github-token")
+    monkeypatch.setenv("GH_TOKEN", "env-gh-token")
+
+    assert resolve_github_token("store-token") == "store-token"
+
+
+def test_resolve_github_token_env_fallback_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "mcp-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "env-github-token")
+    monkeypatch.setenv("GH_TOKEN", "env-gh-token")
+    assert resolve_github_token(None) == "mcp-token"
+
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN")
+    assert resolve_github_token(None) == "env-github-token"
+
+    monkeypatch.delenv("GITHUB_TOKEN")
+    assert resolve_github_token(None) == "env-gh-token"
+
+    monkeypatch.delenv("GH_TOKEN")
+    assert resolve_github_token(None) == ""
+
+
+def test_extract_params_maps_store_token_and_repo() -> None:
+    params = _github_cli_extract_params(
+        {
+            "github": {
+                "connection_verified": True,
+                "auth_token": "store-token",
+                "owner": "Tracer-Cloud",
+                "repo": "opensre",
+            }
+        }
+    )
+
+    assert params["github_token"] == "store-token"
+    assert params["repo"] == "Tracer-Cloud/opensre"
+
+
+def test_github_cli_hides_token_from_public_schema() -> None:
+    tool = _registered(github_cli)
+    assert "github_token" in tool.injected_params
+    assert "github_token" not in tool.public_input_schema.get("properties", {})
+
+
+def test_run_gh_prefers_store_token_over_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configured source present: the env token must not reach gh."""
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.setenv("GH_TOKEN", "env-token")
+    completed = MagicMock(returncode=0, stdout="", stderr="")
+    with (
+        patch(
+            "integrations.github.tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"
+        ),
+        patch(
+            "integrations.github.tools.github_cli.runner.subprocess.run", return_value=completed
+        ) as run_mock,
+    ):
+        result = run_gh(args=["issue", "list"], github_token="store-token")
+
+    assert result["ok"] is True
+    env = run_mock.call_args.kwargs["env"]
+    assert env["GH_TOKEN"] == "store-token"
+    assert env["GITHUB_TOKEN"] == "store-token"
+
+
+def test_run_gh_falls_back_to_env_without_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No configured source: env-only local setups keep working."""
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    completed = MagicMock(returncode=0, stdout="", stderr="")
+    with (
+        patch(
+            "integrations.github.tools.github_cli.runner.shutil.which", return_value="/usr/bin/gh"
+        ),
+        patch(
+            "integrations.github.tools.github_cli.runner.subprocess.run", return_value=completed
+        ) as run_mock,
+    ):
+        result = run_gh(args=["issue", "list"], github_token=None)
+
+    assert result["ok"] is True
+    assert run_mock.call_args.kwargs["env"]["GH_TOKEN"] == "env-token"
+
+
+def test_github_cli_available_with_env_token_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+
+    assert _github_cli_available({}) is True
+
+
+def test_github_cli_available_with_mcp_env_token_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "mcp-token")
+
+    assert _github_cli_available({}) is True
+
+
+def test_github_cli_available_with_verified_source_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+
+    assert _github_cli_available({"github": {"connection_verified": True}}) is True
+    assert _github_cli_available({}) is False
+
+
 def test_github_cli_runs_mutate_without_approval() -> None:
     tool = _registered(github_cli)
     assert tool.requires_approval is False
@@ -159,7 +295,7 @@ def test_github_cli_runs_mutate_without_approval() -> None:
     assert "chat" not in tool.surfaces
 
     with patch(
-        "tools.github_cli.tool.run_gh",
+        "integrations.github.tools.github_cli.tool.run_gh",
         return_value={
             "ok": True,
             "argv": ["gh", "issue", "create", "--title", "t"],
@@ -180,7 +316,7 @@ def test_github_cli_runs_mutate_without_approval() -> None:
 
 def test_github_cli_runs_read() -> None:
     with patch(
-        "tools.github_cli.tool.run_gh",
+        "integrations.github.tools.github_cli.tool.run_gh",
         return_value={
             "ok": True,
             "argv": ["gh", "issue", "list"],

@@ -29,7 +29,7 @@ import os
 from collections.abc import AsyncIterator, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import httpx
 from mcp import ClientSession, StdioServerParameters, types  # type: ignore[import-not-found]
@@ -38,14 +38,20 @@ from mcp.client.stdio import stdio_client  # type: ignore[import-not-found]
 from pydantic import Field, field_validator, model_validator
 from typing_extensions import TypedDict
 
+from config.constants.sentry_mcp import (
+    SENTRY_MCP_AUTH_TOKEN_ENV,
+    SENTRY_MCP_HOST_ENV,
+    SENTRY_MCP_URL_ENV,
+)
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 from integrations.mcp_streamable_http_compat import streamable_http_client
+from integrations.mcp_transport import McpTransportMode
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SENTRY_MCP_URL = "https://mcp.sentry.dev/mcp"
-DEFAULT_SENTRY_MCP_MODE: Literal["streamable-http", "sse", "stdio"] = "streamable-http"
+DEFAULT_SENTRY_MCP_MODE: McpTransportMode = McpTransportMode.STREAMABLE_HTTP
 
 
 class SentryMCPToolDescriptor(TypedDict):
@@ -80,7 +86,7 @@ class SentryMCPConfig(StrictConfigModel):
     """Normalized Sentry MCP connection settings."""
 
     url: str = DEFAULT_SENTRY_MCP_URL
-    mode: Literal["stdio", "sse", "streamable-http"] = DEFAULT_SENTRY_MCP_MODE
+    mode: McpTransportMode = DEFAULT_SENTRY_MCP_MODE
     auth_token: str = ""
     command: str = ""
     args: tuple[str, ...] = ()
@@ -198,9 +204,9 @@ def build_sentry_mcp_config(raw: Mapping[str, object] | None) -> SentryMCPConfig
 def sentry_mcp_config_from_env() -> SentryMCPConfig | None:
     """Load a Sentry MCP config from environment variables."""
     mode = os.getenv("SENTRY_MCP_MODE", DEFAULT_SENTRY_MCP_MODE).strip().lower()
-    url = os.getenv("SENTRY_MCP_URL", "").strip()
+    url = os.getenv(SENTRY_MCP_URL_ENV, "").strip()
     command = os.getenv("SENTRY_MCP_COMMAND", "").strip()
-    auth_token = os.getenv("SENTRY_MCP_AUTH_TOKEN", "").strip()
+    auth_token = os.getenv(SENTRY_MCP_AUTH_TOKEN_ENV, "").strip()
     args_env = os.getenv("SENTRY_MCP_ARGS", "").strip()
 
     mode = mode or DEFAULT_SENTRY_MCP_MODE
@@ -222,7 +228,7 @@ def sentry_mcp_config_from_env() -> SentryMCPConfig | None:
             "command": command,
             "args": [part for part in args_env.split() if part],
             "auth_token": auth_token,
-            "host": os.getenv("SENTRY_MCP_HOST", "").strip(),
+            "host": os.getenv(SENTRY_MCP_HOST_ENV, "").strip(),
             "organization_slug": os.getenv("SENTRY_MCP_ORGANIZATION_SLUG", "").strip(),
             "project_slug": os.getenv("SENTRY_MCP_PROJECT_SLUG", "").strip(),
             "skills": os.getenv("SENTRY_MCP_SKILLS", "").strip(),

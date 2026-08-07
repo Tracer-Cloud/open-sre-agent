@@ -61,14 +61,14 @@ _EMAIL_RE = re.compile(r"\b([\w.+-]+@[\w-]+\.[\w.-]+)\b")
 
 
 _BUILTIN_DETECTORS: dict[IdentifierKind, re.Pattern[str]] = {
-    "pod": _POD_RE,
-    "namespace": _NAMESPACE_RE,
-    "cluster": _CLUSTER_RE,
-    "service_name": _SERVICE_NAME_RE,
-    "hostname": _HOSTNAME_RE,
-    "account_id": _ACCOUNT_RE,
-    "ip_address": _IP_RE,
-    "email": _EMAIL_RE,
+    IdentifierKind.POD: _POD_RE,
+    IdentifierKind.NAMESPACE: _NAMESPACE_RE,
+    IdentifierKind.CLUSTER: _CLUSTER_RE,
+    IdentifierKind.SERVICE_NAME: _SERVICE_NAME_RE,
+    IdentifierKind.HOSTNAME: _HOSTNAME_RE,
+    IdentifierKind.ACCOUNT_ID: _ACCOUNT_RE,
+    IdentifierKind.IP_ADDRESS: _IP_RE,
+    IdentifierKind.EMAIL: _EMAIL_RE,
 }
 
 
@@ -127,22 +127,22 @@ def _resolve_overlaps(matches: list[DetectedIdentifier]) -> list[DetectedIdentif
     """Drop matches that overlap (fully or partially) a longer earlier match.
 
     Sort by start ASC, then by length DESC so the longest match at each
-    start position is considered first. For each candidate, drop it if any
-    already-kept match shares even a single character — this prevents
-    ``_apply_replacements`` from processing overlapping spans and producing
-    corrupted output when replacements are spliced in reverse.
+    start position is considered first. Kept intervals are non-overlapping and
+    start-ordered, so a candidate only needs to compare against the previous
+    kept end — O(N) after the sort, not O(N²) against the full kept list.
     """
     if not matches:
         return []
     by_start = sorted(matches, key=lambda m: (m.start, -(m.end - m.start)))
     result: list[DetectedIdentifier] = []
+    last_end = -1
     for m in by_start:
-        # Partial-overlap check: kept.start < m.end AND kept.end > m.start
-        # means [kept.start, kept.end) and [m.start, m.end) share characters.
-        if any(kept.start < m.end and kept.end > m.start and kept is not m for kept in result):
+        # Overlap with previous kept: last_end > m.start (half-open spans).
+        if m.start < last_end:
             continue
         result.append(m)
-    return sorted(result, key=lambda m: m.start)
+        last_end = m.end
+    return result
 
 
 __all__ = [

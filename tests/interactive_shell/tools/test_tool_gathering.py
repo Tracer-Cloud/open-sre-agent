@@ -59,8 +59,10 @@ def _stub_agent_factory(run: _FakeRun) -> GatherAgentFactory:
         gather_tools: list[Any],
         resolved: dict[str, Any],
         on_progress: Any,
+        message: str,
+        max_iterations: int = 4,
     ) -> _StubAgent:
-        _ = (llm, session, gather_tools, resolved)
+        _ = (llm, session, gather_tools, resolved, message, max_iterations)
         from core.events import runtime_event_callback_from_observer
 
         return _StubAgent(runtime_event_callback_from_observer(on_progress))
@@ -277,7 +279,7 @@ def test_resolve_gather_integrations_enriches_github_from_repo_url() -> None:
     gh = resolved["github"]
     assert gh["owner"] == "Tracer-Cloud"
     assert gh["repo"] == "opensre"
-    assert session.github_repo_scope == ("Tracer-Cloud", "opensre")
+    assert session.vcs_repo_scopes["github"] == ("Tracer-Cloud", "opensre")
 
 
 def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
@@ -285,7 +287,7 @@ def test_resolve_gather_integrations_uses_session_cache_on_follow_up() -> None:
     session.resolved_integrations_cache = {
         "github": {"connection_verified": True, "url": "https://api.githubcopilot.com/mcp/"}
     }
-    session.github_repo_scope = ("Tracer-Cloud", "opensre")
+    session.vcs_repo_scopes = {"github": ("Tracer-Cloud", "opensre")}
     session.agent.messages = [
         ("user", "https://github.com/Tracer-Cloud/opensre"),
         ("assistant", "Got it."),
@@ -316,7 +318,7 @@ def test_resolve_gather_integrations_enriches_gitlab_file_scope() -> None:
     assert gitlab["project_id"] == "group/project"
     assert gitlab["ref_name"] == "main"
     assert gitlab["file_path"] == "runbooks/api.md"
-    assert session.gitlab_repo_scope == ("group/project", "main", "runbooks/api.md")
+    assert session.vcs_repo_scopes["gitlab"] == ("group/project", "main", "runbooks/api.md")
 
 
 def test_resolve_gather_integrations_uses_gitlab_session_cache() -> None:
@@ -324,7 +326,7 @@ def test_resolve_gather_integrations_uses_gitlab_session_cache() -> None:
     session.resolved_integrations_cache = {
         "gitlab": {"connection_verified": True, "auth_token": "token"}
     }
-    session.gitlab_repo_scope = ("group/project", "main", "runbook.md")
+    session.vcs_repo_scopes = {"gitlab": ("group/project", "main", "runbook.md")}
 
     resolved = _resolve_gather_integrations(session, "read that file")
 

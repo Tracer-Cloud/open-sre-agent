@@ -1,10 +1,12 @@
-"""Tests for :mod:`gateway.runtime.manager` lifecycle behavior."""
+"""Tests for :mod:`gateway.core.runtime.manager` lifecycle behavior."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from gateway.runtime.manager import GatewayManager
+import pytest
+
+from gateway.core.runtime.manager import GatewayManager
 
 
 def test_wait_blocks_until_stop_not_telegram_thread_exit() -> None:
@@ -28,3 +30,56 @@ def test_wait_blocks_until_stop_not_telegram_thread_exit() -> None:
 
     manager.stop()
     assert manager.wait(timeout=0.01) is True
+
+
+def test_manager_stop_never_touches_the_real_gateway_directory() -> None:
+    """Stopping a manager must not clear the running daemon's status file.
+
+    ``stop()`` calls ``clear_component_status()``, which resolves a module
+    global captured at import time. Without the isolation fixture in
+    ``gateway/tests/conftest.py`` this test deleted
+    ``~/.opensre/gateway/components.json`` on the developer's machine.
+    """
+    # Arrange
+    from pathlib import Path
+
+    from gateway.core.runtime import daemon
+
+    real_gateway_dir = Path.home() / ".opensre" / "gateway"
+
+    # Act
+    GatewayManager().stop()
+
+    # Assert
+    assert real_gateway_dir not in daemon.GATEWAY_COMPONENTS_FILE.parents
+    assert real_gateway_dir not in daemon.GATEWAY_PID_FILE.parents
+
+
+def test_manager_reload_scheduler_refreshes_component_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Loop/cron mutations must resync the long-lived gateway scheduler."""
+    from logging import getLogger
+
+    publishes: list[dict[str, str]] = []
+
+    def _refresh(scheduler: object | None, *, task_filter=None):
+        _ = task_filter
+        assert scheduler is None
+        return object(), 3
+
+    monkeypatch.setattr(
+        "platform.scheduler.runner.refresh_background_scheduler",
+        _refresh,
+    )
+    manager = GatewayManager()
+    monkeypatch.setattr(
+        manager,
+        "_publish_status",
+        lambda _logger: publishes.append(dict(manager.components)),
+    )
+
+    manager._reload_scheduler(getLogger("test"))
+
+    assert manager.components["scheduler"] == "running 3 scheduled task(s)"
+    assert publishes == [{"scheduler": "running 3 scheduled task(s)"}]

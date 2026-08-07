@@ -44,26 +44,20 @@ class MetricsValidator:
         if "data" in normalized and isinstance(normalized["data"], list):
             validated_data, _ = _validate_data_list(normalized["data"], self._validate_flat_metrics)
             normalized["data"] = validated_data
-            # Also check aggregated values if present
             if "max_cpu" in normalized or "max_ram" in normalized:
                 normalized = self._validate_flat_metrics(normalized)
 
-        # Check nested memory metrics
         if "memory" in normalized:
             normalized["memory"] = self._validate_memory_metric(normalized["memory"])
 
-        # Check CPU metrics
         if "cpu" in normalized:
             normalized["cpu"] = self._validate_cpu_metric(normalized["cpu"])
 
-        # Check disk metrics
         if "disk" in normalized:
             normalized["disk"] = self._validate_disk_metric(normalized["disk"])
 
-        # Check for flat structure metrics (cpu, ram, disk at top level)
         normalized = self._validate_flat_metrics(normalized)
 
-        # Check for percentage fields at top level
         for key in ["percent", "percentage", "usage_percent"]:
             if key in normalized:
                 value = normalized[key]
@@ -93,7 +87,6 @@ class MetricsValidator:
 
         normalized = memory_data.copy()
 
-        # Check for impossible percentage values
         if "percent" in memory_data:
             raw_percent = memory_data["percent"]
 
@@ -285,7 +278,6 @@ class MetricsValidator:
                 # Don't set to None - keep raw value but mark as invalid
                 # LLM can use interpretation to understand it
 
-        # Check "max_ram" if present
         if "max_ram" in normalized:
             raw_max_ram = normalized["max_ram"]
             if isinstance(raw_max_ram, int | float) and raw_max_ram > 100:

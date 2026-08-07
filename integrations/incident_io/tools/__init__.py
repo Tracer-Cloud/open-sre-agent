@@ -115,47 +115,65 @@ class IncidentIoIncidentsTool(BaseTool):
             )
 
         normalized_action = (action or "context").strip().lower()
-        with client:
-            if normalized_action == "list":
-                result = client.list_incidents(
-                    status_category=status_category,
+
+        def _require_incident_id(label: str) -> dict[str, Any] | None:
+            if incident_id:
+                return None
+            return {"success": False, "error": f"incident_id is required for {label}."}
+
+        def _list() -> dict[str, Any]:
+            return client.list_incidents(
+                status_category=status_category,
+                page_size=page_size,
+                after=after,
+            )
+
+        def _get() -> dict[str, Any]:
+            missing = _require_incident_id("get")
+            return missing if missing is not None else client.get_incident(incident_id)
+
+        def _updates() -> dict[str, Any]:
+            missing = _require_incident_id("updates")
+            return (
+                missing
+                if missing is not None
+                else client.list_incident_updates(
+                    incident_id,
                     page_size=page_size,
                     after=after,
                 )
-            elif normalized_action == "get":
-                if not incident_id:
-                    result = {"success": False, "error": "incident_id is required for get."}
-                else:
-                    result = client.get_incident(incident_id)
-            elif normalized_action == "updates":
-                if not incident_id:
-                    result = {"success": False, "error": "incident_id is required for updates."}
-                else:
-                    result = client.list_incident_updates(
-                        incident_id,
-                        page_size=page_size,
-                        after=after,
-                    )
-            elif normalized_action == "append_summary":
-                if not incident_id:
-                    result = {
-                        "success": False,
-                        "error": "incident_id is required for append_summary.",
-                    }
-                elif not title:
-                    result = {"success": False, "error": "title is required for append_summary."}
-                else:
-                    result = client.append_summary_update(
-                        incident_id,
-                        title=title,
-                        body=body,
-                        notify_incident_channel=notify_incident_channel,
-                    )
-            else:
-                if not incident_id:
-                    result = {"success": False, "error": "incident_id is required for context."}
-                else:
-                    result = client.get_incident_context(incident_id, update_limit=page_size)
+            )
+
+        def _append_summary() -> dict[str, Any]:
+            missing = _require_incident_id("append_summary")
+            if missing is not None:
+                return missing
+            if not title:
+                return {"success": False, "error": "title is required for append_summary."}
+            return client.append_summary_update(
+                incident_id,
+                title=title,
+                body=body,
+                notify_incident_channel=notify_incident_channel,
+            )
+
+        def _context() -> dict[str, Any]:
+            missing = _require_incident_id("context")
+            return (
+                missing
+                if missing is not None
+                else client.get_incident_context(incident_id, update_limit=page_size)
+            )
+
+        handlers = {
+            "list": _list,
+            "get": _get,
+            "updates": _updates,
+            "append_summary": _append_summary,
+            "context": _context,
+        }
+        with client:
+            result = handlers.get(normalized_action, _context)()
 
         result.update(
             {

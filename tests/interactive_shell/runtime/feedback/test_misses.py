@@ -30,6 +30,7 @@ from core.domain.feedback.misses import (
 def opensre_home(monkeypatch, tmp_path: Path) -> Path:
     home = tmp_path / ".opensre"
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", home)
+    monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", home)
     return home
 
 

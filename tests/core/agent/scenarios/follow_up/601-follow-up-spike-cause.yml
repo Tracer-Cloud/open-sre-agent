@@ -14,7 +14,7 @@ policy:
   executes_terminal_action: false
 planned_actions:
 - kind: assistant_handoff
-  content: follow_up:spike_cause
+  content: follow_up:prior_investigation
   source: llm
 response_contract:
   must_contain_any:

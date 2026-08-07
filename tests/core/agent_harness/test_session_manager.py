@@ -111,6 +111,36 @@ def test_rotate_closes_old_and_creates_new() -> None:
     assert session.session_id == "new-1"
 
 
+def test_rotate_restores_outgoing_transcript_for_memory_extraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = InMemorySessionStorage()
+    scheduled: list[tuple[list[tuple[str, str]], bool]] = []
+
+    def _schedule(messages: list[tuple[str, str]], *, wait_for_completion: bool = False) -> None:
+        scheduled.append((list(messages), wait_for_completion))
+
+    monkeypatch.setattr(
+        "core.agent_harness.session.memory_extraction.schedule_memory_extraction",
+        _schedule,
+    )
+    repo = SimpleNamespace(
+        load_session=lambda _sid: {
+            "cli_agent_messages": [
+                ("user", "prod cluster is eks-prod-1"),
+                ("assistant", "got it"),
+            ]
+        }
+    )
+    manager = SessionManager(storage=storage, repo=repo)
+
+    manager.rotate(old_session_id="old-1", new_session_id="new-1")
+
+    assert len(scheduled) == 1
+    assert scheduled[0][0] == [("user", "prod cluster is eks-prod-1"), ("assistant", "got it")]
+    assert scheduled[0][1] is False  # rotate must not block on extraction
+
+
 def test_rotate_without_old_id_skips_close() -> None:
     storage = InMemorySessionStorage()
     flushed: list[str] = []
@@ -162,6 +192,37 @@ def test_close_persists_and_releases_resources() -> None:
     assert session.terminal.prompt_refresh_fn is None
 
 
+def test_close_releases_resources_before_memory_extraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = InMemorySessionStorage()
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    session = Session(session_id="s-close-order")
+    session.storage = storage
+    session.agent.messages = [("user", "remember eks-prod-1"), ("assistant", "saved")]
+    session.terminal.prompt_refresh_fn = lambda: None
+
+    events: list[str] = []
+
+    def _release() -> None:
+        events.append("release")
+        session.terminal.prompt_refresh_fn = None
+
+    def _schedule(messages: list[tuple[str, str]], *, wait_for_completion: bool = False) -> None:
+        events.append(f"extract:{len(messages)}:{wait_for_completion}")
+
+    monkeypatch.setattr(session, "release_resources", _release)
+    monkeypatch.setattr(
+        "core.agent_harness.session.memory_extraction.schedule_memory_extraction",
+        _schedule,
+    )
+
+    manager.close(session)
+
+    assert events == ["release", "extract:2:True"]
+    assert session.terminal.prompt_refresh_fn is None
+
+
 def test_close_flush_failure_does_not_crash_teardown() -> None:
     storage = InMemorySessionStorage()
 
@@ -204,6 +265,33 @@ def test_rotate_in_place_flushes_clears_and_opens_new_id() -> None:
     assert session.accumulated_context == {}
     # Regression: in-place reuse must NOT drop the loop-owned prompt hook.
     assert session.terminal.prompt_refresh_fn is refresh
+
+
+def test_rotate_in_place_schedules_extraction_before_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = InMemorySessionStorage()
+    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    session = Session(session_id="old-id")
+    session.storage = storage
+    session.agent.messages = [("user", "my name is Ada"), ("assistant", "noted")]
+
+    scheduled: list[tuple[list[tuple[str, str]], bool]] = []
+
+    def _schedule(messages: list[tuple[str, str]], *, wait_for_completion: bool = False) -> None:
+        scheduled.append((list(messages), wait_for_completion))
+
+    monkeypatch.setattr(
+        "core.agent_harness.session.memory_extraction.schedule_memory_extraction",
+        _schedule,
+    )
+
+    manager.rotate_in_place(session)
+
+    assert scheduled == [
+        ([("user", "my name is Ada"), ("assistant", "noted")], False),
+    ]
+    assert session.agent.messages == []
 
 
 def test_rebind_for_resume_switches_id_and_reopens_storage() -> None:

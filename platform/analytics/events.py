@@ -14,9 +14,11 @@ class Event(StrEnum):
     SENTRY_INIT_SKIPPED = "sentry_init_skipped"
 
     # GitHub first-launch login (A/B: control allows skip, forced does not)
-    GITHUB_LOGIN_PROMPTED = "github_login_prompted"
+    GITHUB_LOGIN_GATE_SHOWN = "github_login_gate_shown"
+    GITHUB_LOGIN_PROMPTED = "github_login_prompted"  # legacy alias; prefer GATE_SHOWN
     GITHUB_LOGIN_SKIPPED = "github_login_skipped"
     GITHUB_LOGIN_ABANDONED = "github_login_abandoned"
+    GITHUB_LOGIN_FAILED = "github_login_failed"
     GITHUB_LOGIN_COMPLETED = "github_login_completed"
 
     # Onboarding
@@ -67,15 +69,15 @@ class Event(StrEnum):
     REACT_TURN_COMPLETED = "react_turn_completed"
     AI_GENERATION = "$ai_generation"
 
+    # Gateway chat turns (Slack / Telegram) — usage sessions, not inventory
+    GATEWAY_TURN_STARTED = "gateway_turn_started"
+    GATEWAY_TURN_COMPLETED = "gateway_turn_completed"
+    GATEWAY_TURN_FAILED = "gateway_turn_failed"
+
     # Update
     UPDATE_STARTED = "update_started"
     UPDATE_COMPLETED = "update_completed"
     UPDATE_FAILED = "update_failed"
-
-    # Deploy
-    DEPLOY_STARTED = "deploy_started"
-    DEPLOY_COMPLETED = "deploy_completed"
-    DEPLOY_FAILED = "deploy_failed"
 
     # Local agent monitoring (Monitor Local Agents feature)
     AGENT_SECRET_DETECTED = "agent_secret_detected"
@@ -86,3 +88,9 @@ class Event(StrEnum):
     SCHEDULED_TASK_STARTED = "scheduled_task_started"
     SCHEDULED_TASK_COMPLETED = "scheduled_task_completed"
     SCHEDULED_TASK_FAILED = "scheduled_task_failed"
+
+    # Suggested loops (interactive-shell startup picker shown when no
+    # scheduled tasks are configured)
+    LOOP_SUGGESTION_PROMPTED = "loop_suggestion_prompted"
+    LOOP_SUGGESTION_SELECTED = "loop_suggestion_selected"
+    LOOP_SUGGESTION_SKIPPED = "loop_suggestion_skipped"

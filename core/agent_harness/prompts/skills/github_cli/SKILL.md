@@ -1,10 +1,16 @@
+---
+name: github-cli
+description: >-
+  GitHub issues/PRs/repos/releases via github_cli (not star history, not CI
+  fix, not security-alert remediation) and also use it for GitHub analytics
+---
 ══════════════════════════════════════════════════════════
 GITHUB CLI SKILL — interactive-shell action agent:
 ══════════════════════════════════════════════════════════
 
 WHEN TO USE (call github_cli; do NOT assistant_handoff):
 - Create / list / view / edit / close / comment / assign / label GitHub issues
-- Create / list / view / merge / comment / checks on pull requests
+- Create / list / view / close / merge / comment / checks on pull requests
 - Repo list/view, releases, labels, workflow runs, search, or gh api
 - github.com/owner/repo URLs or "open an issue / merge this PR" requests
 - Follow-ups like "create an issue from that" after a prior scan/report
@@ -12,9 +18,17 @@ WHEN TO USE (call github_cli; do NOT assistant_handoff):
 Do NOT use this skill for:
 - Live incident RCA (investigation_start) — including multi-source asks that
   name github issues alongside Sentry/PostHog/Datadog while diagnosing a crash
+- Star history / day-by-day stars / stars gained / star velocity — emit
+  assistant_handoff so gather can call get_github_star_history. Do NOT use
+  github_cli, gh api stargazers, or shell_run for these; paginated stargazer
+  scans via gh routinely undercount or report false zeros.
 - Observability lookups (Sentry/Datadog/Grafana/PostHog) — those stay handoffs
 - Slack → GitHub propose/execute mutations (workflow tools)
 - Architecture audit (architecture_* tools + architecture audit skill)
+- GitHub PR CI remediation / failing checks fixes / "fix CI and push" — use
+  fix_github_pr_ci when available
+- GitHub security alert remediation / vulnerable dependencies / code-scanning
+  fixes — use fix_github_security_alert when available
 
 HARD RULES:
 - Prefer github_cli over shell_run / !gh / raw gh.

@@ -6,9 +6,10 @@ import questionary
 from rich.console import Console
 
 from config.config import DEFAULT_OLLAMA_HOST
+from config.env_file import sync_env_values
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-from surfaces.cli.wizard.env_sync import sync_env_values, sync_provider_env
+from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.local_llm.hardware import detect_hardware, recommend_model
 from surfaces.cli.wizard.local_llm.ollama import (
     install,

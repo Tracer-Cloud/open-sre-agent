@@ -11,11 +11,13 @@ import logging
 import os
 import re
 import time
+from http import HTTPStatus
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
+from config.constants.vercel import VERCEL_API_BASE_URL
 from integrations.config_models import VercelIntegrationConfig
 from integrations.probes import ProbeResult
 from platform.observability.errors.service import capture_service_error
@@ -23,7 +25,7 @@ from platform.observability.streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api.vercel.com"
+_BASE_URL = VERCEL_API_BASE_URL
 _MAX_VERCEL_PATH_SEGMENT_LEN = 256
 # Vercel project and deployment IDs are opaque tokens (no slashes or traversal).
 _VERCEL_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -532,7 +534,7 @@ class VercelClient:
                     break
                 time.sleep(min(8.0, 2.0**attempt))
             except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
+                if exc.response.status_code == HTTPStatus.NOT_FOUND:
                     return {"success": True, "logs": [], "total": 0}
                 capture_service_error(
                     exc,

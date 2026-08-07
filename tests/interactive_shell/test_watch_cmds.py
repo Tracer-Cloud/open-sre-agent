@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from integrations.rocketchat.credentials import RocketChatCredentials
 from integrations.telegram.credentials import TelegramCredentials
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
@@ -52,6 +53,26 @@ def test_parse_watch_argv_parses_flags() -> None:
     assert raw.once is True
 
 
+def test_parse_watch_argv_parses_provider_and_chat_id() -> None:
+    raw = parse_watch_argv(["999", "--provider", "rocketchat", "--chat-id", "#ops"])
+    assert isinstance(raw, WatchdogStartSpec)
+    assert raw.provider == "rocketchat"
+    assert raw.chat_id == "#ops"
+
+
+def test_parse_watch_argv_defaults_provider_to_telegram() -> None:
+    raw = parse_watch_argv(["999"])
+    assert isinstance(raw, WatchdogStartSpec)
+    assert raw.provider == "telegram"
+    assert raw.chat_id == ""
+
+
+def test_parse_watch_argv_rejects_unknown_provider() -> None:
+    out = parse_watch_argv(["999", "--provider", "discord"])
+    assert isinstance(out, str)
+    assert "invalid --provider" in out
+
+
 def test_dispatch_watch_creates_watchdog_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -87,6 +108,89 @@ def test_dispatch_watch_creates_watchdog_task(
     assert watchdogs[0].status == TaskStatus.RUNNING
     assert "max_cpu=80" in (watchdogs[0].command or "")
     assert "started" in buf.getvalue()
+
+
+def test_dispatch_watch_creates_rocketchat_watchdog_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_rc_load(**kwargs: object) -> RocketChatCredentials:
+        captured.update(kwargs)
+        return RocketChatCredentials(
+            server_url="https://chat.example.com",
+            auth_token="tok",
+            user_id="u1",
+            channel="#ops",
+        )
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds."
+        "load_rocketchat_credentials_from_env",
+        _fake_rc_load,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
+        lambda _pid: True,
+    )
+
+    def _fake_start(**_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds.start_watchdog_daemon_thread",
+        _fake_start,
+    )
+
+    session = Session()
+    session.terminal.trust_mode = True
+    console, buf = _capture()
+    dispatch_slash(
+        f"/watch {__import__('os').getpid()} --max-cpu 80 --provider rocketchat --chat-id #ops",
+        session,
+        console,
+        is_tty=True,
+    )
+
+    watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
+    assert len(watchdogs) == 1
+    assert watchdogs[0].status == TaskStatus.RUNNING
+    assert "provider=rocketchat" in (watchdogs[0].command or "")
+    assert "started" in buf.getvalue()
+    assert captured == {"channel_override": "#ops"}
+
+
+def test_dispatch_watch_reports_rocketchat_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from platform.common.errors import OpenSREError
+
+    def _raise_missing(**_kw: object) -> RocketChatCredentials:
+        raise OpenSREError("Rocket.Chat is not configured.")
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds."
+        "load_rocketchat_credentials_from_env",
+        _raise_missing,
+    )
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.watch_cmds.pid_exists",
+        lambda _pid: True,
+    )
+
+    session = Session()
+    session.terminal.trust_mode = True
+    console, buf = _capture()
+    dispatch_slash(
+        f"/watch {__import__('os').getpid()} --provider rocketchat",
+        session,
+        console,
+        is_tty=True,
+    )
+
+    watchdogs = [t for t in session.task_registry.list_recent(20) if t.kind == TaskKind.WATCHDOG]
+    assert len(watchdogs) == 0
+    assert "Rocket.Chat is not configured" in buf.getvalue()
 
 
 def test_unwatch_marks_watchdog_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,3 +335,122 @@ def test_run_watchdog_once_without_thresholds_exits(monkeypatch: pytest.MonkeyPa
     assert task.status == TaskStatus.COMPLETED
     assert task.result == "single sample (once)"
     dispatcher.dispatch.assert_not_called()
+
+
+def test_run_watchdog_first_probe_inaccessible_marks_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live PID this user cannot introspect must fail loudly, not report
+    'target process exited' (a permission failure is not an exit)."""
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.system.watch_dog.monitor.pid_exists", lambda _pid: True)
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert task.status == TaskStatus.FAILED
+    assert "permission denied" in (task.error or "")
+    dispatcher.dispatch.assert_not_called()
+
+
+def test_run_watchdog_gone_pid_completes_as_exited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", lambda *_a, **_kw: None)
+    monkeypatch.setattr("tools.system.watch_dog.monitor.pid_exists", lambda _pid: False)
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "target process exited"
+
+
+def test_run_watchdog_transient_inaccessible_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mid-watch AccessDenied tick (probe None while the PID exists) must
+    retry, then still report the real exit when the PID is truly gone."""
+    from datetime import UTC, datetime, timedelta
+
+    from platform.common.task_registry import TaskRegistry
+    from tools.system.fleet_monitoring.probe import ProcessSnapshot
+    from tools.system.watch_dog.monitor import run_watchdog
+
+    reg = TaskRegistry()
+    task = reg.create(TaskKind.WATCHDOG, command="watchdog pid=1")
+    task.mark_running()
+    dispatcher = MagicMock()
+    dispatcher.dispatch = MagicMock(return_value=True)
+
+    snap = ProcessSnapshot(
+        pid=1,
+        cpu_percent=1.0,
+        rss_mb=10.0,
+        num_fds=None,
+        num_connections=None,
+        status="running",
+        started_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    probe_results = [snap, None, None]
+    probe_calls = {"n": 0}
+
+    def _fake_probe(*_a: object, **_kw: object) -> ProcessSnapshot | None:
+        probe_calls["n"] += 1
+        return probe_results.pop(0)
+
+    pid_exists_results = [True, False]
+    monkeypatch.setattr("tools.system.watch_dog.monitor.probe", _fake_probe)
+    monkeypatch.setattr(
+        "tools.system.watch_dog.monitor.pid_exists",
+        lambda _pid: pid_exists_results.pop(0),
+    )
+
+    run_watchdog(
+        task=task,
+        watched_pid=1,
+        interval_seconds=0.01,
+        max_cpu=None,
+        max_runtime_seconds=None,
+        max_rss_mib=None,
+        once=False,
+        dispatcher=dispatcher,
+        on_alarm=None,
+    )
+    assert probe_calls["n"] == 3
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == "target process exited"

@@ -18,9 +18,9 @@ _NAME_MAX_CHARS = 50
 
 
 def sessions_dir() -> Path:
-    from config.constants import OPENSRE_HOME_DIR
+    from config.constants.paths import session_home
 
-    return OPENSRE_HOME_DIR / "sessions"
+    return session_home() / "sessions"
 
 
 def session_path(session_id: str) -> Path:

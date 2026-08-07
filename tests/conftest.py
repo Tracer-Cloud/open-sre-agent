@@ -1,17 +1,32 @@
 """Root pytest configuration — loads .env for all test directories."""
 
+from __future__ import annotations
+
 import os
 from collections.abc import Iterator
 
 import pytest
 
-from config.constants.paths import PROJECT_ROOT
+import config.constants.paths as paths
+from config.constants import (
+    OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV,
+    OPENSRE_MEMORY_DIR_ENV,
+)
 from config.grafana_cloud import load_env
 from config.platform_bootstrap import ensure_project_platform_package
+from config.secrets.os_keyring import reset_keyring_state
 
 ensure_project_platform_package()
 
-_ENV_PATH = PROJECT_ROOT / ".env"
+_ENV_PATH = paths.PROJECT_ROOT / ".env"
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Prepare the environment every test run depends on."""
+    _ = config
+    _load_env()
+    _disable_sentry()
+    _mark_tests_for_analytics()
 
 
 def _load_env() -> None:
@@ -73,7 +88,14 @@ def _restore_os_environ():
 
 @pytest.fixture(autouse=True)
 def _disable_system_keyring(request, monkeypatch) -> None:
-    """Keep tests isolated from any real developer keychain entries."""
+    """Keep tests isolated from any real developer keychain entries.
+
+    The sticky "keyring unavailable" flag is process-global by design (one probe
+    decides for a whole run), so a test that deliberately provokes a backend
+    failure would otherwise leak that state into every later test on the same
+    xdist worker.
+    """
+    reset_keyring_state()
     if request.node.get_closest_marker("live_llm") is not None:
         return
     monkeypatch.setenv("OPENSRE_DISABLE_KEYRING", "1")
@@ -94,22 +116,42 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
     default; a test that needs a specific path can still override it via
     ``monkeypatch`` or by passing an explicit ``path=`` argument.
 
-    Mirrors the ``live_llm`` exemption on ``_disable_system_keyring`` above:
-    live LLM turn tests need the real ``~/.opensre/llm-auth.json`` metadata for
-    CLI-subscription providers, whose prompt-safe ``status()`` reads the
-    metadata record directly rather than an env var.
+    Memory storage is also redirected for every test so deterministic prompt
+    snapshots never read the developer's real ``~/.opensre/memory`` directory.
+    Background memory extraction is disabled by default because most tests use
+    tiny fake LLM clients and assert the exact prompt/stream call shape; the
+    memory-specific tests remove this env var in their own fixture.
+
+    The wizard/LLM-auth overrides mirror the ``live_llm`` exemption on
+    ``_disable_system_keyring`` above: live LLM turn tests need the real
+    ``~/.opensre/llm-auth.json`` metadata for CLI-subscription providers, whose
+    prompt-safe ``status()`` reads the metadata record directly rather than an
+    env var.
     """
+    monkeypatch.setenv(OPENSRE_MEMORY_DIR_ENV, str(tmp_path / "memory"))
+    monkeypatch.setenv(OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV, "1")
     if request.node.get_closest_marker("live_llm") is not None:
         return
     monkeypatch.setenv("OPENSRE_WIZARD_STORE_PATH", str(tmp_path / "opensre.json"))
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
+    # Same reasoning for the fallback credential store, which ``host_home()``
+    # resolves from this module global at call time: a test that provokes a
+    # keyring failure would otherwise write real secrets into the developer's
+    # ~/.opensre/credentials.json and leave them there.
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "opensre-home")
 
 
-def pytest_configure(config):
-    """Pytest hook — keep env available for collection and execution."""
-    _load_env()
-    _disable_sentry()
-    _mark_tests_for_analytics()
+@pytest.fixture(autouse=True)
+def _reset_setup_state_cache() -> None:
+    """Drop the memoized setup block between tests.
+
+    It lives at module scope and is keyed partly on a stat of the scheduler
+    stores, so a test whose stores happen to match an earlier one would read
+    the earlier block and pass or fail for the wrong reason.
+    """
+    from platform.setup_state import clear_setup_state_cache
+
+    clear_setup_state_cache()
 
 
 @pytest.hookimpl(trylast=True)

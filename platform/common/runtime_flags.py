@@ -7,7 +7,6 @@ these via :func:`cli.runtime_flags.sync_runtime_flags_from_click`.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 
@@ -51,13 +50,6 @@ def configure_runtime_flags(
 def reset_runtime_flags() -> None:
     global _flags
     _flags = RuntimeFlags()
-
-
-def is_interactive_env() -> bool:
-    """True unless OPENSRE_INTERACTIVE=0 in env or interactive=False."""
-    if os.environ.get("OPENSRE_INTERACTIVE") == "0":
-        return False
-    return _flags.interactive
 
 
 def is_json_output() -> bool:

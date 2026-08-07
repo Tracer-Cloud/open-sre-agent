@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from core.agent_harness.prompts.assistant import build_assistant_system_prompt
 
 
@@ -48,3 +50,18 @@ def test_gateway_preamble_is_slack_teammate_not_terminal() -> None:
     assert prompt.startswith("You are OpenSRE, an AI production engineer teammate")
     assert "terminal assistant" not in prompt
     assert "full-shell semantics" not in prompt
+
+
+def test_no_surface_leaves_blank_line_runs_from_empty_rule_slots() -> None:
+    """CLI-only rule slots are empty on gateway turns; their separators must go too.
+
+    Each slot contributes its own trailing separator, so an empty one adds
+    nothing. A bare ``\\n\\n`` around an empty slot would waste prompt tokens and
+    read as a missing section.
+    """
+    # Arrange / Act
+    for surface in ("gateway", "interactive_shell"):
+        prompt = build_assistant_system_prompt("ref", "hist", surface=surface)
+
+        # Assert: no run of three or more newlines anywhere in the prompt.
+        assert not re.search(r"\n{3,}", prompt), f"blank-line run in {surface} prompt"

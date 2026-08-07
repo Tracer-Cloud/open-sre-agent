@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,15 @@ _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json
 
 _CLI_REFERENCE_TEXT = "=== opensre --help ===\nUsage: opensre [OPTIONS] COMMAND [ARGS]...\n"
 _AGENTS_MD_TEXT = "=== AGENTS.md (root) ===\nrepo map body\n"
+# Frozen live facts so the late runtime block stays byte-stable in the snapshot.
+_FROZEN_RUNTIME: dict[str, object] = {
+    "now_iso": "2026-07-29T12:00:00+00:00",
+    "uptime_seconds": 100.0,
+    "disk_used_percent": 50.0,
+    "disk_free_gb": 100.0,
+    "memory_used_percent": 40.0,
+    "memory_available_gb": 8.0,
+}
 
 
 class _StubPromptContextProvider:
@@ -73,11 +83,24 @@ class _StubPromptContextProvider:
     def investigation_flow(self) -> str:
         return build_investigation_flow_reference_text()
 
-    def environment_block(self) -> str:
+    def runtime_facts(self) -> dict[str, object]:
+
+        from config.runtime_metadata import capture_runtime_facts
+
+        return capture_runtime_facts()
+
+    def environment_block(self, runtime=None) -> str:  # noqa: ANN001
         return build_environment_block(
             integrations=self._configured_integrations,
             known=self._configured_integrations_known,
+            runtime=runtime,
         )
+
+    def long_term_memory(self) -> str:
+        return ""
+
+    def setup_state(self) -> str:
+        return ""
 
     def suggested_synthetic_prompt(self) -> str:
         return SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
@@ -94,6 +117,7 @@ def _agent_ctx(
     configured_integrations_known: bool = False,
     last_state: dict[str, Any] | None = None,
     last_synthetic_observation_path: str | None = None,
+    recovery_note: str | None = None,
 ) -> TurnSnapshot:
     return TurnSnapshot(
         text=text,
@@ -103,6 +127,7 @@ def _agent_ctx(
         last_state=last_state,
         last_synthetic_observation_path=last_synthetic_observation_path,
         reasoning_effort=None,
+        recovery_note=recovery_note,
     )
 
 
@@ -140,6 +165,17 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             conversation_messages=convo,
         )
     )
+    # WAL recovery note (first turn after /resume of an interrupted session).
+    cases["action_system_with_recovery_note"] = build_action_system_prompt(
+        _agent_ctx(
+            recovery_note=(
+                "A previous turn in this session was interrupted while tool "
+                "calls were still executing (no result was recorded for them):\n"
+                "- shell_run step-2 >> /tmp/demo_state.json (step 2)\n"
+                "Whether their side effects landed is unknown."
+            ),
+        )
+    )
 
     # --- action user message: sanitization (control chars + >>> fences) ---
     cases["action_user_plain"] = build_action_user_message("run /health")
@@ -154,6 +190,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         tool_observation=None,
         tool_observation_on_screen=True,
         turn_snapshot=_agent_ctx(text="how do I configure datadog?"),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_no_integrations_guard"] = build_cli_agent_prompt_from_provider(
@@ -162,6 +199,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
         tool_observation=None,
         tool_observation_on_screen=True,
         turn_snapshot=_agent_ctx(text="set up sentry", configured_integrations_known=True),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_integrations_listed_with_prior_state"] = build_cli_agent_prompt_from_provider(
@@ -178,6 +216,10 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations_known=True,
             conversation_messages=convo,
             last_state={
+                # Inside the recall window so the prior-investigation block still
+                # renders. The stamp gates recall only; it is never rendered, so
+                # the snapshot stays deterministic.
+                "investigation_started_at": time.monotonic(),
                 "alert_name": "Checkout 500s",
                 "root_cause": "DB connection pool exhausted",
                 "problem_md": "Checkout returned 500s after deploy.",
@@ -185,6 +227,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
                 "evidence": {"e1": {"summary": "pool maxed"}, "e2": {"summary": "deploy at 12:00"}},
             },
         ),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_observation_on_screen"] = build_cli_agent_prompt_from_provider(
@@ -200,6 +243,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations=("datadog",),
             configured_integrations_known=True,
         ),
+        runtime=_FROZEN_RUNTIME,
     )
 
     cases["cli_agent_observation_off_screen"] = build_cli_agent_prompt_from_provider(
@@ -215,6 +259,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             configured_integrations=("sentry",),
             configured_integrations_known=True,
         ),
+        runtime=_FROZEN_RUNTIME,
     )
 
     obs_path = tmp_path / "synthetic_observation.json"
@@ -231,6 +276,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
             text="why did it fail?",
             last_synthetic_observation_path=str(obs_path),
         ),
+        runtime=_FROZEN_RUNTIME,
     )
     # The observation path is the per-run tmp dir; normalize it so the snapshot
     # stays deterministic while every other byte of the block is still pinned.

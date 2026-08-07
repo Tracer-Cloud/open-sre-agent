@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import os
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import sysconfig
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,6 +22,7 @@ import pytest
 
 from config.constants.paths import REPO_ROOT
 from config.version import get_opensre_version
+from tests.utils.polling import wait_until
 
 _SCRIPT_NAME = "opensre.exe" if os.name == "nt" else "opensre"
 _ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -65,6 +68,12 @@ _CLEARED_ENV_KEYS = (
     "TELEGRAM_DEFAULT_CHAT_ID",
     "TRACER_API_URL",
     "TRACER_WEB_APP_URL",
+    "X_BEARER_TOKEN",
+    "X_MCP_ARGS",
+    "X_MCP_AUTH_TOKEN",
+    "X_MCP_COMMAND",
+    "X_MCP_MODE",
+    "X_MCP_URL",
 )
 
 
@@ -170,7 +179,16 @@ class CliSandbox:
         return self.project_env_path.read_text(encoding="utf-8")
 
     def read_wizard_store(self) -> dict[str, object]:
-        return json.loads(self.wizard_store_path.read_text(encoding="utf-8"))
+        store: dict[str, object] = json.loads(self.wizard_store_path.read_text(encoding="utf-8"))
+        return store
+
+    def wizard_target(self, name: str) -> dict[str, object]:
+        """Return the wizard store's entry for one target (e.g. ``local``)."""
+        targets = self.read_wizard_store()["targets"]
+        assert isinstance(targets, dict), f"wizard store 'targets' is not a mapping: {targets!r}"
+        entry = targets[name]
+        assert isinstance(entry, dict), f"wizard target {name!r} is not a mapping: {entry!r}"
+        return entry
 
 
 def _clean_terminal_output(text: str) -> str:
@@ -367,7 +385,11 @@ def _run_cli_pty(
             if action.stagger_j:
                 for _ in range(action.stagger_j):
                     os.write(master_fd, action.stagger_key)
-                    time.sleep(0.05)
+                    # Pace keystrokes so prompt_toolkit doesn't coalesce a
+                    # burst; there's no observable condition to poll for
+                    # here, so wait_until always times out by design.
+                    with contextlib.suppress(TimeoutError):
+                        wait_until(lambda: False, timeout=0.05, interval=0.05)
             os.write(master_fd, action.send)
 
         deadline = time.monotonic() + timeout
@@ -417,7 +439,7 @@ class _ReleaseHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture()
-def release_api_url() -> str:
+def release_api_url() -> Iterator[str]:
     try:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _ReleaseHandler)
     except OSError as exc:
@@ -448,7 +470,9 @@ def test_opensre_help_smoke(cli_sandbox: CliSandbox) -> None:
 
     assert result.exit_code == 0
     assert "Welcome back" not in result.stdout
-    assert "Commands:" in result.stdout
+    # Commands are grouped so the entry point is not buried alphabetically.
+    assert "Getting started:" in result.stdout
+    assert "onboard" in result.stdout
     assert "integrations" in result.stdout
     assert "--interactive / --no-interactive" in result.stdout
     assert "--layout [classic|pinned]" in result.stdout
@@ -636,8 +660,23 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
                 send=b"\r",
                 stagger_j=1,
             ),
-            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            # #3591: the model is picked BEFORE the credential, so the live probe runs
+            # against the model that actually gets persisted.
             PtyAction(expect="Choose Anthropic model", send=b"\r"),
+            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            # #3591: the wizard now live-validates the key; smoke-test-key fails
+            # (401 online, connection error offline — the menu renders either way).
+            # One `j` moves from the default "Re-enter the API key" to "Save anyway
+            # without validating", which keeps the keyring persistence path and every
+            # downstream assertion intact. The per-action timeout covers a hanging
+            # network: the validator's client timeout is 30s and connection errors
+            # are retried (the CLI login expect below already uses 90.0 as well).
+            PtyAction(
+                expect="could not be verified. What next?",
+                send=b"\r",
+                stagger_j=1,
+                timeout=90.0,
+            ),
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
@@ -653,9 +692,9 @@ def test_onboard_interactive_smoke(cli_sandbox: CliSandbox) -> None:
     assert "Done." in result.stdout
     assert "next" in result.stdout
 
-    store = cli_sandbox.read_wizard_store()
-    assert store["targets"]["local"]["provider"] == "anthropic"
-    assert "api_key" not in store["targets"]["local"]
+    target = cli_sandbox.wizard_target("local")
+    assert target["provider"] == "anthropic"
+    assert "api_key" not in target
     assert "LLM_PROVIDER=anthropic" in cli_sandbox.read_project_env()
     assert "ANTHROPIC_API_KEY=" not in cli_sandbox.read_project_env()
     assert "ANTHROPIC_REASONING_MODEL=" in cli_sandbox.read_project_env()
@@ -745,8 +784,20 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
                 send=b"\r",
                 stagger_j=1,
             ),
-            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            # #3591: the model is chosen BEFORE the credential, so the live probe
+            # runs against the model that gets persisted. Same order as
+            # test_onboard_interactive_smoke: model -> key -> recovery menu.
             PtyAction(expect="Choose Anthropic model", send=b"\r"),
+            PtyAction(expect="Anthropic API key", send=b"smoke-test-key\r"),
+            # smoke-test-key fails validation; move to "Save anyway without
+            # validating" to keep the keyring persistence path and every
+            # downstream assertion intact.
+            PtyAction(
+                expect="could not be verified. What next?",
+                send=b"\r",
+                stagger_j=1,
+                timeout=90.0,
+            ),
             PtyAction(
                 expect="Choose an integration to configure",
                 send=b"\r",
@@ -792,9 +843,9 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
     assert "Done." in result.stdout
     assert "next" in result.stdout
 
-    store = cli_sandbox.read_wizard_store()
-    assert store["targets"]["local"]["provider"] == "anthropic"
-    assert "api_key" not in store["targets"]["local"]
+    target = cli_sandbox.wizard_target("local")
+    assert target["provider"] == "anthropic"
+    assert "api_key" not in target
     env_body = cli_sandbox.read_project_env()
     assert "LLM_PROVIDER=anthropic\n" in env_body
     assert "ANTHROPIC_API_KEY=" not in env_body
@@ -802,7 +853,16 @@ def test_onboard_interactive_smoke_cli_provider_repick_when_unauthenticated(
 
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")
-def test_integrations_setup_datadog_interactive_smoke(cli_sandbox: CliSandbox) -> None:
+def test_integrations_setup_datadog_rejects_credentials_that_do_not_verify(
+    cli_sandbox: CliSandbox,
+) -> None:
+    """Placeholder keys must leave nothing behind, on any tier.
+
+    This used to save first and verify afterwards, so a typo'd key overwrote a
+    working integration and the command still reported ``Saved``. The shared
+    setup flow verifies before it persists; with keys the Datadog API rejects,
+    the store and ``.env`` are expected to stay untouched.
+    """
     result = _run_cli_pty(
         cli_sandbox,
         "integrations",
@@ -810,22 +870,17 @@ def test_integrations_setup_datadog_interactive_smoke(cli_sandbox: CliSandbox) -
         "datadog",
         actions=[
             PtyAction(expect="API key", send=b"dd-api-key\r"),
-            PtyAction(expect="Application key", send=b"dd-app-key\r"),
+            PtyAction(expect="application key", send=b"dd-app-key\r"),
             PtyAction(expect="Site", send=b"\r"),
         ],
         # Setup runs verify against the Datadog API; CI runners can exceed 20s.
         timeout=45.0,
     )
 
-    assert "Saved" in result.stdout
-    # Setup saves credentials then runs verify; placeholder keys fail the Datadog API check.
-    assert result.exit_code in (0, 1)
-
-    integrations = cli_sandbox.read_integrations()
-    assert len(integrations) == 1
-    assert integrations[0]["service"] == "datadog"
-    # v2 store shape: credentials live inside the default instance.
-    assert integrations[0]["instances"][0]["credentials"]["site"] == "datadoghq.com"
+    assert result.exit_code == 1
+    assert "Saved" not in result.stdout
+    assert cli_sandbox.read_integrations() == []
+    assert "DD_SITE" not in cli_sandbox.read_project_env()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="interactive smoke uses POSIX PTYs")

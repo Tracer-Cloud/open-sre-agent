@@ -838,6 +838,23 @@ def test_ensure_on_path_ignores_relative_path_entries(tmp_path: Path) -> None:
     assert (tmp_path / "home" / ".zshrc").exists()
 
 
+def test_ensure_on_path_skips_python_venv_bin(tmp_path: Path) -> None:
+    """``.venv/bin`` on PATH must not be hijacked (``uv run`` / editable installs)."""
+    venv_bin = tmp_path / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (tmp_path / ".venv" / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+    safe_bin = tmp_path / "safe-bin"
+    safe_bin.mkdir()
+
+    result, install_dir = _run_ensure_on_path(tmp_path, [str(venv_bin), str(safe_bin)])
+
+    assert result.returncode == 0, result.stderr
+    assert not (venv_bin / "opensre").exists()
+    link = safe_bin / "opensre"
+    assert link.is_symlink()
+    assert link.resolve() == (install_dir / "opensre").resolve()
+
+
 def test_onboarding_hint_appears_after_version_line(tmp_path: Path) -> None:
     """The onboarding hint must appear AFTER the 'Installed opensre v...' line."""
     result = _run_post_install(tmp_path, shell="/bin/zsh", installed_version="2026.4.1")

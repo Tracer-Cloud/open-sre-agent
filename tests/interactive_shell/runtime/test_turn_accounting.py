@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.accounting.token_accounting import LlmRunInfo
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from surfaces.interactive_shell.runtime.core.turn_accounting import ShellTurnAccounting
 from surfaces.interactive_shell.session import Session
 
@@ -26,8 +26,8 @@ class _FakeRecorder:
         self.flushed += 1
 
 
-def _result(*, llm_run: Any | None = None, text: str = "done") -> ShellTurnResult:
-    return ShellTurnResult(
+def _result(*, llm_run: Any | None = None, text: str = "done") -> TurnResult:
+    return TurnResult(
         final_intent="slash",
         action_result=ToolCallingTurnResult(
             planned_count=0,

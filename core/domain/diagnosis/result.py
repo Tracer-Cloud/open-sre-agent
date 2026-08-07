@@ -5,21 +5,22 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
 
 from core.context_budget import strip_internal_message_markers
 from core.domain.diagnosis.alignment import apply_category_alignment_adjustments
-from core.domain.types.root_cause_categories import (
-    HERMES_ROOT_CAUSE_CATEGORIES,
-    VALID_ROOT_CAUSE_CATEGORIES,
-    render_prompt_taxonomy,
+from core.domain.diagnosis.taxonomy_registry import (
+    root_cause_category_instruction_for_source,
+    taxonomy_categories_for_alert_source,
 )
+from core.domain.types.root_cause_categories import render_prompt_taxonomy
 
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[\s\-/]+")
+_UNKNOWN_CATEGORY = "unknown"
 
 # Hand-curated adjacent labels emitted by older prompts or parsers. Targets are
 # still gated by the caller's allowed taxonomy, so Hermes-only prompts cannot
@@ -109,34 +110,15 @@ def result_to_state(result: InvestigationResult) -> dict[str, Any]:
     }
 
 
-def taxonomy_categories_for_alert_source(alert_source: str) -> set[str]:
-    source = alert_source.strip().lower()
-    if source == "hermes":
-        return set(HERMES_ROOT_CAUSE_CATEGORIES | {"healthy", "unknown"})
-    return set(VALID_ROOT_CAUSE_CATEGORIES - HERMES_ROOT_CAUSE_CATEGORIES)
-
-
-def root_cause_category_instruction_for_source(alert_source: str) -> str:
-    categories = taxonomy_categories_for_alert_source(alert_source)
-    taxonomy = render_prompt_taxonomy(categories).strip()
-    if alert_source.strip().lower() == "hermes":
-        return (
-            "Use exactly one category name from the Hermes taxonomy below\n\n"
-            "## Hermes root cause category taxonomy (single source of truth)\n"
-            f"{taxonomy}"
-        )
-    return (
-        "Use exactly one category name from the root cause taxonomy below\n\n"
-        "## Root cause category taxonomy (single source of truth)\n"
-        f"{taxonomy}"
-    )
-
-
 def normalize_root_cause_category(raw: str, *, allowed_categories: set[str]) -> str:
-    """Map adjacent labels onto a canonical allowed category when possible."""
+    """Map adjacent labels onto a canonical allowed category; else ``unknown``.
+
+    Fail closed: out-of-taxonomy values are never persisted. Aliases apply only
+    when the target is in ``allowed_categories``.
+    """
     cleaned = raw.strip()
     if not cleaned:
-        return cleaned
+        return _UNKNOWN_CATEGORY
 
     if cleaned in allowed_categories:
         return cleaned
@@ -150,7 +132,12 @@ def normalize_root_cause_category(raw: str, *, allowed_categories: set[str]) -> 
         logger.info("Normalized root_cause_category %r -> %r", cleaned, alias_target)
         return alias_target
 
-    return cleaned
+    logger.info(
+        "Rejecting out-of-taxonomy root_cause_category %r -> %s",
+        cleaned,
+        _UNKNOWN_CATEGORY,
+    )
+    return _UNKNOWN_CATEGORY
 
 
 def _normalize_token(raw: str) -> str:
@@ -158,12 +145,27 @@ def _normalize_token(raw: str) -> str:
     return _TOKEN_RE.sub("_", cleaned).strip("_")
 
 
+def _category_literal(include_categories: set[str]) -> Any:
+    """Closed ``Literal[...]`` of allowed category names (always includes ``unknown``)."""
+    names = tuple(sorted(set(include_categories) | {_UNKNOWN_CATEGORY}))
+    if not names:
+        names = (_UNKNOWN_CATEGORY,)
+    return cast(Any, Literal.__getitem__(names))
+
+
 def build_diagnosis_schema(include_categories: set[str]) -> type[BaseModel]:
+    """Build a Pydantic schema whose ``root_cause_category`` is a closed enum.
+
+    The field type is a dynamic ``Literal`` so ``model_json_schema()`` emits
+    ``"enum": [...]`` — the shape OpenAI/Anthropic structured outputs expect
+    for classification fields, instead of an open ``str``.
+    """
     category_taxonomy = render_prompt_taxonomy(include_categories).strip()
+    category_type = _category_literal(include_categories)
 
     class DiagnosisSchema(BaseModel):
         root_cause: str = Field(description="Concise root cause statement (2-3 sentences max)")
-        root_cause_category: str = Field(
+        root_cause_category: category_type = Field(  # type: ignore[valid-type]
             description=(f"Use exactly one category from this taxonomy:\n{category_taxonomy}")
         )
         causal_chain: list[str] = Field(
@@ -258,3 +260,16 @@ def build_investigation_result(
         category_text_mismatch=mismatch,
         category_text_mismatch_reason=reason,
     )
+
+
+__all__ = [
+    "InvestigationResult",
+    "build_diagnosis_schema",
+    "build_investigation_result",
+    "claims_to_dicts",
+    "normalize_root_cause_category",
+    "result_to_state",
+    # Re-exported for compat — canonical home is taxonomy_registry.
+    "root_cause_category_instruction_for_source",
+    "taxonomy_categories_for_alert_source",
+]

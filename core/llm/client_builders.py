@@ -62,7 +62,9 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
     settings, provider = route.settings, route.provider
 
     if is_openai_compat_provider(provider):
-        resolved = resolve_openai_compat_provider(settings, provider, "reasoning")
+        from core.llm.types import ModelType
+
+        resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
         max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
         return sdk.OpenAIAgentClient(
             model=resolved.model,
@@ -133,11 +135,12 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     )
     from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
     from core.llm.transports.sdk import llm_clients as sdk
+    from core.llm.types import ModelType
 
     settings, provider = route.settings, route.provider
 
     def _fallback_model(provider_prefix: str) -> str | None:
-        if model_type == "toolcall":
+        if model_type is ModelType.TOOLCALL:
             return None
         return str(getattr(settings, f"{provider_prefix}_toolcall_model", None) or "") or None
 

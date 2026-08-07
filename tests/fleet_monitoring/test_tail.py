@@ -15,6 +15,7 @@ review hammered on:
 
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import threading
@@ -24,6 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.utils.polling import wait_until
 from tools.system.fleet_monitoring import tail as tail_mod
 from tools.system.fleet_monitoring.tail import (
     DEFAULT_MAX_BYTES,
@@ -446,7 +448,8 @@ class TestAttachSession:
         log.write_bytes(b"already-here")
         with self._make_session(log) as sess:
             # Give the reader a couple of poll cycles to (not) push.
-            time.sleep(0.1)
+            with contextlib.suppress(TimeoutError):
+                wait_until(lambda: not sess._queue.empty(), timeout=0.1, interval=0.01)  # noqa: SLF001
             items: list[object] = []
             while True:
                 try:
@@ -517,9 +520,7 @@ class TestAttachSession:
         monkeypatch.setattr(tail_mod, "pid_exists", _fake_pid_exists)
         with self._make_session(log) as sess:
             # Wait up to 2s for the reader thread to exit naturally.
-            deadline = time.monotonic() + 2.0
-            while time.monotonic() < deadline and sess._thread.is_alive():  # noqa: SLF001
-                time.sleep(0.01)
+            wait_until(lambda: not sess._thread.is_alive(), timeout=2.0, interval=0.01)  # noqa: SLF001
             assert not sess._thread.is_alive()  # noqa: SLF001
             # ``producer_exited`` is the signal the slash-command trailer
             # uses to print "· process exited" — must flip True only on

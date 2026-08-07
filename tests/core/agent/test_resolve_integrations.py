@@ -58,6 +58,30 @@ def test_resolve_integrations_does_not_cache_empty_resolve(
     assert session.resolved_integrations_cache is None
 
 
+def test_resolve_integrations_honors_explicit_empty_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``{}`` is a forced no-integration world — do not live-resolve over it.
+
+    Turn oracles pin ``resolved_integrations: {}`` so gather cannot see the
+    developer's/CI real credentials. Treating that as a cache miss would let
+    Datadog/Sentry tools fire and fail ``must_not_call`` contracts.
+    """
+    session = Session()
+    session.resolved_integrations_cache = {}
+
+    def _unexpected(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        raise AssertionError("resolve_integrations() must not run on explicit empty cache")
+
+    monkeypatch.setattr(
+        "core.agent_harness.session.integration_resolution.resolve_integrations",
+        _unexpected,
+    )
+
+    assert resolve_and_cache_integrations(session) == {}
+    assert session.resolved_integrations_cache == {}
+
+
 def test_resolve_integrations_reresolves_metadata_only_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

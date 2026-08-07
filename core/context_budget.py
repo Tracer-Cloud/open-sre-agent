@@ -86,6 +86,7 @@ def _candidate_exchange(
     *,
     start: int,
     end: int,
+    message_tokens: list[int] | None = None,
 ) -> _ToolExchange | None:
     exchange_messages = messages[start:end]
     if any(_is_pinned_message(message) for message in exchange_messages):
@@ -95,10 +96,14 @@ def _candidate_exchange(
     duplicate_only = bool(result_messages) and all(
         _is_duplicate_result_message(message) for message in result_messages
     )
+    if message_tokens is not None:
+        token_estimate = sum(message_tokens[start:end])
+    else:
+        token_estimate = estimate_message_tokens(exchange_messages)
     return _ToolExchange(
         start=start,
         end=end,
-        token_estimate=estimate_message_tokens(exchange_messages),
+        token_estimate=token_estimate,
         duplicate_only=duplicate_only,
     )
 
@@ -109,20 +114,31 @@ def _append_candidate(
     *,
     start: int,
     end: int,
+    message_tokens: list[int] | None = None,
 ) -> None:
-    candidate = _candidate_exchange(messages, start=start, end=end)
+    candidate = _candidate_exchange(messages, start=start, end=end, message_tokens=message_tokens)
     if candidate is not None:
         candidates.append(candidate)
 
 
-def _tool_exchange_candidates(messages: list[dict[str, Any]]) -> list[_ToolExchange]:
+def _tool_exchange_candidates(
+    messages: list[dict[str, Any]],
+    *,
+    message_tokens: list[int] | None = None,
+) -> list[_ToolExchange]:
     candidates: list[_ToolExchange] = []
     for index, message in enumerate(messages):
         if message.get("role") != "assistant":
             continue
 
         if _has_tool_use_block(message.get("content")):
-            _append_candidate(candidates, messages, start=index, end=min(index + 2, len(messages)))
+            _append_candidate(
+                candidates,
+                messages,
+                start=index,
+                end=min(index + 2, len(messages)),
+                message_tokens=message_tokens,
+            )
             continue
 
         tool_calls = message.get("tool_calls")
@@ -135,7 +151,13 @@ def _tool_exchange_candidates(messages: list[dict[str, Any]]) -> list[_ToolExcha
                     end += 1
                 else:
                     break
-            _append_candidate(candidates, messages, start=index, end=end)
+            _append_candidate(
+                candidates,
+                messages,
+                start=index,
+                end=end,
+                message_tokens=message_tokens,
+            )
     return candidates
 
 
@@ -162,6 +184,64 @@ def context_budget_ceiling_for_model(model: str | None) -> int:
     return max(window - _RESPONSE_HEADROOM_TOKENS, _RESPONSE_HEADROOM_TOKENS)
 
 
+def _message_token_estimate(message: dict[str, Any]) -> int:
+    total = 0
+    content = message.get("content", "")
+    if isinstance(content, str):
+        total += int(len(content) * _TOKENS_PER_CHAR)
+    elif isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict):
+                total += int(len(json.dumps(block, default=str)) * _TOKENS_PER_CHAR)
+            elif isinstance(block, str):
+                total += int(len(block) * _TOKENS_PER_CHAR)
+    return total
+
+
+def _message_token_estimates(messages: list[dict[str, Any]]) -> tuple[list[int], int]:
+    tokens = [_message_token_estimate(message) for message in messages]
+    return tokens, sum(tokens)
+
+
+def _ledger_remove_range(
+    message_tokens: list[int],
+    total_message_tokens: int,
+    *,
+    start: int,
+    end: int,
+) -> int:
+    """Drop ``[start, end)`` from the ledger; return the new total."""
+    removed = sum(message_tokens[start:end])
+    del message_tokens[start:end]
+    return total_message_tokens - removed
+
+
+def _estimate_messages_tokens(messages: list[dict[str, Any]]) -> int:
+    return sum(_message_token_estimate(message) for message in messages)
+
+
+def _system_tokens(system: str | None) -> int:
+    return int(len(system) * _TOKENS_PER_CHAR) if system else 0
+
+
+def system_and_tools_overhead(
+    system: str | None,
+    tools: list[dict[str, Any]] | None,
+) -> int:
+    """Fixed token overhead for the system prompt and tool schemas.
+
+    Callers on a hot path (e.g. the investigation ReAct loop) should call this
+    once and pass the result to ``enforce_context_budget`` via
+    ``fixed_overhead_tokens`` so tool schemas are not re-serialized every
+    iteration.
+    """
+    total = _system_tokens(system)
+    if tools:
+        for schema in tools:
+            total += int(len(json.dumps(schema, default=str)) * _TOKENS_PER_CHAR)
+    return total
+
+
 def estimate_message_tokens(
     messages: list[dict[str, Any]],
     *,
@@ -175,34 +255,27 @@ def estimate_message_tokens(
     aggressively while system + tools (tens of thousands of tokens for
     opensre's 100+ tool registry) silently pushed us over the line.
     """
-    total = 0
-    for message in messages:
-        content = message.get("content", "")
-        if isinstance(content, str):
-            total += int(len(content) * _TOKENS_PER_CHAR)
-        elif isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict):
-                    total += int(len(json.dumps(block, default=str)) * _TOKENS_PER_CHAR)
-                elif isinstance(block, str):
-                    total += int(len(block) * _TOKENS_PER_CHAR)
-    if system:
-        total += int(len(system) * _TOKENS_PER_CHAR)
-    if tools:
-        for schema in tools:
-            total += int(len(json.dumps(schema, default=str)) * _TOKENS_PER_CHAR)
-    return total
+    return _estimate_messages_tokens(messages) + system_and_tools_overhead(system, tools)
+
+
+def _trim_lowest_value_tool_pair(
+    messages: list[dict[str, Any]],
+    *,
+    message_tokens: list[int] | None = None,
+) -> tuple[int, int] | None:
+    """Drop one non-pinned tool exchange; return its ``[start, end)`` range."""
+    candidates = _tool_exchange_candidates(messages, message_tokens=message_tokens)
+    if not candidates:
+        return None
+
+    selected = min(candidates, key=_eviction_priority)
+    del messages[selected.start : selected.end]
+    return selected.start, selected.end
 
 
 def trim_lowest_value_tool_pair(messages: list[dict[str, Any]]) -> bool:
     """Drop one non-pinned tool exchange using the eviction heuristic."""
-    candidates = _tool_exchange_candidates(messages)
-    if not candidates:
-        return False
-
-    selected = min(candidates, key=_eviction_priority)
-    del messages[selected.start : selected.end]
-    return True
+    return _trim_lowest_value_tool_pair(messages) is not None
 
 
 def _shrink_text(text: str, max_chars: int) -> tuple[str, bool]:
@@ -283,10 +356,11 @@ def truncate_content(content: Any, max_chars: int) -> tuple[Any, bool]:
 def _truncate_largest_message(
     messages: list[dict[str, Any]],
     *,
-    system: str | None,
-    tools: list[dict[str, Any]] | None,
+    message_tokens: list[int],
+    total_message_tokens: int,
+    fixed_overhead_tokens: int,
     ceiling: int,
-) -> bool:
+) -> tuple[bool, int]:
     """Truncate the biggest still-shrinkable message so the prompt fits.
 
     Tries messages largest-first (so an untruncatable assistant ``tool_calls``
@@ -298,20 +372,21 @@ def _truncate_largest_message(
     """
     order = sorted(
         range(len(messages)),
-        key=lambda i: estimate_message_tokens([messages[i]]),
+        key=message_tokens.__getitem__,
         reverse=True,
     )
     for idx in order:
-        overhead = estimate_message_tokens(
-            [m for i, m in enumerate(messages) if i != idx], system=system, tools=tools
-        )
+        overhead = (total_message_tokens - message_tokens[idx]) + fixed_overhead_tokens
         budget_tokens = max(ceiling - overhead - _TRUNCATION_SAFETY_TOKENS, _TRUNCATION_MIN_TOKENS)
         max_chars = int(budget_tokens / _TOKENS_PER_CHAR)
         new_content, changed = truncate_content(messages[idx].get("content"), max_chars)
         if changed:
             messages[idx]["content"] = new_content
-            return True
-    return False
+            updated_tokens = _message_token_estimate(messages[idx])
+            total_message_tokens += updated_tokens - message_tokens[idx]
+            message_tokens[idx] = updated_tokens
+            return True, total_message_tokens
+    return False, total_message_tokens
 
 
 def enforce_context_budget(
@@ -319,12 +394,30 @@ def enforce_context_budget(
     *,
     system: str | None = None,
     tools: list[dict[str, Any]] | None = None,
+    fixed_overhead_tokens: int | None = None,
     ceiling: int = _TOKEN_BUDGET_CEILING,
 ) -> None:
-    """Trim low-value tool exchanges until the prompt fits under ``ceiling``."""
-    while estimate_message_tokens(messages, system=system, tools=tools) > ceiling:
-        if not trim_lowest_value_tool_pair(messages):
-            if not _truncate_largest_message(messages, system=system, tools=tools, ceiling=ceiling):
+    """Trim low-value tool exchanges until the prompt fits under ``ceiling``.
+
+    Pass ``fixed_overhead_tokens`` (from :func:`system_and_tools_overhead`) to
+    skip re-serializing tool schemas on every call.  When omitted the overhead
+    is computed from ``system`` and ``tools``.
+    """
+    if fixed_overhead_tokens is None:
+        fixed_overhead_tokens = system_and_tools_overhead(system, tools)
+    # Per-message ledger: estimate once, then adjust only on trim / truncate.
+    message_tokens, total_message_tokens = _message_token_estimates(messages)
+    while (total_message_tokens + fixed_overhead_tokens) > ceiling:
+        removed = _trim_lowest_value_tool_pair(messages, message_tokens=message_tokens)
+        if removed is None:
+            changed, total_message_tokens = _truncate_largest_message(
+                messages,
+                message_tokens=message_tokens,
+                total_message_tokens=total_message_tokens,
+                fixed_overhead_tokens=fixed_overhead_tokens,
+                ceiling=ceiling,
+            )
+            if not changed:
                 logger.warning(
                     "[agent] context still over budget after trimming + truncation "
                     "(ceiling=%d); letting the request proceed",
@@ -335,6 +428,10 @@ def enforce_context_budget(
                 "[agent] truncated oversized message to fit context budget (ceiling=%d)", ceiling
             )
             continue
+        start, end = removed
+        total_message_tokens = _ledger_remove_range(
+            message_tokens, total_message_tokens, start=start, end=end
+        )
         logger.warning(
             "[agent] trimmed low-value tool pair to fit context budget (ceiling=%d)", ceiling
         )

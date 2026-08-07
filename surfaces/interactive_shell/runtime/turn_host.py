@@ -16,11 +16,15 @@ import logging
 import threading
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 
+if TYPE_CHECKING:
+    from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+
 from platform.analytics.repl_context import bound_repl_turn_context
+from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
 from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -63,19 +67,47 @@ class AgentTurnRuntime:
     spinner: SpinnerState
     invalidate_prompt: Callable[[], None]
     request_exit: Callable[[], None] | None = None
+    #: Where this turn's streamed output goes. ``None`` keeps the shell's own
+    #: terminal; an embedding caller passes its console so agent responses and
+    #: tool output land in the same stream as the startup renders.
+    console: Console | None = None
+    #: Session-scoped action runner; rebound to each turn's streaming console.
+    action_runner: ShellActionRunner | None = None
+
+
+def _streaming_console(
+    runtime: AgentTurnRuntime, cancel_event: threading.Event
+) -> StreamingConsole:
+    """Spinner-aware console for one turn, writing where the caller asked.
+
+    The turn needs a :class:`StreamingConsole` for progress and cancellation, so
+    an injected console cannot be used directly. It renders *through* that
+    console rather than to a copy of its file, so a caller's ``capture()`` and
+    ``record`` see the turn.
+    """
+    base = runtime.console
+    if base is None:
+        return StreamingConsole(
+            runtime.spinner,
+            cancel_event,
+            highlight=False,
+            force_terminal=True,
+            color_system="truecolor",
+            legacy_windows=False,
+        )
+    return StreamingConsole(
+        runtime.spinner,
+        cancel_event,
+        output=base,
+        highlight=False,
+        force_terminal=base.is_terminal,
+    )
 
 
 async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
     """Set up shell presentation for one turn and drive its lifecycle."""
     dispatch_cancel = threading.Event()
-    console = StreamingConsole(
-        runtime.spinner,
-        dispatch_cancel,
-        highlight=False,
-        force_terminal=True,
-        color_system="truecolor",
-        legacy_windows=False,
-    )
+    console = _streaming_console(runtime, dispatch_cancel)
     emit = ConsoleAgentEventSink(
         session=runtime.session,
         spinner=runtime.spinner,
@@ -143,10 +175,16 @@ async def _run_agent_turn_loop(
         # (``action_agent -> core.agent``) before the first turn is queued.
         from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 
-        with bound_repl_turn_context(
-            session_id=runtime.session.session_id,
-            turn_kind=_AGENT_TURN_KIND,
-            prompt_turn_id=recorder.turn_id if recorder is not None else None,
+        with (
+            bound_usage_context(
+                surface=SURFACE_CLI,
+                session_id=runtime.session.session_id,
+            ),
+            bound_repl_turn_context(
+                session_id=runtime.session.session_id,
+                turn_kind=_AGENT_TURN_KIND,
+                prompt_turn_id=recorder.turn_id if recorder is not None else None,
+            ),
         ):
             await asyncio.to_thread(
                 execute_shell_turn,
@@ -157,6 +195,7 @@ async def _run_agent_turn_loop(
                 confirm_fn=confirm,
                 is_tty=None,
                 request_exit=runtime.request_exit,
+                action_runner=runtime.action_runner,
             )
     except asyncio.CancelledError:
         await emit(AgentEvent(type="turn_interrupted"))

@@ -25,31 +25,43 @@ def _cloudwatch_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     }
 
 
+_CW_LOGS_ANTI_EXAMPLES = (
+    "Do not call without an absolute log_group path (e.g. /aws/lambda/checkout).",
+    "Do not use for Kubernetes pod logs — use kubernetes_get_pod_logs or get_eks_pod_logs.",
+    "Do not invent filter_pattern values; omit the filter when the pattern is unknown.",
+)
+
+
 @tool(
     name="get_cloudwatch_logs",
     display_name="CloudWatch",
     source="cloudwatch",
-    description="Fetch error logs from AWS CloudWatch Logs.",
+    description=(
+        "Fetch recent log events from one AWS CloudWatch Logs group. "
+        "Require the absolute log_group name; optionally narrow with log_stream "
+        "or filter_pattern (correlation id / ERROR)."
+    ),
     use_cases=[
-        "Retrieving error tracebacks from CloudWatch",
-        "Analyzing application-level errors",
-        "Investigating file not found errors",
-        "Understanding pipeline failure root causes",
-        "Auto-discovering recent logs from ECS tasks, Lambda functions, etc.",
-        "Searching for logs by correlation ID or error pattern",
+        "Retrieving error tracebacks from a known CloudWatch log group",
+        "Searching a Lambda/ECS/log group by correlation ID or error pattern",
+        "Auto-discovering the newest stream when only the log group is known",
     ],
+    anti_examples=list(_CW_LOGS_ANTI_EXAMPLES),
     requires=[],
     input_schema={
         "type": "object",
         "properties": {
-            "log_group": {"type": "string", "description": "CloudWatch log group name (required)"},
+            "log_group": {
+                "type": "string",
+                "description": "Absolute CloudWatch log group name (e.g. /aws/lambda/api)",
+            },
             "log_stream": {
                 "type": "string",
                 "description": "Log stream name (optional — auto-discovered if absent)",
             },
             "filter_pattern": {
                 "type": "string",
-                "description": "Pattern to filter logs (e.g., correlation_id, error text)",
+                "description": "CloudWatch filter pattern (correlation_id, ERROR, etc.)",
             },
             "limit": {"type": "integer", "default": 100},
         },

@@ -12,6 +12,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Literal
 
+from core.state.transcript_window import compact_messages_to_window
+
 MAX_CONVERSATION_TURNS = 12
 MAX_CONVERSATION_MESSAGES = MAX_CONVERSATION_TURNS * 2
 
@@ -48,7 +50,7 @@ class MutableAgentState:
     def record_turn(self, user_message: str, assistant_message: str) -> None:
         self._messages.append(("user", user_message))
         self._messages.append(("assistant", assistant_message))
-        self._trim_messages()
+        self._compact_messages()
 
     def reset_observation(self) -> None:
         self._last_observation = None
@@ -59,11 +61,13 @@ class MutableAgentState:
 
     def _replace_messages(self, messages: Sequence[tuple[str, str]]) -> None:
         self._messages = list(messages)
-        self._trim_messages()
+        self._compact_messages()
 
-    def _trim_messages(self) -> None:
+    def _compact_messages(self) -> None:
         if len(self._messages) > MAX_CONVERSATION_MESSAGES:
-            self._messages[:] = self._messages[-MAX_CONVERSATION_MESSAGES:]
+            self._messages[:] = compact_messages_to_window(
+                self._messages, max_messages=MAX_CONVERSATION_MESSAGES
+            )
 
 
 __all__ = [

@@ -13,7 +13,7 @@ def _state(**overrides: Any) -> dict[str, Any]:
         "root_cause": "A bad deploy introduced 5xx errors.",
         "remediation_steps": ["Roll back the deploy", "Verify health checks"],
         "validity_score": 0.92,
-        "openclaw_context": {},
+        "channel_contexts": {"openclaw": {}},
     }
     base.update(overrides)
     return base
@@ -147,7 +147,7 @@ def test_send_openclaw_report_forwards_conversation_id(monkeypatch: pytest.Monke
     monkeypatch.setattr("integrations.openclaw.delivery.call_openclaw_tool", _fake_call)
 
     posted, error = send_openclaw_report(
-        _state(openclaw_context={"conversation_id": "conv-1"}),
+        _state(channel_contexts={"openclaw": {"conversation_id": "conv-1"}}),
         "report",
         _creds(),
     )
@@ -175,7 +175,11 @@ def test_send_openclaw_report_merges_transport_overrides(monkeypatch: pytest.Mon
     )
 
     posted, error = send_openclaw_report(
-        _state(openclaw_context={"mode": "stdio", "command": "openclaw", "args": ["mcp", "serve"]}),
+        _state(
+            channel_contexts={
+                "openclaw": {"mode": "stdio", "command": "openclaw", "args": ["mcp", "serve"]}
+            }
+        ),
         "report",
         _creds(),
     )

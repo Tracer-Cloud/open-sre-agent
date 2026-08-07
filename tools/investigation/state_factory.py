@@ -26,11 +26,14 @@ def make_initial_state(
     *,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str] | None = None,
+    user_requested: bool = False,
 ) -> AgentState:
     """Create initial investigation state from the raw alert payload.
 
     When ``investigation_metadata`` is set, it supplies ``(alert_name, severity)``
     for initial state instead of deriving them only from ``raw_alert``.
+    ``user_requested`` marks an investigation the user explicitly asked for;
+    the intake noise gate does not discard those.
     """
     rubric = ""
     alert_payload: str | dict[str, Any] = raw_alert
@@ -59,12 +62,13 @@ def make_initial_state(
             "alert_name": alert_name,
             "severity": severity,
             "raw_alert": alert_payload,
+            "user_requested": user_requested,
             "investigation_started_at": time.monotonic(),
             "opensre_evaluate": opensre_evaluate,
             "opensre_eval_rubric": rubric,
         }
     )
-    return cast(AgentState, state.model_dump(mode="python", by_alias=True, exclude_none=True))
+    return cast(AgentState, state.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 
 def _resolve_alert_metadata(raw_alert: str | dict[str, Any]) -> tuple[str, str]:

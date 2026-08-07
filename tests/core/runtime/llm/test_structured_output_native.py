@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, Field
 
+from config.constants.llm import OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV
 from core.llm.shared.structured_output import (
-    OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV,
     StructuredOutputClient,
     json_schema_for_structured_output,
     native_structured_output_enabled,

@@ -4,13 +4,13 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.telegram.inbound_security import (
+from gateway.transports.telegram.inbound_security import (
     enforce_inbound_telegram_message_security,
     persist_policy_if_needed,
 )
 from integrations.messaging_security import MessagingIdentityPolicy
 
-_SECURITY = "gateway.telegram.inbound_security"
+_SECURITY = "gateway.transports.telegram.inbound_security"
 
 
 @pytest.fixture

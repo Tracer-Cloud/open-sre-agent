@@ -52,8 +52,14 @@ class StreamRenderer:
     in real time with tool calls, LLM reasoning, and other decisions.
     """
 
-    def __init__(self, *, local: bool = False, display: bool = True) -> None:
-        self._tracker = ProgressTracker()
+    def __init__(
+        self,
+        *,
+        local: bool = False,
+        display: bool = True,
+        console: Console | None = None,
+    ) -> None:
+        self._tracker = ProgressTracker(console=console)
         self._active_node: str | None = None
         self._events_received: int = 0
         self._node_names_seen: list[str] = []
@@ -65,7 +71,9 @@ class StreamRenderer:
         # instead of into the compact spinner subtext. The helper owns the
         # buffer + Live region + throttle state; the renderer only
         # orchestrates lifecycle (active_node tracking, finish-on-end).
-        self._console = Console(highlight=False)
+        # An embedding caller's console keeps investigation progress and tool
+        # detail in the same stream as the rest of the turn.
+        self._console = console if console is not None else Console(highlight=False)
         self._diagnose = _DiagnoseStreamRenderer(
             self._console,
             self._tracker,
@@ -115,7 +123,7 @@ class StreamRenderer:
     def _start_toggle_watcher(self) -> None:
         if get_output_format() != "rich" or _repl_progress_active():
             return
-        # ProgressTracker already owns the single Ctrl+O stdin watcher.
+        # ProgressTracker already owns the single Tab stdin watcher.
         # Register our handler so toggle_active_tool_details() routes here.
         self._toggle_unregister = register_tool_detail_toggle(self._toggle_tool_details)
 
@@ -130,7 +138,7 @@ class StreamRenderer:
             self._sync_tool_detail_view(clear=True)
             return
         label = "shown" if self._tool_details_visible else "hidden"
-        self._print_above_renderable(Text(f"  Tool details {label} (ctrl+o)", style="dim"))
+        self._print_above_renderable(Text(f"  Tool details {label} (tab)", style="dim"))
         if self._tool_details_visible:
             self._flush_tool_details()
 
@@ -555,10 +563,17 @@ class StreamRenderer:
                 root_cause = (self._final_state.get("root_cause") or "").strip()
                 if root_cause:
                     _print_info(f"Root cause: {root_cause}")
-                _print_info(
-                    "Investigation finished without a full report. "
-                    "Re-run, or check the logs if this persists."
-                )
+                if self._final_state.get("is_noise"):
+                    _print_info(
+                        "Classified as noise — not an incident, so no "
+                        "investigation ran. Rephrase as a concrete alert or "
+                        "symptom to investigate it."
+                    )
+                else:
+                    _print_info(
+                        "Investigation finished without a full report. "
+                        "Re-run, or check the logs if this persists."
+                    )
             return
 
         from tools.investigation.reporting.renderers.terminal import (

@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from integrations.slack.bot_api import SlackBotTarget, post_channel_message
 from integrations.slack.tools.slack_reply_message_tool import (
     SlackReplyMessageTool,
     slack_reply_message,
 )
+from integrations.slack.web_client import SlackBotTarget, post_channel_message
 
 
 class _FakeResponse:
@@ -38,7 +38,9 @@ class _FakeClient:
 
 
 def _install_fake_client(monkeypatch: Any, responder: Any) -> None:
-    monkeypatch.setattr("integrations.slack.bot_api._shared_client", lambda: _FakeClient(responder))
+    monkeypatch.setattr(
+        "integrations.slack.web_client._shared_client", lambda: _FakeClient(responder)
+    )
 
 
 def test_metadata_requires_approval_for_external_send() -> None:

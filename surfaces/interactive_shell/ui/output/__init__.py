@@ -21,7 +21,7 @@ from surfaces.interactive_shell.ui.output.renderers import (
     render_investigation_header,
 )
 from surfaces.interactive_shell.ui.output.toggles import (
-    CtrlOToggleWatcher,
+    ToolDetailToggleWatcher,
     register_tool_detail_toggle,
     suppress_stdin_watchers,
     toggle_active_tool_details,
@@ -31,6 +31,7 @@ from surfaces.interactive_shell.ui.output.tracker import (
     get_tracker,
     reset_tracker,
     set_silent_tracker,
+    set_tracker_console,
 )
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "ProgressTracker",
     "get_tracker",
     "reset_tracker",
+    "set_tracker_console",
     "set_silent_tracker",
     # Rendering
     "render_completed_investigation_footer",
@@ -51,7 +53,7 @@ __all__ = [
     "stop_display",
     "unregister_live_console",
     # Tool-detail toggle
-    "CtrlOToggleWatcher",
+    "ToolDetailToggleWatcher",
     "register_tool_detail_toggle",
     "suppress_stdin_watchers",
     "toggle_active_tool_details",

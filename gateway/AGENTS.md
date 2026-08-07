@@ -11,35 +11,50 @@ changes.
 |------|------|
 | Package main | `main.py` (`python -m gateway.main`) |
 | Production entry (slash ports) | `surfaces.cli.gateway_entry` (`python -m surfaces.cli.gateway_entry`) |
-| Composition root / process | `runtime/manager.py` |
-| Daemon pidfile / status | `runtime/daemon.py` |
-| Turn callback | `runtime/turn_handler.py` |
-| Sink + callback contracts | `runtime/sink_protocol.py` |
-| Shared config error | `runtime/errors.py` (`GatewayConfigurationError`) |
-| HTTP FastAPI app | `http/webapp.py` (`app`) |
-| Telegram start | `telegram/wiring.py` (`start_telegram_worker`) |
-| Slack start | `slack/wiring.py` (`start_slack_worker`) |
+| Composition root / process | `core/runtime/manager.py` |
+| Daemon pidfile / status | `core/runtime/daemon.py` |
+| Turn callback | `core/runtime/turn_handler.py` |
+| Sink + callback contracts | `core/runtime/sink_protocol.py` |
+| Config error type | `core/runtime/errors.py` (`GatewayConfigurationError`) |
+| Web surface (FastAPI) | `web/webapp.py` (`app`) |
+| Telegram start | `transports/telegram/wiring.py` (`start_telegram_worker`) |
+| Slack start | `transports/slack/wiring.py` (`start_slack_worker`) |
+| Discord start | `transports/discord/wiring.py` (`start_discord_worker`) |
 
 ## Layout
 
-- `runtime/` — process and turn machinery. `runtime/manager.py` is the
-  composition root: builds the turn handler, starts the transport workers,
-  owns signals and shutdown. `runtime/turn_handler.py` is the
-  transport-agnostic turn callback: `GatewayTurnHandler` (a
-  `(text, session, sink, logger) -> None` callable) builds a fresh
-  `HeadlessAgent` per turn and calls `agent.dispatch(text)`.
-  `runtime/sink_protocol.py` holds `GatewaySink` + `GatewayAgentCallback`;
-  `runtime/errors.py` holds `GatewayConfigurationError`.
-- `http/` — everything served over HTTP: `http/webapp.py` (FastAPI app),
-  `http/web_server.py`, the `/api/investigations` routes, and the
-  investigation store / worker / artifacts.
-- `telegram/` and `slack/` — one package per transport, each owning settings,
-  the inbound worker, inbound security, the output sink, and `wiring.py`
-  (e.g. `telegram/wiring.py` wires the handler into the polling worker).
-- `storage/session/resolver.py` — per-conversation session binding keyed by
-  platform; delegates create / resolve / rotate to `SessionManager`.
+Packages are split like `core/agent_harness/prompts/`: **core infra** vs
+**peer surfaces**. See `gateway/core/AGENTS.md` and
+`gateway/transports/AGENTS.md`.
 
-Tests mirror the subpackages: `gateway/tests/{runtime,http,telegram,slack}/`.
+- `core/` — process and leaf infrastructure (`runtime`, `storage`,
+  `billing`, `attachments`, `session`, `config`). No imports from transports
+  or `web`, except the composition root `core/runtime/manager.py`, which
+  wires them together.
+- `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
+  settings, inbound worker, security, output sink, and `wiring.py`. Peers
+  never import each other; anything two need belongs in `core/` (usually
+  `gateway.core.runtime`). See `transports/AGENTS.md`.
+- `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
+  May import `core/`; must not import chat transports. See `web/AGENTS.md`.
+- `core/storage/session/resolver.py` — per-conversation session binding
+  keyed by platform; delegates create / resolve / rotate to `SessionManager`.
+
+### Dependency rule (acyclic)
+
+```
+core  ←  transports.{slack,discord,telegram} · web
+         (peer surfaces — never import each other)
+```
+
+Sole exception: `core/runtime/manager.py` (composition root) imports the
+transports and `web`. Package DAG pinned by
+`tests/test_package_borders.py` (plus discord↔slack isolation in
+`tests/discord/test_transport_borders.py`).
+
+Tests stay flat under `gateway/tests/{runtime,web,slack,discord,telegram,…}/`
+(nesting `tests/transports/discord` collides with the `discord` PyPI package
+name during collection).
 
 ## Gateway turn dispatch
 

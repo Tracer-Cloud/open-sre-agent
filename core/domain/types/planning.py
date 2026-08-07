@@ -16,6 +16,7 @@ class PlannedInvestigationAction:
     score: int
     reasons: tuple[str, ...] = field(default_factory=tuple)
     retrieval_intent: RetrievalIntent | None = None
+    is_fallback: bool = False
 
 
 __all__ = ["PlannedInvestigationAction"]

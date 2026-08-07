@@ -1,6 +1,6 @@
 """Argv classification, fast-path ``--version`` output, and stdio setup.
 
-Pure helpers used by ``surfaces.cli.__main__`` before the full CLI is
+Pure helpers used by ``surfaces.cli.app`` before the full CLI is
 bootstrapped. They take the Click command / argv explicitly so they carry no
 dependency on the root group and stay trivially testable.
 """

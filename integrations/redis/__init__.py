@@ -15,6 +15,15 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.redis import (
+    REDIS_DATABASE_ENV,
+    REDIS_HOST_ENV,
+    REDIS_PASSWORD_ENV,
+    REDIS_PORT_ENV,
+    REDIS_SSL_ENV,
+    REDIS_USERNAME_ENV,
+)
+from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -83,18 +92,20 @@ def build_redis_config(raw: dict[str, Any] | None) -> RedisConfig:
 
 def redis_config_from_env() -> RedisConfig | None:
     """Load a Redis config from env vars."""
-    host = os.getenv("REDIS_HOST", "").strip()
+    host = os.getenv(REDIS_HOST_ENV, "").strip()
     if not host:
         return None
 
     return build_redis_config(
         {
             "host": host,
-            "port": safe_int(os.getenv("REDIS_PORT", str(DEFAULT_REDIS_PORT)), DEFAULT_REDIS_PORT),
-            "username": os.getenv("REDIS_USERNAME", "").strip(),
-            "password": os.getenv("REDIS_PASSWORD", "").strip(),
-            "db": safe_int(os.getenv("REDIS_DATABASE", "0"), 0),
-            "ssl": os.getenv("REDIS_SSL", "false").strip().lower() in ("true", "1", "yes"),
+            "port": safe_int(
+                os.getenv(REDIS_PORT_ENV, str(DEFAULT_REDIS_PORT)), DEFAULT_REDIS_PORT
+            ),
+            "username": os.getenv(REDIS_USERNAME_ENV, "").strip(),
+            "password": resolve_env_credential(REDIS_PASSWORD_ENV) or "",
+            "db": safe_int(os.getenv(REDIS_DATABASE_ENV, "0"), 0),
+            "ssl": os.getenv(REDIS_SSL_ENV, "false").strip().lower() in ("true", "1", "yes"),
         }
     )
 

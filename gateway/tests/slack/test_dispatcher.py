@@ -10,11 +10,15 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.slack.dispatcher import _SlackTurnDispatcher
-from gateway.slack.events import SlackInboundMessage
-from gateway.slack.settings import SlackGatewaySettings
+from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
+from config.principal import Principal, StorageScope
+from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.transports.slack.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.events import SlackInboundMessage
+from gateway.transports.slack.principal import slack_scope
+from gateway.transports.slack.settings import SlackGatewaySettings
 
-_SECURITY = "gateway.slack.security"
+_SECURITY = "gateway.transports.slack.security"
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +29,28 @@ def _isolate_slack_integration_store():
         patch(f"{_SECURITY}.upsert_instance"),
     ):
         yield
+
+
+TEST_ORG_ID = "org_test_dispatcher"
+
+
+def _test_scope() -> StorageScope:
+    """Scope a turn would have resolved to under the autouse silo org."""
+    return slack_scope(Principal.org(TEST_ORG_ID), "U1")
+
+
+@pytest.fixture(autouse=True)
+def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve an owning org, but leave metering unable to make real HTTP calls.
+
+    ``consume_credits`` needs a URL and a token as well as an org, so setting
+    only the org keeps every outcome UNCONFIGURED while giving principal
+    resolution a silo organization to land on. Install lookup is stubbed so
+    tests do not touch the developer's gateway SQLite catalog.
+    """
+    for name in (WEBAPP_URL_ENV, USAGE_SECRET_ENV):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, TEST_ORG_ID)
 
 
 class _FakeMessagingClient:
@@ -72,13 +98,37 @@ class _FakeSessionResolver:
         self.calls: list[dict[str, str]] = []
         self._has_session = has_session
 
-    def resolve(self, *, user_id: str, chat_id: str) -> _FakeSession:
+    def resolve(
+        self,
+        *,
+        user_id: str,
+        chat_id: str,
+        principal: object = None,
+        actor: object = None,
+    ) -> _FakeSession:
         self.calls.append({"user_id": user_id, "chat_id": chat_id})
+        _ = principal, actor
         return _FakeSession()
 
-    def has_session(self, *, user_id: str) -> bool:
-        _ = user_id
+    def has_conversation(self, *, conversation_key: str, principal: object = None) -> bool:
+        _ = conversation_key, principal
         return self._has_session
+
+    def has_session(self, *, user_id: str, principal: object = None, actor: object = None) -> bool:
+        _ = user_id, principal, actor
+        return self._has_session
+
+    def rotate(
+        self,
+        *,
+        user_id: str,
+        chat_id: str,
+        principal: object = None,
+        actor: object = None,
+    ) -> _FakeSession:
+        self.calls.append({"user_id": user_id, "chat_id": chat_id, "rotate": "1"})
+        _ = principal, actor
+        return _FakeSession()
 
 
 def _settings(
@@ -150,7 +200,7 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
     # Placeholder posted into the thread, then edited with the final answer.
     assert messaging.posts[0]["thread_ts"] == "100.1"
     assert messaging.updates[-1]["text"] == "done"
-    # Viktor-like coworker UX: eyes while working, then checkmark.
+    # Coworker UX: eyes while working, then checkmark.
     emoji_ops = [(r["op"], r["emoji"]) for r in messaging.reactions]
     assert ("add", "eyes") in emoji_ops
     assert ("remove", "eyes") in emoji_ops
@@ -178,8 +228,59 @@ def test_unauthorized_user_gets_denial_reply_and_no_turn() -> None:
     assert "SLACK_" not in denial
 
 
+def test_out_of_credits_blocks_turn_with_short_reply(monkeypatch: pytest.MonkeyPatch) -> None:
+    messaging = _FakeMessagingClient()
+    resolver = _FakeSessionResolver()
+    turns: list[str] = []
+    reasons: list[str] = []
+
+    def deny(_organization_id: str | None = None, **kwargs: Any) -> CreditsOutcome:
+        reasons.append(kwargs["reason"])
+        return CreditsOutcome.DENIED
+
+    monkeypatch.setattr("gateway.transports.slack.dispatcher.consume_credits", deny)
+
+    _dispatcher(
+        settings=_settings(["U1"]),
+        messaging=messaging,
+        resolver=resolver,
+        handler=lambda text, *_args: turns.append(text),
+    ).dispatch(_inbound())
+
+    assert turns == []
+    assert reasons == ["slack_turn"]
+    # Short thread reply; no balances or env details leak to the channel.
+    assert messaging.posts[0]["text"] == "Out of credits — top up in the OpenSRE console."
+    assert messaging.posts[0]["thread_ts"] == "100.1"
+
+
+@pytest.mark.parametrize(
+    "outcome", [CreditsOutcome.ALLOWED, CreditsOutcome.UNCONFIGURED, CreditsOutcome.UNAVAILABLE]
+)
+def test_non_denied_credit_outcomes_run_the_turn(
+    monkeypatch: pytest.MonkeyPatch, outcome: CreditsOutcome
+) -> None:
+    """Fail-open: metering off or a webapp outage must never block a turn."""
+    messaging = _FakeMessagingClient()
+    resolver = _FakeSessionResolver()
+    turns: list[str] = []
+    monkeypatch.setattr(
+        "gateway.transports.slack.dispatcher.consume_credits", lambda *_args, **_kw: outcome
+    )
+
+    def handler(text: str, _session: Any, sink: Any, _logger: logging.Logger) -> None:
+        turns.append(text)
+        sink.finalize("done")
+
+    _dispatcher(
+        settings=_settings(["U1"]), messaging=messaging, resolver=resolver, handler=handler
+    ).dispatch(_inbound())
+
+    assert len(turns) == 1
+
+
 def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.slack import dispatcher
+    from gateway.transports.slack import dispatcher
 
     monkeypatch.setattr(dispatcher, "_MAX_CONVERSATION_LOCKS", 4)
     dispatcher = _dispatcher(
@@ -197,7 +298,7 @@ def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_in_use_conversation_lock_survives_pruning(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.slack import dispatcher
+    from gateway.transports.slack import dispatcher
 
     monkeypatch.setattr(dispatcher, "_MAX_CONVERSATION_LOCKS", 1)
     dispatcher = _dispatcher(
@@ -244,7 +345,7 @@ def test_errored_turn_replaces_placeholder_with_error() -> None:
             messaging=messaging,
             resolver=_FakeSessionResolver(),
             handler=handler,
-        )._run_turn(_inbound())
+        )._run_turn(_inbound(), _test_scope())
 
     # The placeholder message was edited to an error, and the message shows ✗.
     assert messaging.updates, "placeholder was never updated on error"
@@ -254,7 +355,7 @@ def test_errored_turn_replaces_placeholder_with_error() -> None:
 
 def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
     # Arrange / Act
-    from gateway.slack.dispatcher import _agent_text_with_slack_context
+    from gateway.transports.slack.dispatcher import _agent_text_with_slack_context
 
     text = _agent_text_with_slack_context(_inbound())
 
@@ -267,7 +368,7 @@ def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
 
 def test_agent_context_attributes_the_speaker() -> None:
     """The turn prefix names who is speaking (multi-user thread attribution)."""
-    from gateway.slack.dispatcher import _agent_text_with_slack_context
+    from gateway.transports.slack.dispatcher import _agent_text_with_slack_context
 
     text = _agent_text_with_slack_context(_inbound())
 
@@ -290,7 +391,7 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
         resolver=_FakeSessionResolver(),
         handler=hanging_handler,
     )
-    worker = threading.Thread(target=lambda: dispatcher._run_turn(_inbound()))
+    worker = threading.Thread(target=lambda: dispatcher._run_turn(_inbound(), _test_scope()))
     worker.start()
     try:
         deadline = time.monotonic() + 3.0
@@ -472,3 +573,21 @@ def test_unprompted_replies_rate_limited_with_eyes_ack_in_multi_user_thread() ->
             (r["op"], r["emoji"]) for r in messaging.reactions if r["timestamp"] == rate_limited_ts
         ]
         assert ops == [("add", "eyes")], f"expected 👀-only ack for {rate_limited_ts}, got {ops}"
+
+
+def test_turn_is_refused_when_the_owning_principal_cannot_be_resolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No known owner means no turn: a turn must never read or bill a guessed principal."""
+    # Arrange: no install record and no silo org, so resolution has nothing to land on.
+    monkeypatch.delenv(ORGANIZATION_ID_ENV, raising=False)
+    messaging = _FakeMessagingClient()
+    turns: list[str] = []
+    dispatcher = _gated_dispatcher(messaging=messaging, handler=_collecting_handler(turns))
+
+    # Act
+    dispatcher.dispatch(_inbound())
+
+    # Assert: the handler never ran and nothing was posted back to the channel.
+    assert turns == []
+    assert messaging.posts == []

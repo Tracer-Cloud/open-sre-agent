@@ -158,6 +158,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Post findings to a Rocket.Chat channel",
     ),
     Choice(
+        value="buzz",
+        label="Buzz",
+        group="Incident & Comms",
+        hint="Post findings to a Buzz (Nostr) channel — requires the buzz CLI",
+    ),
+    Choice(
         value="google_docs",
         label="Google Docs",
         group="Incident & Comms",

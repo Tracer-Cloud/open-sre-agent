@@ -8,6 +8,7 @@ without a wrapped HTTP response, and the empty-result envelope.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -47,7 +48,7 @@ class _FakeLokiHost(LokiMixin):
     def _build_datasource_url(self, datasource_uid: str, path: str) -> str:
         return f"{self.instance_url}/api/datasources/proxy/uid/{datasource_uid}{path}"
 
-    def _make_request(
+    def _make_get_request(
         self,
         url: str,
         params: dict[str, str] | None = None,
@@ -108,6 +109,7 @@ class TestQueryLokiSuccess:
         assert result["total_streams"] == 2
         assert result["total_logs"] == 3
         assert len(result["logs"]) == 3
+        assert result["truncated"] is False
 
     def test_each_log_row_carries_timestamp_message_and_labels(self) -> None:
         host = _FakeLokiHost()
@@ -142,6 +144,18 @@ class TestQueryLokiSuccess:
         assert host.last_params["start"] == str(expected_start)
         assert host.last_params["end"] == str(expected_end)
 
+    @patch("integrations.grafana.loki._MAX_LOKI_LOG_LINES", 2)
+    def test_truncates_logs_when_cap_is_reached(self) -> None:
+        host = _FakeLokiHost()
+        host.make_request_mock.return_value = _two_stream_response()
+
+        result = host.query_loki(_QUERY)
+
+        assert result["success"] is True
+        assert result["truncated"] is True
+        assert len(result["logs"]) == 2
+        assert result["total_logs"] == 2
+
 
 # ---------------------------------------------------------------------------
 # Not configured short-circuit
@@ -160,6 +174,7 @@ class TestQueryLokiNotConfigured:
             "success": False,
             "error": "Grafana client not configured for account 'missing-acct'",
             "logs": [],
+            "truncated": False,
         }
 
     def test_does_not_invoke_make_request(self) -> None:
@@ -189,21 +204,43 @@ class TestQueryLokiExceptions:
             "error": "connection refused",
             "response": "",
             "logs": [],
+            "truncated": False,
         }
 
-    def test_exception_with_response_includes_status_and_truncated_text(self) -> None:
+    @pytest.mark.parametrize(
+        ("status", "expected_error"),
+        [
+            (
+                HTTPStatus.TOO_MANY_REQUESTS,
+                "Loki rate-limited the query (429). "
+                "Retry later, shorten the time range, or lower the limit.",
+            ),
+            (
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Loki is unavailable (500). Server-side failure, retry later.",
+            ),
+            (
+                HTTPStatus.BAD_GATEWAY,
+                "Loki is unavailable (502). Server-side failure, retry later.",
+            ),
+            (HTTPStatus.NOT_FOUND, "Loki query failed: 404"),
+        ],
+    )
+    def test_exception_with_response_includes_status_and_truncated_text(
+        self, status: HTTPStatus, expected_error: str
+    ) -> None:
         host = _FakeLokiHost()
 
         long_text = "x" * 500
-        response = MagicMock(status_code=502, text=long_text)
-        err = RuntimeError("bad gateway")
+        response = MagicMock(status_code=status, text=long_text)
+        err = RuntimeError("upstream failure")
         err.response = response  # type: ignore[attr-defined]
         host.make_request_mock.side_effect = err
 
         result = host.query_loki(_QUERY)
 
         assert result["success"] is False
-        assert result["error"] == "Loki query failed: 502"
+        assert result["error"] == expected_error
         assert result["response"] == long_text[:300]
         assert len(result["response"]) == 300
         assert result["logs"] == []

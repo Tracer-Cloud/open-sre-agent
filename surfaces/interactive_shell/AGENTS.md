@@ -124,14 +124,18 @@ owning area rather than adding more logic to the caller.
   language, or any deterministic mapping from non-`/`-prefixed prose to an action
   (e.g. "show integrations" -> `/integrations`). Engineers have been fired before
   for reintroducing intent heuristics that compete with the action agent.
-  - **Sanctioned exception:** input the user types as a literal `/slash` command
-    is dispatched deterministically (a static `slash_invoke` call in
-    `core/agent_harness/turns/action_driver.py`), so slash commands keep working when the
-    action-agent LLM is unavailable. This is an explicit-command bypass, not
-    intent inference — it fires only when the message *is* a `/command`, and
-    free-form text is still LLM-selected. See
-    `docs/interactive-shell-action-policy.md` ("Deterministic literal-`/slash`
-    dispatch").
+  - **Sanctioned exceptions** (explicit-command bypasses, not intent inference;
+    free-form prose is still LLM-selected):
+    1. Literal `/slash` the user typed — static `slash_invoke` in
+       `core/agent_harness/turns/action_driver.py` (keeps `/login` etc. working
+       when the action-agent LLM is down). See
+       `docs/interactive-shell-action-policy.md` ("Deterministic literal-`/slash`
+       dispatch").
+    2. Structured Want-me-to *accept* after a pending offer armed this session —
+       schedule yes expands to `/cron …`; investigation yes expands to
+       `/investigate alert:…`. Both are literal slash text and use path 1 only
+       (no separate static `investigation_start` bypass). Surfaces that disable
+       the investigation capability (gateway) must not arm the pending offer.
 - **No planning-stage fail-closed safeguard (v0.1 decision).** The second-phase
   action agent never denies a turn. Because every terminal action is read-only,
   an unmatched/ambiguous/chatty clause is not a safety risk — the agent executes
@@ -172,9 +176,10 @@ owning area rather than adding more logic to the caller.
   (`rich.markup.escape`): alerts, command output, file paths, integration names,
   model/provider labels, errors, docs snippets, and model text that is not
   already intentionally rendered as Markdown.
-- Use semantic tokens from `ui/theme.py`. Do not introduce raw hex colors, Rich
-  named colors, or raw ANSI escapes outside `ui/theme.py` unless a narrow
-  prompt-toolkit compatibility path requires it.
+- Use semantic tokens from `platform/terminal/theme.py`. Do not introduce raw
+  hex colors, Rich named colors, or raw ANSI escapes outside
+  `platform/terminal/theme.py` unless a narrow prompt-toolkit compatibility
+  path requires it.
 - Any raw terminal-mode code must check TTY support and restore terminal state
   in `finally`.
 - Be careful mixing `prompt_toolkit.patch_stdout`, Rich live rendering, and

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from config.constants.rds import RDS_DB_INSTANCE_IDENTIFIER_ENV, RDS_REGION_ENV
 from config.strict_config import StrictConfigModel
 from integrations._relational import env_str
 from integrations._validation_helpers import report_classify_failure
@@ -38,13 +39,13 @@ def build_rds_config(raw: dict[str, Any] | None) -> RDSConfig:
 
 def rds_config_from_env() -> RDSConfig | None:
     """Load an RDS config from env vars."""
-    db_id = env_str("RDS_DB_INSTANCE_IDENTIFIER")
+    db_id = env_str(RDS_DB_INSTANCE_IDENTIFIER_ENV)
     if not db_id:
         return None
     return build_rds_config(
         {
             "db_instance_identifier": db_id,
-            "region": env_str("AWS_REGION") or env_str("RDS_REGION") or DEFAULT_RDS_REGION,
+            "region": env_str("AWS_REGION") or env_str(RDS_REGION_ENV) or DEFAULT_RDS_REGION,
         }
     )
 
@@ -75,7 +76,7 @@ def rds_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     region = (
         str(rds.get("region") or "").strip()
         or env_str("AWS_REGION")
-        or env_str("RDS_REGION")
+        or env_str(RDS_REGION_ENV)
         or DEFAULT_RDS_REGION
     )
     return {

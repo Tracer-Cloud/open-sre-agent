@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 _SENSITIVE_KEY_RE = re.compile(
@@ -29,8 +30,33 @@ _JSON_TRUNCATION_SUFFIX = "\n... [truncated]"
 _SEED_LOOP_ITERATION = -1
 
 
+@dataclass(frozen=True, slots=True)
+class RedactedToolView:
+    """Frozen holder for one deep-copied redacted tool input/output.
+
+    Security contract:
+    - ``tool_input`` / ``output`` are produced by :func:`redact_sensitive` —
+      deep copies with credential/runtime keys replaced. They are **not**
+      aliases of the raw tool payload.
+    - Share this view across tracker, events, ``evidence_entries``, and
+      ``tool_outputs`` so each sink sees the same redacted tree (one walk).
+    - Treat nested dicts/lists as **read-only**. The dataclass is frozen, but
+      nested containers are ordinary copies and must not be mutated in place.
+    - Stage logic that needs the unredacted tool result still reads
+      ``evidence[tool_name]`` (raw) — that path is unchanged and intentional.
+    """
+
+    tool_input: Any
+    output: Any | None = None
+
+
 def redact_sensitive(value: Any) -> Any:
-    """Return a copy of ``value`` with credentials and runtime objects hidden."""
+    """Return a deep copy of ``value`` with credentials and runtime objects hidden.
+
+    Non-container scalars are returned unchanged (no copy). Nested dict/list/
+    tuple values are walked once into new containers — never aliases of
+    ``value``'s nested objects.
+    """
     if isinstance(value, dict):
         redacted: dict[str, Any] = {}
         for key, item in value.items():
@@ -47,6 +73,18 @@ def redact_sensitive(value: Any) -> Any:
     if isinstance(value, tuple):
         return [redact_sensitive(item) for item in value]
     return value
+
+
+def redact_tool_view(tool_input: Any, output: Any | None = None) -> RedactedToolView:
+    """Deep-copy-redact tool input (and optional output) once for shared sinks.
+
+    Does **not** skip redaction — it runs :func:`redact_sensitive` fully, then
+    lets callers reuse that one copy instead of walking the same tree 3–5×.
+    """
+    return RedactedToolView(
+        tool_input=redact_sensitive(tool_input),
+        output=None if output is None else redact_sensitive(output),
+    )
 
 
 def format_json_preview(value: Any, *, max_chars: int = DEFAULT_JSON_PREVIEW_MAX_CHARS) -> str:
@@ -81,7 +119,9 @@ def _one_line(value: str) -> str:
 __all__ = [
     "DEFAULT_JSON_PREVIEW_MAX_CHARS",
     "DEFAULT_TOOL_TRACE_OUTPUT_MAX_CHARS",
+    "RedactedToolView",
     "format_json_preview",
     "format_tool_trace_entry",
     "redact_sensitive",
+    "redact_tool_view",
 ]

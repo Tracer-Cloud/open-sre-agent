@@ -20,6 +20,7 @@ _EXPORT_MODULES = {
     "context_budget_ceiling_for_model": "core.context_budget",
     "enforce_context_budget": "core.context_budget",
     "estimate_message_tokens": "core.context_budget",
+    "system_and_tools_overhead": "core.context_budget",
     "trim_lowest_value_tool_pair": "core.context_budget",
     "truncate_content": "core.context_budget",
     "AgentEndEvent": "core.events",
@@ -65,7 +66,7 @@ _EXPORT_MODULES = {
     "AgentToolContext": "core.types",
     "AgentToolExecutor": "core.types",
     "RuntimeTool": "core.types",
-    "ToolExecutionMode": "core.types",
+    "ToolParallelism": "core.types",
 }
 
 

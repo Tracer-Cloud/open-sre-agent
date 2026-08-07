@@ -7,6 +7,91 @@ import pytest
 from config.constants import get_store_path
 
 
+def test_billing_env_var_names_are_the_infra_contract() -> None:
+    """Pin the credit-metering env-var names to the exact strings the org-silo
+    infra injects — a rename here silently disables metering in production."""
+    # Arrange / Act
+    from config.constants import billing
+
+    # Assert
+    assert billing.WEBAPP_URL_ENV == "OPENSRE_WEBAPP_URL"
+    assert billing.MACHINE_SECRET_ENV == "CLERK_MACHINE_SECRET_KEY"
+    assert billing.USAGE_SECRET_ENV == "AGENT_USAGE_SECRET"
+    assert billing.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
+    assert billing.CREDITS_HTTP_TIMEOUT_SECONDS == 5.0
+
+
+def test_tenancy_env_var_names_are_the_infra_contract() -> None:
+    """Pin the control plane's env-var names to the strings its ECS task
+    definition injects — a rename here fails gateway startup in a silo."""
+    # Arrange / Act
+    from config.constants import tenancy
+
+    # Assert
+    assert tenancy.CREDENTIALS_API_URL_ENV == "OPENSRE_CREDENTIALS_API_URL"
+    assert (
+        tenancy.CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV == "OPENSRE_CREDENTIALS_BOOTSTRAP_SECRET_ARN"
+    )
+
+
+def test_the_organization_id_is_re_exported() -> None:
+    """Callers may import it from the package root."""
+    # Arrange
+    from config import constants
+
+    # Act / Assert
+    assert constants.ORGANIZATION_ID_ENV == "ORGANIZATION_ID"
+    for name in (
+        "ORGANIZATION_ID_ENV",
+        "CREDENTIALS_API_URL_ENV",
+        "CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV",
+    ):
+        assert name in constants.__all__
+
+
+@pytest.mark.parametrize("module", ["billing", "tenancy"])
+def test_constants_module_stays_a_leaf(module: str) -> None:
+    """``config`` sits at the bottom layer, so the constants must not
+    reach up into another package — that would form an import cycle."""
+    # Arrange / Act
+    from pathlib import Path as _Path
+
+    source = _Path(f"config/constants/{module}.py").read_text(encoding="utf-8")
+
+    # Assert: no upward import of a sibling top-level package.
+    for package in ("integrations", "gateway", "core", "platform", "tools", "surfaces"):
+        assert f"import {package}" not in source
+        assert f"from {package}" not in source
+
+
+def test_llm_env_var_names_are_the_infra_contract() -> None:
+    """Pin the Azure OpenAI connection env-var names to their exact strings."""
+    # Arrange / Act
+    from config.constants import llm
+
+    # Assert
+    assert llm.AZURE_OPENAI_BASE_URL_ENV == "AZURE_OPENAI_BASE_URL"
+    assert llm.AZURE_OPENAI_API_VERSION_ENV == "AZURE_OPENAI_API_VERSION"
+    assert llm.AZURE_OPENAI_API_KEY_ENV == "AZURE_OPENAI_API_KEY"
+
+
+def test_provider_catalog_and_wizard_share_the_same_azure_constants() -> None:
+    """The Azure spec + wizard option must reference the one set of constants,
+    not re-typed literals, so they cannot drift apart."""
+    # Arrange
+    from config.constants import llm
+    from config.llm_auth.provider_catalog import require_provider_spec
+    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+
+    spec = require_provider_spec("azure-openai")
+    (option,) = [opt for opt in SUPPORTED_PROVIDERS if opt.value == "azure-openai"]
+
+    # Act / Assert: both sides equal the centralized constants.
+    assert spec.api_key_env == option.api_key_env == llm.AZURE_OPENAI_API_KEY_ENV
+    assert spec.endpoint_env == option.endpoint_env == llm.AZURE_OPENAI_BASE_URL_ENV
+    assert spec.api_version_env == option.api_version_env == llm.AZURE_OPENAI_API_VERSION_ENV
+
+
 def test_get_store_path_honors_env_override(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

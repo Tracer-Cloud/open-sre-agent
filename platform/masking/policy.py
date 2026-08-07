@@ -12,7 +12,8 @@ import json
 import logging
 import os
 import re
-from typing import ClassVar, Literal
+from enum import StrEnum
+from typing import ClassVar
 
 from pydantic import Field, field_validator
 
@@ -20,27 +21,19 @@ from config.strict_config import StrictConfigModel
 
 logger = logging.getLogger(__name__)
 
-IdentifierKind = Literal[
-    "pod",
-    "namespace",
-    "cluster",
-    "hostname",
-    "account_id",
-    "ip_address",
-    "email",
-    "service_name",
-]
 
-ALL_KINDS: tuple[IdentifierKind, ...] = (
-    "pod",
-    "namespace",
-    "cluster",
-    "hostname",
-    "account_id",
-    "ip_address",
-    "email",
-    "service_name",
-)
+class IdentifierKind(StrEnum):
+    POD = "pod"
+    NAMESPACE = "namespace"
+    CLUSTER = "cluster"
+    HOSTNAME = "hostname"
+    ACCOUNT_ID = "account_id"
+    IP_ADDRESS = "ip_address"
+    EMAIL = "email"
+    SERVICE_NAME = "service_name"
+
+
+ALL_KINDS: tuple[IdentifierKind, ...] = tuple(IdentifierKind)
 
 
 class MaskingPolicy(StrictConfigModel):
@@ -72,7 +65,7 @@ class MaskingPolicy(StrictConfigModel):
         valid: list[IdentifierKind] = []
         for p in parts:
             if p in ALL_KINDS:
-                valid.append(p)  # type: ignore[arg-type]
+                valid.append(IdentifierKind(p))
             else:
                 logger.warning("[masking] ignoring unknown identifier kind: %r", p)
         return tuple(valid) if valid else ALL_KINDS

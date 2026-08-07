@@ -76,6 +76,34 @@ class _AccessDeniedProcess(_FakeProcess):
         raise psutil.AccessDenied(self.pid)
 
 
+class _TransientAccessDeniedProcess(_FakeProcess):
+    """Passes the construction-time introspection check, then denies."""
+
+    def __init__(self, pid: int, name: str) -> None:
+        super().__init__(pid, name)
+        self.memory_calls = 0
+
+    def memory_info(self) -> _MemoryInfo:
+        self.memory_calls += 1
+        if self.memory_calls > 1:
+            raise psutil.AccessDenied(self.pid)
+        return super().memory_info()
+
+
+class _GoneMidSampleProcess(_FakeProcess):
+    """Passes the construction-time introspection check, then vanishes."""
+
+    def __init__(self, pid: int, name: str) -> None:
+        super().__init__(pid, name)
+        self.memory_calls = 0
+
+    def memory_info(self) -> _MemoryInfo:
+        self.memory_calls += 1
+        if self.memory_calls > 1:
+            raise psutil.NoSuchProcess(self.pid)
+        return super().memory_info()
+
+
 def test_process_monitor_resolves_by_pid_and_warms_cpu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -138,13 +166,46 @@ def test_process_monitor_returns_dead_sample_on_no_such_process(
 
     assert sample.pid == 123
     assert sample.alive is False
+    assert sample.accessible is False
     assert sample.cpu_percent == 0.0
 
 
-def test_process_monitor_returns_dead_sample_on_access_denied(
+def test_process_monitor_rejects_always_inaccessible_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A running process this user cannot introspect (e.g. another user's
+    daemon) is a configuration error at construction, not a false exit."""
     process = _AccessDeniedProcess(123, "python")
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
+
+    with pytest.raises(OpenSREError, match="permission denied"):
+        ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
+
+
+def test_process_monitor_marks_transient_access_denied_inaccessible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient AccessDenied on a live process yields alive=True,
+    accessible=False so the runner retries instead of reporting an exit."""
+    process = _TransientAccessDeniedProcess(123, "python")
+    monkeypatch.setattr(
+        "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
+    )
+
+    monitor = ProcessMonitor(WatchdogConfig(pid=123, max_cpu=90))
+    sample = monitor.sample()
+
+    assert sample.pid == 123
+    assert sample.alive is True
+    assert sample.accessible is False
+
+
+def test_process_monitor_returns_dead_sample_when_process_vanishes_mid_sample(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _GoneMidSampleProcess(123, "python")
     monkeypatch.setattr(
         "tools.system.watch_dog.process_monitor.process_probe.process", lambda _pid: process
     )
@@ -154,3 +215,4 @@ def test_process_monitor_returns_dead_sample_on_access_denied(
 
     assert sample.pid == 123
     assert sample.alive is False
+    assert sample.accessible is False

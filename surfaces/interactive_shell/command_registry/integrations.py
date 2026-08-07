@@ -93,6 +93,7 @@ def _handle_remove(session: Session, console: Console, service: str | None) -> b
     """Remove an integration with a native inline-picker confirmation (no subprocess)."""
     from integrations.registry import resolve_management_service
     from integrations.store import remove_integration
+    from integrations.webapp_vault import delete_webapp_org_integration
     from platform.analytics.cli import capture_integration_removed
 
     svc = resolve_management_service(service) if service else service
@@ -143,6 +144,7 @@ def _handle_remove(session: Session, console: Console, service: str | None) -> b
             return True
 
     if remove_integration(svc):
+        delete_webapp_org_integration(svc)
         repl_print(console, f"[{HIGHLIGHT}]removed '{escape(svc)}'.[/]")
         capture_integration_removed(svc)
         if svc == "github":
@@ -267,7 +269,8 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
         # Bare setup delegates to the CLI service picker on the REPL; headless
         # surfaces (Telegram) have no picker, so return usage guidance instead.
         if not headless:
-            result = run_cli_command(console, ["integrations", "setup"])
+            # Interactive service picker + credential prompts on the real TTY.
+            result = run_cli_command(console, ["integrations", "setup"], capture_output=False)
             session.refresh_integration_state()
             return result
         repl_print(console, f"[{DIM}]usage:[/] /integrations setup <service>")
@@ -294,6 +297,7 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
     result = run_cli_command(
         console,
         ["integrations", "setup", service, *args[2:]],
+        capture_output=False,
         session=session,
     )
     session.refresh_integration_state()

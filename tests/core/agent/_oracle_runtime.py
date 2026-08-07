@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import re
+import time
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -150,10 +152,17 @@ def fresh_session(
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
     resolved_integrations_override: dict[str, Any] | None = None,
+    pending_investigation_alert: str | None = None,
+    conversation_seed: tuple[tuple[str, str], ...] = (),
 ) -> Session:
     session = Session()
     if with_prior_state:
-        session.last_state = {"root_cause": "disk full on orders-api"}
+        # Stamped inside the recall window: an undated prior state reads as stale,
+        # which would disable the follow-up gather skip these scenarios assert.
+        session.last_state = {
+            "root_cause": "disk full on orders-api",
+            "investigation_started_at": time.monotonic(),
+        }
     session.configured_integrations = configured_integrations
     session.configured_integrations_known = True
     session.available_capabilities = available_capabilities or {}
@@ -163,7 +172,32 @@ def fresh_session(
     # An explicit empty mapping ({}) deliberately forces a no-integration world.
     if resolved_integrations_override is not None:
         session.resolved_integrations_cache = resolved_integrations_override
+    if conversation_seed:
+        session.cli_agent_messages = list(conversation_seed)
+    if pending_investigation_alert:
+        from core.agent_harness.session.pending_offer import PendingInvestigationOffer
+
+        session.pending_investigation_offer = PendingInvestigationOffer(
+            alert_text=pending_investigation_alert.strip()
+        )
     return session
+
+
+def session_from_scenario(
+    scenario_session: Any,
+    *,
+    resolved_integrations_override: dict[str, Any] | None,
+    available_capabilities: dict[str, tuple[str, ...]] | None,
+) -> Session:
+    """Build a fixture session including Phase 1b pending-offer seeds."""
+    return fresh_session(
+        with_prior_state=scenario_session.has_prior_state,
+        configured_integrations=scenario_session.configured_integrations,
+        available_capabilities=available_capabilities,
+        resolved_integrations_override=resolved_integrations_override,
+        pending_investigation_alert=getattr(scenario_session, "pending_investigation_alert", None),
+        conversation_seed=tuple(getattr(scenario_session, "conversation_seed", ()) or ()),
+    )
 
 
 def match_actions(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
@@ -288,19 +322,43 @@ def normalize_history_for_oracle_match(
     return collapsed
 
 
+# Prefix marking a response-contract needle as a regular expression rather than a
+# literal substring. Models paraphrase ("the disk was full" for "disk full"), so a
+# scenario asserting *meaning* rather than wording opts into a pattern. Plain
+# needles keep exact substring semantics, so existing fixtures are unaffected.
+REGEX_NEEDLE_PREFIX = "re:"
+
+
+def _needle_matches(haystack: str, needle: str) -> bool:
+    """True when ``needle`` matches ``haystack`` (substring, or regex when prefixed).
+
+    A bare ``re:`` is rejected rather than compiled: the empty pattern matches
+    every response, so a fixture typo would silently turn the assertion into an
+    unconditional pass.
+    """
+    if needle.startswith(REGEX_NEEDLE_PREFIX):
+        pattern = needle[len(REGEX_NEEDLE_PREFIX) :].strip()
+        if not pattern:
+            raise ValueError(
+                f"empty regex needle {needle!r}: a bare "
+                f"{REGEX_NEEDLE_PREFIX!r} matches every response"
+            )
+        # The haystack is already normalized (lowercased, whitespace-collapsed).
+        return re.search(pattern, haystack) is not None
+    return normalize_response_text(needle) in haystack
+
+
 def contains_any(haystack: str, needles: list[str]) -> bool:
     if not needles:
         return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return any(needle in haystack for needle in normalized_needles)
+    return any(_needle_matches(haystack, needle) for needle in needles if needle.strip())
 
 
 def contains_all(haystack: str, needles: list[str]) -> bool:
     """True only when every needle appears in the haystack (or needles is empty)."""
     if not needles:
         return True
-    normalized_needles = [normalize_response_text(needle) for needle in needles if needle.strip()]
-    return all(needle in haystack for needle in normalized_needles)
+    return all(_needle_matches(haystack, needle) for needle in needles if needle.strip())
 
 
 def history_matches(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
@@ -474,11 +532,10 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     resolved_override, _unavailable = resolve_live_integrations(
         case.scenario.session.resolved_integrations
     )
-    session = fresh_session(
-        with_prior_state=case.scenario.session.has_prior_state,
-        configured_integrations=case.scenario.session.configured_integrations,
-        available_capabilities=session_capabilities(case.scenario.available_capabilities),
+    session = session_from_scenario(
+        case.scenario.session,
         resolved_integrations_override=resolved_override,
+        available_capabilities=session_capabilities(case.scenario.available_capabilities),
     )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)

@@ -6,12 +6,10 @@ import stat
 import keyring
 import pytest
 
+from config.env_file import is_sensitive_env_key, sync_env_secret, sync_env_values
 from config.llm_credentials import resolve_env_credential
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.cli.wizard.env_sync import (
-    _is_sensitive_env_key,
-    sync_env_secret,
-    sync_env_values,
     sync_provider_env,
     sync_reasoning_model_env,
 )
@@ -48,10 +46,12 @@ def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
         "CREDENTIAL",
         # Substring-based sensitives.
         "DATABASE_CONNECTION_STRING",
+        # Inline kubeconfig YAML embeds credentials; path-only KUBECONFIG does not.
+        "KUBECONFIG_CONTENT",
     ],
 )
 def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
-    assert _is_sensitive_env_key(key) is True
+    assert is_sensitive_env_key(key) is True
 
 
 @pytest.mark.parametrize(
@@ -68,10 +68,15 @@ def test_is_sensitive_env_key_marks_secrets(key: str) -> None:
         "OPENAI_TOKEN_LIMIT",
         # Explicit exception: a public discord key is not sensitive.
         "DISCORD_PUBLIC_KEY",
+        # Explicit exception: paired with a private key, not a secret itself.
+        "MONGODB_ATLAS_PUBLIC_KEY",
+        # Path to a kubeconfig file is not the credential itself.
+        "KUBECONFIG",
+        "HELM_KUBECONFIG",
     ],
 )
 def test_is_sensitive_env_key_leaves_non_secrets(key: str) -> None:
-    assert _is_sensitive_env_key(key) is False
+    assert is_sensitive_env_key(key) is False
 
 
 def test_sync_provider_env_updates_provider_specific_keys(tmp_path, monkeypatch) -> None:
@@ -544,6 +549,25 @@ def test_sync_env_values_rejects_sensitive_keys(tmp_path) -> None:
         sync_env_values({"GITLAB_ACCESS_TOKEN": "secret"}, env_path=env_path)
 
 
+def test_set_env_value_rejects_sensitive_keys_with_value_error() -> None:
+    from config.env_file import set_env_value
+
+    with pytest.raises(ValueError, match="sync_env_secret"):
+        set_env_value(["FOO=bar\n"], "GITLAB_ACCESS_TOKEN", "secret")
+
+
+def test_sync_env_secret_raises_when_keyring_unavailable(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "config.env_file.save_keyring_secret",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("Secure local credential storage is unavailable on this machine.")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Failed to persist.*system keyring"):
+        sync_env_secret("GITLAB_ACCESS_TOKEN", "gl-secret-token")
+
+
 def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
@@ -571,6 +595,29 @@ def test_sync_env_values_routes_secrets_to_keyring(tmp_path, monkeypatch) -> Non
         keyring.set_keyring(previous_backend)
 
 
+def test_sync_env_secret_with_blank_value_deletes_the_stored_secret(monkeypatch) -> None:
+    """A field cleared back to blank must remove the old keyring entry, not just skip writing.
+
+    apply_setup calls sync_env_secret for every secret field on every save,
+    submitted or not (see integrations/setup_flow.py:_persist_env) — so clearing
+    an optional token in the UI has to reach here as a real deletion.
+    """
+    monkeypatch.delenv("DAGSTER_API_TOKEN", raising=False)
+    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
+
+    previous_backend = keyring.get_keyring()
+    keyring.set_keyring(MemoryKeyring())
+    try:
+        sync_env_secret("DAGSTER_API_TOKEN", "dag_stale_token")
+        assert resolve_env_credential("DAGSTER_API_TOKEN") == "dag_stale_token"
+
+        sync_env_secret("DAGSTER_API_TOKEN", "")
+
+        assert resolve_env_credential("DAGSTER_API_TOKEN") == ""
+    finally:
+        keyring.set_keyring(previous_backend)
+
+
 @pytest.mark.skipif(_SKIP_AS_ROOT, reason="root bypasses file permission checks")
 def test_sync_env_values_permission_error(tmp_path) -> None:
     env_path = tmp_path / ".env"
@@ -584,7 +631,7 @@ def test_sync_env_values_permission_error(tmp_path) -> None:
 
 
 def test_strip_keyring_backed_secret_lines_removes_all_sensitive_lines() -> None:
-    from surfaces.cli.wizard.env_sync import _strip_keyring_backed_secret_lines
+    from config.env_file import strip_secret_env_lines
 
     lines = [
         "TELEGRAM_BOT_TOKEN=fallback\n",
@@ -592,7 +639,7 @@ def test_strip_keyring_backed_secret_lines_removes_all_sensitive_lines() -> None
         "DD_SITE=old\n",
     ]
 
-    kept = _strip_keyring_backed_secret_lines(lines)
+    kept = strip_secret_env_lines(lines)
 
     assert kept == ["DD_SITE=old\n"]
 

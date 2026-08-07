@@ -86,6 +86,13 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to cancel a specific task when they provide or imply a task id",
         anti_examples=("User asks to stop everything without an id (use /stop guidance first)",),
     ),
+    "/choose": _mcp(
+        "Open the pending interactive selection menu queued by the ask_user_choice tool.",
+        "Queued automatically after ask_user_choice; users rarely type it directly",
+        anti_examples=(
+            "Presenting a new set of options to the user (call ask_user_choice instead)",
+        ),
+    ),
     "/clear": _mcp(
         "Clear the terminal screen and re-render the OpenSRE banner.",
         "User asks to clear the screen or terminal",
@@ -112,9 +119,12 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     ),
     "/cron": _mcp(
         "Manage cron-driven scheduled deliveries. "
-        "Subcommands: list, add, remove <id>, run <id>, logs <id>.",
-        "User asks to list, add, remove, run, or view logs for scheduled delivery tasks",
-        anti_examples=("User asks about one-off messaging without a schedule (use /messaging)",),
+        "Subcommands: add, remove <id>, run <id>, logs <id>, list.",
+        "User asks to create, remove, run, or view logs for scheduled delivery tasks",
+        anti_examples=(
+            "User asks to list active recurring loops (use /loops)",
+            "User asks about one-off messaging without a schedule (use /messaging)",
+        ),
     ),
     "/sentry": _mcp(
         "Schedule and run automated Sentry morning digests (requires Telegram or Slack). "
@@ -124,6 +134,17 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         anti_examples=(
             "User wants an on-demand Sentry summary in chat (ask naturally; skill handles it)",
             "User asks about Sentry integration setup only (use /integrations)",
+        ),
+    ),
+    "/posthog": _mcp(
+        "Schedule and run automated PostHog per-metric summary reports "
+        "(requires Telegram, Slack bot token, or Rocket.Chat). "
+        "Subcommands: report run, report schedule list|add|run|remove.",
+        "User asks to schedule or automate a PostHog metric summary report delivery",
+        "User asks to list or run configured PostHog report schedules",
+        anti_examples=(
+            "User wants an on-demand PostHog summary in chat (ask naturally; skill handles it)",
+            "User asks about PostHog integration setup only (use /integrations)",
         ),
     ),
     "/doctor": _mcp(
@@ -206,6 +227,19 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to log in to ChatGPT, Claude, DeepSeek, or another LLM provider",
         anti_examples=("User asks to log in to a non-LLM integration (use /integrations or /mcp)",),
     ),
+    "/loops": _mcp(
+        "List, create, stop, start, delete, run once, and debug recurring prompt loops, "
+        "including next fire time. "
+        "Subcommands: list, active, all, add, run <id>, stop <id>, start <id>, delete <id>, "
+        "next <id>, messages. "
+        "Use add with --prompt, --time or --cron, optional --channel, and --run-now.",
+        "User asks to list active loops or recurring scheduled loops",
+        "User asks when configured loops will run next",
+        "User asks to set up a manual recurring loop from a prompt",
+        "User asks to add a loop and execute it once immediately",
+        "User asks to stop, disable, resume, start, delete, or remove a recurring loop",
+        anti_examples=("User wants low-level cron task logs by task id (use /cron)",),
+    ),
     "/rca": _mcp(
         "Browse persisted RCA reports across sessions. Subcommands: history, show <id>, save <path>.",
         "User asks for past RCA reports, investigation history, or to export a previous root-cause report",
@@ -215,6 +249,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "Manage connected MCP servers. Subcommands: list, connect, disconnect.",
         "User asks to list, connect, or disconnect MCP servers",
         anti_examples=("User asks about remote deployments or remote agents (use /remote)",),
+    ),
+    "/memory": _mcp(
+        "List and manage the agent's long-term memory. "
+        "Subcommands: show <name>, forget <name>, path.",
+        "User explicitly asks to list, show, or delete stored memories via /memory",
+        anti_examples=(
+            "User shares a durable fact in normal chat (agent should auto-save via memory_remember)",
+            "User asks what the agent knows about them (use memory_recall)",
+        ),
     ),
     "/messaging": _mcp(
         "Manage messaging security and Telegram identities. Subcommands: pair, allow, revoke, status.",
@@ -309,6 +352,17 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks how to stop a running investigation or background work",
         anti_examples=("User provides a task id to cancel (use /cancel)",),
     ),
+    "/remote-sync": _mcp(
+        "Mirror this machine's sessions and memory to an object store the user "
+        "owns (built-in: aws/S3, vercel Blob). Subcommands: status, sync, setup. "
+        "Off until setup or env enable; integration credentials and model keys "
+        "are never uploaded.",
+        "User asks to sync, back up, set up remote sync, or restore conversations",
+        anti_examples=(
+            "User asks to connect an AWS integration for investigations (use /integrations)",
+            "User asks what opensre remembers (use /memory)",
+        ),
+    ),
     "/tasks": _mcp(
         "List recent and in-flight shell background tasks with ids and status.",
         "User asks to list running or recent tasks",
@@ -380,6 +434,15 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
     "/watches": _mcp(
         "List active watchdog background tasks with latest resource samples.",
         "User asks to list running watchdog watches",
+    ),
+    "/work": _mcp(
+        "Manage durable human work items and reminders. Subcommands: list, add, done, next, path.",
+        "User explicitly types /work to list, add, complete, or prioritize work items",
+        "User asks for a durable task list or hackathon task overview via the slash command",
+        anti_examples=(
+            "User asks to manage OpenSRE runtime background jobs (use /tasks)",
+            "User asks in natural language to add or prioritize work (use work_task_* tools)",
+        ),
     ),
     "/debug": _mcp(
         "Run targeted runtime diagnostics (e.g. /debug sentry to trigger a Sentry smoke test).",

@@ -16,6 +16,9 @@ from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERT
 from surfaces.interactive_shell.command_registry.background_cmds import (
     COMMANDS as BACKGROUND_COMMANDS,
 )
+from surfaces.interactive_shell.command_registry.choice_prompt import (
+    COMMANDS as CHOICE_COMMANDS,
+)
 from surfaces.interactive_shell.command_registry.cli_parity import (
     COMMANDS as PARITY_COMMANDS,
 )
@@ -32,6 +35,10 @@ from surfaces.interactive_shell.command_registry.integrations import (
 from surfaces.interactive_shell.command_registry.investigation import (
     COMMANDS as INVESTIGATION_COMMANDS,
 )
+from surfaces.interactive_shell.command_registry.loops_cmds import COMMANDS as LOOPS_COMMANDS
+from surfaces.interactive_shell.command_registry.memory_cmds import (
+    COMMANDS as MEMORY_COMMANDS,
+)
 from surfaces.interactive_shell.command_registry.model import COMMANDS as MODEL_COMMANDS
 from surfaces.interactive_shell.command_registry.model import (
     switch_llm_provider,
@@ -42,6 +49,9 @@ from surfaces.interactive_shell.command_registry.privacy_cmds import (
     COMMANDS as PRIVACY_COMMANDS,
 )
 from surfaces.interactive_shell.command_registry.rca_cmds import COMMANDS as RCA_COMMANDS
+from surfaces.interactive_shell.command_registry.remote_sync_cmds import (
+    COMMANDS as REMOTE_SYNC_COMMANDS,
+)
 from surfaces.interactive_shell.command_registry.repl_data import (
     load_llm_settings,
     load_verified_integrations,
@@ -62,6 +72,7 @@ from surfaces.interactive_shell.command_registry.theme import COMMANDS as THEME_
 from surfaces.interactive_shell.command_registry.tools_cmds import COMMANDS as TOOLS_COMMANDS
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.command_registry.watch_cmds import COMMANDS as WATCH_COMMANDS
+from surfaces.interactive_shell.command_registry.work_cmds import COMMANDS as WORK_COMMANDS
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.utils.telemetry.console_capture import capture_console_segment
@@ -73,6 +84,7 @@ _MERGED_SEQUENCE = tuple(
         HELP_COMMANDS,
         SESSION_COMMANDS,
         THEME_COMMANDS,
+        CHOICE_COMMANDS,
         BACKGROUND_COMMANDS,
         SETTINGS_COMMANDS,
         DIAGNOSTICS_COMMANDS,
@@ -81,10 +93,14 @@ _MERGED_SEQUENCE = tuple(
         TOOLS_COMMANDS,
         INVESTIGATION_COMMANDS,
         RCA_COMMANDS,
+        LOOPS_COMMANDS,
         TASK_COMMANDS,
         WATCH_COMMANDS,
         GATEWAY_COMMANDS,
         PRIVACY_COMMANDS,
+        MEMORY_COMMANDS,
+        WORK_COMMANDS,
+        REMOTE_SYNC_COMMANDS,
         AGENTS_COMMANDS,
         ALERTS_COMMANDS,
         PARITY_COMMANDS,
@@ -202,21 +218,18 @@ def dispatch_slash(
                     record_slash(ok=True)
                     return _cmd_help(session, console, [])
 
-                parts = stripped.split()
+                # Quote-aware split: /cron add --cron '0 8 * * 1-5' must keep the
+                # five-field expression as one argument. Plain str.split fragments
+                # it and Click reports unexpected extra arguments. Fall back when
+                # shlex rejects unbalanced quotes (e.g. /investigate don't …).
+                try:
+                    parts = shlex.split(stripped, posix=True)
+                except ValueError:
+                    parts = stripped.split()
                 if not parts:
                     return True
                 name = parts[0].lower()
-                if name in ("/watch", "/unwatch"):
-                    head = parts[0]
-                    body = stripped[len(head) :].strip()
-                    try:
-                        # Use POSIX mode on all platforms so quoted values are unwrapped
-                        # consistently (e.g., --max-cpu "80" -> 80).
-                        args = shlex.split(body, posix=True)
-                    except ValueError:
-                        args = body.split()
-                else:
-                    args = parts[1:]
+                args = parts[1:]
                 cmd = SLASH_COMMANDS.get(name)
                 if cmd is None:
                     typo_message = format_unknown_slash_message(

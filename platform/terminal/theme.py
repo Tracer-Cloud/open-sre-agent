@@ -16,6 +16,7 @@ Token reference
   ERROR      errors only — missing required config, failures
   BG         terminal background, never used as foreground
   INPUT_SURFACE  prompt/menu surface background
+  BOLD_SKILL fixed green skill-activation label
 
 Usage
 -----
@@ -416,6 +417,14 @@ BOLD_TEXT = _LazyRichStyle("TEXT", bold=True)
 BOLD_WARNING = _LazyRichStyle("WARNING", bold=True)
 BOLD_ERROR = _LazyRichStyle("ERROR", bold=True)
 
+# Skill loading should remain recognizable regardless of the selected accent
+# theme. Reuse the canonical green palette rather than defining a UI-local
+# colour.
+BOLD_SKILL = f"bold {THEME_REGISTRY['green'].BRAND}"
+
+# Pygments style used for fenced code blocks in every Rich Markdown render.
+MARKDOWN_CODE_THEME = "ansi_dark"
+
 # GitHub/device-flow one-time codes should be easy to spot and transcribe.
 DEVICE_CODE = BOLD_HIGHLIGHT
 
@@ -431,6 +440,7 @@ __all__ = [
     "BOLD_BRAND_ANSI",
     "BOLD_ERROR",
     "BOLD_HIGHLIGHT",
+    "BOLD_SKILL",
     "BOLD_TEXT",
     "BOLD_WARNING",
     "BRAND",
@@ -452,6 +462,7 @@ __all__ = [
     "INCOMING_ALERT_ACCENT",
     "INPUT_SURFACE",
     "INPUT_SURFACE_BG_ANSI",
+    "MARKDOWN_CODE_THEME",
     "MARKDOWN_THEME",
     "MENU_SELECTION_ROW_ANSI",
     "PROMPT_ACCENT_ANSI",

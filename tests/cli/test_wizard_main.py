@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 import pytest
 
-from surfaces.cli.wizard import __main__ as wizard_main
+from surfaces.cli.wizard import app as wizard_main
 
 
 def test_main_initialises_sentry_and_emits_cli_invoked(

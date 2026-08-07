@@ -1,108 +1,76 @@
 from __future__ import annotations
 
-import sys
-from collections.abc import Callable
-from types import SimpleNamespace
+from http import HTTPStatus
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import httpx
 from pydantic import ValidationError
 
 from integrations.discord import classify
 from integrations.discord.verifier import verify_discord
 
 
-class _FakeIntents:
-    def __init__(self) -> None:
-        self.guilds = False
-
-    @classmethod
-    def none(cls) -> _FakeIntents:
-        return cls()
+def _fake_response(status_code: int, json_body: dict[str, Any] | None = None) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_body or {}
+    return resp
 
 
-def _install_fake_discord(
-    monkeypatch: Any,
-    *,
-    run_error_factory: Callable[[type[Exception]], Exception] | None = None,
-) -> list[str]:
-    tokens: list[str] = []
-
-    class LoginFailure(Exception):
-        pass
-
-    class Client:
-        def __init__(self, *, intents: _FakeIntents) -> None:
-            assert intents.guilds is True
-
-        def run(self, token: str) -> None:
-            tokens.append(token)
-            if run_error_factory is not None:
-                raise run_error_factory(LoginFailure)
-
-    fake_discord = SimpleNamespace(
-        Intents=_FakeIntents,
-        Client=Client,
-        LoginFailure=LoginFailure,
-    )
-    monkeypatch.setitem(sys.modules, "discord", fake_discord)
-    return tokens
-
-
-def test_verify_discord_missing_bot_token(monkeypatch: Any) -> None:
-    _install_fake_discord(monkeypatch)
-
+def test_verify_discord_missing_bot_token() -> None:
     result = verify_discord("local env", {})
 
     assert result["status"] == "missing"
     assert "bot_token" in result["detail"]
 
 
-def test_verify_discord_reports_login_failure(monkeypatch: Any) -> None:
-    _install_fake_discord(
-        monkeypatch,
-        run_error_factory=lambda login_failure_cls: login_failure_cls("bad token"),
-    )
-
-    result = verify_discord("local env", {"bot_token": "bad-token"})
-
-    assert result["status"] == "failed"
-    assert "Discord login failed" in result["detail"]
-
-
-def test_verify_discord_reports_api_failure(monkeypatch: Any) -> None:
-    _install_fake_discord(
-        monkeypatch,
-        run_error_factory=lambda _login_failure_cls: RuntimeError("gateway unavailable"),
-    )
-
-    result = verify_discord("local env", {"bot_token": "token"})
-
-    assert result["status"] == "failed"
-    assert "gateway unavailable" in result["detail"]
-
-
-def test_verify_discord_accepts_running_event_loop_success(monkeypatch: Any) -> None:
-    _install_fake_discord(
-        monkeypatch,
-        run_error_factory=lambda _login_failure_cls: RuntimeError(
-            "run() cannot be called from a running event loop"
-        ),
-    )
-
-    result = verify_discord("local env", {"bot_token": "token"})
+def test_verify_discord_accepts_a_valid_token_and_names_the_bot() -> None:
+    with patch(
+        "integrations.discord.verifier.httpx.get",
+        return_value=_fake_response(HTTPStatus.OK, {"username": "opensre_bot"}),
+    ) as get:
+        result = verify_discord("local env", {"bot_token": "good-token"})
 
     assert result["status"] == "passed"
-    assert "Discord bot token accepted" in result["detail"]
+    assert "@opensre_bot" in result["detail"]
+    # Probes /users/@me with the bot token, never running a discord.py client.
+    args, kwargs = get.call_args
+    assert args[0].endswith("/users/@me")
+    assert kwargs["headers"]["Authorization"] == "Bot good-token"
 
 
-def test_verify_discord_accepts_token_when_client_run_succeeds(monkeypatch: Any) -> None:
-    tokens = _install_fake_discord(monkeypatch)
+def test_verify_discord_reports_an_invalid_token() -> None:
+    with patch(
+        "integrations.discord.verifier.httpx.get",
+        return_value=_fake_response(HTTPStatus.UNAUTHORIZED),
+    ):
+        result = verify_discord("local env", {"bot_token": "revoked"})
 
-    result = verify_discord("local env", {"bot_token": " token "})
+    assert result["status"] == "failed"
+    assert "invalid or revoked" in result["detail"]
 
-    assert tokens == ["token"]
-    assert result["status"] == "passed"
+
+def test_verify_discord_reports_an_unexpected_status() -> None:
+    with patch(
+        "integrations.discord.verifier.httpx.get",
+        return_value=_fake_response(HTTPStatus.SERVICE_UNAVAILABLE),
+    ):
+        result = verify_discord("local env", {"bot_token": "token"})
+
+    assert result["status"] == "failed"
+    assert f"HTTP {HTTPStatus.SERVICE_UNAVAILABLE.value}" in result["detail"]
+
+
+def test_verify_discord_reports_a_transport_error() -> None:
+    with patch(
+        "integrations.discord.verifier.httpx.get",
+        side_effect=httpx.RequestError("unreachable"),
+    ):
+        result = verify_discord("local env", {"bot_token": "token"})
+
+    assert result["status"] == "failed"
+    assert "Discord API check failed" in result["detail"]
 
 
 def test_classify_validation_error_returns_none_and_reports() -> None:

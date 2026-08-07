@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from core.context_budget import context_budget_ceiling_for_model, strip_internal_message_markers
+import json
+from unittest.mock import patch
+
+from core.context_budget import (
+    _TOKENS_PER_CHAR,
+    context_budget_ceiling_for_model,
+    enforce_context_budget,
+    estimate_message_tokens,
+    strip_internal_message_markers,
+    system_and_tools_overhead,
+)
 
 
 class TestGpt56ContextWindow:
@@ -67,3 +77,147 @@ def test_strip_internal_message_markers_preserves_other_underscore_keys() -> Non
     cleaned = strip_internal_message_markers(messages)
 
     assert cleaned == [{"role": "user", "content": "hi", "_custom": "keep"}]
+
+
+def test_estimate_message_tokens_includes_system_and_tools_overhead() -> None:
+    messages = [{"role": "user", "content": "abcd"}]
+    system = "sys"
+    tools = [
+        {"type": "function", "name": "alpha", "parameters": {"type": "object"}},
+        {
+            "type": "function",
+            "name": "beta",
+            "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+        },
+    ]
+
+    message_tokens = int(len("abcd") * _TOKENS_PER_CHAR)
+    system_tokens = int(len(system) * _TOKENS_PER_CHAR)
+    tool_tokens = sum(
+        int(len(json.dumps(schema, default=str)) * _TOKENS_PER_CHAR) for schema in tools
+    )
+    expected = message_tokens + system_tokens + tool_tokens
+
+    assert estimate_message_tokens(messages, system=system, tools=tools) == expected
+
+
+def test_estimate_message_tokens_distinguishes_distinct_tool_lists() -> None:
+    messages: list[dict[str, str]] = []
+    system = "system prompt"
+    tools_a = [{"type": "function", "name": "alpha"}]
+    tools_b = [{"type": "function", "name": "beta", "parameters": {"type": "object"}}]
+
+    assert estimate_message_tokens(
+        messages, system=system, tools=tools_a
+    ) != estimate_message_tokens(messages, system=system, tools=tools_b)
+    assert estimate_message_tokens(messages, system=system, tools=[]) == int(
+        len(system) * _TOKENS_PER_CHAR
+    )
+
+
+def _tool_schema_dump_count(value: object) -> int:
+    if isinstance(value, dict) and value.get("type") == "function":
+        return 1
+    if isinstance(value, list):
+        return sum(1 for item in value if isinstance(item, dict) and item.get("type") == "function")
+    return 0
+
+
+def test_enforce_context_budget_serializes_tool_schemas_once_per_invocation() -> None:
+    tools = [
+        {"type": "function", "name": f"tool_{index}", "parameters": {"type": "object"}}
+        for index in range(12)
+    ]
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "noop", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "x" * 4000}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t2", "name": "noop", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "y" * 4000}],
+        },
+    ]
+    ceiling = 500
+    schema_dump_calls = 0
+    original_dumps = json.dumps
+
+    def counting_dumps(value: object, *args: object, **kwargs: object) -> str:
+        nonlocal schema_dump_calls
+        schema_dump_calls += _tool_schema_dump_count(value)
+        return original_dumps(value, *args, **kwargs)
+
+    with patch("core.context_budget.json.dumps", side_effect=counting_dumps):
+        enforce_context_budget(messages, tools=tools, ceiling=ceiling)
+
+    assert schema_dump_calls <= len(tools)
+
+
+def test_enforce_context_budget_accepts_precomputed_overhead() -> None:
+    tools = [
+        {"type": "function", "name": f"tool_{index}", "parameters": {"type": "object"}}
+        for index in range(12)
+    ]
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "noop", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "x" * 4000}],
+        },
+    ]
+    ceiling = 500
+    precomputed = system_and_tools_overhead(system="sys", tools=tools)
+    schema_dump_calls = 0
+    original_dumps = json.dumps
+
+    def counting_dumps(value: object, *args: object, **kwargs: object) -> str:
+        nonlocal schema_dump_calls
+        schema_dump_calls += _tool_schema_dump_count(value)
+        return original_dumps(value, *args, **kwargs)
+
+    with patch("core.context_budget.json.dumps", side_effect=counting_dumps):
+        enforce_context_budget(messages, fixed_overhead_tokens=precomputed, ceiling=ceiling)
+
+    assert schema_dump_calls == 0
+
+
+def test_enforce_context_budget_still_trims_when_over_ceiling_with_tools() -> None:
+    tools = [{"type": "function", "name": "noop", "parameters": {"type": "object"}}]
+    messages = [
+        {"role": "user", "content": "alert"},
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "noop", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "x" * 4000}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t2", "name": "noop", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "y" * 4000}],
+        },
+    ]
+    ceiling = 500
+
+    enforce_context_budget(messages, tools=tools, ceiling=ceiling)
+
+    assert estimate_message_tokens(messages, tools=tools) <= ceiling
+    assert len(messages) < 5

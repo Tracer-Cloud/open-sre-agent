@@ -1,6 +1,6 @@
 """Root Click group: lazy command registration and Rich help rendering.
 
-Kept separate from ``surfaces.cli.__main__`` so the entrypoint stays a thin
+Kept separate from ``surfaces.cli.app`` so the entrypoint stays a thin
 wiring module. Command modules are only imported on first access to keep CLI
 startup (and especially the "just launch the shell" path) fast.
 """

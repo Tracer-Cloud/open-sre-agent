@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.session import InMemorySessionStorage
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
@@ -24,10 +24,10 @@ from core.agent_harness.turns.headless_dispatch import (
     HeadlessAgent,
     NoopTurnAccounting,
 )
-from core.agent_harness.turns.turn_results import ShellTurnResult
+from core.agent_harness.turns.turn_results import TurnResult
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -58,7 +58,7 @@ class TurnSnapshot:
     probe_ran: bool
 
     @classmethod
-    def from_result(cls, result: ShellTurnResult, *, probe_ran: bool) -> TurnSnapshot:
+    def from_result(cls, result: TurnResult, *, probe_ran: bool) -> TurnSnapshot:
         return cls(
             final_intent=result.final_intent,
             action_handled=result.action_result.handled,
@@ -199,11 +199,15 @@ class RecordingGatewaySink:
         label: str,
         chunks: Iterator[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with)
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
         text = "".join(str(chunk) for chunk in chunks)
         self.streamed.append(text)
         return text
+
+    def finish_streamed_response(self, text: str) -> None:
+        self.finalize(text)
 
     def finalize(self, text: str) -> None:
         self.finalized = text
@@ -300,7 +304,7 @@ def _dispatch_turn(
     session: Session,
     *,
     gather_enabled: bool = True,
-) -> ShellTurnResult:
+) -> TurnResult:
     output = BufferOutputSink()
     agent = HeadlessAgent(
         tools=DefaultToolProvider(
@@ -338,6 +342,37 @@ def snapshot_headless(message: str, *, integrations: dict[str, Any] | None = Non
     return TurnSnapshot.from_result(result, probe_ran=probe_run_count() > before)
 
 
+def _install_gateway_dispatch_spy(
+    monkeypatch: Any,
+    captured: list[TurnResult],
+) -> None:
+    """Spy on the gateway pool's agent factory (not ``HeadlessAgent`` directly).
+
+    ``SessionAgentPool`` builds agents via ``build_default_headless_agent``; patching
+    the class name on ``session_agents`` no longer intercepts construction.
+    """
+    from core.agent_harness.turns.default_headless_agent import (
+        build_default_headless_agent as real_build,
+    )
+
+    def _spy_build(**kwargs: Any) -> HeadlessAgent:
+        agent = real_build(**kwargs)
+        original_dispatch = type(agent).dispatch
+
+        def dispatch(message: str) -> TurnResult:
+            result = original_dispatch(agent, message)
+            captured.append(result)
+            return result
+
+        agent.dispatch = dispatch  # type: ignore[method-assign]
+        return agent
+
+    monkeypatch.setattr(
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
+        _spy_build,
+    )
+
+
 def snapshot_gateway_handler(
     message: str,
     monkeypatch: Any,
@@ -346,15 +381,8 @@ def snapshot_gateway_handler(
 ) -> TurnSnapshot:
     session = fresh_session(integrations=integrations)
     sink = RecordingGatewaySink()
-    captured: list[ShellTurnResult] = []
-
-    class _SpyAgent(HeadlessAgent):
-        def dispatch(self, message: str) -> ShellTurnResult:
-            result = super().dispatch(message)
-            captured.append(result)
-            return result
-
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
+    captured: list[TurnResult] = []
+    _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
     handler = GatewayTurnHandler(
         console=console(),
@@ -421,15 +449,8 @@ def run_gateway_turn_with_sink(
     """Run one gateway turn and return both routing snapshot and transport sink."""
     session = fresh_session(integrations=integrations)
     sink = RecordingGatewaySink()
-    captured: list[ShellTurnResult] = []
-
-    class _SpyAgent(HeadlessAgent):
-        def dispatch(self, message: str) -> ShellTurnResult:
-            result = super().dispatch(message)
-            captured.append(result)
-            return result
-
-    monkeypatch.setattr("gateway.runtime.turn_handler.HeadlessAgent", _SpyAgent)
+    captured: list[TurnResult] = []
+    _install_gateway_dispatch_spy(monkeypatch, captured)
     before = probe_run_count()
     handler = GatewayTurnHandler(
         console=console(),

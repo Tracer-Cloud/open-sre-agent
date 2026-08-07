@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tools.system.fleet_monitoring.discovery import classify_command_provider
 from tools.system.fleet_monitoring.provider_ids import (
-    KNOWN_PROVIDERS,
+    FleetAgentProvider,
     provider_from_classified_name,
 )
 from tools.system.fleet_monitoring.registry import AgentRecord
@@ -28,7 +28,7 @@ def provider_for(record: AgentRecord) -> str | None:
     return classify_command_provider(record.command)
 
 
-def provider_from_command(command: str) -> str | None:
+def provider_from_command(command: str) -> FleetAgentProvider | None:
     """Legacy alias for :func:`tools.system.fleet_monitoring.discovery.classify_command_provider`.
 
     Kept for tests and external callers; the classification engine
@@ -39,7 +39,7 @@ def provider_from_command(command: str) -> str | None:
 
 
 __all__ = [
-    "KNOWN_PROVIDERS",
+    "FleetAgentProvider",
     "provider_for",
     "provider_from_classified_name",
     "provider_from_command",

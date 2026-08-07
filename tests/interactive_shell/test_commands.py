@@ -491,7 +491,8 @@ class TestDispatchSlash:
 
         calls: list[list[str]] = []
 
-        def _fake_run_cli_command(_console: Console, args: list[str]) -> bool:
+        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
+            del kwargs
             calls.append(args)
             return True
 
@@ -516,6 +517,7 @@ class TestDispatchSlash:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("opensre health")
         history.store_string("/integrations list")
@@ -870,7 +872,9 @@ class TestIntegrationsCommand:
         from surfaces.interactive_shell.command_registry import integrations as m
 
         captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        monkeypatch.setattr(
+            m, "run_cli_command", lambda _, args, **_kw: (captured.append(args), True)[1]
+        )
         dispatch_slash("/integrations setup", Session(), Console())
         assert captured == [["integrations", "setup"]]
 
@@ -928,7 +932,9 @@ class TestMcpCommand:
         from surfaces.interactive_shell.command_registry import integrations as m
 
         captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        monkeypatch.setattr(
+            m, "run_cli_command", lambda _, args, **_kw: (captured.append(args), True)[1]
+        )
         dispatch_slash("/mcp connect", Session(), Console())
         assert captured == [["integrations", "setup"]]
 
@@ -996,6 +1002,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setattr(model_cmd, "repl_tty_interactive", lambda: True)
         selections = iter(["set", "anthropic", "__provider_default__"])
         monkeypatch.setattr(model_cmd, "repl_choose_one", lambda **_: next(selections))
@@ -1059,6 +1066,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         reset_calls: list[str] = []
         monkeypatch.setattr(
@@ -1096,6 +1104,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
         # Keyring lookups in CI / sandboxes are flaky; force the helper into
@@ -1135,6 +1144,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         session = Session()
         session.record("slash", "/model set anthropic not-a-real-model-xyz")
@@ -1159,6 +1169,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -1183,6 +1194,7 @@ class TestModelCommand:
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         console, buf = _capture()
@@ -1209,6 +1221,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         dispatch_slash("/model set gpt 5.5", Session(), _capture()[0])
@@ -1234,6 +1247,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "openai")
 
         console, buf = _capture()
@@ -1257,6 +1271,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
 
         console, buf = _capture()
@@ -1283,6 +1298,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash(
@@ -1309,6 +1325,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_REASONING_MODEL", "not-a-real-model-xyz")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
@@ -1333,6 +1350,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model set anthropic --made-up-flag x", Session(), console)
@@ -1353,6 +1371,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model set anthropic --toolcall-model", Session(), console)
@@ -1372,6 +1391,7 @@ class TestModelCommand:
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", env_path)
         reset_calls: list[str] = []
         monkeypatch.setattr(
             "core.llm.factory.reset_llm_clients", lambda: reset_calls.append("reset")
@@ -1406,6 +1426,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("LLM_PROVIDER", "codex")
         console, buf = _capture()
         dispatch_slash("/model toolcall set gpt-5.4", Session(), console)
@@ -1420,6 +1441,7 @@ class TestModelCommand:
         import surfaces.cli.wizard.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
+        monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         console, buf = _capture()
         dispatch_slash("/model switch anthropic", Session(), console)
@@ -1497,6 +1519,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict:
             captured.append(alert_text)
             return {"root_cause": "test cause"}
@@ -1520,6 +1543,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(template_name)
@@ -1609,6 +1633,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             calls.append(template_name)
@@ -1641,6 +1666,7 @@ class TestInvestigateFileCommand:
             template_name: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(template_name)
@@ -1685,6 +1711,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, str]:
             _ = (context_overrides, cancel_requested)
             captured.append(alert_text)
@@ -1764,6 +1791,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict:
             return {
                 "root_cause": "disk full",
@@ -1834,6 +1862,7 @@ class TestInvestigateFileCommand:
             alert_text: str,
             context_overrides: object = None,
             cancel_requested: object = None,
+            console: object = None,
         ) -> dict[str, object]:
             raise OpenSREError("bad config")
 
@@ -2131,6 +2160,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         console, buf = _capture()
         dispatch_slash("/history", Session(), console)
         assert "no history" in buf.getvalue()
@@ -2143,6 +2173,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         history = FileHistory(str(tmp_path / "interactive_history"))
         history.store_string("pod crash in prod")
         history.store_string("/status")
@@ -2162,6 +2193,7 @@ class TestHistoryCommand:
         import config.constants as const_module
 
         monkeypatch.setattr(const_module, "OPENSRE_HOME_DIR", tmp_path)
+        monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
         session = Session()
         session.record("alert", "bad input", ok=False)
         console, buf = _capture()
@@ -2699,7 +2731,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, _ = _capture()
 
-        assert m.run_cli_command(console, ["onboard"]) is True
+        assert m.run_cli_command(console, ["onboard"], capture_output=False) is True
         assert captured == [["/tmp/opensre", "onboard"]]
 
     def test_script_entrypoint_delegate_reuses_opensre_without_module_flags(
@@ -2736,7 +2768,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, _ = _capture()
 
-        assert m.run_cli_command(console, ["onboard"]) is True
+        assert m.run_cli_command(console, ["onboard"], capture_output=False) is True
         assert captured == [["/tmp/bin/opensre", "onboard"]]
 
     def test_cli_delegate_marks_parent_interactive_shell(
@@ -2761,7 +2793,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, _ = _capture()
 
-        assert m.run_cli_command(console, ["onboard"]) is True
+        assert m.run_cli_command(console, ["onboard"], capture_output=False) is True
         assert captured_envs[0]["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
 
 
@@ -2823,10 +2855,10 @@ class TestCliDelegatedCommands:
         self, monkeypatch: object, slash_input: str
     ) -> None:
         """Both the known-subcommand fall-through (e.g. ``/tests list``) and
-        the flag-style branch (e.g. ``/tests --help``) must call
-        ``run_cli_command`` with ``capture_output=True`` so the delegated CLI
-        output is replayed through the REPL console instead of vanishing onto
-        the parent process's stdout FD.
+        the flag-style branch (e.g. ``/tests --help``) must inherit the
+        capturing default of ``run_cli_command`` (no ``capture_output=False``
+        opt-out) so the delegated CLI output is replayed through the REPL
+        console instead of vanishing onto the parent process's stdout FD.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -2837,9 +2869,10 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(slash_input, Session(), Console())
+        session = Session()
+        dispatch_slash(slash_input, session, Console())
 
-        assert captured_kwargs == [{"capture_output": True}]
+        assert captured_kwargs == [{"session": session}]
 
     @pytest.mark.parametrize(
         "slash_input",
@@ -2849,10 +2882,11 @@ class TestCliDelegatedCommands:
         self, monkeypatch: object, slash_input: str
     ) -> None:
         """Bare ``/guardrails`` (no subcommand), known subcommands, and flag-style
-        invocations must all call ``run_cli_command`` with
-        ``capture_output=True``. Without this, Click's usage block (printed for
-        the no-subcommand case) and subcommand output bypass ``console.print``
-        and never reach the REPL buffer — see issue #2388.
+        invocations must all inherit the capturing default of
+        ``run_cli_command`` (no ``capture_output=False`` opt-out). Without
+        capture, Click's usage block (printed for the no-subcommand case) and
+        subcommand output bypass ``console.print`` and never reach the REPL
+        buffer — see issue #2388.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -2863,9 +2897,60 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(slash_input, Session(), Console())
+        session = Session()
+        dispatch_slash(slash_input, session, Console())
 
-        assert captured_kwargs == [{"capture_output": True}]
+        assert captured_kwargs == [{"session": session}]
+
+    def test_run_cli_command_captures_output_by_default(self) -> None:
+        """The capturing default is the safety net the per-handler tests rely on:
+        a printer that passes no ``capture_output`` must get capture, so its
+        output reaches the REPL buffer and the agent's slash observation."""
+        import inspect
+
+        from surfaces.interactive_shell.command_registry.cli_parity import run_cli_command
+
+        parameter = inspect.signature(run_cli_command).parameters["capture_output"]
+        assert parameter.default is True
+
+    @pytest.mark.parametrize(
+        "slash_input",
+        ["/cron", "/cron list", "/cron remove ecf7c2580b83"],
+    )
+    def test_slash_cron_printers_opt_into_output_capture(
+        self, monkeypatch: object, slash_input: str
+    ) -> None:
+        """Non-daemon cron subcommands must capture output so the table (and
+        task ids in it) reaches the REPL buffer and the slash history row."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        captured_kwargs: list[dict[str, object]] = []
+
+        def _fake_run_cli_command(_console: Console, _args: list[str], **kwargs: object) -> bool:
+            captured_kwargs.append(kwargs)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        session = Session()
+        dispatch_slash(slash_input, session, Console())
+
+        assert captured_kwargs == [{"capture_output": True, "session": session}]
+
+    def test_slash_cron_start_streams_to_the_tty(self, monkeypatch: object) -> None:
+        """The scheduler daemon blocks; capturing would buffer its output forever."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        captured_kwargs: list[dict[str, object]] = []
+
+        def _fake_run_cli_command(_console: Console, _args: list[str], **kwargs: object) -> bool:
+            captured_kwargs.append(kwargs)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        session = Session()
+        dispatch_slash("/cron start", session, Console())
+
+        assert captured_kwargs == [{"capture_output": False, "session": session}]
 
     def test_slash_onboard_with_args_forwards_them_to_subprocess(self, monkeypatch: object) -> None:
         """Args passed to ``/onboard`` must be forwarded to the subprocess."""

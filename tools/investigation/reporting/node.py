@@ -4,8 +4,7 @@ Node contract:
     Entrypoint : deliver(state: InvestigationState) -> dict[str, Any]
     Reads      : root_cause, validated_claims, non_validated_claims,
                  remediation_steps, correlation, evidence, resolved_integrations,
-                 slack_context, telegram_context, whatsapp_context,
-                 discord_context, problem_md, masking_context, opensre_evaluate
+                 channel_contexts, problem_md, masking_context, opensre_evaluate
     Writes     : slack_message, report, opensre_llm_eval (optional)
 """
 

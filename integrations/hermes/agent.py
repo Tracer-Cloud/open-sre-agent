@@ -25,14 +25,14 @@ from typing import Final
 from integrations.hermes.classifier import IncidentClassifier
 from integrations.hermes.incident import HermesIncident, LogLevel
 from integrations.hermes.parser import parse_log_line
-from integrations.hermes.tailer import DEFAULT_POLL_INTERVAL_S, FileTailer
+from integrations.hermes.tailer import DEFAULT_POLL_INTERVAL_SECONDS, FileTailer
 
 logger = logging.getLogger(__name__)
 
 IncidentSink = Callable[[HermesIncident], None]
 
 DEFAULT_LOG_PATH: Final[Path] = Path.home() / ".hermes" / "logs" / "errors.log"
-_THREAD_JOIN_TIMEOUT_S: Final[float] = 2.0
+_THREAD_JOIN_TIMEOUT_SECONDS: Final[float] = 2.0
 
 
 class HermesAgent:
@@ -63,7 +63,7 @@ class HermesAgent:
         sink: IncidentSink,
         log_path: Path | str = DEFAULT_LOG_PATH,
         classifier: IncidentClassifier | None = None,
-        poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+        poll_interval_s: float = DEFAULT_POLL_INTERVAL_SECONDS,
         from_start: bool = False,
     ) -> None:
         self._sink = sink
@@ -102,7 +102,7 @@ class HermesAgent:
         )
         self._thread.start()
 
-    def stop(self, *, timeout: float = _THREAD_JOIN_TIMEOUT_S) -> None:
+    def stop(self, *, timeout: float = _THREAD_JOIN_TIMEOUT_SECONDS) -> None:
         """Signal the polling thread and wait until it has exited.
 
         The poller is joined for up to ``timeout`` seconds first so slow

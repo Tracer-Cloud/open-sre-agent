@@ -31,6 +31,10 @@ from platform.analytics.runtime_context import (
     detect_runtime_context,
     is_ci_environment,
 )
+from platform.analytics.usage_context import (
+    ORGANIZATION_GROUP_TYPE,
+    merge_usage_enrichment,
+)
 
 _CONFIG_DIR = get_store_path().parent
 _ANONYMOUS_ID_PATH = _CONFIG_DIR / "anonymous_id"
@@ -709,6 +713,8 @@ class Analytics:
         self._shutdown = False
         self._worker_alive = not self._disabled
         self._persistent_properties: Properties = {}
+        self._identified_organization_groups: set[str] = set()
+        self._org_group_lock = threading.Lock()
 
         if not self._disabled:
             # Never block interpreter exit on PostHog; callers that need a
@@ -723,12 +729,13 @@ class Analytics:
     def capture(self, event: Event, properties: Properties | None = None) -> None:
         if self._disabled or self._shutdown:
             return
-        envelope = _Envelope(
-            event=event.value,
-            properties=_BASE_PROPERTIES
+        merged = merge_usage_enrichment(
+            _BASE_PROPERTIES
             | self._persistent_properties
-            | _coerce_properties(event.value, properties),
+            | _coerce_properties(event.value, properties)
         )
+        self._ensure_organization_group(merged)
+        envelope = _Envelope(event=event.value, properties=merged)
         self._enqueue(envelope)
 
     def set_persistent_property(self, key: str, value: JsonScalar) -> None:
@@ -756,12 +763,58 @@ class Analytics:
         coerced = _coerce_properties("$identify", set_properties)
         if not coerced:
             return
+        properties = merge_usage_enrichment(
+            {
+                **_BASE_PROPERTIES,
+                "$process_person_profile": True,
+                "$set": coerced,
+            }
+        )
+        self._ensure_organization_group(properties)
+        self._enqueue(_Envelope(event="$identify", properties=properties))
+
+    def group_identify(
+        self,
+        group_type: str,
+        group_key: str,
+        set_properties: Properties | None = None,
+    ) -> None:
+        """Create/update a PostHog group via a ``$groupidentify`` event.
+
+        Used so CLI/gateway events that stamp ``$groups.organization`` attach to
+        the same org group the webapp uses for integration inventory.
+        """
+        if self._disabled or self._shutdown:
+            return
+        key = group_key.strip()
+        if not group_type.strip() or not key:
+            return
+        coerced = _coerce_properties("$groupidentify", set_properties)
         properties: Properties = {
             **_BASE_PROPERTIES,
-            "$process_person_profile": True,
-            "$set": coerced,
+            "$group_type": group_type,
+            "$group_key": key,
+            "$group_set": coerced,
         }
-        self._enqueue(_Envelope(event="$identify", properties=properties))
+        self._enqueue(_Envelope(event="$groupidentify", properties=properties))
+
+    def _ensure_organization_group(self, properties: Properties) -> None:
+        """Emit ``$groupidentify`` once per process for each organization id seen."""
+        org = properties.get("organization_id")
+        if not isinstance(org, str):
+            return
+        org_id = org.strip()
+        if not org_id:
+            return
+        with self._org_group_lock:
+            if org_id in self._identified_organization_groups:
+                return
+            self._identified_organization_groups.add(org_id)
+        self.group_identify(
+            ORGANIZATION_GROUP_TYPE,
+            org_id,
+            {"organization_id": org_id},
+        )
 
     def _enqueue(self, envelope: _Envelope) -> None:
         pending_registered = False

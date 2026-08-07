@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from core.agent_harness.turns.turn_results import ShellTurnResult, ToolCallingTurnResult
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from integrations.sentry.morning_digest_runner import (
     build_morning_digest_prompt,
     run_sentry_morning_digest,
@@ -23,6 +23,10 @@ class TestBuildMorningDigestPrompt:
         prompt = build_morning_digest_prompt({})
         assert "24 hours" in prompt
         assert "sentry-summary" in prompt
+
+    def test_includes_uptime_instruction(self) -> None:
+        prompt = build_morning_digest_prompt({})
+        assert "uptime" in prompt.lower()
 
     def test_project_scope(self) -> None:
         prompt = build_morning_digest_prompt({"project_slug": "checkout-api"})
@@ -46,7 +50,7 @@ class TestRunSentryMorningDigest:
         )
         monkeypatch.setattr(
             "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
-            lambda _message, _payload: ShellTurnResult(
+            lambda _message, _payload: TurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
                     planned_count=0,
@@ -70,7 +74,7 @@ class TestRunSentryMorningDigest:
         )
         monkeypatch.setattr(
             "integrations.sentry.morning_digest_runner._dispatch_headless_turn",
-            lambda _message, _payload: ShellTurnResult(
+            lambda _message, _payload: TurnResult(
                 final_intent="chat",
                 action_result=ToolCallingTurnResult(
                     planned_count=1,

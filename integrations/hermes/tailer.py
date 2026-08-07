@@ -32,9 +32,9 @@ from typing import Final
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_POLL_INTERVAL_S: Final[float] = 0.5
+DEFAULT_POLL_INTERVAL_SECONDS: Final[float] = 0.5
 DEFAULT_READ_CHUNK: Final[int] = 64 * 1024
-_REOPEN_LOG_THROTTLE_S: Final[float] = 30.0
+_REOPEN_LOG_THROTTLE_SECONDS: Final[float] = 30.0
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ class FileTailer:
         self,
         path: Path | str,
         *,
-        poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
+        poll_interval_s: float = DEFAULT_POLL_INTERVAL_SECONDS,
         read_chunk: int = DEFAULT_READ_CHUNK,
         from_start: bool = False,
         stop_event: threading.Event | None = None,
@@ -197,14 +197,14 @@ class FileTailer:
         # Throttle noisy reopen/error logs so a long-missing file does not
         # flood structured-logging pipelines once per poll interval.
         now = time.monotonic()
-        if now - self._last_reopen_log < _REOPEN_LOG_THROTTLE_S:
+        if now - self._last_reopen_log < _REOPEN_LOG_THROTTLE_SECONDS:
             return
         self._last_reopen_log = now
         logger.warning(fmt, *args)
 
 
 __all__ = [
-    "DEFAULT_POLL_INTERVAL_S",
+    "DEFAULT_POLL_INTERVAL_SECONDS",
     "DEFAULT_READ_CHUNK",
     "FileTailer",
 ]

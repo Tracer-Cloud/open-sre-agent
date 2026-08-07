@@ -6,19 +6,24 @@ from typing import Any
 
 from core import public_tool_input
 from core.domain.alerts.alert_source import (
-    SECONDARY_TOOL_SOURCES,
     primary_sources_for_alert,
     relevant_sources_for_alert,
+    secondary_tool_sources,
     seed_tool_sources_for_alert,
 )
 from core.llm.types import ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from core.tool_framework.utils.integration_sources import availability_view
-from platform.observability.trace.redaction import redact_sensitive
+from platform.observability.trace.redaction import RedactedToolView, redact_tool_view
 from tools.registry import get_registered_tools
 
 # Consecutive iterations made up ENTIRELY of duplicate (already-seen) tool calls
 # that we tolerate before forcing the agent to conclude.
+#
+# This is *not* OpenAI-style trajectory pause (halt for human/policy review on
+# credit burn or destructive patterns). Stagnation only detects zero-progress
+# duplicate loops; a future trajectory monitor should sit beside this counter
+# and set a separate needs_human / paused flag rather than overloading it.
 MAX_STAGNANT_ITERATIONS = 2
 
 # Upper bound on how many tool schemas we hand the model on a single turn. The
@@ -88,7 +93,8 @@ def select_investigation_tools(
         return tools
 
     ranked = _relevance_ranked(tools, state)
-    secondary = [tool for tool in ranked if str(tool.source) in SECONDARY_TOOL_SOURCES]
+    secondary_sources = secondary_tool_sources()
+    secondary = [tool for tool in ranked if str(tool.source) in secondary_sources]
     # Reserve a few slots *inside* the cap for cheap reasoning fallbacks so the
     # agent never loses its "reason about the alert" path on a busy environment,
     # without ever pushing the total past the hard ceiling.
@@ -98,7 +104,7 @@ def select_investigation_tools(
     kept: list[RegisteredTool] = []
     kept_names: set[str] = set()
     for tool in ranked:
-        if str(tool.source) in SECONDARY_TOOL_SOURCES or len(kept) >= primary_budget:
+        if str(tool.source) in secondary_sources or len(kept) >= primary_budget:
             continue
         kept.append(tool)
         kept_names.add(tool.name)
@@ -129,9 +135,11 @@ def _relevance_ranked(tools: list[RegisteredTool], state: dict[str, Any]) -> lis
     primary = set(primary_sources_for_alert(state))
     content_relevant = set(relevant_sources_for_alert(state, sources_present))
 
+    secondary_sources = secondary_tool_sources()
+
     def rank(tool: RegisteredTool) -> tuple[int, str, str]:
         source = str(tool.source)
-        if source in SECONDARY_TOOL_SOURCES:
+        if source in secondary_sources:
             # Cheap reasoning fallbacks (knowledge, etc.): keep but never crowd
             # out incident-specific tools.
             tier = 3
@@ -164,6 +172,7 @@ def build_connected_tool_context(
         if not key.startswith("_")
         and (isinstance(value, BaseModel) or (isinstance(value, dict) and value))
     )
+    connected_source_set = set(connected_integrations)
     connected_families = {family_key(key) for key in connected_integrations}
 
     sources: dict[str, dict[str, Any]] = {}
@@ -172,7 +181,7 @@ def build_connected_tool_context(
         source_info = sources.setdefault(
             source,
             {
-                "connected": source in connected_integrations
+                "connected": source in connected_source_set
                 or family_key(source) in connected_families,
                 "tools": [],
             },
@@ -182,7 +191,7 @@ def build_connected_tool_context(
     return {
         "connected_integrations": connected_integrations,
         "available_sources": sources,
-        "available_action_names": [tool.name for tool in sorted(tools, key=lambda item: item.name)],
+        "available_action_names": sorted(tool.name for tool in tools),
     }
 
 
@@ -224,20 +233,38 @@ def build_seed_calls(
             injected = tool.extract_params(tool_sources)
         except Exception:
             injected = {}
+        # Seed calls are validated against the public schema before execution.
+        # Keep only declared arguments and omit None for optional fields, where
+        # absence is valid but an explicit null may violate the declared type.
+        public_properties = tool.public_input_schema.get("properties", {})
+        if not isinstance(public_properties, dict):
+            public_properties = {}
+        public_input = {
+            key: value
+            for key, value in injected.items()
+            if key in public_properties and value is not None
+        }
         tool_id = new_tool_use_id() if use_converse_ids else f"seed_{tool.name}"
-        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(injected)))
+        calls.append(ToolCall(id=tool_id, name=tool.name, input=public_tool_input(public_input)))
 
     return calls
 
 
-def tool_event_payload(tc: ToolCall, *, output: Any | None = None) -> dict[str, Any]:
+def tool_event_payload(
+    tc: ToolCall,
+    *,
+    output: Any | None = None,
+    redacted: RedactedToolView | None = None,
+) -> dict[str, Any]:
+    """Build a tracker/event payload; prefer a shared ``redacted`` view."""
+    view = redacted if redacted is not None else redact_tool_view(tc.input, output)
     payload: dict[str, Any] = {
         "id": tc.id,
         "name": tc.name,
-        "input": redact_sensitive(tc.input),
+        "input": view.tool_input,
     }
-    if output is not None:
-        payload["output"] = redact_sensitive(output)
+    if output is not None or (redacted is not None and redacted.output is not None):
+        payload["output"] = view.output
     return payload
 
 
@@ -246,16 +273,23 @@ def merge_tool_evidence(
     tool_name: str,
     output: Any,
     tool_input: dict[str, Any],
+    *,
+    redacted: RedactedToolView | None = None,
 ) -> None:
-    """Store raw tool output and the legacy report-facing evidence keys."""
+    """Store raw tool output and the legacy report-facing evidence keys.
+
+    Pass ``redacted`` when the caller already built a ``RedactedToolView`` so
+    report rows share that copy instead of walking the payload again.
+    """
     evidence[tool_name] = output
+    view = redacted if redacted is not None else redact_tool_view(tool_input, output)
     tool_outputs = evidence.setdefault("tool_outputs", [])
     if isinstance(tool_outputs, list):
         tool_outputs.append(
             {
                 "tool_name": tool_name,
-                "tool_args": redact_sensitive(tool_input),
-                "data": redact_sensitive(output),
+                "tool_args": view.tool_input,
+                "data": view.output,
             }
         )
 

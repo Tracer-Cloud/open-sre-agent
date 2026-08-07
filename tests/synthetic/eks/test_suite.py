@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,6 +17,7 @@ from tests.synthetic.eks.scenario_loader import (
 from tests.synthetic.k8s_schemas import VALID_K8S_EVIDENCE_SOURCES
 from tests.synthetic.mock_datadog_backend.backend import FixtureDatadogBackend
 from tests.synthetic.mock_eks_backend.backend import FixtureEKSBackend
+from tests.synthetic.score_artifacts import record_scenario_score
 
 # Synthetic E2E uses fixture EKS/Datadog backends; many tool "calls" hit mocks, not real APIs.
 # This gate only reflects whether the *LLM* can authenticate (the reason we skip when keys are absent).
@@ -259,6 +261,16 @@ def _run_scenario_test(fixture) -> None:
     failures: list[str] = []
     for attempt in range(1, _LLM_ATTEMPTS + 1):
         final_state, score = run_scenario(fixture, use_mock_backends=True)
+        record_scenario_score(
+            suite="eks",
+            scenario_id=fixture.scenario_id,
+            attempt=attempt,
+            passed=bool(score.passed),
+            score=score,
+            final_state=final_state,
+            difficulty=getattr(fixture.metadata, "scenario_difficulty", None),
+            failure_mode=getattr(fixture.metadata, "failure_mode", "") or "",
+        )
 
         try:
             assert final_state["root_cause"]
@@ -516,3 +528,31 @@ class TestScenarioInheritance:
         assert fixture.metadata.scenario_id == "000-healthy"
         assert fixture.metadata.failure_mode == "healthy"
         assert fixture.evidence.eks_pods is not None
+
+
+def test_declared_equivalent_categories_are_accepted(tmp_path: Path) -> None:
+    """A documented answer-key field must not be silently dropped.
+
+    ``equivalent_root_cause_categories`` is validated by the shared schema and
+    honoured by the RDS scorer. Before this was wired through, an EKS fixture
+    could declare it, pass validation, and still fail scoring.
+    """
+    # Arrange
+    from tests.synthetic.eks.run_suite import _accepted_categories
+    from tests.synthetic.eks.scenario_loader import K8sScenarioAnswerKey
+
+    fixture = SimpleNamespace(
+        answer_key=K8sScenarioAnswerKey(
+            root_cause_category="resource_exhaustion",
+            required_keywords=["memory"],
+            model_response="x",
+            equivalent_root_cause_categories=["pod_oomkilled"],
+        ),
+        metadata=SimpleNamespace(failure_mode="pod_oomkilled"),
+    )
+
+    # Act
+    accepted = _accepted_categories(fixture)
+
+    # Assert
+    assert accepted == {"resource_exhaustion", "pod_oomkilled"}

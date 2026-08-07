@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from tools.system.fleet_monitoring.probe import ProcessSnapshot
 
 _CPU_THRESHOLD_PERCENT = 5.0
 
 
-class Status(Enum):
+class FleetProcessStatus(StrEnum):
     ACTIVE = "active"
     IDLE = "idle"
     STUCK = "stuck"
@@ -21,7 +21,7 @@ def compute_status(
     last_output_at: datetime | None,
     idle_after_s: int = 120,
     stuck_after_s: int = 480,
-) -> Status:
+) -> FleetProcessStatus:
     """
     Classify an agent process as active, idle, or stuck based on CPU activity and output recency.
 
@@ -43,8 +43,8 @@ def compute_status(
     high_cpu = record.cpu_percent >= _CPU_THRESHOLD_PERCENT
 
     if not high_cpu and delta.total_seconds() >= idle_after_s:
-        return Status.IDLE
+        return FleetProcessStatus.IDLE
     if high_cpu and delta.total_seconds() >= stuck_after_s:
-        return Status.STUCK
+        return FleetProcessStatus.STUCK
 
-    return Status.ACTIVE
+    return FleetProcessStatus.ACTIVE

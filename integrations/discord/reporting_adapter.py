@@ -36,7 +36,9 @@ class _DiscordReportDeliveryAdapter:
             logger.debug("[publish] discord delivery: no discord integration configured")
             return False
 
-        discord_ctx = state.get("discord_context") or {}
+        from core.state.channel_context import get_channel_context
+
+        discord_ctx = get_channel_context(state, "discord")
         bot_token = discord_ctx.get("bot_token") or discord_creds.get("bot_token", "")
         channel_id = discord_ctx.get("channel_id") or discord_creds.get("default_channel_id", "")
         thread_id = discord_ctx.get("thread_id", "")
