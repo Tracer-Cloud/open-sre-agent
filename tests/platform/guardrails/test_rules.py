@@ -175,3 +175,41 @@ class TestLoadRules:
             GuardrailAction.BLOCK,
             GuardrailAction.AUDIT,
         ]
+
+    def test_guardrail_action_string_behavior(self) -> None:
+        """Characterize the string behavior of GuardrailAction enum members.
+
+        This test ensures that after refactoring to StrEnum, the enum members
+        maintain both their enum behavior and gain direct string comparison
+        capabilities for backward compatibility and usability.
+        """
+        # Test enum behavior is preserved
+        assert GuardrailAction.REDACT != GuardrailAction.BLOCK
+        assert GuardrailAction.BLOCK != GuardrailAction.AUDIT
+        assert GuardrailAction.REDACT != GuardrailAction.AUDIT
+
+        # Test string comparison behavior (new with StrEnum)
+        assert GuardrailAction.REDACT == "redact"
+        assert GuardrailAction.BLOCK == "block"
+        assert GuardrailAction.AUDIT == "audit"
+
+        # Test that string comparison is symmetric
+        assert "redact" == GuardrailAction.REDACT
+        assert "block" == GuardrailAction.BLOCK
+        assert "audit" == GuardrailAction.AUDIT
+
+        # Test that incorrect string comparisons return False
+        assert GuardrailAction.REDACT != "block"
+        assert GuardrailAction.BLOCK != "audit"
+        assert GuardrailAction.AUDIT != "redact"
+        assert GuardrailAction.REDACT != "invalid"
+
+        # Test that the .value attribute still works (backward compatibility)
+        assert GuardrailAction.REDACT.value == "redact"
+        assert GuardrailAction.BLOCK.value == "block"
+        assert GuardrailAction.AUDIT.value == "audit"
+
+        # Test that enum members are string instances (core StrEnum behavior)
+        assert isinstance(GuardrailAction.REDACT, str)
+        assert isinstance(GuardrailAction.BLOCK, str)
+        assert isinstance(GuardrailAction.AUDIT, str)
