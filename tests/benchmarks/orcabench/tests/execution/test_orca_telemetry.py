@@ -96,16 +96,15 @@ def test_prometheus_and_jaeger_calls_use_explicit_april_bounds() -> None:
     assert trace_params["limit"] == 5
 
 
-def test_empty_trace_service_uses_bounded_discovery() -> None:
+def test_empty_trace_service_does_not_guess_a_service() -> None:
     session = _Session()
     backend = _backend(session)
 
     traces = backend.query_traces("", limit=20)
 
-    assert traces["traces"][0]["traceID"] == "abc"
-    _, trace_kwargs = session.get_calls[0]
-    assert trace_kwargs["params"]["service"] == "checkout"
-    assert trace_kwargs["params"]["limit"] == 5
+    assert traces["traces"] == []
+    assert session.get_calls == []
+    assert session.post_calls == []
 
 
 def test_probe_records_compact_bounded_jaeger_evidence() -> None:
@@ -152,3 +151,14 @@ def test_opensearch_call_filters_the_same_window_and_maps_log_results() -> None:
     assert kwargs["json"]["query"]["bool"]["filter"][1] == {
         "term": {"resource.service.name.keyword": "checkout"}
     }
+    assert "must" not in kwargs["json"]["query"]["bool"]
+
+
+def test_empty_log_service_does_not_query_every_service() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    result = backend.query_logs("", limit=20)
+
+    assert result["data"]["result"] == []
+    assert session.post_calls == []

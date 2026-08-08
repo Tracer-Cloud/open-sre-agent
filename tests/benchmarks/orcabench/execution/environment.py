@@ -6,6 +6,7 @@ import os
 import time
 from pathlib import Path
 
+from config.constants.llm import LLM_MAX_TOKENS_ENV
 from tests.benchmarks.orcabench.config import ModelSettings, RunnerSettings
 
 
@@ -27,6 +28,7 @@ def native_environment_values(model: ModelSettings) -> dict[str, str]:
         f"{model_prefix}_REASONING_MODEL": model.opensre_model,
         f"{model_prefix}_CLASSIFICATION_MODEL": model.opensre_model,
         f"{model_prefix}_TOOLCALL_MODEL": model.opensre_model,
+        LLM_MAX_TOKENS_ENV: str(model.max_tokens),
         "OPENSRE_REASONING_EFFORT": model.reasoning_effort,
         "OPENSRE_MEMORY_DISABLED": "1",
         "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED": "1",

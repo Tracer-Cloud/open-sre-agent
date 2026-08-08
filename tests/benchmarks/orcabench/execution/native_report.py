@@ -8,14 +8,17 @@ from typing import Any
 
 
 class NativeReportPolicy:
-    """Write OpenSRE's public report without formatting or normalization."""
+    """Map OpenSRE's structured disposition to ORCA's report-file contract."""
 
     def write(self, payload: dict[str, Any], destination: Path) -> bytes:
-        """Persist exactly the UTF-8 bytes represented by ``payload['report']``."""
+        """Write an empty control report; otherwise preserve OpenSRE's report."""
         report = payload.get("report")
         if not isinstance(report, str):
             raise ValueError("native OpenSRE payload must contain a string report")
-        data = report.encode("utf-8")
+        category = payload.get("root_cause_category")
+        if not isinstance(category, str):
+            raise ValueError("native OpenSRE payload must contain a root-cause category")
+        data = b"" if category == "healthy" else report.encode("utf-8")
 
         # ORCA pre-creates /app/report.md as mode 0666 but keeps /app root-owned,
         # so an atomic sibling rename is not available to the non-root agent.

@@ -548,7 +548,7 @@ class QueryGrafanaMetricsOutput(BaseModel):
 def _query_grafana_metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     grafana = _grafana_source(sources)
     return {
-        "metric_name": grafana.get("default_metric_query", "pipeline_runs_total"),
+        "metric_name": "pipeline_runs_total",
         "service_name": grafana.get("service_name"),
         "grafana_backend": grafana.get("_backend"),
         **_grafana_creds(grafana),

@@ -62,7 +62,7 @@ def test_grafana_connection_contains_connection_data_only() -> None:
     assert grafana["password"] == "admin"
     assert grafana["verify_ssl"] is True
     assert grafana["connection_verified"] is True
-    assert "STATUS_CODE_ERROR" in grafana["default_metric_query"]
+    assert "default_metric_query" not in grafana
     assert grafana["_backend"].query_window == {
         "start": "2026-04-21T11:00:00Z",
         "end": "2026-04-21T13:00:00Z",
@@ -83,6 +83,7 @@ def test_openrouter_environment_uses_provider_specific_model_names() -> None:
     assert values["OPENROUTER_REASONING_MODEL"] == "openrouter/free"
     assert values["OPENROUTER_CLASSIFICATION_MODEL"] == "openrouter/free"
     assert values["OPENROUTER_TOOLCALL_MODEL"] == "openrouter/free"
+    assert values["LLM_MAX_TOKENS"] == "16384"
     assert all(not name.startswith("OPENAI_") for name in values)
 
 
@@ -91,7 +92,26 @@ def test_native_report_policy_preserves_exact_utf8_bytes(tmp_path: Path) -> None
     destination.touch(mode=0o666)
     report = "# Incident\n\nUnicode: café ∑\n"
 
-    written = NativeReportPolicy().write({"report": report}, destination)
+    written = NativeReportPolicy().write(
+        {"report": report, "root_cause_category": "configuration_error"},
+        destination,
+    )
 
     assert written == report.encode("utf-8")
     assert destination.read_bytes() == written
+
+
+def test_native_report_policy_writes_empty_control_report(tmp_path: Path) -> None:
+    destination = tmp_path / "report.md"
+    destination.write_text("stale report", encoding="utf-8")
+
+    written = NativeReportPolicy().write(
+        {
+            "report": "The investigated system is healthy.",
+            "root_cause_category": "healthy",
+        },
+        destination,
+    )
+
+    assert written == b""
+    assert destination.read_bytes() == b""

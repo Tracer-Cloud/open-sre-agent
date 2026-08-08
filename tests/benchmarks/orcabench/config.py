@@ -51,6 +51,7 @@ class ModelSettings(StrictFrozenModel):
     provider: Literal["openai", "openrouter"] = "openai"
     transport: Literal["sdk"] = "sdk"
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    max_tokens: int = Field(default=16384, ge=1)
 
     @property
     def opensre_model(self) -> str:

@@ -9,7 +9,7 @@ class NativeInvestigationRunner:
 
     def investigate(
         self,
-        instruction: str,
+        alert: str | dict[str, Any],
         integrations: dict[str, Any],
         incident_window: dict[str, Any],
     ) -> dict:
@@ -19,14 +19,16 @@ class NativeInvestigationRunner:
 
         install_harness_ports()
         state = run_investigation(
-            instruction,
+            alert,
             resolved_integrations=integrations,
             incident_window=incident_window,
         )
         return dict(state)
 
     def build_payload(self, state: dict) -> dict[str, Any]:
-        """Use OpenSRE's standard public state projection without adaptation."""
+        """Add the structured disposition needed by ORCA's report policy."""
         from tools.investigation.capability import build_investigation_payload
 
-        return build_investigation_payload(state)
+        payload = build_investigation_payload(state)
+        payload["root_cause_category"] = state.get("root_cause_category", "")
+        return payload

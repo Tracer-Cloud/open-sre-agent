@@ -38,10 +38,6 @@ class OrcaGrafanaConnection:
                 "password": self._settings.password,
                 "verify_ssl": self._settings.verify_ssl,
                 "connection_verified": True,
-                "default_metric_query": (
-                    'sum by (service_name) (rate(traces_span_metrics_calls_total'
-                    '{status_code="STATUS_CODE_ERROR"}[5m]))'
-                ),
                 "_backend": OrcaTelemetryBackend(
                     endpoint=endpoint,
                     username=self._settings.username,

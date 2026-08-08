@@ -16,12 +16,23 @@ _CURRENT_TIME_RE = re.compile(
     r"(?P<clock>\d{1,2}:\d{2})(?:\s*(?P<ampm>[AP]M))?\s+ET\.",
 )
 
+_MARKDOWN_SECTION_RE = re.compile(
+    r"^##\s+(?P<title>[^\n]+)\s*$\n(?P<body>.*?)(?=^##\s+|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+_REPORTED_ISSUE_RE = re.compile(
+    r"^The following issue was reported[^\n]*:[ \t]*$\n"
+    r"(?P<issue>.*?)(?=^NOTE:[ \t]*$)",
+    re.MULTILINE | re.DOTALL,
+)
+
 
 @dataclass(frozen=True)
 class OrcaTaskContext:
     """Agent-visible temporal context extracted from an ORCA instruction."""
 
     current_time: datetime
+    reported_issue: str
 
     def incident_window(self, *, lookback_minutes: int = 120) -> dict[str, object]:
         """Return OpenSRE's generic serialized historical investigation window."""
@@ -34,6 +45,39 @@ class OrcaTaskContext:
             "source": "caller_override",
             "confidence": 1.0,
         }
+
+    def investigation_alert(self) -> dict[str, object]:
+        """Return the ORCA report as a native OpenSRE dataset alert.
+
+        Grafana is context available to the investigator, not the alert source.
+        Keeping those concepts separate prevents benchmark instructions about
+        Grafana from being mistaken for evidence that a Grafana alert fired.
+        """
+        return {
+            "alert_source": "opensre_dataset",
+            "commonAnnotations": {
+                "summary": self.reported_issue,
+                "context_sources": "grafana",
+            },
+        }
+
+
+def _markdown_section(instruction: str, title: str) -> str:
+    for match in _MARKDOWN_SECTION_RE.finditer(instruction):
+        if match.group("title").strip() == title:
+            return match.group("body").strip()
+    raise ValueError(f"ORCA instruction is missing its {title!r} section")
+
+
+def _reported_issue(instruction: str) -> str:
+    task_description = _markdown_section(instruction, "Task Description")
+    match = _REPORTED_ISSUE_RE.search(task_description)
+    if match is None:
+        raise ValueError("ORCA task description is missing its reported issue")
+    issue = match.group("issue").strip()
+    if not issue:
+        raise ValueError("ORCA task description contains an empty reported issue")
+    return issue
 
 
 def parse_orca_task_context(instruction: str) -> OrcaTaskContext:
@@ -56,4 +100,7 @@ def parse_orca_task_context(instruction: str) -> OrcaTaskContext:
     local = datetime.strptime(rendered, time_format).replace(
         tzinfo=ZoneInfo("America/New_York")
     )
-    return OrcaTaskContext(current_time=local)
+    return OrcaTaskContext(
+        current_time=local,
+        reported_issue=_reported_issue(instruction),
+    )

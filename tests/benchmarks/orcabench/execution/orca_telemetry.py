@@ -86,25 +86,20 @@ class OrcaTelemetryBackend:
         **_: Any,
     ) -> dict[str, Any]:
         """Search bounded OpenSearch log documents and return a Loki-compatible shape."""
+        if not service_name:
+            return {
+                "status": "success",
+                "data": {"resultType": "streams", "result": []},
+            }
         filters: list[dict[str, Any]] = [
             {"range": {"@timestamp": {"gte": self._start, "lte": self._end}}}
         ]
-        must: list[dict[str, Any]] = []
-        if service_name:
-            filters.append({"term": {"resource.service.name.keyword": service_name}})
-        must.append(
-            {
-                "query_string": {
-                    "query": "error OR fail* OR exception OR timeout OR unavailable",
-                    "fields": ["body", "severity.text"],
-                }
-            }
-        )
+        filters.append({"term": {"resource.service.name.keyword": service_name}})
         effective_limit = min(max(1, limit), 20)
         body = {
             "size": effective_limit,
             "sort": [{"@timestamp": "asc"}],
-            "query": {"bool": {"filter": filters, "must": must}},
+            "query": {"bool": {"filter": filters}},
         }
         response = self._session.post(
             self._url(self.LOGS_UID, "/otel-logs-*/_search"),
@@ -209,9 +204,6 @@ class OrcaTelemetryBackend:
         **_: Any,
     ) -> dict[str, Any]:
         """Query bounded Jaeger traces for a concrete service."""
-        if not service_name:
-            services = self.query_service_names()
-            service_name = "frontend-proxy" if "frontend-proxy" in services else (services[0] if services else "")
         if not service_name:
             return {"traces": [], "metrics": {}, "query_window": self.query_window}
         effective_limit = min(max(1, limit), 5)

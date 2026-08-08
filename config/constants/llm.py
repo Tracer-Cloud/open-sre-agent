@@ -12,6 +12,7 @@ from typing import Final
 AZURE_OPENAI_BASE_URL_ENV: Final[str] = "AZURE_OPENAI_BASE_URL"
 AZURE_OPENAI_API_VERSION_ENV: Final[str] = "AZURE_OPENAI_API_VERSION"
 AZURE_OPENAI_API_KEY_ENV: Final[str] = "AZURE_OPENAI_API_KEY"
+LLM_MAX_TOKENS_ENV: Final[str] = "LLM_MAX_TOKENS"
 
 #: Opt-in provider-native structured outputs (Anthropic ``output_config`` /
 #: OpenAI ``chat.completions.parse``). Default off until a live diagnose turn

@@ -160,7 +160,7 @@ def run(config_path: Path, instruction_path: Path) -> int:
         set_usage_hook(collect_usage)
         try:
             state = mode.investigation.investigate(
-                instruction,
+                task_context.investigation_alert(),
                 integrations,
                 incident_window,
             )

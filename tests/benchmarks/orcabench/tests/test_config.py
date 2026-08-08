@@ -25,6 +25,7 @@ def test_checked_in_config_is_native_and_model_route_is_explicit() -> None:
     assert settings.model.opensre_model == "openai-gpt-5.5"
     assert settings.model.transport == "sdk"
     assert settings.model.reasoning_effort == "medium"
+    assert settings.model.max_tokens == 16384
     assert settings.model.required_environment_names == (
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
@@ -38,6 +39,7 @@ def test_openrouter_config_is_an_unverified_smoke_profile() -> None:
     assert settings.profile == "smoke"
     assert settings.model.harbor_model == "openrouter/openrouter/free"
     assert settings.model.opensre_model == "openrouter/free"
+    assert settings.model.max_tokens == 16384
     assert settings.model.required_environment_names == ("OPENROUTER_API_KEY",)
     assert not settings.verifier.enabled
     assert settings.verifier.required_environment_names == ()

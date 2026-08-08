@@ -20,7 +20,7 @@ class ConnectionProvider(Protocol):
 class InvestigationRunner(Protocol):
     def investigate(
         self,
-        instruction: str,
+        alert: str | dict[str, Any],
         integrations: dict[str, Any],
         incident_window: dict[str, Any],
     ) -> dict:

@@ -16,6 +16,7 @@ from pydantic import Field, ValidationError, field_validator, model_validator
 from config.constants.llm import (
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
+    LLM_MAX_TOKENS_ENV,
 )
 from config.llm_auth.auth_method import (
     LLM_AUTH_METHOD_ENV,
@@ -422,7 +423,7 @@ def _llm_settings_env_payload(provider: str) -> dict[str, object]:
         "ollama_model": os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
         or DEFAULT_OLLAMA_MODEL,
         "ollama_host": os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
-        "max_tokens": os.getenv("LLM_MAX_TOKENS", str(DEFAULT_MAX_TOKENS)),
+        "max_tokens": os.getenv(LLM_MAX_TOKENS_ENV, str(DEFAULT_MAX_TOKENS)),
     }
 
 
