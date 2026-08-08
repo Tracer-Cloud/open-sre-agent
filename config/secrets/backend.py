@@ -8,9 +8,7 @@ acyclic.
 
 from __future__ import annotations
 
-from enum import Enum, StrEnum
 from enum import StrEnum
-from typing import Literal
 
 
 class SecretTier(StrEnum):

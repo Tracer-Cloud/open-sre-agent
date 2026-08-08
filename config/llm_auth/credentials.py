@@ -73,7 +73,11 @@ class CredentialResolution:
 
     @property
     def ok(self) -> bool:
-        return bool(self.api_key) or self.source in {"cli", "ambient", "local"}
+        return bool(self.api_key) or self.source in {
+            CredentialSource.CLI,
+            CredentialSource.AMBIENT,
+            CredentialSource.LOCAL,
+        }
 
     def __repr__(self) -> str:
         redacted = "<set>" if self.api_key else "<empty>"
@@ -167,9 +171,9 @@ _AMBIENT_PROBES: dict[str, Callable[[ProviderSpec], _AmbientProbeResult]] = {
 def _source_status(provider: str, source: CredentialSource, detail: str) -> CredentialStatus:
     return CredentialStatus(
         provider=provider,
-        configured=source not in {"none", "unknown"},
+        configured=source not in {CredentialSource.NONE, CredentialSource.UNKNOWN},
         source=source,
-        verified=source not in {"metadata", "unknown"},
+        verified=source not in {CredentialSource.METADATA, CredentialSource.UNKNOWN},
         stale=False,
         detail=detail,
     )
@@ -186,7 +190,9 @@ def _record_status(spec: ProviderSpec, record: dict[str, str]) -> CredentialStat
     return CredentialStatus(
         provider=spec.value,
         configured=True,
-        source=CredentialSource.METADATA if source in {"keyring", "fallback"} else source,
+        source=CredentialSource.METADATA
+        if source in {CredentialSource.KEYRING, CredentialSource.FALLBACK}
+        else source,
         verified=verified and not stale,
         stale=stale,
         detail=detail,
@@ -239,7 +245,8 @@ def status(provider: str) -> CredentialStatus:
                 provider=spec.value,
                 configured=True,
                 source=CredentialSource.CLI
-                if record_source in {"metadata", "unknown", "none"}
+                if record_source
+                in {CredentialSource.METADATA, CredentialSource.UNKNOWN, CredentialSource.NONE}
                 else record_source,
                 verified=True,
                 stale=False,

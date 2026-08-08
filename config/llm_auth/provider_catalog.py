@@ -18,8 +18,8 @@ class CredentialKind(StrEnum):
     Kept distinct from the wizard's onboarding vocabulary
     (:class:`surfaces.cli.wizard.config.WizardCredentialKind`): the two share
     ``api_key``/``cli`` but the wizard's ``host``/``none`` map to this enum's
-    ``local``/``ambient``. Do not merge them — see the ``kind_map`` translation
-    in ``surfaces/cli/wizard/config.py``.
+    ``local``/``ambient``. Do not merge them — see the ``WIZARD_TO_CATALOG_KIND``
+    translation in ``surfaces/cli/wizard/config.py``.
     """
 
     #: A user-supplied API key stored by OpenSRE (keyring/.env).
