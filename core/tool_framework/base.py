@@ -45,11 +45,8 @@ class BaseTool(ABC):
     input_model: ClassVar[type[BaseModel] | None] = None
     source: ClassVar[EvidenceSource]
     source_id: ClassVar[str | None] = None
-    # Declared as ``... | str`` so subclasses may keep using the plain wire
-    # values (``"logs"``, ``"read_only"``); ``ToolMetadata`` validation in
-    # ``__init_subclass__`` coerces them to the enum member.
-    evidence_type: ClassVar[EvidenceType | str | None] = None
-    side_effect_level: ClassVar[SideEffectLevel | str | None] = None
+    evidence_type: ClassVar[EvidenceType | None] = None
+    side_effect_level: ClassVar[SideEffectLevel | None] = None
     use_cases: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[str]] = ()
     anti_examples: ClassVar[Sequence[str]] = ()
@@ -61,7 +58,7 @@ class BaseTool(ABC):
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
-    surfaces: ClassVar[tuple[ToolSurface | str, ...]] = ("investigation",)
+    surfaces: ClassVar[tuple[ToolSurface | str, ...]] = (ToolSurface.INVESTIGATION,)
     tags: ClassVar[Sequence[str]] = ()
     parallel_safe: ClassVar[bool] = True
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging

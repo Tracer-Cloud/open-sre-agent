@@ -4,6 +4,7 @@ from typing import Any, ClassVar
 
 from core.domain.types.evidence import EvidenceSource
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.config_models import RailwayIntegrationConfig
 from integrations.railway.client import (
@@ -17,7 +18,7 @@ class InspectRailwayDeploymentTool(BaseTool):
     name = "inspect_railway_deployment"
     source: ClassVar[EvidenceSource] = "railway"
     surfaces = ("investigation", "chat", "action")
-    side_effect_level = "read_only"
+    side_effect_level = SideEffectLevel.READ_ONLY
     description = (
         "Show the latest successful Railway deployment and source commit metadata for a service."
     )

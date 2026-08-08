@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.tools.tool_context import action_context_from_agent_context
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.github.client import resolve_github_token
 from integrations.github.helpers import (
@@ -124,7 +125,7 @@ def _confirm_fn(context: Any) -> Any:
         "Merging or closing the resulting PR",
     ],
     surfaces=("action",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     requires_approval=True,
     approval_reason=("Edits files and can push a branch and open a GitHub PR."),
     parallel_safe=False,

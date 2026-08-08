@@ -32,6 +32,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from integrations.pi import is_pi_coding_enabled
 from integrations.pi.tools.pi_coding_tool.errors import PiCodingError
 from integrations.pi.tools.pi_coding_tool.runner import (
@@ -51,7 +52,7 @@ class PiCodingTool(BaseTool):
     name = "pi_coding_task"
     display_name = "Pi coding task"
     source = SOURCE
-    side_effect_level = "mutating"
+    side_effect_level = SideEffectLevel.MUTATING
     surfaces = ("investigation",)
     description = (
         "Submit a coding task to the Pi agent (pi.dev). Pi edits files in the workspace to "

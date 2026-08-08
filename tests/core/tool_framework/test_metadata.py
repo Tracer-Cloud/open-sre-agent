@@ -122,3 +122,69 @@ def test_evidence_type_valid_literals(et: EvidenceType) -> None:
 def test_evidence_type_rejects_unknown() -> None:
     with pytest.raises(ValidationError):
         ToolMetadata.model_validate(_valid_kwargs(evidence_type="profiling"))
+
+
+def _run_mypy_snippet(code: str) -> tuple[int, str]:
+    """Helper to run mypy.api.run on a Python code snippet in a temporary file."""
+    import os
+    import tempfile
+
+    from mypy import api
+
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+        f.write(code)
+        f_path = f.name
+
+    try:
+        stdout, _stderr, exit_code = api.run([f_path])
+        return exit_code, stdout
+    finally:
+        if os.path.exists(f_path):
+            os.remove(f_path)
+
+
+def test_static_typechecking_rejects_side_effect_level_typos() -> None:
+    """Verify that static typechecking with mypy fails on invalid side_effect_level strings."""
+    code = """from core.tool_framework.base import BaseTool
+
+class Tool(BaseTool):
+    side_effect_level = "reed_only"
+"""
+    exit_code, stdout = _run_mypy_snippet(code)
+    assert exit_code != 0, f"Expected mypy typecheck to fail, but it succeeded:\n{stdout}"
+    assert "Incompatible types in assignment" in stdout
+
+
+def test_static_typechecking_rejects_evidence_type_typos() -> None:
+    """Verify that static typechecking with mypy fails on invalid evidence_type strings."""
+    code = """from core.tool_framework.base import BaseTool
+
+class Tool(BaseTool):
+    evidence_type = "metricz"
+"""
+    exit_code, stdout = _run_mypy_snippet(code)
+    assert exit_code != 0, f"Expected mypy typecheck to fail, but it succeeded:\n{stdout}"
+    assert "Incompatible types in assignment" in stdout
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Blocked on Phase B: BaseTool.surfaces is ClassVar[tuple[ToolSurface | str, ...]] "
+        "until Phase B migrates tool surface declarations to ToolSurface enums."
+    )
+)
+def test_static_typechecking_rejects_surfaces_typos() -> None:
+    """Verify static typechecking for surfaces typos.
+
+    Currently xfail: BaseTool.surfaces intentionally permits str until Phase B.
+    """
+    code = """from core.tool_framework.base import BaseTool
+
+class Tool(BaseTool):
+    surfaces = ("investigaton",)
+"""
+    exit_code, stdout = _run_mypy_snippet(code)
+    assert exit_code != 0, (
+        f"Expected mypy typecheck to fail for surfaces typo, but it succeeded:\n{stdout}"
+    )
+    assert "Incompatible types in assignment" in stdout

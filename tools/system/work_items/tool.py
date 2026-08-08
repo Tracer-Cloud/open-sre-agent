@@ -22,6 +22,7 @@ from core.domain.work_items import (
     update_work_item,
     work_items_path,
 )
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.types import AgentToolContext
 from platform.scheduler.store import add_task as add_scheduled_task
@@ -214,7 +215,7 @@ def _schedule_item_reminder(
     ],
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
     is_available=_work_items_available,
@@ -340,7 +341,7 @@ def work_task_add(
     ),
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_work_items_available,
     input_schema={
         "type": "object",
@@ -386,7 +387,7 @@ def work_task_list(
     ),
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_work_items_available,
     input_schema={
@@ -422,7 +423,7 @@ def work_task_complete(selectors: list[str]) -> dict[str, Any]:
     ),
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
     is_available=_work_items_available,
@@ -569,7 +570,7 @@ def work_task_update(
     ),
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_work_items_available,
     input_schema={
         "type": "object",
@@ -622,7 +623,7 @@ def work_task_prioritize(
     ],
     tags=("safe", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
     is_available=_work_items_available,

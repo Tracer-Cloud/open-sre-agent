@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.tools.tool_context import action_context_from_agent_context
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.github.tools.architecture_issue_tool.repo_workspace import (
     WorkspaceError,
@@ -78,7 +79,7 @@ def _session_id_from_runtime(context: Any, explicit: str = "") -> str:
     ],
     requires=["owner", "repo"],
     surfaces=("action",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     input_schema={
         "type": "object",
         "properties": {
@@ -153,7 +154,7 @@ def architecture_clone_repo(
     use_cases=["Cleanup after architecture_clone_repo"],
     anti_examples=["Deleting arbitrary paths outside the architecture workspace"],
     surfaces=("action",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     input_schema={
         "type": "object",
         "properties": {
@@ -201,7 +202,7 @@ def architecture_cleanup_repo(
     ],
     requires=["repo_name", "observations"],
     surfaces=("action",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     accepts_runtime_context=True,
     input_schema={
         "type": "object",

@@ -17,6 +17,7 @@ from core.domain.memory import (
     save_memory,
     search_memories,
 )
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from tools.system.agent_memory.results import (
     deleted_result,
@@ -58,7 +59,7 @@ def _memory_available(sources: dict[str, dict[str, Any]]) -> bool:
     ],
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_memory_available,
     input_schema={
@@ -113,7 +114,7 @@ def memory_remember(name: str, type: str, description: str, content: str) -> dic
     ),
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_memory_available,
     input_schema={
@@ -143,7 +144,7 @@ def memory_forget(name: str) -> dict[str, Any]:
     ),
     tags=("safe", "fast", "no-credentials"),
     surfaces=("action", "investigation"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_memory_available,
     input_schema={
         "type": "object",

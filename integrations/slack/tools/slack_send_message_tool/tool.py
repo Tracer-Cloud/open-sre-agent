@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.slack.tools.slack_send_message_tool.constants import SOURCE
 from integrations.slack.tools.slack_send_message_tool.delivery import (
@@ -42,7 +43,7 @@ class SlackSendMessageTool(BaseTool):
         "Replying in an existing Slack thread without thread context",
     ]
     requires = ["slack"]
-    side_effect_level = "external"
+    side_effect_level = SideEffectLevel.EXTERNAL
     requires_approval = True
     approval_reason = "Sends a message to Slack on your behalf."
     input_schema = {

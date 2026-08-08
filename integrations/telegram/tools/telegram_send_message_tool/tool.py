@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.telegram.tools.telegram_send_message_tool.constants import SOURCE
 from integrations.telegram.tools.telegram_send_message_tool.delivery import (
@@ -38,7 +39,7 @@ class TelegramSendMessageTool(BaseTool):
         "Following up after an investigation with a short status update",
     ]
     requires = ["telegram"]
-    side_effect_level = "external"
+    side_effect_level = SideEffectLevel.EXTERNAL
     requires_approval = True
     approval_reason = "Sends a message via Telegram on your behalf."
     input_schema = {

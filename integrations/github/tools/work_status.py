@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
@@ -110,7 +111,7 @@ def _count_work_items(items: list[dict[str, Any]]) -> dict[str, int]:
     anti_examples=["Creating, editing, or closing GitHub issues"],
     requires=["owner", "repo"],
     surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -250,7 +251,7 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
     ],
     requires=["owner", "repo"],
     surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -357,7 +358,7 @@ _ISSUE_MUTATION_OPERATIONS = {"create", "update", "close"}
     ],
     requires=["owner", "repo"],
     surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -427,7 +428,7 @@ def list_github_security_alerts(
     ],
     anti_examples=["Directly mutating GitHub", "Inferring tasks from ambiguous Slack discussion"],
     surfaces=("chat",),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -606,7 +607,7 @@ def _marker_exists_on_issue(
         "Running during investigations",
     ],
     surfaces=("chat",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     input_schema={
         "type": "object",
         "properties": {
