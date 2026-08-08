@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
@@ -84,7 +85,7 @@ def test_rejected_alert_does_not_leak_exception_detail(client: TestClient) -> No
 
 def test_oversized_body_returns_413(client: TestClient, inbox: AlertInbox) -> None:
     resp = client.post("/alerts", json={"text": "x" * (webapp.MAX_ALERT_BODY_BYTES + 1)})
-    assert resp.status_code == 413
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert resp.json() == {"error": "payload too large"}
     assert inbox.pop_nowait() is None
 
@@ -99,7 +100,7 @@ def test_missing_content_length_oversized_body_returns_413(
         content=big_body,
         headers={"content-type": "application/json"},
     )
-    assert resp.status_code == 413
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert resp.json() == {"error": "payload too large"}
     assert inbox.pop_nowait() is None
 
@@ -114,7 +115,7 @@ def test_zero_content_length_with_oversized_body_returns_413(
         content=big_body,
         headers={"content-type": "application/json", "content-length": "0"},
     )
-    assert resp.status_code == 413
+    assert resp.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert resp.json() == {"error": "payload too large"}
     assert inbox.pop_nowait() is None
 
