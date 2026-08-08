@@ -124,6 +124,7 @@ class RuntimeSettings(StrictFrozenModel):
     """Paths and bounded waits inside the official ORCA task container."""
 
     report_path: Path = Path("/app/report.md")
+    source_root: Path = Path("/app/opentelemetry-demo")
     artifact_dir: Path = Path("/logs/agent/opensre-orca")
     environment_ready_path: Path = Path("/tmp/env-ready")
     environment_ports_path: Path = Path("/tmp/env-ports")
@@ -135,6 +136,7 @@ class RuntimeSettings(StrictFrozenModel):
         """Keep all container paths explicit and independent of the current directory."""
         for name in (
             "report_path",
+            "source_root",
             "artifact_dir",
             "environment_ready_path",
             "environment_ports_path",

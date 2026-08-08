@@ -17,6 +17,7 @@ grafana:
 
 runtime:
   report_path: /app/report.md
+  source_root: /app/opentelemetry-demo
   artifact_dir: /logs/agent/opensre-orca
   environment_ready_path: /tmp/env-ready
   environment_ports_path: /tmp/env-ports

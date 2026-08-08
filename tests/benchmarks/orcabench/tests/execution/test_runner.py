@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from tests.benchmarks.orcabench.execution.runner import _write_smoke_telemetry_probe
+from tests.benchmarks.orcabench.execution.runner import (
+    _write_smoke_source_probe,
+    _write_smoke_telemetry_probe,
+)
 
 
 class _Backend:
@@ -47,4 +51,49 @@ def test_benchmark_profile_does_not_probe_telemetry() -> None:
     )
 
     assert backend.calls == 0
+    assert writer.writes == []
+
+
+def test_smoke_profile_probes_source_without_persisting_contents(tmp_path: Path) -> None:
+    root = tmp_path / "opentelemetry-demo"
+    root.mkdir()
+    (root / "docker-compose.yml").write_text(
+        "services:\n  checkout:\n    image: checkout\n",
+        encoding="utf-8",
+    )
+    writer = _Writer()
+
+    _write_smoke_source_probe(
+        "smoke",
+        {"local_source": {"root_path": str(root), "connection_verified": True}},
+        writer,  # type: ignore[arg-type]
+    )
+
+    assert writer.writes == [
+        (
+            "source-probe.json",
+            {
+                "list_available": True,
+                "entry_count": 1,
+                "search_available": True,
+                "match_count": 1,
+                "read_available": True,
+                "read_nonempty": True,
+            },
+        )
+    ]
+    assert "services:" not in str(writer.writes)
+
+
+def test_benchmark_profile_does_not_probe_source(tmp_path: Path) -> None:
+    root = tmp_path / "opentelemetry-demo"
+    root.mkdir()
+    writer = _Writer()
+
+    _write_smoke_source_probe(
+        "benchmark",
+        {"local_source": {"root_path": str(root), "connection_verified": True}},
+        writer,  # type: ignore[arg-type]
+    )
+
     assert writer.writes == []

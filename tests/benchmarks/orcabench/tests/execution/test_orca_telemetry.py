@@ -58,6 +58,11 @@ class _Session:
                             "_source": {
                                 "@timestamp": "2026-04-21T12:00:00Z",
                                 "body": "checkout completed",
+                                "severity.text": "INFO",
+                                "trace.id": "trace-123",
+                                "span.id": "span-456",
+                                "http.response.status_code": 200,
+                                "resource.service.name": "checkout",
                             }
                         }
                     ]
@@ -93,7 +98,7 @@ def test_prometheus_and_jaeger_calls_use_explicit_april_bounds() -> None:
     trace_params = session.get_calls[1][1]["params"]
     assert trace_params["start"] == 1776769200000000
     assert trace_params["end"] == 1776776400000000
-    assert trace_params["limit"] == 5
+    assert trace_params["limit"] == 7
 
 
 def test_empty_trace_service_does_not_guess_a_service() -> None:
@@ -134,10 +139,20 @@ def test_opensearch_call_filters_the_same_window_and_maps_log_results() -> None:
     services = backend.query_service_names()
 
     assert result["data"]["result"][0]["values"][0][1] == "checkout completed"
+    stream = result["data"]["result"][0]["stream"]
+    assert stream["service_name"] == "checkout"
+    assert stream["log_level"] == "INFO"
+    assert stream["attributes"] == {
+        "severity.text": "INFO",
+        "trace.id": "trace-123",
+        "span.id": "span-456",
+        "http.response.status_code": 200,
+        "resource.service.name": "checkout",
+    }
     assert services == ["checkout", "frontend"]
     url, kwargs = session.post_calls[0]
     assert url.endswith("/otel-logs-*/_search")
-    assert kwargs["json"]["size"] == 20
+    assert kwargs["json"]["size"] == 50
     assert kwargs["json"]["query"]["bool"]["filter"][0] == (
         {
             "range": {

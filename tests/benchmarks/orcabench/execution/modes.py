@@ -10,7 +10,7 @@ from tests.benchmarks.orcabench.execution.contracts import (
     InvestigationRunner,
     ReportPolicy,
 )
-from tests.benchmarks.orcabench.execution.native_connection import OrcaGrafanaConnection
+from tests.benchmarks.orcabench.execution.native_connection import OrcaNativeConnections
 from tests.benchmarks.orcabench.execution.native_investigation import (
     NativeInvestigationRunner,
 )
@@ -36,7 +36,10 @@ def build_mode(settings: RunnerSettings) -> ModeComponents:
     """Compose the requested mode; unsupported modes fail during settings validation."""
     return ModeComponents(
         settings=settings,
-        connections=OrcaGrafanaConnection(settings.benchmark.grafana),
+        connections=OrcaNativeConnections(
+            settings.benchmark.grafana,
+            settings.benchmark.runtime.source_root,
+        ),
         investigation=NativeInvestigationRunner(),
         report=NativeReportPolicy(),
     )

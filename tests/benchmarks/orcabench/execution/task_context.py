@@ -57,7 +57,7 @@ class OrcaTaskContext:
             "alert_source": "opensre_dataset",
             "commonAnnotations": {
                 "summary": self.reported_issue,
-                "context_sources": "grafana",
+                "context_sources": "grafana,local_source",
             },
         }
 

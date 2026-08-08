@@ -95,7 +95,7 @@ class OrcaTelemetryBackend:
             {"range": {"@timestamp": {"gte": self._start, "lte": self._end}}}
         ]
         filters.append({"term": {"resource.service.name.keyword": service_name}})
-        effective_limit = min(max(1, limit), 20)
+        effective_limit = max(1, limit)
         body = {
             "size": effective_limit,
             "sort": [{"@timestamp": "asc"}],
@@ -110,25 +110,33 @@ class OrcaTelemetryBackend:
         )
         response.raise_for_status()
         hits = response.json().get("hits", {}).get("hits", [])
-        values: list[tuple[str, str, str]] = []
+        streams: list[dict[str, Any]] = []
         for hit in hits:
             source = hit.get("_source", {})
             timestamp = str(source.get("@timestamp", ""))
             timestamp_ns = str(int(_unix_seconds(timestamp) * 1_000_000_000))
             message = source.get("body") or source.get("message") or json.dumps(source)
             actual_service = source.get("resource.service.name") or service_name
-            values.append([timestamp_ns, str(message), str(actual_service)])
-        streams: dict[str, list[list[str]]] = {}
-        for timestamp_ns, message, actual_service in values:
-            streams.setdefault(actual_service, []).append([timestamp_ns, message])
+            attributes = {
+                key: value
+                for key, value in source.items()
+                if key not in {"@timestamp", "body", "message"}
+            }
+            streams.append(
+                {
+                    "stream": {
+                        "service_name": str(actual_service),
+                        "log_level": str(source.get("severity.text", "")),
+                        "attributes": attributes,
+                    },
+                    "values": [[timestamp_ns, str(message)]],
+                }
+            )
         return {
             "status": "success",
             "data": {
                 "resultType": "streams",
-                "result": [
-                    {"stream": {"service_name": name}, "values": stream_values}
-                    for name, stream_values in streams.items()
-                ],
+                "result": streams,
             },
         }
 
@@ -206,7 +214,7 @@ class OrcaTelemetryBackend:
         """Query bounded Jaeger traces for a concrete service."""
         if not service_name:
             return {"traces": [], "metrics": {}, "query_window": self.query_window}
-        effective_limit = min(max(1, limit), 5)
+        effective_limit = max(1, limit)
         payload = self._get(
             self.TRACES_UID,
             "/api/traces",

@@ -5,9 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.benchmarks.orcabench.config import GrafanaSettings
-from tests.benchmarks.orcabench.execution.native_connection import (
-    OrcaGrafanaConnection,
-)
+from tests.benchmarks.orcabench.execution.native_connection import OrcaNativeConnections
 from tests.benchmarks.orcabench.execution.task_context import parse_orca_task_context
 from tools.investigation.stages.gather_evidence.tools import (
     build_seed_calls,
@@ -48,7 +46,7 @@ def test_parses_standard_orca_current_time_and_builds_historical_window() -> Non
         "alert_source": "opensre_dataset",
         "commonAnnotations": {
             "summary": "users are reporting site issues",
-            "context_sources": "grafana",
+            "context_sources": "grafana,local_source",
         },
     }
 
@@ -65,9 +63,13 @@ def test_rejects_missing_reported_issue() -> None:
         )
 
 
-def test_orca_alert_plans_grafana_context_without_eager_seed_calls() -> None:
+def test_orca_alert_plans_telemetry_and_source_without_eager_seed_calls(
+    tmp_path: Path,
+) -> None:
     context = parse_orca_task_context(_orca_instruction())
-    integrations = OrcaGrafanaConnection(GrafanaSettings()).build(
+    source_root = tmp_path / "opentelemetry-demo"
+    source_root.mkdir()
+    integrations = OrcaNativeConnections(GrafanaSettings(), source_root).build(
         {"GRAFANA_URL": "http://grafana.invalid"},
         context.incident_window(),
     )
@@ -85,14 +87,17 @@ def test_orca_alert_plans_grafana_context_without_eager_seed_calls() -> None:
     agent_tools = select_investigation_tools(available, state)
     seed_calls = build_seed_calls(state, agent_tools, object())
 
-    assert plan["plan_audit"]["matched_sources"] == ["grafana"]
-    assert plan["planned_actions"] == [
+    assert plan["plan_audit"]["matched_sources"] == ["grafana", "local_source"]
+    assert set(plan["planned_actions"]) == {
+        "list_local_source_tree",
+        "read_local_source_file",
+        "search_local_source",
         "query_grafana_alert_rules",
         "query_grafana_annotations",
         "query_grafana_logs",
         "query_grafana_metrics",
         "query_grafana_service_names",
         "query_grafana_traces",
-    ]
-    assert [tool.name for tool in agent_tools] == plan["planned_actions"]
+    }
+    assert {tool.name for tool in agent_tools} == set(plan["planned_actions"])
     assert seed_calls == []

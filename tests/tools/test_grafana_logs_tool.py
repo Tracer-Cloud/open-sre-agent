@@ -95,7 +95,11 @@ def test_run_with_backend_returns_logs() -> None:
         "data": {
             "result": [
                 {
-                    "stream": {"service_name": "svc"},
+                    "stream": {
+                        "service_name": "svc",
+                        "log_level": "INFO",
+                        "attributes": {"trace.id": "trace-123", "http.status_code": 500},
+                    },
                     "values": [["1000000", "info log"], ["2000000", "error in pipeline"]],
                 }
             ]
@@ -105,6 +109,10 @@ def test_run_with_backend_returns_logs() -> None:
     assert result["available"] is True
     assert result["total_logs"] == 2
     assert len(result["error_logs"]) == 1
+    assert result["logs"][0]["attributes"] == {
+        "trace.id": "trace-123",
+        "http.status_code": 500,
+    }
 
 
 def test_run_returns_unavailable_when_no_client() -> None:

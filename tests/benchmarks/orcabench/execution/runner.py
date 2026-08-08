@@ -70,6 +70,51 @@ def _write_smoke_telemetry_probe(
         writer.write_json("telemetry-probe.json", telemetry_backend.probe())
 
 
+def _write_smoke_source_probe(
+    profile: str,
+    integrations: dict[str, Any],
+    writer: ArtifactWriter,
+) -> None:
+    """Exercise scoped source tools in smoke runs without persisting source text."""
+    if profile != "smoke":
+        return
+    source = integrations.get("local_source")
+    if not isinstance(source, dict):
+        return
+
+    from tools.system.local_source import (
+        list_local_source_tree,
+        read_local_source_file,
+        search_local_source,
+    )
+
+    root_path = str(source.get("root_path") or "")
+    listing = list_local_source_tree(depth=1, limit=5, root_path=root_path)
+    search = search_local_source(
+        query="services:",
+        path="docker-compose.yml",
+        limit=1,
+        root_path=root_path,
+    )
+    read = read_local_source_file(
+        path="docker-compose.yml",
+        start_line=1,
+        end_line=1,
+        root_path=root_path,
+    )
+    writer.write_json(
+        "source-probe.json",
+        {
+            "list_available": listing.get("available") is True,
+            "entry_count": len(listing.get("entries") or []),
+            "search_available": search.get("available") is True,
+            "match_count": len(search.get("matches") or []),
+            "read_available": read.get("available") is True,
+            "read_nonempty": bool(read.get("content")),
+        },
+    )
+
+
 def _manifest(
     settings: RunnerSettings,
     instruction: bytes,
@@ -140,6 +185,11 @@ def run(config_path: Path, instruction_path: Path) -> int:
         )
         writer.write_json("health.json", health)
         _write_smoke_telemetry_probe(
+            settings.benchmark.profile,
+            integrations,
+            writer,
+        )
+        _write_smoke_source_probe(
             settings.benchmark.profile,
             integrations,
             writer,

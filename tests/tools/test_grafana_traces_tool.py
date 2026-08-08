@@ -122,7 +122,7 @@ def test_run_with_injected_backend() -> None:
     assert result["source"] == "grafana_tempo"
     assert result["total_traces"] == 1
     assert len(result["pipeline_spans"]) == 1
-    backend.query_traces.assert_called_once_with(service_name="svc")
+    backend.query_traces.assert_called_once_with(service_name="svc", limit=20)
 
 
 def test_run_with_injected_backend_empty_traces() -> None:

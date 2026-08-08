@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tests.benchmarks.orcabench.config import GrafanaSettings, ModelSettings
 from tests.benchmarks.orcabench.execution.environment import native_environment_values
-from tests.benchmarks.orcabench.execution.native_connection import OrcaGrafanaConnection
+from tests.benchmarks.orcabench.execution.native_connection import OrcaNativeConnections
 from tests.benchmarks.orcabench.execution.native_report import NativeReportPolicy
 
 
@@ -45,12 +45,14 @@ assert hasattr(sys.modules["platform"], "__path__")
     assert result.returncode == 0, result.stderr
 
 
-def test_grafana_connection_contains_connection_data_only() -> None:
+def test_native_connections_contain_telemetry_and_scoped_source_only(tmp_path: Path) -> None:
+    source_root = tmp_path / "opentelemetry-demo"
+    source_root.mkdir()
     window = {
         "since": "2026-04-21T11:00:00Z",
         "until": "2026-04-21T13:00:00Z",
     }
-    resolved = OrcaGrafanaConnection(GrafanaSettings()).build(
+    resolved = OrcaNativeConnections(GrafanaSettings(), source_root).build(
         {"GRAFANA_URL": "http://frontend-proxy:8080/grafana/"},
         window,
     )
@@ -69,6 +71,10 @@ def test_grafana_connection_contains_connection_data_only() -> None:
     }
     flattened_keys = set(resolved["grafana"])
     assert flattened_keys.isdisjoint({"query", "start", "end", "task", "report"})
+    assert resolved["local_source"] == {
+        "root_path": str(source_root),
+        "connection_verified": True,
+    }
 
 
 def test_openrouter_environment_uses_provider_specific_model_names() -> None:

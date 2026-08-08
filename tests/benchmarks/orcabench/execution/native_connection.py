@@ -1,7 +1,8 @@
-"""Connection-only bridge from the ORCA Grafana contract to OpenSRE."""
+"""Connection-only bridge from ORCA evidence sources to OpenSRE."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -9,18 +10,19 @@ from tests.benchmarks.orcabench.config import GrafanaSettings
 from tests.benchmarks.orcabench.execution.orca_telemetry import OrcaTelemetryBackend
 
 
-class OrcaGrafanaConnection:
-    """Build the native OpenSRE Grafana source without diagnostic information."""
+class OrcaNativeConnections:
+    """Build native OpenSRE telemetry and source connections without evidence."""
 
-    def __init__(self, settings: GrafanaSettings) -> None:
+    def __init__(self, settings: GrafanaSettings, source_root: Path) -> None:
         self._settings = settings
+        self._source_root = source_root
 
     def build(
         self,
         environ: dict[str, str],
         incident_window: dict[str, Any],
     ) -> dict[str, Any]:
-        """Return the single pre-resolved Grafana connection expected by OpenSRE."""
+        """Return pre-resolved read-only connections expected by OpenSRE."""
         endpoint = environ.get("GRAFANA_URL", "").strip().rstrip("/")
         parsed = urlparse(endpoint)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -46,5 +48,9 @@ class OrcaGrafanaConnection:
                     start_time=str(incident_window["since"]),
                     end_time=str(incident_window["until"]),
                 ),
-            }
+            },
+            "local_source": {
+                "root_path": str(self._source_root),
+                "connection_verified": self._source_root.is_dir(),
+            },
         }

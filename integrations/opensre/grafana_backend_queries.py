@@ -87,7 +87,7 @@ def query_traces_from_backend(
     extract_pipeline_spans: Any | None = None,
 ) -> dict[str, Any]:
     """Return a Tempo-shaped payload from an injected Grafana backend."""
-    raw = backend.query_traces(service_name=service_name)
+    raw = backend.query_traces(service_name=service_name, limit=limit)
     traces = raw.get("traces", [])
     if execution_run_id and traces:
         filtered = [

@@ -14,6 +14,7 @@ from __future__ import annotations
 TOOL_MODULES = (
     "agent_memory.tool",
     "fleet_monitoring",
+    "local_source",
     "python_execution_tool",
     "sre_guidance_tool",
     "watch_dog",
