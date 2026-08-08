@@ -63,14 +63,8 @@ def _clerk_claims(*, org: str = "org_test") -> JWTClaims:
 @pytest.fixture()
 def investigate_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv("OPENSRE_ALERT_LISTENER_TOKEN", raising=False)
-    monkeypatch.setattr(
-        "gateway.web.webapp.run_investigation_payload",
-        lambda **_: _FAKE_RESULT,
-    )
-    monkeypatch.setattr(
-        "gateway.web.webapp.resolve_investigation_context",
-        lambda **_: {},
-    )
+    monkeypatch.setattr(webapp, "run_investigation_payload", lambda **_: _FAKE_RESULT)
+    monkeypatch.setattr(webapp, "resolve_investigation_context", lambda **_: {})
     return TestClient(webapp.app, client=_LOOPBACK)
 
 
