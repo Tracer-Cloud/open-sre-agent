@@ -19,9 +19,10 @@ def query_logs_from_backend(
     *,
     service_name: str,
     execution_run_id: str | None = None,
+    limit: int = 100,
 ) -> dict[str, Any]:
     """Return a Loki-shaped payload from an injected Grafana backend."""
-    raw = backend.query_logs(service_name=service_name)
+    raw = backend.query_logs(service_name=service_name, limit=limit)
     logs: list[dict[str, Any]] = []
     for stream in raw.get("data", {}).get("result", []):
         stream_labels = stream.get("stream", {})

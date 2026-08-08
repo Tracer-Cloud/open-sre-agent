@@ -136,6 +136,10 @@ def _build_alert_updates(
     raw_alert: Any,
     details: AlertDetails,
 ) -> dict[str, Any]:
+    incident_window = state.get("incident_window")
+    if incident_window is None:
+        incident_window = resolve_incident_window(raw_alert).to_dict()
+
     result: dict[str, Any] = {
         "is_noise": False,
         "alert_name": details.alert_name,
@@ -143,7 +147,7 @@ def _build_alert_updates(
         "alert_json": details.model_dump(),
         "raw_alert": enrich_raw_alert(raw_alert, details),
         "problem_md": make_problem_md(details),
-        "incident_window": resolve_incident_window(raw_alert).to_dict(),
+        "incident_window": incident_window,
     }
     if details.alert_source:
         result["alert_source"] = details.alert_source

@@ -46,19 +46,26 @@ assert hasattr(sys.modules["platform"], "__path__")
 
 
 def test_grafana_connection_contains_connection_data_only() -> None:
+    window = {
+        "since": "2026-04-21T11:00:00Z",
+        "until": "2026-04-21T13:00:00Z",
+    }
     resolved = OrcaGrafanaConnection(GrafanaSettings()).build(
-        {"GRAFANA_URL": "http://frontend-proxy:8080/grafana/"}
+        {"GRAFANA_URL": "http://frontend-proxy:8080/grafana/"},
+        window,
     )
 
-    assert resolved == {
-        "grafana": {
-            "endpoint": "http://frontend-proxy:8080/grafana",
-            "api_key": "orca-basic-auth",
-            "username": "admin",
-            "password": "admin",
-            "verify_ssl": True,
-            "connection_verified": True,
-        }
+    grafana = resolved["grafana"]
+    assert grafana["endpoint"] == "http://frontend-proxy:8080/grafana"
+    assert grafana["api_key"] == "orca-basic-auth"
+    assert grafana["username"] == "admin"
+    assert grafana["password"] == "admin"
+    assert grafana["verify_ssl"] is True
+    assert grafana["connection_verified"] is True
+    assert "STATUS_CODE_ERROR" in grafana["default_metric_query"]
+    assert grafana["_backend"].query_window == {
+        "start": "2026-04-21T11:00:00Z",
+        "end": "2026-04-21T13:00:00Z",
     }
     flattened_keys = set(resolved["grafana"])
     assert flattened_keys.isdisjoint({"query", "start", "end", "task", "report"})

@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from tests.benchmarks.orcabench.config import GrafanaSettings
+from tests.benchmarks.orcabench.execution.orca_telemetry import OrcaTelemetryBackend
 
 
 class OrcaGrafanaConnection:
@@ -14,7 +15,11 @@ class OrcaGrafanaConnection:
     def __init__(self, settings: GrafanaSettings) -> None:
         self._settings = settings
 
-    def build(self, environ: dict[str, str]) -> dict[str, Any]:
+    def build(
+        self,
+        environ: dict[str, str],
+        incident_window: dict[str, Any],
+    ) -> dict[str, Any]:
         """Return the single pre-resolved Grafana connection expected by OpenSRE."""
         endpoint = environ.get("GRAFANA_URL", "").strip().rstrip("/")
         parsed = urlparse(endpoint)
@@ -33,5 +38,17 @@ class OrcaGrafanaConnection:
                 "password": self._settings.password,
                 "verify_ssl": self._settings.verify_ssl,
                 "connection_verified": True,
+                "default_metric_query": (
+                    'sum by (service_name) (rate(traces_span_metrics_calls_total'
+                    '{status_code="STATUS_CODE_ERROR"}[5m]))'
+                ),
+                "_backend": OrcaTelemetryBackend(
+                    endpoint=endpoint,
+                    username=self._settings.username,
+                    password=self._settings.password,
+                    verify_ssl=self._settings.verify_ssl,
+                    start_time=str(incident_window["since"]),
+                    end_time=str(incident_window["until"]),
+                ),
             }
         }

@@ -7,9 +7,17 @@ import pytest
 from tests.benchmarks.orcabench.host.launcher import (
     AGENT_IMPORT_PATH,
     DEFAULT_DATASET,
+    _opensre_repo_root,
     _validate_exact_task_name,
     build_harbor_command,
 )
+
+
+def test_opensre_repo_root_contains_importable_tests_package() -> None:
+    root = _opensre_repo_root()
+
+    assert (root / "tests" / "__init__.py").is_file()
+    assert root.name == "opensre"
 
 
 def _config_path() -> Path:

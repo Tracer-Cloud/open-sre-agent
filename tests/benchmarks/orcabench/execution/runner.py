@@ -32,6 +32,7 @@ from tests.benchmarks.orcabench.execution.environment import (
 )
 from tests.benchmarks.orcabench.execution.health import check_grafana
 from tests.benchmarks.orcabench.execution.modes import build_mode
+from tests.benchmarks.orcabench.execution.task_context import parse_orca_task_context
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -54,6 +55,19 @@ def _error_category(exc: BaseException) -> str:
     if isinstance(exc, OSError):
         return "environment_io_failed"
     return "investigation_failed"
+
+
+def _write_smoke_telemetry_probe(
+    profile: str,
+    integrations: dict[str, Any],
+    writer: ArtifactWriter,
+) -> None:
+    """Persist deterministic adapter evidence only for non-scored smoke runs."""
+    if profile != "smoke":
+        return
+    telemetry_backend = integrations.get("grafana", {}).get("_backend")
+    if telemetry_backend is not None:
+        writer.write_json("telemetry-probe.json", telemetry_backend.probe())
 
 
 def _manifest(
@@ -116,13 +130,20 @@ def run(config_path: Path, instruction_path: Path) -> int:
         configure_native_environment(settings)
         grafana_endpoint = os.environ.get("GRAFANA_URL", "").strip()
         mode = build_mode(settings)
-        integrations = mode.connections.build(dict(os.environ))
+        task_context = parse_orca_task_context(instruction)
+        incident_window = task_context.incident_window()
+        integrations = mode.connections.build(dict(os.environ), incident_window)
         health = check_grafana(
             grafana_endpoint,
             settings.benchmark.grafana,
             runtime.grafana_timeout_seconds,
         )
         writer.write_json("health.json", health)
+        _write_smoke_telemetry_probe(
+            settings.benchmark.profile,
+            integrations,
+            writer,
+        )
 
         from core.llm.shared.usage import set_usage_hook
 
@@ -138,7 +159,11 @@ def run(config_path: Path, instruction_path: Path) -> int:
 
         set_usage_hook(collect_usage)
         try:
-            state = mode.investigation.investigate(instruction, integrations)
+            state = mode.investigation.investigate(
+                instruction,
+                integrations,
+                incident_window,
+            )
             writer.write_json("state.json", state)
             writer.write_jsonl("evidence.jsonl", list(state.get("evidence_entries") or []))
             payload = mode.investigation.build_payload(state)

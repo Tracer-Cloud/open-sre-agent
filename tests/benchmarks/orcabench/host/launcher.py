@@ -17,6 +17,11 @@ DEFAULT_DATASET = "orca-bench/orca-bench@latest"
 AGENT_IMPORT_PATH = "tests.benchmarks.orcabench.host.agent:OpenSRENativeAgent"
 
 
+def _opensre_repo_root() -> Path:
+    """Return the import root containing the top-level ``tests`` package."""
+    return Path(__file__).resolve().parents[4]
+
+
 def _parser() -> argparse.ArgumentParser:
     package_dir = Path(__file__).resolve().parents[1]
     opensre_repo = package_dir.parents[2]
@@ -154,7 +159,7 @@ def run_one(args: argparse.Namespace) -> int:
     if args.print_command:
         print(subprocess.list2cmdline(command))
 
-    opensre_repo = Path(__file__).resolve().parents[3]
+    opensre_repo = _opensre_repo_root()
     environment = dict(os.environ)
     python_path = environment.get("PYTHONPATH", "")
     environment["PYTHONPATH"] = os.pathsep.join(

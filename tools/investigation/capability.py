@@ -84,6 +84,7 @@ def run_investigation(
     raw_alert: str | dict[str, Any],
     *,
     resolved_integrations: dict[str, Any] | None = None,
+    incident_window: dict[str, Any] | None = None,
     openclaw_context: dict[str, Any] | None = None,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str] | None = None,
@@ -96,6 +97,8 @@ def run_investigation(
         resolved_integrations: Optional pre-resolved integrations dict. When provided,
             integration resolution is skipped — useful for synthetic testing where a
             FixtureGrafanaBackend should be injected without real credential resolution.
+        incident_window: Optional caller-resolved historical window. When provided,
+            intake preserves it instead of resolving a window from the live clock.
         investigation_metadata: Optional ``(alert_name, severity)`` for AgentState.
         agent_class: Optional override for the investigation agent class. Defaults
             to ``ConnectedInvestigationAgent``. Callers that need a custom
@@ -109,6 +112,7 @@ def run_investigation(
         raw_alert=raw_alert,
         opensre_evaluate=opensre_evaluate,
         investigation_metadata=investigation_metadata,
+        incident_window=incident_window,
     )
     if resolved_integrations is not None:
         cast(dict[str, Any], initial)["resolved_integrations"] = resolved_integrations

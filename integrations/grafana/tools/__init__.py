@@ -433,6 +433,7 @@ def query_grafana_logs(
             grafana_backend,
             service_name=service_name,
             execution_run_id=execution_run_id,
+            limit=limit,
         )
 
     client = _resolve_grafana_client(
@@ -547,7 +548,7 @@ class QueryGrafanaMetricsOutput(BaseModel):
 def _query_grafana_metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     grafana = _grafana_source(sources)
     return {
-        "metric_name": "pipeline_runs_total",
+        "metric_name": grafana.get("default_metric_query", "pipeline_runs_total"),
         "service_name": grafana.get("service_name"),
         "grafana_backend": grafana.get("_backend"),
         **_grafana_creds(grafana),
@@ -684,7 +685,15 @@ def query_grafana_service_names(
 ) -> dict:
     """Discover available service names in Loki."""
     if grafana_backend is not None:
-        return {"source": "grafana_loki_labels", "available": True, "service_names": []}
+        query_service_names = getattr(grafana_backend, "query_service_names", None)
+        service_names = query_service_names() if callable(query_service_names) else []
+        if not isinstance(service_names, list):
+            service_names = []
+        return {
+            "source": "grafana_backend_services",
+            "available": True,
+            "service_names": service_names,
+        }
 
     client = _resolve_grafana_client(
         grafana_endpoint,

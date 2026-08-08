@@ -26,6 +26,7 @@ def make_initial_state(
     *,
     opensre_evaluate: bool = False,
     investigation_metadata: tuple[str, str] | None = None,
+    incident_window: dict[str, Any] | None = None,
 ) -> AgentState:
     """Create initial investigation state from the raw alert payload.
 
@@ -52,8 +53,7 @@ def make_initial_state(
     else:
         alert_name, severity = _resolve_alert_metadata(alert_payload)
 
-    state = AgentStateModel.model_validate(
-        {
+    initial_values: dict[str, Any] = {
             **model_default_payload("mode", "messages"),
             "mode": "investigation",
             "alert_name": alert_name,
@@ -62,8 +62,11 @@ def make_initial_state(
             "investigation_started_at": time.monotonic(),
             "opensre_evaluate": opensre_evaluate,
             "opensre_eval_rubric": rubric,
-        }
-    )
+    }
+    if incident_window is not None:
+        initial_values["incident_window"] = incident_window
+
+    state = AgentStateModel.model_validate(initial_values)
     return cast(AgentState, state.model_dump(mode="json", by_alias=True, exclude_none=True))
 
 

@@ -9,12 +9,21 @@ from tests.benchmarks.orcabench.config import RunnerSettings
 
 
 class ConnectionProvider(Protocol):
-    def build(self, environ: dict[str, str]) -> dict[str, Any]:
+    def build(
+        self,
+        environ: dict[str, str],
+        incident_window: dict[str, Any],
+    ) -> dict[str, Any]:
         """Build connection-only OpenSRE resolved integrations."""
 
 
 class InvestigationRunner(Protocol):
-    def investigate(self, instruction: str, integrations: dict[str, Any]) -> dict:
+    def investigate(
+        self,
+        instruction: str,
+        integrations: dict[str, Any],
+        incident_window: dict[str, Any],
+    ) -> dict:
         """Run one investigation and return its native state."""
 
     def build_payload(self, state: dict) -> dict[str, Any]:
