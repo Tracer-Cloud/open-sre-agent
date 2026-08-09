@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from config.constants.gateway import NEW_SESSION_MESSAGE
 from config.principal import StorageScope
 from core.agent_harness.session import SessionCore
 from gateway.core.storage import SessionResolver
@@ -39,7 +40,7 @@ def resolve_or_rotate_session(
             principal=scope.principal,
             actor=scope.actor,
         )
-        client.send_message(event.chat_id, "Started a new session.")
+        client.send_message(event.chat_id, NEW_SESSION_MESSAGE)
         if event.text.strip().lower() == "/new":
             return None
         return session

@@ -6,6 +6,7 @@ import asyncio
 import logging
 import threading
 
+from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
 from gateway.core.runtime.active_turns import is_stop_command
 from gateway.core.runtime.polling_thread import PollingBackground, start_polling_background
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
@@ -90,7 +91,7 @@ async def _poll_telegram_until_stopped(
                 # the active-turn registry before dispatching a new turn.
                 if is_stop_command(event.text):
                     if not resources.active_cancels.request_stop(event.chat_id):
-                        resources.client.send_message(event.chat_id, "Nothing running to stop.")
+                        resources.client.send_message(event.chat_id, NO_ACTIVE_TURN_MESSAGE)
                     continue
                 await handle_polled_inbound_telegram_message(
                     event,

@@ -6,7 +6,15 @@ import logging
 import threading
 import time
 
-from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
+from config.constants.gateway import (
+    CREDITS_DENIED_MESSAGE,
+    NEW_SESSION_MESSAGE,
+    NO_ACTIVE_TURN_MESSAGE,
+    TURN_ERROR_MESSAGE,
+    TURN_TIMEOUT_MESSAGE,
+    UNAUTHORIZED_MESSAGE,
+    USER_STOP_MESSAGE,
+)
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
@@ -42,14 +50,10 @@ from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
 
-_DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
-_NEW_SESSION_REPLY = "Started a new session."
+
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
 # UNAVAILABLE outcomes run the turn instead, so a misconfiguration or webapp
 # outage never masquerades to users as "out of credits".
-_CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
-
-
 class _SlackTurnDispatcher:
     """Runs authorized inbound Slack messages through the gateway agent callback."""
 
@@ -80,7 +84,7 @@ class _SlackTurnDispatcher:
         # /stop must not wait on the per-conversation turn lock.
         if is_stop_command(inbound.text):
             if not self._active_cancels.request_stop(inbound.conversation_key):
-                self._post(inbound, "Nothing running to stop.")
+                self._post(inbound, NO_ACTIVE_TURN_MESSAGE)
             return
         try:
             scope = resolve_slack_scope(team_id=inbound.team_id, user_id=inbound.user_id)
@@ -189,7 +193,7 @@ class _SlackTurnDispatcher:
                 return None
 
         if not decision.allowed and not is_rotate:
-            self._post(inbound, _DENIAL_REPLY)
+            self._post(inbound, UNAUTHORIZED_MESSAGE)
             return None
 
         with self._resolver_lock:
@@ -200,7 +204,7 @@ class _SlackTurnDispatcher:
                     principal=scope.principal,
                     actor=scope.actor,
                 )
-                self._post(inbound, _NEW_SESSION_REPLY)
+                self._post(inbound, NEW_SESSION_MESSAGE)
                 if inbound.text.strip().lower() == "/new":
                     return None
                 return session
@@ -234,7 +238,7 @@ class _SlackTurnDispatcher:
                     "[slack-gateway] turn denied: out of credits channel=%s",
                     inbound.channel_id,
                 )
-                self._post(inbound, _CREDITS_DENIED_MESSAGE)
+                self._post(inbound, CREDITS_DENIED_MESSAGE)
                 return
 
             # Never log message bodies — audit hashes live in messaging_security.

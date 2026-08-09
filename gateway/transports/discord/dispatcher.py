@@ -7,7 +7,15 @@ import threading
 import time
 from contextlib import suppress
 
-from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
+from config.constants.gateway import (
+    CREDITS_DENIED_MESSAGE,
+    NEW_SESSION_MESSAGE,
+    NO_ACTIVE_TURN_MESSAGE,
+    TURN_ERROR_MESSAGE,
+    TURN_TIMEOUT_MESSAGE,
+    UNAUTHORIZED_MESSAGE,
+    USER_STOP_MESSAGE,
+)
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
@@ -37,9 +45,6 @@ from gateway.transports.discord.thread_history import (
 )
 from platform.analytics.usage_context import SURFACE_DISCORD, bound_usage_context
 
-_DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
-_NEW_SESSION_REPLY = "Started a new session."
-_CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"
 _DONE_EMOJI = "\N{WHITE HEAVY CHECK MARK}"
@@ -85,7 +90,7 @@ class DiscordTurnDispatcher:
             if not self._active_cancels.request_stop(inbound.conversation_key):
                 send_message(
                     channel_id=inbound.channel_id,
-                    content="Nothing running to stop.",
+                    content=NO_ACTIVE_TURN_MESSAGE,
                     bot_token=self._bot_token,
                 )
             return
@@ -167,7 +172,7 @@ class DiscordTurnDispatcher:
                 return None
 
         if not decision.allowed and not is_rotate:
-            self._post(inbound, _DENIAL_REPLY)
+            self._post(inbound, UNAUTHORIZED_MESSAGE)
             return None
 
         with self._resolver_lock:
@@ -178,7 +183,7 @@ class DiscordTurnDispatcher:
                     principal=scope.principal,
                     actor=scope.actor,
                 )
-                self._post(inbound, _NEW_SESSION_REPLY)
+                self._post(inbound, NEW_SESSION_MESSAGE)
                 if inbound.text.strip().lower() == "/new":
                     return None
                 return session
@@ -208,7 +213,7 @@ class DiscordTurnDispatcher:
                     "[discord-gateway] turn denied: out of credits channel=%s",
                     inbound.channel_id,
                 )
-                self._post(inbound, _CREDITS_DENIED_MESSAGE)
+                self._post(inbound, CREDITS_DENIED_MESSAGE)
                 return
 
             is_reply = not inbound.addressed

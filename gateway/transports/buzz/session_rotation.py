@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from config.constants.gateway import NEW_SESSION_MESSAGE
 from core.agent_harness.session import SessionCore
 from gateway.core.storage import SessionResolver
 from gateway.transports.buzz.inbound_security import InboundDecision, persist_policy_if_needed
@@ -40,7 +41,7 @@ def resolve_or_rotate_session(
     key = conversation_key(event)
     if decision.reply_text == "__ROTATE_SESSION__":
         session = session_resolver.rotate(user_id=key, chat_id=event.channel_id)
-        client.send_message(channel=event.channel_id, content="Started a new session.")
+        client.send_message(channel=event.channel_id, content=NEW_SESSION_MESSAGE)
         if event.content.strip().lower() == "/new":
             return None
         return session
