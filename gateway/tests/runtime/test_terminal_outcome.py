@@ -60,6 +60,17 @@ def test_timeout_requests_cancellation_and_claims_outcome() -> None:
     assert not arbiter.claim()
 
 
+def test_late_timeout_cancels_work_without_replacing_claimed_outcome() -> None:
+    arbiter = TerminalOutcomeArbiter()
+    rendered = threading.Event()
+    assert arbiter.claim()
+
+    with arbiter.timeout_after(0.01, rendered.set):
+        assert arbiter.cancel_event.wait(_THREAD_TIMEOUT_SECONDS)
+
+    assert not rendered.is_set()
+
+
 def test_completed_timeout_context_cancels_timer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
