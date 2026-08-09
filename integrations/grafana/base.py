@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -423,7 +424,7 @@ class GrafanaClientBase:
             verify=self._config.ssl_verify,
         )
         response.raise_for_status()
-        if response.status_code == 204 or not response.content.strip():
+        if response.status_code == HTTPStatus.NO_CONTENT or not response.content.strip():
             return {}
         data: dict[str, Any] = response.json()
         return data
