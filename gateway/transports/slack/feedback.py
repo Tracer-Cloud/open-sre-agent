@@ -9,15 +9,14 @@ attention gate later (e.g. whether a layer-4 micro-classifier is warranted).
 
 from __future__ import annotations
 
-import json
 import logging
-import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from config.constants import OPENSRE_HOME_DIR
+from gateway.core.feedback import append_feedback_entry
 
 logger = logging.getLogger("gateway")
 
@@ -26,7 +25,6 @@ FEEDBACK_POSITIVE_VALUE = "good"
 FEEDBACK_NEGATIVE_VALUE = "bad"
 
 _DEFAULT_FEEDBACK_PATH = OPENSRE_HOME_DIR / "gateway" / "slack_feedback.jsonl"
-_WRITE_LOCK = threading.Lock()
 
 
 def feedback_block() -> dict[str, Any]:
@@ -88,7 +86,7 @@ def record_feedback_payload(
             # guidance: store metadata, not data).
             "verdict": str(action.get("value") or ""),
         }
-        if _append_jsonl(entry, path=path or _DEFAULT_FEEDBACK_PATH):
+        if append_feedback_entry(entry, path=path or _DEFAULT_FEEDBACK_PATH):
             recorded = True
             logger.info(
                 "[slack-gateway] reply feedback verdict=%s channel=%s message_ts=%s",
@@ -97,18 +95,6 @@ def record_feedback_payload(
                 message_ts,
             )
     return recorded
-
-
-def _append_jsonl(entry: dict[str, Any], *, path: Path) -> bool:
-    try:
-        with _WRITE_LOCK:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except OSError:
-        logger.warning("[slack-gateway] feedback write failed path=%s", path, exc_info=True)
-        return False
-    return True
 
 
 __all__ = [
