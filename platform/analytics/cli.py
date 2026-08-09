@@ -35,36 +35,6 @@ if TYPE_CHECKING:
     from core.agent_harness.session import SessionCore
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
-    "eval_pass_rate": """
-SELECT
-  round(
-    100.0 * countIf(
-      event = 'eval_process_completed'
-      AND (properties.overall_pass = true OR properties.overall_pass = 'true')
-    ) /
-    nullIf(countIf(event = 'eval_process_completed'), 0),
-    2
-  ) AS eval_pass_rate
-FROM events
-WHERE event IN ('eval_process_completed')
-""".strip(),
-    "eval_latency_p50_p95_ms": """
-SELECT
-  quantile(0.50)(toFloat64OrNull(properties.duration_ms)) AS eval_latency_p50_ms,
-  quantile(0.95)(toFloat64OrNull(properties.duration_ms)) AS eval_latency_p95_ms
-FROM events
-WHERE event = 'eval_process_completed'
-""".strip(),
-    "eval_parse_error_rate": """
-SELECT
-  round(
-    100.0 * countIf(event = 'eval_process_parse_failed') /
-    nullIf(countIf(event IN ('eval_process_completed', 'eval_process_parse_failed')), 0),
-    2
-  ) AS eval_parse_error_rate
-FROM events
-WHERE event IN ('eval_process_completed', 'eval_process_parse_failed')
-""".strip(),
     "terminal_action_execution_success_rate": """
 SELECT
   round(
@@ -91,34 +61,6 @@ WHERE event = 'terminal_turn_summarized'
 }
 
 EVAL_AND_TERMINAL_EVENT_CONTRACT: Final[dict[Event, frozenset[str]]] = {
-    Event.EVAL_PROCESS_STARTED: frozenset(
-        {
-            "rubric_present",
-            "rubric_length_bucket",
-            "mode",
-        }
-    ),
-    Event.EVAL_PROCESS_COMPLETED: frozenset(
-        {
-            "duration_bucket",
-            "duration_ms",
-            "overall_pass",
-            "score_bucket",
-            "rubric_item_count",
-            "mode",
-        }
-    ),
-    Event.EVAL_PROCESS_FAILED: frozenset(
-        {
-            "duration_bucket",
-            "duration_ms",
-            "failure_stage",
-            "failure_type",
-            "mode",
-        }
-    ),
-    Event.EVAL_PROCESS_SKIPPED: frozenset({"skip_reason", "mode"}),
-    Event.EVAL_PROCESS_PARSE_FAILED: frozenset({"failure_type", "mode"}),
     Event.TERMINAL_ACTIONS_PLANNED: frozenset({"planned_count", "has_unhandled_clause"}),
     Event.TERMINAL_ACTIONS_EXECUTED: frozenset(
         {"planned_count", "executed_count", "executed_success_count", "success_rate_bucket"}
@@ -399,16 +341,6 @@ def _bucket_duration_ms(duration_ms: float) -> str:
     return ">=5s"
 
 
-def _bucket_score(score_0_100: int) -> str:
-    if score_0_100 < 50:
-        return "0-49"
-    if score_0_100 < 70:
-        return "50-69"
-    if score_0_100 < 85:
-        return "70-84"
-    return "85-100"
-
-
 def _bucket_percentage(percent: float) -> str:
     if percent < 25:
         return "0-24"
@@ -419,19 +351,6 @@ def _bucket_percentage(percent: float) -> str:
     if percent < 95:
         return "75-94"
     return "95-100"
-
-
-def _bucket_rubric_length(text: str) -> str:
-    size = len(text.strip())
-    if size == 0:
-        return "0"
-    if size < 256:
-        return "1-255"
-    if size < 1024:
-        return "256-1023"
-    if size < 4096:
-        return "1024-4095"
-    return ">=4096"
 
 
 def build_cli_invoked_properties(
@@ -871,13 +790,8 @@ def stamp_github_gate_variant(variant: str) -> None:
         capture_exception(exc)
 
 
-def capture_github_login_gate_shown(*, variant: str) -> None:
-    """Exposure event: gate was rendered to an eligible interactive install."""
-    _capture(Event.GITHUB_LOGIN_GATE_SHOWN, github_gate_experiment_properties(variant))
-
-
 def capture_github_login_prompted(*, variant: str) -> None:
-    """Legacy alias for :func:`capture_github_login_gate_shown`.
+    """Exposure event when the GitHub login gate is rendered to an eligible install.
 
     Emits both ``github_login_gate_shown`` (canonical) and ``github_login_prompted``
     (backward compatible) with identical experiment properties so existing
@@ -984,77 +898,6 @@ def capture_test_run_failed(test_id: str, *, dry_run: bool, reason: str) -> None
             "test_id": test_id,
             "dry_run": dry_run,
             "reason": reason,
-        },
-    )
-
-
-def capture_eval_process_started(*, rubric: str, mode: str) -> None:
-    _capture(
-        Event.EVAL_PROCESS_STARTED,
-        {
-            "rubric_present": bool(rubric.strip()),
-            "rubric_length_bucket": _bucket_rubric_length(rubric),
-            "mode": mode,
-        },
-    )
-
-
-def capture_eval_process_skipped(*, reason: str, mode: str) -> None:
-    _capture(
-        Event.EVAL_PROCESS_SKIPPED,
-        {
-            "skip_reason": reason,
-            "mode": mode,
-        },
-    )
-
-
-def capture_eval_process_completed(
-    *,
-    duration_ms: float,
-    overall_pass: bool,
-    score_0_100: int,
-    rubric_item_count: int,
-    mode: str,
-) -> None:
-    _capture(
-        Event.EVAL_PROCESS_COMPLETED,
-        {
-            "duration_ms": round(duration_ms, 2),
-            "duration_bucket": _bucket_duration_ms(duration_ms),
-            "overall_pass": overall_pass,
-            "score_bucket": _bucket_score(score_0_100),
-            "rubric_item_count": rubric_item_count,
-            "mode": mode,
-        },
-    )
-
-
-def capture_eval_process_parse_failed(*, failure_type: str, mode: str) -> None:
-    _capture(
-        Event.EVAL_PROCESS_PARSE_FAILED,
-        {
-            "failure_type": failure_type,
-            "mode": mode,
-        },
-    )
-
-
-def capture_eval_process_failed(
-    *,
-    duration_ms: float,
-    failure_stage: str,
-    failure_type: str,
-    mode: str,
-) -> None:
-    _capture(
-        Event.EVAL_PROCESS_FAILED,
-        {
-            "duration_ms": round(duration_ms, 2),
-            "duration_bucket": _bucket_duration_ms(duration_ms),
-            "failure_stage": failure_stage,
-            "failure_type": failure_type,
-            "mode": mode,
         },
     )
 

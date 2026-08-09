@@ -553,6 +553,13 @@ RULES: tuple[PathRule, ...] = (
     PathRule("tools/system/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
     PathRule("platform/analytics/", ("tests/analytics/",)),
+    # Without this rule a change under platform/filestorage/ matches nothing,
+    # and the credential deny-list tests only run via the no-targets fallback —
+    # which a diff that also touches any test file silently defeats.
+    PathRule(
+        "platform/filestorage/",
+        ("tests/filestorage/", "tests/surfaces/test_remote_sync_surface_contract.py"),
+    ),
     PathRule("platform/guardrails/", ("tests/platform/guardrails/",)),
     PathRule("platform/masking/", ("tests/masking/",)),
     PathRule("platform/packaging/", ("tests/packaging/",)),

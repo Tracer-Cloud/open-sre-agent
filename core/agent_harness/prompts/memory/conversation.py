@@ -143,13 +143,6 @@ def _latest_actionable_offer(
     return None
 
 
-def _latest_want_me_to_offer(
-    messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
-) -> str | None:
-    """Backward-compatible alias for :func:`_latest_actionable_offer`."""
-    return _latest_actionable_offer(messages)
-
-
 def format_recent_conversation(
     messages: list[tuple[str, str]] | tuple[tuple[str, str], ...],
     *,

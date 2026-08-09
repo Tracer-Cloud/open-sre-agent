@@ -10,6 +10,12 @@ Sessions are append-mostly JSONL and memory files are small markdown, so whole
 objects are transferred rather than ranges. Downloads land through a temporary
 file and an atomic rename, matching how every local store writes, so an
 interrupted pull cannot leave a half-written session behind.
+
+Uploads overlap, up to a cap the provider declares (see
+:func:`~platform.filestorage.providers.registry.max_parallel_uploads_for_provider`),
+because a push is latency-bound: the laptop spends nearly all of it waiting on
+one round trip at a time. The concurrency is confined to the transfer half —
+see :func:`push` for why the two halves cannot be interleaved.
 """
 
 from __future__ import annotations
@@ -18,11 +24,14 @@ import hashlib
 import logging
 import os
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
+from config.constants.filestorage import DEFAULT_MAX_PARALLEL_UPLOADS
 from platform.filestorage.enums import SyncDirection
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules
@@ -81,6 +90,34 @@ class SyncReport:
     @property
     def total_bytes(self) -> int:
         return self.uploaded_bytes + self.downloaded_bytes
+
+
+class _PushAction(StrEnum):
+    """What a push decided about one candidate.
+
+    Private to this module: the surfaces read the outcome off
+    :class:`SyncReport`, so this is the wire between a worker thread and the
+    single-threaded reduce, not a vocabulary anything outside shares.
+    """
+
+    UPLOADED = "uploaded"
+    SKIPPED = "skipped"
+    KEPT_REMOTE = "kept_remote"
+
+
+@dataclass(frozen=True)
+class _PushOutcome:
+    """One candidate's result, carried back from a worker thread.
+
+    Workers return this instead of touching :class:`SyncReport`. Counters like
+    ``skipped`` are read-modify-write and would lose updates under threads, and
+    appending from whichever upload happened to finish first would make the
+    reported order depend on timing.
+    """
+
+    key: str
+    action: _PushAction
+    size: int = 0
 
 
 def content_tag(data: bytes) -> str:
@@ -155,8 +192,23 @@ def push(
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
     on_progress: ProgressCallback | None = None,
+    max_parallel_uploads: int = DEFAULT_MAX_PARALLEL_UPLOADS,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket.
+
+    Every candidate is checked before any of them is sent. The two halves
+    cannot be interleaved: the deny-list refusal below is a security boundary,
+    and uploading while still walking would leave earlier files in the store by
+    the time a denied one is found. Concurrency therefore applies only to the
+    transfer half, once the plan is closed.
+
+    Transfers run on a small pool — ``max_parallel_uploads`` at once, which the
+    caller takes from the provider's own declaration. Results are folded back
+    into ``report`` on this thread in plan order, so the report and the
+    ``on_progress`` callbacks are identical to a sequential run and neither
+    depends on which upload finished first. A failing upload propagates, as
+    before; uploads already in flight are allowed to finish, which is safe
+    because a sync only ever adds.
 
     Under ``dry_run`` nothing is sent, and a key ``pull`` already previewed as
     a download (``result.downloaded``, when both share one report) is trusted
@@ -200,29 +252,55 @@ def push(
         if on_progress is not None:
             on_progress(SyncProgress(SyncDirection.PUSH, key, completed, total))
 
-    for completed, (key, path) in enumerate(planned, start=1):
+    def _transfer_one(candidate: tuple[str, Path]) -> _PushOutcome:
+        """Evaluate and, when it differs, upload one candidate.
+
+        Runs on a worker thread, so it reads shared state and returns — it
+        never touches ``result`` or fires ``on_progress``.
+        """
+        key, path = candidate
         if key in previewed_pulls:
-            result.skipped += 1
-            _report(key, completed)
-            continue
+            return _PushOutcome(key, _PushAction.SKIPPED)
         data = path.read_bytes()
         existing = by_key.get(key)
         if existing is not None:
             if comparable_etag(existing) == content_tag(data):
-                result.skipped += 1
-                _report(key, completed)
-                continue
+                return _PushOutcome(key, _PushAction.SKIPPED)
             if existing.last_modified > _modified_at(path):
                 # The store holds the more recent write, so uploading would
                 # destroy it. Same rule pull applies in the other direction.
-                result.kept_remote.append(key)
-                _report(key, completed)
-                continue
+                return _PushOutcome(key, _PushAction.KEPT_REMOTE)
         if not dry_run:
             store.put_object(key, data)
-        result.uploaded.append(key)
-        result.uploaded_bytes += len(data)
-        _report(key, completed)
+        return _PushOutcome(key, _PushAction.UPLOADED, len(data))
+
+    def _record(outcome: _PushOutcome) -> None:
+        if outcome.action is _PushAction.UPLOADED:
+            result.uploaded.append(outcome.key)
+            result.uploaded_bytes += outcome.size
+        elif outcome.action is _PushAction.KEPT_REMOTE:
+            result.kept_remote.append(outcome.key)
+        else:
+            result.skipped += 1
+
+    # A dry run sends nothing, so there is no latency to hide and a pool would
+    # only add threads. One candidate does not need a pool either.
+    workers = min(max_parallel_uploads, total)
+    if dry_run or workers <= 1:
+        outcomes: Iterable[_PushOutcome] = map(_transfer_one, planned)
+        for completed, outcome in enumerate(outcomes, start=1):
+            _record(outcome)
+            _report(outcome.key, completed)
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="remote-sync-push") as pool:
+            # ``map`` yields in submission order, so the fold below stays in
+            # plan order however the uploads interleave. It also re-raises the
+            # first failure by plan position, not by whichever failed soonest,
+            # keeping the error a caller sees deterministic.
+            ordered: Iterator[_PushOutcome] = pool.map(_transfer_one, planned)
+            for completed, outcome in enumerate(ordered, start=1):
+                _record(outcome)
+                _report(outcome.key, completed)
 
     if previewed_pulls:
         # Keys pull previewed but that never had a local file to begin with
@@ -320,6 +398,7 @@ def run_sync(
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
     on_progress: ProgressCallback | None = None,
+    max_parallel_uploads: int = DEFAULT_MAX_PARALLEL_UPLOADS,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
@@ -327,7 +406,10 @@ def run_sync(
     the bucket, so the push half can reuse it. ``dry_run`` previews the same
     plan without writing anywhere, local or remote. ``on_progress``, when
     given, is called once per key evaluated in the pull pass and then again
-    for the push pass — see :data:`ProgressCallback`.
+    for the push pass — see :data:`ProgressCallback`. ``max_parallel_uploads``
+    caps concurrent uploads in the push pass; callers that built the store from
+    a config should pass the provider's own declared limit rather than rely on
+    the conservative default.
     """
     report = SyncReport()
     listing = store.list_objects("")
@@ -350,6 +432,7 @@ def run_sync(
             exclusions=exclusions,
             dry_run=dry_run,
             on_progress=on_progress,
+            max_parallel_uploads=max_parallel_uploads,
         )
     return report
 

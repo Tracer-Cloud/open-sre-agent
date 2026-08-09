@@ -23,6 +23,21 @@ _POOL_MIN_CONNECTIONS = 1
 # Bounds concurrent server connections: the worker plus a burst of API threads.
 _POOL_MAX_CONNECTIONS = 10
 
+# psycopg2 passes connect_timeout straight through to libpq,
+# which waits forever when connect_timeout is unset or 0,
+# so a blackholed address would hang store
+# construction under the module lock in gateway/web/investigations.py.
+# Operators may tune this through DATABASE_URL;e.g. ``postgresql://....?connect_timeout=10``.
+_CONNECT_TIMEOUT_SECONDS = 10  # default connect_timeout applied to the pool DSN
+_CONNECT_TIMEOUT_MAX_SECONDS = 30  # ceiling; caps an operator-supplied DATABASE_URL value
+
+# Keepalives detect a silently dropped connection;
+# connect_timeout covers only the handshake.
+
+_KEEPALIVES_IDLE_SECONDS = 30
+_KEEPALIVES_INTERVAL_SECONDS = 10
+_KEEPALIVES_COUNT = 3
+
 _COLUMNS = (
     "id, clerk_org_id, workspace_id, status, trigger, error, "
     "report_local_path, report_s3_key, created_at, updated_at"
@@ -47,6 +62,31 @@ ALTER TABLE investigations ADD COLUMN IF NOT EXISTS report_local_path TEXT;
 CREATE INDEX IF NOT EXISTS investigations_status_created
     ON investigations (status, created_at);
 """
+
+
+def _bounded_connect_timeout(requested: str | None) -> int:
+    """Clamp an operator-supplied ``connect_timeout`` into the bound we enforce."""
+    try:
+        seconds = int(requested or 0)
+    except ValueError:
+        seconds = 0
+    if seconds <= 0:  # unset, unparseable, or libpq's "wait forever"
+        return _CONNECT_TIMEOUT_SECONDS  # default
+    return min(seconds, _CONNECT_TIMEOUT_MAX_SECONDS)
+
+
+def _connect_kwargs(dsn: str) -> dict[str, Any]:
+    """Bounds applied to every connection the pool opens; these override the DSN."""
+    # Local import: the postgresql extra is optional.
+    from psycopg2.extensions import parse_dsn
+
+    return {
+        "connect_timeout": _bounded_connect_timeout(parse_dsn(dsn).get("connect_timeout")),
+        "keepalives": 1,
+        "keepalives_idle": _KEEPALIVES_IDLE_SECONDS,
+        "keepalives_interval": _KEEPALIVES_INTERVAL_SECONDS,
+        "keepalives_count": _KEEPALIVES_COUNT,
+    }
 
 
 def _row_to_record(row: tuple[Any, ...]) -> InvestigationRecord:
@@ -84,7 +124,10 @@ class PostgresInvestigationStore:
                 from psycopg2.pool import ThreadedConnectionPool
 
                 self._pool = ThreadedConnectionPool(
-                    _POOL_MIN_CONNECTIONS, _POOL_MAX_CONNECTIONS, self._dsn
+                    _POOL_MIN_CONNECTIONS,
+                    _POOL_MAX_CONNECTIONS,
+                    self._dsn,
+                    **_connect_kwargs(self._dsn),
                 )
             return self._pool
 

@@ -6,7 +6,10 @@ from typing import Any
 
 import pytest
 
-from gateway.core.storage.investigations.postgres import PostgresInvestigationStore
+from gateway.core.storage.investigations.postgres import (
+    PostgresInvestigationStore,
+    _bounded_connect_timeout,
+)
 from gateway.core.storage.investigations.store import InvestigationStatus
 
 
@@ -42,10 +45,11 @@ def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
     class _FakePool:
         instances: list[_FakePool] = []
 
-        def __init__(self, minconn: int, maxconn: int, dsn: str) -> None:
+        def __init__(self, minconn: int, maxconn: int, dsn: str, **kwargs: Any) -> None:
             self.minconn = minconn
             self.maxconn = maxconn
             self.dsn = dsn
+            self.kwargs = kwargs
             self.connection = _FakeConnection()
             self.gets = 0
             self.puts = 0
@@ -58,14 +62,25 @@ def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
         def putconn(self, _conn: _FakeConnection) -> None:
             self.puts += 1
 
+    def _parse_dsn(dsn: str) -> dict[str, str]:
+        """Stand-in for psycopg2.extensions.parse_dsn; query args are all we read."""
+        query = dsn.partition("?")[2]
+        return dict(item.split("=", 1) for item in query.split("&") if "=" in item)
+
     pool_module = types.ModuleType("psycopg2.pool")
     pool_module.ThreadedConnectionPool = _FakePool  # type: ignore[attr-defined]
+    extensions_module = types.ModuleType("psycopg2.extensions")
+    extensions_module.parse_dsn = _parse_dsn  # type: ignore[attr-defined]
     psycopg2_module = types.ModuleType("psycopg2")
     psycopg2_module.pool = pool_module  # type: ignore[attr-defined]
+    psycopg2_module.extensions = extensions_module  # type: ignore[attr-defined]
     _FakeCursor.executed = []
     _FakeCursor.rows = []
     monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
     monkeypatch.setitem(sys.modules, "psycopg2.pool", pool_module)
+    # Registered explicitly: the fake psycopg2 module has no __path__, so
+    # ``from psycopg2.extensions import parse_dsn`` cannot resolve the submodule.
+    monkeypatch.setitem(sys.modules, "psycopg2.extensions", extensions_module)
     return _FakePool, _FakeCursor
 
 
@@ -82,6 +97,54 @@ def test_one_pool_and_every_connection_returned(monkeypatch: pytest.MonkeyPatch)
     # Three operations (schema, get, claim): each borrowed and returned once.
     assert pool.gets == 3
     assert pool.puts == 3
+
+
+def test_pool_connects_under_a_bounded_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """libpq waits forever without connect_timeout, and the pool opens connections
+    inside __init__ — a blackholed address would wedge every request queued on the
+    store lock in gateway/web/investigations.py, not just the first."""
+    # Arrange
+    fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
+
+    # Act
+    PostgresInvestigationStore("postgresql://example/db")
+
+    # Assert
+    kwargs = fake_pool_cls.instances[0].kwargs
+    assert 0 < kwargs["connect_timeout"] <= 30
+    # Keepalives are what detect a silently dropped socket after connect.
+    assert kwargs["keepalives"] == 1
+    assert kwargs["keepalives_idle"] > 0
+
+
+def test_dsn_connect_timeout_is_honoured_inside_the_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Operators tune through DATABASE_URL; the clamp still owns the bound."""
+    # Arrange
+    fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
+
+    # Act
+    PostgresInvestigationStore("postgresql://example/db?connect_timeout=7")
+
+    # Assert
+    assert fake_pool_cls.instances[0].kwargs["connect_timeout"] == 7
+
+
+@pytest.mark.parametrize(
+    ("dsn_value", "expected"),
+    [
+        (None, 10),  # unset
+        ("", 10),
+        ("0", 10),  # libpq's "wait forever"
+        ("not-a-number", 10),
+        ("1", 1),  # an aggressive value fails fast, which cannot cause a hang
+        ("7", 7),
+        ("3600", 30),  # an hour is not a bound
+    ],
+)
+def test_connect_timeout_is_clamped(dsn_value: str | None, expected: int) -> None:
+    assert _bounded_connect_timeout(dsn_value) == expected
 
 
 def _raise_query_error() -> None:

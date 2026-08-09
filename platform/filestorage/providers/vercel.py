@@ -355,6 +355,10 @@ def check_public_access(
     )
 
 
+# No ``max_parallel_uploads``: this backend stays on the cautious shared
+# default. ``httpx.Client`` is safe to share across threads, but ``put_object``
+# raises on the first non-2xx with no retry, so a throttled write during a wide
+# fan-out would abort the push rather than back off.
 register_object_store(
     PROVIDER_NAME,
     _factory,

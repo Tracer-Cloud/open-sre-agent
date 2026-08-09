@@ -267,6 +267,11 @@ def check_public_access(
     return PublicAccessStatus(BucketExposure.PUBLIC if is_public else BucketExposure.PRIVATE)
 
 
+# No ``max_parallel_uploads``: this backend stays on the cautious shared
+# default. ``AuthorizedSession`` is a ``requests.Session``, which is not
+# documented as thread-safe — nothing here mutates it per request, so sharing
+# it works, but it is not a client to lean on for a wide upload fan-out — and
+# a write carries no retry, so one throttled response ends the whole push.
 register_object_store(
     PROVIDER_NAME,
     _factory,

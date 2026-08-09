@@ -279,10 +279,6 @@ class FileBindingStore:
         )
         return new_id
 
-    def import_records(self, rows: list[dict[str, Any]]) -> int:
-        """Insert rows that have no binding yet. Returns how many were added."""
-        return self._insert_missing(self.path, rows)
-
     def _insert_missing(self, path: Path, rows: list[dict[str, Any]]) -> int:
         if not rows:
             return 0

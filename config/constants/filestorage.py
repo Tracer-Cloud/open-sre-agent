@@ -38,9 +38,15 @@ BLOB_READ_WRITE_TOKEN_ENV = "BLOB_READ_WRITE_TOKEN"
 
 DEFAULT_REMOTE_SYNC_PREFIX = "opensre"
 DEFAULT_REMOTE_SYNC_PROVIDER = "aws"
+# Uploads run in parallel, capped per provider. This is the cap for a provider
+# that declares none: deliberately low, because an undeclared limit means an
+# unknown one, and a throttled write aborts the whole push. Providers that know
+# they tolerate more say so via ``register_object_store``.
+DEFAULT_MAX_PARALLEL_UPLOADS = 4
 
 __all__ = [
     "BLOB_READ_WRITE_TOKEN_ENV",
+    "DEFAULT_MAX_PARALLEL_UPLOADS",
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "REMOTE_SYNC_BUCKET_ENV",

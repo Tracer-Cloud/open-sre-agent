@@ -39,7 +39,18 @@ class ObjectStore(Protocol):
         """Full contents of one object."""
 
     def put_object(self, key: str, data: bytes) -> None:
-        """Store ``data`` under ``key``."""
+        """Store ``data`` under ``key``.
+
+        Called concurrently: a push uploads several objects at once, so an
+        implementation must not keep mutable per-request state on the instance.
+        A vendor SDK client that is itself safe to share across threads — the
+        boto3 low-level client, an ``httpx.Client`` — satisfies this by holding
+        the client and nothing else. How many calls run at once is the
+        provider's own declaration (``max_parallel_uploads`` in
+        :mod:`platform.filestorage.providers.registry`), so a backend without
+        client-level retry can keep the number low rather than lose a whole
+        push to one throttled write.
+        """
 
     def describe(self) -> str:
         """Short human-readable destination, for logs and CLI output."""

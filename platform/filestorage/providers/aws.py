@@ -150,17 +150,24 @@ def check_public_access(
     return PublicAccessStatus(BucketExposure.PUBLIC if is_public else BucketExposure.PRIVATE)
 
 
+# Above the shared default: the boto3 low-level client is safe to share across
+# threads, botocore retries throttling itself, and S3 sustains far more
+# concurrent writes per prefix than a laptop's session tree will ever produce.
+MAX_PARALLEL_UPLOADS = 16
+
 register_object_store(
     PROVIDER_NAME,
     _factory,
     credential_hint=CREDENTIAL_HINT,
     extra_fields=EXTRA_FIELDS,
     public_access_checker=check_public_access,
+    max_parallel_uploads=MAX_PARALLEL_UPLOADS,
 )
 
 __all__ = [
     "CREDENTIAL_HINT",
     "EXTRA_FIELDS",
+    "MAX_PARALLEL_UPLOADS",
     "PROVIDER_NAME",
     "S3ObjectStore",
     "check_public_access",

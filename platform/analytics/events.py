@@ -55,13 +55,6 @@ class Event(StrEnum):
     TEST_SYNTHETIC_COMPLETED = "test_synthetic_completed"
     TEST_SYNTHETIC_FAILED = "test_synthetic_failed"
 
-    # Evaluation metrics
-    EVAL_PROCESS_STARTED = "eval_process_started"
-    EVAL_PROCESS_COMPLETED = "eval_process_completed"
-    EVAL_PROCESS_FAILED = "eval_process_failed"
-    EVAL_PROCESS_SKIPPED = "eval_process_skipped"
-    EVAL_PROCESS_PARSE_FAILED = "eval_process_parse_failed"
-
     # Interactive terminal analytics
     TERMINAL_ACTIONS_PLANNED = "terminal_actions_planned"
     TERMINAL_ACTIONS_EXECUTED = "terminal_actions_executed"

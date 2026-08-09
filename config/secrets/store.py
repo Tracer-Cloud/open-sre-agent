@@ -54,19 +54,19 @@ class SecretSaveResult:
 
     @property
     def used_fallback(self) -> bool:
-        return self.tier == "fallback"
+        return self.tier == SecretTier.FALLBACK
 
 
 def lookup(env_var: str, *, default: str = "") -> SecretLookup:
     """Resolve a secret through env, then the keyring, then the fallback file."""
     env_value = os.getenv(env_var, default).strip()
     if env_value:
-        return SecretLookup(env_value, "env")
+        return SecretLookup(env_value, SecretTier.ENV)
 
     # The disable switch takes the machine out of local persistence entirely,
     # so neither tier is consulted and env vars are the only source.
     if os_keyring.keyring_is_disabled():
-        return SecretLookup("", "none")
+        return SecretLookup("", SecretTier.NONE)
 
     keyring_error = ""
     try:
@@ -75,12 +75,12 @@ def lookup(env_var: str, *, default: str = "") -> SecretLookup:
         keyring_error = str(exc)
     else:
         if value:
-            return SecretLookup(value, "keyring")
+            return SecretLookup(value, SecretTier.KEYRING)
 
     fallback_value = local_file.get(env_var)
     if fallback_value:
-        return SecretLookup(fallback_value, "fallback", keyring_error)
-    return SecretLookup("", "none", keyring_error)
+        return SecretLookup(fallback_value, SecretTier.FALLBACK, keyring_error)
+    return SecretLookup("", SecretTier.NONE, keyring_error)
 
 
 def resolve_secret(env_var: str, *, default: str = "") -> str:
@@ -106,7 +106,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
     normalized = value.strip()
     if not normalized:
         delete_secret(env_var)
-        return SecretSaveResult("none", f"{env_var} cleared.")
+        return SecretSaveResult(SecretTier.NONE, f"{env_var} cleared.")
 
     if not os_keyring.keyring_writes_enabled():
         # Env-first / file-first path: skip keyring writes entirely.
@@ -124,7 +124,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
                 reason=KeyringUnavailableReason.NO_BACKEND,
             ) from file_exc
         return SecretSaveResult(
-            "fallback",
+            SecretTier.FALLBACK,
             f"{env_var} stored in {local_file.store_path()} "
             "(set OPENSRE_USE_KEYRING=1 to prefer the system keychain).",
         )
@@ -143,12 +143,12 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
                 f"{exc} Writing {env_var} to {local_file.store_path()} also failed.",
                 reason=exc.reason,
             ) from file_exc
-        return SecretSaveResult("fallback", _fallback_detail(exc))
+        return SecretSaveResult(SecretTier.FALLBACK, _fallback_detail(exc))
 
     # A keyring write supersedes any fallback copy from an earlier run, which
     # would otherwise shadow nothing but linger as a stale plaintext secret.
     _discard_fallback(env_var)
-    return SecretSaveResult("keyring", f"{env_var} stored in the system keychain.")
+    return SecretSaveResult(SecretTier.KEYRING, f"{env_var} stored in the system keychain.")
 
 
 def _fallback_detail(exc: KeyringUnavailableError) -> str:
