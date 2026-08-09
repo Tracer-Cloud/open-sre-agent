@@ -117,10 +117,10 @@ def _start_background_investigation(
     session.terminal.background_investigations[task.task_id] = record
 
     def _worker() -> None:
-        from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
+        from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
         with bound_usage_context(
-            surface=SURFACE_CLI,
+            surface=UsageSurface.CLI,
             session_id=session.session_id,
         ):
             try:
