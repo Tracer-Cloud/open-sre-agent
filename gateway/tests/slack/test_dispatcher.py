@@ -279,44 +279,6 @@ def test_non_denied_credit_outcomes_run_the_turn(
     assert len(turns) == 1
 
 
-def test_conversation_locks_are_pruned_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.transports.slack import dispatcher
-
-    monkeypatch.setattr(dispatcher, "_MAX_CONVERSATION_LOCKS", 4)
-    dispatcher = _dispatcher(
-        settings=_settings(["U1"]),
-        messaging=_FakeMessagingClient(),
-        resolver=_FakeSessionResolver(),
-        handler=lambda *_args: None,
-    )
-
-    for index in range(10):
-        with dispatcher._conversation_turn(f"T1:C1:{index}"):
-            pass
-
-    assert len(dispatcher._conversation_locks) <= 4 + 1
-
-
-def test_in_use_conversation_lock_survives_pruning(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.transports.slack import dispatcher
-
-    monkeypatch.setattr(dispatcher, "_MAX_CONVERSATION_LOCKS", 1)
-    dispatcher = _dispatcher(
-        settings=_settings(["U1"]),
-        messaging=_FakeMessagingClient(),
-        resolver=_FakeSessionResolver(),
-        handler=lambda *_args: None,
-    )
-
-    with dispatcher._conversation_turn("T1:C1:busy"):
-        busy_entry = dispatcher._conversation_locks["T1:C1:busy"]
-        # Another conversation triggers pruning while the first turn is running.
-        with dispatcher._conversation_turn("T1:C1:other"):
-            pass
-        # The in-use entry was never discarded or replaced.
-        assert dispatcher._conversation_locks["T1:C1:busy"] is busy_entry
-
-
 def test_handler_exception_is_contained() -> None:
     messaging = _FakeMessagingClient()
 

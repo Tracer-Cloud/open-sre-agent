@@ -5,9 +5,6 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass, field
 
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
@@ -20,6 +17,7 @@ from gateway.core.runtime.active_turns import (
 )
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
+from gateway.core.runtime.conversation_locks import ConversationLockRegistry
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
 from gateway.transports.slack.approvals import ThreadApprovalPrompter
@@ -46,10 +44,6 @@ from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
 
-# Per-thread locks are pruned once this many conversations have been seen,
-# keeping memory flat in workspaces where every message starts a new thread.
-_MAX_CONVERSATION_LOCKS = 1024
-
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
 _NEW_SESSION_REPLY = "Started a new session."
 _TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
@@ -57,14 +51,6 @@ _TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
 # UNAVAILABLE outcomes run the turn instead, so a misconfiguration or webapp
 # outage never masquerades to users as "out of credits".
 _CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
-
-
-@dataclass
-class _ConversationLock:
-    """A per-conversation lock with a holder/waiter count for safe pruning."""
-
-    lock: threading.Lock = field(default_factory=threading.Lock)
-    refs: int = 0
 
 
 class _SlackTurnDispatcher:
@@ -90,8 +76,7 @@ class _SlackTurnDispatcher:
         self._approvals = approvals if approvals is not None else ApprovalBroker()
         self._active_cancels = ActiveTurnCancels()
         self._attention = ThreadAttentionGate()
-        self._conversation_locks: dict[str, _ConversationLock] = {}
-        self._locks_guard = threading.Lock()
+        self._conversation_locks = ConversationLockRegistry()
         self._resolver_lock = threading.Lock()
 
     def dispatch(self, inbound: SlackInboundMessage) -> None:
@@ -176,32 +161,6 @@ class _SlackTurnDispatcher:
         )
         return True
 
-    @contextmanager
-    def _conversation_turn(self, conversation_key: str) -> Iterator[None]:
-        """Serialize turns per conversation, pruning idle lock entries at the cap.
-
-        The reference count marks an entry as in use from before this thread
-        leaves the guard until after it releases the lock, so pruning can never
-        discard a lock another thread is about to acquire.
-        """
-        with self._locks_guard:
-            entry = self._conversation_locks.get(conversation_key)
-            if entry is None:
-                if len(self._conversation_locks) >= _MAX_CONVERSATION_LOCKS:
-                    self._conversation_locks = {
-                        key: existing
-                        for key, existing in self._conversation_locks.items()
-                        if existing.refs > 0
-                    }
-                entry = self._conversation_locks[conversation_key] = _ConversationLock()
-            entry.refs += 1
-        try:
-            with entry.lock:
-                yield
-        finally:
-            with self._locks_guard:
-                entry.refs -= 1
-
     def _post(self, inbound: SlackInboundMessage, text: str) -> None:
         self._messaging.post_message(
             channel=inbound.channel_id,
@@ -256,7 +215,7 @@ class _SlackTurnDispatcher:
             )
 
     def _run_turn(self, inbound: SlackInboundMessage, scope: StorageScope) -> None:
-        with self._conversation_turn(inbound.conversation_key):
+        with self._conversation_locks.hold(inbound.conversation_key):
             decision = enforce_inbound_slack_message_security(
                 user_id=inbound.user_id,
                 channel_id=inbound.channel_id,

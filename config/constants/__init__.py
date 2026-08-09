@@ -71,6 +71,7 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_REGION_ENV,
 )
+from config.constants.gateway import DEFAULT_MAX_CONVERSATION_LOCKS
 from config.constants.git import (
     OPENSRE_COMMIT_COAUTHOR_EMAIL,
     OPENSRE_COMMIT_COAUTHOR_NAME,
@@ -351,6 +352,7 @@ __all__ = [
     "BUZZ_RELAY_URL_ENV",
     "CONTEXT_ROOT_ENV",
     "BLOB_READ_WRITE_TOKEN_ENV",
+    "DEFAULT_MAX_CONVERSATION_LOCKS",
     "DEFAULT_MAX_PARALLEL_UPLOADS",
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
