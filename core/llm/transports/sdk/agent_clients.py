@@ -22,6 +22,8 @@ from core.llm.shared.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
     AGENT_CLIENT_TIMEOUT_SEC,
+    message_to_dict,
+    parse_tool_calls,
 )
 from core.llm.shared.openai_chat_completions import (
     build_assistant_message as build_openai_compat_assistant_message,
@@ -542,7 +544,12 @@ class OpenAIAgentClient:
 
         resolver = credential_resolver or resolve_env_credential
         api_key = resolver(api_key_env) or api_key_default
-        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=AGENT_CLIENT_TIMEOUT_SEC)
+        self._client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=AGENT_CLIENT_TIMEOUT_SEC,
+            max_retries=0,
+        )
         self._model = model
         self._max_tokens = max_tokens
         self._api_key_env = api_key_env
@@ -721,13 +728,7 @@ class OpenAIAgentClient:
         content = msg.content or ""
         stop_reason = choice.finish_reason or "stop"
 
-        tool_calls: list[ToolCall] = []
-        for tc in msg.tool_calls or []:
-            try:
-                input_dict = json.loads(tc.function.arguments)
-            except json.JSONDecodeError:
-                input_dict = {}
-            tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, input=input_dict))
+        tool_calls = parse_tool_calls(msg)
 
         return AgentLLMResponse(
             content=content,
@@ -737,7 +738,7 @@ class OpenAIAgentClient:
             # thought_signature in tool_calls) survive into the next conversation turn.
             # exclude_none=True strips null fields (refusal, audio, function_call …)
             # that strict OpenAI-compatible endpoints may reject on replay.
-            raw_content=msg.model_dump(exclude_none=True),
+            raw_content=message_to_dict(msg),
         )
 
     @staticmethod

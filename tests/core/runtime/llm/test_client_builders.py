@@ -23,6 +23,7 @@ def _provider_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AWS_REGION", "us-east-1")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("NVIDIA_API_KEY", "test-nvidia-key")
 
 
 def _settings(provider: str) -> SimpleNamespace:
@@ -34,9 +35,13 @@ def _settings(provider: str) -> SimpleNamespace:
         openai_reasoning_model="gpt-r",
         openai_classification_model="gpt-c",
         openai_toolcall_model="gpt-t",
+        nvidia_reasoning_model="z-ai/glm-5.2",
+        nvidia_classification_model="z-ai/glm-5.2",
+        nvidia_toolcall_model="z-ai/glm-5.2",
         bedrock_reasoning_model="us.anthropic.claude-r",
         bedrock_classification_model="us.anthropic.claude-c",
         bedrock_toolcall_model="us.anthropic.claude-t",
+        max_tokens=16384,
     )
 
 
@@ -82,6 +87,13 @@ def test_bedrock_picks_converse_client_for_non_anthropic_model() -> None:
         settings=settings, provider="bedrock", cli_provider_registration=None, use_litellm=False
     )
     assert type(build_agent_client(route)).__name__ == "BedrockConverseAgentClient"
+
+
+def test_openai_compatible_agent_uses_runtime_max_tokens() -> None:
+    client = build_agent_client(_route("nvidia"))
+
+    assert client.model_id == "z-ai/glm-5.2"
+    assert client._max_tokens == 16384
 
 
 def test_ollama_sdk_reasoning_builds_without_per_tier_toolcall_attr(

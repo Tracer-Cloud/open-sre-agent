@@ -4,10 +4,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from tests.benchmarks.orcabench.config import GrafanaSettings, ModelSettings
 from tests.benchmarks.orcabench.execution.environment import native_environment_values
 from tests.benchmarks.orcabench.execution.native_connection import OrcaNativeConnections
 from tests.benchmarks.orcabench.execution.native_investigation import (
+    NativeInvestigationIncompleteError,
     NativeInvestigationRunner,
 )
 from tests.benchmarks.orcabench.execution.native_report import NativeReportPolicy
@@ -128,7 +131,10 @@ def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(
     )
     alert = {
         "alert_source": "opensre_dataset",
-        "_meta": {"orca_investigation_guidance": "There may be no root cause."},
+        "_meta": {
+            "orca_investigation_guidance": "There may be no root cause.",
+            "orca_report_instructions": "Use Summary, Timeline, 5 Whys, and Remediation.",
+        },
     }
 
     result = NativeInvestigationRunner().investigate(alert, {}, {"since": "start"})
@@ -142,12 +148,121 @@ def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(
     prompt = agent_class()._build_system_prompt({"raw_alert": alert})
     assert "## ORCA task guidance" in prompt
     assert "There may be no root cause." in prompt
+    assert "## ORCA report contract" in prompt
+    assert "Use Summary, Timeline, 5 Whys, and Remediation." in prompt
     from integrations.grafana.tools import query_grafana_metrics
 
     native_tool = query_grafana_metrics.__opensre_registered_tool__
     [orca_tool] = agent_class()._filter_tools([native_tool])
     assert "time_bounds" in orca_tool.public_input_schema["properties"]
     assert "time_bounds" not in native_tool.public_input_schema["properties"]
+
+    agent = agent_class()
+    accepted, nudge = agent._should_accept_conclusion(
+        evidence_count=3,
+        iteration=4,
+        final_text="Insufficient evidence.",
+    )
+    assert accepted is False
+    assert nudge is not None
+    assert "ORCA report contract" in nudge
+
+    inline_heading_agent = agent_class()
+    accepted, nudge = inline_heading_agent._should_accept_conclusion(
+        evidence_count=3,
+        iteration=5,
+        final_text=(
+            "The required headings are ## Summary, ## Timeline, ## 5 Whys, and "
+            "## Remediation, but this is not a report."
+        ),
+    )
+    assert accepted is False
+    assert nudge is not None
+
+    accepted, nudge = agent._should_accept_conclusion(
+        evidence_count=3,
+        iteration=5,
+        final_text=(
+            "## Summary\nIncident.\n\n"
+            "## Timeline\n09:00 UTC.\n\n"
+            "## 5 Whys\nWhy 1.\n\n"
+            "## Remediation\nFix it."
+        ),
+    )
+    assert (accepted, nudge) == (True, None)
+
+    healthy_agent = agent_class()
+    assert healthy_agent._should_accept_conclusion(
+        evidence_count=3,
+        iteration=4,
+        final_text="Root cause category: healthy",
+    ) == (True, None)
+
+    non_healthy_agent = agent_class()
+    accepted, nudge = non_healthy_agent._should_accept_conclusion(
+        evidence_count=3,
+        iteration=4,
+        final_text="Root cause category: not healthy",
+    )
+    assert accepted is False
+    assert nudge is not None
+
+
+def test_native_payload_uses_agent_conclusion_as_orca_report() -> None:
+    conclusion = (
+        "## Summary\nCheckout failed.\n\n"
+        "## Timeline\n09:00 UTC — failures began.\n\n"
+        "## 5 Whys\nWhy 1: dependency failed.\n\n"
+        "## Remediation\nRestore the dependency."
+    )
+    state = {
+        "slack_message": "OpenSRE channel-formatted report",
+        "problem_md": "checkout failures",
+        "root_cause": "The payment dependency failed.",
+        "root_cause_category": "dependency_failure",
+        "agent_messages": [
+            {"role": "assistant", "content": "Earlier status"},
+            {"role": "assistant", "content": conclusion},
+        ],
+    }
+
+    payload = NativeInvestigationRunner().build_payload(state)
+
+    assert payload["report"] == conclusion
+    assert payload["root_cause_category"] == "dependency_failure"
+
+
+def test_native_payload_propagates_llm_failure_instead_of_exporting_stale_text() -> None:
+    state = {
+        "slack_message": "Error report that must not be scored",
+        "problem_md": "site issues",
+        "root_cause": "Error: The LLM provider rejected the investigation request.",
+        "root_cause_category": "Investigation Error",
+        "causal_chain": [
+            "LLM invoke failed: provider rejected malformed tool-call history"
+        ],
+        "agent_messages": [
+            {
+                "role": "assistant",
+                "content": "Triage complete: provisional and unsupported incident",
+                "tool_calls": [
+                    {
+                        "id": "bad-call",
+                        "function": {
+                            "name": "query_grafana_metrics",
+                            "arguments": "{malformed",
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    with pytest.raises(
+        NativeInvestigationIncompleteError,
+        match="LLM invocation failed.*provider rejected",
+    ):
+        NativeInvestigationRunner().build_payload(state)
 
 
 def test_native_report_policy_preserves_exact_utf8_bytes(tmp_path: Path) -> None:

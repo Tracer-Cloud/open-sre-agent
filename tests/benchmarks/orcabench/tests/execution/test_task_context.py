@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -32,7 +33,18 @@ def _orca_instruction(issue: str = "users are reporting site issues") -> str:
         "cause events and the times of their occurrence.\n"
         "* There may be multiple root causes or no root cause at all.\n\n"
         "## Telemetry Tools\n\n"
-        "Use the Grafana HTTP API.\n"
+        "Use the Grafana HTTP API.\n\n"
+        "## Instructions\n\n"
+        "First determine whether an incident actually occurred. If no incident "
+        "occurred, write an empty report.\n\n"
+        "## Section 1: Summary\n\n"
+        "Summarize what happened.\n\n"
+        "## Section 2: Timeline\n\n"
+        "Give UTC events in chronological order.\n\n"
+        "## Section 3: 5 Whys\n\n"
+        "Ground each why in telemetry.\n\n"
+        "## Section 4: Remediation\n\n"
+        "Classify each corrective action.\n"
     )
 
 
@@ -57,6 +69,18 @@ def test_parses_standard_orca_current_time_and_builds_historical_window() -> Non
                 "root cause events and the times of their occurrence.\n"
                 "There may be multiple root causes or no root cause at all."
             ),
+            "orca_report_instructions": (
+                "First determine whether an incident actually occurred. If no incident "
+                "occurred, write an empty report.\n\n"
+                "## Section 1: Summary\n\n"
+                "Summarize what happened.\n\n"
+                "## Section 2: Timeline\n\n"
+                "Give UTC events in chronological order.\n\n"
+                "## Section 3: 5 Whys\n\n"
+                "Ground each why in telemetry.\n\n"
+                "## Section 4: Remediation\n\n"
+                "Classify each corrective action."
+            ),
         },
         "commonAnnotations": {
             "summary": "users are reporting site issues",
@@ -79,6 +103,13 @@ def test_orca_investigation_guidance_reaches_native_agent_context() -> None:
     assert "## ORCA task guidance" in prompt
     assert "The time that an issue was reported" in prompt
     assert "There may be multiple root causes or no root cause at all." in prompt
+    assert "## ORCA report contract" in prompt
+    assert "## Section 3: 5 Whys" in prompt
+    assert "Classify each corrective action." in prompt
+    assert "## What to produce at the end" not in prompt
+    assert "Incident command summary" not in prompt
+    assert "Phase 4 — Mitigation" in prompt
+    assert "using the ORCA report contract below" in prompt
     assert "Use the Grafana HTTP API" not in prompt
 
 
@@ -92,6 +123,13 @@ def test_rejects_missing_reported_issue() -> None:
         parse_orca_task_context(
             "You are an expert SRE. The current time is Apr 21, 2026 at 09:00 ET."
         )
+
+
+def test_rejects_missing_report_instructions() -> None:
+    instruction_without_contract = _orca_instruction().partition("## Instructions")[0]
+
+    with pytest.raises(ValueError, match="missing its 'Instructions' section"):
+        parse_orca_task_context(instruction_without_contract)
 
 
 def test_orca_alert_plans_telemetry_and_source_without_eager_seed_calls(

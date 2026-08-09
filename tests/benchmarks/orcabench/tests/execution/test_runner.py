@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
+from tests.benchmarks.orcabench.config import (
+    BenchmarkSettings,
+    BuildManifest,
+    RunnerSettings,
+    RuntimeSettings,
+)
+from tests.benchmarks.orcabench.execution import runner
+from tests.benchmarks.orcabench.execution.native_investigation import (
+    NativeInvestigationIncompleteError,
+    NativeInvestigationRunner,
+)
 from tests.benchmarks.orcabench.execution.runner import (
     _write_smoke_source_probe,
     _write_smoke_telemetry_probe,
@@ -97,3 +112,77 @@ def test_benchmark_profile_does_not_probe_source(tmp_path: Path) -> None:
     )
 
     assert writer.writes == []
+
+
+def test_runner_marks_native_llm_failure_failed_without_writing_report(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    artifact_dir = tmp_path / "artifacts"
+    report_path = tmp_path / "report.md"
+    report_path.write_bytes(b"")
+    ready_path = tmp_path / "env-ready"
+    ports_path = tmp_path / "env-ports"
+    ready_path.touch()
+    ports_path.touch()
+    settings = RunnerSettings(
+        benchmark=BenchmarkSettings(
+            runtime=RuntimeSettings(
+                report_path=report_path,
+                source_root=tmp_path / "source",
+                artifact_dir=artifact_dir,
+                environment_ready_path=ready_path,
+                environment_ports_path=ports_path,
+            )
+        ),
+        build=BuildManifest(
+            opensre_commit="1234567890abcdef",
+            python_version="3.13.0",
+            opensre_wheel="wheelhouse/opensre.whl",
+            files_sha256={},
+        ),
+    )
+    config_path = tmp_path / "runner-config.json"
+    config_path.write_text(settings.to_json(), encoding="utf-8")
+    instruction_path = tmp_path / "instruction.txt"
+    instruction_path.write_text("test instruction", encoding="utf-8")
+    failure_state = {
+        "root_cause": "Error: provider rejected the request.",
+        "root_cause_category": "Investigation Error",
+        "causal_chain": ["LLM invoke failed: invalid tool-call history"],
+        "evidence_entries": [],
+        "agent_messages": [
+            {"role": "assistant", "content": "unsupported provisional incident"}
+        ],
+    }
+    investigation = SimpleNamespace(
+        investigate=lambda *_args, **_kwargs: failure_state,
+        build_payload=NativeInvestigationRunner().build_payload,
+    )
+    mode = SimpleNamespace(
+        connections=SimpleNamespace(build=lambda *_args, **_kwargs: {}),
+        investigation=investigation,
+        report=SimpleNamespace(write=lambda *_args, **_kwargs: b"unexpected"),
+    )
+    task_context = SimpleNamespace(
+        incident_window=lambda: {},
+        investigation_alert=lambda: {},
+    )
+    monkeypatch.setattr(runner, "wait_for_path", lambda *_args: None)
+    monkeypatch.setattr(runner, "configure_native_environment", lambda *_args: None)
+    monkeypatch.setattr(runner, "build_mode", lambda *_args: mode)
+    monkeypatch.setattr(runner, "parse_orca_task_context", lambda *_args: task_context)
+    monkeypatch.setattr(runner, "check_grafana", lambda *_args: {"status": "ready"})
+
+    with pytest.raises(NativeInvestigationIncompleteError, match="did not complete"):
+        runner.run(config_path, instruction_path)
+
+    manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+    error = json.loads((artifact_dir / "error.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "failed"
+    assert error["category"] == "investigation_failed"
+    assert error["exception_type"] == "NativeInvestigationIncompleteError"
+    assert (artifact_dir / "state.json").is_file()
+    assert not (artifact_dir / "payload.json").exists()
+    assert not (artifact_dir / "report.md").exists()
+    assert report_path.read_bytes() == b""

@@ -6,7 +6,7 @@ import shlex
 from pathlib import Path, PurePosixPath
 from typing import Any, override
 
-from harbor.agents.installed.base import BaseInstalledAgent
+from harbor.agents.installed.base import BaseInstalledAgent, NonZeroAgentExitCodeError
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
 from pydantic import ValidationError
@@ -15,6 +15,10 @@ from tests.benchmarks.orcabench.artifacts import RunSummary
 from tests.benchmarks.orcabench.config import BenchmarkSettings, RunnerSettings
 from tests.benchmarks.orcabench.host.bundle import validate_bundle
 from tests.benchmarks.orcabench.host.pricing import calculate_orca_cost
+
+
+class OpenSRERunnerError(RuntimeError):
+    """The native runner failed before producing a benchmark-scorable result."""
 
 
 class OpenSRENativeAgent(BaseInstalledAgent):
@@ -110,15 +114,24 @@ class OpenSRENativeAgent(BaseInstalledAgent):
         await environment.upload_file(instruction_path, self._REMOTE_INSTRUCTION.as_posix())
 
         python = self._REMOTE_VENV / "bin/python"
-        await self.exec_as_agent(
-            environment,
-            command=(
-                f"{shlex.quote(python.as_posix())} "
-                "-m tests.benchmarks.orcabench.execution.runner "
-                f"--config {shlex.quote(self._REMOTE_CONFIG.as_posix())} "
-                f"--instruction {shlex.quote(self._REMOTE_INSTRUCTION.as_posix())}"
-            ),
-        )
+        try:
+            await self.exec_as_agent(
+                environment,
+                command=(
+                    f"{shlex.quote(python.as_posix())} "
+                    "-m tests.benchmarks.orcabench.execution.runner "
+                    f"--config {shlex.quote(self._REMOTE_CONFIG.as_posix())} "
+                    f"--instruction {shlex.quote(self._REMOTE_INSTRUCTION.as_posix())}"
+                ),
+            )
+        except NonZeroAgentExitCodeError as exc:
+            # Harbor's single-step runner verifies ordinary installed-agent nonzero
+            # exits. Terminus provider errors escape its in-process agent instead,
+            # skipping verification. Translate here so both agents produce the same
+            # unscored trial semantics while Harbor still recovers our artifacts.
+            raise OpenSRERunnerError(
+                "Native OpenSRE failed before producing a benchmark-scorable result"
+            ) from exc
 
     @override
     def populate_context_post_run(self, context: AgentContext) -> None:

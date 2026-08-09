@@ -65,7 +65,7 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
         from core.llm.types import ModelType
 
         resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
-        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
+        max_tokens = 1024 if provider == PROVIDER_OLLAMA else settings.max_tokens
         return sdk.OpenAIAgentClient(
             model=resolved.model,
             max_tokens=max_tokens,

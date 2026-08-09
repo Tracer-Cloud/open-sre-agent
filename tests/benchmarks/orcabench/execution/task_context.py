@@ -29,6 +29,10 @@ _NOTE_BULLET_RE = re.compile(
     r"^\*\s+(?P<body>.*?)(?=^\*\s+|\Z)",
     re.MULTILINE | re.DOTALL,
 )
+_INSTRUCTIONS_RE = re.compile(
+    r"^##\s+Instructions\s*$\n(?P<body>.*)\Z",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,7 @@ class OrcaTaskContext:
     current_time: datetime
     reported_issue: str
     investigation_guidance: str
+    report_instructions: str
 
     def incident_window(self, *, lookback_minutes: int = 120) -> dict[str, object]:
         """Return OpenSRE's generic serialized historical investigation window."""
@@ -62,6 +67,7 @@ class OrcaTaskContext:
             "alert_source": "opensre_dataset",
             "_meta": {
                 "orca_investigation_guidance": self.investigation_guidance,
+                "orca_report_instructions": self.report_instructions,
             },
             "commonAnnotations": {
                 "summary": self.reported_issue,
@@ -102,6 +108,16 @@ def _investigation_guidance(instruction: str) -> str:
     return "\n".join(bullets)
 
 
+def _report_instructions(instruction: str) -> str:
+    match = _INSTRUCTIONS_RE.search(instruction)
+    if match is None:
+        raise ValueError("ORCA instruction is missing its 'Instructions' section")
+    report_instructions = match.group("body").strip()
+    if not report_instructions:
+        raise ValueError("ORCA instruction contains an empty 'Instructions' section")
+    return report_instructions
+
+
 def parse_orca_task_context(instruction: str) -> OrcaTaskContext:
     """Parse ORCA's standardized simulated current-time sentence.
 
@@ -126,4 +142,5 @@ def parse_orca_task_context(instruction: str) -> OrcaTaskContext:
         current_time=local,
         reported_issue=_reported_issue(instruction),
         investigation_guidance=_investigation_guidance(instruction),
+        report_instructions=_report_instructions(instruction),
     )

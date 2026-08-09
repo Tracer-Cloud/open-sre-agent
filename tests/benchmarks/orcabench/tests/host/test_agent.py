@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 pytest.importorskip("harbor", reason="Harbor is supplied by the ORCA-Bench environment")
 
-from harbor.agents.installed.base import BaseInstalledAgent
+from harbor.agents.installed.base import BaseInstalledAgent, NonZeroAgentExitCodeError
 from harbor.models.agent.context import AgentContext
 
 from tests.benchmarks.orcabench.artifacts import RunSummary
-from tests.benchmarks.orcabench.host.agent import OpenSRENativeAgent
+from tests.benchmarks.orcabench.host.agent import OpenSRENativeAgent, OpenSRERunnerError
 from tests.benchmarks.orcabench.host.validation import _harbor_check
 from tests.benchmarks.orcabench.tests._support import create_bundle
 
@@ -106,6 +109,36 @@ def test_invalid_post_run_summary_is_nonfatal(tmp_path: Path) -> None:
     assert context.n_input_tokens is None
     assert context.metadata is not None
     assert "llm_calls" not in context.metadata
+
+
+def test_runner_nonzero_escapes_harbor_installed_agent_verification_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    agent = OpenSRENativeAgent(
+        logs_dir=logs_dir,
+        model_name="gradient_ai/openai-gpt-5.5",
+        benchmark_config_path=_config_path(),
+        bundle_path=create_bundle(tmp_path),
+    )
+    exec_as_agent = AsyncMock(
+        side_effect=NonZeroAgentExitCodeError("native runner exited 1")
+    )
+    monkeypatch.setattr(agent, "exec_as_agent", exec_as_agent)
+    environment = SimpleNamespace(upload_file=AsyncMock())
+
+    with pytest.raises(OpenSRERunnerError, match="benchmark-scorable"):
+        asyncio.run(
+            agent.run(
+                "investigate",
+                environment,  # type: ignore[arg-type]
+                AgentContext(),
+            )
+        )
+
+    environment.upload_file.assert_awaited_once()
 
 
 def test_harbor_validation_recognizes_orca_checksum_patch() -> None:

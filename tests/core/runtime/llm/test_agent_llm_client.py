@@ -60,6 +60,27 @@ def _install_fake_anthropic(monkeypatch: pytest.MonkeyPatch) -> types.SimpleName
     return fake_module
 
 
+def test_openai_agent_disables_sdk_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class OpenAI:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=OpenAI))
+
+    OpenAIAgentClient(
+        model="z-ai/glm-5.2",
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key_env="NVIDIA_API_KEY",
+        credential_resolver=lambda _name: "test-key",
+    )
+
+    assert captured["max_retries"] == 0
+
+
 def test_bedrock_client_requires_region_env(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fake_anthropic(monkeypatch)
     monkeypatch.delenv("AWS_REGION", raising=False)
@@ -621,6 +642,50 @@ def test_openai_agent_client_invoke_raw_content_preserves_extra_fields(
     assert isinstance(response.raw_content.get("tool_calls"), list)
     first_tc = response.raw_content["tool_calls"][0]
     assert first_tc.get("thought_signature") == "abc123"
+
+
+def test_openai_agent_client_normalizes_malformed_tool_arguments_for_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bad compatible-provider tool call must not poison the next request."""
+    _install_fake_openai(monkeypatch)
+
+    def fake_tc_model_dump() -> dict:
+        return {
+            "id": "call_bad",
+            "type": "function",
+            "function": {
+                "name": "query_grafana_metrics",
+                "arguments": '{"metric_name": "up"',
+            },
+            "thought_signature": "keep-me",
+        }
+
+    fake_tc = types.SimpleNamespace(
+        id="call_bad",
+        function=types.SimpleNamespace(
+            name="query_grafana_metrics",
+            arguments='{"metric_name": "up"',
+        ),
+        model_dump=fake_tc_model_dump,
+    )
+    fake_response = _make_fake_openai_response(
+        tool_calls=[fake_tc], finish_reason="tool_calls"
+    )
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=lambda **_: fake_response)
+        )
+    )
+    client._model = "openrouter/free"
+    client._max_tokens = 1024
+
+    response = client.invoke(messages=[{"role": "user", "content": "investigate"}])
+
+    assert response.tool_calls[0].input == {}
+    assert response.raw_content["tool_calls"][0]["function"]["arguments"] == "{}"
+    assert response.raw_content["tool_calls"][0]["thought_signature"] == "keep-me"
 
 
 def test_openai_agent_client_enables_parallel_tool_calls_for_openai(

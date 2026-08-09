@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import time
 from collections.abc import Callable, Iterator
@@ -36,22 +37,60 @@ def first_choice(response: Any) -> Any:
     return choices[0]
 
 
+def _normalize_tool_call_arguments(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return a replay-safe copy of an OpenAI-compatible assistant message.
+
+    Some compatible providers return malformed ``function.arguments`` strings.
+    The parsed runtime call already degrades those arguments to an empty mapping;
+    replay the same valid mapping instead of preserving bytes that the provider
+    will reject on the next turn. Provider extensions on the message or tool call
+    (for example Gemini ``thought_signature``) remain untouched.
+    """
+    normalized = copy.deepcopy(payload)
+    raw_tool_calls = normalized.get("tool_calls")
+    if not isinstance(raw_tool_calls, list):
+        return normalized
+
+    for raw_call in raw_tool_calls:
+        if not isinstance(raw_call, dict):
+            continue
+        function = raw_call.get("function")
+        if not isinstance(function, dict):
+            continue
+        raw_arguments = function.get("arguments")
+        if not isinstance(raw_arguments, str):
+            function["arguments"] = "{}"
+            continue
+        try:
+            parsed = json.loads(raw_arguments)
+        except json.JSONDecodeError:
+            function["arguments"] = "{}"
+            continue
+        if not isinstance(parsed, dict):
+            function["arguments"] = "{}"
+    return normalized
+
+
 def message_to_dict(message: Any) -> dict[str, Any]:
     if isinstance(message, dict):
-        return {key: value for key, value in message.items() if value is not None}
-    model_dump = getattr(message, "model_dump", None)
-    if callable(model_dump):
-        dumped = model_dump(exclude_none=True)
+        payload = {key: value for key, value in message.items() if value is not None}
+    else:
+        model_dump = getattr(message, "model_dump", None)
+        dumped = model_dump(exclude_none=True) if callable(model_dump) else None
         if isinstance(dumped, dict):
-            return {str(key): value for key, value in dumped.items() if value is not None}
-    payload: dict[str, Any] = {
-        "role": get_attr_or_item(message, "role", "assistant"),
-        "content": get_attr_or_item(message, "content", ""),
-    }
-    tool_calls = get_attr_or_item(message, "tool_calls", None)
-    if tool_calls:
-        payload["tool_calls"] = tool_calls
-    return {key: value for key, value in payload.items() if value is not None}
+            payload = {
+                str(key): value for key, value in dumped.items() if value is not None
+            }
+        else:
+            payload = {
+                "role": get_attr_or_item(message, "role", "assistant"),
+                "content": get_attr_or_item(message, "content", ""),
+            }
+            tool_calls = get_attr_or_item(message, "tool_calls", None)
+            if tool_calls:
+                payload["tool_calls"] = tool_calls
+            payload = {key: value for key, value in payload.items() if value is not None}
+    return _normalize_tool_call_arguments(payload)
 
 
 def parse_tool_calls(message: Any) -> list[ToolCall]:
@@ -62,9 +101,11 @@ def parse_tool_calls(message: Any) -> list[ToolCall]:
         name = str(get_attr_or_item(function, "name", ""))
         raw_arguments = str(get_attr_or_item(function, "arguments", "") or "")
         try:
-            input_dict = json.loads(raw_arguments) if raw_arguments else {}
+            parsed_arguments = json.loads(raw_arguments) if raw_arguments else {}
         except json.JSONDecodeError:
             input_dict = {}
+        else:
+            input_dict = parsed_arguments if isinstance(parsed_arguments, dict) else {}
         tool_calls.append(ToolCall(id=call_id, name=name, input=input_dict))
     return tool_calls
 

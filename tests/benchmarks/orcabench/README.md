@@ -1,8 +1,6 @@
 ```text
 orcabench/                           # One-task OpenSRE integration for ORCA-Bench
 ├── README.md                           # Annotated directory map
-├── CONTEXT.md                          # Setup, operation, artifacts, and limitations
-├── plan.md                             # Scope, architecture, and acceptance criteria
 ├── __init__.py                         # Public benchmark package exports
 ├── config.py                           # Validated shared configuration and manifests
 ├── configs/                          # Checked-in experiment configurations
