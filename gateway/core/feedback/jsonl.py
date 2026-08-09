@@ -20,8 +20,8 @@ def append_feedback_entry(entry: dict[str, Any], *, path: Path) -> bool:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except OSError:
-        logger.warning("[gateway] feedback write failed path=%s", path, exc_info=True)
+    except (OSError, TypeError, ValueError):
+        logger.warning("[gateway] feedback serialization/write failed path=%s", path, exc_info=True)
         return False
     return True
 

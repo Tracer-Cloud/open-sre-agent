@@ -39,3 +39,10 @@ def test_feedback_write_failure_is_contained(tmp_path: Path) -> None:
     directory.mkdir()
 
     assert not append_feedback_entry({"verdict": "good"}, path=directory)
+
+
+def test_feedback_serialization_failure_is_contained(tmp_path: Path) -> None:
+    path = tmp_path / "feedback.jsonl"
+
+    assert not append_feedback_entry({"unsupported": object()}, path=path)
+    assert path.read_text(encoding="utf-8") == ""
