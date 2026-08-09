@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-_MAX_FILE_CHARS = 40_000
-_MAX_TOTAL_CHARS = 120_000
+from config.constants.gateway import ATTACHMENT_MAX_FILE_CHARS
+
 _HEAD_CHARS = 26_000
 _TAIL_CHARS = 12_000
 
@@ -51,7 +51,7 @@ def is_text_mimetype(mimetype: str) -> bool:
     return mime.startswith("text/") or mime in _TEXT_MIME_EXACT
 
 
-def truncate_attachment_text(text: str, *, max_chars: int = _MAX_FILE_CHARS) -> str:
+def truncate_attachment_text(text: str, *, max_chars: int = ATTACHMENT_MAX_FILE_CHARS) -> str:
     if len(text) <= max_chars:
         return text
     omitted = len(text) - _HEAD_CHARS - _TAIL_CHARS
@@ -71,8 +71,6 @@ def join_attachment_sections(sections: list[str]) -> str:
 
 
 __all__ = [
-    "_MAX_FILE_CHARS",
-    "_MAX_TOTAL_CHARS",
     "budgeted_section",
     "is_text_mimetype",
     "join_attachment_sections",

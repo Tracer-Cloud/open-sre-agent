@@ -8,10 +8,9 @@ from urllib.parse import urlparse
 import httpx
 
 from config.constants.discord import DISCORD_ATTACHMENT_HOST_SUFFIXES
+from config.constants.gateway import ATTACHMENT_MAX_TOTAL_CHARS
 from core.llm.image_description import describe_image_via_provider, is_supported_image
 from gateway.core.attachments.inline import (
-    _MAX_FILE_CHARS,
-    _MAX_TOTAL_CHARS,
     budgeted_section,
     is_text_mimetype,
     join_attachment_sections,
@@ -73,7 +72,7 @@ def build_discord_attachments_context(
     if not attachments:
         return ""
     sections: list[str] = []
-    remaining = _MAX_TOTAL_CHARS
+    remaining = ATTACHMENT_MAX_TOTAL_CHARS
     for item in attachments:
         label = item.filename or "attachment"
         if remaining <= 0:
@@ -102,7 +101,7 @@ def build_discord_attachments_context(
                 text = data.decode("utf-8")
             except UnicodeDecodeError:
                 text = data.decode("latin-1", errors="replace")
-            text = truncate_attachment_text(text, max_chars=_MAX_FILE_CHARS)
+            text = truncate_attachment_text(text)
             header = f"--- attached file: {label} ---"
             section, consumed = budgeted_section(header, text, remaining)
             remaining -= consumed
