@@ -110,11 +110,77 @@ make verify-integrations
 If Fargate CDK code, its deployment commands, or infrastructure tests changed,
 also run:
 
-## 5) Optional extra confidence
+## 5) Mandatory post-push PR monitoring
+
+Opening or updating a PR does not finish the task. After every push, continue
+monitoring and fixing the PR without waiting for another prompt until all exit
+conditions below pass or an external dependency is genuinely blocking progress.
+
+1. Verify that the PR is reviewing the commit you just pushed:
+
+   ```bash
+   LOCAL_SHA=$(git rev-parse HEAD)
+   REMOTE_SHA=$(gh pr view --json headRefOid -q .headRefOid)
+   test "$LOCAL_SHA" = "$REMOTE_SHA"
+   ```
+
+   Do not trigger a review or wait on results for a stale remote head.
+
+2. Watch every reported check, including CI shards, CodeQL, synthetic tests,
+   and installed review integrations:
+
+   ```bash
+   gh pr checks --watch --interval 30
+   ```
+
+   A conditionally skipped job is neutral. Pending, queued, failing, cancelled,
+   errored, or timed-out required checks do not satisfy the gate.
+
+3. Inspect all review surfaces, not only Actions checks:
+
+   ```bash
+   gh pr view --json reviewDecision,reviews,statusCheckRollup
+   gh api repos/{owner}/{repo}/pulls/{pr}/comments
+   gh api repos/{owner}/{repo}/issues/{pr}/comments
+   ```
+
+   Also inspect unresolved GitHub review threads. Review apps may publish their
+   score in a PR comment or review instead of an Actions check. When Greptile is
+   installed, require a **5/5 score for the current head commit** and zero
+   unresolved Greptile threads; do not accept a stale score from an older push.
+
+4. For each failure or actionable review comment:
+
+   - Read the full log or thread before changing code. For Actions failures,
+     use `gh run view <run-id> --log-failed` and reproduce the smallest relevant
+     command locally when possible.
+   - Fix the root cause, run the focused checks, commit, and push to the same PR
+     branch.
+   - Resolve a review thread only after its concern is addressed or clearly
+     explained as non-actionable.
+   - Restart this section from the remote-head verification step after every
+     push. Rerun a job without a code change only for a credible flaky or
+     external failure, never to hide a deterministic failure.
+
+The PR monitoring loop is complete only when:
+
+- every required CI and security check is successful or legitimately skipped;
+- there are no unresolved actionable human or bot review threads and no active
+  changes-requested review;
+- Greptile, when configured, reports 5/5 for the current head with zero
+  unresolved comments; and
+- the PR is mergeable.
+
+If credentials, an unavailable external service, or maintainer-only action
+prevents completion, report that concrete blocker instead of claiming the PR is
+ready. `CI.md` defines the agent workflow; it does not authorize a GitHub
+workflow to modify arbitrary contributor branches automatically.
+
+## 6) Optional extra confidence
 
 You may run `make check` as a final pass, but it is heavier (`test-full`) than the required harness.
 
-## 6) Interactive-shell turn tests
+## 7) Interactive-shell turn tests
 
 Interactive-shell live turn tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
 
@@ -137,7 +203,7 @@ In CI, [`.github/workflows/interactive-shell-live.yml`](.github/workflows/intera
 
 `@live` gather scenarios **fail** (not skip) in GitHub Actions when integration credentials are missing; locally they may still skip. Natural-language investigation dispatch is **enabled** by default (`INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True`). Investigation dispatch scenarios run in `turn-live`; if the flag is set to `False` for emergency rollback, those scenarios **skip** in live shards and `turn-checks` stays green. Require all `turn-checks` and `turn-live shard *` checks on `main` branch protection.
 
-## 7) CI-only tests
+## 8) CI-only tests
 
 Some paths require live infrastructure and are excluded from `make test-cov`:
 
