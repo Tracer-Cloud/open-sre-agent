@@ -6,19 +6,17 @@ import logging
 import threading
 import time
 
+from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.runtime.active_turns import (
-    USER_STOP_MESSAGE,
-    ActiveTurnCancels,
-    is_stop_command,
-)
+from gateway.core.runtime.active_turns import ActiveTurnCancels, is_stop_command
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.core.runtime.conversation_locks import ConversationLockRegistry
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
 from gateway.transports.slack.approvals import ThreadApprovalPrompter
 from gateway.transports.slack.client import (
@@ -46,7 +44,6 @@ _ROTATE_SESSION = "__ROTATE_SESSION__"
 
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
 _NEW_SESSION_REPLY = "Started a new session."
-_TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
 # UNAVAILABLE outcomes run the turn instead, so a misconfiguration or webapp
 # outage never masquerades to users as "out of credits".
@@ -285,30 +282,10 @@ class _SlackTurnDispatcher:
                 update_interval_seconds=self._settings.status_update_interval_seconds,
                 tool_hooks=approval_tool_hooks(prompter),
             )
-            outcome_lock = threading.Lock()
-            outcome_taken = False
-
-            def _claim_terminal_outcome() -> bool:
-                # The first of {timeout, error, normal completion} to claim owns
-                # the final message + reaction. This keeps a timed-out turn that
-                # later finishes from stacking a done tick over the timeout's
-                # cross, and stops a timeout racing an error from finalizing twice.
-                nonlocal outcome_taken
-                with outcome_lock:
-                    if outcome_taken:
-                        return False
-                    outcome_taken = True
-                    return True
-
-            turn_cancel = threading.Event()
-            sink.turn_cancel = turn_cancel
+            terminal = TerminalOutcomeArbiter()
+            sink.turn_cancel = terminal.cancel_event
 
             def _on_turn_timeout() -> None:
-                # Cooperative cancel stops the ReAct loop / remaining tools; the
-                # sink still needs an explicit finalize for the timeout UX copy.
-                turn_cancel.set()
-                if not _claim_terminal_outcome():
-                    return
                 self._logger.warning(
                     "[slack-gateway] turn TIMED OUT after %.0fs channel=%s session=%s",
                     self._settings.turn_timeout_seconds,
@@ -316,7 +293,7 @@ class _SlackTurnDispatcher:
                     session.session_id[:8],
                 )
                 try:
-                    sink.finalize(_TURN_TIMEOUT_MESSAGE)
+                    sink.finalize(TURN_TIMEOUT_MESSAGE)
                 except Exception:
                     self._logger.debug("[slack-gateway] timeout finalize failed", exc_info=True)
                 mark_turn_failed(
@@ -326,7 +303,7 @@ class _SlackTurnDispatcher:
                 )
 
             def _on_user_stop() -> None:
-                if not _claim_terminal_outcome():
+                if not terminal.claim():
                     return
                 try:
                     sink.finalize(USER_STOP_MESSAGE)
@@ -338,67 +315,66 @@ class _SlackTurnDispatcher:
                     timestamp=inbound.ts,
                 )
 
-            timer = threading.Timer(self._settings.turn_timeout_seconds, _on_turn_timeout)
-            timer.start()
-            try:
-                # Slack thread is the continuity source when the
-                # gateway session file is empty (redeploy / ephemeral disk).
-                if session_needs_thread_seed(inbound.text, is_reply=is_reply):
-                    seeded = seed_session_from_slack_thread(
-                        session,
-                        channel_id=inbound.channel_id,
-                        thread_ts=inbound.thread_ts,
-                        exclude_ts=inbound.ts,
-                        bot_user_id=self._bot_user_id,
-                    )
-                    if seeded:
-                        self._logger.info(
-                            "seeded session history from Slack thread msgs=%d",
-                            seeded,
+            with terminal.timeout_after(self._settings.turn_timeout_seconds, _on_turn_timeout):
+                try:
+                    # Slack thread is the continuity source when the
+                    # gateway session file is empty (redeploy / ephemeral disk).
+                    if session_needs_thread_seed(inbound.text, is_reply=is_reply):
+                        seeded = seed_session_from_slack_thread(
+                            session,
+                            channel_id=inbound.channel_id,
+                            thread_ts=inbound.thread_ts,
+                            exclude_ts=inbound.ts,
+                            bot_user_id=self._bot_user_id,
                         )
-                agent_text = _agent_text_with_slack_context(inbound)
-                if inbound.files and (
-                    files_context := _slack_files_context(inbound.files, self._logger)
-                ):
-                    agent_text = f"{agent_text}\n\n{files_context}"
-                with (
-                    self._active_cancels.track(
-                        inbound.conversation_key,
-                        turn_cancel,
-                        on_user_stop=_on_user_stop,
-                    ),
-                    bound_usage_context(
-                        surface=SURFACE_SLACK,
-                        session_id=session.session_id,
-                        user_id=inbound.user_id or None,
-                    ),
-                ):
-                    self._handler(agent_text, session, sink, self._logger)
-            except Exception:
-                self._logger.exception(
-                    "[slack-gateway] turn ERRORED after %.1fs channel=%s session=%s",
-                    time.monotonic() - turn_started,
-                    inbound.channel_id,
-                    session.session_id[:8],
-                )
-                # Replace the "Digging in…" placeholder with a visible error —
-                # otherwise a raised turn is indistinguishable from one still
-                # running (only the ✗ reaction changes). Skip if the timeout
-                # already owns the outcome.
-                if _claim_terminal_outcome():
-                    try:
-                        sink.render_error("Something went wrong on that request.")
-                    except Exception:
-                        self._logger.debug("[slack-gateway] error finalize failed", exc_info=True)
-                    mark_turn_failed(
-                        self._messaging,
-                        channel=inbound.channel_id,
-                        timestamp=inbound.ts,
+                        if seeded:
+                            self._logger.info(
+                                "seeded session history from Slack thread msgs=%d",
+                                seeded,
+                            )
+                    agent_text = _agent_text_with_slack_context(inbound)
+                    if inbound.files and (
+                        files_context := _slack_files_context(inbound.files, self._logger)
+                    ):
+                        agent_text = f"{agent_text}\n\n{files_context}"
+                    with (
+                        self._active_cancels.track(
+                            inbound.conversation_key,
+                            terminal.cancel_event,
+                            on_user_stop=_on_user_stop,
+                        ),
+                        bound_usage_context(
+                            surface=SURFACE_SLACK,
+                            session_id=session.session_id,
+                            user_id=inbound.user_id or None,
+                        ),
+                    ):
+                        self._handler(agent_text, session, sink, self._logger)
+                except Exception:
+                    self._logger.exception(
+                        "[slack-gateway] turn ERRORED after %.1fs channel=%s session=%s",
+                        time.monotonic() - turn_started,
+                        inbound.channel_id,
+                        session.session_id[:8],
                     )
-                raise
-            finally:
-                timer.cancel()
-            if _claim_terminal_outcome():
+                    # Replace the "Digging in…" placeholder with a visible error —
+                    # otherwise a raised turn is indistinguishable from one still
+                    # running (only the ✗ reaction changes). Skip if the timeout
+                    # already owns the outcome.
+                    if terminal.claim():
+                        try:
+                            sink.render_error(TURN_ERROR_MESSAGE)
+                        except Exception:
+                            self._logger.debug(
+                                "[slack-gateway] error finalize failed", exc_info=True
+                            )
+                        mark_turn_failed(
+                            self._messaging,
+                            channel=inbound.channel_id,
+                            timestamp=inbound.ts,
+                        )
+                    raise
+            if terminal.claim():
                 self._logger.info(
                     "[slack-gateway] turn done in %.1fs channel=%s session=%s",
                     time.monotonic() - turn_started,

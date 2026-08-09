@@ -16,8 +16,6 @@ from dataclasses import dataclass
 
 _STOP_TOKENS = frozenset({"/stop", "stop", "/cancel", "cancel"})
 
-USER_STOP_MESSAGE = "Stopped."
-
 
 @dataclass(slots=True)
 class _TrackedTurn:
@@ -76,7 +74,6 @@ def is_stop_command(text: str) -> bool:
 
 
 __all__ = [
-    "USER_STOP_MESSAGE",
     "ActiveTurnCancels",
     "is_stop_command",
 ]

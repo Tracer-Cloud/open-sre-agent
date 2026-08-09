@@ -7,19 +7,17 @@ import threading
 import time
 from contextlib import suppress
 
+from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.runtime.active_turns import (
-    USER_STOP_MESSAGE,
-    ActiveTurnCancels,
-    is_stop_command,
-)
+from gateway.core.runtime.active_turns import ActiveTurnCancels, is_stop_command
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.core.runtime.conversation_locks import ConversationLockRegistry
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
 from gateway.transports.discord.approvals import DiscordApprovalPrompter
 from gateway.transports.discord.client import add_reaction, remove_reaction, send_message
@@ -41,7 +39,6 @@ from platform.analytics.usage_context import SURFACE_DISCORD, bound_usage_contex
 
 _DENIAL_REPLY = "You're not authorized to use this bot. Ask an admin to add you."
 _NEW_SESSION_REPLY = "Started a new session."
-_TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
 _CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"
@@ -244,26 +241,12 @@ class DiscordTurnDispatcher:
                     )
                 ),
             )
-            outcome_lock = threading.Lock()
-            outcome_taken = False
-
-            def _claim_terminal_outcome() -> bool:
-                nonlocal outcome_taken
-                with outcome_lock:
-                    if outcome_taken:
-                        return False
-                    outcome_taken = True
-                    return True
-
-            turn_cancel = threading.Event()
-            sink.turn_cancel = turn_cancel
+            terminal = TerminalOutcomeArbiter()
+            sink.turn_cancel = terminal.cancel_event
 
             def _on_turn_timeout() -> None:
-                turn_cancel.set()
-                if not _claim_terminal_outcome():
-                    return
                 try:
-                    sink.finalize(_TURN_TIMEOUT_MESSAGE)
+                    sink.finalize(TURN_TIMEOUT_MESSAGE)
                 except Exception:
                     self._logger.debug("[discord-gateway] timeout finalize failed", exc_info=True)
                 remove_reaction(
@@ -280,7 +263,7 @@ class DiscordTurnDispatcher:
                 )
 
             def _on_user_stop() -> None:
-                if not _claim_terminal_outcome():
+                if not terminal.claim():
                     return
                 try:
                     sink.finalize(USER_STOP_MESSAGE)
@@ -299,60 +282,57 @@ class DiscordTurnDispatcher:
                     bot_token=self._bot_token,
                 )
 
-            timer = threading.Timer(self._settings.turn_timeout_seconds, _on_turn_timeout)
-            timer.start()
             turn_started = time.monotonic()
-            try:
-                if session_needs_thread_seed(inbound.text, is_reply=is_reply):
-                    seed_session_from_discord_thread(
-                        session,
-                        history=list(inbound.thread_history),
-                    )
-                agent_text = inbound.text
-                if inbound.attachments:
-                    from gateway.transports.discord.attachments import (
-                        build_discord_attachments_context,
-                    )
+            with terminal.timeout_after(self._settings.turn_timeout_seconds, _on_turn_timeout):
+                try:
+                    if session_needs_thread_seed(inbound.text, is_reply=is_reply):
+                        seed_session_from_discord_thread(
+                            session,
+                            history=list(inbound.thread_history),
+                        )
+                    agent_text = inbound.text
+                    if inbound.attachments:
+                        from gateway.transports.discord.attachments import (
+                            build_discord_attachments_context,
+                        )
 
-                    ctx = build_discord_attachments_context(
-                        inbound.attachments,
-                        bot_token=self._bot_token,
-                    )
-                    if ctx:
-                        agent_text = f"{agent_text}\n\n{ctx}"
-                with (
-                    self._active_cancels.track(
-                        inbound.conversation_key,
-                        turn_cancel,
-                        on_user_stop=_on_user_stop,
-                    ),
-                    bound_usage_context(
-                        surface=SURFACE_DISCORD,
-                        session_id=session.session_id,
-                        user_id=inbound.user_id or None,
-                    ),
-                ):
-                    self._handler(agent_text, session, sink, self._logger)
-            except Exception:
-                if _claim_terminal_outcome():
-                    with suppress(Exception):
-                        sink.render_error("Something went wrong on that request.")
-                    remove_reaction(
-                        channel_id=inbound.channel_id,
-                        message_id=inbound.message_id,
-                        emoji=_WORKING_EMOJI,
-                        bot_token=self._bot_token,
-                    )
-                    add_reaction(
-                        channel_id=inbound.channel_id,
-                        message_id=inbound.message_id,
-                        emoji=_FAILED_EMOJI,
-                        bot_token=self._bot_token,
-                    )
-                raise
-            finally:
-                timer.cancel()
-            if _claim_terminal_outcome():
+                        ctx = build_discord_attachments_context(
+                            inbound.attachments,
+                            bot_token=self._bot_token,
+                        )
+                        if ctx:
+                            agent_text = f"{agent_text}\n\n{ctx}"
+                    with (
+                        self._active_cancels.track(
+                            inbound.conversation_key,
+                            terminal.cancel_event,
+                            on_user_stop=_on_user_stop,
+                        ),
+                        bound_usage_context(
+                            surface=SURFACE_DISCORD,
+                            session_id=session.session_id,
+                            user_id=inbound.user_id or None,
+                        ),
+                    ):
+                        self._handler(agent_text, session, sink, self._logger)
+                except Exception:
+                    if terminal.claim():
+                        with suppress(Exception):
+                            sink.render_error(TURN_ERROR_MESSAGE)
+                        remove_reaction(
+                            channel_id=inbound.channel_id,
+                            message_id=inbound.message_id,
+                            emoji=_WORKING_EMOJI,
+                            bot_token=self._bot_token,
+                        )
+                        add_reaction(
+                            channel_id=inbound.channel_id,
+                            message_id=inbound.message_id,
+                            emoji=_FAILED_EMOJI,
+                            bot_token=self._bot_token,
+                        )
+                    raise
+            if terminal.claim():
                 remove_reaction(
                     channel_id=inbound.channel_id,
                     message_id=inbound.message_id,

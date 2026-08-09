@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from typing import Any
+
+import pytest
 
 from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
 
@@ -60,7 +61,7 @@ def test_timeout_requests_cancellation_and_claims_outcome() -> None:
 
 
 def test_completed_timeout_context_cancels_timer(
-    monkeypatch: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     timers: list[_FakeTimer] = []
 
