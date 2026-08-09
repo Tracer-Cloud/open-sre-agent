@@ -136,9 +136,10 @@ def test_slack_reseed_replaces_stale_session_history(monkeypatch: pytest.MonkeyP
     session = SessionCore()
     session.cli_agent_messages = [("assistant", "stale offer")]
 
-    assert thread_history.seed_session_from_slack_thread(
-        session, channel_id="C1", thread_ts="1.0"
-    ) == 1
+    assert (
+        thread_history.seed_session_from_slack_thread(session, channel_id="C1", thread_ts="1.0")
+        == 1
+    )
     assert session.cli_agent_messages == latest
 
 
