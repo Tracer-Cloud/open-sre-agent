@@ -28,6 +28,14 @@ def test_concurrent_feedback_entries_remain_distinct_json_lines(tmp_path: Path) 
         worker.join(_THREAD_TIMEOUT_SECONDS)
 
     assert all(not worker.is_alive() for worker in workers)
+    assert len(results) == 20
     assert all(results)
     entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert {entry["index"] for entry in entries} == set(range(20))
+
+
+def test_feedback_write_failure_is_contained(tmp_path: Path) -> None:
+    directory = tmp_path / "not-a-file"
+    directory.mkdir()
+
+    assert not append_feedback_entry({"verdict": "good"}, path=directory)
