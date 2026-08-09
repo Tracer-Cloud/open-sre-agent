@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
 
+from core.agent_harness.session import SessionCore
+from gateway.core.session import seed_session_history
 from integrations.slack.web_client import (
     fetch_channel_messages,
     resolve_bot_token,
@@ -90,7 +91,7 @@ def messages_from_slack_thread(
 
 
 def seed_session_from_slack_thread(
-    session: Any,
+    session: SessionCore,
     *,
     channel_id: str,
     thread_ts: str,
@@ -107,10 +108,7 @@ def seed_session_from_slack_thread(
         exclude_ts=exclude_ts,
         bot_user_id=bot_user_id,
     )
-    if not seeded:
-        return 0
-    session.cli_agent_messages = seeded
-    return len(seeded)
+    return seed_session_history(session, seeded, replace_existing=True)
 
 
 def _is_assistant_message(text: str, *, user: str, bot_user_id: str) -> bool:

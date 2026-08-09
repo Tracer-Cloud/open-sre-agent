@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness.session import SessionCore
+from gateway.core.session import seed_session_history
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +22,4 @@ def seed_session_from_discord_thread(
     history: list[tuple[str, str]],
 ) -> int:
     """Append prior thread messages as user/assistant pairs. Returns count added."""
-    if not history:
-        return 0
-    messages = list(getattr(session, "cli_agent_messages", []) or [])
-    if messages:
-        return 0
-    for role, content in history:
-        if not content.strip():
-            continue
-        messages.append({"role": role, "content": content})
-    session.cli_agent_messages = messages
-    return len(history)
+    return seed_session_history(session, history)
