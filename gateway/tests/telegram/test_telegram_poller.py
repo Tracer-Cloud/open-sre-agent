@@ -129,3 +129,61 @@ def test_poll_once_parses_callback_query(mock_get: MagicMock, mock_sleep: MagicM
     # Ensure getUpdates asked for callback_query updates.
     assert "callback_query" in mock_get.call_args.kwargs["params"]["allowed_updates"]
     mock_sleep.assert_not_called()
+
+
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
+def test_poll_once_redacts_token_from_transient_exception(
+    mock_get: MagicMock,
+    mock_sleep: MagicMock,
+    caplog: object,
+) -> None:
+    import logging
+
+    token = "123456:SECRET"
+
+    mock_get.side_effect = httpx.ConnectError(
+        f"Connection failed for https://api.telegram.org/bot{token}/getUpdates"
+    )
+
+    caplog.set_level(
+        logging.DEBUG,
+        logger="gateway.transports.telegram.poller.poller",
+    )
+
+    result = TelegramPoller(token).poll_once()
+
+    assert result == TelegramPollResult()
+    assert token not in caplog.text
+    assert f"/bot{token}/" not in caplog.text
+    assert "<redacted>" in caplog.text
+    mock_sleep.assert_called_once_with(2.0)
+
+
+@patch("gateway.transports.telegram.poller.poller.time.sleep")
+@patch("gateway.transports.telegram.poller.poller.httpx.get")
+def test_poll_once_redacts_token_from_error_response(
+    mock_get: MagicMock,
+    mock_sleep: MagicMock,
+    caplog: object,
+) -> None:
+    import logging
+
+    token = "123456:SECRET"
+
+    mock_get.return_value = httpx.Response(
+        500,
+        text=f"request failed: https://api.telegram.org/bot{token}/getUpdates",
+    )
+
+    caplog.set_level(
+        logging.DEBUG,
+        logger="gateway.transports.telegram.poller.poller",
+    )
+
+    TelegramPoller(token).poll_once()
+
+    assert token not in caplog.text
+    assert f"/bot{token}/" not in caplog.text
+    assert "<redacted>" in caplog.text
+    mock_sleep.assert_called_once_with(2.0)

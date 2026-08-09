@@ -33,3 +33,24 @@ def test_send_message_success_with_mapping_proxy_data(mock_post: MagicMock) -> N
     assert ok is True
     assert error == ""
     assert message_id == "42"
+
+
+@patch("gateway.transports.telegram.poller.client.post_json")
+def test_client_redacts_token_from_transport_error(mock_post: MagicMock) -> None:
+    token = "123456:SECRET"
+
+    mock_post.return_value = DeliveryResponse(
+        ok=False,
+        error=(f"ConnectError: https://api.telegram.org/bot{token}/sendMessage"),
+        exc_type="ConnectError",
+    )
+
+    client = TelegramBotClient(token)
+
+    ok, error, message_id = client.send_message("123", "hello")
+
+    assert ok is False
+    assert message_id == ""
+    assert token not in error
+    assert f"/bot{token}/" not in error
+    assert "<redacted>" in error
