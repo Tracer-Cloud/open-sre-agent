@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from tests.benchmarks.orcabench.config import BenchmarkSettings, RuntimeSettings
+from tests.benchmarks.orcabench.config import (
+    BenchmarkSettings,
+    ModelSettings,
+    RuntimeSettings,
+)
 
 
 def _config_path() -> Path:
@@ -14,6 +18,10 @@ def _config_path() -> Path:
 
 def _openrouter_config_path() -> Path:
     return Path(__file__).resolve().parents[1] / "configs/openrouter_smoke_one_task.yml"
+
+
+def _nvidia_config_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "configs/nvidia_smoke_one_task.yml"
 
 
 def test_checked_in_config_is_native_and_model_route_is_explicit() -> None:
@@ -38,15 +46,22 @@ def test_openrouter_config_is_an_unverified_smoke_profile() -> None:
     settings = BenchmarkSettings.from_yaml(_openrouter_config_path())
 
     assert settings.profile == "smoke"
-    assert (
-        settings.model.harbor_model
-        == "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
-    )
-    assert settings.model.opensre_model == "nvidia/nemotron-3-super-120b-a12b:free"
+    assert settings.model.harbor_model == "openrouter/openrouter/free"
+    assert settings.model.opensre_model == "openrouter/free"
     assert settings.model.max_tokens == 16384
     assert settings.model.required_environment_names == ("OPENROUTER_API_KEY",)
     assert not settings.verifier.enabled
     assert settings.verifier.required_environment_names == ()
+
+
+def test_nvidia_config_uses_native_glm_route_without_changing_other_routes() -> None:
+    settings = BenchmarkSettings.from_yaml(_nvidia_config_path())
+
+    assert settings.profile == "smoke"
+    assert settings.model.harbor_model == "nvidia/z-ai/glm-5.2"
+    assert settings.model.opensre_model == "z-ai/glm-5.2"
+    assert settings.model.required_environment_names == ("NVIDIA_API_KEY",)
+    assert not settings.verifier.enabled
 
 
 def test_smoke_profile_rejects_enabled_verifier() -> None:
@@ -55,6 +70,11 @@ def test_smoke_profile_rejects_enabled_verifier() -> None:
 
     with pytest.raises(ValidationError, match="must disable ORCA verification"):
         BenchmarkSettings.model_validate(raw)
+
+
+def test_openrouter_rejects_harbor_route_that_becomes_bare_model_name() -> None:
+    with pytest.raises(ValidationError, match="owner/model"):
+        ModelSettings(harbor_model="openrouter/free", provider="openrouter")
 
 
 def test_config_rejects_unknown_fields() -> None:

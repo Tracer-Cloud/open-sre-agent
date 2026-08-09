@@ -3,8 +3,8 @@ profile: smoke
 mode: native
 
 model:
-  harbor_model: openrouter/openrouter/free
-  provider: openrouter
+  harbor_model: nvidia/z-ai/glm-5.2
+  provider: nvidia
   transport: sdk
   reasoning_effort: medium
   max_tokens: 16384

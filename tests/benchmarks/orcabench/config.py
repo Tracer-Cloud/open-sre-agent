@@ -35,6 +35,11 @@ PROVIDER_ROUTES = {
         environment_prefix="OPENROUTER",
         api_key_env="OPENROUTER_API_KEY",
     ),
+    "nvidia": ProviderRoute(
+        harbor_prefix="nvidia/",
+        environment_prefix="NVIDIA",
+        api_key_env="NVIDIA_API_KEY",
+    ),
 }
 
 
@@ -48,7 +53,7 @@ class ModelSettings(StrictFrozenModel):
     """OpenSRE's native LLM route for this experiment."""
 
     harbor_model: str = "gradient_ai/openai-gpt-5.5"
-    provider: Literal["openai", "openrouter"] = "openai"
+    provider: Literal["openai", "openrouter", "nvidia"] = "openai"
     transport: Literal["sdk"] = "sdk"
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     max_tokens: int = Field(default=16384, ge=1)
@@ -82,8 +87,8 @@ class ModelSettings(StrictFrozenModel):
         model = self.opensre_model
         if self.provider == "openai" and not model.startswith("openai-"):
             raise ValueError("Gradient AI route must identify an OpenAI model")
-        if self.provider == "openrouter" and "/" not in model:
-            raise ValueError("OpenRouter model must use an owner/model identifier")
+        if self.provider in {"openrouter", "nvidia"} and "/" not in model:
+            raise ValueError(f"{self.provider} model must use an owner/model identifier")
         return self
 
 

@@ -97,6 +97,18 @@ def test_openrouter_environment_uses_provider_specific_model_names() -> None:
     assert all(not name.startswith("OPENAI_") for name in values)
 
 
+def test_nvidia_environment_uses_existing_native_provider_contract() -> None:
+    values = native_environment_values(
+        ModelSettings(harbor_model="nvidia/z-ai/glm-5.2", provider="nvidia")
+    )
+
+    assert values["LLM_PROVIDER"] == "nvidia"
+    assert values["NVIDIA_REASONING_MODEL"] == "z-ai/glm-5.2"
+    assert values["NVIDIA_CLASSIFICATION_MODEL"] == "z-ai/glm-5.2"
+    assert values["NVIDIA_TOOLCALL_MODEL"] == "z-ai/glm-5.2"
+    assert values["LLM_MAX_TOKENS"] == "16384"
+
+
 def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(
     monkeypatch,
 ) -> None:
