@@ -7,6 +7,9 @@ from pathlib import Path
 from tests.benchmarks.orcabench.config import GrafanaSettings, ModelSettings
 from tests.benchmarks.orcabench.execution.environment import native_environment_values
 from tests.benchmarks.orcabench.execution.native_connection import OrcaNativeConnections
+from tests.benchmarks.orcabench.execution.native_investigation import (
+    NativeInvestigationRunner,
+)
 from tests.benchmarks.orcabench.execution.native_report import NativeReportPolicy
 
 
@@ -80,17 +83,59 @@ def test_native_connections_contain_telemetry_and_scoped_source_only(tmp_path: P
 def test_openrouter_environment_uses_provider_specific_model_names() -> None:
     values = native_environment_values(
         ModelSettings(
-            harbor_model="openrouter/openrouter/free",
+            harbor_model="openrouter/nvidia/nemotron-3-super-120b-a12b:free",
             provider="openrouter",
         )
     )
 
     assert values["LLM_PROVIDER"] == "openrouter"
-    assert values["OPENROUTER_REASONING_MODEL"] == "openrouter/free"
-    assert values["OPENROUTER_CLASSIFICATION_MODEL"] == "openrouter/free"
-    assert values["OPENROUTER_TOOLCALL_MODEL"] == "openrouter/free"
+    expected_model = "nvidia/nemotron-3-super-120b-a12b:free"
+    assert values["OPENROUTER_REASONING_MODEL"] == expected_model
+    assert values["OPENROUTER_CLASSIFICATION_MODEL"] == expected_model
+    assert values["OPENROUTER_TOOLCALL_MODEL"] == expected_model
     assert values["LLM_MAX_TOKENS"] == "16384"
     assert all(not name.startswith("OPENAI_") for name in values)
+
+
+def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(
+    monkeypatch,
+) -> None:
+    import tools.investigation.capability as capability
+
+    captured: dict[str, object] = {}
+
+    def fake_run_investigation(alert, **kwargs):
+        captured["alert"] = alert
+        captured.update(kwargs)
+        return {"root_cause": "test"}
+
+    monkeypatch.setattr(capability, "run_investigation", fake_run_investigation)
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.ui.output.boundary.install_harness_ports",
+        lambda: None,
+    )
+    alert = {
+        "alert_source": "opensre_dataset",
+        "_meta": {"orca_investigation_guidance": "There may be no root cause."},
+    }
+
+    result = NativeInvestigationRunner().investigate(alert, {}, {"since": "start"})
+
+    assert result == {"root_cause": "test"}
+    assert captured["alert"] == alert
+    assert captured["resolved_integrations"] == {}
+    assert captured["incident_window"] == {"since": "start"}
+    agent_class = captured["agent_class"]
+    assert isinstance(agent_class, type)
+    prompt = agent_class()._build_system_prompt({"raw_alert": alert})
+    assert "## ORCA task guidance" in prompt
+    assert "There may be no root cause." in prompt
+    from integrations.grafana.tools import query_grafana_metrics
+
+    native_tool = query_grafana_metrics.__opensre_registered_tool__
+    [orca_tool] = agent_class()._filter_tools([native_tool])
+    assert "time_bounds" in orca_tool.public_input_schema["properties"]
+    assert "time_bounds" not in native_tool.public_input_schema["properties"]
 
 
 def test_native_report_policy_preserves_exact_utf8_bytes(tmp_path: Path) -> None:

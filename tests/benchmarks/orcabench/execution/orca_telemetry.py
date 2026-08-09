@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
 
+from core.domain.types.retrieval import TimeBounds
+
 
 def _unix_seconds(value: str) -> float:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+
+_RELATIVE_TIME_RE = re.compile(r"^-(?P<amount>\d+)(?P<unit>[mhd])$")
+
+
+def _iso_utc(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 class OrcaTelemetryBackend:
@@ -40,6 +50,51 @@ class OrcaTelemetryBackend:
         self._end_seconds = _unix_seconds(end_time)
         self._session = session or requests.Session()
 
+    def _query_window(
+        self,
+        time_bounds: dict[str, Any] | TimeBounds | None,
+    ) -> tuple[str, str, float, float]:
+        """Resolve OpenSRE's native time controls against ORCA's simulated clock."""
+        if time_bounds is None:
+            return self._start, self._end, self._start_seconds, self._end_seconds
+
+        bounds = TimeBounds.model_validate(time_bounds)
+        end = self._resolve_time(bounds.end_time, anchor=self._end)
+        if bounds.start_time:
+            start = self._resolve_time(bounds.start_time, anchor=_iso_utc(end))
+        elif bounds.lookback_minutes is not None:
+            start = end - timedelta(minutes=bounds.lookback_minutes)
+        else:
+            default_span = timedelta(seconds=self._end_seconds - self._start_seconds)
+            start = end - default_span
+
+        current = datetime.fromtimestamp(self._end_seconds, tz=UTC)
+        if end > current:
+            raise ValueError(
+                "Telemetry time bounds cannot extend past ORCA's simulated current time"
+            )
+        if start > end:
+            raise ValueError("Telemetry time bounds require start_time <= end_time")
+        return _iso_utc(start), _iso_utc(end), start.timestamp(), end.timestamp()
+
+    @staticmethod
+    def _resolve_time(value: str | None, *, anchor: str) -> datetime:
+        if value is None or value == "now":
+            return datetime.fromisoformat(anchor.replace("Z", "+00:00")).astimezone(UTC)
+        relative = _RELATIVE_TIME_RE.fullmatch(value)
+        if relative:
+            amount = int(relative.group("amount"))
+            delta = {
+                "m": timedelta(minutes=amount),
+                "h": timedelta(hours=amount),
+                "d": timedelta(days=amount),
+            }[relative.group("unit")]
+            return datetime.fromisoformat(anchor.replace("Z", "+00:00")).astimezone(UTC) - delta
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+
     def _url(self, uid: str, path: str) -> str:
         return f"{self._endpoint}/api/datasources/proxy/uid/{uid}{path}"
 
@@ -65,15 +120,22 @@ class OrcaTelemetryBackend:
         response.raise_for_status()
         return response.json()
 
-    def query_timeseries(self, query: str = "", **_: Any) -> dict[str, Any]:
+    def query_timeseries(
+        self,
+        query: str = "",
+        *,
+        time_bounds: dict[str, Any] | TimeBounds | None = None,
+        **_: Any,
+    ) -> dict[str, Any]:
         """Execute a bounded Prometheus range query at the task's simulated time."""
+        _start, _end, start_seconds, end_seconds = self._query_window(time_bounds)
         return self._get(
             self.METRICS_UID,
             "/api/v1/query_range",
             params={
                 "query": query,
-                "start": self._start_seconds,
-                "end": self._end_seconds,
+                "start": start_seconds,
+                "end": end_seconds,
                 "step": 60,
             },
         )
@@ -83,6 +145,7 @@ class OrcaTelemetryBackend:
         service_name: str = "",
         *,
         limit: int = 20,
+        time_bounds: dict[str, Any] | TimeBounds | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         """Search bounded OpenSearch log documents and return a Loki-compatible shape."""
@@ -91,8 +154,9 @@ class OrcaTelemetryBackend:
                 "status": "success",
                 "data": {"resultType": "streams", "result": []},
             }
+        start, end, _start_seconds, _end_seconds = self._query_window(time_bounds)
         filters: list[dict[str, Any]] = [
-            {"range": {"@timestamp": {"gte": self._start, "lte": self._end}}}
+            {"range": {"@timestamp": {"gte": start, "lte": end}}}
         ]
         filters.append({"term": {"resource.service.name.keyword": service_name}})
         effective_limit = max(1, limit)
@@ -193,11 +257,13 @@ class OrcaTelemetryBackend:
         *,
         tags: list[str] | None = None,
         limit: int = 100,
+        time_bounds: dict[str, Any] | TimeBounds | None = None,
     ) -> list[dict[str, Any]]:
         """Query Grafana annotations using the same explicit task window."""
+        _start, _end, start_seconds, end_seconds = self._query_window(time_bounds)
         params: list[tuple[str, Any]] = [
-            ("from", int(self._start_seconds * 1000)),
-            ("to", int(self._end_seconds * 1000)),
+            ("from", int(start_seconds * 1000)),
+            ("to", int(end_seconds * 1000)),
             ("limit", limit),
         ]
         params.extend(("tags", tag) for tag in tags or [])
@@ -209,26 +275,28 @@ class OrcaTelemetryBackend:
         service_name: str = "",
         *,
         limit: int = 20,
+        time_bounds: dict[str, Any] | TimeBounds | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         """Query bounded Jaeger traces for a concrete service."""
         if not service_name:
             return {"traces": [], "metrics": {}, "query_window": self.query_window}
+        start, end, start_seconds, end_seconds = self._query_window(time_bounds)
         effective_limit = max(1, limit)
         payload = self._get(
             self.TRACES_UID,
             "/api/traces",
             params={
                 "service": service_name,
-                "start": int(self._start_seconds * 1_000_000),
-                "end": int(self._end_seconds * 1_000_000),
+                "start": int(start_seconds * 1_000_000),
+                "end": int(end_seconds * 1_000_000),
                 "limit": effective_limit,
             },
         )
         return {
             "traces": payload.get("data", []),
             "metrics": {},
-            "query_window": self.query_window,
+            "query_window": {"start": start, "end": end},
         }
 
     def probe(self) -> dict[str, Any]:
@@ -240,11 +308,26 @@ class OrcaTelemetryBackend:
             else (services[0] if services else "")
         )
         traces = self.query_traces(trace_service, limit=1) if trace_service else {"traces": []}
+        historical_bounds = {"lookback_minutes": 1440}
+        historical_metrics = self.query_timeseries(
+            "count(up)",
+            time_bounds=historical_bounds,
+        )
+        historical_start, historical_end, _start_seconds, _end_seconds = (
+            self._query_window(historical_bounds)
+        )
         return {
             "query_window": self.query_window,
             "service_count": len(services),
             "trace_service": trace_service,
             "trace_count": len(traces.get("traces", [])),
+            "historical_query_window": {
+                "start": historical_start,
+                "end": historical_end,
+            },
+            "historical_metric_series_count": len(
+                historical_metrics.get("data", {}).get("result", [])
+            ),
         }
 
     @property

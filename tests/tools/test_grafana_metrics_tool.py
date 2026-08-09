@@ -55,6 +55,23 @@ def test_run_with_backend() -> None:
     assert result["total_series"] == 1
 
 
+def test_backend_query_exposes_and_forwards_native_time_bounds() -> None:
+    rt = query_grafana_metrics.__opensre_registered_tool__
+    time_bounds = {
+        "start_time": "2026-04-20T15:00:00Z",
+        "end_time": "2026-04-20T16:00:00Z",
+    }
+    backend = MagicMock()
+    backend.query_timeseries.return_value = {"data": {"result": []}}
+    query_grafana_metrics(
+        metric_name="up",
+        time_bounds=time_bounds,
+        grafana_backend=backend,
+    )
+
+    backend.query_timeseries.assert_called_once_with(query="up", time_bounds=time_bounds)
+
+
 def test_rds_storage_fixture_metrics_have_compact_summaries() -> None:
     fixture = load_scenario(SUITE_DIR / "003-storage-full")
     backend = FixtureGrafanaBackend(fixture)

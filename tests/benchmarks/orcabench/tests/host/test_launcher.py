@@ -65,7 +65,10 @@ def test_openrouter_smoke_command_uses_its_key_and_disables_verification(
         snapshot_cache=tmp_path / "snapshot",
     )
 
-    assert command[command.index("--model") + 1] == "openrouter/openrouter/free"
+    assert (
+        command[command.index("--model") + 1]
+        == "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
+    )
     assert "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}" in command
     assert "--disable-verification" in command
     assert "--verifier-env" not in command

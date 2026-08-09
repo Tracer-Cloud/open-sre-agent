@@ -125,6 +125,24 @@ def test_run_with_injected_backend() -> None:
     backend.query_traces.assert_called_once_with(service_name="svc", limit=20)
 
 
+def test_backend_query_exposes_and_forwards_native_time_bounds() -> None:
+    time_bounds = {"lookback_minutes": 1440}
+
+    backend = MagicMock()
+    backend.query_traces.return_value = {"traces": []}
+    query_grafana_traces(
+        service_name="svc",
+        time_bounds=time_bounds,
+        grafana_backend=backend,
+    )
+
+    backend.query_traces.assert_called_once_with(
+        service_name="svc",
+        limit=20,
+        time_bounds=time_bounds,
+    )
+
+
 def test_run_with_injected_backend_empty_traces() -> None:
     backend = MagicMock()
     backend.query_traces.return_value = {"traces": [], "metrics": {}}

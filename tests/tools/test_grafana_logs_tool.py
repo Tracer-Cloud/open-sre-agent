@@ -115,6 +115,24 @@ def test_run_with_backend_returns_logs() -> None:
     }
 
 
+def test_backend_query_exposes_and_forwards_native_time_bounds() -> None:
+    time_bounds = {"lookback_minutes": 1440}
+
+    backend = MagicMock()
+    backend.query_logs.return_value = {"data": {"result": []}}
+    query_grafana_logs(
+        service_name="svc",
+        time_bounds=time_bounds,
+        grafana_backend=backend,
+    )
+
+    backend.query_logs.assert_called_once_with(
+        service_name="svc",
+        limit=100,
+        time_bounds=time_bounds,
+    )
+
+
 def test_run_returns_unavailable_when_no_client() -> None:
     mock_client = MagicMock()
     mock_client.is_configured = False

@@ -147,6 +147,20 @@ def test_run_backend_forwards_tags_and_limit() -> None:
     mock_backend.query_annotations.assert_called_once_with(tags=["deployment"], limit=50)
 
 
+def test_backend_query_exposes_and_forwards_native_time_bounds() -> None:
+    time_bounds = {"lookback_minutes": 1440}
+
+    backend = MagicMock()
+    backend.query_annotations.return_value = []
+    query_grafana_annotations(time_bounds=time_bounds, grafana_backend=backend)
+
+    backend.query_annotations.assert_called_once_with(
+        tags=None,
+        limit=100,
+        time_bounds=time_bounds,
+    )
+
+
 def test_extract_params_surfaces_basic_auth() -> None:
     rt = query_grafana_annotations.__opensre_registered_tool__
     sources = mock_agent_state({"grafana": {"username": "admin", "password": "secret"}})

@@ -38,8 +38,11 @@ def test_openrouter_config_is_an_unverified_smoke_profile() -> None:
     settings = BenchmarkSettings.from_yaml(_openrouter_config_path())
 
     assert settings.profile == "smoke"
-    assert settings.model.harbor_model == "openrouter/openrouter/free"
-    assert settings.model.opensre_model == "openrouter/free"
+    assert (
+        settings.model.harbor_model
+        == "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
+    )
+    assert settings.model.opensre_model == "nvidia/nemotron-3-super-120b-a12b:free"
     assert settings.model.max_tokens == 16384
     assert settings.model.required_environment_names == ("OPENROUTER_API_KEY",)
     assert not settings.verifier.enabled

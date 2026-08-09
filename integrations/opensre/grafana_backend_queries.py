@@ -20,9 +20,11 @@ def query_logs_from_backend(
     service_name: str,
     execution_run_id: str | None = None,
     limit: int = 100,
+    time_bounds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a Loki-shaped payload from an injected Grafana backend."""
-    raw = backend.query_logs(service_name=service_name, limit=limit)
+    time_kwargs = {"time_bounds": time_bounds} if time_bounds is not None else {}
+    raw = backend.query_logs(service_name=service_name, limit=limit, **time_kwargs)
     logs: list[dict[str, Any]] = []
     for stream in raw.get("data", {}).get("result", []):
         stream_labels = stream.get("stream", {})
@@ -64,9 +66,11 @@ def query_metrics_from_backend(
     *,
     metric_name: str = "",
     service_name: str | None = None,
+    time_bounds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a Mimir-shaped payload from an injected Grafana backend."""
-    raw = backend.query_timeseries(query=metric_name)
+    time_kwargs = {"time_bounds": time_bounds} if time_bounds is not None else {}
+    raw = backend.query_timeseries(query=metric_name, **time_kwargs)
     metrics = raw.get("data", {}).get("result", [])
     return {
         "source": "grafana_mimir",
@@ -84,10 +88,12 @@ def query_traces_from_backend(
     service_name: str,
     execution_run_id: str | None = None,
     limit: int = 20,
+    time_bounds: dict[str, Any] | None = None,
     extract_pipeline_spans: Any | None = None,
 ) -> dict[str, Any]:
     """Return a Tempo-shaped payload from an injected Grafana backend."""
-    raw = backend.query_traces(service_name=service_name, limit=limit)
+    time_kwargs = {"time_bounds": time_bounds} if time_bounds is not None else {}
+    raw = backend.query_traces(service_name=service_name, limit=limit, **time_kwargs)
     traces = raw.get("traces", [])
     if execution_run_id and traces:
         filtered = [

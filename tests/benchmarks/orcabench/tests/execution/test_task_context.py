@@ -6,6 +6,9 @@ import pytest
 
 from tests.benchmarks.orcabench.config import GrafanaSettings
 from tests.benchmarks.orcabench.execution.native_connection import OrcaNativeConnections
+from tests.benchmarks.orcabench.execution.native_investigation import (
+    _build_orca_investigation_system_prompt,
+)
 from tests.benchmarks.orcabench.execution.task_context import parse_orca_task_context
 from tools.investigation.stages.gather_evidence.tools import (
     build_seed_calls,
@@ -24,7 +27,10 @@ def _orca_instruction(issue: str = "users are reporting site issues") -> str:
         "The following issue was reported at 9:00 AM today ET:\n\n"
         f"{issue}\n\n"
         "NOTE:\n"
-        "* The report time may differ from the incident time.\n\n"
+        "* The time that an issue was reported is not necessarily the same as "
+        "the time the incident actually began. Your task is to pinpoint the root "
+        "cause events and the times of their occurrence.\n"
+        "* There may be multiple root causes or no root cause at all.\n\n"
         "## Telemetry Tools\n\n"
         "Use the Grafana HTTP API.\n"
     )
@@ -44,11 +50,36 @@ def test_parses_standard_orca_current_time_and_builds_historical_window() -> Non
     }
     assert context.investigation_alert() == {
         "alert_source": "opensre_dataset",
+        "_meta": {
+            "orca_investigation_guidance": (
+                "The time that an issue was reported is not necessarily the same as "
+                "the time the incident actually began. Your task is to pinpoint the "
+                "root cause events and the times of their occurrence.\n"
+                "There may be multiple root causes or no root cause at all."
+            ),
+        },
         "commonAnnotations": {
             "summary": "users are reporting site issues",
             "context_sources": "grafana,local_source",
         },
     }
+
+
+def test_orca_investigation_guidance_reaches_native_agent_context() -> None:
+    context = parse_orca_task_context(_orca_instruction())
+    state = dict(
+        make_initial_state(
+            context.investigation_alert(),
+            incident_window=context.incident_window(),
+        )
+    )
+
+    prompt = _build_orca_investigation_system_prompt(state)
+
+    assert "## ORCA task guidance" in prompt
+    assert "The time that an issue was reported" in prompt
+    assert "There may be multiple root causes or no root cause at all." in prompt
+    assert "Use the Grafana HTTP API" not in prompt
 
 
 def test_rejects_missing_current_time_instead_of_using_host_clock() -> None:

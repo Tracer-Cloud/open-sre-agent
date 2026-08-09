@@ -3,7 +3,7 @@ profile: smoke
 mode: native
 
 model:
-  harbor_model: openrouter/openrouter/free
+  harbor_model: openrouter/nvidia/nemotron-3-super-120b-a12b:free
   provider: openrouter
   transport: sdk
   reasoning_effort: medium

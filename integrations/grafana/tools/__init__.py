@@ -220,6 +220,7 @@ def query_grafana_annotations(
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
+    time_bounds: dict[str, Any] | None = None,
     **_kwargs: Any,
 ) -> dict:
     """Query Grafana annotations to correlate deploys/config changes with an incident.
@@ -229,7 +230,18 @@ def query_grafana_annotations(
     When absent, the window defaults to the last ``time_range_minutes``.
     """
     if grafana_backend is not None:
-        raw = grafana_backend.query_annotations(tags=tags, limit=limit)
+        backend_time_bounds = time_bounds
+        if backend_time_bounds is None and (_kwargs.get("from") or _kwargs.get("to")):
+            backend_time_bounds = {
+                "start_time": _kwargs.get("from"),
+                "end_time": _kwargs.get("to"),
+            }
+        time_kwargs = (
+            {"time_bounds": backend_time_bounds}
+            if backend_time_bounds is not None
+            else {}
+        )
+        raw = grafana_backend.query_annotations(tags=tags, limit=limit, **time_kwargs)
         annotations = _normalize_backend_annotations(raw)
         return {
             "source": "grafana_annotations",
@@ -420,6 +432,7 @@ def query_grafana_logs(
     grafana_ca_bundle: str = "",
     pipeline_name: str | None = None,
     grafana_backend: Any = None,
+    time_bounds: dict[str, Any] | None = None,
     **_kwargs: Any,
 ) -> dict:
     """Query Grafana Loki for pipeline logs.
@@ -434,6 +447,7 @@ def query_grafana_logs(
             service_name=service_name,
             execution_run_id=execution_run_id,
             limit=limit,
+            time_bounds=time_bounds,
         )
 
     client = _resolve_grafana_client(
@@ -594,6 +608,7 @@ def query_grafana_metrics(
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
+    time_bounds: dict[str, Any] | None = None,
     **_kwargs: Any,
 ) -> dict:
     """Query Grafana Cloud Mimir for pipeline metrics."""
@@ -602,6 +617,7 @@ def query_grafana_metrics(
             grafana_backend,
             metric_name=metric_name,
             service_name=service_name,
+            time_bounds=time_bounds,
         )
 
     client = _resolve_grafana_client(
@@ -786,6 +802,7 @@ def query_grafana_traces(
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
+    time_bounds: dict[str, Any] | None = None,
     **_kwargs: Any,
 ) -> dict:
     """Query Grafana Cloud Tempo for pipeline traces."""
@@ -795,6 +812,7 @@ def query_grafana_traces(
             service_name=service_name,
             execution_run_id=execution_run_id,
             limit=limit,
+            time_bounds=time_bounds,
             extract_pipeline_spans=_extract_pipeline_spans,
         )
 

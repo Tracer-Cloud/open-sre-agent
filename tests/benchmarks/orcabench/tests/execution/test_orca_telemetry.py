@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from tests.benchmarks.orcabench.execution.orca_telemetry import OrcaTelemetryBackend
 
 
@@ -101,6 +103,81 @@ def test_prometheus_and_jaeger_calls_use_explicit_april_bounds() -> None:
     assert trace_params["limit"] == 7
 
 
+def test_model_selected_historical_bounds_reach_all_telemetry_backends() -> None:
+    session = _Session()
+    backend = _backend(session)
+    historical = {
+        "start_time": "2026-04-20T15:00:00Z",
+        "end_time": "2026-04-20T16:00:00Z",
+    }
+
+    backend.query_timeseries("up", time_bounds=historical)
+    backend.query_logs("checkout", time_bounds=historical)
+    backend.query_annotations(time_bounds=historical)
+    traces = backend.query_traces("checkout", time_bounds=historical)
+
+    metric_params = session.get_calls[0][1]["params"]
+    assert metric_params["start"] == 1776697200.0
+    assert metric_params["end"] == 1776700800.0
+    log_range = session.post_calls[0][1]["json"]["query"]["bool"]["filter"][0]["range"]
+    assert log_range == {
+        "@timestamp": {
+            "gte": "2026-04-20T15:00:00Z",
+            "lte": "2026-04-20T16:00:00Z",
+        }
+    }
+    annotation_params = session.get_calls[1][1]["params"]
+    assert annotation_params[:2] == [
+        ("from", 1776697200000),
+        ("to", 1776700800000),
+    ]
+    trace_params = session.get_calls[2][1]["params"]
+    assert trace_params["start"] == 1776697200000000
+    assert trace_params["end"] == 1776700800000000
+    assert traces["query_window"] == {
+        "start": "2026-04-20T15:00:00Z",
+        "end": "2026-04-20T16:00:00Z",
+    }
+
+
+def test_day_lookback_is_anchored_to_simulated_current_time() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    backend.query_timeseries("up", time_bounds={"lookback_minutes": 1440})
+
+    params = session.get_calls[0][1]["params"]
+    assert params["start"] == 1776690000.0
+    assert params["end"] == 1776776400.0
+
+
+def test_end_only_preserves_the_default_window_width() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    backend.query_timeseries(
+        "up",
+        time_bounds={"end_time": "2026-04-20T16:00:00Z"},
+    )
+
+    params = session.get_calls[0][1]["params"]
+    assert params["start"] == 1776693600.0
+    assert params["end"] == 1776700800.0
+
+
+def test_model_selected_bounds_cannot_read_past_simulated_current_time() -> None:
+    backend = _backend(_Session())
+
+    with pytest.raises(ValueError, match="simulated current time"):
+        backend.query_timeseries(
+            "up",
+            time_bounds={
+                "start_time": "2026-04-21T13:00:00Z",
+                "end_time": "2026-04-21T14:00:00Z",
+            },
+        )
+
+
 def test_empty_trace_service_does_not_guess_a_service() -> None:
     session = _Session()
     backend = _backend(session)
@@ -126,9 +203,20 @@ def test_probe_records_compact_bounded_jaeger_evidence() -> None:
         "service_count": 2,
         "trace_service": "checkout",
         "trace_count": 1,
+        "historical_query_window": {
+            "start": "2026-04-20T13:00:00Z",
+            "end": "2026-04-21T13:00:00Z",
+        },
+        "historical_metric_series_count": 1,
     }
     assert session.get_calls[0][1]["params"]["service"] == "checkout"
     assert session.get_calls[0][1]["params"]["limit"] == 1
+    assert session.get_calls[1][1]["params"] == {
+        "query": "count(up)",
+        "start": 1776690000.0,
+        "end": 1776776400.0,
+        "step": 60,
+    }
 
 
 def test_opensearch_call_filters_the_same_window_and_maps_log_results() -> None:

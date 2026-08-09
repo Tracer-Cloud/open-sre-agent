@@ -25,6 +25,10 @@ _REPORTED_ISSUE_RE = re.compile(
     r"(?P<issue>.*?)(?=^NOTE:[ \t]*$)",
     re.MULTILINE | re.DOTALL,
 )
+_NOTE_BULLET_RE = re.compile(
+    r"^\*\s+(?P<body>.*?)(?=^\*\s+|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,7 @@ class OrcaTaskContext:
 
     current_time: datetime
     reported_issue: str
+    investigation_guidance: str
 
     def incident_window(self, *, lookback_minutes: int = 120) -> dict[str, object]:
         """Return OpenSRE's generic serialized historical investigation window."""
@@ -55,6 +60,9 @@ class OrcaTaskContext:
         """
         return {
             "alert_source": "opensre_dataset",
+            "_meta": {
+                "orca_investigation_guidance": self.investigation_guidance,
+            },
             "commonAnnotations": {
                 "summary": self.reported_issue,
                 "context_sources": "grafana,local_source",
@@ -80,6 +88,20 @@ def _reported_issue(instruction: str) -> str:
     return issue
 
 
+def _investigation_guidance(instruction: str) -> str:
+    task_description = _markdown_section(instruction, "Task Description")
+    _, separator, note = task_description.partition("NOTE:")
+    if not separator:
+        raise ValueError("ORCA task description is missing its NOTE guidance")
+    bullets = [
+        " ".join(match.group("body").split())
+        for match in _NOTE_BULLET_RE.finditer(note)
+    ]
+    if not bullets:
+        raise ValueError("ORCA task description contains empty NOTE guidance")
+    return "\n".join(bullets)
+
+
 def parse_orca_task_context(instruction: str) -> OrcaTaskContext:
     """Parse ORCA's standardized simulated current-time sentence.
 
@@ -103,4 +125,5 @@ def parse_orca_task_context(instruction: str) -> OrcaTaskContext:
     return OrcaTaskContext(
         current_time=local,
         reported_issue=_reported_issue(instruction),
+        investigation_guidance=_investigation_guidance(instruction),
     )
