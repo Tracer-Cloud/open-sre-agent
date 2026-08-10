@@ -1,8 +1,10 @@
-"""Context-budget token ledger.
+"""Context-budget token ledger and cross-think content estimate cache.
 
 Each think used to re-``json.dumps`` every content block and, while trimming,
 re-estimate the whole transcript after every eviction. A per-message ledger
-should estimate once, then adjust only touched indices.
+should estimate once within a call, and the content-identity cache should skip
+re-serialization on later thinks (including shallow provider-payload copies)
+until truncation changes the content fingerprint.
 """
 
 from __future__ import annotations
@@ -140,3 +142,116 @@ def test_ledger_slices_match_a_fresh_estimate_after_mixed_trim() -> None:
     assert [(c.start, c.end) for c in with_ledger] == [(c.start, c.end) for c in from_scratch]
     for ledger_candidate, fresh in zip(with_ledger, from_scratch, strict=True):
         assert ledger_candidate.token_estimate == fresh.token_estimate
+
+
+def test_second_enforce_under_ceiling_does_not_redump_cached_content() -> None:
+    """Cross-think reuse: content-identity cache skips json.dumps on later enforces."""
+    budget._CONTENT_CACHE.clear()
+    messages = _over_budget_transcript(exchanges=4, payload=2_000)
+    budget.enforce_context_budget(messages, fixed_overhead_tokens=0, ceiling=100_000)
+
+    dumps_calls = 0
+    original = json.dumps
+
+    def counting_dumps(value: object, *args: object, **kwargs: object) -> str:
+        nonlocal dumps_calls
+        dumps_calls += 1
+        return original(value, *args, **kwargs)
+
+    with patch("core.context_budget.json.dumps", side_effect=counting_dumps):
+        budget.enforce_context_budget(messages, fixed_overhead_tokens=0, ceiling=100_000)
+
+    assert dumps_calls == 0
+
+
+def test_shallow_provider_copy_reuses_content_estimate_cache() -> None:
+    """ReactLoop shallow-copies provider payloads; shared content must cache-hit."""
+    budget._CONTENT_CACHE.clear()
+    original = _tool_result("t0", "payload " * 500)
+    first = budget._message_token_estimate(original)
+    copied = dict(original)
+
+    dumps_calls = 0
+    dumps = json.dumps
+
+    def counting_dumps(value: object, *args: object, **kwargs: object) -> str:
+        nonlocal dumps_calls
+        dumps_calls += 1
+        return dumps(value, *args, **kwargs)
+
+    with patch("core.context_budget.json.dumps", side_effect=counting_dumps):
+        assert budget._message_token_estimate(copied) == first
+
+    assert dumps_calls == 0
+    assert copied == original  # cache must not mutate the provider message
+
+
+def test_content_cache_rejects_stale_entry_at_a_reused_id() -> None:
+    """A cache entry keyed by ``id()`` must never be served for an unrelated
+    object that happens to land at the same address after garbage collection.
+
+    Two different single-block ``tool_use`` contents (or two truncated
+    payloads landing on the same target length) can share a size —
+    ``(block_count, text_char_sum)`` — without being the same object. The
+    identity check (not just the size) must reject a stale hit.
+    """
+    budget._CONTENT_CACHE.clear()
+    real_content = [{"type": "tool_use", "id": "t1", "name": "noop", "input": {}}]
+    real_tokens = budget._compute_message_token_estimate({"content": real_content})
+
+    # Seed a stale entry at this id for a *different* object with a matching
+    # size but a deliberately wrong token count.
+    budget._CONTENT_CACHE[id(real_content)] = budget._ContentEstimate(
+        content=object(),
+        size=budget._content_size(real_content),
+        tokens=real_tokens + 999_999,
+    )
+
+    assert budget._message_token_estimate({"content": real_content}) == real_tokens
+
+
+def test_truncate_invalidates_content_estimate_cache() -> None:
+    """After truncation mutates content, the cache must match a fresh compute."""
+    budget._CONTENT_CACHE.clear()
+    ceiling = 50_000
+    big = "y" * 1_000_000
+    messages = [{"role": "user", "content": [{"type": "text", "text": big}]}]
+    stale = budget._message_token_estimate(messages[0])
+
+    budget.enforce_context_budget(messages, fixed_overhead_tokens=0, ceiling=ceiling)
+
+    cached = budget._message_token_estimate(messages[0])
+    recomputed = budget._compute_message_token_estimate(messages[0])
+    assert cached == recomputed
+    assert cached < stale
+    assert budget.estimate_message_tokens(messages) <= ceiling
+    assert messages[0]["content"][0]["text"].endswith(budget._TRUNCATION_MARKER)
+
+
+def test_multi_think_shallow_copies_bound_json_dumps() -> None:
+    """Growing transcript across thinks should dump new blocks, not the whole history."""
+    budget._CONTENT_CACHE.clear()
+    payload = "x" * 20_000
+    provider_messages: list[dict[str, Any]] = [{"role": "user", "content": "alert"}]
+    dumps_calls = 0
+    original = json.dumps
+
+    def counting_dumps(value: object, *args: object, **kwargs: object) -> str:
+        nonlocal dumps_calls
+        dumps_calls += 1
+        return original(value, *args, **kwargs)
+
+    with patch("core.context_budget.json.dumps", side_effect=counting_dumps):
+        for index in range(20):
+            call_id = f"t{index}"
+            provider_messages.append(_assistant_tool_use(call_id))
+            provider_messages.append(_tool_result(call_id, payload))
+            # ReactLoop: fresh shallow copies each think, shared nested content.
+            think_messages = [dict(message) for message in provider_messages]
+            budget.enforce_context_budget(
+                think_messages, fixed_overhead_tokens=0, ceiling=2_000_000
+            )
+
+    # Without a content cache this is ~420 dumps (2 * sum(1..20)).
+    # With a cache: one dump per new block ≈ 40.
+    assert dumps_calls < 80, f"json.dumps called {dumps_calls} times across 20 thinks"

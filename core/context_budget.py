@@ -40,6 +40,24 @@ _TRUNCATION_MIN_TOKENS = 1_000
 _PINNED_MESSAGE_KEY = "_opensre_seed"
 _DUPLICATE_RESULT_KEY = "_opensre_duplicate_result"
 
+# Token estimates are cached per ``content`` object: each think shallow-copies
+# the provider message, so the nested ``content`` is shared while the message
+# dict is not. Plain lists cannot be weakly referenced, so entries key on
+# ``id(content)`` and hold a strong reference — keeping the object alive is what
+# makes its id safe to trust, since a collected object's id can be reused by an
+# unrelated one. ``size`` then catches in-place truncation of that same object.
+_CONTENT_CACHE_MAX = 4_096
+
+
+@dataclass(frozen=True) 
+class _ContentEstimate:
+    content: Any
+    size: tuple[int, int]
+    tokens: int
+
+
+_CONTENT_CACHE: dict[int, _ContentEstimate] = {}
+
 
 def strip_internal_message_markers(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return a copy of ``messages`` without internal ``_opensre_*`` keys.
@@ -184,7 +202,25 @@ def context_budget_ceiling_for_model(model: str | None) -> int:
     return max(window - _RESPONSE_HEADROOM_TOKENS, _RESPONSE_HEADROOM_TOKENS)
 
 
-def _message_token_estimate(message: dict[str, Any]) -> int:
+def _content_size(content: Any) -> tuple[int, int]:
+    """Cheap mutation check; changes whenever truncation rewrites ``content``."""
+    if isinstance(content, str):
+        return (len(content), 0)
+    if isinstance(content, list):
+        return (len(content), _sum_text_chars(content))
+    return (0, 0)
+
+
+def _cache_content_estimate(content: Any, tokens: int) -> int:
+    """Cache ``tokens`` against ``content`` identity and return it."""
+    if len(_CONTENT_CACHE) >= _CONTENT_CACHE_MAX:
+        _CONTENT_CACHE.clear()
+    _CONTENT_CACHE[id(content)] = _ContentEstimate(content, _content_size(content), tokens)
+    return tokens
+
+
+def _compute_message_token_estimate(message: dict[str, Any]) -> int:
+    """Serialize content blocks to estimate tokens (no cache read/write)."""
     total = 0
     content = message.get("content", "")
     if isinstance(content, str):
@@ -196,6 +232,27 @@ def _message_token_estimate(message: dict[str, Any]) -> int:
             elif isinstance(block, str):
                 total += int(len(block) * _TOKENS_PER_CHAR)
     return total
+
+
+def _message_token_estimate(message: dict[str, Any]) -> int:
+    """Return a cheap token estimate, reusing prior work for unchanged content.
+
+    Blocks are ``json.dumps``'d only to get a length, and every think re-walks
+    the whole transcript. Tool schemas are already serialized once per run; this
+    gives message bodies the same treatment, keyed on shared ``content``
+    identity so shallow provider-payload copies still hit.
+    """
+    content = message.get("content", "")
+    cached = _CONTENT_CACHE.get(id(content))
+    if cached is not None and cached.content is content and cached.size == _content_size(content):
+        return cached.tokens
+    return _cache_content_estimate(content, _compute_message_token_estimate(message))
+
+
+def _refresh_message_token_estimate(message: dict[str, Any]) -> int:
+    """Recompute and re-cache after truncation mutated ``content`` in place."""
+    content = message.get("content", "")
+    return _cache_content_estimate(content, _compute_message_token_estimate(message))
 
 
 def _message_token_estimates(messages: list[dict[str, Any]]) -> tuple[list[int], int]:
@@ -382,7 +439,8 @@ def _truncate_largest_message(
         new_content, changed = truncate_content(messages[idx].get("content"), max_chars)
         if changed:
             messages[idx]["content"] = new_content
-            updated_tokens = _message_token_estimate(messages[idx])
+            # Content mutated — do not reuse the pre-truncation stamp.
+            updated_tokens = _refresh_message_token_estimate(messages[idx])
             total_message_tokens += updated_tokens - message_tokens[idx]
             message_tokens[idx] = updated_tokens
             return True, total_message_tokens
