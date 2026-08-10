@@ -13,6 +13,7 @@ from core.agent_harness.investigation_api import (
     reset_investigation_payload_runner_for_tests,
 )
 from gateway.web import webapp
+from http import HTTPStatus
 
 _LOOPBACK = ("127.0.0.1", 40000)
 _REMOTE = ("203.0.113.9", 40000)
@@ -71,7 +72,7 @@ def test_investigate_runs_pipeline_and_returns_report(
         },
     )
 
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     body = resp.json()
     assert body["report"] == "Root cause identified."
     assert body["root_cause"] == "Timeout calling downstream service."
@@ -99,13 +100,13 @@ def test_investigate_resolves_metadata_from_raw_alert_when_overrides_missing(
         json={"raw_alert": {"alert_name": "High CPU", "severity": "warning"}},
     )
 
-    assert resp.status_code == 200
+    assert resp.status_code == HTTPStatus.OK
     assert captured["investigation_metadata"] == ("High CPU", "warning")
 
 
 def test_investigate_missing_raw_alert_returns_422(client: TestClient) -> None:
     resp = client.post("/investigate", json={"alert_name": "x"})
-    assert resp.status_code == 422
+    assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text(
@@ -118,7 +119,7 @@ def test_investigate_pipeline_failure_returns_503_without_leaking_exception_text
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
-    assert resp.status_code == 503
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     body = resp.json()
     assert body["error"] == "investigation failed: RuntimeError"
     assert "llm unavailable" not in body["error"]
@@ -135,7 +136,7 @@ def test_investigate_malformed_pipeline_result_returns_503(client: TestClient) -
 
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
-    assert resp.status_code == 503
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert resp.json()["error"] == "investigation failed: ValidationError"
 
 
@@ -145,7 +146,7 @@ def test_investigate_non_loopback_without_token_returns_403() -> None:
 
     resp = remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
 
-    assert resp.status_code == 403
+    assert resp.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -153,14 +154,14 @@ def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     install_investigation_payload_runner(lambda **_: _fake_payload())
     remote = TestClient(webapp.app, client=_REMOTE)
 
-    assert remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}}).status_code == 401
+    assert remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}}).status_code == HTTPStatus.UNAUTHORIZED
     assert (
         remote.post(
             "/investigate",
             json={"raw_alert": {"alert_name": "x"}},
             headers={"Authorization": "Bearer sekret"},
         ).status_code
-        == 200
+        == HTTPStatus.OK
     )
 
 
@@ -177,7 +178,7 @@ def test_investigate_at_capacity_returns_503(client: TestClient) -> None:
     set_process_turn_gate(gate)
     try:
         resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
-        assert resp.status_code == 503
+        assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
         assert "at capacity" in resp.json()["error"]
     finally:
         gate.release()
