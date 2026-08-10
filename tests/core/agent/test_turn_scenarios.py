@@ -409,14 +409,14 @@ def test_build_actual_action_keeps_assistant_handoff_ontology_fields() -> None:
             input={
                 "content": "Count Windows users.",
                 "evidence_kind": "metric_read",
-                "session_goal": "max_turns=5;steps=5",
+                "session_goal": True,
                 "session_goal_items": ["gather", "analyze", "report"],
             },
         )
     )
     assert actual["kind"] == "assistant_handoff"
     assert actual["evidence_kind"] == "metric_read"
-    assert actual["session_goal"] == "max_turns=5;steps=5"
+    assert actual["session_goal"] is True
     assert actual["session_goal_items"] == ["gather", "analyze", "report"]
 
     expected = cast(
@@ -427,7 +427,7 @@ def test_build_actual_action_keeps_assistant_handoff_ontology_fields() -> None:
                 "content": "any non-empty handoff body",
                 "source": "llm",
                 "evidence_kind": "metric_read",
-                "session_goal": "max_turns=5;steps=5",
+                "session_goal": True,
                 "session_goal_items": ["gather", "analyze", "report"],
             }
         ],
