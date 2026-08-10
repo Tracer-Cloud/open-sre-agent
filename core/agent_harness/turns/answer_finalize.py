@@ -54,6 +54,7 @@ def should_suppress_want_me_to_for_session_goal(session: SessionStore) -> bool:
         and goal.status == SessionGoalStatus.ACHIEVED
     )
 
+
 @dataclass(frozen=True)
 class AnswerFinalizeResult:
     """Text after CTA/offer rewrites, plus whether the sink must re-flush."""
@@ -149,9 +150,8 @@ def finalize_routed_answer(
     # Bookkeeping only — never feed this into route selection.
     text_changed_after_streaming = text != streamed_text
 
-    suppress_investigate = should_suppress_investigation_offer(
-        evidence_need
-    ) or should_suppress_want_me_to_for_session_goal(session)
+    suppress_for_goal = should_suppress_want_me_to_for_session_goal(session)
+    suppress_investigate = should_suppress_investigation_offer(evidence_need) or suppress_for_goal
     if suppress_investigate:
         stripped = strip_want_me_to_closer(text)
         if stripped != text:
@@ -184,7 +184,11 @@ def finalize_routed_answer(
             )
             if route_intent == "gather_and_answer":
                 finish_stream = True
-    elif route_intent == "gather_and_answer" and text_changed_after_streaming:
+    elif route_intent == "gather_and_answer" and (
+        text_changed_after_streaming or suppress_for_goal
+    ):
+        # Flush deferred Want-me-to (or drop it) when a session goal owns
+        # continuation — otherwise the TTY keeps a streamed closer.
         finish_stream = True
 
     return AnswerFinalizeResult(response_text=text, finish_stream=finish_stream)

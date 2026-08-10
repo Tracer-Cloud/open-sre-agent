@@ -62,7 +62,7 @@ def test_finalize_suppresses_investigate_when_session_goal_active() -> None:
     result = finalize_routed_answer(
         session=session,
         route_intent="gather_and_answer",
-        response_text="Step 1 done.",
+        response_text="Step 1 done.\n\nWant me to: dig further?",
         evidence_for_offer="evidence",
         evidence_need=need,
         handoff_contents=("session_goal:max_turns=3",),
@@ -72,8 +72,37 @@ def test_finalize_suppresses_investigate_when_session_goal_active() -> None:
 
     assert session.pending_investigation_offer is None
     assert "Want me to" not in result.response_text
-    # No CTA rewrite → no forced re-flush when investigate is suppressed.
-    assert result.finish_stream is False
+    # Deferred closer must flush (without Want-me-to) so the TTY drops it.
+    assert result.finish_stream is True
+
+
+def test_finalize_flushes_gather_when_goal_active_even_without_closer() -> None:
+    """Footer / deferred paint must flush when the goal owns the turn."""
+    session = SessionCore()
+    attach_session_goal(session, SessionGoal(condition="triage", max_outer_turns=6))
+    need = EvidenceNeed(
+        kind=EvidenceKind.INCIDENT,
+        preferred_sources=(),
+        connected=(),
+        missing=(),
+        tier=EvidenceTier.L1,
+        required_for_authoritative=False,
+    )
+
+    result = finalize_routed_answer(
+        session=session,
+        route_intent="gather_and_answer",
+        response_text="Highest priority: Sentry. First step: nvm use 22.",
+        evidence_for_offer="evidence",
+        evidence_need=need,
+        handoff_contents=(),
+        original_user_text="morning triage",
+        confirms_pending=False,
+    )
+
+    assert session.pending_investigation_offer is None
+    assert "Want me to" not in result.response_text
+    assert result.finish_stream is True
 
 
 def test_finalize_strips_want_me_to_when_host_owned_goal_just_achieved() -> None:
@@ -103,8 +132,7 @@ def test_finalize_strips_want_me_to_when_host_owned_goal_just_achieved() -> None
         session=session,
         route_intent="cli_agent_handled",
         response_text=(
-            "1. a\n2. b\n3. c\n\n"
-            "Want me to: mark this goal achieved now with /goal clear?"
+            "1. a\n2. b\n3. c\n\nWant me to: mark this goal achieved now with /goal clear?"
         ),
         evidence_for_offer=None,
         evidence_need=need,

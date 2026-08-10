@@ -187,7 +187,8 @@ def run_until_session_goal(
         attach_session_goal(session, goal)
 
     pre = getattr(session, "session_goal", None)
-    if isinstance(pre, SessionGoal) and session_goal_is_active(session):
+    had_active_before = isinstance(pre, SessionGoal) and pre.status == SessionGoalStatus.ACTIVE
+    if had_active_before:
         _announce_working(session, pre, on_progress)
 
     last = chat(message)
@@ -200,6 +201,12 @@ def run_until_session_goal(
             turns_used=1,
         )
         return SessionGoalRunResult(goal=synthetic, last_result=last, turn_count=1)
+
+    # ``/goal set`` attaches a host-owned goal mid-turn and queues autosubmit.
+    # That attach turn must not count against the budget or run evaluate —
+    # the next submitted condition is the first real outer turn.
+    if not had_active_before and active.host_owned and active.turns_used == 0:
+        return SessionGoalRunResult(goal=active, last_result=last, turn_count=0)
 
     if active.turns_used == 0:
         active = active.record_turn()

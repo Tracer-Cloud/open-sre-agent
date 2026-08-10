@@ -103,7 +103,9 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "(comma-separate multiple). When every item is done, include "
         "`session_goal:achieved`. Put those tags on their own at the end of "
         "the reply; the harness strips them before the user sees the text. "
-        "Do not ask whether to continue while the goal is active.\n\n"
+        "Do not ask whether to continue while the goal is active. "
+        "Do NOT close with **Want me to:** (no investigation offer, no "
+        "follow-up menu) — the outer loop owns continuation.\n\n"
     ),
     # Prefix key: ``build_handoff_guidance_block`` matches any
     # ``database_query:<topic>`` tag (mysql_active_connections, mariadb_dashboard, …).

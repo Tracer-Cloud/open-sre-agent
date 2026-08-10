@@ -68,6 +68,10 @@ class AssistantPromptContextProvider(Protocol):
         """Emit grounding-cache diagnostics for ``reason``."""
 
 
+def _handoff_has_session_goal(handoff_contents: tuple[str, ...]) -> bool:
+    return any(tag.startswith("session_goal:") for tag in handoff_contents)
+
+
 def _assistant_context_blocks(
     *,
     turn_snapshot: TurnSnapshot,
@@ -76,11 +80,16 @@ def _assistant_context_blocks(
     tool_observation_on_screen: bool,
     suggested_prompt: str = SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST,
 ) -> str:
+    omit_want_me_to = _handoff_has_session_goal(handoff_contents)
     return "".join(
         (
             _build_integration_guard(turn_snapshot),
             build_handoff_guidance_block(handoff_contents),
-            build_observation_block(tool_observation, on_screen=tool_observation_on_screen),
+            build_observation_block(
+                tool_observation,
+                on_screen=tool_observation_on_screen,
+                omit_want_me_to=omit_want_me_to,
+            ),
             synthetic_failure.build_block(turn_snapshot, suggested_prompt=suggested_prompt),
         )
     )

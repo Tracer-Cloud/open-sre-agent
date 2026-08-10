@@ -47,7 +47,10 @@ from core.agent_harness.session.pending_offer import (
     first_pending_offer,
     is_pending_offer_confirmation,
 )
-from core.agent_harness.session.session_goal import attach_session_goal_from_handoffs
+from core.agent_harness.session.session_goal import (
+    attach_session_goal_from_handoffs,
+    session_goal_is_active,
+)
 from core.agent_harness.turns.answer_finalize import (
     finalize_routed_answer,
     finish_streamed_response,
@@ -471,6 +474,12 @@ def run_turn(
     tier_tag = handoff_tag_for(evidence_need)
     if tier_tag is not None and tier_tag not in handoff_contents:
         handoff_contents = (*handoff_contents, tier_tag)
+    # Host ``/goal set`` goals never appear in action handoff tags — inject a
+    # guidance tag so the assistant omits Want-me-to (observation + HANDOFF).
+    if session_goal_is_active(session) and not any(
+        tag.startswith("session_goal:") for tag in handoff_contents
+    ):
+        handoff_contents = (*handoff_contents, "session_goal:continue")
     observation = session.last_command_observation
     route = _route_turn(
         _routing_input_from_result(action_result, observation),

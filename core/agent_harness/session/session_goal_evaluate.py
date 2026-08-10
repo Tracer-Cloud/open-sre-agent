@@ -17,6 +17,7 @@ claim, not proof. This module is the independent host check:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,7 +28,11 @@ from core.agent_harness.session.session_goal import (
     attach_session_goal,
 )
 
-_ACHIEVED_TAG = "session_goal:achieved"
+# Standalone progress tag only — must not match host reason phrases like
+# ``waiting for session_goal:achieved`` (substring false positive on /goal set).
+_ACHIEVED_CLAIM = re.compile(
+    r"(?<!waiting for )session_goal:achieved(?![A-Za-z0-9_])",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +41,18 @@ class SessionGoalVerdict:
 
     status: str
     reason: str
+
+
+def reply_claims_session_goal_achieved(text: str) -> bool:
+    """True when ``text`` contains a real ``session_goal:achieved`` progress tag.
+
+    Host status lines say ``waiting for session_goal:achieved``; a naive
+    substring check would treat that phrase as a completion claim (and did, on
+    the ``/goal set`` turn that prints the waiting reason).
+    """
+    if not text:
+        return False
+    return _ACHIEVED_CLAIM.search(text) is not None
 
 
 def _reply_text(result: Any) -> str:
@@ -102,7 +119,7 @@ def evaluate_session_goal(
             current = stored
     current = apply_session_goal_progress(current, text)
 
-    claimed = _ACHIEVED_TAG in text
+    claimed = reply_claims_session_goal_achieved(text)
     dispatched = turn_dispatched_investigation(result)
 
     if current.checklist:
@@ -186,6 +203,7 @@ __all__ = [
     "SessionGoalVerdict",
     "default_evaluate_session_goal",
     "evaluate_session_goal",
+    "reply_claims_session_goal_achieved",
     "turn_dispatched_investigation",
     "turn_has_session_goal_evidence",
 ]

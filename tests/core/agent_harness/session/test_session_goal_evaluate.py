@@ -50,6 +50,85 @@ def test_turn_has_session_goal_evidence_requires_a_tool_that_succeeded() -> None
     assert turn_has_session_goal_evidence(_result("done", executed=1, success=1)) is True
 
 
+def test_waiting_for_reason_is_not_an_achieved_claim() -> None:
+    """Slash ``/goal set`` paints ``waiting for session_goal:achieved`` — not a claim."""
+    from core.agent_harness.session.session_goal_evaluate import (
+        reply_claims_session_goal_achieved,
+    )
+
+    assert reply_claims_session_goal_achieved("session_goal:achieved") is True
+    assert reply_claims_session_goal_achieved("All done.\nsession_goal:achieved") is True
+    assert reply_claims_session_goal_achieved("All done. session_goal:achieved") is True
+    assert reply_claims_session_goal_achieved("waiting for session_goal:achieved") is False
+    assert (
+        reply_claims_session_goal_achieved(
+            "◎ /goal active\n  reason: waiting for session_goal:achieved"
+        )
+        is False
+    )
+
+
+def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
+    """Regression: /goal set turn captured status text and falsely achieved."""
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="How many Windows users?",
+        max_outer_turns=4,
+        host_owned=True,
+    )
+    attach_session_goal(session, goal)
+    verdict = evaluate_session_goal(
+        goal,
+        _result(
+            "◎ /goal active · 0s · turn 0/4 · +0 tokens\n"
+            "  condition: How many Windows users?\n"
+            "  reason: waiting for session_goal:achieved",
+            executed=1,
+            success=1,
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert "waiting" in verdict.reason
+    assert session.session_goal is not None
+    assert session.session_goal.status == SessionGoalStatus.ACTIVE
+
+
+def test_goal_set_attach_turn_does_not_consume_outer_budget() -> None:
+    """``/goal set`` attach + autosubmit: first work turn is the next chat."""
+    session = SessionCore()
+    turns: list[str] = []
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        if message.startswith("/goal"):
+            attach_session_goal(
+                session,
+                SessionGoal(
+                    condition="count windows users",
+                    max_outer_turns=4,
+                    host_owned=True,
+                ),
+            )
+            return _result(
+                "◎ /goal active\n  reason: waiting for session_goal:achieved",
+                executed=1,
+                success=1,
+            )
+        return _result("284 users. session_goal:achieved", executed=1, success=1)
+
+    outcome = run_until_session_goal(_chat, session, "/goal set count windows users")
+    assert len(turns) == 1
+    assert outcome.turn_count == 0
+    assert outcome.goal.status == SessionGoalStatus.ACTIVE
+    assert outcome.goal.turns_used == 0
+
+    # Autosubmit path: next chat under the already-active goal.
+    outcome2 = run_until_session_goal(_chat, session, "count windows users")
+    assert outcome2.goal.status == SessionGoalStatus.ACHIEVED
+    assert outcome2.goal.turns_used == 1
+
+
 def test_bare_achieved_without_checklist_or_tools_stays_active() -> None:
     session = SessionCore()
     goal = SessionGoal(condition="finish migration", max_outer_turns=3)
