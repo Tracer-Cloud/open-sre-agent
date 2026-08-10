@@ -14,9 +14,7 @@ class _FakeDispatcher:
 
     def dispatch(self, message: str) -> TurnResult:
         self.calls.append(message)
-        body = (
-            "working session_goal:done=0" if len(self.calls) == 1 else "done session_goal:achieved"
-        )
+        body = "working session_goal:done=0" if len(self.calls) == 1 else "done session_goal:done=1"
         return TurnResult(
             final_intent="cli_agent_handled",
             action_result=ToolCallingTurnResult(
@@ -47,4 +45,4 @@ def test_chat_until_goal_continues_until_achieved() -> None:
 
     assert len(dispatcher.calls) == 2
     assert outcome.goal.status == SessionGoalStatus.ACHIEVED
-    assert "session_goal:achieved" not in (outcome.last_result.assistant_response_text or "")
+    assert "session_goal:" not in (outcome.last_result.assistant_response_text or "")

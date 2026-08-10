@@ -8,11 +8,10 @@ from core.agent_harness.session.session_goal import (
     SessionGoalStatus,
     apply_session_goal_progress,
     attach_session_goal,
-    default_evaluate_session_goal,
-    format_session_goal_checklist,
     session_goal_from_assistant_handoffs,
     session_goal_from_handoffs,
 )
+from core.agent_harness.session.session_goal_evaluate import default_evaluate_session_goal
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -84,16 +83,102 @@ def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:
 
 
 def test_format_session_goal_checklist_shows_progress() -> None:
+    from core.agent_harness.session.session_goal import format_session_goal_progress
+
     goal = SessionGoal(
-        condition="x",
+        condition="ship the checklist",
+        turns_used=2,
+        max_outer_turns=5,
         checklist=("One", "Two", "Three"),
         completed=frozenset({0}),
+        last_reason="checklist 1/3 done — next: Two",
     )
-    rendered = format_session_goal_checklist(goal)
+    rendered = format_session_goal_progress(goal)
 
-    assert "One" in rendered and "Two" in rendered
-    assert "[x]" in rendered or "✓" in rendered or "[done]" in rendered.lower()
-    assert "[ ]" in rendered or "pending" in rendered.lower()
+    assert "◎ /goal active" in rendered
+    assert "turn 2/5" in rendered
+    assert "condition: ship the checklist" in rendered
+    assert "reason: checklist 1/3 done — next: Two" in rendered
+    assert "One" in rendered and "Two" in rendered and "Three" in rendered
+    assert "[x]" in rendered
+    assert "[ ]" in rendered
+    assert "→" in rendered  # next unfinished item marker
+
+
+def test_format_session_goal_status_line_is_compact() -> None:
+    from core.agent_harness.session.session_goal import format_session_goal_status_line
+
+    goal = SessionGoal(
+        condition="two-step",
+        turns_used=1,
+        max_outer_turns=3,
+        checklist=("one", "two"),
+        completed=frozenset({0}),
+    )
+    line = format_session_goal_status_line(goal)
+    assert "\n" not in line
+    assert "◎ /goal active" in line
+    assert "turn 1/3" in line
+    assert "next: two" in line
+
+
+def test_format_session_goal_progress_active_header_includes_duration() -> None:
+    from core.agent_harness.session.session_goal import (
+        format_session_goal_progress,
+        mark_session_goal_started,
+    )
+
+    goal = mark_session_goal_started(
+        SessionGoal(condition="finish migrate", max_outer_turns=5, turns_used=1),
+        now=1_000.0,
+        input_tokens=10,
+        output_tokens=5,
+    )
+    rendered = format_session_goal_progress(
+        goal,
+        now=1_083.0,
+        input_tokens=110,
+        output_tokens=55,
+    )
+    assert "◎ /goal active" in rendered
+    assert "1m 23s" in rendered or "83s" in rendered
+    assert "turn 1/5" in rendered
+    assert "tokens" in rendered.lower()
+    assert "+150" in rendered or "150" in rendered
+
+
+def test_format_duration_and_token_compacts() -> None:
+    from core.agent_harness.session.session_goal import (
+        format_duration_compact,
+        format_token_count_compact,
+    )
+
+    assert format_duration_compact(45) == "45s"
+    assert format_duration_compact(83) == "1m 23s"
+    assert format_duration_compact(3725) == "1h 02m"
+    assert format_token_count_compact(150) == "150"
+    assert format_token_count_compact(1200) == "1.2k"
+    assert format_token_count_compact(3_400_000) == "3.4M"
+
+
+def test_session_goal_payload_round_trips_started_at_and_token_baseline() -> None:
+    from core.agent_harness.session.session_goal import (
+        mark_session_goal_started,
+        session_goal_from_payload,
+        session_goal_to_payload,
+    )
+
+    goal = mark_session_goal_started(
+        SessionGoal(condition="persist clocks", max_outer_turns=2),
+        now=1_700_000_000.0,
+        input_tokens=11,
+        output_tokens=7,
+    )
+    restored = session_goal_from_payload(session_goal_to_payload(goal))
+    assert restored is not None
+    assert restored.started_at == 1_700_000_000.0
+    assert restored.token_baseline_input == 11
+    assert restored.token_baseline_output == 7
 
 
 def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
@@ -138,11 +223,47 @@ def test_nudge_lists_unfinished_checklist_items() -> None:
         condition="x",
         checklist=("A", "B", "C"),
         completed=frozenset({0}),
+        last_reason="checklist 1/3 done — next: B",
     )
     nudge = continuation_nudge(goal)
 
     assert "B" in nudge and "C" in nudge
     assert "session_goal:done=" in nudge
+    assert "Last progress: checklist 1/3 done — next: B" in nudge
+
+
+def test_outer_loop_nudge_carries_reason_after_partial_progress() -> None:
+    session = SessionCore()
+    turns: list[str] = []
+    goal = SessionGoal(
+        condition="two checks",
+        max_outer_turns=4,
+        checklist=("A", "B"),
+    )
+    attach_session_goal(session, goal)
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        n = len(turns)
+        body = f"Working. session_goal:done={n - 1}"
+        return TurnResult(
+            final_intent="cli_agent_fallback",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=True,
+            ),
+            assistant_response_text=body,
+            llm_run=None,
+        )
+
+    run_until_session_goal(_chat, session, "go", goal=goal)
+
+    assert len(turns) == 2
+    assert "Last progress:" in turns[1]
+    assert "next: B" in turns[1]
 
 
 def test_strip_session_goal_progress_tags_hides_harness_tokens() -> None:

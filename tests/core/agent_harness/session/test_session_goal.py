@@ -51,8 +51,10 @@ def test_session_goal_from_structured_handoff_not_user_prose() -> None:
 def test_attach_session_goal_on_session_core() -> None:
     session = SessionCore()
     goal = SessionGoal(condition="finish the checklist", max_outer_turns=3)
-    attach_session_goal(session, goal)
-    assert session.session_goal is goal
+    attached = attach_session_goal(session, goal)
+    assert session.session_goal is attached
+    assert attached.condition == goal.condition
+    assert attached.started_at is not None
     assert session_goal_is_active(session) is True
 
 
@@ -177,18 +179,12 @@ def test_typed_assistant_handoff_attaches_session_goal_without_content_tags() ->
 def test_five_step_outer_loop_continues_until_achieved() -> None:
     session = SessionCore()
     turns: list[str] = []
+    checklist = ("list the goal", "step one", "step two", "step three", "confirm done")
 
     def _chat(message: str) -> TurnResult:
         turns.append(message)
         n = len(turns)
-        if n == 1:
-            # First turn: action attaches the goal via host (already attached)
-            # and the answer is incomplete.
-            body = "Completed step 1 of 5."
-        elif n < 5:
-            body = f"Completed step {n} of 5."
-        else:
-            body = "Done. session_goal:achieved"
+        body = f"Completed item. session_goal:done={n - 1}"
         return TurnResult(
             final_intent="cli_agent_fallback",
             action_result=ToolCallingTurnResult(
@@ -210,6 +206,7 @@ def test_five_step_outer_loop_continues_until_achieved() -> None:
             condition="complete all five steps",
             max_outer_turns=5,
             step_count=5,
+            checklist=checklist,
         ),
     )
 
@@ -217,6 +214,7 @@ def test_five_step_outer_loop_continues_until_achieved() -> None:
     assert turns[0] == _FIVE_STEP_ASK
     assert outcome.goal.status == SessionGoalStatus.ACHIEVED
     assert outcome.turn_count == 5
+    assert outcome.goal.completed == frozenset({0, 1, 2, 3, 4})
     # Progress tags are stripped before the user-visible reply is returned.
     assert "session_goal:" not in (outcome.last_result.assistant_response_text or "")
 

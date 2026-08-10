@@ -162,7 +162,7 @@ def test_turn_handler_continues_outer_loop_for_active_session_goal(
                 has_unhandled_clause=False,
                 handled=True,
             ),
-            assistant_response_text="all done session_goal:achieved",
+            assistant_response_text="all done session_goal:done=1",
         )
 
     agent_cls.return_value.dispatch.side_effect = _dispatch
@@ -182,8 +182,12 @@ def test_turn_handler_continues_outer_loop_for_active_session_goal(
     assert len(calls) == 2
     sink.finalize.assert_called_once()
     finalized = sink.finalize.call_args.args[0]
-    assert "session_goal:achieved" not in finalized
+    assert "session_goal:" not in finalized
     assert "all done" in finalized
+    # Same mid-loop progress contract as the interactive shell.
+    assert sink.set_tool_status.called
+    status_texts = [call.args[0] for call in sink.set_tool_status.call_args_list]
+    assert any("Goal ·" in text and "turn " in text for text in status_texts)
 
 
 def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:

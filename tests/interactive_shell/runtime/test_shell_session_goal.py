@@ -30,7 +30,15 @@ def test_execute_shell_turn_continues_when_action_emits_session_goal() -> None:
         execute_calls += 1
         handoffs: tuple[str, ...]
         if execute_calls == 1:
-            handoffs = ("session_goal:max_turns=5;steps=5", "Work the checklist.")
+            handoffs = (
+                "session_goal:continue",
+                "session_goal_max_turns:5",
+                "session_goal_item:a",
+                "session_goal_item:b",
+                "session_goal_item:c",
+                "session_goal_item:d",
+                "session_goal_item:e",
+            )
         else:
             handoffs = ("Continue the checklist.",)
         return ToolCallingTurnResult(
@@ -48,8 +56,7 @@ def test_execute_shell_turn_continues_when_action_emits_session_goal() -> None:
     def _answer(text: str, *_a: object, **_k: object) -> MagicMock:
         answer_calls.append(text)
         n = len(answer_calls)
-        body = "session_goal:achieved" if n >= 5 else f"Completed step {n} of 5."
-        return MagicMock(response_text=body)
+        return MagicMock(response_text=f"step done session_goal:done={n - 1}")
 
     result = execute_shell_turn(
         _FIVE_STEP,
@@ -104,8 +111,11 @@ def test_execute_shell_turn_prints_checklist_progress(capsys: Any) -> None:
     )
 
     painted = capsys.readouterr().out
-    assert "Goal checklist:" in painted
+    assert "Session goal" in painted
+    assert "Checklist:" in painted
     assert "Alpha" in painted and "Beta" in painted
+    assert "turn " in painted
+    assert "reason:" in painted
 
 
 def test_execute_shell_turn_does_not_loop_on_user_prose_alone() -> None:
@@ -180,8 +190,7 @@ def test_execute_shell_turn_continues_from_typed_assistant_handoff() -> None:
     def _answer(text: str, *_a: object, **_k: object) -> MagicMock:
         answer_calls.append(text)
         n = len(answer_calls)
-        body = "session_goal:achieved" if n >= 5 else f"Completed step {n} of 5."
-        return MagicMock(response_text=body)
+        return MagicMock(response_text=f"step done session_goal:done={n - 1}")
 
     result = execute_shell_turn(
         _FIVE_STEP,

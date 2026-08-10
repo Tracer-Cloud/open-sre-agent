@@ -37,6 +37,7 @@ from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
 from core.agent_harness.prompts.rules import normalize_three_tier_spacing
+from core.agent_harness.session.session_goal import strip_session_goal_progress_tags
 from core.agent_harness.session.want_me_to import WANT_ME_TO_MARKER, closer_tail_from
 from surfaces.interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
@@ -104,10 +105,11 @@ def render_markdown_block(console: Console, text: str) -> None:
     chunk-streamed) — e.g. the action agent's intermediate phase headers —
     so every markdown surface shares one escaping/theme policy.
     """
-    if not text.strip():
+    visible = strip_session_goal_progress_tags(text)
+    if not visible.strip():
         return
     with console.use_theme(ui_theme.MARKDOWN_THEME):
-        console.print(_build_markdown_block(text))
+        console.print(_build_markdown_block(visible))
 
 
 def render_response_header(console: Console, label: str) -> None:
@@ -262,9 +264,10 @@ def stream_to_console_state(
 
     def _paint_paragraph_body(text: str) -> None:
         nonlocal rendered_paragraphs
-        if not text.strip():
+        visible = strip_session_goal_progress_tags(text)
+        if not visible.strip():
             return
-        markdown = _build_markdown_block(text)
+        markdown = _build_markdown_block(visible)
         starts_with_self_spacing_block = bool(
             markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
         )
@@ -280,6 +283,8 @@ def stream_to_console_state(
 
     def _render_paragraph(text: str) -> None:
         nonlocal deferred_closer
+        # Keep raw ``text`` (with progress tags) for Want-me-to detection; paint
+        # only the scrubbed visible body so ``session_goal:…`` never hits the TTY.
         if not text.strip():
             return
         if defer_want_me_to_closer and _paragraph_has_want_me_to(text):

@@ -66,11 +66,12 @@ COMMANDS: list[SlashCommand] = [
         ),
         notes=(
             "Sugar over SessionGoal / chat_until_goal — distinct from /work durable todos.",
+            "Setting a goal queues the condition as the next turn (autosubmit).",
             "The action agent can also attach goals via session_goal:… handoff tags.",
         ),
         first_arg_completions=(
-            ("show", "show the active session goal and checklist"),
-            ("set", "attach an outer session goal (/goal set <condition>)"),
+            ("show", "show the active session goal (duration, turns, tokens)"),
+            ("set", "set a goal and start working on it immediately"),
             ("clear", "clear the active session goal"),
         ),
     ),

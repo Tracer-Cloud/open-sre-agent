@@ -17,10 +17,11 @@ from core.agent_harness.session.session_goal import (
     apply_session_goal_progress,
     attach_session_goal,
     continuation_nudge,
-    default_evaluate_session_goal,
+    refresh_session_goal_reason,
     session_goal_is_active,
     strip_session_goal_progress_tags,
 )
+from core.agent_harness.session.session_goal_evaluate import default_evaluate_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 ChatFn = Callable[[str], TurnResult]
@@ -55,12 +56,104 @@ def _refresh_active(session: Any, active: SessionGoal, result: TurnResult) -> Se
 
 
 def _scrub_progress_tags(result: TurnResult) -> TurnResult:
-    """Hide ``session_goal:done=`` / ``achieved`` tokens from the user-visible reply."""
-    raw = result.assistant_response_text or ""
-    cleaned = strip_session_goal_progress_tags(raw)
-    if cleaned == raw:
+    """Hide ``session_goal:done=`` / ``achieved`` tokens from the user-visible reply.
+
+    Scrubs both ``assistant_response_text`` and any action ``response_text`` so
+    shell and gateway ``primary_response_text`` stay tag-free.
+    """
+    assistant = result.assistant_response_text or ""
+    cleaned_assistant = strip_session_goal_progress_tags(assistant)
+    action = result.action_result
+    action_text = getattr(action, "response_text", "") or ""
+    cleaned_action = strip_session_goal_progress_tags(action_text)
+    if cleaned_assistant == assistant and cleaned_action == action_text:
         return result
-    return replace(result, assistant_response_text=cleaned)
+    new_action = action
+    if cleaned_action != action_text and hasattr(action, "response_text"):
+        new_action = replace(action, response_text=cleaned_action)
+    return replace(
+        result,
+        assistant_response_text=cleaned_assistant,
+        action_result=new_action,
+    )
+
+
+def _paint(
+    session: Any,
+    active: SessionGoal,
+    on_progress: ProgressFn | None,
+    *,
+    rederive: bool = True,
+) -> SessionGoal:
+    """Notify the host of progress.
+
+    When ``rederive`` is false, keep ``active.last_reason`` (e.g. the evaluate
+    verdict) so we do not flash a stale "waiting…" line before "achieved".
+    """
+    painted = refresh_session_goal_reason(active) if rederive else active
+    if not painted.last_reason.strip():
+        painted = refresh_session_goal_reason(painted)
+    attach_session_goal(session, painted)
+    if on_progress is not None:
+        on_progress(painted)
+    return painted
+
+
+def _announce_working(
+    session: Any,
+    active: SessionGoal,
+    on_progress: ProgressFn | None,
+) -> SessionGoal:
+    """Paint a clear 'working now' line before an outer ``chat`` starts."""
+    next_turn = min(active.turns_used + 1, active.max_outer_turns)
+    working = active.with_reason(
+        f"working — starting outer turn {next_turn}/{active.max_outer_turns}"
+    )
+    attach_session_goal(session, working)
+    if on_progress is not None:
+        on_progress(working)
+    return working
+
+
+def _finish_outer_turn(
+    session: Any,
+    active: SessionGoal,
+    last: TurnResult,
+    *,
+    evaluate_fn: EvaluateFn,
+    on_progress: ProgressFn | None,
+) -> tuple[SessionGoal, TurnResult, bool]:
+    """Refresh → evaluate → single paint. Returns ``(goal, scrubbed, stop)``."""
+    active = _refresh_active(session, active, last)
+
+    if last.cancelled:
+        active = active.with_status(SessionGoalStatus.CANCELLED)
+        active = _paint(session, active, on_progress)
+        return active, _scrub_progress_tags(last), True
+
+    if getattr(session, "pending_user_choice", None) is not None:
+        active = active.with_reason("paused — waiting for your choice")
+        active = _paint(session, active, on_progress, rederive=False)
+        return active, _scrub_progress_tags(last), True
+
+    next_status = evaluate_fn(active, last, session=session)
+    stored = getattr(session, "session_goal", None)
+    if isinstance(stored, SessionGoal):
+        active = stored
+    last = _scrub_progress_tags(last)
+
+    if next_status != SessionGoalStatus.ACTIVE:
+        active = active.with_status(next_status)
+        active = _paint(session, active, on_progress, rederive=False)
+        return active, last, True
+
+    # Still active: one honest paint with the evaluate reason (not a pre-eval guess).
+    active = _paint(session, active, on_progress, rederive=False)
+    if active.turns_used >= active.max_outer_turns:
+        active = active.with_status(SessionGoalStatus.BUDGET_EXHAUSTED)
+        active = _paint(session, active, on_progress)
+        return active, last, True
+    return active, last, False
 
 
 @dataclass(slots=True)
@@ -93,6 +186,10 @@ def run_until_session_goal(
     if goal is not None:
         attach_session_goal(session, goal)
 
+    pre = getattr(session, "session_goal", None)
+    if isinstance(pre, SessionGoal) and session_goal_is_active(session):
+        _announce_working(session, pre, on_progress)
+
     last = chat(message)
     active = getattr(session, "session_goal", None)
     if not isinstance(active, SessionGoal) or not session_goal_is_active(session):
@@ -106,77 +203,39 @@ def run_until_session_goal(
 
     if active.turns_used == 0:
         active = active.record_turn()
-    active = _refresh_active(session, active, last)
-    if on_progress is not None:
-        on_progress(active)
 
-    if last.cancelled:
-        active = active.with_status(SessionGoalStatus.CANCELLED)
-        attach_session_goal(session, active)
-        return SessionGoalRunResult(
-            goal=active, last_result=_scrub_progress_tags(last), turn_count=active.turns_used
-        )
-
-    if getattr(session, "pending_user_choice", None) is not None:
-        return SessionGoalRunResult(
-            goal=active, last_result=_scrub_progress_tags(last), turn_count=active.turns_used
-        )
-
-    # Evaluate on raw text (tags still present), then scrub for the user.
-    next_status = evaluate_fn(active, last, session=session)
-    stored = getattr(session, "session_goal", None)
-    if isinstance(stored, SessionGoal):
-        active = stored
-    last = _scrub_progress_tags(last)
-    if next_status != SessionGoalStatus.ACTIVE:
-        active = active.with_status(next_status)
-        attach_session_goal(session, active)
-        if on_progress is not None:
-            on_progress(active)
+    active, last, stop = _finish_outer_turn(
+        session,
+        active,
+        last,
+        evaluate_fn=evaluate_fn,
+        on_progress=on_progress,
+    )
+    if stop:
         return SessionGoalRunResult(goal=active, last_result=last, turn_count=active.turns_used)
 
     while active.status == SessionGoalStatus.ACTIVE:
         if cancel_requested is not None and cancel_requested():
             active = active.with_status(SessionGoalStatus.CANCELLED)
-            attach_session_goal(session, active)
+            active = _paint(session, active, on_progress)
             break
 
         if active.turns_used >= active.max_outer_turns:
             active = active.with_status(SessionGoalStatus.BUDGET_EXHAUSTED)
-            attach_session_goal(session, active)
+            active = _paint(session, active, on_progress)
             break
 
+        _announce_working(session, active, on_progress)
         last = chat(continuation_nudge(active))
         active = active.record_turn()
-        active = _refresh_active(session, active, last)
-        if on_progress is not None:
-            on_progress(active)
-
-        if last.cancelled:
-            active = active.with_status(SessionGoalStatus.CANCELLED)
-            attach_session_goal(session, active)
-            last = _scrub_progress_tags(last)
-            break
-
-        if getattr(session, "pending_user_choice", None) is not None:
-            last = _scrub_progress_tags(last)
-            break
-
-        next_status = evaluate_fn(active, last, session=session)
-        stored = getattr(session, "session_goal", None)
-        if isinstance(stored, SessionGoal):
-            active = stored
-        last = _scrub_progress_tags(last)
-        if next_status != SessionGoalStatus.ACTIVE:
-            active = active.with_status(next_status)
-            attach_session_goal(session, active)
-            if on_progress is not None:
-                on_progress(active)
-            break
-
-        if active.turns_used >= active.max_outer_turns:
-            active = active.with_status(SessionGoalStatus.BUDGET_EXHAUSTED)
-            attach_session_goal(session, active)
+        active, last, stop = _finish_outer_turn(
+            session,
+            active,
+            last,
+            evaluate_fn=evaluate_fn,
+            on_progress=on_progress,
+        )
+        if stop:
             break
 
     if last is None:

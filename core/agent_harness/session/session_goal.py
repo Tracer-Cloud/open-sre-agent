@@ -16,11 +16,13 @@ Inner ``core.agent.goals.Goal`` / ``goal_review`` stay the per-turn ReAct gate.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix
+from platform.common.evidence_compaction import truncate_message
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.assistant_handoff import AssistantHandoff
@@ -39,10 +41,18 @@ class SessionGoalStatus:
     CANCELLED = "cancelled"
 
 
+# Character budgets for goal text. The ellipsis arithmetic lives in
+# ``truncate_message`` so no call site repeats ``limit - len("...")``.
+# A reason is one line of the checklist render; a condition is persisted in
+# full-ish for resume; the status-line condition shares a single Slack/Telegram
+# timeline row with the status, turn counter, and reason.
+MAX_GOAL_REASON_CHARS = 240
+MAX_GOAL_CONDITION_CHARS = 400
+MAX_GOAL_STATUS_LINE_CONDITION_CHARS = 60
+
 # Outer turns a goal may run before the host stops on budget.
 _DEFAULT_MAX_OUTER_TURNS = 5
 
-_ACHIEVED_TAG = "session_goal:achieved"
 _DONE_TAG = re.compile(r"session_goal:done=([0-9,\s]+)")
 # Whole-token progress tags removed before the user sees the reply.
 _PROGRESS_TAG_LINE = re.compile(
@@ -62,6 +72,13 @@ class SessionGoal:
     step_count: int | None = None
     checklist: tuple[str, ...] = ()
     completed: frozenset[int] = frozenset()
+    # Last host/evaluator reason shown in progress paint and continuation nudges.
+    last_reason: str = ""
+    # Wall-clock start for Claude-shaped ``◎ /goal active`` duration (``time.time()``).
+    started_at: float | None = None
+    # Session token totals when the goal was attached — delta is goal spend.
+    token_baseline_input: int = 0
+    token_baseline_output: int = 0
 
     def with_status(self, status: str) -> SessionGoal:
         return replace(self, status=status)
@@ -71,6 +88,10 @@ class SessionGoal:
 
     def with_completed(self, completed: frozenset[int]) -> SessionGoal:
         return replace(self, completed=completed)
+
+    def with_reason(self, reason: str) -> SessionGoal:
+        text = truncate_message(reason.strip(), MAX_GOAL_REASON_CHARS)
+        return replace(self, last_reason=text)
 
     @property
     def checklist_complete(self) -> bool:
@@ -85,6 +106,11 @@ class SessionGoal:
             for index, item in enumerate(self.checklist)
             if index not in self.completed
         )
+
+    @property
+    def next_checklist_item(self) -> tuple[int, str] | None:
+        unfinished = self.unfinished_items
+        return unfinished[0] if unfinished else None
 
 
 def _checklist_from_handoffs(handoff_contents: Sequence[str]) -> tuple[str, ...]:
@@ -151,8 +177,7 @@ def session_goal_from_handoffs(
             max_turns = max(max_turns, step_count)
 
     goal_condition = condition.strip() or body
-    if len(goal_condition) > 400:
-        goal_condition = goal_condition[:397] + "..."
+    goal_condition = truncate_message(goal_condition, MAX_GOAL_CONDITION_CHARS)
     return SessionGoal(
         condition=goal_condition,
         max_outer_turns=max_turns,
@@ -204,8 +229,50 @@ def attach_session_goal_from_handoffs(
     return attach_session_goal(session, detected)
 
 
+def _session_token_totals(session: Any | None) -> tuple[int, int]:
+    if session is None:
+        return 0, 0
+    tokens = getattr(session, "tokens", None)
+    totals = getattr(tokens, "totals", None)
+    if not isinstance(totals, dict):
+        return 0, 0
+    try:
+        return int(totals.get("input", 0) or 0), int(totals.get("output", 0) or 0)
+    except (TypeError, ValueError):
+        return 0, 0
+
+
+def mark_session_goal_started(
+    goal: SessionGoal,
+    *,
+    now: float | None = None,
+    session: Any | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> SessionGoal:
+    """Stamp wall-clock start + token baselines for active-status UX."""
+    if input_tokens is None or output_tokens is None:
+        baseline_in, baseline_out = _session_token_totals(session)
+        if input_tokens is None:
+            input_tokens = baseline_in
+        if output_tokens is None:
+            output_tokens = baseline_out
+    return replace(
+        goal,
+        started_at=float(time.time() if now is None else now),
+        token_baseline_input=max(0, int(input_tokens)),
+        token_baseline_output=max(0, int(output_tokens)),
+    )
+
+
 def attach_session_goal(session: Any, goal: SessionGoal) -> SessionGoal:
-    """Store ``goal`` on ``session`` and return it."""
+    """Store ``goal`` on ``session`` and return it.
+
+    Fresh active goals get a start stamp (duration / token delta) unless the
+    caller already set ``started_at`` (e.g. restore from payload).
+    """
+    if goal.started_at is None and goal.status == SessionGoalStatus.ACTIVE:
+        goal = mark_session_goal_started(goal, session=session)
     session.session_goal = goal
     return goal
 
@@ -214,9 +281,67 @@ def clear_session_goal(session: Any) -> None:
     session.session_goal = None
 
 
+def session_goal_elapsed_seconds(
+    goal: SessionGoal,
+    *,
+    now: float | None = None,
+) -> float | None:
+    """Seconds since ``started_at``, or ``None`` when the clock was never stamped."""
+    if goal.started_at is None:
+        return None
+    clock = time.time() if now is None else now
+    return max(0.0, float(clock) - float(goal.started_at))
+
+
+def session_goal_token_delta(
+    goal: SessionGoal,
+    *,
+    session: Any | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> int:
+    """Token spend since attach (input+output), floored at zero."""
+    if input_tokens is None or output_tokens is None:
+        cur_in, cur_out = _session_token_totals(session)
+        if input_tokens is None:
+            input_tokens = cur_in
+        if output_tokens is None:
+            output_tokens = cur_out
+    delta = (int(input_tokens) - int(goal.token_baseline_input)) + (
+        int(output_tokens) - int(goal.token_baseline_output)
+    )
+    return max(0, delta)
+
+
+def format_duration_compact(seconds: float) -> str:
+    """Human duration for status lines (``45s``, ``1m 23s``, ``1h 02m``)."""
+    total = max(0, int(seconds))
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m {secs:02d}s"
+    return f"{secs}s"
+
+
+def format_token_count_compact(count: int) -> str:
+    """Compact token count (``150``, ``1.2k``, ``3.4M``)."""
+    value = max(0, int(count))
+    if value < 1000:
+        return str(value)
+    if value < 1_000_000:
+        scaled = value / 1000.0
+        text = f"{scaled:.1f}".rstrip("0").rstrip(".")
+        return f"{text}k"
+    scaled = value / 1_000_000.0
+    text = f"{scaled:.1f}".rstrip("0").rstrip(".")
+    return f"{text}M"
+
+
 def session_goal_to_payload(goal: SessionGoal) -> dict[str, Any]:
     """JSON-ready dict for persistence / host transport."""
-    return {
+    payload: dict[str, Any] = {
         "condition": goal.condition,
         "max_outer_turns": int(goal.max_outer_turns),
         "status": goal.status,
@@ -224,7 +349,13 @@ def session_goal_to_payload(goal: SessionGoal) -> dict[str, Any]:
         "step_count": goal.step_count,
         "checklist": list(goal.checklist),
         "completed": sorted(int(index) for index in goal.completed),
+        "last_reason": goal.last_reason,
+        "token_baseline_input": int(goal.token_baseline_input),
+        "token_baseline_output": int(goal.token_baseline_output),
     }
+    if goal.started_at is not None:
+        payload["started_at"] = float(goal.started_at)
+    return payload
 
 
 def session_goal_from_payload(payload: Any) -> SessionGoal | None:
@@ -263,6 +394,20 @@ def session_goal_from_payload(payload: Any) -> SessionGoal | None:
     status = payload.get("status")
     if not isinstance(status, str) or not status.strip():
         status = SessionGoalStatus.ACTIVE
+    reason_raw = payload.get("last_reason")
+    last_reason = reason_raw.strip() if isinstance(reason_raw, str) else ""
+    started_at: float | None = None
+    started_raw = payload.get("started_at")
+    if started_raw is not None:
+        try:
+            started_at = float(started_raw)
+        except (TypeError, ValueError):
+            started_at = None
+    try:
+        token_in = max(0, int(payload.get("token_baseline_input", 0) or 0))
+        token_out = max(0, int(payload.get("token_baseline_output", 0) or 0))
+    except (TypeError, ValueError):
+        token_in, token_out = 0, 0
     return SessionGoal(
         condition=condition.strip(),
         max_outer_turns=max_outer,
@@ -271,6 +416,10 @@ def session_goal_from_payload(payload: Any) -> SessionGoal | None:
         step_count=step_count,
         checklist=checklist,
         completed=frozenset(completed),
+        last_reason=last_reason,
+        started_at=started_at,
+        token_baseline_input=token_in,
+        token_baseline_output=token_out,
     )
 
 
@@ -399,66 +548,127 @@ def strip_session_goal_progress_tags(text: str) -> str:
     return cleaned.strip()
 
 
-def default_evaluate_session_goal(
-    goal: SessionGoal,
-    result: Any,
-    *,
-    session: Any | None = None,
-) -> str:
-    """Evaluate completion from structured signals (not fuzzy user intent).
+def derive_session_goal_reason(goal: SessionGoal) -> str:
+    """Structured reason for progress paint and continuation nudges.
 
-    Achieved when the reply emits ``session_goal:achieved``, or when every
-    checklist item has been marked via ``session_goal:done=<index>``.
+    No LLM — derived from status + checklist progress so hosts stay honest and
+    cheap. Surfaces show this like Claude's per-turn evaluator reason.
     """
-    if session is not None and getattr(session, "pending_user_choice", None) is not None:
-        return SessionGoalStatus.ACTIVE
+    if goal.status == SessionGoalStatus.ACHIEVED:
+        return "goal achieved"
+    if goal.status == SessionGoalStatus.BUDGET_EXHAUSTED:
+        return f"outer turn budget exhausted ({goal.turns_used}/{goal.max_outer_turns})"
+    if goal.status == SessionGoalStatus.CANCELLED:
+        return "goal cancelled"
+    if goal.status == SessionGoalStatus.CLEARED:
+        return "goal cleared"
+    if goal.checklist:
+        done = len(goal.completed & frozenset(range(len(goal.checklist))))
+        total = len(goal.checklist)
+        nxt = goal.next_checklist_item
+        if nxt is None:
+            return f"checklist {done}/{total} done"
+        _index, item = nxt
+        return f"checklist {done}/{total} done — next: {item}"
+    return "waiting for session_goal:achieved with tool evidence"
 
-    text = ""
-    response = getattr(result, "assistant_response_text", None)
-    if isinstance(response, str):
-        text = response
-    primary = getattr(result, "primary_response_text", None)
-    if not text and isinstance(primary, str):
-        text = primary
 
-    if _ACHIEVED_TAG in text:
-        return SessionGoalStatus.ACHIEVED
-
-    # Prefer the (possibly already progress-updated) goal on the session.
-    current = goal
-    if session is not None:
-        stored = getattr(session, "session_goal", None)
-        if isinstance(stored, SessionGoal):
-            current = stored
-    current = apply_session_goal_progress(current, text)
-    if session is not None and isinstance(getattr(session, "session_goal", None), SessionGoal):
-        attach_session_goal(session, current)
-
-    if current.checklist and current.checklist_complete:
-        return SessionGoalStatus.ACHIEVED
-
-    return SessionGoalStatus.ACTIVE
+def refresh_session_goal_reason(goal: SessionGoal) -> SessionGoal:
+    """Attach a fresh :func:`derive_session_goal_reason` on ``goal``."""
+    return goal.with_reason(derive_session_goal_reason(goal))
 
 
 def format_session_goal_checklist(goal: SessionGoal) -> str:
-    """Render a compact checklist for REPL / host progress display."""
+    """Backward-compatible alias for :func:`format_session_goal_progress`."""
+    return format_session_goal_progress(goal)
+
+
+def format_session_goal_progress(
+    goal: SessionGoal,
+    *,
+    session: Any | None = None,
+    now: float | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> str:
+    """Multi-line progress paint for REPL mid-loop updates and ``/goal show``."""
+    reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
+    status = goal.status
+    if status == SessionGoalStatus.ACTIVE:
+        elapsed = session_goal_elapsed_seconds(goal, now=now)
+        duration = format_duration_compact(elapsed) if elapsed is not None else "—"
+        tokens = session_goal_token_delta(
+            goal,
+            session=session,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        token_text = format_token_count_compact(tokens)
+        if reason.startswith("working"):
+            headline = (
+                f"◎ /goal active · working… · {duration} · "
+                f"turn {goal.turns_used}/{goal.max_outer_turns} · +{token_text} tokens"
+            )
+        else:
+            headline = (
+                f"◎ /goal active · {duration} · turn {goal.turns_used}/{goal.max_outer_turns} "
+                f"· +{token_text} tokens"
+            )
+    else:
+        headline = f"Session goal · {status} · turn {goal.turns_used}/{goal.max_outer_turns}"
+    lines = [
+        headline,
+        f"  condition: {goal.condition}",
+        f"  reason: {reason}",
+    ]
     if not goal.checklist:
-        return ""
-    lines = ["Goal checklist:"]
+        return "\n".join(lines)
+
+    lines.append("  Checklist:")
+    next_index = goal.next_checklist_item[0] if goal.next_checklist_item else None
     for index, item in enumerate(goal.checklist):
-        mark = "[x]" if index in goal.completed else "[ ]"
-        lines.append(f"  {mark} {index + 1}. {item}")
+        done = index in goal.completed
+        mark = "[x]" if done else "[ ]"
+        prefix = "→ " if (not done and index == next_index) else "  "
+        lines.append(f"  {prefix}{mark} {index + 1}. {item}")
     return "\n".join(lines)
+
+
+def format_session_goal_status_line(
+    goal: SessionGoal,
+    *,
+    session: Any | None = None,
+    now: float | None = None,
+) -> str:
+    """Compact one-line status for gateway sinks (Slack/Telegram timelines)."""
+    reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
+    condition = goal.condition.strip()
+    condition = truncate_message(condition, MAX_GOAL_STATUS_LINE_CONDITION_CHARS)
+    if goal.status == SessionGoalStatus.ACTIVE:
+        elapsed = session_goal_elapsed_seconds(goal, now=now)
+        duration = format_duration_compact(elapsed) if elapsed is not None else "—"
+        tokens = format_token_count_compact(session_goal_token_delta(goal, session=session))
+        return (
+            f"◎ /goal active · {duration} · turn {goal.turns_used}/{goal.max_outer_turns} "
+            f"· +{tokens} tok · {condition} · {reason}"
+        )
+    return (
+        f"Goal · {goal.status} · turn {goal.turns_used}/{goal.max_outer_turns} · "
+        f"{condition} · {reason}"
+    )
 
 
 def continuation_nudge(goal: SessionGoal) -> str:
     """User-visible follow-up message for the next outer turn."""
+    reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
+    reason_block = f"Last progress: {reason}\n\n"
     unfinished = goal.unfinished_items
     if unfinished:
         pending = "\n".join(f"  - [{index}] {item}" for index, item in unfinished)
         return (
             "[session_goal] Continue the active goal without asking whether to "
             f"continue. Goal: {goal.condition}\n\n"
+            f"{reason_block}"
             "Unfinished checklist items (0-based indices):\n"
             f"{pending}\n\n"
             "Take the next unfinished item now. When you complete an item, include "
@@ -468,8 +678,10 @@ def continuation_nudge(goal: SessionGoal) -> str:
     return (
         "[session_goal] Continue the active goal without asking whether to "
         f"continue. Goal: {goal.condition}\n\n"
-        "Take the next unfinished step now. When every step is done, include the "
-        "exact tag `session_goal:achieved` in your reply."
+        f"{reason_block}"
+        "Take the next unfinished step now. When the goal is met after real tool "
+        "work, include the exact tag `session_goal:achieved` in your reply. "
+        "Do not emit that tag with no tool evidence — the host will ignore it."
     )
 
 
@@ -483,8 +695,15 @@ __all__ = [
     "attach_session_goal_from_handoffs",
     "clear_session_goal",
     "continuation_nudge",
-    "default_evaluate_session_goal",
+    "derive_session_goal_reason",
+    "format_duration_compact",
     "format_session_goal_checklist",
+    "format_session_goal_progress",
+    "format_session_goal_status_line",
+    "format_token_count_compact",
+    "mark_session_goal_started",
+    "refresh_session_goal_reason",
+    "session_goal_elapsed_seconds",
     "session_goal_from_assistant_handoffs",
     "session_goal_from_handoffs",
     "session_goal_from_payload",
@@ -492,6 +711,7 @@ __all__ = [
     "session_goal_state_is_empty",
     "session_goal_state_snapshot",
     "session_goal_to_payload",
+    "session_goal_token_delta",
     "should_persist_session_goal_state",
     "strip_session_goal_progress_tags",
 ]

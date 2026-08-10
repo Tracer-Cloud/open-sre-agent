@@ -26,6 +26,7 @@ def test_session_goal_round_trips_through_payload() -> None:
         step_count=3,
         checklist=("a", "b", "c"),
         completed=frozenset({0}),
+        last_reason="checklist 1/3 done — next: b",
     )
     restored = session_goal_from_payload(session_goal_to_payload(goal))
     assert restored == goal
@@ -151,3 +152,43 @@ def test_clearing_a_goal_writes_a_tombstone_so_resume_does_not_revive_it() -> No
     assert restored.session_goal is None
     assert restored.offered_upgrade_ctas == set()
     assert restored.pending_integration_setup_offer is None
+
+
+def test_clearing_a_goal_is_persisted_so_resume_does_not_revive_it() -> None:
+    """A cleared goal must not come back when the session is resumed.
+
+    Empty goal snapshots are suppressed at flush so they cannot re-parent the
+    transcript leaf. That suppression must not hide a *transition* to empty:
+    without a tombstone the last persisted snapshot still holds the goal, and
+    restore reattaches something the user explicitly cleared.
+    """
+    # Arrange: a session that had a goal, flushed once.
+    from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+    from core.agent_harness.session.session_core import SessionCore
+    from core.agent_harness.session.session_goal import (
+        SESSION_GOAL_STATE_CUSTOM_TYPE,
+        SessionGoal,
+        attach_session_goal,
+        clear_session_goal,
+    )
+
+    storage = InMemorySessionStorage()
+    session = SessionCore(storage=storage)
+    storage.open_session(session)
+    session.record("cli_agent", "start", ok=True)
+    attach_session_goal(session, SessionGoal(condition="finish it", max_outer_turns=3))
+    storage.flush(session)
+
+    # Act: the user runs ``/goal clear`` — dispatch_slash records the row.
+    session.record("slash", "/goal clear", ok=True)
+    clear_session_goal(session)
+    storage.flush(session)
+
+    # Assert: the last persisted snapshot carries no goal.
+    snapshots = [
+        record["content"]
+        for record in storage.read(session.session_id)
+        if record.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert len(snapshots) == 2, "the clear was not tombstoned"
+    assert snapshots[-1].get("session_goal") is None

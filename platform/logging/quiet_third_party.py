@@ -3,6 +3,10 @@
 MCP's client session logs a WARNING when a tool returns without a cached
 output schema (``Tool X not listed by server, cannot validate…``). That is
 internal validation noise — keep it off the user-facing transcript.
+
+Note: current ``mcp`` SDK uses ``logging.getLogger("client")`` (bare name),
+not ``mcp.client.session``. Quiet both, and filter the known message so a
+generic ``client`` logger cannot hide unrelated warnings forever.
 """
 
 from __future__ import annotations
@@ -24,7 +28,22 @@ _ERROR_FLOOR = (
     "mcp",
     "mcp.client",
     "mcp.client.session",
+    # mcp.client.session.py historically used this bare logger name.
+    "client",
 )
+
+_MCP_SCHEMA_NOISE = "not listed by server, cannot validate"
+
+
+class _DropMcpSchemaValidationNoise(logging.Filter):
+    """Drop the known MCP structured-content cache miss warning."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:
+            return True
+        return _MCP_SCHEMA_NOISE not in message
 
 
 def quiet_noisy_third_party_loggers() -> None:
@@ -33,6 +52,9 @@ def quiet_noisy_third_party_loggers() -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
     for name in _ERROR_FLOOR:
         logging.getLogger(name).setLevel(logging.ERROR)
+    client = logging.getLogger("client")
+    if not any(isinstance(f, _DropMcpSchemaValidationNoise) for f in client.filters):
+        client.addFilter(_DropMcpSchemaValidationNoise())
 
 
 __all__ = ["quiet_noisy_third_party_loggers"]

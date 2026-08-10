@@ -1,4 +1,9 @@
-"""Slash sugar for the outer SessionGoal API: /goal show|set|clear."""
+"""Slash sugar for the outer SessionGoal API: /goal show|set|clear.
+
+Claude Code–shaped UX: ``/goal set`` attaches a completion condition and
+immediately queues that condition as the next turn (autosubmit). Status shows
+``◎ /goal active`` with duration, turn budget, and token delta.
+"""
 
 from __future__ import annotations
 
@@ -10,11 +15,13 @@ from core.agent_harness.session.session_goal import (
     SessionGoalStatus,
     attach_session_goal,
     clear_session_goal,
-    format_session_goal_checklist,
+    format_session_goal_progress,
     session_goal_is_active,
 )
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
+
+_GOAL_SUBCOMMANDS = frozenset({"show", "status", "set", "clear", "unset"})
 
 
 def _show(session: Session, console: Console) -> bool:
@@ -26,15 +33,7 @@ def _show(session: Session, console: Console) -> bool:
             f"or let the action agent attach ``session_goal:…``."
         )
         return True
-    console.print(f"[{HIGHLIGHT}]session goal[/] ({_rich_escape(goal.status)})")
-    console.print(f"  condition: {_rich_escape(goal.condition)}")
-    console.print(
-        f"  turns: {goal.turns_used}/{goal.max_outer_turns}"
-        + (f"  steps: {goal.step_count}" if goal.step_count is not None else "")
-    )
-    checklist = format_session_goal_checklist(goal)
-    if checklist:
-        console.print(checklist)
+    console.print(format_session_goal_progress(goal, session=session), markup=False)
     return True
 
 
@@ -62,8 +61,14 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
         status=SessionGoalStatus.ACTIVE,
     )
     attach_session_goal(session, goal)
+    # Claude-shaped: setting starts work immediately with the condition as the
+    # directive — queue autosubmit on the REPL prompt loop.
+    session.terminal.set_auto_command(condition)
+    console.print(format_session_goal_progress(goal, session=session), markup=False)
     console.print(
-        f"[{HIGHLIGHT}]session goal set[/] (max_turns={max_turns}): {_rich_escape(condition)}"
+        f"[{DIM}]→ starting now (condition queued as the next turn). [/]"
+        f"[{DIM}]/goal[/][{DIM}] for status · [/]"
+        f"[{DIM}]/goal clear[/][{DIM}] to stop.[/]"
     )
     return True
 
@@ -87,5 +92,8 @@ def _cmd_goal(session: Session, console: Console, args: list[str]) -> bool:
         return _set(session, console, args[1:])
     if sub in {"clear", "unset"}:
         return _clear(session, console)
-    console.print(f"[{ERROR}]usage:[/] /goal [show|set|clear]")
+    # Claude-shaped: ``/goal <condition>`` is sugar for ``/goal set <condition>``.
+    if sub not in _GOAL_SUBCOMMANDS:
+        return _set(session, console, args)
+    console.print(f"[{ERROR}]usage:[/] /goal [show|set|clear]  or  /goal <condition>")
     return True

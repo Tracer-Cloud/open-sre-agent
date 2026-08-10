@@ -26,7 +26,12 @@ are separate layers.
 
 Outer `SessionGoal` (`session/session_goal.py` + `turns/session_goal_loop.py`) is
 **not** the inner ReAct `Goal` / `goal_review`. While a session goal is active,
-`run_turn` suppresses investigation Want-me-to closers.
+`run_turn` suppresses investigation Want-me-to closers. Completion is judged by
+`session/session_goal_evaluate.py` (independent of model self-report): checklist
+complete via `done=` indices, or `session_goal:achieved` **only** with tool
+evidence when there is no checklist — bare `achieved` is ignored. Optional LLM
+confirm for the tool-evidence path: `build_session_goal_llm_evaluator` in
+`session/session_goal_review.py` (pass as `evaluate=` to the outer loop).
 
 **Evidence kinds (open/closed):** vocabulary + per-kind policy live in
 `turns/evidence_kind.py` (`EvidenceKind` + `EvidenceKindPolicy`). Add a kind by

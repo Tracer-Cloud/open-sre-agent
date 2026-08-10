@@ -23,7 +23,11 @@ from rich.console import Console
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.session_goal import SessionGoal, format_session_goal_checklist
+from core.agent_harness.session.session_goal import (
+    SessionGoal,
+    format_session_goal_progress,
+    format_session_goal_status_line,
+)
 from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cancel
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
@@ -142,9 +146,17 @@ class GatewayTurnHandler:
                     return isinstance(cancel, threading.Event) and cancel.is_set()
 
                 def _on_progress(goal: SessionGoal) -> None:
-                    rendered = format_session_goal_checklist(goal)
-                    if rendered:
-                        logger.debug("gateway_session_goal_progress\n%s", rendered)
+                    # Same progress contract as the interactive shell: paint mid-loop
+                    # and scrub happens inside run_until_session_goal. Gateway sinks
+                    # get a compact status line; full text goes to debug logs.
+                    full = format_session_goal_progress(goal, session=session)
+                    compact = format_session_goal_status_line(goal, session=session)
+                    if full:
+                        logger.debug("gateway_session_goal_progress\n%s", full)
+                    if compact:
+                        set_status = getattr(sink, "set_tool_status", None)
+                        if callable(set_status):
+                            set_status(compact)
 
                 turn_result = run_until_session_goal(
                     _chat,

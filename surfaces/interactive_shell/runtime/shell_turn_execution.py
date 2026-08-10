@@ -18,7 +18,7 @@ from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.session.session_goal import (
     SessionGoal,
-    format_session_goal_checklist,
+    format_session_goal_progress,
 )
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.host_cancel import host_cancel_requested
@@ -185,9 +185,10 @@ def execute_shell_turn(
         )
 
     def _on_progress(goal: SessionGoal) -> None:
-        rendered = format_session_goal_checklist(goal)
+        rendered = format_session_goal_progress(goal, session=session)
         if rendered:
-            console.print(rendered)
+            # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
+            console.print(rendered, markup=False)
 
     # Always one action-agent turn first. Outer loop continues only when that
     # turn (or a prior turn) attached a SessionGoal via structured handoff /
