@@ -83,10 +83,12 @@ def _required_stored(stored: Callable[[], dict[str, Any] | None]) -> dict[str, A
     Only for values the environment cannot supply: ``enabled`` when the switch
     env var is unset, and ``bucket`` when the bucket env var is unset.
     """
+    from config.local_settings import local_settings_path
+
     section = stored()
     if section is None:
         raise RemoteSyncConfigError(
-            "remote_sync settings cannot be read from ~/.opensre/config.yml"
+            f"remote_sync settings cannot be read from {local_settings_path()}"
         )
     return section
 

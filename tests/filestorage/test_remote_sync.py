@@ -15,7 +15,12 @@ import pytest
 from config.constants.filestorage import (
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
+    REMOTE_SYNC_EXCLUDE_ENV,
+    REMOTE_SYNC_EXCLUDE_OFF_ENV,
     REMOTE_SYNC_PREFIX_ENV,
+    REMOTE_SYNC_PROFILE_ENV,
+    REMOTE_SYNC_PROVIDER_ENV,
+    REMOTE_SYNC_REGION_ENV,
 )
 from platform.filestorage import engine as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
@@ -1185,13 +1190,13 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
     monkeypatch.setenv(REMOTE_SYNC_PREFIX_ENV, "env-prefix")
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_REGION", "eu-west-2")
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROFILE", "env-profile")
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROVIDER", "aws")
+    monkeypatch.setenv(REMOTE_SYNC_REGION_ENV, "eu-west-2")
+    monkeypatch.setenv(REMOTE_SYNC_PROFILE_ENV, "env-profile")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "aws")
     # Exclusions are a setting like any other, so "purely by env" now includes
     # them. Left unset, an unreadable stored section falls back to the defaults
     # — see test_a_corrupt_settings_file_defaults_to_no_exclusions_when_env_covers_required.
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_EXCLUDE", "*.tmp")
+    monkeypatch.setenv(REMOTE_SYNC_EXCLUDE_ENV, "*.tmp")
 
     # Act
     config = load_remote_sync_config()
@@ -1221,12 +1226,12 @@ def test_the_two_documented_env_vars_survive_a_corrupt_settings_file(
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
     for env in (
-        "OPENSRE_REMOTE_SYNC_PREFIX",
-        "OPENSRE_REMOTE_SYNC_REGION",
-        "OPENSRE_REMOTE_SYNC_PROFILE",
-        "OPENSRE_REMOTE_SYNC_PROVIDER",
-        "OPENSRE_REMOTE_SYNC_EXCLUDE",
-        "OPENSRE_REMOTE_SYNC_EXCLUDE_OFF",
+        REMOTE_SYNC_PREFIX_ENV,
+        REMOTE_SYNC_REGION_ENV,
+        REMOTE_SYNC_PROFILE_ENV,
+        REMOTE_SYNC_PROVIDER_ENV,
+        REMOTE_SYNC_EXCLUDE_ENV,
+        REMOTE_SYNC_EXCLUDE_OFF_ENV,
     ):
         monkeypatch.delenv(env, raising=False)
 
