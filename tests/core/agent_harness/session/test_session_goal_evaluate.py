@@ -148,7 +148,7 @@ def test_bare_achieved_without_checklist_or_tools_stays_active() -> None:
 
 
 def test_host_owned_achieved_without_tools_completes() -> None:
-    """``/goal set`` prose goals may achieve on the tag alone (Claude-shaped)."""
+    """``/goal set`` prose goals may achieve on the tag alone."""
     session = SessionCore()
     goal = SessionGoal(
         condition="list three steps",

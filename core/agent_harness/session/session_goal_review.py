@@ -3,7 +3,7 @@
 Structured :func:`~core.agent_harness.session.session_goal_evaluate.evaluate_session_goal`
 is the default host judge. This module adds a second, independent model check
 only when that judge would achieve a **condition-only** goal via the achieved
-tag + tool evidence path — the case most like Claude's separate evaluator.
+tag + tool evidence path.
 
 Checklist completion stays structured-only (done indices are already host-tracked).
 Fails open to ACTIVE on LLM errors so a broken reviewer cannot false-complete.

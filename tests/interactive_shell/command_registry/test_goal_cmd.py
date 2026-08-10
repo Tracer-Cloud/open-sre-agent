@@ -37,7 +37,7 @@ def test_goal_set_show_and_clear() -> None:
 
 
 def test_goal_set_queues_condition_as_immediate_turn() -> None:
-    """Claude-shaped: setting a goal starts work without a separate prompt."""
+    """Setting a goal starts work without a separate prompt."""
     session = Session()
     console, buf = _console()
 
@@ -73,7 +73,7 @@ def test_goal_show_prints_active_duration_and_tokens() -> None:
 
 
 def test_bare_goal_condition_is_set_and_starts_turn() -> None:
-    """Claude-shaped ``/goal <condition>`` (no ``set``) attaches and autosubmits."""
+    """Bare ``/goal <condition>`` (no ``set``) attaches and autosubmits."""
     session = Session()
     console, _buf = _console()
 

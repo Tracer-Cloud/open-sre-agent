@@ -74,7 +74,7 @@ class SessionGoal:
     completed: frozenset[int] = frozenset()
     # Last host/evaluator reason shown in progress paint and continuation nudges.
     last_reason: str = ""
-    # Wall-clock start for Claude-shaped ``◎ /goal active`` duration (``time.time()``).
+    # Wall-clock start for ``◎ /goal active`` duration (``time.time()``).
     started_at: float | None = None
     # Session token totals when the goal was attached — delta is goal spend.
     token_baseline_input: int = 0
@@ -565,7 +565,7 @@ def derive_session_goal_reason(goal: SessionGoal) -> str:
     """Structured reason for progress paint and continuation nudges.
 
     No LLM — derived from status + checklist progress so hosts stay honest and
-    cheap. Surfaces show this like Claude's per-turn evaluator reason.
+    cheap.
     """
     if goal.status == SessionGoalStatus.ACHIEVED:
         return "goal achieved"

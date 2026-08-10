@@ -1,8 +1,8 @@
 """Slash sugar for the outer SessionGoal API: /goal show|set|clear.
 
-Claude Code–shaped UX: ``/goal set`` attaches a completion condition and
-immediately queues that condition as the next turn (autosubmit). Status shows
-``◎ /goal active`` with duration, turn budget, and token delta.
+``/goal set`` attaches a completion condition and immediately queues that
+condition as the next turn (autosubmit). Status shows ``◎ /goal active`` with
+duration, turn budget, and token delta.
 """
 
 from __future__ import annotations
@@ -62,8 +62,7 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
         host_owned=True,
     )
     goal = attach_session_goal(session, goal)
-    # Claude-shaped: setting starts work immediately with the condition as the
-    # directive — queue autosubmit on the REPL prompt loop.
+    # Setting starts work immediately: queue the condition on the REPL loop.
     session.terminal.set_auto_command(condition)
     console.print(format_session_goal_progress(goal, session=session), markup=False)
     console.print(
@@ -93,7 +92,7 @@ def _cmd_goal(session: Session, console: Console, args: list[str]) -> bool:
         return _set(session, console, args[1:])
     if sub in {"clear", "unset"}:
         return _clear(session, console)
-    # Claude-shaped: ``/goal <condition>`` is sugar for ``/goal set <condition>``.
+    # ``/goal <condition>`` is sugar for ``/goal set <condition>``.
     if sub not in _GOAL_SUBCOMMANDS:
         return _set(session, console, args)
     console.print(f"[{ERROR}]usage:[/] /goal [show|set|clear]  or  /goal <condition>")
