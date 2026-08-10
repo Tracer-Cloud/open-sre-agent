@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from integrations.config_models import JiraIntegrationConfig
+from integrations.path_safety import safe_path_segment
 from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
@@ -92,10 +93,13 @@ class JiraClient:
         fields: dict[str, Any],
     ) -> dict[str, Any]:
         """Update fields on an existing Jira issue."""
+        safe_key = safe_path_segment(issue_key)
+        if safe_key is None:
+            return {"success": False, "error": "issue_key is not a valid Jira issue key or id."}
         try:
             with self._get_client() as client:
                 resp = client.put(
-                    f"{self.config.api_base}/issue/{issue_key}",
+                    f"{self.config.api_base}/issue/{safe_key}",
                     json={"fields": fields},
                 )
                 resp.raise_for_status()
@@ -128,6 +132,9 @@ class JiraClient:
         body: str,
     ) -> dict[str, Any]:
         """Append an investigation summary as a comment on an existing Jira issue."""
+        safe_key = safe_path_segment(issue_key)
+        if safe_key is None:
+            return {"success": False, "error": "issue_key is not a valid Jira issue key or id."}
         payload = {
             "body": {
                 "type": "doc",
@@ -143,7 +150,7 @@ class JiraClient:
         try:
             with self._get_client() as client:
                 resp = client.post(
-                    f"{self.config.api_base}/issue/{issue_key}/comment",
+                    f"{self.config.api_base}/issue/{safe_key}/comment",
                     json=payload,
                 )
                 resp.raise_for_status()
@@ -239,9 +246,12 @@ class JiraClient:
 
     def get_issue(self, issue_key: str) -> dict[str, Any]:
         """Fetch an existing Jira issue to pull context into the investigation."""
+        safe_key = safe_path_segment(issue_key)
+        if safe_key is None:
+            return {"success": False, "error": "issue_key is not a valid Jira issue key or id."}
         try:
             with self._get_client() as client:
-                resp = client.get(f"{self.config.api_base}/issue/{issue_key}")
+                resp = client.get(f"{self.config.api_base}/issue/{safe_key}")
                 resp.raise_for_status()
                 data = resp.json()
                 fields = data.get("fields", {})

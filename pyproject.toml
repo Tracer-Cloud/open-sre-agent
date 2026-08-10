@@ -68,6 +68,17 @@ dependencies = [
     # Google APIs
     "google-api-python-client>=2.194.0,<3.0.0",
     "google-auth>=2.0.0,<3.0.0",
+    # Imported directly to build a timeout-bounded transport (httplib2 takes a
+    # timeout only at construction). It arrives transitively via
+    # google-api-python-client, but a direct import must not rest on that.
+    "google-auth-httplib2>=0.2.0,<1.0.0",
+    # Required by LiteLLM's Vertex AI *partner model* route (Anthropic Claude,
+    # Mistral, Llama served through Vertex), which hard-imports `vertexai`
+    # before it will build a request. Gemini-on-Vertex takes a different,
+    # REST-only handler and does not need this — so a Gemini-only deployment
+    # never notices it is absent, and a Claude-on-Vertex one fails every turn
+    # with "No module named 'vertexai'" at first request, not at startup.
+    "google-cloud-aiplatform>=1.38,<2.0.0",
     # MongoDB
     "pymongo>=4.6.0,<6.0.0",
     # Redis

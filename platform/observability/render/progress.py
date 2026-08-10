@@ -13,6 +13,7 @@ the adapter — they're not the core's concern.
 
 from __future__ import annotations
 
+import contextvars
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -126,15 +127,29 @@ _tracker: ProgressReporter = NoopProgressTracker()
 _tracker_factory: Callable[[], ProgressReporter] | None = None
 _silenced: bool = False
 
+# Per-run progress override that takes precedence over globals
+_progress_override: contextvars.ContextVar[ProgressReporter | None] = contextvars.ContextVar(
+    "_progress_override", default=None
+)
+
 
 def get_progress_tracker() -> ProgressReporter:
     """Return the currently-registered tracker (or the Noop default).
+
+    Checks for a per-run ContextVar override first, falling back to the global
+    tracker when none is set. This allows detached investigations to have their
+    own progress handling without affecting concurrent runs.
 
     When a CLI factory is registered and progress has not been silenced,
     the first call materializes the adapter lazily so ``ProgressReporter``
     is constructed after REPL boot (when ``_repl_progress_active()`` is
     accurate) rather than at process start-up.
     """
+    # Check for per-run override first
+    override = _progress_override.get()
+    if override is not None:
+        return override
+
     global _tracker
     if not _silenced and isinstance(_tracker, NoopProgressTracker) and _tracker_factory is not None:
         set_progress_tracker(_tracker_factory())
@@ -177,3 +192,14 @@ def silence_progress_tracker() -> None:
     _silenced = True
     _tracker.stop()
     set_progress_tracker(NoopProgressTracker())
+
+
+def set_progress_override(tracker: ProgressReporter | None) -> None:
+    """Set a per-run progress tracker override.
+
+    When set to a tracker instance, get_progress_tracker() returns this instead
+    of the global tracker. When set to None, removes the override and falls back
+    to global behavior. This allows detached investigations to have their own
+    progress handling without affecting other concurrent runs.
+    """
+    _progress_override.set(tracker)

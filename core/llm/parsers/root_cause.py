@@ -1,10 +1,17 @@
 """Parse a free-text LLM diagnosis into structured root-cause fields.
 
-Legacy fallback used when the diagnose stage's structured output is unavailable.
-The model emits labelled sections (``ROOT_CAUSE:``, ``VALIDATED_CLAIMS:``, …) and
-this reads each one back out. All the section-scanning shares two helpers:
+Fallback used when the diagnose stage's structured output is unavailable. It
+reads labelled sections (``ROOT_CAUSE:``, ``VALIDATED_CLAIMS:``, …) back out of
+the conclusion. All the section-scanning shares two helpers:
 :func:`_text_between` (the text after a label, up to the next section) and
 :func:`_cleaned_bullets` (list items with ``*``/``-``/``•`` markers stripped).
+
+The investigation system prompt asks for those sections as **markdown headings**
+(``**Root cause**:``), not as the screaming-snake labels, so
+:func:`_normalize_section_labels` rewrites the heading forms to the canonical
+labels first. Without that step this parser matches nothing on a real
+conclusion and every fallback returns "Unable to determine root cause" — which
+is exactly what a failed structured parse used to produce.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from core.domain.types.root_cause_categories import VALID_ROOT_CAUSE_CATEGORIES
 # where the root-cause text and each claim list end.
 _SECTIONS_AFTER_ROOT_CAUSE = (
     "ROOT_CAUSE_CATEGORY:",
+    "EVIDENCE:",
     "VALIDATED_CLAIMS:",
     "NON_VALIDATED_CLAIMS:",
     "CAUSAL_CHAIN:",
@@ -26,12 +34,83 @@ _SECTIONS_AFTER_ROOT_CAUSE = (
 )
 _REMEDIATION_STOP_HEADERS = (
     "ROOT_CAUSE",
+    "EVIDENCE",
     "VALIDATED",
     "NON_VALIDATED",
     "CAUSAL",
     "ALTERNATIVE",
     "REMEDIATION_STEPS",
+    "VALIDITY_SCORE",
 )
+
+
+#: Heading text the investigation prompt asks for, mapped to the canonical
+#: label this parser scans for. Keys are the heading lowercased with every run
+#: of non-alphanumeric characters collapsed to ``_``, so ``Non-validated
+#: claims``, ``NON VALIDATED CLAIMS`` and ``non_validated_claims`` all land on
+#: the same entry. Kept to the headings the prompt actually requests — a looser
+#: table (bare ``category``, bare ``remediation``) would capture prose.
+#:
+#: ``Evidence`` and ``Validity score`` have no field on
+#: :class:`RootCauseResult`, but the prompt puts them between and after the
+#: sections that do, so they must be recognised as boundaries or their contents
+#: are appended to whichever list precedes them.
+_HEADING_LABELS = {
+    "root_cause": "ROOT_CAUSE:",
+    "root_cause_category": "ROOT_CAUSE_CATEGORY:",
+    "evidence": "EVIDENCE:",
+    "validated_claims": "VALIDATED_CLAIMS:",
+    "non_validated_claims": "NON_VALIDATED_CLAIMS:",
+    "causal_chain": "CAUSAL_CHAIN:",
+    "remediation_steps": "REMEDIATION_STEPS:",
+    "alternative_hypotheses_considered": "ALTERNATIVE_HYPOTHESES_CONSIDERED:",
+    "validity_score": "VALIDITY_SCORE:",
+}
+
+#: A colon-terminated heading at the start of a line: optional list bullet,
+#: optional ATX marker, then the heading text and its colon in any emphasis
+#: arrangement (``**Root cause**:``, ``**Root cause:**``, ``## Root cause:``,
+#: ``Root cause:``). The colon is what separates a heading from a sentence, so
+#: a line with content after it is only rewritten when the colon is present.
+_HEADING_LINE = re.compile(
+    r"^[ \t]{0,3}(?:[-*+][ \t]+)?(?:#{1,6}[ \t]+)?"
+    r"(?P<heading>[*_ \t]*[A-Za-z][A-Za-z0-9 \-]*[*_ \t]*:[*_]*)"
+)
+
+#: Characters that are pure markdown decoration around a heading.
+_HEADING_DECORATION = "#*_-• \t:"
+
+
+def _canonical_label(heading: str) -> str | None:
+    """The canonical ``LABEL:`` for a heading, or ``None`` when it is not one."""
+    bare = heading.strip(_HEADING_DECORATION)
+    return _HEADING_LABELS.get(re.sub(r"[^a-z0-9]+", "_", bare.lower()).strip("_"))
+
+
+def _normalized_line(line: str) -> str:
+    """Rewrite one markdown heading line to canonical form, or return it as-is."""
+    match = _HEADING_LINE.match(line)
+    if match is not None:
+        label = _canonical_label(match.group("heading"))
+        if label is not None:
+            return f"{label}{line[match.end() :]}"
+        return line
+    # A heading with no colon is only trusted when the whole line is the
+    # heading (``## Root cause``, ``**Root cause**``) — never mid-prose.
+    label = _canonical_label(line)
+    return label if label is not None else line
+
+
+def _normalize_section_labels(response: str) -> str:
+    """Rewrite markdown section headings to the canonical ``LABEL:`` form.
+
+    The investigation prompt asks the model for ``**Root cause**:`` and friends,
+    never for ``ROOT_CAUSE:``, so without this every section scan below misses
+    and the caller reports no root cause at all. Lines whose heading is not in
+    :data:`_HEADING_LABELS` — and lines already in canonical form — are returned
+    untouched.
+    """
+    return "\n".join(_normalized_line(line) for line in response.split("\n"))
 
 
 @dataclass(frozen=True)
@@ -151,7 +230,12 @@ def _remediation_steps(after: str) -> list[str]:
 
 
 def parse_root_cause(response: str) -> RootCauseResult:
-    """Parse root cause, category, and claims from an LLM diagnosis response."""
+    """Parse root cause, category, and claims from an LLM diagnosis response.
+
+    Accepts both the canonical ``ROOT_CAUSE:`` labels and the markdown headings
+    the investigation prompt asks for (``**Root cause**:``).
+    """
+    response = _normalize_section_labels(response)
     category = _extract_category(response)
 
     after = _text_between(response, "ROOT_CAUSE:", ())

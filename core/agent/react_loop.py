@@ -361,6 +361,10 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                     iteration=iteration,
                     data={
                         "terminate": result.terminate,
+                        # An error to the model, but not work that went wrong:
+                        # a surface showing outcomes must not report a failure
+                        # for a call the runtime declined on purpose.
+                        "suppressed_duplicate": bool(result.metadata.get("suppressed_duplicate")),
                         "tool_call_index": index,
                         "tool_call_count": requested_tool_count,
                     },

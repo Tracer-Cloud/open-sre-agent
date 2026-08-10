@@ -50,6 +50,17 @@ def resolve_effective_integrations(
     )
 
 
+def resolve_local_classified_integrations(
+    store_integrations: list[dict[str, Any]] | None = None,
+    env_integrations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    _sync_overrides()
+    return _catalog_impl.resolve_local_classified_integrations(
+        store_integrations=store_integrations,
+        env_integrations=env_integrations,
+    )
+
+
 def _env_is_set(name: str) -> bool:
     return bool(os.getenv(name, "").strip())
 
@@ -121,6 +132,7 @@ def load_env_integration_services() -> list[str]:
     add("opsgenie", _env_is_set("OPSGENIE_API_KEY"))
     add("pagerduty", _env_is_set("PAGERDUTY_API_KEY"))
     add("incident_io", _env_is_set("INCIDENT_IO_API_KEY"))
+    add("rootly", _env_is_set("ROOTLY_API_TOKEN"))
     add("jira", _all_env("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"))
     add(
         "servicenow",
@@ -298,4 +310,5 @@ __all__ = [
     "merge_integrations_by_service",
     "merge_local_integrations",
     "resolve_effective_integrations",
+    "resolve_local_classified_integrations",
 ]

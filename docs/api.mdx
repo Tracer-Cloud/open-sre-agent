@@ -58,7 +58,9 @@ curl -X POST "https://<host>/investigate" \
 Enqueue and poll — the pattern web clients should use. Queued investigations
 are executed by a background worker in the web service; it is enabled by
 setting `OPENSRE_INVESTIGATION_WORKER=1` (the Terraform deployment sets this).
-Records live in Postgres when `DATABASE_URL` is set, else in process memory.
+Records live in Postgres when `DATABASE_URI` is set, else in process memory.
+`DATABASE_URL` also works, for hosts that inject that name for you; `DATABASE_URI`
+wins if both are set.
 Reports are written to local disk first and uploaded to S3 when
 `OPENSRE_ARTIFACTS_BUCKET` is configured.
 
@@ -82,6 +84,11 @@ curl "https://<host>/api/investigations/<investigation_id>" \
 
 Investigations belong to the Clerk organization in the token; reading another
 organization's investigation returns `404`.
+
+Investigations started from a Slack thread land in the same table, and polling
+by id works for those too as long as they belong to your organization. What does
+not cross over is execution: each worker claims only records of its own origin,
+so a run enqueued here is never picked up by the chat gateway and vice versa.
 
 ## Status codes
 

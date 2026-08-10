@@ -259,3 +259,75 @@ def test_affirmative_qualifier_does_not_rescue_a_second_category() -> None:
     assert (
         _extract_category("ROOT_CAUSE_CATEGORY:\npod_oomkilled confirmed, code_defect") == "unknown"
     )
+
+
+class TestMarkdownHeadings:
+    """The conclusion format the investigation prompt actually asks for.
+
+    ``ROOT_CAUSE:`` appears in no prompt in the repo — the investigation asks
+    for ``**Root cause**:``. Before this, every fallback parse of a real
+    conclusion matched nothing and the report said "Unable to determine root
+    cause" over a complete, correct diagnosis.
+    """
+
+    def test_prompt_format_conclusion_parses_into_every_field(self) -> None:
+        # Arrange
+        response = """Triage complete: 2 pods restarting in namespace `acme-web`.
+
+**Root cause**: The `example-api` deployment caps memory at 256Mi while the
+container's steady-state footprint is ~310Mi, so the kubelet kills it on warm-up.
+
+**Root cause category**: pod_oomkilled
+
+**Evidence**: kubernetes_describe_pod, kubernetes_list_deployments
+
+**Validated claims**:
+- the last termination reports exit code 137
+- the deployment spec caps memory at 256Mi
+
+**Non-validated claims**:
+- a recent image change raised the baseline footprint
+
+**Remediation steps**:
+1. raise `resources.limits.memory` to 512Mi
+2. re-run the load profile
+
+**Validity score**: 0.9
+"""
+
+        # Act
+        result = parse_root_cause(response)
+
+        # Assert
+        assert result.root_cause_category == "pod_oomkilled"
+        assert result.root_cause.startswith("The `example-api` deployment caps memory")
+        assert result.validated_claims == [
+            "the last termination reports exit code 137",
+            "the deployment spec caps memory at 256Mi",
+        ]
+        assert result.non_validated_claims == [
+            "a recent image change raised the baseline footprint"
+        ]
+        # "Validity score" is not a result field, but it must still terminate the
+        # remediation list rather than becoming the last step.
+        assert result.remediation_steps == [
+            "1. raise `resources.limits.memory` to 512Mi",
+            "2. re-run the load profile",
+        ]
+
+    def test_atx_heading_without_a_colon_is_recognized(self) -> None:
+        """``## Root cause`` on its own line is a heading; mid-prose text is not."""
+        response = (
+            "## Root cause\nthe node ran out of memory\n\n## Root cause category\npod_oomkilled\n"
+        )
+
+        result = parse_root_cause(response)
+
+        assert result.root_cause == "the node ran out of memory"
+        assert result.root_cause_category == "pod_oomkilled"
+
+    def test_a_sentence_mentioning_a_section_name_is_not_a_heading(self) -> None:
+        """Only a heading line is rewritten — prose must not open a section."""
+        result = parse_root_cause("We could not establish the root cause from the evidence.")
+
+        assert result.root_cause == "Unable to determine root cause"

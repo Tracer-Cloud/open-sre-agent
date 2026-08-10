@@ -23,7 +23,7 @@ _BLOCKED_COMMANDS = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTIO
 _STATIC_GUIDANCE = (
     ". When the user asks which OpenSRE version is running, reply with the "
     "full version string above verbatim — including any parenthetical suffix. "
-    "When the user asks for the local timezone name, Python version, process "
+    "When the user asks for the reporting timezone, Python version, process "
     "id, parent process id, host/pod name, cloud provider or region, "
     "kubeconfig path, or which tools are installed, answer from the strings "
     "above directly, WITHOUT any tool call — these facts are authoritative "
@@ -42,7 +42,11 @@ _LIVE_GUIDANCE = (
     ". When the user asks for the current date, time, day of the week, "
     "timezone offset embedded in the timestamp, uptime, disk or memory usage, "
     "answer from the strings above — do NOT guess a date/time from your "
-    "training data. Never run "
+    "training data. Report EVERY time you mention in the reporting timezone "
+    "named above and label it with that zone, so a reader never has to convert "
+    "it. When a timestamp comes from a log line, alert, incident, or tool "
+    "result in another zone, convert it and keep the original in parentheses "
+    "so the conversion is checkable. Never run "
     f"{_BLOCKED_COMMANDS}. Do NOT invent field names, values, or numbers not "
     "present above."
 )
@@ -188,7 +192,7 @@ _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _version_line,
     _str_fact("runtime_env", "runtime environment is {}"),
     _str_fact("hostname", "host name is {}"),
-    _str_fact("tz_name", "local timezone is {}"),
+    _str_fact("tz_name", "times are reported in timezone {}"),
     _str_fact("python_version", "Python interpreter version is {}"),
     _pid_line,
     _cloud_line,

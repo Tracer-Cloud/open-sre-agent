@@ -23,6 +23,7 @@ from core.llm.providers.vertex_ai import (
     is_vertex_ai_provider,
     resolve_vertex_ai_request_kwargs,
 )
+from core.llm.shared.max_tokens import resolve_max_output_tokens
 from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMClient
 from core.llm.types import ModelType
 
@@ -39,9 +40,10 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
     spec = FIRST_PARTY_PROVIDERS.get(provider)
     if spec is not None:
         model = getattr(settings, f"{spec.env_prefix}_reasoning_model")
+        max_tokens = resolve_max_output_tokens(settings, provider_default=spec.max_tokens)
         return LiteLLMAgentClient(
             litellm_model=f"{spec.litellm_prefix}/{model}",
-            max_tokens=spec.max_tokens,
+            max_tokens=max_tokens,
             api_key_env=spec.api_key_env,
         )
 
@@ -49,19 +51,20 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         from config.config import AZURE_OPENAI_LLM_CONFIG
 
         azure = resolve_azure_openai_request_kwargs(settings, model_type=ModelType.REASONING)
+        max_tokens = resolve_max_output_tokens(
+            settings, provider_default=AZURE_OPENAI_LLM_CONFIG.max_tokens
+        )
         return LiteLLMAgentClient(
             litellm_model=azure["litellm_model"],
-            max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
+            max_tokens=max_tokens,
             api_base=azure["api_base"],
             api_version=azure["api_version"],
             api_key_env=azure["api_key_env"],
         )
 
     if is_openai_compat_provider(provider):
-        from config.config import PROVIDER_OLLAMA
-
         resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
-        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
+        max_tokens = resolve_max_output_tokens(settings, provider_default=resolved.agent_max_tokens)
         return LiteLLMAgentClient(
             litellm_model=_litellm_model_for_compat(resolved.model),
             max_tokens=max_tokens,
@@ -75,9 +78,12 @@ def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClie
         from config.config import VERTEX_AI_LLM_CONFIG
 
         vertex = resolve_vertex_ai_request_kwargs(settings, model_type=ModelType.REASONING)
+        max_tokens = resolve_max_output_tokens(
+            settings, provider_default=VERTEX_AI_LLM_CONFIG.max_tokens
+        )
         return LiteLLMAgentClient(
             litellm_model=vertex["litellm_model"],
-            max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
+            max_tokens=max_tokens,
             vertex_project=vertex.get("vertex_project"),
             vertex_location=vertex.get("vertex_location"),
             api_key_env=None,
@@ -110,10 +116,11 @@ def build_litellm_llm_client(
     if spec is not None:
         model = str(getattr(settings, f"{spec.env_prefix}_{model_type}_model"))
         fallback = _fallback(spec.env_prefix)
+        max_tokens = resolve_max_output_tokens(settings, provider_default=spec.max_tokens)
         return LiteLLMLLMClient(
             litellm_model=f"{spec.litellm_prefix}/{model}",
             model_fallback=(fallback and f"{spec.litellm_prefix}/{fallback}") or None,
-            max_tokens=spec.max_tokens,
+            max_tokens=max_tokens,
             api_key_env=spec.api_key_env,
             usage_callback=usage_callback,
         )
@@ -128,10 +135,13 @@ def build_litellm_llm_client(
             azure_fallback_model = (
                 raw_fallback if raw_fallback.startswith("azure/") else f"azure/{raw_fallback}"
             )
+        max_tokens = resolve_max_output_tokens(
+            settings, provider_default=AZURE_OPENAI_LLM_CONFIG.max_tokens
+        )
         return LiteLLMLLMClient(
             litellm_model=azure["litellm_model"],
             model_fallback=azure_fallback_model,
-            max_tokens=AZURE_OPENAI_LLM_CONFIG.max_tokens,
+            max_tokens=max_tokens,
             api_base=azure["api_base"],
             api_version=azure["api_version"],
             api_key_env=azure["api_key_env"],
@@ -145,10 +155,11 @@ def build_litellm_llm_client(
         if raw_fallback:
             fallback_compat = resolve_openai_compat_provider(settings, provider, ModelType.TOOLCALL)
             fallback_model = _litellm_model_for_compat(fallback_compat.model)
+        max_tokens = resolve_max_output_tokens(settings, provider_default=compat.config.max_tokens)
         return LiteLLMLLMClient(
             litellm_model=_litellm_model_for_compat(compat.model),
             model_fallback=fallback_model,
-            max_tokens=compat.config.max_tokens,
+            max_tokens=max_tokens,
             api_base=compat.base_url,
             api_key_env=compat.api_key_env,
             api_key_default=compat.api_key_default,
@@ -162,10 +173,13 @@ def build_litellm_llm_client(
         vertex = resolve_vertex_ai_request_kwargs(settings, model_type=model_type)
         raw_fallback = _fallback("vertex_ai")
         vertex_fallback_model = f"vertex_ai/{raw_fallback}" if raw_fallback else None
+        max_tokens = resolve_max_output_tokens(
+            settings, provider_default=VERTEX_AI_LLM_CONFIG.max_tokens
+        )
         return LiteLLMLLMClient(
             litellm_model=vertex["litellm_model"],
             model_fallback=vertex_fallback_model,
-            max_tokens=VERTEX_AI_LLM_CONFIG.max_tokens,
+            max_tokens=max_tokens,
             vertex_project=vertex.get("vertex_project"),
             vertex_location=vertex.get("vertex_location"),
             api_key_env=None,

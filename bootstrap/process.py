@@ -59,6 +59,7 @@ class BootStep(StrEnum):
     HARNESS_ADAPTERS = "harness_adapters"
     SCHEDULER_RUNNERS = "scheduler_runners"
     CAPABILITY_WARNINGS = "capability_warnings"
+    GKE_AUTOREGISTRATION = "gke_autoregistration"
     PRELOAD_LLM = "preload_llm"
 
 
@@ -85,6 +86,7 @@ GATEWAY_PROFILE: Final = ProcessProfile(
             BootStep.SENTRY,
             BootStep.HARNESS_ADAPTERS,
             BootStep.CAPABILITY_WARNINGS,
+            BootStep.GKE_AUTOREGISTRATION,
             BootStep.PRELOAD_LLM,
         }
     ),
@@ -153,6 +155,18 @@ def _run_capability_warnings(profile: ProcessProfile, log: logging.Logger) -> No
         log.warning("[%s] capability: %s", profile.name, warning)
 
 
+def _run_gke_autoregistration(_profile: ProcessProfile, log: logging.Logger) -> None:
+    # Opt-in and backgrounded: the on-disk integration store is ephemeral in a
+    # container, so a GKE cluster registered by hand is gone at the next
+    # restart. Off unless GCP_AUTO_REGISTER_GKE is set. Not part of the boot
+    # ordering in any real sense — it runs on a background thread and nothing
+    # after it waits. Deliberately absent from the CLI profiles, which are
+    # one-shot commands that should not pay for cluster discovery.
+    from integrations.gcp.gke import start_gke_autoregistration
+
+    start_gke_autoregistration(log)
+
+
 def _run_preload_llm(_profile: ProcessProfile, _log: logging.Logger) -> None:
     from core.llm.internal.preload import preload_llm_clients
 
@@ -169,6 +183,7 @@ _STEP_ORDER: Final[
     (BootStep.HARNESS_ADAPTERS, _run_harness_adapters),
     (BootStep.SCHEDULER_RUNNERS, _run_scheduler_runners),
     (BootStep.CAPABILITY_WARNINGS, _run_capability_warnings),
+    (BootStep.GKE_AUTOREGISTRATION, _run_gke_autoregistration),
     (BootStep.PRELOAD_LLM, _run_preload_llm),
 )
 

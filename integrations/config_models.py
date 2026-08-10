@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from config.config import get_tracer_base_url
+from config.constants.gcp import GCP_DISCOVER_PROJECTS_TOKEN
+from config.constants.rootly import DEFAULT_ROOTLY_TIMEOUT_SECONDS
 from config.strict_config import StrictConfigModel
 from integrations._validators import (
     normalize_bearer,
@@ -30,6 +32,9 @@ DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
 }
 DEFAULT_INCIDENT_IO_BASE_URL = "https://api.incident.io"
 DEFAULT_PAGERDUTY_BASE_URL = "https://api.pagerduty.com"
+DEFAULT_ROOTLY_BASE_URL = "https://api.rootly.com"
+# Rootly speaks JSON:API, which rejects a plain ``application/json`` body.
+ROOTLY_JSON_API_CONTENT_TYPE = "application/vnd.api+json"
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +360,60 @@ class IncidentIoIntegrationConfig(StrictConfigModel):
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+        }
+
+
+class RootlyIntegrationConfig(StrictConfigModel):
+    """Normalized Rootly credentials used by investigation and verification flows.
+
+    ``timeout_seconds`` is settable from the environment on purpose. Jenkins
+    hardcodes its equivalent, and raising it on a slow controller now needs a
+    code change — that is the mistake this field exists to avoid.
+    """
+
+    api_token: str
+    base_url: str = DEFAULT_ROOTLY_BASE_URL
+    timeout_seconds: float = Field(default=DEFAULT_ROOTLY_TIMEOUT_SECONDS, gt=0)
+    integration_id: str = ""
+
+    @field_validator("base_url", mode="before")
+    @classmethod
+    def _normalize_base_url(cls, value: object) -> str:
+        normalized = normalize_url(DEFAULT_ROOTLY_BASE_URL)(value)
+        return validate_https_or_loopback_http_url(normalized, service_name="Rootly")
+
+    @field_validator("api_token", mode="before")
+    @classmethod
+    def _normalize_api_token(cls, value: object) -> str:
+        return normalize_str()(value)
+
+    @field_validator("timeout_seconds", mode="before")
+    @classmethod
+    def _normalize_timeout(cls, value: object) -> float:
+        """Fall back to the default rather than reject a blank or junk override.
+
+        The value arrives from an env var and a Helm chart, where "unset" is an
+        empty string. A hard failure there takes the whole integration down over
+        a formatting slip.
+        """
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return DEFAULT_ROOTLY_TIMEOUT_SECONDS
+        try:
+            parsed = float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return DEFAULT_ROOTLY_TIMEOUT_SECONDS
+        return parsed if parsed > 0 else DEFAULT_ROOTLY_TIMEOUT_SECONDS
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_token)
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": ROOTLY_JSON_API_CONTENT_TYPE,
+            "Accept": ROOTLY_JSON_API_CONTENT_TYPE,
         }
 
 
@@ -1133,6 +1192,101 @@ class AzureIntegrationConfig(StrictConfigModel):
         except (TypeError, ValueError):
             return 100
         return max(1, min(v, 500))
+
+
+class GCPIntegrationConfig(StrictConfigModel):
+    """Normalized Google Cloud credentials and project scope.
+
+    Two independent axes of "multiple projects" exist and both are represented
+    here. ``project_id`` plus :attr:`additional_projects` covers the common GCP
+    case where one credential reaches many projects through folder/org-level
+    IAM inheritance — Cloud Logging can query all of them in a single request.
+    Genuinely separate credentials (a different org, a different SA) are
+    separate *instances* instead, via ``GCP_INSTANCES``.
+
+    Authentication resolves in precedence order: explicit
+    :attr:`service_account_key`, then :attr:`impersonate_service_account`
+    layered over the ambient credential, then plain ADC. On GKE with Workload
+    Identity the last one needs no configuration at all.
+    """
+
+    project_id: str
+    additional_projects: list[str] = Field(default_factory=list)
+    service_account_key: str = ""
+    impersonate_service_account: str = ""
+    max_results: int = 100
+    integration_id: str = ""
+
+    _normalize_strs = field_validator(
+        "project_id",
+        "service_account_key",
+        "impersonate_service_account",
+        "integration_id",
+        mode="before",
+    )(normalize_str())
+
+    @field_validator("additional_projects", mode="before")
+    @classmethod
+    def _split_projects(cls, value: object) -> list[str]:
+        """Accept a comma-separated env string or an already-parsed list.
+
+        Duplicates and the primary project are not filtered here — the model
+        does not know the primary yet during field validation. ``all_projects``
+        on the resolved config is the deduplicating accessor.
+        """
+        if value is None or value == "":
+            return []
+        items = value.split(",") if isinstance(value, str) else value
+        if not isinstance(items, (list, tuple)):
+            return []
+        return [text for text in (str(item).strip() for item in items) if text]
+
+    @field_validator("max_results", mode="before")
+    @classmethod
+    def _clamp_max_results(cls, value: object) -> int:
+        try:
+            v: int = int(value)  # type: ignore[arg-type,call-overload]
+        except (TypeError, ValueError):
+            return 100
+        return max(1, min(v, 1000))
+
+    @property
+    def discovery_requested(self) -> bool:
+        """Whether :attr:`additional_projects` asks for live Resource Manager lookup.
+
+        Expansion itself lives in :mod:`integrations.gcp.project_discovery` — it
+        is a network call, and this model is validated on paths that must not
+        make one.
+        """
+        return GCP_DISCOVER_PROJECTS_TOKEN in self.additional_projects
+
+    @property
+    def all_projects(self) -> list[str]:
+        """Primary project first, then extras, de-duplicated and order-stable.
+
+        The discovery token is a directive and is never emitted as a project id.
+        Leaking it would reproduce the ``"*"`` failure exactly: a name that
+        passes every local check, then fails inside Google — and in Cloud
+        Logging, which validates one request's worth of ``resourceNames``
+        together, takes the real projects down with it.
+
+        Stripped only from :attr:`additional_projects`, which is the only
+        position where it means anything. Filtering :attr:`project_id` too would
+        leave a deployment whose primary project is genuinely named ``discover``
+        with an empty allow-list and no working GCP tool at all.
+        """
+        extras = [
+            project
+            for project in self.additional_projects
+            if project != GCP_DISCOVER_PROJECTS_TOKEN
+        ]
+        seen: set[str] = set()
+        unique: list[str] = []
+        for project in (self.project_id, *extras):
+            if project and project not in seen:
+                seen.add(project)
+                unique.append(project)
+        return unique
 
 
 class OpenObserveIntegrationConfig(StrictConfigModel):

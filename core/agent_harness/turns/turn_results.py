@@ -44,6 +44,9 @@ class ToolCallingTurnResult:
     investigation_dispatched: bool = False
     #: Host soft-timeout / stop asked the action phase to halt (shell/gateway).
     cancelled: bool = False
+    #: ``response_text`` with raw tool payloads replaced by short receipts, for
+    #: external chat surfaces. ``None`` means nothing needed replacing.
+    external_response_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,37 @@ class TurnResult:
     def primary_response_text(self) -> str:
         """Assistant text, falling back to the action-phase response when empty."""
         return (self.assistant_response_text or self.action_result.response_text).strip()
+
+    @property
+    def external_primary_response_text(self) -> str:
+        """:attr:`primary_response_text`, safe to send to an external chat surface.
+
+        Assistant prose is model-authored and always safe, so only the
+        action-phase fallback is swapped. This can therefore contain a receipt
+        only when the assistant produced no text — i.e. when the turn did not
+        answer.
+        """
+        action_text = self.action_result.external_response_text
+        if action_text is None:
+            action_text = self.action_result.response_text
+        return (self.assistant_response_text or action_text).strip()
+
+    @property
+    def produced_an_answer(self) -> bool:
+        """Whether the turn delivered a real answer rather than a stand-in.
+
+        Distinct from :attr:`answered`, which only says the answer was
+        *streamed* — an ordinary action turn returns its answer to be finalized
+        instead, and is a success. What is not an answer is a receipt: per
+        :attr:`external_primary_response_text` it appears exactly when the
+        assistant produced no text, so a turn reduced to one gave the reader
+        nothing it was asked for.
+        """
+        if self.assistant_response_text.strip():
+            return True
+        if self.action_result.external_response_text is not None:
+            return False
+        return bool(self.action_result.response_text.strip())
 
 
 __all__ = [

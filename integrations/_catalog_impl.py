@@ -49,6 +49,15 @@ from config.constants.datadog import (
     DATADOG_APP_KEY_ENV,
     DATADOG_SITE_ENV,
 )
+from config.constants.gcp import (
+    GCP_ADDITIONAL_PROJECTS_ENV,
+    GCP_IMPERSONATE_SERVICE_ACCOUNT_ENV,
+    GCP_INSTANCES_ENV,
+    GCP_MAX_RESULTS_ENV,
+    GCP_PROJECT_ID_ENV,
+    GCP_SERVICE_ACCOUNT_KEY_ENV,
+    GOOGLE_CLOUD_PROJECT_ENV,
+)
 from config.constants.github import (
     GITHUB_MCP_ARGS_ENV,
     GITHUB_MCP_AUTH_TOKEN_ENV,
@@ -82,6 +91,7 @@ from config.constants.kubernetes import (
     KUBECONFIG_CONTEXT_ENV,
     KUBECONFIG_NAMESPACE_ENV,
     KUBECONFIG_PATH_ENV,
+    KUBERNETES_INSTANCES_ENV,
 )
 from config.constants.mariadb import (
     MARIADB_DATABASE_ENV,
@@ -189,6 +199,7 @@ from integrations.config_models import (
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
     DiscordBotConfig,
+    GCPIntegrationConfig,
     GrafanaIntegrationConfig,
     GroundcoverIntegrationConfig,
     HelmIntegrationConfig,
@@ -214,7 +225,12 @@ from integrations.dagster import classify as _classify_dagster
 from integrations.datadog import classify as _classify_datadog
 from integrations.discord import classify as _classify_discord
 from integrations.effective_models import EffectiveIntegrations
-from integrations.github.mcp import build_github_mcp_config
+from integrations.gcp import classify as _classify_gcp
+from integrations.github.mcp import (
+    DEFAULT_GITHUB_MCP_URL,
+    build_github_mcp_config,
+    github_mcp_env_is_configured,
+)
 from integrations.github.mcp import classify as _classify_github
 from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
 from integrations.gitlab import classify as _classify_gitlab
@@ -264,6 +280,8 @@ from integrations.registry import (
     service_key,
 )
 from integrations.rocketchat import classify as _classify_rocketchat
+from integrations.rootly import classify as _classify_rootly
+from integrations.rootly import rootly_config_from_env
 from integrations.sentry import build_sentry_config
 from integrations.sentry import classify as _classify_sentry
 from integrations.sentry_mcp import DEFAULT_SENTRY_MCP_URL, build_sentry_mcp_config
@@ -424,6 +442,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "opsgenie": _classify_opsgenie,
     "pagerduty": _classify_pagerduty,
     "incident_io": _classify_incident_io,
+    "rootly": _classify_rootly,
     "jira": _classify_jira,
     "servicenow": _classify_servicenow,
     "discord": _classify_discord,
@@ -453,6 +472,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "bitbucket": _classify_bitbucket,
     "snowflake": _classify_snowflake,
     "azure": _classify_azure,
+    "gcp": _classify_gcp,
     "openobserve": _classify_openobserve,
     "opensearch": _classify_opensearch,
     "splunk": _classify_splunk,
@@ -786,16 +806,54 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     )
                 )
 
+    gcp_multi = _parse_instances_env(GCP_INSTANCES_ENV, "gcp")
+    if gcp_multi is not None:
+        integrations.append(gcp_multi)
+        gcp_project_id = ""
+    else:
+        # GOOGLE_CLOUD_PROJECT is Google's own convention; a pod that already
+        # sets it for the client libraries needs no OpenSRE-specific variable.
+        gcp_project_id = (
+            os.getenv(GCP_PROJECT_ID_ENV, "").strip()
+            or os.getenv(GOOGLE_CLOUD_PROJECT_ENV, "").strip()
+        )
+    if gcp_project_id:
+        try:
+            gcp_config = GCPIntegrationConfig.model_validate(
+                {
+                    "project_id": gcp_project_id,
+                    "additional_projects": os.getenv(GCP_ADDITIONAL_PROJECTS_ENV, ""),
+                    "service_account_key": resolve_env_credential(GCP_SERVICE_ACCOUNT_KEY_ENV),
+                    "impersonate_service_account": os.getenv(
+                        GCP_IMPERSONATE_SERVICE_ACCOUNT_ENV, ""
+                    ).strip(),
+                    "max_results": os.getenv(GCP_MAX_RESULTS_ENV, "100").strip() or "100",
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="gcp")
+        else:
+            integrations.append(
+                _active_env_record("gcp", gcp_config.model_dump(exclude={"integration_id"}))
+            )
+
     github_mode = os.getenv(GITHUB_MCP_MODE_ENV, "streamable-http").strip() or "streamable-http"
     github_url = os.getenv(GITHUB_MCP_URL_ENV, "").strip()
     github_command = os.getenv(GITHUB_MCP_COMMAND_ENV, "").strip()
     github_args = os.getenv(GITHUB_MCP_ARGS_ENV, "").strip()
     github_auth_token = resolve_env_credential(GITHUB_MCP_AUTH_TOKEN_ENV)
     github_toolsets = os.getenv(GITHUB_MCP_TOOLSETS_ENV, "").strip()
-    if (github_mode == "stdio" and github_command) or (github_mode != "stdio" and github_url):
+    if github_mcp_env_is_configured(
+        mode=github_mode,
+        url=github_url,
+        command=github_command,
+        auth_token=github_auth_token,
+    ):
         github_config = build_github_mcp_config(
             {
-                "url": github_url,
+                # A token with no URL means GitHub's hosted server, which is
+                # what the docs advertise as the default.
+                "url": github_url or DEFAULT_GITHUB_MCP_URL,
                 "mode": github_mode,
                 "command": github_command,
                 "args": [part for part in github_args.split() if part],
@@ -1682,27 +1740,35 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="alertmanager")
 
-    _kubeconfig_path = os.getenv(KUBECONFIG_PATH_ENV, "").strip()
-    _kubeconfig_content = resolve_env_credential(KUBECONFIG_CONTENT_ENV)
-    if _kubeconfig_path or _kubeconfig_content:
-        try:
-            kubernetes_config = KubernetesIntegrationConfig.model_validate(
-                {
-                    "kubeconfig_path": _kubeconfig_path,
-                    "kubeconfig": _kubeconfig_content,
-                    "context": os.getenv(KUBECONFIG_CONTEXT_ENV, "").strip(),
-                    "namespace": os.getenv(KUBECONFIG_NAMESPACE_ENV, "default").strip()
-                    or "default",
-                }
-            )
-            integrations.append(
-                _active_env_record(
-                    "kubernetes",
-                    kubernetes_config.model_dump(exclude={"integration_id"}),
+    # KUBERNETES_INSTANCES (JSON array) registers multiple named clusters in one
+    # env var — the durable, GitOps-friendly way to run multi-cluster in a pod,
+    # where the on-disk store is ephemeral. Falls back to the single-instance
+    # KUBECONFIG_* vars when unset. Mirrors GRAFANA_INSTANCES / ARGOCD_INSTANCES.
+    kubernetes_multi = _parse_instances_env(KUBERNETES_INSTANCES_ENV, "kubernetes")
+    if kubernetes_multi is not None:
+        integrations.append(kubernetes_multi)
+    else:
+        _kubeconfig_path = os.getenv(KUBECONFIG_PATH_ENV, "").strip()
+        _kubeconfig_content = resolve_env_credential(KUBECONFIG_CONTENT_ENV)
+        if _kubeconfig_path or _kubeconfig_content:
+            try:
+                kubernetes_config = KubernetesIntegrationConfig.model_validate(
+                    {
+                        "kubeconfig_path": _kubeconfig_path,
+                        "kubeconfig": _kubeconfig_content,
+                        "context": os.getenv(KUBECONFIG_CONTEXT_ENV, "").strip(),
+                        "namespace": os.getenv(KUBECONFIG_NAMESPACE_ENV, "default").strip()
+                        or "default",
+                    }
                 )
-            )
-        except Exception as exc:
-            _report_env_loader_failure(exc, integration="kubernetes")
+                integrations.append(
+                    _active_env_record(
+                        "kubernetes",
+                        kubernetes_config.model_dump(exclude={"integration_id"}),
+                    )
+                )
+            except Exception as exc:
+                _report_env_loader_failure(exc, integration="kubernetes")
 
     victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "").strip().rstrip("/")
     if victoria_logs_url:
@@ -1777,6 +1843,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
     except Exception as exc:
         _report_env_loader_failure(exc, integration="signoz")
+
+    try:
+        rootly_config = rootly_config_from_env()
+        if rootly_config is not None and rootly_config.is_configured:
+            integrations.append(
+                _active_env_record(
+                    "rootly",
+                    rootly_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+    except Exception as exc:
+        _report_env_loader_failure(exc, integration="rootly")
 
     try:
         jenkins_config = jenkins_config_from_env()
@@ -1955,6 +2033,35 @@ def _slack_effective_config(
         config["bot_token"] = bot_token
         config["app_token"] = app_token
     return config
+
+
+def resolve_local_classified_integrations(
+    *,
+    store_integrations: list[dict[str, Any]] | None = None,
+    env_integrations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Classify the local integrations from ``~/.opensre`` and the environment.
+
+    Returns the :func:`classify_integrations` shape — ``resolved[service]`` is
+    the default instance's **flat config**, with ``_all_{service}_instances``
+    alongside it. That is what every runtime consumer expects:
+    ``availability_view`` and the ``extract_params`` of every tool read it, as
+    do the ``integrations/selectors.py`` helpers.
+
+    :func:`resolve_effective_integrations` returns a different, wrapper shape
+    (``{service: {"source": ..., "config": {...}}}``) built for display. Passing
+    that to a runtime consumer is silently wrong rather than an error: the
+    per-service sanitizers drop the unrecognised ``source``/``config`` keys and
+    hand back an empty config, so the caller reports the integration as
+    unconfigured while the environment is set correctly.
+    """
+    store_records = (
+        list(store_integrations) if store_integrations is not None else load_integrations()
+    )
+    env_records = (
+        list(env_integrations) if env_integrations is not None else load_env_integrations()
+    )
+    return classify_integrations(merge_local_integrations(store_records, env_records))
 
 
 def resolve_effective_integrations(

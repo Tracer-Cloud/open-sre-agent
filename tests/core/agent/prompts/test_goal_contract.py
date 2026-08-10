@@ -15,9 +15,9 @@ from core.agent_harness.prompts.action.text import (
     ACTION_SETUP_CAPACITY_SCHEDULE_RULE,
 )
 from core.agent_harness.prompts.assistant.text import (
-    CLI_PREAMBLE,
-    GATEWAY_PREAMBLE,
     SHELL_GOAL_CONTRACT,
+    cli_preamble,
+    gateway_preamble,
 )
 from core.agent_harness.prompts.kernel.envelope import PromptTier
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -50,9 +50,9 @@ def test_shell_goal_contract_is_capacity_gated_not_a_playbook() -> None:
 
 def test_shell_goal_contract_lives_in_cli_preamble_not_gateway() -> None:
     # Arrange / Act / Assert: gateway has no setup_state; do not push schedule offers there.
-    assert SHELL_GOAL_CONTRACT in CLI_PREAMBLE
-    assert SHELL_GOAL_CONTRACT not in GATEWAY_PREAMBLE
-    assert "setup-state block" not in GATEWAY_PREAMBLE.lower()
+    assert SHELL_GOAL_CONTRACT in cli_preamble()
+    assert SHELL_GOAL_CONTRACT not in gateway_preamble()
+    assert "setup-state block" not in gateway_preamble().lower()
 
 
 def test_action_capacity_rule_ties_facts_to_propose_not_skip() -> None:

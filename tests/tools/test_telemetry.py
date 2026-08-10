@@ -305,6 +305,244 @@ def _github_star_history_case() -> ToolFailureCase:
     )
 
 
+def _gcp_logging_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_logging_query_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("logging")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_logging_query_tool import gcp_logging_query
+
+        return gcp_logging_query(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_logging_query",
+        patch,
+        invoke,
+        "gcp_logging_query",
+        "gcp",
+    )
+
+
+def _raising_monitoring_service() -> Any:
+    """A monitoring client whose ``timeSeries.list`` execution fails."""
+    service = MagicMock()
+    service.projects().timeSeries().list().execute.side_effect = RuntimeError("monitoring")
+    # The aligner pre-flight reads a descriptor; leave it failing too so the
+    # tool falls back to its default aligner rather than a MagicMock.
+    service.projects().metricDescriptors().get().execute.side_effect = RuntimeError("descriptor")
+    return service
+
+
+def _gcp_monitoring_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_monitoring_query_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(return_value=_raising_monitoring_service()))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_monitoring_query_tool import gcp_monitoring_query
+
+        return gcp_monitoring_query(
+            filter='metric.type="a/b/c"', default_project="p", available_projects=["p"]
+        )
+
+    return ToolFailureCase(
+        "gcp_monitoring_query",
+        patch,
+        invoke,
+        "gcp_monitoring_query",
+        "gcp",
+    )
+
+
+def _gcp_audit_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_audit_log_query_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("audit")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_audit_log_query_tool import gcp_audit_log_query
+
+        return gcp_audit_log_query(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_audit_log_query",
+        patch,
+        invoke,
+        "gcp_audit_log_query",
+        "gcp",
+    )
+
+
+def _gcp_metrics_scope_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_metrics_scope_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("metrics_scope")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_metrics_scope_tool import gcp_metrics_scope
+
+        return gcp_metrics_scope(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_metrics_scope",
+        patch,
+        invoke,
+        "gcp_metrics_scope",
+        "gcp",
+    )
+
+
+def _gcp_alerting_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_alerting_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("alerting")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_alerting_tool import gcp_alerting
+
+        return gcp_alerting(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_alerting",
+        patch,
+        invoke,
+        "gcp_alerting",
+        "gcp",
+    )
+
+
+def _gcp_gke_clusters_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_list_gke_clusters_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("container")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_list_gke_clusters_tool import gcp_list_gke_clusters
+
+        return gcp_list_gke_clusters(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_list_gke_clusters",
+        patch,
+        invoke,
+        "gcp_list_gke_clusters",
+        "gcp",
+    )
+
+
+def _gcp_compute_instances_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_list_compute_instances_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("compute")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_list_compute_instances_tool import (
+            gcp_list_compute_instances,
+        )
+
+        return gcp_list_compute_instances(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_list_compute_instances",
+        patch,
+        invoke,
+        "gcp_list_compute_instances",
+        "gcp",
+    )
+
+
+def _gcp_cloud_run_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_list_cloud_run_services_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("run")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_list_cloud_run_services_tool import (
+            gcp_list_cloud_run_services,
+        )
+
+        return gcp_list_cloud_run_services(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_list_cloud_run_services",
+        patch,
+        invoke,
+        "gcp_list_cloud_run_services",
+        "gcp",
+    )
+
+
+def _gcp_cloud_sql_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_list_cloud_sql_instances_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("sqladmin")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_list_cloud_sql_instances_tool import (
+            gcp_list_cloud_sql_instances,
+        )
+
+        return gcp_list_cloud_sql_instances(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_list_cloud_sql_instances",
+        patch,
+        invoke,
+        "gcp_list_cloud_sql_instances",
+        "gcp",
+    )
+
+
+def _gcp_pubsub_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_pubsub_backlog_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("pubsub")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_pubsub_backlog_tool import gcp_pubsub_backlog
+
+        return gcp_pubsub_backlog(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_pubsub_backlog",
+        patch,
+        invoke,
+        "gcp_pubsub_backlog",
+        "gcp",
+    )
+
+
+def _gcp_error_reporting_case() -> ToolFailureCase:
+    def patch(mp: pytest.MonkeyPatch) -> None:
+        import integrations.gcp.tools.gcp_error_reporting_tool as mod
+
+        mp.setattr(mod, "build_service", MagicMock(side_effect=RuntimeError("errorreporting")))
+
+    def invoke() -> dict[str, Any]:
+        from integrations.gcp.tools.gcp_error_reporting_tool import gcp_error_reporting_top_errors
+
+        return gcp_error_reporting_top_errors(default_project="p", available_projects=["p"])
+
+    return ToolFailureCase(
+        "gcp_error_reporting_top_errors",
+        patch,
+        invoke,
+        "gcp_error_reporting_top_errors",
+        "gcp",
+    )
+
+
 def _eks_list_clusters_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
         import integrations.eks.tools as mod
@@ -786,6 +1024,17 @@ _TOOL_FAILURE_CASES: list[ToolFailureCase] = [
     _google_docs_case(),
     _github_repository_case(),
     _github_star_history_case(),
+    _gcp_logging_case(),
+    _gcp_monitoring_case(),
+    _gcp_audit_case(),
+    _gcp_metrics_scope_case(),
+    _gcp_alerting_case(),
+    _gcp_gke_clusters_case(),
+    _gcp_compute_instances_case(),
+    _gcp_cloud_run_case(),
+    _gcp_cloud_sql_case(),
+    _gcp_pubsub_case(),
+    _gcp_error_reporting_case(),
     _eks_list_clusters_case(),
     _eks_describe_cluster_case(),
     _eks_nodegroup_case(),
@@ -848,6 +1097,150 @@ def test_tool_reports_exactly_one_sentry_event(
     registered = get_registered_tool_map().get(case.expected_tool_name)
     if registered is not None:
         assert registered.source == case.expected_source
+
+
+def test_gcp_list_projects_reports_a_partial_failure_at_warning_severity(
+    captured_sentry_events: list[CapturedSentryEvent],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed live listing must be reported, but must not fail the tool.
+
+    ``resourcemanager.projects.list`` is a permission many service accounts
+    legitimately lack. The configured project scope is still a correct answer,
+    so the tool degrades: it reports at ``warning`` and returns the configured
+    list rather than an unavailable envelope.
+    """
+    import integrations.gcp.project_discovery as discovery
+    import integrations.gcp.tools.gcp_list_projects_tool as mod
+
+    # The listing itself lives in ``project_discovery`` — it is shared with
+    # allow-list expansion — but the event must still be tagged with the tool
+    # that ran, which is what this test exists to pin.
+    monkeypatch.setattr(
+        discovery, "build_service", MagicMock(side_effect=RuntimeError("discovery"))
+    )
+
+    result = mod.gcp_list_projects(
+        default_project="p",
+        available_projects=["p", "q"],
+        project_configs={"p": {"project_id": "p"}, "q": {"project_id": "p"}},
+    )
+
+    assert result["projects"] == ["p", "q"]
+    assert "discovery_error" in result
+
+    assert len(captured_sentry_events) == 1
+    event = captured_sentry_events[0]
+    assert isinstance(event.exc, RuntimeError)
+    assert event.extras["tag.tool_name"] == "gcp_list_projects"
+    assert event.extras["tag.source"] == "gcp"
+
+
+def test_gcp_list_projects_reports_one_event_however_many_credentials_fail(
+    captured_sentry_events: list[CapturedSentryEvent],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Per tool call, not per credential.
+
+    ``GCP_INSTANCES`` deployments list once per registered credential. The
+    failure they all hit is the same missing grant, so reporting per credential
+    would multiply one configuration gap by the instance count on every call —
+    and the tool is called at the start of most GCP investigations.
+    """
+    import integrations.gcp.project_discovery as discovery
+    import integrations.gcp.tools.gcp_list_projects_tool as mod
+
+    monkeypatch.setattr(discovery, "build_service", MagicMock(side_effect=RuntimeError("nope")))
+
+    result = mod.gcp_list_projects(
+        default_project="p",
+        available_projects=["p", "q"],
+        project_configs={
+            "p": {"project_id": "p", "service_account_key": '{"type":"one"}'},
+            "q": {"project_id": "q", "service_account_key": '{"type":"two"}'},
+        },
+    )
+
+    assert result["projects"] == ["p", "q"]
+    assert len(captured_sentry_events) == 1
+
+
+def test_gcp_refresh_discovery_reports_a_failed_relisting_under_its_own_name(
+    captured_sentry_events: list[CapturedSentryEvent],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The shared scan reports under the tool that called it, not a constant.
+
+    ``gcp_list_projects`` and ``gcp_refresh_discovery`` run the same listing
+    code. If it reported under a fixed name, every discovery failure in the
+    process would be filed against whichever tool that name happened to be.
+    """
+    import integrations.gcp.project_discovery as discovery
+    import integrations.gcp.tools.gcp_refresh_discovery_tool as mod
+    from config.constants.gcp import GCP_AUTO_REGISTER_GKE_ENV
+
+    monkeypatch.delenv(GCP_AUTO_REGISTER_GKE_ENV, raising=False)
+    monkeypatch.setattr(discovery, "build_service", MagicMock(side_effect=RuntimeError("nope")))
+
+    result = mod.gcp_refresh_discovery(
+        default_project="p",
+        available_projects=["p"],
+        project_configs={"p": {"project_id": "p"}},
+    )
+
+    assert result["projects"] == ["p"]
+    assert "discovery_error" in result
+
+    assert len(captured_sentry_events) == 1
+    event = captured_sentry_events[0]
+    assert event.extras["tag.tool_name"] == "gcp_refresh_discovery"
+    assert event.extras["tag.source"] == "gcp"
+
+
+def _raising_register(_logger: Any, _scope: Any) -> None:
+    """Stand in for a registration pass that hits an unreachable control plane."""
+    raise RuntimeError("control plane unreachable")
+
+
+def _empty_rm_service(_config: Any, _api: Any) -> Any:
+    """A Resource Manager client that lists nothing and raises nothing.
+
+    The project half has to *succeed* here, or its own failure would report a
+    second event and the count below would stop meaning what it says.
+    """
+    service = MagicMock()
+    service.projects().list().execute.return_value = {"projects": []}
+    return service
+
+
+def test_gcp_refresh_discovery_reports_a_failed_gke_pass(
+    captured_sentry_events: list[CapturedSentryEvent],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The GKE half has its own catch, so it needs its own event.
+
+    It is a separate code path from the project scan — it has to be, because a
+    failure in either half must still let the other half answer — and a catch
+    that returns a message without reporting is exactly the swallow this whole
+    file exists to prevent.
+    """
+    import integrations.gcp.project_discovery as discovery
+    import integrations.gcp.tools.gcp_refresh_discovery_tool as mod
+    from config.constants.gcp import GCP_AUTO_REGISTER_GKE_ENV
+
+    monkeypatch.setenv(GCP_AUTO_REGISTER_GKE_ENV, "true")
+    monkeypatch.setattr(discovery, "build_service", _empty_rm_service)
+    monkeypatch.setattr(mod, "register_now", _raising_register)
+
+    result = mod.gcp_refresh_discovery(
+        default_project="p",
+        available_projects=["p"],
+        project_configs={"p": {"project_id": "p"}},
+    )
+
+    assert result["gke"]["ran"] is False
+    assert len(captured_sentry_events) == 1
+    assert captured_sentry_events[0].extras["tag.tool_name"] == "gcp_refresh_discovery"
 
 
 def test_eks_client_error_path_uses_warning_severity(
@@ -979,6 +1372,21 @@ _MIGRATED_TOOL_NAMES: frozenset[str] = frozenset(
         "create_google_docs_incident_report",
         "get_github_repository",
         "get_github_star_history",
+        # GCP — each catches the Google API error and returns a structured dict
+        # so a 403 on one project does not abort the investigation.
+        "gcp_logging_query",
+        "gcp_monitoring_query",
+        "gcp_list_projects",
+        "gcp_audit_log_query",
+        "gcp_list_gke_clusters",
+        "gcp_list_compute_instances",
+        "gcp_list_cloud_run_services",
+        "gcp_list_cloud_sql_instances",
+        "gcp_pubsub_backlog",
+        "gcp_error_reporting_top_errors",
+        "gcp_refresh_discovery",
+        "gcp_metrics_scope",
+        "gcp_alerting",
         # EKS — enumerated in #1463
         "list_eks_clusters",
         "describe_eks_cluster",
@@ -1201,6 +1609,10 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "memory_forget",
         "memory_recall",
         "memory_remember",
+        # open_github_pull_request catches only GitHubWriteError for known
+        # states (bad branch name, branch exists, GitHub rejected the write);
+        # unexpected errors escape to the global #1476 wrapper.
+        "open_github_pull_request",
         "opsgenie_alert_detail",
         "opsgenie_alerts",
         "pagerduty_incident_detail",
@@ -1236,6 +1648,13 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "query_tempo",
         "redeploy_railway_service",
         "replay_slack_thread_locally",
+        # Rootly tools: the client catches exceptions internally via
+        # capture_service_error and returns structured error dicts; any unexpected
+        # exception from run() escapes to the #1476 global wrapper.
+        "rootly_alerts",
+        "rootly_incidents",
+        "rootly_on_call",
+        "rootly_post_timeline_event",
         "run_investigation",
         "scan_redis_keys",
         "search_bitbucket_code",
@@ -1285,14 +1704,21 @@ _TOOLS_WITHOUT_DELIBERATE_CATCH: frozenset[str] = frozenset(
         "kubernetes_get_events",
         "kubernetes_get_pod_logs",
         "kubernetes_get_resource",
+        # Pure read of the already-resolved instance list injected by
+        # extract_params; run() builds a dict and cannot fail.
+        "kubernetes_list_clusters",
         "kubernetes_list_configmaps",
         "kubernetes_list_daemonsets",
         "kubernetes_list_deployments",
         "kubernetes_list_ingresses",
+        "kubernetes_list_namespaces",
         "kubernetes_list_nodes",
         "kubernetes_list_pods",
+        "kubernetes_list_rollouts",
         "kubernetes_list_services",
         "kubernetes_list_statefulsets",
+        "kubernetes_list_workloads",
+        "kubernetes_search_fleet",
     }
 )
 
@@ -1351,10 +1777,22 @@ def test_every_migrated_tool_has_a_parameterised_failure_case() -> None:
     ``_normalize_named_bridge_call`` with ``get_openclaw_conversation``,
     and the latter's case already exercises that helper's
     ``report_run_error`` path.
+
+    ``gcp_list_projects`` and ``gcp_refresh_discovery`` have their own tests
+    below rather than parameterised cases: their failures are partial by design
+    (the live discovery call fails, the configured answer still returns), so
+    neither produces the ``available=False`` / ``error`` shape the shared
+    assertion looks for.
     """
     covered_by_parametrised = {case.expected_tool_name for case in _TOOL_FAILURE_CASES}
     shared_code_path = {"send_openclaw_message"}
-    missing = _MIGRATED_TOOL_NAMES - covered_by_parametrised - shared_code_path
+    covered_by_dedicated_test = {"gcp_list_projects", "gcp_refresh_discovery"}
+    missing = (
+        _MIGRATED_TOOL_NAMES
+        - covered_by_parametrised
+        - shared_code_path
+        - covered_by_dedicated_test
+    )
     assert missing == set(), (
         "Every name in _MIGRATED_TOOL_NAMES must have a parameterised "
         "failure case in _TOOL_FAILURE_CASES (unless it shares a code path "

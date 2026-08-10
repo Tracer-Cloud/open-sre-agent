@@ -27,6 +27,11 @@ def _clear_env(monkeypatch) -> None:
         "AWS_EXTERNAL_ID",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
+        "KUBERNETES_INSTANCES",
+        "KUBECONFIG",
+        "KUBECONFIG_CONTENT",
+        "KUBECONFIG_CONTEXT",
+        "KUBECONFIG_NAMESPACE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -147,6 +152,78 @@ def test_empty_json_array_falls_through_to_legacy(
     grafana_records = [r for r in records if r.get("service") == "grafana"]
     assert len(grafana_records) == 1
     assert "instances" not in grafana_records[0]
+
+
+def test_kubernetes_instances_json_produces_single_record_with_multiple_instances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv(
+        "KUBERNETES_INSTANCES",
+        json.dumps(
+            [
+                {
+                    "name": "gke-dev",
+                    "tags": {"env": "dev"},
+                    "credentials": {
+                        "kubeconfig": "kc-dev",
+                        "context": "ctx-dev",
+                        "namespace": "dev",
+                    },
+                },
+                {
+                    "name": "gke-prod",
+                    "tags": {"env": "prod"},
+                    "credentials": {"kubeconfig_path": "/p/prod", "context": "ctx-prod"},
+                },
+            ]
+        ),
+    )
+
+    records = load_env_integrations()
+    k8s = [r for r in records if r.get("service") == "kubernetes"]
+    assert len(k8s) == 1
+    instances = k8s[0]["instances"]
+    assert [i["name"] for i in instances] == ["gke-dev", "gke-prod"]
+    assert instances[0]["credentials"]["context"] == "ctx-dev"
+    assert instances[1]["credentials"]["kubeconfig_path"] == "/p/prod"
+
+
+def test_kubernetes_instances_missing_falls_back_to_legacy_kubeconfig(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("KUBECONFIG_CONTENT", "kc-legacy")
+    monkeypatch.setenv("KUBECONFIG_NAMESPACE", "legacy-ns")
+
+    records = load_env_integrations()
+    k8s = [r for r in records if r.get("service") == "kubernetes"]
+    assert len(k8s) == 1
+    assert "instances" not in k8s[0]
+    assert k8s[0]["credentials"]["kubeconfig"] == "kc-legacy"
+    assert k8s[0]["credentials"]["namespace"] == "legacy-ns"
+
+
+def test_kubernetes_instances_reach_tool_facing_all_instances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # End-to-end: env -> classify publishes _all_kubernetes_instances, which is
+    # what the multi-cluster tools resolve `cluster` against.
+    from integrations.catalog import classify_integrations
+
+    _clear_env(monkeypatch)
+    monkeypatch.setenv(
+        "KUBERNETES_INSTANCES",
+        json.dumps(
+            [
+                {"name": "gke-dev", "credentials": {"kubeconfig": "kc-dev"}},
+                {"name": "gke-prod", "credentials": {"kubeconfig_path": "/p/prod"}},
+            ]
+        ),
+    )
+    resolved = classify_integrations(load_env_integrations())
+    names = [i["name"] for i in resolved["_all_kubernetes_instances"]]
+    assert names == ["gke-dev", "gke-prod"]
 
 
 @pytest.mark.parametrize(

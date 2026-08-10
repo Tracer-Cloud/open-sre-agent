@@ -13,6 +13,7 @@ from integrations.github.helpers import (
     github_creds,
     github_source_available,
 )
+from integrations.github.path_safety import repo_path
 
 
 def _github_repository_available(sources: dict[str, dict]) -> bool:
@@ -97,8 +98,14 @@ def get_github_repository(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Fetch repository metadata from the GitHub REST API."""
+    # Above the request's ``try`` on purpose: its handler files telemetry, and a
+    # model guessing owner/repo must not cost one Sentry error per guess.
     try:
-        payload = GitHubRestClient(github_token).request("GET", f"/repos/{owner}/{repo}")
+        repository_path = repo_path(owner, repo)
+    except GitHubApiError as exc:
+        return tool_unavailable("github", str(exc), owner=owner, repo=repo, repository={})
+    try:
+        payload = GitHubRestClient(github_token).request("GET", repository_path)
     except GitHubApiError as exc:
         report_run_error(
             exc,

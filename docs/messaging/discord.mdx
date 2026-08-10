@@ -58,6 +58,7 @@ opensre onboard
 | `DISCORD_ALLOWED_USERS` | Comma-separated Discord user snowflakes allowed to chat |
 | `DISCORD_ALLOW_OPEN_GUILD` | Set to `1` to allow any member in server channels (dogfood only). DMs still require the allowlist |
 | `DISCORD_SILO_GUILD_IDS` | Comma-separated server ids allowed to use this deployment's organization. Unset serves every server the bot is in |
+| `OPENSRE_AGENT_NAME` | Name the bot introduces itself with and answers to in a thread. Defaults to `OpenSRE` — set it to match the bot's name in Discord. See [Agent identity](/configuration/environment-variables#agent-identity) |
 
 Discord turns are billed and stored against the organization in
 `ORGANIZATION_ID`. Without it every turn is refused — the bot appears
@@ -95,6 +96,14 @@ When configured, status includes `discord: connected via gateway`.
 ```
 /investigate alert:<alert text or JSON>
 ```
+
+<Warning>
+On Discord the investigation runs inside the turn, and a real one takes longer
+than a turn is allowed to last — so you get a timeout instead of a report. Only
+[Slack](/messaging/slack#start-an-investigation-from-a-thread) can hand the run
+off and deliver the report back to the thread when it finishes. Use `/investigate`
+here for short, cheap alerts only, or run it from the terminal.
+</Warning>
 
 Gateway turns use the same agent session model as Slack and Telegram: `/new`, `/help`, and `/pair <code>` work in Discord text.
 

@@ -27,7 +27,7 @@ def test_environment_block_renders_timezone_but_not_live_clock() -> None:
         "tz_name": "Europe/Berlin",
     }
     block = _env_block(runtime)
-    assert "local timezone is Europe/Berlin" in block
+    assert "times are reported in timezone Europe/Berlin" in block
     assert "current time is" not in block
 
     live = render_live_runtime_facts(runtime)
@@ -159,7 +159,7 @@ def test_environment_block_omits_time_when_slot_empty() -> None:
     must not render an empty ``current time is`` line in that case."""
     block = _env_block({"opensre_version": "0.1", "now_iso": "", "tz_name": ""})
     assert "current time is" not in block
-    assert "local timezone is" not in block
+    assert "times are reported in timezone" not in block
 
 
 def test_environment_block_renders_build_marker_when_provided() -> None:

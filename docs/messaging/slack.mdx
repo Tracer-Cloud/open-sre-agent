@@ -303,11 +303,80 @@ opensre gateway status
 
 Built-in chat commands: `/new` (fresh session), `/help`, `/pair <code>`.
 
+### Tool timeline
+
+Each tool the agent runs gets its own row in the thread, and the row is marked
+complete or errored when that tool finishes — including when the agent runs
+several at once. A turn that timed out, was stopped, or produced no answer marks
+whatever rows are still open as errored, so a thread full of ticks means the work
+actually succeeded, not just that it ended — with one exception: a tool that
+hands off to a detached investigation (see below) leaves its row open
+indefinitely, because that work is still running after the turn itself ends.
+Slack has no status for "still running elsewhere," so that row is retitled
+once, to say it was handed off, rather than repeating the original request
+forever.
+
 While a turn runs, the gateway adds an 👀 (`eyes`) reaction on the inbound
-message, then swaps to ✅ (`white_check_mark`) when the reply is finalized.
+message. An ordinary turn swaps that to ✅ (`white_check_mark`) when the reply
+is finalized. A turn that launched a detached investigation instead **leaves
+the 👀 in place** — the turn is done, but the investigation it started is
+not — and the reaction only becomes ✅ (or ✗, `x`, if the report never reached
+the thread) once that investigation itself finishes, which can be minutes
+later.
 
 If Slack is not configured the daemon still runs the other components and
 `opensre gateway status` shows `slack: not configured`.
+
+### Start an investigation from a thread
+
+Ask for one in plain language, or run `/investigate <alert text>`. Either way the
+investigation is **detached**: the bot replies within seconds with a queued
+receipt, edits that same message as the run moves through its stages, and posts
+the report as a follow-up in the thread when it finishes.
+
+```text
+you   /investigate checkout p99 latency is up 4x since the 14:10 deploy
+      (👀 stays on this message while the investigation runs)
+bot   Investigation 3f9c1ab2 queued. I'll post results here when complete.
+bot   🔄 Investigation 3f9c1ab2: Gathering evidence        (the same message, edited)
+bot   ✅ Investigation 3f9c1ab2 complete: …                (a new message)
+      (👀 on your message becomes ✅ once the report above lands)
+```
+
+The final report carries the same provenance footer and 👍/👎 feedback buttons
+an ordinary reply does — it is the model's own investigation output, delivered
+minutes after the turn that asked for it.
+
+Detaching is what makes it usable at all. A full run takes minutes, and a Slack
+turn is abandoned long before that — so before this the answer arrived after the
+bot had already reported a timeout, or never.
+
+Worth knowing:
+
+- **Slack only.** Asking in plain language on Discord or Telegram gets a "not
+  supported here" refusal — the bot withholds the capability on any surface it
+  cannot deliver a report back to. Typing `/investigate` there still runs the
+  old inline path, which times out; see [Discord](/messaging/discord).
+- **The report is truncated to fit Slack's message limit.** The root cause is
+  written first, so what survives is the part you need. The full result is
+  always written to `~/.opensre/investigations/<id>/report.json` on the host
+  running the gateway.
+- **Set `DATABASE_URI`** if you want investigations to survive a gateway
+  restart, and to run more than one gateway. Without it they still work — the
+  run happens on a background thread in the gateway process — but a restart
+  loses whatever was in flight.
+- **There is no queue limit.** Every ask — plain language or `/investigate` —
+  starts a real background investigation that costs real LLM and vendor calls;
+  nothing filters duplicates or caps how many can be in flight at once. If
+  that matters for your workspace, restrict who can talk to the bot with
+  `SLACK_ALLOWED_USERS`.
+- **`delivery_failed`** on a record means the investigation finished but Slack
+  rejected the message — check `opensre gateway logs`, the report file is still
+  on disk.
+
+For the equivalent in the terminal, see
+[Background investigations](/background-investigations); for the HTTP API, see
+[API](/api).
 
 ### Deploying the Slack gateway
 
@@ -330,6 +399,14 @@ single-consumer, so a second gateway holding the same tokens would split events.
 | `SLACK_APP_TOKEN` | App-level token (`xapp-…`) for Socket Mode. Env or integration store. |
 | `SLACK_ALLOWED_USERS` | Comma-separated Slack user IDs allowed to talk to the bot (required unless open workspace). |
 | `SLACK_ALLOW_OPEN_WORKSPACE` | Set to `1` to allow any workspace member (dogfood escape hatch). |
+| `OPENSRE_AGENT_NAME` | Name the bot introduces itself with, signs its footer with, and answers to in a thread. Defaults to `OpenSRE`. |
+
+<Note>
+Renaming the Slack app does not rename the agent — set `OPENSRE_AGENT_NAME` to
+match. OpenSRE cannot read the name from Slack: a bot user's profile keeps the
+old one until the app is reinstalled. See
+[Agent identity](/configuration/environment-variables#agent-identity).
+</Note>
 
 ---
 
@@ -358,3 +435,9 @@ A webhook is bound to the channel it was created against. To change channels, cr
 **Webhook returns `no_service`**
 
 The Slack app or webhook was deleted. Re-create it and update the URL.
+
+**A timeline row is marked errored but the tool looked fine**
+
+A row errors either because its own tool failed or because the turn ended while
+it was still open — a timeout, a `/stop`, or the agent finishing without writing
+an answer. Run `opensre gateway logs` to tell the two apart.

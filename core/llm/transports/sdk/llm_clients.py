@@ -269,12 +269,14 @@ class LLMClient:
 
         content = _extract_text(response)
         usage = getattr(response, "usage", None)
+        stop_reason = getattr(response, "stop_reason", None)
         return llm_response_with_usage(
             content,
             self._model,
             usage,
             input_key="input_tokens",
             output_key="output_tokens",
+            finish_reason=str(stop_reason) if stop_reason else None,
         )
 
     def _create_with_retry(self, kwargs: dict[str, Any]) -> Any:

@@ -12,7 +12,8 @@ agent loop. Subprocess-backed LLM CLIs live under `integrations/llm_cli/`.
 | `config/llm_auth/provider_catalog.py` | Canonical `ProviderSpec` metadata shared by wizard, auth, and runtime checks. |
 | `core/llm/factory.py` | Single routing entrypoint: `resolve_llm_route()`, `get_llm(role)`, `reset_llm_clients()`. |
 | `core/llm/client_builders.py` | Construct the client for a resolved route: `build_agent_client()`, `build_reasoning_client()`. |
-| `core/llm/providers/provider_registry.py` | `FIRST_PARTY_PROVIDERS` table (models, max_tokens, LiteLLM prefix, api-key env) the builders read. |
+| `core/llm/providers/provider_registry.py` | `FIRST_PARTY_PROVIDERS` table (models, LiteLLM prefix, api-key env) the builders read. Its `max_tokens` is the provider *default*, not the final budget — see `shared/max_tokens.py`. |
+| `core/llm/shared/max_tokens.py` | Final output-token budget: `resolve_max_output_tokens()` applies the `LLM_MAX_TOKENS` operator override over the provider default. Every builder on both transports routes through it, so the override cannot be honoured on one and dropped on another. |
 | `core/llm/transport_mode.py` | `OPENSRE_LLM_TRANSPORT` (`sdk` vs `litellm`) and `use_litellm_for_provider()`. |
 | `core/llm/internal/client_cache_key.py` | Singleton cache invalidation key `(transport, runtime_provider)`. |
 | `core/llm/providers/openai_compat_providers.py` | OpenAI-compatible provider catalog and model/base-URL resolution. |
@@ -95,7 +96,11 @@ Do not add a separate Azure client class — extend `transports/litellm/routing.
 Vertex AI authenticates via Google Application Default Credentials (ADC) — no API key:
 
 - `VERTEX_AI_PROJECT`, `VERTEX_AI_LOCATION` (defaults to `us-central1`)
-- `VERTEX_AI_*_MODEL` env vars hold Gemini model IDs served via Vertex (e.g. `gemini-2.5-pro`)
+- `VERTEX_AI_*_MODEL` env vars hold any Vertex publisher-model ID, passed through verbatim.
+  The wizard's curated list and the defaults are Gemini (`gemini-2.5-pro`), but Anthropic
+  Claude served through Vertex works unchanged — set them to the Model Garden IDs
+  (`claude-opus-4-5@20251101`); LiteLLM routes `vertex_ai/claude-*` to the Anthropic
+  publisher endpoint.
 - LiteLLM model string: `vertex_ai/<model>` via `resolve_vertex_ai_request_kwargs()`
 
 Do not add a separate Vertex client class — extend `transports/litellm/routing.py` and helpers in

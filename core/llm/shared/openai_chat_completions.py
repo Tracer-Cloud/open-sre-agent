@@ -190,7 +190,8 @@ def llm_response_from_completion(
     bound_tools: bool,
     usage_emit: Callable[[str, int | None, int | None], object] | None = None,
 ) -> LLMResponse:
-    message = get_attr_or_item(first_choice(response), "message")
+    choice = first_choice(response)
+    message = get_attr_or_item(choice, "message")
     if message is None:
         raise RuntimeError(
             f"OpenAI-compatible API returned an unexpected response: {type(response).__name__}"
@@ -199,10 +200,12 @@ def llm_response_from_completion(
     input_tokens, output_tokens = usage_tokens(get_attr_or_item(response, "usage"))
     if usage_emit is not None and (input_tokens is not None or output_tokens is not None):
         usage_emit(model, input_tokens, output_tokens)
+    raw_finish_reason = get_attr_or_item(choice, "finish_reason")
     return LLMResponse(
         content=content.strip(),
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        finish_reason=str(raw_finish_reason) if raw_finish_reason else None,
     )
 
 

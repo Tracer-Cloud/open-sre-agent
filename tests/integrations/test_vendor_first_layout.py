@@ -37,6 +37,8 @@ ALLOWED_FLAT_MODULES = frozenset(
         "mcp_transport.py",
         "messaging_security.py",
         "models.py",
+        # Cross-cutting infrastructure shared by every vendor client.
+        "path_safety.py",
         "port.py",
         "probes.py",
         "registry.py",

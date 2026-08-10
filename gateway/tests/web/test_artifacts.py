@@ -11,11 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 from botocore.exceptions import ReadTimeoutError
 
-from gateway.web.artifacts import (
-    ARTIFACTS_BUCKET_ENV,
-    upload_report_to_s3,
-    write_local_report,
-)
+from config.constants.investigation_worker import OPENSRE_ARTIFACTS_BUCKET_ENV
+from gateway.core.investigations.artifacts import upload_report_to_s3, write_local_report
 
 
 def test_write_local_report_creates_json(tmp_path: Path) -> None:
@@ -26,7 +23,7 @@ def test_write_local_report_creates_json(tmp_path: Path) -> None:
 
 
 def test_upload_skips_when_bucket_unset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(ARTIFACTS_BUCKET_ENV, raising=False)
+    monkeypatch.delenv(OPENSRE_ARTIFACTS_BUCKET_ENV, raising=False)
     local = write_local_report("inv-1", {}, base_dir=tmp_path)
 
     assert upload_report_to_s3(local, org_id="org", investigation_id="inv-1") is None
@@ -39,7 +36,7 @@ def test_upload_returns_none_on_s3_error(tmp_path: Path, monkeypatch: pytest.Mon
 
     import boto3
 
-    monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "bucket")
+    monkeypatch.setenv(OPENSRE_ARTIFACTS_BUCKET_ENV, "bucket")
     monkeypatch.setattr(boto3, "client", lambda *_a, **_k: _Boom())
     local = write_local_report("inv-1", {}, base_dir=tmp_path)
 
@@ -52,7 +49,7 @@ def test_upload_uses_no_org_prefix_when_org_empty(
     fake = MagicMock()
     import boto3
 
-    monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "bucket")
+    monkeypatch.setenv(OPENSRE_ARTIFACTS_BUCKET_ENV, "bucket")
     monkeypatch.setattr(boto3, "client", lambda *_a, **_k: fake)
     local = write_local_report("inv-1", {}, base_dir=tmp_path)
 
@@ -74,7 +71,7 @@ def test_upload_bounds_every_s3_request(tmp_path: Path, monkeypatch: pytest.Monk
 
     import boto3
 
-    monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "bucket")
+    monkeypatch.setenv(OPENSRE_ARTIFACTS_BUCKET_ENV, "bucket")
     monkeypatch.setattr(boto3, "client", _client)
     local = write_local_report("inv-1", {}, base_dir=tmp_path)
 
@@ -100,11 +97,11 @@ def test_upload_gives_up_on_timeout_without_failing_the_investigation(
 
     import boto3
 
-    monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "bucket")
+    monkeypatch.setenv(OPENSRE_ARTIFACTS_BUCKET_ENV, "bucket")
     monkeypatch.setattr(boto3, "client", lambda *_a, **_k: _TimingOut())
     local = write_local_report("inv-1", {}, base_dir=tmp_path)
 
-    with caplog.at_level(logging.WARNING, logger="gateway.web.artifacts"):
+    with caplog.at_level(logging.WARNING, logger="gateway.core.investigations.artifacts"):
         key = upload_report_to_s3(local, org_id="org", investigation_id="inv-1")
 
     assert key is None

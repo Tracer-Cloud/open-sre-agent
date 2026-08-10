@@ -44,7 +44,20 @@ def get_instances(resolved: dict[str, Any] | None, service: str) -> list[dict[st
         return []
     explicit = resolved.get(_instances_key(service))
     if isinstance(explicit, list):
-        return [item for item in explicit if isinstance(item, dict)]
+        # ``config`` is normalized here, not left to each caller. classify_integrations
+        # stores the classified *model* in this list, while the flat fallback below
+        # hands back a dict — so the same helper returned two different shapes
+        # depending on how many instances happened to be registered. Callers that
+        # only ever ran the flat path looked correct and silently broke as soon as a
+        # second cluster (or a non-``default`` name) appeared: `isinstance(config,
+        # dict)` turned False and the branch behind it stopped running, with no error.
+        # The docstring above has always promised a dict; this makes both paths keep
+        # that promise.
+        return [
+            {**item, "config": _as_dict(item.get("config")) or {}}
+            for item in explicit
+            if isinstance(item, dict)
+        ]
     flat = resolved.get(service)
     flat_dict = _as_dict(flat)
     if flat_dict is not None:

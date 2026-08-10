@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import time
+
+import pytest
+
 from tools.investigation.reporting.context import build_report_context
 from tools.investigation.reporting.formatters.report import (
     build_slack_blocks,
@@ -130,6 +134,20 @@ def test_format_slack_message_shows_incident_command_section() -> None:
     assert "*Verification:*" in message
     assert "*Follow-up questions:*" in message
     assert "Remediation trade-offs:" in message
+
+
+def test_format_slack_message_renders_timing_as_minutes_and_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live report showed "Timing: 254s" — minutes past a minute must render as such."""
+    monkeypatch.setattr(time, "monotonic", lambda: 254.0)
+    state = _make_state()
+    state["investigation_started_at"] = 0.0
+
+    message = format_slack_message(build_report_context(state))
+
+    assert "Timing: 4m 14s" in message
+    assert "254s" not in message
 
 
 def test_format_slack_message_shows_provenance() -> None:

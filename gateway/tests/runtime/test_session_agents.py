@@ -57,10 +57,10 @@ def test_live_sink_rebinds_across_turns() -> None:
     second = MagicMock()
     live.bind(first)
     live.finalize("a")
-    first.finalize.assert_called_once_with("a")
+    first.finalize.assert_called_once_with("a", failed=False)
     live.bind(second)
     live.set_tool_status("running")
-    second.set_tool_status.assert_called_once_with("running")
+    second.set_tool_status.assert_called_once_with("running", call_id=None)
 
 
 def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> None:

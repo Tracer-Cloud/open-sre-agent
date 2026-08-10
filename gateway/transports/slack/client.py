@@ -9,11 +9,13 @@ from typing import Any, Protocol
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 
-logger = logging.getLogger(__name__)
+from config.constants import (
+    SLACK_REACTION_DONE,
+    SLACK_REACTION_FAILED,
+    SLACK_REACTION_WORKING,
+)
 
-_WORKING_REACTION = "eyes"
-_DONE_REACTION = "white_check_mark"
-_FAILED_REACTION = "x"
+logger = logging.getLogger(__name__)
 
 Blocks = Sequence[dict[str, Any]]
 
@@ -50,8 +52,22 @@ class SlackMessagingClient(Protocol):
     def delete_message(self, *, channel: str, ts: str) -> bool:
         """Delete one of the bot's own messages; return whether it succeeded."""
 
-    def start_stream(self, *, channel: str, thread_ts: str) -> str | None:
-        """Open a streamed timeline message; return its ``ts`` or ``None``."""
+    def start_stream(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        recipient_team_id: str,
+        recipient_user_id: str,
+    ) -> str | None:
+        """Open a streamed timeline message; return its ``ts`` or ``None``.
+
+        Both recipients name where the stream is delivered. An org-wide install
+        spans workspaces, so Slack infers neither and rejects the call with
+        ``missing_recipient_team_id`` or ``missing_recipient_user_id`` — it asks
+        for them one at a time, so supplying only the team surfaces the second
+        error rather than succeeding.
+        """
 
     def append_stream(self, *, channel: str, ts: str, chunks: Blocks) -> bool:
         """Append markdown/task chunks to a streamed message."""
@@ -175,7 +191,14 @@ class SlackWebApiClient:
             return False
         return True
 
-    def start_stream(self, *, channel: str, thread_ts: str) -> str | None:
+    def start_stream(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        recipient_team_id: str,
+        recipient_user_id: str,
+    ) -> str | None:
         # Streaming is documented under Slack's AI-apps surface; whether it
         # works without the Agents feature toggle is workspace/app-dependent,
         # so the first failure with a permanent-looking error disables it for
@@ -187,6 +210,13 @@ class SlackWebApiClient:
                 channel=channel,
                 thread_ts=thread_ts,
                 task_display_mode="timeline",
+                # Omit either and an org-wide install answers
+                # ``missing_recipient_team_id`` / ``missing_recipient_user_id``
+                # rather than inferring the destination. Sent unconditionally:
+                # both name the workspace and person the turn arrived from
+                # either way, so a single-workspace install is unaffected.
+                recipient_team_id=recipient_team_id,
+                recipient_user_id=recipient_user_id,
             )
         except SlackApiError as exc:
             error = str(exc.response.get("error") or "")
@@ -246,16 +276,23 @@ class SlackWebApiClient:
 
 def mark_turn_working(client: SlackMessagingClient, *, channel: str, timestamp: str) -> None:
     """Best-effort eyes reaction while the agent is working."""
-    client.add_reaction(channel=channel, timestamp=timestamp, emoji=_WORKING_REACTION)
+    client.add_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_WORKING)
 
 
 def mark_turn_done(client: SlackMessagingClient, *, channel: str, timestamp: str) -> None:
     """Swap eyes → checkmark when the turn finishes."""
-    client.remove_reaction(channel=channel, timestamp=timestamp, emoji=_WORKING_REACTION)
-    client.add_reaction(channel=channel, timestamp=timestamp, emoji=_DONE_REACTION)
+    client.remove_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_WORKING)
+    client.add_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_DONE)
 
 
 def mark_turn_failed(client: SlackMessagingClient, *, channel: str, timestamp: str) -> None:
     """Swap eyes → x when the turn raised without completing."""
-    client.remove_reaction(channel=channel, timestamp=timestamp, emoji=_WORKING_REACTION)
-    client.add_reaction(channel=channel, timestamp=timestamp, emoji=_FAILED_REACTION)
+    client.remove_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_WORKING)
+    client.add_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_FAILED)
+
+
+def mark_detached_done(client: SlackMessagingClient, *, channel: str, timestamp: str) -> None:
+    """Swap eyes/x → checkmark when a detached investigation finishes."""
+    client.remove_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_WORKING)
+    client.remove_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_FAILED)
+    client.add_reaction(channel=channel, timestamp=timestamp, emoji=SLACK_REACTION_DONE)

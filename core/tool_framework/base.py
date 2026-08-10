@@ -12,6 +12,7 @@ from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
+from core.tool_framework.approval_display import ApprovalDisplay
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
 from core.tool_framework.registry_metadata import BaseToolRegistryMetadata
 
@@ -67,6 +68,9 @@ class BaseTool(ABC):
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging
     approval_reason: ClassVar[str] = ""  # Human-readable reason for requiring approval
     approval_expiry_seconds: ClassVar[int] = DEFAULT_APPROVAL_EXPIRY_SECONDS
+    # Optional per-tool wording for the approval prompt; None falls back to the
+    # approval surface's generic argument summary.
+    approval_display: ClassVar[ApprovalDisplay | None] = None
     accepts_runtime_context: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

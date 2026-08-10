@@ -189,6 +189,13 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         verify_order=22,
     ),
     IntegrationSpec(
+        service="rootly",
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=53,
+        verify_order=60,
+    ),
+    IntegrationSpec(
         service="jira",
         has_verifier=True,
         direct_effective=True,
@@ -384,6 +391,14 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         has_verifier=True,
         setup_order=25,
         verify_order=9,
+    ),
+    IntegrationSpec(
+        service="gcp",
+        aliases=("google cloud", "google_cloud", "gce", "cloud logging"),
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=44,
+        verify_order=59,
     ),
     IntegrationSpec(service="google_docs", has_verifier=True, verify_order=19),
     IntegrationSpec(service="kafka", has_verifier=True, verify_order=37),

@@ -29,6 +29,8 @@ logger = logging.getLogger("gateway")
 class DiscordOutputSink:
     """Stream assistant output back to a Discord channel or thread."""
 
+    redacts_raw_tool_output = True
+
     def __init__(
         self,
         *,
@@ -71,7 +73,7 @@ class DiscordOutputSink:
         suppress_if_starts_with: str | None = None,
         defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
+        _ = (label, suppress_if_starts_with)
         parts: list[str] = []
         for chunk in chunks:
             parts.append(str(chunk))
@@ -79,15 +81,32 @@ class DiscordOutputSink:
             now = time.monotonic()
             if now - self._last_edit >= self._edit_interval:
                 self._edit_preview(combined)
-        return "".join(parts)
+        text = "".join(parts)
+        if defer_want_me_to_closer:
+            return text
+        self.finalize(text or EMPTY_RESPONSE_MESSAGE)
+        return text
 
-    def set_tool_status(self, text: str) -> None:
+    def set_tool_status(self, text: str, *, call_id: str | None = None) -> None:
+        _ = call_id  # Discord has no timeline
         self._set_status(text)
+
+    def end_tool_status(self, *, failed: bool, call_id: str | None = None) -> None:
+        """No-op: Discord has no timeline."""
+        _ = (failed, call_id)
+
+    def leave_tool_status_open(
+        self, *, call_id: str | None = None, title: str | None = None
+    ) -> None:
+        """No-op: Discord has no timeline."""
+        _ = (call_id, title)
+        _ = call_id
 
     def finish_streamed_response(self, text: str) -> None:
         self.finalize(text)
 
-    def finalize(self, text: str) -> None:
+    def finalize(self, text: str, *, failed: bool = False) -> None:
+        _ = failed  # Discord shows no turn-level success/failure state
         body = (text or EMPTY_RESPONSE_MESSAGE).strip()
         chunks = split_discord_content(body)
         if not chunks:

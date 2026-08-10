@@ -17,6 +17,28 @@ if _mcp_streamable_http_client is None and _mcp_streamablehttp_client is None:
     raise ImportError("mcp.client.streamable_http has no streamable HTTP client")
 
 
+def _no_session_id() -> str | None:
+    """Stand in for the session-id getter on SDKs that do not yield one."""
+    return None
+
+
+def _as_triple(yielded: Any) -> tuple[Any, Any, Any]:
+    """Normalize the transport's yield to ``(read, write, get_session_id)``.
+
+    The SDK yields two streams on some versions and three values on others, and
+    the arity does not track the function name: ``mcp`` 1.x yields the triple
+    from ``streamable_http_client`` while 2.x yields only the two streams from
+    the same name. Every caller unpacks three, so an unnormalized yield fails at
+    ``ValueError: not enough values to unpack`` on the first connection attempt
+    — at runtime, per integration, with no import-time signal.
+
+    Callers that need the session id must tolerate ``None``; no version of the
+    SDK reports one before the session is initialized anyway.
+    """
+    read_stream, write_stream, *rest = yielded
+    return read_stream, write_stream, (rest[0] if rest else _no_session_id)
+
+
 @asynccontextmanager
 async def streamable_http_client(
     url: str,
@@ -33,8 +55,8 @@ async def streamable_http_client(
             url,
             http_client=http_client,
             terminate_on_close=terminate_on_close,
-        ) as triple:
-            yield triple
+        ) as yielded:
+            yield _as_triple(yielded)
         return
 
     del http_client
@@ -44,5 +66,5 @@ async def streamable_http_client(
         timeout=timeout,
         sse_read_timeout=sse_read_timeout,
         terminate_on_close=terminate_on_close,
-    ) as triple:
-        yield triple
+    ) as yielded:
+        yield _as_triple(yielded)

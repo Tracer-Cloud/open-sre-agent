@@ -13,7 +13,11 @@ from gateway.transports.discord.output_sink import DiscordOutputSink
 @pytest.fixture
 def _patch_discord_client(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Stub Discord HTTP helpers so sink construction does not leave the process."""
-    state: dict[str, Any] = {"edits": [], "posts": []}
+    # ``final`` records only component-bearing calls. A Discord answer is
+    # "delivered" exactly when the feedback components go out; plain ``edits``
+    # also contains throttled in-progress previews, so counting them cannot
+    # tell delivery from a preview.
+    state: dict[str, Any] = {"edits": [], "posts": [], "final": []}
 
     def _send_message(*, channel_id: str, content: str, bot_token: str) -> str:
         _ = (channel_id, bot_token)
@@ -41,6 +45,7 @@ def _patch_discord_client(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     ) -> bool:
         _ = (channel_id, message_id, components, bot_token)
         state["edits"].append(content)
+        state["final"].append(content)
         return True
 
     def _send_with_components(
@@ -52,6 +57,7 @@ def _patch_discord_client(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     ) -> str:
         _ = (channel_id, components, bot_token)
         state["posts"].append(content)
+        state["final"].append(content)
         return "msg-extra"
 
     monkeypatch.setattr(
@@ -124,6 +130,58 @@ def test_sink_accepts_tool_hooks_attribute(
         tool_hooks=hooks,
     )
     assert sink.tool_hooks is hooks
+
+
+def test_stream_without_defer_delivers_the_answer(
+    _patch_discord_client: dict[str, Any],
+) -> None:
+    """A non-deferred stream must deliver, not just leave a throttled preview.
+
+    Discord used to discard ``defer_want_me_to_closer`` and never call
+    ``finalize`` on any path, so an answered turn (the turn handler skips its
+    own finalize when ``answered`` is true) reached the channel as an
+    in-progress preview and never as a final message.
+    """
+    sink = DiscordOutputSink(
+        bot_token="tok",
+        channel_id="chan",
+        edit_interval_seconds=0.0,
+    )
+    _patch_discord_client["final"].clear()
+
+    result = sink.stream(
+        label="assistant",
+        chunks=iter(["test", " message"]),
+        defer_want_me_to_closer=False,
+    )
+
+    assert result == "test message"
+    assert _patch_discord_client["final"] == ["test message"]
+
+
+def test_stream_with_defer_holds_delivery_until_finish_streamed_response(
+    _patch_discord_client: dict[str, Any],
+) -> None:
+    """A deferred stream delivers nothing until the orchestrator flushes."""
+    sink = DiscordOutputSink(
+        bot_token="tok",
+        channel_id="chan",
+        edit_interval_seconds=0.0,
+    )
+    _patch_discord_client["final"].clear()
+
+    result = sink.stream(
+        label="assistant",
+        chunks=iter(["deferred", " message"]),
+        defer_want_me_to_closer=True,
+    )
+
+    assert result == "deferred message"
+    assert _patch_discord_client["final"] == []
+
+    sink.finish_streamed_response("deferred message")
+
+    assert _patch_discord_client["final"] == ["deferred message"]
 
 
 def test_a_second_goal_turn_posts_instead_of_overwriting(

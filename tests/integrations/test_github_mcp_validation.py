@@ -953,3 +953,119 @@ def test_github_integration_is_configured_true_when_store_has_token(
     monkeypatch.setattr(github_mcp_module, "github_mcp_config_from_env", lambda: None)
 
     assert github_mcp_module.github_integration_is_configured() is True
+
+
+# --- env loaders: what makes GitHub "configured" -----------------------------
+#
+# Two loaders read the same env vars: `github_mcp_config_from_env` (used by the
+# tools) and the block in `integrations/_catalog_impl.py` (used by everything
+# that resolves integrations, which is how a deployment configures GitHub).
+# Both used to require GITHUB_MCP_URL, so a token-only setup — the one the docs
+# describe — registered nothing at all, with no error to explain why.
+
+
+def _clear_github_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "GITHUB_MCP_MODE",
+        "GITHUB_MCP_URL",
+        "GITHUB_MCP_COMMAND",
+        "GITHUB_MCP_ARGS",
+        "GITHUB_MCP_AUTH_TOKEN",
+        "GITHUB_MCP_TOOLSETS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_a_token_alone_is_enough_to_configure_the_hosted_server() -> None:
+    assert (
+        github_mcp_module.github_mcp_env_is_configured(
+            mode="streamable-http", url="", command="", auth_token="gho_test"
+        )
+        is True
+    )
+
+
+def test_an_explicit_url_without_a_token_still_configures() -> None:
+    assert (
+        github_mcp_module.github_mcp_env_is_configured(
+            mode="streamable-http", url="https://ghe.example.com/mcp/", command="", auth_token=""
+        )
+        is True
+    )
+
+
+def test_an_empty_environment_configures_nothing() -> None:
+    assert (
+        github_mcp_module.github_mcp_env_is_configured(
+            mode="streamable-http", url="", command="", auth_token=""
+        )
+        is False
+    )
+
+
+def test_stdio_needs_a_command_and_a_token_does_not_substitute() -> None:
+    assert (
+        github_mcp_module.github_mcp_env_is_configured(
+            mode="stdio", url="", command="", auth_token="gho_test"
+        )
+        is False
+    )
+    assert (
+        github_mcp_module.github_mcp_env_is_configured(
+            mode="stdio", url="", command="github-mcp-server", auth_token=""
+        )
+        is True
+    )
+
+
+def test_config_from_env_defaults_the_url_when_only_a_token_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_github_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "gho_test")
+
+    config = github_mcp_module.github_mcp_config_from_env()
+
+    assert config is not None
+    assert config.url == github_mcp_module.DEFAULT_GITHUB_MCP_URL
+    assert config.auth_token == "gho_test"
+
+
+def test_classify_registers_github_when_only_a_token_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The deployment path: a PAT in the environment must yield a GitHub record.
+
+    This is the seam the bug lived in. `github_mcp_is_usably_configured` already
+    treated a token as sufficient, but the loader discarded the config before
+    that check ever ran, so the integration was silently absent.
+    """
+    from integrations._catalog_impl import (
+        classify_integrations,
+        load_env_integrations,
+        merge_local_integrations,
+    )
+
+    _clear_github_env(monkeypatch)
+    monkeypatch.setenv("GITHUB_MCP_AUTH_TOKEN", "gho_test")
+
+    resolved = classify_integrations(merge_local_integrations([], load_env_integrations()))
+
+    assert "github" in resolved
+    assert resolved["github"].url == github_mcp_module.DEFAULT_GITHUB_MCP_URL
+
+
+def test_classify_does_not_register_github_without_any_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from integrations._catalog_impl import (
+        classify_integrations,
+        load_env_integrations,
+        merge_local_integrations,
+    )
+
+    _clear_github_env(monkeypatch)
+
+    resolved = classify_integrations(merge_local_integrations([], load_env_integrations()))
+
+    assert "github" not in resolved

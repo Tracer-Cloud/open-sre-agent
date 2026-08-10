@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from core.llm.types import ToolCall
+from core.tool_framework.utils.call_identity import bound_tool_call_id
 from core.tool_framework.utils.integration_sources import availability_view
 from core.types import AgentTool, AgentToolContext, RuntimeTool
 from platform.observability.trace.redaction import redact_sensitive
@@ -116,7 +117,10 @@ def execute_tool_calls(
     runtime_resources = dict(tool_resources or {})
 
     def _call(tc: ToolCall) -> ToolExecutionResult:
-        with tool_span(tc.name, tool_call_id=tc.id) as span_attrs:
+        with (
+            bound_tool_call_id(tc.id),
+            tool_span(tc.name, tool_call_id=tc.id) as span_attrs,
+        ):
             return _execute_one_tool_call(
                 tc,
                 tool_map=tool_map,

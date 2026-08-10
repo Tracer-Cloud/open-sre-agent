@@ -197,13 +197,16 @@ def test_gateway_handler_outbound_finalize_on_action_only_turn(
     assert sink.finalized is not None
     assert sink.streamed == []
     assert "probe executed" in sink.finalized
+    # ``answered`` is False here and the turn still succeeded: keying the
+    # failure flag off it would mark the majority of tool turns as failures.
+    assert sink.finalized_failed is False
 
 
 def test_gateway_handler_streams_answer_on_assistant_turn(
     parity_env,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Answer turns stream via the sink; they must not call finalize."""
+    """Gateway session (investigation = ()) on gather path gets deferred paint flushed exactly once."""
     configure, _ = parity_env
     configure(tools=[probe_tool()], action_mode="text")
 
@@ -211,9 +214,10 @@ def test_gateway_handler_streams_answer_on_assistant_turn(
 
     assert snapshot.answered is True
     assert PARITY_ANSWER in snapshot.assistant_text
+    # Deferred paint flushed exactly once, handler still does not double-finalize
+    assert len(sink.finished) == 1
+    assert PARITY_ANSWER in sink.finished[0]
     assert sink.finalized is None
-    assert sink.streamed
-    assert PARITY_ANSWER in sink.streamed[-1]
     assert PARITY_ANSWER in sink.outbound_text
 
 
@@ -239,3 +243,230 @@ def test_turn_snapshot_fields_action_vs_answer(parity_env, monkeypatch: pytest.M
     assert answer.answered is True
     assert answer.assistant_text == PARITY_ANSWER
     assert answer.probe_ran is False
+
+
+def test_gather_path_non_deferred_stream_does_not_flush(
+    parity_env,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T4: The non-deferred path must NOT flush to prevent duplicate-post regression."""
+    configure, _ = parity_env
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    # Create a handoff that sets handoff_requires_gather=False -> defer=False
+    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        _ = text
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="action handled",
+            handoff_contents=("diagnostic:test",),
+            handoff_requires_gather=False,  # This forces defer=False
+        )
+
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+    from core.agent_harness.turns.orchestrator import run_turn
+
+    session = InMemorySessionStore()
+    finish_calls: list[str] = []
+
+    class FakeRun:
+        response_text = PARITY_ANSWER
+
+    def fake_answer(*_args: object, **_kwargs: object) -> FakeRun:
+        return FakeRun()
+
+    class FakeOutput:
+        def finish_streamed_response(self, text: str) -> None:
+            finish_calls.append(text)
+
+    # handoff_requires_gather=False -> defer=False, finish_streamed_response never called
+    result = run_turn(
+        "test message",
+        session,
+        execute_actions=execute_actions,
+        answer=fake_answer,
+        gather=lambda *_a, **_k: None,
+        accounting=NoopTurnAccounting(),
+        output=FakeOutput(),  # type: ignore[arg-type]
+    )
+
+    assert result.final_intent == "cli_agent_fallback"
+    assert len(finish_calls) == 0  # No flush on non-deferred path
+
+
+def test_failed_answer_stream_does_not_clobber_error(
+    parity_env,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T5: A failed answer stream must not have its error clobbered by finish flush."""
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+    from core.agent_harness.turns.orchestrator import run_turn
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    configure, _ = parity_env
+    configure(tools=[probe_tool()], action_mode="text")
+
+    session = InMemorySessionStore()
+    finish_calls: list[str] = []
+
+    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        _ = text
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=False,
+            response_text="",
+            handoff_contents=("diagnostic:test",),
+        )
+
+    def fake_answer(*_args: object, **_kwargs: object) -> None:
+        # answer returns None after the sink rendered an error -> no flush
+        return None
+
+    class FakeOutput:
+        def finish_streamed_response(self, text: str) -> None:
+            finish_calls.append(text)
+
+    run_turn(
+        "test error case",
+        session,
+        execute_actions=execute_actions,
+        answer=fake_answer,
+        gather=lambda *_a, **_k: "gathered evidence",
+        accounting=NoopTurnAccounting(),
+        output=FakeOutput(),  # type: ignore[arg-type]
+    )
+
+    # Failed answer should not flush (run is None)
+    assert len(finish_calls) == 0
+
+
+def test_confirms_pending_offer_still_flushes_interactive_shell_half(
+    parity_env,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T6: The confirms_pending leg: armed offer + 'yes' + action does not handle -> gather path still flushes."""
+    from core.agent_harness.session.pending_offer import PendingInvestigationOffer
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+    from core.agent_harness.turns.orchestrator import run_turn
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    configure, _ = parity_env
+    configure(tools=[probe_tool()], action_mode="text")
+
+    session = InMemorySessionStore()
+    # Arm a pending investigation offer
+    session.pending_investigation_offer = PendingInvestigationOffer(alert_text="test alert")
+    finish_calls: list[str] = []
+
+    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        _ = text
+        # Action does not handle -> gather path
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=False,
+            response_text="",
+            handoff_contents=(),
+        )
+
+    class FakeRun:
+        response_text = PARITY_ANSWER
+
+    def fake_answer(*_args: object, **_kwargs: object) -> FakeRun:
+        return FakeRun()
+
+    class FakeOutput:
+        def finish_streamed_response(self, text: str) -> None:
+            finish_calls.append(text)
+
+    # confirms_pending + gather path still flushes (interactive-shell half)
+    result = run_turn(
+        "yes",  # This should expand to the pending offer and then go to gather
+        session,
+        execute_actions=execute_actions,
+        answer=fake_answer,
+        gather=lambda *_a, **_k: "gathered evidence",
+        accounting=NoopTurnAccounting(),
+        output=FakeOutput(),  # type: ignore[arg-type]
+    )
+
+    assert result.final_intent == "cli_agent_fallback"
+    # Should still flush even with confirms_pending
+    assert len(finish_calls) == 1
+
+
+def test_deferred_flush_paints_the_canonical_closer_rewrite(
+    parity_env,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flush must run *after* the offer rewrite, and survive ``replace()``.
+
+    Two independent requirements meet on this path, and neither was pinned:
+
+    * ``_RouteOutcome`` is rebuilt with ``dataclasses.replace`` inside the
+      capability guard. If ``paint_deferred`` were dropped there, a surface
+      that held the paint would never be flushed and the tail would be lost --
+      the same production symptom, one branch over.
+    * The flush is placed after the guard closes so it paints what
+      ``finalize_gather_investigation_offer`` rewrote. Flushing before the
+      guard would deliver the model's raw closer while the session armed the
+      canonical one, so bare ``yes`` would accept an offer the user never saw.
+    """
+    from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+    from core.agent_harness.turns.orchestrator import run_turn
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    configure, _ = parity_env
+    configure(tools=[probe_tool()], action_mode="text")
+
+    raw_answer = "The crashloop is off pod worker-5cc.\n\nWant me to: check the deploy history?"
+    canonical = "The crashloop is off pod worker-5cc.\n\n**Want me to:** run a full investigation"
+
+    session = InMemorySessionStore()
+    finish_calls: list[str] = []
+
+    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        _ = text
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=False,
+            response_text="",
+            handoff_contents=(),
+        )
+
+    class FakeRun:
+        response_text = raw_answer
+
+    def fake_answer(*_args: object, **_kwargs: object) -> FakeRun:
+        return FakeRun()
+
+    class FakeOutput:
+        def finish_streamed_response(self, text: str) -> None:
+            finish_calls.append(text)
+
+    run_turn(
+        "why is checkout failing",
+        session,
+        execute_actions=execute_actions,
+        answer=fake_answer,
+        gather=lambda *_a, **_k: "gathered evidence",
+        accounting=NoopTurnAccounting(),
+        output=FakeOutput(),  # type: ignore[arg-type]
+    )
+
+    # The guard rewrote the closer, so the offer is armed...
+    assert session.pending_investigation_offer is not None
+    # ...and the surface was painted exactly once, with the rewritten text.
+    assert finish_calls == [canonical]

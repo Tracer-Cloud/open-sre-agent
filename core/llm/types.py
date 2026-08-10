@@ -39,6 +39,11 @@ class LLMResponse:
     #: ``None`` means the provider sent no cache fields — distinct from 0.
     cache_read_tokens: int | None = None
     cache_creation_tokens: int | None = None
+    #: Why the model stopped (``length``/``max_tokens`` mean the output budget
+    #: ran out and ``content`` is cut off mid-value). ``None`` when the transport
+    #: does not report it. Structured-output parsing reads this to tell a
+    #: truncated payload apart from a model that wrote unparseable JSON.
+    finish_reason: str | None = None
 
 
 @dataclass

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from config.constants.agent_identity import AGENT_NAME_ENV
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 from gateway.tests.runtime.concurrency_limited_handler import (
@@ -61,7 +62,8 @@ def test_chat_handler_refuses_excess_turn_without_calling_handler() -> None:
         release.wait(1)
 
     class Sink:
-        def finalize(self, text: str) -> None:
+        def finalize(self, text: str, *, failed: bool = False) -> None:
+            _ = failed
             finalized.append(text)
 
     handler = ConcurrencyLimitedTurnHandler(handler=blocking_handler, gate=gate)
@@ -94,7 +96,8 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
     ran: list[str] = []
 
     class Sink:
-        def finalize(self, text: str) -> None:
+        def finalize(self, text: str, *, failed: bool = False) -> None:
+            _ = failed
             finalized.append(text)
 
     handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
@@ -171,13 +174,17 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """REST investigation worker waits for the same chat capacity as other turns."""
+    from gateway.core.investigations.worker import InvestigationWorker
     from gateway.core.runtime.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
     )
-    from gateway.core.storage.investigations.store import InMemoryInvestigationStore
-    from gateway.web.worker import InvestigationWorker
+    from gateway.core.storage.investigations.store import (
+        InMemoryInvestigationStore,
+        InvestigationOrigin,
+    )
 
     reset_process_turn_gate_for_tests()
     gate = TurnConcurrencyGate(1)
@@ -186,7 +193,11 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
     monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
 
     store = InMemoryInvestigationStore()
-    store.create(clerk_org_id="org_a", trigger={"raw_alert": {"alert_name": "cpu"}})
+    store.create(
+        clerk_org_id="org_a",
+        trigger={"raw_alert": {"alert_name": "cpu"}},
+        origin=InvestigationOrigin.REST,
+    )
     entered = threading.Event()
     result: list[str] = []
 
@@ -203,6 +214,35 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
     thread.join(1)
     assert result == ["True"]
     reset_process_turn_gate_for_tests()
+
+
+def test_the_capacity_notice_comes_from_the_named_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It is posted into the channel, so it must not name a bot nobody knows."""
+    from rich.console import Console
+
+    from gateway.core.runtime.turn_handler import GatewayTurnHandler
+
+    monkeypatch.setenv(AGENT_NAME_ENV, "AcmeOps")
+    finalized: list[str] = []
+
+    class Sink:
+        def finalize(self, text: str, *, failed: bool = False) -> None:
+            _ = failed
+            finalized.append(text)
+
+    def unreachable_turn(*_args: object) -> None:
+        raise AssertionError("the gate was full; the turn must not have run")
+
+    gate = TurnConcurrencyGate(1)
+    assert gate.try_acquire()  # the only slot is already taken
+    handler = GatewayTurnHandler(console=Console(force_terminal=False), gate=gate)
+    monkeypatch.setattr(GatewayTurnHandler, "_run_turn", unreachable_turn)
+
+    handler("two", object(), Sink(), logging.getLogger("test"))  # type: ignore[arg-type]
+
+    assert finalized == ["AcmeOps is at capacity. Please try again shortly."]
 
 
 def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:

@@ -18,6 +18,11 @@ class InvestigationStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class InvestigationOrigin(StrEnum):
+    REST = "rest"
+    CHAT = "chat"
+
+
 @dataclass
 class InvestigationRecord:
     id: str
@@ -26,6 +31,7 @@ class InvestigationRecord:
     trigger: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+    origin: InvestigationOrigin
     workspace_id: str | None = None
     report_local_path: str | None = None
     report_s3_key: str | None = None
@@ -40,6 +46,7 @@ class InvestigationStore(Protocol):
         *,
         clerk_org_id: str,
         trigger: dict[str, Any],
+        origin: InvestigationOrigin,
         workspace_id: str | None = None,
     ) -> InvestigationRecord:
         """Persist a new queued investigation and return it."""
@@ -47,8 +54,16 @@ class InvestigationStore(Protocol):
     def get(self, investigation_id: str) -> InvestigationRecord | None:
         """Return the record for ``investigation_id``, or None when unknown."""
 
-    def claim_next_queued(self) -> InvestigationRecord | None:
-        """Atomically move the oldest queued record to running and return it."""
+    def claim_next_queued(self, *, origin: InvestigationOrigin) -> InvestigationRecord | None:
+        """Atomically move the oldest queued record with matching origin to running and return it."""
+
+    def claim(self, investigation_id: str) -> InvestigationRecord | None:
+        """Atomically move one named queued record to running, or None if it was not queued.
+
+        The in-process fallback already knows which record it launched, so it
+        claims by id rather than racing the queue. ``None`` means somebody else
+        got there first — the caller must not run the pipeline a second time.
+        """
 
     def finish(
         self,
@@ -69,6 +84,9 @@ class InvestigationStore(Protocol):
     ) -> InvestigationRecord | None:
         """Cancel a queued investigation for ``clerk_org_id``, or None if not cancellable."""
 
+    def touch(self, investigation_id: str) -> None:
+        """Update the heartbeat timestamp for a running investigation."""
+
 
 @dataclass
 class InMemoryInvestigationStore:
@@ -82,6 +100,7 @@ class InMemoryInvestigationStore:
         *,
         clerk_org_id: str,
         trigger: dict[str, Any],
+        origin: InvestigationOrigin,
         workspace_id: str | None = None,
     ) -> InvestigationRecord:
         now = datetime.now(UTC)
@@ -92,6 +111,7 @@ class InMemoryInvestigationStore:
             trigger=trigger,
             created_at=now,
             updated_at=now,
+            origin=origin,
             workspace_id=workspace_id,
         )
         with self._lock:
@@ -103,16 +123,25 @@ class InMemoryInvestigationStore:
             record = self._by_id.get(investigation_id)
             return replace(record) if record else None
 
-    def claim_next_queued(self) -> InvestigationRecord | None:
+    def claim_next_queued(self, *, origin: InvestigationOrigin) -> InvestigationRecord | None:
         with self._lock:
             queued = [
                 record
                 for record in self._by_id.values()
-                if record.status is InvestigationStatus.QUEUED
+                if record.status is InvestigationStatus.QUEUED and record.origin is origin
             ]
             if not queued:
                 return None
             record = min(queued, key=lambda r: r.created_at)
+            record.status = InvestigationStatus.RUNNING
+            record.updated_at = datetime.now(UTC)
+            return replace(record)
+
+    def claim(self, investigation_id: str) -> InvestigationRecord | None:
+        with self._lock:
+            record = self._by_id.get(investigation_id)
+            if record is None or record.status is not InvestigationStatus.QUEUED:
+                return None
             record.status = InvestigationStatus.RUNNING
             record.updated_at = datetime.now(UTC)
             return replace(record)
@@ -153,3 +182,10 @@ class InMemoryInvestigationStore:
             record.status = InvestigationStatus.CANCELLED
             record.updated_at = datetime.now(UTC)
             return replace(record)
+
+    def touch(self, investigation_id: str) -> None:
+        """Update the heartbeat timestamp for a running investigation."""
+        with self._lock:
+            record = self._by_id.get(investigation_id)
+            if record is not None:
+                record.updated_at = datetime.now(UTC)

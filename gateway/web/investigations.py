@@ -1,49 +1,36 @@
 """Async investigation API — enqueue now, poll later (ALB-safe).
 
-Store selection: Postgres when ``DATABASE_URL`` is set, else process-local
-memory. Do not widen the public response shape without a schema bump.
+Store selection: Postgres when ``DATABASE_URI`` (or ``DATABASE_URL``) is set,
+else process-local memory. Do not widen the public response shape without a
+schema bump.
 """
 
 from __future__ import annotations
 
-import os
-import threading
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from gateway.core.investigations.worker import ensure_worker_started
 from gateway.core.runtime.security_audit import audit_security_action
 from gateway.core.storage.investigations.store import (
-    InMemoryInvestigationStore,
+    InvestigationOrigin,
     InvestigationRecord,
     InvestigationStatus,
     InvestigationStore,
 )
 from gateway.web.clerk_deps import ClerkClaims
-from gateway.web.worker import ensure_worker_started
 
 router = APIRouter(prefix="/api/investigations", tags=["investigations"])
 
-_store_lock = threading.Lock()
-_store_instance: InvestigationStore | None = None
-
 
 def _store() -> InvestigationStore:
-    global _store_instance
-    with _store_lock:
-        if _store_instance is None:
-            dsn = os.getenv("DATABASE_URL", "").strip()
-            if dsn:
-                from gateway.core.storage.investigations.postgres import (
-                    PostgresInvestigationStore,
-                )
+    """Share one store with the chat launcher; see ``storage_utils`` for why it is cached."""
+    from gateway.core.investigations.storage_utils import get_investigation_store
 
-                _store_instance = PostgresInvestigationStore(dsn)
-            else:
-                _store_instance = InMemoryInvestigationStore()
-        return _store_instance
+    return get_investigation_store()
 
 
 def _audit_investigation(
@@ -120,6 +107,7 @@ def create_investigation(
     record = store.create(
         clerk_org_id=clerk_org_id,
         trigger=trigger,
+        origin=InvestigationOrigin.REST,
         workspace_id=body.workspace_id,
     )
     _audit_investigation("create", record, actor_id=claims.sub, clerk_org_id=clerk_org_id)

@@ -196,15 +196,33 @@ def test_llm_settings_from_env_max_tokens_invalid_raises(monkeypatch) -> None:
         LLMSettings.from_env()
 
 
-def test_llm_settings_from_env_max_tokens_default(monkeypatch) -> None:
+def test_llm_settings_max_tokens_is_none_when_env_unset(monkeypatch) -> None:
+    """Unset must stay distinguishable from an explicit 4096.
+
+    Collapsing the two hides the per-provider default — notably Ollama's 1024
+    agent budget, which an implicit 4096 would silently raise.
+    """
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.delenv("LLM_MAX_TOKENS", raising=False)
 
-    from config.config import DEFAULT_MAX_TOKENS
+    settings = LLMSettings.from_env()
+
+    assert settings.max_tokens is None
+
+
+def test_llm_settings_max_tokens_is_none_when_env_blank(monkeypatch) -> None:
+    """``LLM_MAX_TOKENS=`` means unset, not a startup crash.
+
+    A deliberate change: a blank value used to fail pydantic parsing at startup.
+    ``KEY=`` is routine in a ``.env`` file, and every sibling entry in
+    ``_llm_settings_env_payload`` already treats blank as "not set".
+    """
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "")
 
     settings = LLMSettings.from_env()
 
-    assert settings.max_tokens == DEFAULT_MAX_TOKENS
+    assert settings.max_tokens is None
 
 
 def test_llm_settings_from_env_claude_code_without_api_key(monkeypatch) -> None:

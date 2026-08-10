@@ -137,6 +137,7 @@ def llm_response_with_usage(
     *,
     input_key: str,
     output_key: str,
+    finish_reason: str | None = None,
 ) -> LLMResponse:
     inp, out = coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
     cache_read, cache_write = extract_cache_tokens(usage)
@@ -148,4 +149,5 @@ def llm_response_with_usage(
         output_tokens=out,
         cache_read_tokens=cache_read,
         cache_creation_tokens=cache_write,
+        finish_reason=finish_reason,
     )

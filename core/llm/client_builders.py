@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any
 
+from core.llm.shared.max_tokens import resolve_max_output_tokens
+
 if TYPE_CHECKING:
     from core.llm.types import AgentLLMClient, LLMRoute, ModelType
 
@@ -51,7 +53,7 @@ def _cli_agent_client(registration: Any) -> AgentLLMClient:
 
 def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
     """Build the native vendor-SDK tool-calling client for the route's provider."""
-    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
+    from config.config import PROVIDER_ANTHROPIC, PROVIDER_BEDROCK, PROVIDER_OPENAI
     from core.llm.providers.openai_compat_providers import (
         is_openai_compat_provider,
         resolve_openai_compat_provider,
@@ -65,7 +67,7 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
         from core.llm.types import ModelType
 
         resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
-        max_tokens = 1024 if provider == PROVIDER_OLLAMA else resolved.config.max_tokens
+        max_tokens = resolve_max_output_tokens(settings, provider_default=resolved.agent_max_tokens)
         return sdk.OpenAIAgentClient(
             model=resolved.model,
             max_tokens=max_tokens,
@@ -76,16 +78,17 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
 
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]
     model = getattr(settings, f"{spec.env_prefix}_reasoning_model")
+    max_tokens = resolve_max_output_tokens(settings, provider_default=spec.max_tokens)
     if provider == PROVIDER_BEDROCK:
         from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
 
         if is_anthropic_bedrock_model(model):
-            return sdk.BedrockAgentClient(model=model, max_tokens=spec.max_tokens)
-        return sdk.BedrockConverseAgentClient(model=model, max_tokens=spec.max_tokens)
+            return sdk.BedrockAgentClient(model=model, max_tokens=max_tokens)
+        return sdk.BedrockConverseAgentClient(model=model, max_tokens=max_tokens)
 
     if provider == PROVIDER_OPENAI:
-        return sdk.OpenAIAgentClient(model=model, max_tokens=spec.max_tokens)
-    return sdk.AnthropicAgentClient(model=model, max_tokens=spec.max_tokens)
+        return sdk.OpenAIAgentClient(model=model, max_tokens=max_tokens)
+    return sdk.AnthropicAgentClient(model=model, max_tokens=max_tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +99,7 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
 def build_reasoning_client(route: LLMRoute, model_type: ModelType) -> Any:
     """Build the reasoning client for the route and model tier: CLI or LiteLLM, else native SDK."""
     if route.cli_provider_registration is not None:
-        return _cli_llm_client(route.cli_provider_registration, model_type)
+        return _cli_llm_client(route, model_type)
 
     if route.use_litellm:
         from core.llm.shared.usage import emit_usage
@@ -112,16 +115,21 @@ def build_reasoning_client(route: LLMRoute, model_type: ModelType) -> Any:
     return _native_sdk_llm_client(route, model_type)
 
 
-def _cli_llm_client(registration: Any, model_type: ModelType) -> Any:
+def _cli_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     """Build the subprocess CLI-backed reasoning client for a CLI provider registration."""
     from config.config import DEFAULT_MAX_TOKENS
     from platform.harness_ports import build_cli_client
 
+    registration = route.cli_provider_registration
+    if registration is None:
+        raise RuntimeError("CLI provider registration is required for CLI-backed LLM client")
+
     model_name = os.getenv(registration.model_env_key, "").strip() or None
+    max_tokens = resolve_max_output_tokens(route.settings, provider_default=DEFAULT_MAX_TOKENS)
     return build_cli_client(
         registration.adapter_factory(),
         model=model_name,
-        max_tokens=DEFAULT_MAX_TOKENS,
+        max_tokens=max_tokens,
         model_type=model_type,
     )
 
@@ -146,10 +154,11 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
 
     if is_openai_compat_provider(provider):
         compat = resolve_openai_compat_provider(settings, provider, model_type)
+        max_tokens = resolve_max_output_tokens(settings, provider_default=compat.config.max_tokens)
         return sdk.OpenAILLMClient(
             model=compat.model,
             model_fallback=_fallback_model(provider),
-            max_tokens=compat.config.max_tokens,
+            max_tokens=max_tokens,
             base_url=compat.base_url,
             api_key_env=compat.api_key_env,
             api_key_default=compat.api_key_default,
@@ -158,12 +167,13 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
 
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]
     model = str(getattr(settings, f"{spec.env_prefix}_{model_type}_model"))
+    max_tokens = resolve_max_output_tokens(settings, provider_default=spec.max_tokens)
     if provider == PROVIDER_OPENAI:
         return sdk.OpenAILLMClient(
             model=model,
             model_fallback=_fallback_model("openai"),
-            max_tokens=spec.max_tokens,
+            max_tokens=max_tokens,
         )
     if provider == PROVIDER_BEDROCK:
-        return sdk.BedrockLLMClient(model=model, max_tokens=spec.max_tokens)
-    return sdk.LLMClient(model=model, max_tokens=spec.max_tokens)
+        return sdk.BedrockLLMClient(model=model, max_tokens=max_tokens)
+    return sdk.LLMClient(model=model, max_tokens=max_tokens)

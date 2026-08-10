@@ -8,7 +8,6 @@ message components on the prompt, and click routing back to the broker.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from typing import Any
 
 import discord
@@ -18,7 +17,7 @@ from gateway.core.runtime.approvals import (
     DENY_ACTION_ID,
     MAX_APPROVAL_WAIT_SECONDS,
     ApprovalBroker,
-    arguments_preview,
+    DecidedPrompts,
 )
 from gateway.transports.discord.client import edit_message, send_message_with_components
 
@@ -38,25 +37,26 @@ class DiscordApprovalPrompter:
         self._broker = broker
         self._bot_token = bot_token
         self._channel_id = channel_id
+        self._decided = DecidedPrompts()
 
     def request(
         self,
         *,
-        tool_name: str,
+        call_id: str,
+        headline: str,
         reason: str,
-        arguments: Mapping[str, Any],
+        details: str,
         expiry_seconds: float,
     ) -> tuple[bool, str]:
         approval_id = self._broker.create(
             platform="discord",
             chat_id=self._channel_id,
         )
-        preview = arguments_preview(arguments)
-        body = f"**Approval needed — `{tool_name}`**"
+        body = f"**Approval needed — {headline}**"
         if reason.strip():
             body += f"\n{reason.strip()}"
-        if preview:
-            body += f"\n```\n{preview}\n```"
+        if details:
+            body += f"\n```\n{details}\n```"
         components = _approval_components(approval_id)
         message_id = send_message_with_components(
             channel_id=self._channel_id,
@@ -66,21 +66,34 @@ class DiscordApprovalPrompter:
         )
         if message_id is None:
             logger.warning(
-                "[discord-gateway] approval prompt post failed tool=%s channel=%s",
-                tool_name,
+                "[discord-gateway] approval prompt post failed call=%s channel=%s",
+                call_id,
                 self._channel_id,
             )
             return (False, "")
         timeout = min(float(expiry_seconds), MAX_APPROVAL_WAIT_SECONDS)
         approved, decided_by = self._broker.wait(approval_id, timeout=timeout)
-        outcome = _outcome_text(tool_name, approved=approved, decided_by=decided_by)
         edit_message(
             channel_id=self._channel_id,
             message_id=message_id,
-            content=outcome,
+            content=_outcome_text(headline, approved=approved, decided_by=decided_by),
             bot_token=self._bot_token,
         )
+        if approved:
+            self._decided.remember(call_id, message_id=message_id, decided_by=decided_by)
         return (approved, decided_by)
+
+    def attach_receipt(self, *, call_id: str, receipt: str) -> None:
+        """Replace the approved prompt's outcome with what the call produced."""
+        decision = self._decided.take(call_id)
+        if decision is None or not receipt.strip():
+            return
+        edit_message(
+            channel_id=self._channel_id,
+            message_id=decision.message_id,
+            content=_outcome_text(receipt, approved=True, decided_by=decision.decided_by)[:2000],
+            bot_token=self._bot_token,
+        )
 
 
 def handle_component_interaction(
@@ -136,12 +149,12 @@ def _approval_components(approval_id: str) -> list[dict[str, Any]]:
     ]
 
 
-def _outcome_text(tool_name: str, *, approved: bool, decided_by: str) -> str:
+def _outcome_text(label: str, *, approved: bool, decided_by: str) -> str:
     if approved:
-        return f"✅ `{tool_name}` approved by <@{decided_by}>"
+        return f"✅ {label} — approved by <@{decided_by}>"
     if decided_by:
-        return f"🚫 `{tool_name}` denied by <@{decided_by}>"
-    return f"⏱ Approval request for `{tool_name}` expired — action skipped."
+        return f"🚫 {label} — denied by <@{decided_by}>"
+    return f"⏱ {label} — approval request expired, action skipped."
 
 
 __all__ = [

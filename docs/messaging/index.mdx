@@ -9,16 +9,18 @@ OpenSRE can deliver investigation findings — and accept investigation triggers
 
 | Platform | Best for | Trigger investigations from chat? | Configured by | Setup time |
 |---|---|---|---|---|
-| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Socket Mode chat via `opensre gateway start` (+ webhook delivery) | `opensre integrations setup slack` | ~10 min |
-| [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ Gateway chat + `/investigate` via `opensre gateway start` | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
-| [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ✅ DM text chat via `opensre gateway start` | `opensre onboard` or `opensre integrations setup telegram` | ~5 min |
+| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Detached investigations via `/investigate` + Socket Mode chat | `opensre integrations setup slack` | ~10 min |
+| [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ❌ chat only — `/investigate` runs inline and times out | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
+| [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ❌ chat only — an investigation runs inline and times out | `opensre onboard` or `opensre integrations setup telegram` | ~5 min |
 | [**Rocket.Chat**](/messaging/rocketchat) | Self-hosted and open-source workspaces | ❌ delivery only | `opensre onboard` or `opensre integrations setup rocketchat` | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
 | [**Twilio SMS**](/messaging/twilio-sms) | SMS paging via Twilio (separate from WhatsApp) | ❌ delivery only | `opensre integrations setup twilio` | ~5 min |
 
-If you're not sure, start with Slack — it has the simplest setup. Pick Discord if you want chat-driven investigations with threaded follow-ups. Pick WhatsApp or Twilio SMS when your team already pages via Twilio.
+If you're not sure, start with Slack — it has the simplest setup, and it is the only platform where an investigation started from chat runs to completion. Pick WhatsApp or Twilio SMS when your team already pages via Twilio.
 
 You can configure more than one. Each is independent and uses its own credentials.
+
+**Chat safety note:** When the agent ends a turn without summarising what a tool returned, chat surfaces get a short receipt naming the tool, its arguments and its output size — not the raw output. Without this, a turn that read pod logs and then ran out of budget posted the entire log body into the channel. The terminal still shows the full output, since it is not a shared surface. Note the limit: an answer the agent does write is sent as written, so log lines it quotes deliberately still reach the channel.
 
 ## What every guide covers
 
@@ -33,11 +35,29 @@ Each platform guide walks you through:
 
 ---
 
+## Name the bot
+
+If you renamed the bot on the platform, tell OpenSRE too:
+
+```bash
+OPENSRE_AGENT_NAME=YourBotName
+```
+
+Without it the agent still greets people as "OpenSRE" no matter what the app is
+called, and a thread reply that uses the bot's real name — with no `@mention` —
+is read as human chatter and goes unanswered. One name covers every surface the
+gateway serves. The `opensre` CLI and these docs are unaffected. Full detail:
+[Environment variables](/configuration/environment-variables#agent-identity).
+
 ## Common environment variables
 
 Discord and Telegram credentials can also be set directly in `.env` instead of (or alongside) the CLI configuration:
 
 ```bash
+# Agent name in chat (defaults to OpenSRE)
+OPENSRE_AGENT_NAME=
+
+
 # Slack — webhook delivery and/or Socket Mode gateway
 SLACK_WEBHOOK_URL=
 SLACK_BOT_TOKEN=

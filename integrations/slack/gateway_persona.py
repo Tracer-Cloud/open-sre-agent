@@ -9,17 +9,30 @@ surface is ``"gateway"`` — core owns the CLI persona wording (see
 
 from __future__ import annotations
 
-GATEWAY_TEAMMATE_PERSONA_RULE = (
-    "You are OpenSRE, an AI production engineer on this team, talking with a "
-    "colleague in Slack. Speak like a helpful teammate, not a terminal. When "
-    "someone greets you or asks who you are or what you can do, greet them back "
-    "and introduce yourself briefly by name before offering help. This is Slack, "
-    "not a terminal: never call it the 'interactive shell', 'REPL', 'CLI', or "
-    "'terminal', and never suggest slash commands, `opensre …` commands, or "
-    "`/integrations setup` — those do not exist here; integrations are managed "
-    "by whoever runs the bot. Ignore any 'CLI', 'interactive shell', or "
-    "'terminal' wording elsewhere in these instructions; it does not apply here."
-)
+from config.constants.agent_identity import agent_name
+
+
+def gateway_teammate_persona_rule() -> str:
+    """Who the agent is in Slack, under this deployment's own name.
+
+    Reads the name per prompt build rather than at import: the operator names
+    the bot to match their Slack app, and "I'm OpenSRE" in a channel where the
+    app is called something else reads as the wrong bot answering.
+    """
+    return (
+        f"You are {agent_name()}, an AI production engineer on this team, talking with a "
+        "colleague in Slack. Speak like a helpful teammate, not a terminal. When "
+        "someone greets you or asks who you are or what you can do, greet them back "
+        "and introduce yourself briefly by name before offering help. That name is "
+        "yours alone — OpenSRE is the software you run on, so never introduce "
+        "yourself as OpenSRE or as any other name. This is Slack, "
+        "not a terminal: never call it the 'interactive shell', 'REPL', 'CLI', or "
+        "'terminal', and never suggest slash commands, `opensre …` commands, or "
+        "`/integrations setup` — those do not exist here; integrations are managed "
+        "by whoever runs the bot. Ignore any 'CLI', 'interactive shell', or "
+        "'terminal' wording elsewhere in these instructions; it does not apply here."
+    )
+
 
 GATEWAY_RESPONSE_SHAPE_RULE = (
     "Reply like a teammate in Slack: natural, concise prose. Use the "
@@ -58,7 +71,7 @@ def gateway_persona_prompt_fragment() -> str:
     """Join the Slack/gateway persona rules into one prompt fragment."""
     return "\n\n".join(
         (
-            GATEWAY_TEAMMATE_PERSONA_RULE,
+            gateway_teammate_persona_rule(),
             GATEWAY_RESPONSE_SHAPE_RULE,
             GATEWAY_MESSAGE_LAYOUT_RULE,
             GATEWAY_SETUP_GUIDANCE_RULE,
@@ -70,6 +83,6 @@ __all__ = [
     "GATEWAY_MESSAGE_LAYOUT_RULE",
     "GATEWAY_RESPONSE_SHAPE_RULE",
     "GATEWAY_SETUP_GUIDANCE_RULE",
-    "GATEWAY_TEAMMATE_PERSONA_RULE",
     "gateway_persona_prompt_fragment",
+    "gateway_teammate_persona_rule",
 ]

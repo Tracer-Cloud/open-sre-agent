@@ -149,7 +149,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     callback = background_kwargs["handle_callback_to_gateway_agent"]
     callback("hello", session, sink, logger)
     agent_cls.return_value.dispatch.assert_called_once()
-    sink.finalize.assert_called_once_with("Hawaii: +25C")
+    sink.finalize.assert_called_once_with("Hawaii: +25C", failed=False)
     assert agent_cls.return_value.dispatch.call_args.args == ("hello",)
     ctor = agent_cls.call_args
     assert ctor.kwargs["session"] is session

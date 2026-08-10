@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
+from gateway.core.storage.investigations.store import InvestigationOrigin
 from gateway.web import webapp
 from platform.auth.jwt_auth import JWTClaims
 
@@ -202,7 +203,7 @@ def test_cancel_running_investigation_returns_current_status(client: TestClient)
     # Drain leftovers from earlier tests sharing the process-local store.
     claimed = None
     for _ in range(32):
-        next_claimed = store.claim_next_queued()
+        next_claimed = store.claim_next_queued(origin=InvestigationOrigin.REST)
         if next_claimed is None:
             break
         if next_claimed.id == investigation_id:

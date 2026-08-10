@@ -6,14 +6,17 @@ from typing import Any
 
 import pytest
 
+from config.constants import OPENSRE_INVESTIGATION_WORKER_ENV
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
+from config.constants.investigation_worker import OPENSRE_ARTIFACTS_BUCKET_ENV
 from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.core.investigations.artifacts import upload_report_to_s3
+from gateway.core.investigations.worker import InvestigationWorker, worker_enabled
 from gateway.core.storage.investigations.store import (
     InMemoryInvestigationStore,
+    InvestigationOrigin,
     InvestigationStatus,
 )
-from gateway.web.artifacts import ARTIFACTS_BUCKET_ENV, upload_report_to_s3
-from gateway.web.worker import WORKER_ENABLED_ENV, InvestigationWorker, worker_enabled
 
 
 @pytest.fixture(autouse=True)
@@ -25,8 +28,14 @@ def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
 
 
-def _queued(store: InMemoryInvestigationStore, org: str = "org_a") -> str:
-    record = store.create(clerk_org_id=org, trigger={"raw_alert": {"alert_name": "cpu"}})
+def _queued(
+    store: InMemoryInvestigationStore,
+    org: str = "org_a",
+    origin: InvestigationOrigin = InvestigationOrigin.REST,
+) -> str:
+    record = store.create(
+        clerk_org_id=org, trigger={"raw_alert": {"alert_name": "cpu"}}, origin=origin
+    )
     return record.id
 
 
@@ -80,7 +89,7 @@ def test_run_once_credit_denial_skips_pipeline_and_marks_failed(
         denials.append((organization_id, kwargs["reason"]))
         return CreditsOutcome.DENIED
 
-    monkeypatch.setattr("gateway.web.worker.consume_credits", deny)
+    monkeypatch.setattr("gateway.core.investigations.worker.consume_credits", deny)
     worker = InvestigationWorker(
         store,
         runner=lambda trigger: runs.append(trigger) or {},
@@ -105,7 +114,7 @@ def test_run_once_proceeds_when_credits_unavailable(
     store = InMemoryInvestigationStore()
     investigation_id = _queued(store)
     monkeypatch.setattr(
-        "gateway.web.worker.consume_credits",
+        "gateway.core.investigations.worker.consume_credits",
         lambda *_a, **_k: CreditsOutcome.UNAVAILABLE,
     )
     worker = InvestigationWorker(store, runner=lambda _t: {"report": "ok"}, artifacts_dir=tmp_path)
@@ -129,26 +138,26 @@ def test_claim_is_oldest_first_and_single_delivery() -> None:
     first = _queued(store)
     second = _queued(store)
 
-    claimed_one = store.claim_next_queued()
-    claimed_two = store.claim_next_queued()
+    claimed_one = store.claim_next_queued(origin=InvestigationOrigin.REST)
+    claimed_two = store.claim_next_queued(origin=InvestigationOrigin.REST)
 
     assert claimed_one is not None and claimed_one.id == first
     assert claimed_one.status is InvestigationStatus.RUNNING
     assert claimed_two is not None and claimed_two.id == second
-    assert store.claim_next_queued() is None
+    assert store.claim_next_queued(origin=InvestigationOrigin.REST) is None
 
 
 def test_worker_disabled_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(WORKER_ENABLED_ENV, raising=False)
+    monkeypatch.delenv(OPENSRE_INVESTIGATION_WORKER_ENV, raising=False)
     assert worker_enabled() is False
-    monkeypatch.setenv(WORKER_ENABLED_ENV, "1")
+    monkeypatch.setenv(OPENSRE_INVESTIGATION_WORKER_ENV, "1")
     assert worker_enabled() is True
 
 
 def test_upload_report_returns_none_without_bucket(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv(ARTIFACTS_BUCKET_ENV, raising=False)
+    monkeypatch.delenv(OPENSRE_ARTIFACTS_BUCKET_ENV, raising=False)
     local = tmp_path / "report.json"
     local.write_text("{}")
 
@@ -166,7 +175,7 @@ def test_upload_report_builds_org_scoped_key(
 
     import boto3
 
-    monkeypatch.setenv(ARTIFACTS_BUCKET_ENV, "opensre-artifacts")
+    monkeypatch.setenv(OPENSRE_ARTIFACTS_BUCKET_ENV, "opensre-artifacts")
     monkeypatch.setattr(boto3, "client", lambda *_a, **_k: _FakeS3())
     local = tmp_path / "report.json"
     local.write_text("{}")
@@ -180,20 +189,20 @@ def test_upload_report_builds_org_scoped_key(
 def test_ensure_worker_started_is_noop_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from gateway.web import worker as worker_mod
-    from gateway.web.worker import ensure_worker_started
+    from gateway.core.investigations import worker as worker_mod
+    from gateway.core.investigations.worker import ensure_worker_started
 
-    monkeypatch.delenv(WORKER_ENABLED_ENV, raising=False)
+    monkeypatch.delenv(OPENSRE_INVESTIGATION_WORKER_ENV, raising=False)
     monkeypatch.setattr(worker_mod, "_worker", None)
 
     assert ensure_worker_started(InMemoryInvestigationStore()) is None
 
 
 def test_ensure_worker_started_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.web import worker as worker_mod
-    from gateway.web.worker import ensure_worker_started
+    from gateway.core.investigations import worker as worker_mod
+    from gateway.core.investigations.worker import ensure_worker_started
 
-    monkeypatch.setenv(WORKER_ENABLED_ENV, "1")
+    monkeypatch.setenv(OPENSRE_INVESTIGATION_WORKER_ENV, "1")
     monkeypatch.setattr(worker_mod, "_worker", None)
     store = InMemoryInvestigationStore()
 

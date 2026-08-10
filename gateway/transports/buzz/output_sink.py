@@ -39,6 +39,8 @@ def _log_preview(text: str) -> str:
 class BuzzOutputSink:
     """Stream assistant output back through the Buzz channel."""
 
+    redacts_raw_tool_output = True
+
     def __init__(
         self,
         *,
@@ -92,8 +94,20 @@ class BuzzOutputSink:
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
-    def set_tool_status(self, text: str) -> None:
+    def set_tool_status(self, text: str, *, call_id: str | None = None) -> None:
+        _ = call_id  # Buzz has no timeline
         self._set_status(text)
+
+    def end_tool_status(self, *, failed: bool, call_id: str | None = None) -> None:
+        """No-op: Buzz has no timeline."""
+        _ = (failed, call_id)
+
+    def leave_tool_status_open(
+        self, *, call_id: str | None = None, title: str | None = None
+    ) -> None:
+        """No-op: Buzz has no timeline."""
+        _ = (call_id, title)
+        _ = call_id
 
     def finish_streamed_response(self, text: str) -> None:
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
@@ -111,7 +125,8 @@ class BuzzOutputSink:
             if result["success"]:
                 self._last_edit = time.monotonic()
 
-    def finalize(self, text: str) -> None:
+    def finalize(self, text: str, *, failed: bool = False) -> None:
+        _ = failed  # Buzz shows no turn-level success/failure state
         self._finalize(text)
 
     def _finalize(self, text: str) -> None:

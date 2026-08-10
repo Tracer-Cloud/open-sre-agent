@@ -256,6 +256,12 @@ def _setup_incident_io() -> None:
     _run_spec_setup(INCIDENT_IO_SETUP)
 
 
+def _setup_rootly() -> None:
+    from integrations.rootly.setup import ROOTLY_SETUP
+
+    _run_spec_setup(ROOTLY_SETUP)
+
+
 def _github_browser_authorize() -> str | None:
     """Run GitHub device-flow browser authorization.
 
@@ -696,6 +702,12 @@ def _setup_pagerduty() -> None:
     _run_spec_setup(PAGERDUTY_SETUP)
 
 
+def _setup_gcp() -> None:
+    from integrations.gcp.setup import GCP_SETUP
+
+    _run_spec_setup(GCP_SETUP)
+
+
 def _setup_kubernetes() -> None:
     from integrations.kubernetes.setup import KUBERNETES_SETUP
 
@@ -708,11 +720,13 @@ _HANDLERS: dict[str, Any] = {
     "betterstack": _setup_betterstack,
     "coralogix": _setup_coralogix,
     "datadog": _setup_datadog,
+    "gcp": _setup_gcp,
     "groundcover": _setup_groundcover,
     "grafana": _setup_grafana,
     "honeycomb": _setup_honeycomb,
     "helm": _setup_helm,
     "incident_io": _setup_incident_io,
+    "rootly": _setup_rootly,
     "mariadb": _setup_mariadb,
     "mongodb_atlas": _setup_mongodb_atlas,
     "slack": _setup_slack,

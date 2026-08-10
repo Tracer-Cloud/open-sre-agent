@@ -18,12 +18,87 @@ Prefer this over shell `gh` / `!gh`. These requests stay on the action path
 | Area | How OpenSRE does it |
 | --- | --- |
 | Ad-hoc issues, PRs, repos, search, API | `github_cli` (action agent) |
+| Opening a PR where `git` and `gh` are unavailable | [`open_github_pull_request`](#opening-a-pull-request-without-git) |
 | Engineering digests, PR readiness, security alerts | [GitHub workflow tools](github-workflow-tools) |
 | Security and quality fixes and PRs | [GitHub security and quality fix](github-security-fix) |
 | Failing PR CI fixes and branch pushes | [GitHub PR CI fix](github-ci-fix) |
 | Slack → GitHub issue create/update/close | Propose + approve via workflow mutation tools |
 | Investigation: code, commits, files, issue search | Dedicated GitHub investigation tools |
 | Failed deploys / workflow runs | [GitHub Actions tools](integrations/github-actions) |
+
+## Opening a pull request without git
+
+`github_cli` and the fix tools shell out to `gh` and `git` and need a checkout on
+disk. In a container — the Slack and Discord gateways, or any deployment built
+from the shipped `Dockerfile` — neither binary is installed, so the agent can
+describe a fix but not propose one.
+
+**`open_github_pull_request`** covers that case. It uses the GitHub REST API
+only: it creates a branch off the base branch, commits your files to it as a
+single commit, and opens the pull request. No clone, no disk, no subprocess.
+
+Ask for it in plain language — *"open a PR against `main` removing that
+resource"* — and the agent fills in the repo, branch, title, body, and file
+contents.
+
+**Every call asks a human first.** The interactive shell prompts
+`Proceed? [Y/n]`; Slack and Discord post **Approve** / **Deny** buttons and the
+call blocks until someone clicks or the request expires (3 minutes). Nothing is
+written to GitHub before that.
+
+The prompt reads like the pull request it is about to open — repository, base
+branch, new branch, the description, and every file the commit touches — so you
+can judge the blast radius without leaving the thread:
+
+```
+🔒 Approval needed — Create PR — fix(pubsub): drop the orphaned subscription
+Creates a branch, commits file changes, and opens a pull request on GitHub.
+
+acme/platform
+main  ←  fix/drop-orphan-subscription
+
+**What:** remove the placeholder.
+
+2 files changed
+  · terraform/modules/functions/notifications.tf — 2,445 chars written
+  · terraform/modules/functions/legacy.tf — deleted
+```
+
+File contents are reported by size rather than pasted, a draft PR says so
+(required checks do not run on drafts), and a change set longer than twelve
+files reports the remainder.
+
+Once you approve, that same message becomes the record of what happened —
+rewritten with the pull request number and link as soon as the call returns:
+
+```
+✅ Create PR #2604 — fix(pubsub): drop the orphan  https://github.com/acme/platform/pull/2604 — approved by @you
+```
+
+What it will and will not do:
+
+- **Creates a new branch, every time.** If the branch name already exists the
+  call fails — there is no force-update path, and no argument combination
+  commits to the base branch. The only way a change reaches `main` is a person
+  merging the PR.
+- **One commit per call**, so a multi-file change lands atomically. A failure
+  part-way leaves no branch behind.
+- **Whole files, not diffs.** Each entry carries the file's *complete* new text.
+  This is the one thing worth watching: a unified diff passed as file contents
+  commits cleanly and corrupts the file. Have the agent read the file first.
+- **UTF-8 text only.** Images, archives, and other binaries need `github_cli`.
+- Files can also be deleted, and the PR can be opened as a draft.
+
+If the commit succeeds but the pull request does not, the result says so and
+names the branch — it is still on the remote, holding your commit, so retrying
+with the same name would otherwise fail with a confusing "branch already exists".
+
+<Warning>
+This needs a token with **write** access to the target repository: `repo` on a
+classic PAT, or `contents: read and write` plus `pull requests: read and write`
+on a fine-grained one. A read-only token leaves the tool visible but every call
+fails with a 403 from GitHub.
+</Warning>
 
 ## First launch (macOS & Windows)
 
@@ -75,6 +150,11 @@ GITHUB_MCP_MODE=streamable-http                      # default
 GITHUB_MCP_TOOLSETS=repos,issues,pull_requests,actions  # default
 ```
 
+Only `GITHUB_MCP_AUTH_TOKEN` is required for GitHub.com — the rest are shown
+with the values they already take. Set `GITHUB_MCP_URL` for GitHub Enterprise
+Server, and `GITHUB_MCP_COMMAND` if you run the MCP server yourself over
+`stdio`.
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GITHUB_MCP_AUTH_TOKEN` | — | GitHub personal access token. Required unless you authorize in the browser (Option 1) |
@@ -111,7 +191,7 @@ GITHUB_MCP_TOOLSETS=repos,issues,pull_requests,actions  # default
 
 1. In GitHub, go to **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
 2. Click **Generate new token**
-3. Select the following scopes: `repo`, `read:org` (add write scopes if you want chat mutations via `github_cli`)
+3. Select the following scopes: `repo`, `read:org` (`repo` also covers opening pull requests with `open_github_pull_request` and chat mutations via `github_cli`; drop it for investigation-only, read-only use)
 4. Copy the token
 
 <Info>
@@ -146,7 +226,10 @@ Detail: GitHub MCP validated for your-username; discovered 18 tools including re
 | --- | --- |
 | **Authentication failed** | Check that the token has `repo` scope and is not expired |
 | **Required tools missing** | Ensure toolsets include `repos` — it provides `get_file_contents`, `list_commits`, etc. |
-| **`github_cli` fails / gh not found** | Install [GitHub CLI](https://cli.github.com/) so `gh` is on `PATH`; confirm token via verify |
+| **`github_cli` fails / gh not found** | Install [GitHub CLI](https://cli.github.com/) so `gh` is on `PATH`; confirm token via verify. In a container, use [`open_github_pull_request`](#opening-a-pull-request-without-git) instead — it needs no binaries |
+| **"No GitHub token is configured"** | Set `GITHUB_MCP_AUTH_TOKEN`, `GITHUB_TOKEN`, or `GH_TOKEN` in the process environment (in Kubernetes, the Secret the pods read via `envFrom`) |
+| **PR tool returns 403** | The token is read-only. Opening a PR needs write access — see the scopes above |
+| **"Branch already exists"** | `open_github_pull_request` never force-updates a branch. Pick a new name, or open the PR for the existing branch yourself |
 | **Connection refused** | Verify `GITHUB_MCP_URL` is reachable and the MCP server is running |
 | **Browser sign-in unavailable** | Set `OPENSRE_GITHUB_OAUTH_CLIENT_ID` to a device-flow-enabled OAuth App, or fall back to pasting a PAT |
 | **First-launch sign-in is blocking me** | Set `OPENSRE_SKIP_GITHUB_LOGIN=1` to bypass the first-launch GitHub prompt |

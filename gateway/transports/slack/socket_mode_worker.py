@@ -100,6 +100,11 @@ def start_slack_gateway_background(
     approvals = ApprovalBroker()
     messaging = SlackWebApiClient(web_client)
     greeter = ChannelIntroGreeter(messaging=messaging, bot_user_id=bot_user_id)
+
+    # Register chat notifier for detached investigations
+    from gateway.transports.slack.chat_notifier import register_slack_notifier
+
+    register_slack_notifier(messaging)
     bindings = open_binding_store()
     dispatcher = _SlackTurnDispatcher(
         settings=settings,

@@ -37,7 +37,7 @@ Tool packages must be substantive production modules — no empty or discovery-o
 - [ ] Output is normalized enough for the planner/LLM to consume reliably
 - [ ] Secrets never leak through `extract_params`, return values, logs, or traceable tool-call kwargs; secret/PII output is run through `platform/masking/` before return
 - [ ] External side effects declare `side_effect_level`, `requires_approval`, and `approval_reason` where appropriate
-- [ ] To appear in both investigation and chat, set `surfaces=("investigation", "chat")`
+- [ ] To appear in both investigation and chat, set `surfaces=("investigation", "chat")`. To appear on the action surface as well, use `surfaces=("investigation", "chat", "action")`. **Important:** the surfaces value must be an inline literal tuple of string literals — constants like `_ACTION_SURFACES` or expressions like `SURFACES + ("action",)` will break the static descriptor index and cause tools to silently vanish from Slack.
 
 ### Live payload parsing
 

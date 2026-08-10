@@ -258,6 +258,17 @@ _routing_input_from_result = routing_input_from_result
 
 
 @dataclass(frozen=True)
+class _GatherOutcome:
+    """Result of the gather+answer path, plus whether the surface held the paint."""
+
+    run: Any | None
+    observation: str | None
+    #: ``stream()`` deferred delivery to ``finish_streamed_response``. True only
+    #: when an answer actually streamed — an error or cancel already painted.
+    paint_deferred: bool
+
+
+@dataclass(frozen=True)
 class _RouteOutcome:
     """Effects of one routed path, ready to pack into ``TurnResult``."""
 
@@ -266,6 +277,7 @@ class _RouteOutcome:
     llm_run: Any | None = None
     # Gather / action evidence to arm PendingInvestigationOffer (not session stash).
     evidence_for_offer: str | None = None
+    paint_deferred: bool = False
 
 
 def _cancelled_turn_result(
@@ -309,7 +321,7 @@ def _gather_and_answer(
     handoff_requires_gather: bool = True,
     output: OutputSink | None = None,
     evidence_need: EvidenceNeed | None = None,
-) -> tuple[Any | None, str | None] | None:
+) -> _GatherOutcome | None:
     """Run gather+answer, or ``None`` when the host cancelled mid-path."""
     # Three cases skip the live gather loop:
     # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
@@ -355,6 +367,7 @@ def _gather_and_answer(
     # Follow-ups skip that rewrite; deferring on non-TTY would hold the whole
     # answer forever (oracle / CI consoles use force_terminal=False).
     observation = gathered if gathered else None
+    defer_paint = not skip_gather
     run = answer(
         text,
         AnswerRequest(
@@ -362,12 +375,14 @@ def _gather_and_answer(
             tool_observation_on_screen=observation is None,
             handoff_contents=handoff_contents,
             turn_plan=turn_plan,
-            defer_want_me_to_closer=not skip_gather,
+            defer_want_me_to_closer=defer_paint,
         ),
     )
     if host_cancel_requested(output):
         return None
-    return run, observation
+    return _GatherOutcome(
+        run=run, observation=observation, paint_deferred=defer_paint and run is not None
+    )
 
 
 def run_turn(
@@ -554,12 +569,12 @@ def run_turn(
                 )
             if gathered_outcome is None:
                 return _cancelled_turn_result(accounting, action_result)
-            run, gathered = gathered_outcome
             outcome = _RouteOutcome(
                 final_intent="cli_agent_fallback",
-                response_text=_response_text(run),
-                llm_run=run,
-                evidence_for_offer=gathered,
+                response_text=_response_text(gathered_outcome.run),
+                llm_run=gathered_outcome.run,
+                evidence_for_offer=gathered_outcome.observation,
+                paint_deferred=gathered_outcome.paint_deferred,
             )
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
@@ -577,8 +592,18 @@ def run_turn(
             confirms_pending=confirms_pending,
         )
         outcome = replace(outcome, response_text=finalized.response_text)
-        if finalized.finish_stream:
-            finish_streamed_response(output, finalized.response_text)
+        # ``finalized.finish_stream`` answers a different question (did the CTA /
+        # offer-arming / goal-suppression pass rewrite the text) than the one that
+        # decides whether to flush: whether *this surface* actually held the paint
+        # back. Confirms_pending, capability-disabled, and every other guard
+        # `finalize_routed_answer` applies to text and offer-arming must not also
+        # gate the flush — a gateway session with investigation explicitly
+        # disabled still held the paint back and must still see it. Conversely,
+        # rewriting the text is not itself a reason to flush: a non-deferred path
+        # already painted immediately, so flushing again double-posts, and a
+        # failed answer (``llm_run is None``) has nothing new to paint.
+        if outcome.paint_deferred:
+            finish_streamed_response(output, outcome.response_text)
 
         return accounting.finalize(
             TurnResult(

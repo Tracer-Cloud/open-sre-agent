@@ -469,7 +469,7 @@ check-imports-strict:
 check-layers-strict: check-imports-strict
 
 # Run all checks (lint + format read-only check + types + imports + full tests; mirrors CI quality gates)
-check: lint format-check typecheck check-imports test-full
+check: lint format-check typecheck check-imports check-imports-strict test-full
 
 # Show help
 help:

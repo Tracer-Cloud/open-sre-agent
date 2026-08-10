@@ -108,6 +108,12 @@ def _safe_execute[T](
         return operation()
     except Exception as exc:  # noqa: BLE001 - centralized turn-safe fallback boundary
         wrapped = wrap_error(exc)
+        # Without this the boundary is silent: an ErrorReporter is optional, and
+        # even when one is wired the turn degrades to a text-only answer with
+        # nothing in the log to say a tool pass was attempted at all. The type
+        # name only — this is a server log, but the same string should stay safe
+        # if a caller ever surfaces it.
+        log.warning("%s: swallowed %s, falling back", context, type(exc).__name__, exc_info=True)
         if error_reporter is not None:
             error_reporter.report(wrapped.cause, context=context, expected=expected)
         return None
@@ -271,23 +277,23 @@ def gather_tool_evidence(
         from platform.harness_ports import get_investigation_tools
 
         if is_cancelled is not None and is_cancelled():
-            log.debug("gather_evidence skip: host cancelled")
+            log.info("gather_evidence skip: host cancelled")
             return None
         resolved = _resolve_gather_integrations(
             session, message, resolved_integrations=resolved_integrations
         )
         gather_tools = list(get_investigation_tools(resolved))
         if not _has_usable_gather_tools(gather_tools):
-            log.debug("gather_evidence skip: no usable tools")
+            log.info("gather_evidence skip: no usable tools (discovered=%s)", len(gather_tools))
             return None
         llm = _load_gather_llm_or_none(error_reporter)
         if llm is None:
-            log.debug("gather_evidence skip: LLM unavailable")
+            log.info("gather_evidence skip: LLM unavailable")
             return None
         iteration_cap = (
             _MAX_GATHER_ITERATIONS if max_iterations is None else max(1, int(max_iterations))
         )
-        log.debug(
+        log.info(
             "gather_evidence start tools=%s integrations=%s iterations=%s",
             len(gather_tools),
             len(resolved),
@@ -346,17 +352,25 @@ def gather_tool_evidence(
         except KeyboardInterrupt:
             if on_progress is not None:
                 on_progress("gather_cancelled", {})
-            log.debug("gather_evidence cancelled")
+            log.info("gather_evidence cancelled")
             return None
 
         if result is None:
+            # ``_safe_execute`` already logged and reported the cause.
             return None
         if not result.executed:
-            log.debug("gather_evidence done: no tools executed")
+            log.info("gather_evidence done: no tools executed")
             return None
         if persist is not None:
             persist(result.executed)
-        log.debug("gather_evidence done tools_executed=%s", len(result.executed))
+        # The tool NAMES, not just the count: the action path logs every call it
+        # makes, so without this a gather-only turn leaves no trace of which
+        # evidence the model actually reached for.
+        log.info(
+            "gather_evidence done tools_executed=%s names=%s",
+            len(result.executed),
+            ",".join(tc.name for tc, _output in result.executed),
+        )
         return _format_observation(result.executed)
 
 

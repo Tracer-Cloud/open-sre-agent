@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 
+from config.constants import PLATFORM_SLACK, SLACK_REACTION_WORKING
 from config.constants.gateway import (
     CREDITS_DENIED_MESSAGE,
     NEW_SESSION_MESSAGE,
@@ -19,6 +20,9 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
+from gateway.core.chat import ChatDeliveryTarget, bound_delivery_target
+from gateway.core.investigations.detached_launcher import bind_gateway_detached_launcher
+from gateway.core.investigations.launch_record import DetachedLaunchRecord
 from gateway.core.runtime.active_turns import ActiveTurnCancels, is_stop_command
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
@@ -145,7 +149,7 @@ class _SlackTurnDispatcher:
         if decision is GateDecision.RATE_LIMITED:
             # Heard, but over the unprompted budget: acknowledge, don't reply.
             self._messaging.add_reaction(
-                channel=inbound.channel_id, timestamp=inbound.ts, emoji="eyes"
+                channel=inbound.channel_id, timestamp=inbound.ts, emoji=SLACK_REACTION_WORKING
             )
             self._logger.info(
                 "[slack-gateway] unprompted reply rate-limited channel=%s thread_ts=%s",
@@ -283,6 +287,8 @@ class _SlackTurnDispatcher:
                 client=self._messaging,
                 channel_id=inbound.channel_id,
                 thread_ts=inbound.thread_ts,
+                team_id=inbound.team_id,
+                user_id=inbound.user_id,
                 update_interval_seconds=self._settings.status_update_interval_seconds,
                 tool_hooks=approval_tool_hooks(prompter),
             )
@@ -297,7 +303,7 @@ class _SlackTurnDispatcher:
                     session.session_id[:8],
                 )
                 try:
-                    sink.finalize(TURN_TIMEOUT_MESSAGE)
+                    sink.finalize(TURN_TIMEOUT_MESSAGE, failed=True)
                 except Exception:
                     self._logger.debug("[slack-gateway] timeout finalize failed", exc_info=True)
                 mark_turn_failed(
@@ -310,7 +316,7 @@ class _SlackTurnDispatcher:
                 if not terminal.claim():
                     return
                 try:
-                    sink.finalize(USER_STOP_MESSAGE)
+                    sink.finalize(USER_STOP_MESSAGE, failed=True)
                 except Exception:
                     self._logger.debug("[slack-gateway] user-stop finalize failed", exc_info=True)
                 mark_turn_failed(
@@ -318,6 +324,8 @@ class _SlackTurnDispatcher:
                     channel=inbound.channel_id,
                     timestamp=inbound.ts,
                 )
+
+            launch_record = DetachedLaunchRecord()
 
             with terminal.timeout_after(self._settings.turn_timeout_seconds, _on_turn_timeout):
                 try:
@@ -341,6 +349,16 @@ class _SlackTurnDispatcher:
                         files_context := _slack_files_context(inbound.files, self._logger)
                     ):
                         agent_text = f"{agent_text}\n\n{files_context}"
+                    # Where a detached investigation posts back to. Binding this
+                    # is what makes the investigation capability available at
+                    # all — an unbound target reads as "no chat surface here".
+                    delivery_target = ChatDeliveryTarget(
+                        platform=PLATFORM_SLACK,
+                        channel_id=inbound.channel_id,
+                        thread_ts=inbound.thread_ts,
+                        user_id=inbound.user_id,
+                        origin_message_id=inbound.ts,
+                    )
                     with (
                         self._active_cancels.track(
                             inbound.conversation_key,
@@ -352,6 +370,8 @@ class _SlackTurnDispatcher:
                             session_id=session.session_id,
                             user_id=inbound.user_id or None,
                         ),
+                        bound_delivery_target(delivery_target),
+                        bind_gateway_detached_launcher(launch_record),
                     ):
                         self._handler(agent_text, session, sink, self._logger)
                 except Exception:
@@ -379,17 +399,26 @@ class _SlackTurnDispatcher:
                         )
                     raise
             if terminal.claim():
-                self._logger.info(
-                    "[slack-gateway] turn done in %.1fs channel=%s session=%s",
-                    time.monotonic() - turn_started,
-                    inbound.channel_id,
-                    session.session_id[:8],
-                )
-                mark_turn_done(
-                    self._messaging,
-                    channel=inbound.channel_id,
-                    timestamp=inbound.ts,
-                )
+                if launch_record.any_accepted:
+                    self._logger.info(
+                        "[slack-gateway] turn handed off to detached investigations %s in %.1fs channel=%s session=%s",
+                        ", ".join(launch_record.investigation_ids),
+                        time.monotonic() - turn_started,
+                        inbound.channel_id,
+                        session.session_id[:8],
+                    )
+                else:
+                    self._logger.info(
+                        "[slack-gateway] turn done in %.1fs channel=%s session=%s",
+                        time.monotonic() - turn_started,
+                        inbound.channel_id,
+                        session.session_id[:8],
+                    )
+                    mark_turn_done(
+                        self._messaging,
+                        channel=inbound.channel_id,
+                        timestamp=inbound.ts,
+                    )
 
 
 def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Logger) -> str:

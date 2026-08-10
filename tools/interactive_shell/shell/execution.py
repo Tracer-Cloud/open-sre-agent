@@ -21,6 +21,13 @@ class ShellExecutionResult:
     executed_with_shell: bool
 
 
+#: POSIX shell exit conventions. A command the shell could not run is reported
+#: with these rather than raised, and the ``argv`` path here answers the same
+#: way ``/bin/sh`` does on the shell path — see :func:`_exec_failure`.
+_COMMAND_NOT_FOUND = 127
+_COMMAND_NOT_EXECUTABLE = 126
+
+
 def _truncate_output(text: str, *, max_chars: int) -> tuple[str, bool]:
     if len(text) <= max_chars:
         return text, False
@@ -41,6 +48,43 @@ def _shell_argv(command: str) -> list[str]:
         return [shell, "/d", "/s", "/c", command]
     shell = os.environ.get("SHELL") or "/bin/sh"
     return [shell, "-lc", command]
+
+
+def _exec_failure(
+    *,
+    command: str,
+    argv: list[str] | None,
+    use_shell: bool,
+    exc: OSError,
+) -> ShellExecutionResult:
+    """Render a failed ``exec`` as a result, the way a shell reports one.
+
+    A binary that is not installed is an ordinary answer to running a command
+    somebody typed, not a fault in this process. On the shell path it already
+    arrives as exit 127 with ``not found`` on stderr, because ``/bin/sh``
+    absorbs it; on the ``argv`` path Python raises ``FileNotFoundError``
+    instead. Left to propagate, that difference means the same missing command
+    is a clean tool result one way and a stack trace — and a Sentry event —
+    the other. An agent probing for ``kubectl`` in a container that has none
+    then files a bug report per guess.
+    """
+    name = exc.filename or (argv[0] if argv else command)
+    if isinstance(exc, FileNotFoundError):
+        exit_code, detail = _COMMAND_NOT_FOUND, "command not found"
+    elif isinstance(exc, PermissionError):
+        exit_code, detail = _COMMAND_NOT_EXECUTABLE, "permission denied"
+    else:
+        exit_code, detail = _COMMAND_NOT_FOUND, exc.strerror or "could not be started"
+    return ShellExecutionResult(
+        command=command,
+        argv=argv,
+        stdout="",
+        stderr=f"{name}: {detail}",
+        exit_code=exit_code,
+        timed_out=False,
+        truncated=False,
+        executed_with_shell=use_shell,
+    )
 
 
 def execute_shell_command(
@@ -80,6 +124,8 @@ def execute_shell_command(
                 timeout=timeout_seconds,
                 check=False,
             )
+    except OSError as exc:
+        return _exec_failure(command=command, argv=argv, use_shell=use_shell, exc=exc)
     except subprocess.TimeoutExpired as exc:
         stdout = _text_from_timeout_stream(exc.stdout)
         stderr = _text_from_timeout_stream(exc.stderr)

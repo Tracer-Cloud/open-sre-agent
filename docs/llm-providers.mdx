@@ -79,7 +79,7 @@ export OPENAI_REASONING_MODEL=gpt-5.4-mini
 export OPENAI_TOOLCALL_MODEL=gpt-5.4-mini
 ```
 
-A shared `LLM_MAX_TOKENS` (default `4096`) controls the response token budget for every provider.
+A shared `LLM_MAX_TOKENS` env var controls the response token budget for every provider and both transports (SDK and LiteLLM). When unset, each provider uses its own default (4096; local Ollama tool calls use 1024). This setting applies to all model tiers, so size it for the smallest model in play. The ceiling is per-model and an over-limit value is rejected by the provider on the first request. CLI-backed providers (codex, claude-code, cursor, …) ignore it — those CLIs expose no scriptable token limit.
 
 ## LiteLLM transport
 
@@ -348,6 +348,38 @@ configured project.
 Always routed through LiteLLM (like Azure OpenAI) as `vertex_ai/<model>`. Curated
 model choices are Gemini models served via Vertex; any other Vertex-supported
 model ID also works by typing it directly (`allow_custom_models`).
+
+#### Anthropic Claude on Vertex
+
+If your organization buys Claude through Vertex AI rather than from Anthropic
+directly, use this provider — **not** `anthropic`. Set the model env vars to the
+Claude publisher-model IDs your project has enabled in Model Garden:
+
+```bash
+export LLM_PROVIDER=vertex-ai
+export VERTEX_AI_PROJECT=my-gcp-project
+export VERTEX_AI_LOCATION=global          # or us-east5, europe-west1, …
+export VERTEX_AI_REASONING_MODEL=claude-opus-4-5@20251101
+export VERTEX_AI_CLASSIFICATION_MODEL=claude-haiku-4-5@20251001
+export VERTEX_AI_TOOLCALL_MODEL=claude-haiku-4-5@20251001
+```
+
+There is no `ANTHROPIC_API_KEY` in this setup — auth is ADC, and billing goes
+through your GCP project.
+
+Gotchas that only bite at request time:
+
+- **Use the exact Model Garden ID, version suffix included** (`@20251101`, or the
+  `@default` alias where Google publishes one). The ID is passed straight into
+  the Vertex publisher URL, so a wrong suffix is a 404 on the first call.
+- **Claude is enabled per region, and per model.** A model available in
+  `us-east5` may 404 in `us-central1` (the OpenSRE default when
+  `VERTEX_AI_LOCATION` is unset). `global` is the safest choice where your
+  project supports it.
+- **Enable the model in Model Garden first** and grant the principal the Vertex
+  AI User role; Vertex returns a permission error rather than a helpful one.
+- Responses are capped at 4096 output tokens (OpenSRE's shared Vertex default),
+  well below what Claude models support.
 
 The default (`gemini-2.5-pro`/`-flash`/`-flash-lite`) is the GA Gemini generation.
 Gemini 3.x (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`,

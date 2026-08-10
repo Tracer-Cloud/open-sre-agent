@@ -426,6 +426,25 @@ def build_github_mcp_config(raw: dict[str, Any] | None) -> GitHubMCPConfig:
     return GitHubMCPConfig.model_validate(data)
 
 
+def github_mcp_env_is_configured(*, mode: str, url: str, command: str, auth_token: str) -> bool:
+    """Whether these env values describe a GitHub MCP connection worth building.
+
+    ``stdio`` needs a command. A remote mode needs an explicit URL **or** an auth
+    token: GitHub's hosted server is at :data:`DEFAULT_GITHUB_MCP_URL`, so a
+    token on its own already names an endpoint, and that is the setup the docs
+    describe.
+
+    Requiring the URL here made a token-only configuration register nothing —
+    silently, because an integration that was never built is indistinguishable
+    from one the operator never asked for. :func:`github_mcp_is_usably_configured`
+    already treats a token as sufficient; this keeps the env loaders from
+    discarding the config before that check can run.
+    """
+    if mode == "stdio":
+        return bool(command)
+    return bool(url or auth_token)
+
+
 def github_mcp_config_from_env() -> GitHubMCPConfig | None:
     """Load a GitHub MCP config from env vars."""
     mode = os.getenv("GITHUB_MCP_MODE", DEFAULT_GITHUB_MCP_MODE).strip().lower()
@@ -435,10 +454,7 @@ def github_mcp_config_from_env() -> GitHubMCPConfig | None:
     toolsets_env = os.getenv("GITHUB_MCP_TOOLSETS", "").strip()
     args_env = os.getenv("GITHUB_MCP_ARGS", "").strip()
 
-    if mode == "stdio":
-        if not command:
-            return None
-    elif not url:
+    if not github_mcp_env_is_configured(mode=mode, url=url, command=command, auth_token=auth_token):
         return None
 
     return build_github_mcp_config(

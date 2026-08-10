@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
+import pytest
+
+from config.constants.agent_identity import AGENT_NAME_ENV
+from gateway.core.runtime.live_sink import LiveOutputSink
+from gateway.core.runtime.session_agents import _ToolStatusObserver
+from gateway.core.runtime.status_messages import TOOL_STATUS_PREFIX
 from gateway.transports.slack.output_sink import (
     SLACK_MAX_MARKDOWN_BLOCK_CHARS,
     SLACK_MAX_MESSAGE_CHARS,
+    SLACK_MAX_TASK_UPDATE_CHARS,
     SlackOutputSink,
 )
 
@@ -63,8 +71,22 @@ class _FakeMessagingClient:
         self.deletes.append({"channel": channel, "ts": ts})
         return True
 
-    def start_stream(self, *, channel: str, thread_ts: str) -> str | None:
-        self.stream_starts.append({"channel": channel, "thread_ts": thread_ts})
+    def start_stream(
+        self,
+        *,
+        channel: str,
+        thread_ts: str,
+        recipient_team_id: str,
+        recipient_user_id: str,
+    ) -> str | None:
+        self.stream_starts.append(
+            {
+                "channel": channel,
+                "thread_ts": thread_ts,
+                "recipient_team_id": recipient_team_id,
+                "recipient_user_id": recipient_user_id,
+            }
+        )
         return f"stream-{len(self.stream_starts)}" if self.stream_ok else None
 
     def append_stream(self, *, channel: str, ts: str, chunks: Any) -> bool:
@@ -84,6 +106,8 @@ def _sink(client: _FakeMessagingClient) -> SlackOutputSink:
         client=client,
         channel_id="C222",
         thread_ts="1700.100",
+        team_id="T111",
+        user_id="U111",
         update_interval_seconds=0.0,
     )
 
@@ -172,7 +196,22 @@ def test_finalize_appends_provenance_footer() -> None:
     footer = next(b for b in client.updates[-1]["blocks"] if b["type"] == "context")
     footer_text = footer["elements"][0]["text"]
     assert "OpenSRE" in footer_text
-    assert "AI-generated" in footer_text
+    assert "AI-generated — verify key details" in footer_text
+
+
+def test_the_footer_signs_with_the_deployments_own_agent_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(AGENT_NAME_ENV, "AcmeOps")
+    client = _FakeMessagingClient()
+    sink = _sink(client)
+
+    sink.finalize("answer")
+
+    footer = next(b for b in client.updates[-1]["blocks"] if b["type"] == "context")
+    footer_text = footer["elements"][0]["text"]
+    assert footer_text.startswith("AcmeOps · AI-generated — verify key details · ")
+    assert "OpenSRE" not in footer_text
 
 
 def test_finalize_appends_feedback_buttons_after_footer() -> None:
@@ -392,3 +431,262 @@ def test_error_after_partial_stream_appends_error_copy() -> None:
     assert "Something went wrong" in markdown
     assert "db-host" not in markdown
     assert len(client.stream_stops) == 1
+
+
+def test_deferred_stream_holds_tail_until_finish_streamed_response() -> None:
+    """The reported production symptom: a deferred stream is not self-closing.
+
+    On the streaming path a deferred ``stream()`` leaves the answer buffered in
+    ``_TurnStream._pending_parts`` and the Slack stream open. Only
+    ``finish_streamed_response`` appends the tail and issues ``chat.stopStream``
+    — when the orchestrator skipped that call the user saw the answer cut off
+    mid-word under a stream that never terminated.
+
+    ``update_interval_seconds`` is large on purpose: the default ``_sink()``
+    helper uses ``0.0``, which flushes every chunk and so cannot hold a tail.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = SlackOutputSink(
+        client=client,
+        channel_id="C222",
+        thread_ts="1700.100",
+        team_id="T111",
+        user_id="U111",
+        update_interval_seconds=1000.0,
+    )
+
+    text = sink.stream(
+        label="assistant",
+        chunks=iter(["the crashloop is off pod ", "svc-api-6c8f9d7b4-2xqlp"]),
+        defer_want_me_to_closer=True,
+    )
+
+    assert text == "the crashloop is off pod svc-api-6c8f9d7b4-2xqlp"
+    # Nothing delivered and the stream is still open: no answer text appended,
+    # no stopStream, and the classic placeholder path untouched.
+    assert client.all_streamed_chunks() == []
+    assert client.stream_stops == []
+    assert client.updates == []
+
+    sink.finish_streamed_response(text)
+
+    markdown = "".join(
+        chunk["text"] for chunk in client.all_streamed_chunks() if chunk["type"] == "markdown_text"
+    )
+    assert markdown == text
+    assert len(client.stream_stops) == 1
+
+
+# --- Timeline rows -----------------------------------------------------------
+#
+# Each tool gets a ``task_update`` row. Slack accepts exactly four status
+# values and rejects the whole ``chat.appendStream`` call on anything else, so
+# an invalid status does not degrade one row — it silences the rest of the turn.
+
+#: Slack's own vocabulary. ``error``, not ``failed``.
+_VALID_TASK_STATUSES = {"pending", "in_progress", "complete", "error"}
+
+
+def _task_chunks(client: _FakeMessagingClient) -> list[dict[str, Any]]:
+    return [chunk for chunk in client.all_streamed_chunks() if chunk["type"] == "task_update"]
+
+
+def test_a_failed_tool_closes_its_row_as_errored() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Get pod logs…", call_id="call-1")
+    sink.end_tool_status(failed=True, call_id="call-1")
+
+    assert [chunk["status"] for chunk in _task_chunks(client)] == ["in_progress", "error"]
+
+
+def test_a_successful_tool_closes_its_row_as_complete() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Get pod logs…", call_id="call-1")
+    sink.end_tool_status(failed=False, call_id="call-1")
+
+    assert [chunk["status"] for chunk in _task_chunks(client)] == ["in_progress", "complete"]
+
+
+def test_a_turn_that_never_answered_does_not_leave_a_green_check() -> None:
+    """The reported incident: the turn failed and every row still read ✓.
+
+    The row is still open when the turn gives up, so the close comes from
+    ``finalize`` rather than from the tool — and it has to carry the outcome.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Get pod logs…", call_id="call-1")
+    sink.finalize("The turn produced no answer.", failed=True)
+
+    assert [chunk["status"] for chunk in _task_chunks(client)][-1] == "error"
+
+
+def test_an_errored_turn_does_not_leave_a_green_check() -> None:
+    """``render_error`` is the crash path, and a crash is not a completed row."""
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Get pod logs…", call_id="call-1")
+    sink.render_error("boom")
+
+    assert [chunk["status"] for chunk in _task_chunks(client)][-1] == "error"
+
+
+def test_every_status_this_sink_emits_is_one_slack_accepts() -> None:
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ First…", call_id="call-1")
+    sink.end_tool_status(failed=False, call_id="call-1")
+    sink.set_tool_status("⏳ Second…", call_id="call-2")
+    sink.end_tool_status(failed=True, call_id="call-2")
+    sink.finalize("done")
+
+    emitted = {chunk["status"] for chunk in _task_chunks(client)}
+    assert emitted <= _VALID_TASK_STATUSES
+    # All three transitions really did fire, so the subset check has teeth.
+    assert emitted == {"in_progress", "complete", "error"}
+
+
+def test_an_over_long_row_title_cannot_take_the_stream_down_with_it() -> None:
+    """A tool that echoes its arguments into a status line breaches Slack's 256.
+
+    The cap is on the encoded chunk, so a title budgeted against 256 on its own
+    still ships one Slack rejects — taking the rest of the turn's output with it.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    # Quotes and newlines are what a tool's own arguments look like, and each
+    # costs two characters once encoded.
+    sink.set_tool_status("⏳ " + '{"x": "y"}\n' * 500, call_id="call-1")
+    sink.end_tool_status(failed=False, call_id="call-1")
+
+    chunks = _task_chunks(client)
+    assert len(chunks) == 2
+    encoded = [len(json.dumps(chunk, ensure_ascii=False)) for chunk in chunks]
+    assert max(encoded) <= SLACK_MAX_TASK_UPDATE_CHARS, encoded
+
+
+def _drive_tool_batch(sink: SlackOutputSink, calls: list[tuple[str, bool]]) -> None:
+    """Replay the runtime's real event order: every start, then every end.
+
+    ``core.agent.react_loop._observe`` emits ``ToolExecutionStartEvent`` for the
+    whole batch, runs the tools, then emits every ``ToolExecutionEndEvent`` — so
+    a batch of N is ``start1..startN, end1..endN``, never interleaved.
+    """
+    live = LiveOutputSink()
+    live.bind(sink)
+    observe = _ToolStatusObserver(live)
+    for call_id, _failed in calls:
+        observe("tool_start", {"name": "kubernetes_get_pod_logs", "id": call_id, "input": {}})
+    for call_id, failed in calls:
+        observe("tool_end", {"name": "kubernetes_get_pod_logs", "id": call_id, "is_error": failed})
+
+
+def test_each_tool_in_a_batch_gets_its_own_outcome() -> None:
+    """The incident turn: 14 pod-log calls, every row ticked green.
+
+    With one open row per stream, the starts close each other — rows 1..N-1 go
+    ``complete`` before their tool has run, and only one end lands anywhere.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    _drive_tool_batch(sink, [("call-1", False), ("call-2", True), ("call-3", False)])
+
+    rows: dict[str, list[str]] = {}
+    for chunk in _task_chunks(client):
+        rows.setdefault(str(chunk["id"]), []).append(str(chunk["status"]))
+    # Three rows, each opened once and closed once with its own tool's verdict.
+    assert list(rows.values()) == [
+        ["in_progress", "complete"],
+        ["in_progress", "error"],
+        ["in_progress", "complete"],
+    ]
+
+
+def test_a_row_whose_tool_never_reported_does_not_spin_past_the_turn() -> None:
+    """A crash between start and end must not leave ⏳ in the thread forever."""
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Get pod logs…", call_id="call-1")
+    sink.finalize("done")
+
+    assert [chunk["status"] for chunk in _task_chunks(client)] == ["in_progress", "complete"]
+
+
+def test_a_finished_row_no_longer_says_it_is_still_running() -> None:
+    """``⏳ Get pod logs…`` beside a ✓ contradicts itself."""
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status(f"{TOOL_STATUS_PREFIX}Get pod logs…", call_id="call-1")
+    sink.end_tool_status(failed=False, call_id="call-1")
+
+    closed = _task_chunks(client)[-1]
+    assert closed["title"] == "Get pod logs…"
+
+
+def test_a_tool_that_ends_without_a_matching_row_is_not_an_error() -> None:
+    """Ending a row that was never opened must not raise or emit a stray chunk."""
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.end_tool_status(failed=True, call_id="call-unknown")
+
+    assert _task_chunks(client) == []
+
+
+def test_detached_launch_row_is_never_closed() -> None:
+    """A tool that hands off to a background run must never read complete/error.
+
+    Stamping either would be a lie once the run is still in flight after the
+    turn ends. ``finish()``'s own sweep (``_close_all_open_task_chunks``) must
+    also skip it — ``leave_tool_status_open`` has to remove it from tracking,
+    not just avoid one explicit close.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Starting investigation…", call_id="call-1")
+    sink.set_tool_status("⏳ Who is on call…", call_id="call-2")
+    sink.leave_tool_status_open(call_id="call-1")
+    sink.end_tool_status(failed=False, call_id="call-2")
+    sink.finalize("Investigation queued; I'll post results here when it's done.")
+
+    rows: dict[str, list[str]] = {}
+    for chunk in _task_chunks(client):
+        rows.setdefault(str(chunk["id"]), []).append(str(chunk["status"]))
+
+    # The detached-launch row opened once and never received an outcome status,
+    # even after finalize()'s own sweep of still-open rows.
+    assert rows["task-1"] == ["in_progress"]
+    # A sibling tool call in the same batch still closes normally.
+    assert rows["task-2"] == ["in_progress", "complete"]
+
+
+def test_leave_tool_status_open_can_retitle_the_row_it_abandons() -> None:
+    """Slack has no status value for "handed off" — the title is the only lever.
+
+    The row must stay ``in_progress`` (never ``complete``/``error``) and must
+    still be released from tracking (finalize()'s sweep must not touch it),
+    but its last chunk should say what actually happened rather than repeat
+    the original tool call's description forever.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.set_tool_status("⏳ Starting investigation…", call_id="call-1")
+    sink.leave_tool_status_open(call_id="call-1", title="Handed off — see thread for updates")
+    sink.finalize("Investigation queued.")
+
+    chunks = [c for c in _task_chunks(client) if c["id"] == "task-1"]
+    assert [c["status"] for c in chunks] == ["in_progress", "in_progress"]
+    assert chunks[-1]["title"] == "Handed off — see thread for updates"

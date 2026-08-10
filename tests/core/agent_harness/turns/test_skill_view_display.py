@@ -41,4 +41,4 @@ def test_loading_a_skill_emits_nothing_from_the_generic_formatter() -> None:
     )
 
     # Assert
-    assert shown == "", f"expected silence, got {len(shown)} chars"
+    assert shown.local == "", f"expected silence, got {len(shown.local)} chars"

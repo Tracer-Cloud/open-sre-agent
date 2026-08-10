@@ -16,6 +16,37 @@
 #   SLACK_BOT_TOKEN + SLACK_APP_TOKEN (Slack) and/or TELEGRAM_BOT_TOKEN +
 #   TELEGRAM_ALLOWED_USERS (Telegram), plus LLM_PROVIDER and API keys
 
+# --- gke-gcloud-auth-plugin ---------------------------------------------------
+# A GKE kubeconfig — whether written by `opensre integrations add-gke-clusters`
+# or by `gcloud container clusters get-credentials` — carries no credential. It
+# execs `gke-gcloud-auth-plugin` to mint a token per connection. Without that
+# binary on PATH the kubernetes_* tools cannot reach any GKE cluster from inside
+# this image, and add-gke-clusters refuses to write a kubeconfig at all.
+#
+# Only the ~10MB binary is taken. `apt-get install` would pull in
+# google-cloud-cli (~1GB) as a dependency, which nothing else here needs:
+# `apt-get download` fetches the .deb without its dependencies and `dpkg-deb -x`
+# unpacks it without running maintainer scripts. The .deb is architecture-
+# specific, so this stage must build for the same platform as the final image.
+FROM python:3.12-slim AS gke-auth-plugin
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+        | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg]" \
+        "https://packages.cloud.google.com/apt cloud-sdk main" \
+        > /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && apt-get update \
+    && cd /tmp \
+    && apt-get download google-cloud-cli-gke-gcloud-auth-plugin \
+    && dpkg-deb -x /tmp/google-cloud-cli-gke-gcloud-auth-plugin_*.deb /tmp/extracted \
+    && install -m 0755 \
+        /tmp/extracted/usr/lib/google-cloud-sdk/bin/gke-gcloud-auth-plugin \
+        /usr/local/bin/gke-gcloud-auth-plugin \
+    && rm -rf /var/lib/apt/lists/* /tmp/extracted /tmp/*.deb
+
+# --- runtime ------------------------------------------------------------------
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -28,11 +59,39 @@ RUN apt-get update \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=gke-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin /usr/local/bin/gke-gcloud-auth-plugin
+
 COPY . /app
 
+# Dependencies come from uv.lock, not from the ranges in pyproject.toml.
+#
+# `pip install .` re-resolves every range at build time, so the image drifts away
+# from the versions CI tests the moment an upstream release lands — and it does so
+# silently, with no diff and no failing test. That is not hypothetical: an image
+# built this way resolved mcp 2.0.0 against a lock pinning 1.28.1, and the two
+# breaking changes in between (a transport yield arity, then `CallToolResult
+# .isError`) each surfaced as a runtime AttributeError in a deployed pod, on a
+# code path CI had exercised green minutes earlier.
+#
+# `uv export` flattens the lock to a pinned requirements file with hashes; pip
+# installs exactly that, then the project itself with --no-deps so nothing is
+# re-resolved behind it. uv is pinned too and uninstalled afterwards — it is a
+# build tool, not a runtime dependency.
+#
 # postgresql extra: psycopg2 for the DATABASE_URL-backed investigations store.
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir ".[postgresql]"
+    && pip install --no-cache-dir "uv==0.12.1" \
+    && uv export \
+        --locked \
+        --no-dev \
+        --extra postgresql \
+        --no-emit-project \
+        --format requirements-txt \
+        -o /tmp/requirements.txt \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
+    && pip install --no-cache-dir --no-deps . \
+    && pip uninstall -y uv \
+    && rm -f /tmp/requirements.txt
 
 # Run as a non-root user (uid/gid 1000). /workspace is the writable runtime
 # working area owned by that user.

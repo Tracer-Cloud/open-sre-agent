@@ -15,6 +15,7 @@ import time as _time
 from typing import Any
 
 from config.config import get_environment
+from config.constants.timezone import resolve_display_timezone
 from config.runtime_metadata.build_info import detect_build_info
 from config.runtime_metadata.contract import RUNTIME_INPUTS_KEY
 from config.runtime_metadata.probes import (
@@ -34,6 +35,17 @@ from config.version import get_opensre_version
 _PROCESS_START_MONOTONIC = _time.monotonic()
 
 
+def display_timezone_name() -> str:
+    """Name of the zone times are quoted in — configured, else the host's.
+
+    Resolved on every call rather than frozen at import: the env is not
+    guaranteed to be in place when this module is first imported, and a
+    module-level snapshot would silently report the wrong zone forever.
+    """
+    zone = resolve_display_timezone()
+    return zone.key if zone is not None else local_tz_name()
+
+
 def build_runtime_metadata() -> dict[str, Any]:
     """Session-lifetime read-only runtime facts.
 
@@ -44,7 +56,8 @@ def build_runtime_metadata() -> dict[str, Any]:
     - ``opensre_build`` — ``""`` in released wheels; ``dev, v0.1.YYYY.M.D @ SHA``
       in a git checkout so the LLM can quote the exact build in local dev.
     - ``runtime_env`` — ``OPENSRE_ENV`` env var, else the app environment name.
-    - ``tz_name`` — local timezone name (rarely changes mid-session).
+    - ``tz_name`` — the zone times are quoted in: ``OPENSRE_DISPLAY_TIMEZONE``
+      when set, else the host's local zone (rarely changes mid-session).
     - ``python_version`` — interpreter version from :data:`sys.version_info`.
     - ``pid`` / ``ppid`` — this process and its parent from :mod:`os`.
     - ``tools`` — probed tool paths (``kubectl``, ``helm``, ``docker``, ``git``, …).
@@ -66,7 +79,7 @@ def build_runtime_metadata() -> dict[str, Any]:
         "opensre_version": get_opensre_version(),
         "opensre_build": detect_build_info(),
         "runtime_env": env_override or get_environment().value,
-        "tz_name": local_tz_name(),
+        "tz_name": display_timezone_name(),
         "python_version": python_version_string(),
         "pid": os.getpid(),
         "ppid": os.getppid(),
@@ -88,7 +101,9 @@ def capture_runtime_facts(*, metadata: dict[str, Any] | None = None) -> dict[str
     the git+importlib probe every call.
     """
     facts = dict(metadata or build_runtime_metadata())
-    facts["now_iso"] = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+    zone = resolve_display_timezone()
+    now = _dt.datetime.now(zone) if zone is not None else _dt.datetime.now().astimezone()
+    facts["now_iso"] = now.isoformat(timespec="seconds")
     facts["uptime_seconds"] = round(_time.monotonic() - _PROCESS_START_MONOTONIC, 3)
     facts.update(disk_memory_facts())
     return facts

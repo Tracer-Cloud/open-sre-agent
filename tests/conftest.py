@@ -87,6 +87,22 @@ def _restore_os_environ():
 
 
 @pytest.fixture(autouse=True)
+def _reset_gcp_project_discovery() -> None:
+    """Clear the memoized Resource Manager listing between tests.
+
+    ``GCP_ADDITIONAL_PROJECTS=discover`` caches one listing per *credential*, and
+    the cache key is a hash of the credential fields alone. Almost every GCP
+    fixture leaves those empty (ADC is the default auth path), so every such test
+    shares one key — the first test to run discovery would decide the project
+    allow-list for all the others on that xdist worker, including the ones
+    asserting that discovery failed.
+    """
+    from integrations.gcp.project_discovery import reset_cache
+
+    reset_cache()
+
+
+@pytest.fixture(autouse=True)
 def _disable_system_keyring(request, monkeypatch) -> None:
     """Keep tests isolated from any real developer keychain entries.
 

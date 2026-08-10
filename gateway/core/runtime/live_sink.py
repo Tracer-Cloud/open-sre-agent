@@ -21,6 +21,8 @@ class LiveOutputSink:
     construction sites do not need ``type: ignore``.
     """
 
+    redacts_raw_tool_output = True
+
     def __init__(self) -> None:
         self._inner: GatewaySink | None = None
 
@@ -89,8 +91,8 @@ class LiveOutputSink:
                 return
             yield chunk
 
-    def finalize(self, text: str) -> None:
-        self._require().finalize(text)
+    def finalize(self, text: str, *, failed: bool = False) -> None:
+        self._require().finalize(text, failed=failed)
 
     def finish_streamed_response(self, text: str) -> None:
         finish = getattr(self._require(), "finish_streamed_response", None)
@@ -99,10 +101,22 @@ class LiveOutputSink:
             return
         self.finalize(text)
 
-    def set_tool_status(self, status: str) -> None:
+    def set_tool_status(self, status: str, *, call_id: str | None = None) -> None:
         set_status = getattr(self._require(), "set_tool_status", None)
         if callable(set_status):
-            set_status(status)
+            set_status(status, call_id=call_id)
+
+    def end_tool_status(self, *, failed: bool, call_id: str | None = None) -> None:
+        end_status = getattr(self._require(), "end_tool_status", None)
+        if callable(end_status):
+            end_status(failed=failed, call_id=call_id)
+
+    def leave_tool_status_open(
+        self, *, call_id: str | None = None, title: str | None = None
+    ) -> None:
+        leave_open = getattr(self._require(), "leave_tool_status_open", None)
+        if callable(leave_open):
+            leave_open(call_id=call_id, title=title)
 
     def __getattr__(self, name: str) -> Any:
         # Forward optional transport-specific attributes (e.g. tool_hooks readers).

@@ -18,7 +18,7 @@ from gateway.core.runtime.approvals import (
     DENY_ACTION_ID,
     MAX_APPROVAL_WAIT_SECONDS,
     ApprovalBroker,
-    arguments_preview,
+    DecidedPrompts,
 )
 from gateway.transports.slack.client import SlackMessagingClient
 
@@ -40,13 +40,15 @@ class ThreadApprovalPrompter:
         self._broker = broker
         self._channel_id = channel_id
         self._thread_ts = thread_ts
+        self._decided = DecidedPrompts()
 
     def request(
         self,
         *,
-        tool_name: str,
+        call_id: str,
+        headline: str,
         reason: str,
-        arguments: Mapping[str, Any],
+        details: str,
         expiry_seconds: float,
     ) -> tuple[bool, str]:
         """Ask the thread for approval; returns (approved, decided_by user id)."""
@@ -54,18 +56,17 @@ class ThreadApprovalPrompter:
             platform="slack",
             chat_id=self._channel_id,
         )
-        prompt_text = _prompt_text(tool_name, reason)
         message_ts = self._client.post_message(
             channel=self._channel_id,
-            text=f"Approval needed: {tool_name} — approve or deny in Slack.",
+            text=f"Approval needed: {headline} — approve or deny in Slack.",
             thread_ts=self._thread_ts,
-            blocks=_prompt_blocks(approval_id, prompt_text, arguments),
+            blocks=_prompt_blocks(approval_id, _prompt_text(headline, reason), details),
         )
         if message_ts is None:
             # No buttons on screen means nobody can approve: fail closed.
             logger.warning(
-                "[slack-gateway] approval prompt post failed tool=%s channel=%s",
-                tool_name,
+                "[slack-gateway] approval prompt post failed call=%s channel=%s",
+                call_id,
                 self._channel_id,
             )
             return (False, "")
@@ -74,15 +75,28 @@ class ThreadApprovalPrompter:
         self._client.update_message(
             channel=self._channel_id,
             ts=message_ts,
-            text=_outcome_text(tool_name, approved=approved, decided_by=decided_by),
+            text=_outcome_text(headline, approved=approved, decided_by=decided_by),
         )
+        if approved:
+            self._decided.remember(call_id, message_id=message_ts, decided_by=decided_by)
         logger.info(
-            "[slack-gateway] approval tool=%s approved=%s decided_by=%s",
-            tool_name,
+            "[slack-gateway] approval call=%s approved=%s decided_by=%s",
+            call_id,
             approved,
             decided_by or "(expired)",
         )
         return (approved, decided_by)
+
+    def attach_receipt(self, *, call_id: str, receipt: str) -> None:
+        """Replace the approved prompt's outcome with what the call produced."""
+        decision = self._decided.take(call_id)
+        if decision is None or not receipt.strip():
+            return
+        self._client.update_message(
+            channel=self._channel_id,
+            ts=decision.message_id,
+            text=_outcome_text(receipt, approved=True, decided_by=decision.decided_by),
+        )
 
 
 def handle_block_actions_payload(
@@ -127,8 +141,8 @@ def handle_block_actions_payload(
     return resolved
 
 
-def _prompt_text(tool_name: str, reason: str) -> str:
-    line = f":lock: *Approval needed — `{tool_name}`*"
+def _prompt_text(headline: str, reason: str) -> str:
+    line = f":lock: *Approval needed — {headline}*"
     if reason.strip():
         line += f"\n{reason.strip()}"
     return line
@@ -137,10 +151,9 @@ def _prompt_text(tool_name: str, reason: str) -> str:
 def _prompt_blocks(
     approval_id: str,
     prompt_text: str,
-    arguments: Mapping[str, Any],
+    details: str,
 ) -> list[dict[str, Any]]:
-    preview = arguments_preview(arguments)
-    section_text = prompt_text if not preview else f"{prompt_text}\n```{preview}```"
+    section_text = prompt_text if not details else f"{prompt_text}\n```{details}```"
     return [
         {"type": "section", "text": {"type": "mrkdwn", "text": section_text}},
         {
@@ -166,12 +179,12 @@ def _prompt_blocks(
     ]
 
 
-def _outcome_text(tool_name: str, *, approved: bool, decided_by: str) -> str:
+def _outcome_text(label: str, *, approved: bool, decided_by: str) -> str:
     if approved:
-        return f":white_check_mark: `{tool_name}` approved by <@{decided_by}>"
+        return f":white_check_mark: {label} — approved by <@{decided_by}>"
     if decided_by:
-        return f":no_entry: `{tool_name}` denied by <@{decided_by}>"
-    return f":hourglass: Approval request for `{tool_name}` expired — action skipped."
+        return f":no_entry: {label} — denied by <@{decided_by}>"
+    return f":hourglass: {label} — approval request expired, action skipped."
 
 
 __all__ = [

@@ -64,7 +64,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
         slash_ports_factory=ctor.kwargs.get("slash_ports_factory"),
     )
     assert tool_provider._precomputed_action_tools is None
-    sink.finalize.assert_called_once_with("gateway-ok")
+    sink.finalize.assert_called_once_with("gateway-ok", failed=False)
 
 
 def test_gateway_turn_handler_does_not_finalize_answered_turn(

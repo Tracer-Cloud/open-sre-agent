@@ -207,6 +207,26 @@ composes the same tier-3 capability code a surface would (after shared
 `bootstrap` process boot) — without ever importing `surfaces`, since the two
 are independent tier-1 peers.
 
+#### When a tier-1 peer needs a behaviour only the other one has
+
+`/investigate` is shared code: the same adapter in
+`surfaces/interactive_shell` serves the REPL and the gateway. In a terminal it
+runs the pipeline in the foreground and prints the report. On a chat surface it
+must detach, because the run outlives the turn — but detaching needs a
+gateway-owned queue and notifier, and `surfaces` may not import `gateway`.
+
+The seam is a **ContextVar holding a launcher protocol**, declared in `tools/`
+(tier 3, which both peers may import). The gateway binds an implementation for
+the duration of a turn; the adapter asks for whatever is bound and falls back to
+running locally when nothing is. Neither tier-1 package learns about the other,
+and the REPL keeps its foreground behaviour by default rather than by an
+`if platform == …` branch.
+
+The cost is that an unbound ContextVar is indistinguishable from "there is
+nothing to bind", so a transport that forgets to bind silently reverts to the
+foreground path. That is a wiring bug tests have to pin — the type checker
+cannot see it.
+
 ## Related docs
 
 - [`AGENTS.md`](https://github.com/Tracer-Cloud/opensre/blob/main/AGENTS.md) —

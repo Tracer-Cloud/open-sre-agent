@@ -20,6 +20,7 @@ from core.execution import (
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.provider import ProviderHooks, ProviderRequest
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.call_identity import current_tool_call_id
 from core.types import AgentTool, AgentToolContext
 
 
@@ -53,6 +54,30 @@ def _tool(
 
 def _call(name: str = "echo", value: str = "ok") -> ToolCall:
     return ToolCall(id=f"{name}-1", name=name, input={"value": value})
+
+
+def test_a_tool_can_read_the_id_of_the_call_that_invoked_it() -> None:
+    """``current_tool_call_id`` must resolve to the call actually executing.
+
+    Detaching a chat investigation relies on this to attribute the launch to
+    the one tool call that caused it (``gateway/core/investigations/detached_launcher.py``).
+    Binding the wrong id — or never binding it — would let that attribution
+    silently fall back to "no call", which is indistinguishable from a launch
+    that never happened.
+    """
+    seen: list[str | None] = []
+
+    def execute(_args: Any, _ctx: Any) -> dict[str, Any]:
+        seen.append(current_tool_call_id())
+        return {"ok": True}
+
+    execute_tool_calls(
+        [ToolCall(id="c-42", name="echo", input={"value": "x"})],
+        [_tool(execute=execute, parallel_safe=False)],
+        {},
+    )
+
+    assert seen == ["c-42"]
 
 
 def test_execute_tool_calls_validates_arguments_before_execution() -> None:

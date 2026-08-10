@@ -14,6 +14,10 @@ from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
+from tools.interactive_shell.shared.detached_launch import (
+    DetachedLaunchResult,
+    current_detached_launcher,
+)
 from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResult
 from tools.interactive_shell.shared.investigation_launch import (
     ForegroundInvestigationResult,
@@ -89,6 +93,30 @@ def repl_background_renderer() -> session_runner.StreamRendererFn:
     return _render
 
 
+def _detached_result(result: DetachedLaunchResult, *, queued_summary: str) -> dict[str, Any]:
+    """Shape a detached launch as the dict the slash handler expects.
+
+    ``slack_message`` and ``report`` stay empty: the launcher already posted the
+    acknowledgment through the notifier, and that message is the anchor the stage
+    updates edit. Echoing it here would show the user the same ack twice.
+    """
+    if not result.accepted:
+        return {
+            "status": "failed",
+            "summary": result.refusal_reason,
+            "slack_message": "",
+            "report": "",
+            "error": "refused",
+        }
+    return {
+        "status": "queued",
+        "summary": queued_summary,
+        "investigation_id": result.investigation_id,
+        "slack_message": "",
+        "report": "",
+    }
+
+
 def run_investigation_for_session(
     *,
     alert_text: str,
@@ -97,6 +125,14 @@ def run_investigation_for_session(
     console: Console | None = None,
 ) -> dict[str, Any]:
     """Run a foreground streaming investigation in the REPL."""
+    # A bound launcher means a chat turn: detach rather than run the pipeline here.
+    launcher = current_detached_launcher()
+    if launcher is not None:
+        return _detached_result(
+            launcher.launch(alert_text=alert_text, context_overrides=context_overrides),
+            queued_summary="Investigation started",
+        )
+
     return session_runner.run_investigation_for_session(
         alert_text=alert_text,
         context_overrides=context_overrides,
@@ -113,6 +149,17 @@ def run_sample_alert_for_session(
     console: Console | None = None,
 ) -> dict[str, Any]:
     """Run a foreground sample-alert investigation in the REPL."""
+    # A bound launcher means a chat turn: detach rather than run the pipeline here.
+    launcher = current_detached_launcher()
+    if launcher is not None:
+        return _detached_result(
+            launcher.launch(
+                alert_text=f"sample:{template_name}",
+                context_overrides=context_overrides,
+            ),
+            queued_summary="Sample investigation started",
+        )
+
     return session_runner.run_sample_alert_for_session(
         template_name=template_name,
         context_overrides=context_overrides,

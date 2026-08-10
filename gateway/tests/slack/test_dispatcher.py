@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import patch
 
@@ -13,12 +15,16 @@ import pytest
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal, StorageScope
 from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.core.investigations.launch_record import current_detached_launch_record
+from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
 from gateway.transports.slack.dispatcher import _SlackTurnDispatcher
 from gateway.transports.slack.events import SlackInboundMessage
+from gateway.transports.slack.output_sink import SlackOutputSink
 from gateway.transports.slack.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
 
 _SECURITY = "gateway.transports.slack.security"
+_DISPATCHER = "gateway.transports.slack.dispatcher"
 
 
 @pytest.fixture(autouse=True)
@@ -207,6 +213,97 @@ def test_authorized_message_reaches_handler_with_thread_sink() -> None:
     assert ("add", "white_check_mark") in emoji_ops
 
 
+def test_detached_launch_turn_leaves_eyes_and_adds_no_checkmark() -> None:
+    """A turn that hands off to a detached investigation is not finished yet.
+
+    Stamping ✅/removing 👀 here would be a lie once the action tool actually
+    launches a background run (Defect A) — the honest state is the 👀 staying
+    in place until the detached run itself reacts on completion.
+    """
+    messaging = _FakeMessagingClient()
+    resolver = _FakeSessionResolver()
+
+    def handler(_text: str, _session: Any, sink: Any, _logger: logging.Logger) -> None:
+        record = current_detached_launch_record()
+        assert record is not None
+        record.note_accepted("inv-test-1")
+        sink.finalize("Investigation queued; I'll post results here when it's done.")
+
+    _dispatcher(
+        settings=_settings(["U1"]), messaging=messaging, resolver=resolver, handler=handler
+    ).dispatch(_inbound())
+
+    emoji_ops = [(r["op"], r["emoji"]) for r in messaging.reactions]
+    assert ("add", "eyes") in emoji_ops
+    assert ("remove", "eyes") not in emoji_ops
+    assert ("add", "white_check_mark") not in emoji_ops
+
+
+class _CapturingArbiter(TerminalOutcomeArbiter):
+    """Records the timeout callback instead of arming a real timer.
+
+    Lets a test simulate a timer whose fire races past the turn body already
+    having returned and claimed the outcome — the exact race ``terminal.claim()``
+    exists to make safe.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.captured_on_timeout: Callable[[], None] | None = None
+
+    @contextmanager
+    def timeout_after(self, timeout_seconds: float, on_timeout: Callable[[], None]):
+        _ = timeout_seconds
+        self.captured_on_timeout = on_timeout
+        yield
+
+
+def _arbiter_capturing_class(instances: list[_CapturingArbiter]) -> type[_CapturingArbiter]:
+    class _Recording(_CapturingArbiter):
+        def __init__(self) -> None:
+            super().__init__()
+            instances.append(self)
+
+    return _Recording
+
+
+def test_detached_launch_turn_still_claims_terminal_outcome() -> None:
+    """``terminal.claim()`` must fire unconditionally, not only on the non-detached
+    path — otherwise a late timer that races past turn completion can still win
+    the claim and stamp ✗ over a turn that successfully handed off."""
+    messaging = _FakeMessagingClient()
+    instances: list[_CapturingArbiter] = []
+
+    def handler(_text: str, _session: Any, sink: Any, _logger: logging.Logger) -> None:
+        record = current_detached_launch_record()
+        assert record is not None
+        record.note_accepted("inv-test-2")
+        sink.finalize("Investigation queued.")
+
+    dispatcher = _dispatcher(
+        settings=_settings(["U1"]),
+        messaging=messaging,
+        resolver=_FakeSessionResolver(),
+        handler=handler,
+    )
+
+    with patch(f"{_DISPATCHER}.TerminalOutcomeArbiter", _arbiter_capturing_class(instances)):
+        dispatcher._run_turn(_inbound(), _test_scope())
+
+    assert len(instances) == 1
+    arbiter = instances[0]
+    assert arbiter.captured_on_timeout is not None
+
+    # Simulate a timer firing after the turn already finished, mirroring
+    # TerminalOutcomeArbiter._handle_timeout's own claim-then-call sequence.
+    arbiter.cancel_event.set()
+    if arbiter.claim():
+        arbiter.captured_on_timeout()
+
+    ops = [(r["op"], r["emoji"]) for r in messaging.reactions]
+    assert ("add", "x") not in ops
+
+
 def test_unauthorized_user_gets_denial_reply_and_no_turn() -> None:
     messaging = _FakeMessagingClient()
     resolver = _FakeSessionResolver()
@@ -376,22 +473,47 @@ def test_stop_cancels_in_flight_turn() -> None:
         resolver=_FakeSessionResolver(),
         handler=hanging_handler,
     )
+    finalizes: _FinalizeCalls = []
     worker = threading.Thread(target=lambda: dispatcher._run_turn(_inbound(), _test_scope()))
-    worker.start()
-    assert started.wait(3.0), "turn did not start"
-    dispatcher.dispatch(_inbound(text="/stop", ts="100.2"))
-    try:
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline and not any(
-            update["text"] == "Stopped." for update in messaging.updates
-        ):
-            time.sleep(0.02)
-    finally:
-        release.set()
-        worker.join(5.0)
+    with patch(f"{_DISPATCHER}.SlackOutputSink", _recording_sink_class(finalizes)):
+        worker.start()
+        assert started.wait(3.0), "turn did not start"
+        dispatcher.dispatch(_inbound(text="/stop", ts="100.2"))
+        try:
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline and not any(
+                update["text"] == "Stopped." for update in messaging.updates
+            ):
+                time.sleep(0.02)
+        finally:
+            release.set()
+            worker.join(5.0)
 
     assert seen_cancel and seen_cancel[0].is_set()
     assert any(update["text"] == "Stopped." for update in messaging.updates)
+    # A stopped turn is not a finished one — the timeline reads this flag.
+    assert [failed for _text, failed in finalizes] == [True], finalizes
+
+
+#: ``(text, failed)`` for every terminal message a dispatcher sent its sink.
+_FinalizeCalls = list[tuple[str, bool]]
+
+
+def _recording_sink_class(calls: _FinalizeCalls) -> type[SlackOutputSink]:
+    """The real sink, plus a record of the outcome flag each finalize carried.
+
+    The dispatcher owns its sink, and these turns take the placeholder-edit path
+    where no timeline renders — so the flag that decides ✓ vs ✗ downstream is
+    only observable at the call. Subclassed rather than replaced so the rest of
+    each test still asserts on what Slack actually received.
+    """
+
+    class _Recording(SlackOutputSink):
+        def finalize(self, text: str, *, failed: bool = False) -> None:
+            calls.append((text, failed))
+            super().finalize(text, failed=failed)
+
+    return _Recording
 
 
 def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
@@ -409,17 +531,19 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
         resolver=_FakeSessionResolver(),
         handler=hanging_handler,
     )
+    finalizes: _FinalizeCalls = []
     worker = threading.Thread(target=lambda: dispatcher._run_turn(_inbound(), _test_scope()))
-    worker.start()
-    try:
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline and not any(
-            "taking longer" in update["text"].lower() for update in messaging.updates
-        ):
-            time.sleep(0.02)
-    finally:
-        release.set()
-        worker.join(5.0)
+    with patch(f"{_DISPATCHER}.SlackOutputSink", _recording_sink_class(finalizes)):
+        worker.start()
+        try:
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline and not any(
+                "taking longer" in update["text"].lower() for update in messaging.updates
+            ):
+                time.sleep(0.02)
+        finally:
+            release.set()
+            worker.join(5.0)
 
     assert any("taking longer" in update["text"].lower() for update in messaging.updates), (
         "timeout did not replace the placeholder"
@@ -429,6 +553,10 @@ def test_turn_timeout_finalizes_placeholder_when_handler_hangs() -> None:
     # The timeout owns the outcome, so a late normal completion must not stack a
     # done tick over the timeout's cross.
     assert ("add", "white_check_mark") not in ops
+    # The ✗ reaction sits on the user's message; the timeline row is a separate
+    # signal, and it reads this flag instead.
+    timed_out = [failed for text, failed in finalizes if "taking longer" in text.lower()]
+    assert timed_out == [True], finalizes
 
 
 _BOT_ID = "UBOT"

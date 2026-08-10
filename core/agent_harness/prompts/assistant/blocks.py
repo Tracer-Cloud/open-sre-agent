@@ -11,9 +11,7 @@ from collections.abc import Callable, Sequence
 
 from core.agent_harness.prompts.assistant.parts import AssistantPromptParts
 from core.agent_harness.prompts.assistant.text import (
-    CLI_PREAMBLE,
     DOCS_PREAMBLE,
-    GATEWAY_PREAMBLE,
     INTERACTION_RULES,
     LONG_TERM_MEMORY_PREAMBLE,
     MARKDOWN_RULE,
@@ -23,6 +21,8 @@ from core.agent_harness.prompts.assistant.text import (
     SETUP_GUIDANCE_RULE,
     SOURCE_SCOPED_INVESTIGATION_RULE,
     TERMINOLOGY_RULE,
+    cli_preamble,
+    gateway_preamble,
 )
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
@@ -53,7 +53,7 @@ def contribute_preamble(parts: AssistantPromptParts, profile: SurfaceProfile) ->
     return [
         _block(
             "assistant-preamble",
-            CLI_PREAMBLE if profile.cli_rules else GATEWAY_PREAMBLE,
+            cli_preamble() if profile.cli_rules else gateway_preamble(),
             kind=PromptBlockKind.SYSTEM,
             tier=PromptTier.STABLE,
             provenance=_HERE,

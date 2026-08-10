@@ -1,0 +1,555 @@
+---
+title: "Google Cloud"
+description: "Connect Google Cloud so OpenSRE can read logs, metrics, audit trails, GKE clusters, VMs, Cloud Run, Cloud SQL, Pub/Sub, Error Reporting, alert policies and SLOs during investigations and chat sessions, across one or many projects"
+---
+
+OpenSRE reads Cloud Logging entries, Cloud Monitoring time series, Cloud Audit Logs, GKE clusters, Compute Engine VMs, Cloud Run services, Cloud SQL instances, Pub/Sub backlogs and Error Reporting groups from your Google Cloud projects — including GKE container logs and cluster metrics when no kubeconfig is registered.
+
+This is separate from running the agent's LLM on Vertex AI. `VERTEX_AI_PROJECT` selects the model; `GCP_PROJECT_ID` selects the infrastructure being investigated. Set both if they are different projects.
+
+## Prerequisites
+
+- A Google Cloud project with the **Cloud Logging API**, **Cloud Monitoring API**, and **Cloud Resource Manager API** enabled
+- A principal with `roles/logging.viewer` and `roles/monitoring.viewer` on each project you want to query
+- Network access from the OpenSRE environment to `logging.googleapis.com`, `monitoring.googleapis.com` and `cloudresourcemanager.googleapis.com`
+
+Everything else is opt-in, one service at a time. Enable the API and grant the role only for the tools you want:
+
+| Tool | API to enable | Role to grant | Endpoint to reach |
+| --- | --- | --- | --- |
+| `gcp_list_gke_clusters` | Kubernetes Engine | `roles/container.viewer` | `container.googleapis.com` |
+| `gcp_list_compute_instances` | Compute Engine | `roles/compute.viewer` | `compute.googleapis.com` |
+| `gcp_list_cloud_run_services` | Cloud Run Admin | `roles/run.viewer` | `run.googleapis.com` |
+| `gcp_list_cloud_sql_instances` | Cloud SQL Admin | `roles/cloudsql.viewer` | `sqladmin.googleapis.com` |
+| `gcp_pubsub_backlog` | Cloud Pub/Sub | `roles/pubsub.viewer` **and** `roles/monitoring.viewer` | `pubsub.googleapis.com` |
+| `gcp_error_reporting_top_errors` | Error Reporting | `roles/errorreporting.viewer` | `clouderrorreporting.googleapis.com` |
+| `gcp_alerting`, `gcp_metrics_scope` | Cloud Monitoring (already required) | `roles/monitoring.viewer` on the scoping project | `monitoring.googleapis.com` |
+
+A missing API or role disables the tool that needs it; it does not break the rest. On a multi-project query, a project that denies one call is reported in `partial_errors` and the projects that answered are still returned.
+
+A project that has simply never enabled the API is different: it cannot hold that kind of resource, so it is skipped silently rather than reported as a failure. You only see the projects that genuinely could not be read. This matters most with `GCP_ADDITIONAL_PROJECTS=discover`, where most of the estate will not run every service.
+
+## Setup
+
+The wizard walks through the three auth paths below and verifies the result:
+
+```bash
+opensre integrations setup gcp
+```
+
+To configure it by hand, set the environment variables directly.
+
+### Option 1: Application Default Credentials (no configuration)
+
+On GKE with Workload Identity, on a GCE VM, or on a laptop where you have run `gcloud auth application-default login`, OpenSRE picks up the ambient credential. Set the project and nothing else:
+
+```bash
+GCP_PROJECT_ID=my-project
+```
+
+<Note>
+On GKE, the Kubernetes service account must carry the `iam.gke.io/gcp-service-account` annotation pointing at your Google service account. Without it the pod silently falls back to the node's `default` compute identity and every call fails with a 403 — and changing the annotation does **not** restart pods, so run `kubectl rollout restart deploy/<name>` afterwards.
+</Note>
+
+### Option 2: Service account key
+
+```bash
+GCP_PROJECT_ID=my-project
+GCP_SERVICE_ACCOUNT_KEY=/secrets/opensre-gcp.json
+```
+
+`GCP_SERVICE_ACCOUNT_KEY` accepts either a path to the JSON file or the JSON document itself, so it works with both mounted secrets and secret-manager env injection.
+
+### Option 3: Impersonation
+
+Keep the ambient credential and impersonate a service account that has the read roles. This reaches other estates without minting long-lived JSON keys:
+
+```bash
+GCP_PROJECT_ID=my-project
+GCP_IMPERSONATE_SERVICE_ACCOUNT=opensre-reader@my-project.iam.gserviceaccount.com
+```
+
+The ambient principal needs `roles/iam.serviceAccountTokenCreator` on the target service account.
+
+### Environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GCP_PROJECT_ID` | — | **Required.** Default project every tool call targets. `GOOGLE_CLOUD_PROJECT` is honoured as a fallback |
+| `GCP_ADDITIONAL_PROJECTS` | — | Comma-separated extra projects reachable with the **same** credential, or `discover` to allow every project the credential can see. See [One credential, many projects](#one-credential-many-projects) |
+| `GCP_SERVICE_ACCOUNT_KEY` | — | Service-account JSON, or a path to it. Leave empty to use Application Default Credentials |
+| `GCP_IMPERSONATE_SERVICE_ACCOUNT` | — | Service account to impersonate on top of the ambient credential |
+| `GCP_MAX_RESULTS` | `100` | Default page size for log and metric queries (clamped to `1`–`1000`) |
+| `GCP_INSTANCES` | — | JSON array registering several GCP estates, each with its own credential. See [Multiple projects](#multiple-projects) |
+| `GCP_AUTO_REGISTER_GKE` | — | Register discovered GKE clusters at startup. `true` for every configured project, a comma-separated project list, or `project/cluster` entries for named clusters. See [Registering at startup](#registering-at-startup-containers) |
+| `GCP_PROJECT_REFRESH_INTERVAL` | `1800` | Seconds before the project listing is re-read. `0` reads it once per process. Only does anything with `GCP_ADDITIONAL_PROJECTS=discover`. See [Staying current](#staying-current) |
+| `GCP_GKE_REFRESH_INTERVAL` | `1800` | Seconds between GKE registration passes. `0` registers once at startup. Only does anything with `GCP_AUTO_REGISTER_GKE` set. See [Staying current](#staying-current) |
+
+## Multiple projects
+
+There are two different situations, and they are configured differently.
+
+### One credential, many projects
+
+IAM inherits down the resource hierarchy, so a service account granted a viewer role at the **folder or organization** level already reads every project beneath it. List those projects and OpenSRE will query across them:
+
+```bash
+GCP_PROJECT_ID=acme-prod
+GCP_ADDITIONAL_PROJECTS=acme-staging,acme-data,acme-shared
+```
+
+The agent then passes `project="acme-staging"` on a tool call, `project="acme-data,acme-shared"` for several, or `project="*"` for all of them. Omitting `project` uses `GCP_PROJECT_ID`.
+
+Cloud Logging queries up to 100 projects in **one** request, so `project="*"` is the cheap way to trace a request id across an estate. Larger estates are split across requests and merged.
+
+#### Letting OpenSRE find them
+
+Typing out the list is transcription, and it goes stale the moment someone creates a project. If your credential has a folder- or org-level grant, hand the job to Cloud Resource Manager:
+
+```bash
+GCP_PROJECT_ID=acme-prod
+GCP_ADDITIONAL_PROJECTS=discover
+```
+
+At the first GCP tool call, OpenSRE asks which projects the credential can see and allows all of them, and re-asks every 30 minutes. You can mix the two — `discover,acme-partner` keeps a project that the listing does not return, such as one reached through a grant on the project itself rather than through the hierarchy.
+
+This needs the **`resourcemanager.projects.list`** permission (in `roles/browser`, `roles/viewer`, and most folder-level viewer grants). Without it nothing breaks: OpenSRE logs a warning and carries on with the projects you named. Run `gcp_list_projects` to see what the credential can actually reach.
+
+<Warning>
+`discover` grants read access to every project it finds, and it keeps granting it — a project created next month is in scope within half an hour, with no config change, no restart, and no review. That is the point of the setting, and it is also the reason to prefer an explicit list when the estate holds anything the agent has no business reading. Note that `GCP_AUTO_REGISTER_GKE=true` means *every configured project*, so pairing it with `discover` also registers GKE clusters org-wide. Name projects or clusters explicitly there if you want log access without cluster access.
+</Warning>
+
+One practical limit: the listing is capped at 200 projects, and you get a warning naming the cap if you exceed it. Name the projects you need instead of using `discover` if you hit it.
+
+### Metrics scopes
+
+A Cloud Monitoring **metrics scope** is not a data boundary. Querying `projects/{p}/timeSeries` where `p` is a *scoping* project returns series for every project that scope monitors, each attributed by `resource_labels.project_id`. The same is true of alerts, alert policies and SLOs.
+
+This is why a project id in an alert is a **monitoring scope, not a runtime location**. Many estates create monitors, alert policies, SLOs, logs and metrics in a dedicated observability project while the services run elsewhere; others co-locate them. Both work, and you cannot tell which from the alert.
+
+`gcp_metrics_scope` answers it in one call, from either direction:
+
+- **`direction="monitored_projects"`** — given the project an alert named, which projects does it monitor? A `self_scoped: true` result means the project monitors only itself, so its signals are its own.
+- **`direction="containing_scopes"`** — given the project a workload runs in, which scopes has it been added to? The non-self entries are the observability projects holding its metrics and alerts.
+
+Cloud Monitoring returns project **numbers**, not ids, so OpenSRE resolves them through Cloud Resource Manager. Without `resourcemanager.projects.list` the numbers still come back and `project_ids_resolved` is `false`. `unconfigured_project_ids` names any monitored project that is not yet in `GCP_ADDITIONAL_PROJECTS` — it is still readable through the scoping project, just not addressable directly. `unresolved_project_numbers` names the ones that got no id at all, which is what a deleted project or one outside the credential's Resource Manager reach looks like.
+
+### Many credentials
+
+When the projects do not share a folder — separate organizations, or a key per environment — register one instance per credential:
+
+```bash
+GCP_INSTANCES='[
+  {"name":"prod","tags":{"env":"prod"},"project_id":"acme-prod","additional_projects":"acme-shared"},
+  {"name":"research","project_id":"acme-research","impersonate_service_account":"ro@acme-research.iam.gserviceaccount.com"}
+]'
+```
+
+Every instance's projects join one flat list, so the agent still picks a **project**, never a credential — OpenSRE maps each project back to the credential that can reach it. The first instance's project is the default.
+
+<Warning>
+A project must be in scope via `GCP_PROJECT_ID`, `GCP_ADDITIONAL_PROJECTS`, or `GCP_INSTANCES` before a tool will query it. `gcp_list_projects` will happily *show* projects your credential can see at the org level, but querying one takes an operator decision — this keeps a hallucinated project id from turning into an opaque 403. `GCP_ADDITIONAL_PROJECTS=discover` is how you make that decision once for the whole estate instead of per project.
+
+Do not write `GCP_ADDITIONAL_PROJECTS="*"` expecting a wildcard. `*` is what the *agent* passes to mean "every project already in scope"; as a config value it is read as a project id, and one invalid id fails an entire Cloud Logging request — taking your real projects' logs with it. Use `discover`.
+</Warning>
+
+## Tools
+
+Eight tools are available on both the investigation and the Slack/action surfaces: `gcp_list_projects`, `gcp_list_gke_clusters`, `gcp_logging_query`, `gcp_monitoring_query`, `gcp_error_reporting_top_errors`, `gcp_refresh_discovery`, `gcp_metrics_scope`, and `gcp_alerting`. The remaining tools are investigation-only.
+
+### `gcp_logging_query`
+
+Runs a [Cloud Logging filter](https://cloud.google.com/logging/docs/view/logging-query-language) and returns flattened entries — timestamp, severity, message, and the GKE cluster/namespace/pod/container labels when present.
+
+- **`filter`** — the filter expression. Leave the time window out of it; OpenSRE always applies its own bound
+- **`project`** — one project, a comma-separated list, or `*`. Defaults to `GCP_PROJECT_ID`
+- **`severity`** — minimum severity (`DEBUG` through `EMERGENCY`)
+- **`hours`** — lookback window, default `1`, capped at 30 days
+- **`limit`** — page size, default `GCP_MAX_RESULTS`
+
+The message is read from whichever payload field the producer used — `textPayload` for GKE stdout, `jsonPayload` for structured logs, `protoPayload` for Cloud Audit Logs — so audit entries are not returned blank.
+
+`project="*"` is one request, not one per project: Cloud Logging accepts up to
+100 `resourceNames` per call, so a sweep of a dozen projects costs the same
+round trip as querying one. Use it whenever you do not know which project holds
+the logs — omitting `project` reads only the default, which on a split estate is
+usually not the one you want.
+
+This is also how you locate a GKE workload you cannot place. Entries from GKE
+carry `cluster_name` and `namespace_name` labels, so a single sweep answers
+"which cluster and namespace is this running in?" even when the alert only named
+a centralised observability project.
+
+### `gcp_monitoring_query`
+
+Reads Cloud Monitoring time series for **one metrics scope** per call. A scope is
+a project id, but it is not a data boundary: a scoping project returns series
+for **every project it monitors**. So when metrics are centralised, query the
+observability project and read `resource_labels.project_id` on each series to
+see which project it actually came from.
+
+The one-scope-per-call limit is about the request shape, not about reach —
+unlike `gcp_logging_query` this takes no list and no `*`.
+
+- **`filter`** — must name a metric type, e.g. `metric.type="kubernetes.io/container/memory/used_bytes"`
+- **`project`** — a single project id, treated as a metrics scope
+- **`hours`** — lookback window, default `1`
+- **`alignment_period_seconds`** — downsampling bucket, default `300`
+- **`aligner`** — optional override, e.g. `ALIGN_MAX`
+
+By default the aligner is chosen from the metric's kind: **mean** for gauges, **per-second rate** for counters. Cloud Monitoring rejects a mean over a cumulative metric outright, so a fixed aligner would fail on most counters. The aligner actually used is returned in the result — read rate values as per second, not as raw counts.
+
+### `gcp_metrics_scope`
+
+Reads a Cloud Monitoring metrics scope — see [Metrics scopes](#metrics-scopes) for why this matters.
+
+- **`project`** — one project id. Not a list and not `*`
+- **`direction`** — `monitored_projects` (default) or `containing_scopes`
+
+Returns project numbers and, where Resource Manager can be listed, the ids. The two directions answer different questions, so they return different fields:
+
+- **`monitored_projects`** — `self_scoped` distinguishes the co-located topology from the split one; `queryable_project_ids` is what you can pass straight to another GCP tool today, `unconfigured_project_ids` is what to add to `GCP_ADDITIONAL_PROJECTS`, and `unresolved_project_numbers` is what got no id — usually a project that has since been deleted.
+- **`containing_scopes`** — `observability_project_ids` names the scopes holding this project's metrics and alerts, and `unresolved_scope_numbers` names any that got no id. Read the second one: an empty `observability_project_ids` on its own means "this project sits in no other scope", which is the opposite conclusion.
+
+Cloud Monitoring answers in project **numbers**, so the ids come from a separate Resource Manager listing. On a very large org that listing is capped before it reaches the end and some ids come back blank — the `note` says so. That is a size limit, not a missing permission; name the projects you need rather than re-granting `resourcemanager.projects.list`.
+
+### `gcp_alerting`
+
+Reads Cloud Monitoring alerting for one metrics scope. Read-only throughout — there is no acknowledge, no silence, no snooze and no policy edit, deliberately.
+
+- **`action`** — `alerts` (default), `policies`, or `slos`
+- **`project`** — one project id, the metrics scope. Not a list and not `*`
+- **`state`** — `alerts` only: `open` (default), `closed`, `any`
+- **`hours`** — `alerts` only: lookback, default `24`, capped at 30 days. An alert counts as in-window if it is still open, or if it opened or closed inside it
+- **`name_contains`** — substring of the policy, SLO or service display name
+- **`policy_id`** — `policies` only: fetch one policy by the id an alert reported
+- **`limit`** — default `GCP_MAX_RESULTS`, capped at 200
+
+**`action="alerts"` is the one that places an alert.** Each alert carries the resource and metric labels preserved from the condition that fired it, so `resource_project_id` names the project the workload actually runs in — which, in a split estate, is not the project you queried. The distinct set is returned as `runtime_project_ids`.
+
+`action="policies"` is **configuration, not state**. An enabled policy with nothing open is the normal case. `condition_filters` flattens every condition's Cloud Monitoring filter so you can re-run the alert's own query through `gcp_monitoring_query`. `invalid_reason` is non-empty when Google considers the policy broken — a common reason an alert "never fired". Notification channels are reported as a count only; OpenSRE does not return channel addresses.
+
+`name_contains` is matched client-side, so a search walks up to five pages of policies before it gives up. On an estate larger than that the `note` says the search was capped — including when it did find matches, since the ones it did not reach are the point. Read it as "not found *yet*", not "does not exist", and narrow with `policy_id` if you have it.
+
+A `policy_id` the project no longer holds comes back as an empty listing with `policy_count: 0` and a `note` saying so — not as a permission problem. An alert routinely outlives the policy that raised it, so this is the ordinary answer, and the fix is to drop `policy_id` and list what does exist.
+
+`action="slos"` walks the project's services (up to 25) and returns each objective's goal, period and SLI shape. It is the objective's **definition**; current error-budget burn is a separate Cloud Monitoring time series, and `resource_name` is the identifier you need to query it.
+
+<Note>
+The three actions reach Cloud Monitoring through three different resources, so a grant that covers one says nothing about the others — alert **instances** in particular are served by a newer endpoint than alert **policies** and are not on every account. Any action your credential does not reach returns `available: false` and names a sibling that is still worth trying, rather than failing the whole question.
+</Note>
+
+### `gcp_audit_log_query`
+
+Answers *who changed what, and when* — the Cloud Audit Logs equivalent of reading CloudTrail. You give it named arguments, not a filter expression; it builds the query.
+
+- **`log_type`** — `activity` (admin writes, the default), `data_access`, `system_event`, `policy`, or `all`
+- **`project`** — one project, a comma-separated list, or `*`
+- **`principal`** — who acted, e.g. an email or service-account name (substring match)
+- **`method`** — the API method, e.g. `compute.instances.delete` or just `delete`
+- **`service`** — e.g. `compute.googleapis.com`
+- **`resource`** — the target resource name, e.g. a cluster or instance name
+- **`failed_only`** — only denied or errored calls
+- **`hours`** — lookback window, default `24`, capped at 30 days
+- **`limit`** — page size, default `GCP_MAX_RESULTS`
+
+Each result is one record: principal, method, service, resource, caller IP, user agent, and whether it succeeded. A denied call also lists the exact IAM permission that was missing, which usually turns "the deploy failed" into a one-line fix.
+
+<Note>
+**Data Access logs are off by default in GCP.** An empty `data_access` result almost always means nobody enabled the log type, not that nobody read anything. Admin writes — the changes that cause incidents — are in `activity`, which is always on.
+</Note>
+
+You can run the same query through `gcp_logging_query`, but only if you already know audit entries live under `logName:cloudaudit.googleapis.com` and that the interesting fields hang off `protoPayload`. Get either wrong and you get zero rows with no hint why.
+
+### `gcp_list_gke_clusters`
+
+Lists GKE clusters across the configured projects, in every region and zone, with control-plane status, master and node versions, node counts, node pools and autoscaling ranges.
+
+- **`project`** — one project, a comma-separated list, or `*`
+
+Each cluster reports **`registered_as`** when a kubeconfig for it is registered with the [Kubernetes integration](/kubernetes) — that value is the name to pass as the `cluster` argument to `kubernetes_list_pods` and friends. Clusters without one are listed under `unregistered_clusters`: they are visible, but only through Cloud Logging and Monitoring until someone registers a kubeconfig. [One command registers them all](#registering-your-gke-clusters-automatically).
+
+Matching is exact — either the registered kubeconfig `context` equals the one `gcloud container clusters get-credentials` writes (`gke_<project>_<location>_<cluster>`), or the registered instance name equals the cluster name. Nothing is matched by prefix, because two clusters called `prod` in different projects are ordinary.
+
+`healthy` is `true` only for a `RUNNING` cluster with no conditions. A cluster can be `RUNNING` and still be reporting exhausted quota or a stuck upgrade, so read `conditions` rather than `status` alone.
+
+### `gcp_list_compute_instances`
+
+Lists Compute Engine VMs across the configured projects, covering every zone in one call per project.
+
+- **`project`** — one project, a comma-separated list, or `*`
+- **`status`** — e.g. `RUNNING` or `TERMINATED` (filtered server-side)
+- **`name_contains`** — substring of the instance name
+- **`limit`** — page size, default `100`, capped at `500`
+
+Returns name, zone, machine type, status, creation time, internal and external IP, labels and network tags. GKE nodes additionally report `gke_cluster` and `gke_node_pool`, so a VM named in an alert can be traced back to the cluster it belongs to. Preemptible and Spot VMs are flagged — their disappearance is expected behaviour, not an incident.
+
+`TERMINATED` means *stopped*, not deleted. A deleted instance is simply absent.
+
+### `gcp_list_cloud_run_services`
+
+Lists Cloud Run services across the configured projects, covering every region in one call per project.
+
+- **`project`** — one project, a comma-separated list, or `*`
+- **`name_contains`** — substring of the service name
+- **`unhealthy_only`** — only services that are not `Ready` or whose latest revision never took traffic
+- **`limit`** — page size, default `100`, capped at `500`
+
+Returns readiness, the revision actually serving traffic, the container images it runs, the live traffic split, ingress setting, scaling bounds, who deployed last and any failing condition.
+
+<Note>
+**A Cloud Run deploy that changed nothing looks healthy.** When a new revision never becomes ready, Cloud Run keeps serving the previous one and the service still reports `Ready`. That shows up here as `latest_created_revision` ≠ `latest_ready_revision`, flagged as `rollout_pending`. Read `failing_conditions` on those services — that is where the pull error, crash-on-start or missing secret is named.
+</Note>
+
+Do not pass a region: the tool already queries all of them.
+
+### `gcp_list_cloud_sql_instances`
+
+Lists Cloud SQL database instances across the configured projects, covering every region in one call per project.
+
+- **`project`** — one project, a comma-separated list, or `*`
+- **`state`** — e.g. `RUNNABLE`, `SUSPENDED`, `MAINTENANCE`, `FAILED` (filtered server-side)
+- **`name_contains`** — substring of the instance name
+- **`unhealthy_only`** — only instances that are not `RUNNABLE` or are near their disk limit
+- **`limit`** — page size, default `100`, capped at `500`
+
+Returns state, database version, region and zone, tier, availability type, disk usage, replica topology, connection name, whether backups are on, scheduled maintenance and suspension reasons.
+
+`healthy` is `true` only for a `RUNNABLE` instance that is not near its disk limit. **An instance that fills its disk stops accepting writes and still reports `RUNNABLE`**, so `state` alone will not show it — instances above 85% of provisioned disk are flagged `disk_pressure`.
+
+`accepts_writes` is `false` on a read replica, and `replica_of` names the primary. That pair answers "why are writes failing but reads fine" without a round trip. `availability_type: ZONAL` means there is no standby, so a zone outage is an outage rather than a failover.
+
+### `gcp_pubsub_backlog`
+
+Lists Pub/Sub subscriptions with their current backlog, joining the subscription configuration to the two Cloud Monitoring metrics that say whether consumers are keeping up.
+
+- **`project`** — one project, a comma-separated list, or `*`
+- **`name_contains`** — substring of the subscription name **or** its topic
+- **`backlogged_only`** — only subscriptions with undelivered messages or a stalled oldest message
+- **`limit`** — page size, default `100`, capped at `500`
+
+Returns `undelivered_messages` and `oldest_unacked_age_seconds` alongside the topic, delivery mode, push endpoint, ack deadline, retry backoff and dead-letter policy. Results are sorted deepest backlog first.
+
+`oldest_unacked_age_seconds` is the field to read, not the count. A batch subscription can sit thousands deep by design; a *rising age* means consumers stopped. Anything over five minutes is flagged `stalled`.
+
+Two subscription details explain most backlogs that will not drain on their own: a **push** subscription whose endpoint is 5xx-ing has no consumer to inspect, and a subscription with an empty `dead_letter_topic` retries a poison message forever.
+
+<Note>
+This tool needs **two** roles. With `roles/pubsub.viewer` but not `roles/monitoring.viewer`, the configuration is still returned and every subscription is marked `backlog_unknown` — deliberately, so an unreadable metric never renders as a healthy zero.
+</Note>
+
+### `gcp_error_reporting_top_errors`
+
+Lists the top error groups from Error Reporting, already deduplicated server-side. The shortest path from "something is wrong" to a stack trace.
+
+- **`project`** — one project, a comma-separated list, or `*`
+- **`period`** — `1h` (default), `6h`, `1d`, `1w`, or `30d`
+- **`order`** — `count` (default), `last_seen`, `first_seen`, or `affected_users`
+- **`service`** — only groups raised by this service name
+- **`limit`** — groups returned, default `20`, capped at `100`
+
+Each group carries its count, users affected, when it was first and last seen, the service and version that raised it, and a representative stack trace truncated to its leading frames.
+
+**`first_seen` is what makes this worth a tool call.** A group first seen twenty minutes ago is a regression; a group first seen eight months ago is background noise with the same count. Use `order="first_seen"` to surface groups that appeared during the incident.
+
+An empty result does not mean nothing is failing. Error Reporting only sees exceptions that reach it — a service logging errors as plain text without a stack trace reports nothing here. Fall back to `gcp_logging_query` with `severity=ERROR`.
+
+### `gcp_list_projects`
+
+Lists the projects the agent may target. Returns the configured set, plus anything a live Resource Manager listing turns up when the credential has folder- or org-level visibility. A missing `resourcemanager.projects.list` permission is not an error — the configured set is still returned.
+
+### `gcp_refresh_discovery`
+
+Re-reads the project listing and re-runs GKE registration immediately, instead of waiting for the next interval — see [Staying current](#staying-current). Use it when a project or cluster was created, or access to one granted, during the conversation.
+
+It **grants nothing**. Both halves redo work the deployment already does on a timer, with the scope it already has: `GCP_ADDITIONAL_PROJECTS` still decides which discovered projects become queryable, and the GKE half does nothing unless `GCP_AUTO_REGISTER_GKE` is set. Widening either variable and then calling this changes nothing — the process reads its environment once, at start.
+
+It is also the slowest tool here. Both halves run before the agent replies, and on an estate of a dozen projects that is a minute or two of silence — enough to consume most of a chat turn. Worth it when you know something changed on the Google side; not worth it as a speculative first step.
+
+## Registering your GKE clusters automatically
+
+Anything `gcp_list_gke_clusters` reports under `unregistered_clusters` is visible but unreachable — the `kubernetes_*` tools cannot run against it. One command fixes every one of them:
+
+```bash
+opensre integrations add-gke-clusters --project '*'
+```
+
+This discovers the clusters, generates a kubeconfig for each, and registers it under the [Kubernetes integration](/kubernetes), so `kubernetes_list_pods` and friends can target it by name. Re-running is safe — clusters already registered are skipped.
+
+**Requires [`gke-gcloud-auth-plugin`](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl) on PATH.** The OpenSRE container image ships with it, so this applies to workstation installs only:
+
+```bash
+gcloud components install gke-gcloud-auth-plugin
+```
+
+The generated kubeconfig **stores no credentials**. It holds the cluster endpoint, the cluster's public CA certificate, and an instruction to ask the plugin for a token at connection time.
+
+The kubeconfig tells the plugin to use Application Default Credentials — the same credentials the GCP tools use — and forwards `GCP_IMPERSONATE_SERVICE_ACCOUNT` when it is set, so discovery and connection present one identity. On GKE with Workload Identity that needs no setup at all.
+
+<Warning>
+When `GCP_SERVICE_ACCOUNT_KEY` is a **file path**, the generated kubeconfig pins the plugin to that same file. When it is inline JSON there is nothing to pin, so set `GOOGLE_APPLICATION_CREDENTIALS` yourself — otherwise the plugin falls back to whatever ADC it finds. On a workstation that means running `gcloud auth application-default login`; `gcloud auth login` alone is not enough.
+</Warning>
+
+| Option | What it does |
+|---|---|
+| `--project` | One project, a comma-separated list, or `*`. Omit for the default project. |
+| `--cluster NAME` | Register only this cluster, out of everything `--project` finds. Repeatable. |
+| `--dry-run` | Report what would be registered; write nothing. |
+| `--tag KEY=VALUE` | Attach a tag to every cluster registered. Repeatable. |
+| `--overwrite` | Replace an existing instance whose name matches but points at another cluster. |
+| `--no-verify` | Skip the connectivity probe before saving. |
+
+Each cluster is registered under its own name and tagged `source=gke` plus its project and location. Two clusters sharing a name across projects both become `<cluster>-<project>`, so neither is ambiguous.
+
+If the endpoint and CA certificate come back empty, grant the principal `roles/container.clusterViewer` on top of `roles/container.viewer` — that is the permission that exposes them.
+
+<Note>
+Clusters with a **private endpoint only** are reachable from inside their VPC. Run the command from a host with VPC access, or use `--no-verify` to register them for later.
+</Note>
+
+## Registering at startup (containers)
+
+`add-gke-clusters` writes to the local store, which lives in the container filesystem. In a pod that store is gone at the next restart and invisible to a second replica, so a cluster you register by hand has to be re-registered after every rollout — and nothing tells you it lapsed until an investigation or chat message needs a `kubernetes_*` tool.
+
+Set `GCP_AUTO_REGISTER_GKE` and each process registers the clusters itself as it starts:
+
+```bash
+GCP_AUTO_REGISTER_GKE=true                      # every cluster in every configured project
+GCP_AUTO_REGISTER_GKE=prod-a,prod-b             # every cluster in these two projects
+GCP_AUTO_REGISTER_GKE=prod-a/checkout           # one named cluster, nothing else
+GCP_AUTO_REGISTER_GKE=prod-a/checkout,prod-b    # mix the two freely
+GCP_AUTO_REGISTER_GKE='*/checkout'              # that cluster, whichever project holds it
+```
+
+Reach for `project/cluster` when a project holds one cluster worth investigating and others that are not the agent's business — registering a cluster is what lets the agent read from it, and project granularity is all-or-nothing. Cluster names are matched exactly and are qualified by project on purpose: two clusters called `prod` in different projects is ordinary, so an unqualified name would quietly register both. Say `*/prod` when you mean that.
+
+Clusters that were found and then filtered out are listed in the startup log, so a mistyped name shows up as a name you can compare against rather than as nothing happening.
+
+It is off unless you set it, on purpose. The `kubernetes_*` tools are read-only — none of them can restart a deployment or delete a pod, and Secrets cannot be fetched — but read-only is not the same as harmless: `kubernetes_get_pod_logs` routinely surfaces credentials and personal data, and whatever it returns ends up in LLM context and in investigation reports. Chat surfaces do not receive the raw log dump when a turn ends without an answer — they get a short receipt naming the tool and the size instead — but an answer the agent *does* write can quote log lines, and that goes through as written. `kubernetes_list_configmaps` and `kubernetes_get_resource` were deliberately excluded from the Slack action surface for exactly this reason — they can expose ConfigMap contents that should have been Secrets. Widening cluster access should be a decision you made rather than something a boot sequence did for you. `true` covers exactly the projects in scope via `GCP_PROJECT_ID` / `GCP_ADDITIONAL_PROJECTS` / `GCP_INSTANCES` — no more.
+
+That bound is only as narrow as those variables, so the one combination to think twice about is `GCP_ADDITIONAL_PROJECTS=discover` with `GCP_AUTO_REGISTER_GKE=true`: together they do mean "register every cluster in every project this credential can see", including projects created later. If you want org-wide *log* access without org-wide *cluster* access, name the projects here instead of using `true`:
+
+```bash
+GCP_ADDITIONAL_PROJECTS=discover      # query logs and metrics estate-wide
+GCP_AUTO_REGISTER_GKE=acme-prod       # but only register clusters in one project
+```
+
+Registration runs in the background, so a slow GKE control plane cannot hold up startup or fail a readiness probe. For a few seconds after boot the clusters are not registered yet; a request arriving in that window sees the `kubernetes_*` tools as unavailable.
+
+Each cluster is probed before it is registered, and an unreachable one is skipped after five seconds rather than holding up the clusters behind it. Discovering far more clusters than get registered usually means the control planes restrict access by source address — see [when a cluster is discovered but not registered](/kubernetes#when-a-cluster-is-discovered-but-not-registered).
+
+The same background thread repeats the pass every 30 minutes, so a cluster built after boot registers itself — see [Staying current](#staying-current).
+
+<Warning>
+Setting `KUBERNETES_INSTANCES` turns startup registration off completely, and this is not a bug. The local store overrides the environment for the whole Kubernetes integration — not cluster by cluster — so writing even one discovered cluster to the store would make every cluster declared in `KUBERNETES_INSTANCES` stop being used. Pick one: `KUBERNETES_INSTANCES` for an explicit list you control, or `GCP_AUTO_REGISTER_GKE` for whatever is out there. The same applies to running `add-gke-clusters` by hand — it warns you before it does it.
+</Warning>
+
+Requirements are the same as for the command: `gke-gcloud-auth-plugin` on PATH (already in the OpenSRE image) and a credential that can reach the clusters. If the plugin is missing, startup registration logs a warning and does nothing rather than storing clusters that could never connect.
+
+Prefer pinning the exact set? Declare the clusters in `KUBERNETES_INSTANCES` — see [Kubernetes](/kubernetes). `add-gke-clusters --dry-run` prints the names and contexts you need.
+
+## Staying current
+
+An estate changes while the pod is running. Both discovery paths repeat, so a project created this morning or a cluster built an hour ago is reachable without a restart.
+
+| Variable | Default | Repeats |
+| --- | --- | --- |
+| `GCP_PROJECT_REFRESH_INTERVAL` | `1800` | Re-reads the project listing. Only does anything with `GCP_ADDITIONAL_PROJECTS=discover` — a named list has nothing to re-read. |
+| `GCP_GKE_REFRESH_INTERVAL` | `1800` | Runs another GKE registration pass. Only does anything with `GCP_AUTO_REGISTER_GKE` set. |
+
+Both take seconds. `0` — or `off`, `no`, `false`, `never` — means run once at startup and stop. Anything under **60 seconds is raised to 60**, with a warning naming the variable: the project listing is read while assembling the arguments of every GCP tool call, so a sub-minute interval puts a Resource Manager round trip in front of each one, which is the cost the cache exists to remove. A value that is neither a number nor an off spelling logs a warning and falls back to the default — a typo will not silently switch refreshing off.
+
+Two things behave differently to how a timer usually reads:
+
+- **The project interval is a ceiling on staleness, not a schedule.** Nothing polls in the background. The listing is re-read on the first GCP tool call *after* the interval lapses, so an idle deployment does no work and a busy one is never more than one interval behind.
+- **GKE registration is on a real timer**, on the same background thread that does the startup pass. It is additive: a pass registers clusters it has not seen and skips the rest. Clusters deleted in GCP keep their registration until you remove it — dropping them automatically would also drop a cluster that was merely unreachable while the pass ran.
+
+**A refresh can only widen.** If a re-read fails — an expired credential, a Resource Manager outage — the previous listing is kept and a warning is logged, rather than shrinking an allow-list an investigation is already using. The next attempt happens one interval later. If the very first listing fails, you get the projects you configured explicitly and nothing more.
+
+Neither interval affects **which** projects become queryable, only how often the question is asked. `GCP_ADDITIONAL_PROJECTS` still decides that, and changing it needs a restart.
+
+Not willing to wait for the interval? The agent can call `gcp_refresh_discovery` to do both halves now — say "re-check which projects you can see" and it will. Expect it to take a minute or two on a large estate; see [`gcp_refresh_discovery`](#gcp-refresh-discovery).
+
+## Verify
+
+```bash
+opensre integrations verify gcp
+```
+
+Expected output:
+
+```
+SERVICE │ SOURCE    │ STATUS   │ DETAIL
+gcp     │ local env │ ✓ passed │ Connected to GCP project acme-prod (acme-prod) via ADC; scope covers 4 projects.
+```
+
+This makes a real API call, so it catches the case that a shape check cannot: credentials that resolve to the *wrong* principal.
+
+With `GCP_ADDITIONAL_PROJECTS=discover` the count is what the credential actually reads, not what you wrote down — `scope covers 12 discovered projects`. If the listing itself failed you get `1 configured project; project discovery unavailable (…)` instead, which still passes: the tools work, on the projects you named explicitly.
+
+## Example queries
+
+GKE container errors in a namespace:
+
+```
+resource.type="k8s_container" AND resource.labels.namespace_name="payments" AND severity>=ERROR
+```
+
+Everything touching one request, across every configured project (`project="*"`):
+
+```
+trace="projects/acme-prod/traces/0123456789abcdef0123456789abcdef"
+```
+
+Who changed an IAM policy before the incident — use `gcp_audit_log_query` with `method="SetIamPolicy"` rather than writing this by hand, but the equivalent raw filter is:
+
+```
+logName:"cloudaudit.googleapis.com%2Factivity" AND protoPayload.methodName="SetIamPolicy"
+```
+
+Container memory for a workload:
+
+```
+metric.type="kubernetes.io/container/memory/used_bytes" AND resource.labels.namespace_name="payments"
+```
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **403 `IAM_PERMISSION_DENIED`** | The credential resolved but lacks the role. Run `opensre integrations verify gcp` to see which principal is actually in use — on GKE this is usually the node's `default` compute identity, meaning the Workload Identity annotation is missing or the pod predates it. |
+| **`unknown GCP project(s): …`** | The project is not in `GCP_PROJECT_ID`, `GCP_ADDITIONAL_PROJECTS`, or `GCP_INSTANCES`. Add it — or set `GCP_ADDITIONAL_PROJECTS=discover` to allow everything the credential can see — and restart. |
+| **`GCP project discovery failed …` in the log** | `GCP_ADDITIONAL_PROJECTS=discover` is set but the credential lacks `resourcemanager.projects.list`. Grant `roles/browser` at the folder or org level, or list the projects by id instead. Queries still work against the projects you named. |
+| **`GCP project re-discovery failed … keeping the N project(s) found previously`** | A refresh could not reach Resource Manager, so the last good listing is still in use — nothing has been lost. Usually a rotated or expired credential. It retries at the next interval; `gcp_refresh_discovery` retries now. |
+| **A project or cluster created just now is not visible** | Discovery repeats on an interval — see [Staying current](#staying-current). Ask the agent to refresh (`gcp_refresh_discovery`) rather than restarting the pod. If it is still missing afterwards, the project is visible but not allowed: it needs to be in `GCP_ADDITIONAL_PROJECTS`, which does take a restart. |
+| **`The aligner cannot be applied to metrics with kind CUMULATIVE`** | Only happens with an explicit `aligner`. Drop it and let OpenSRE pick, or use `ALIGN_RATE`. |
+| **Empty log results** | Cloud Logging filters are exact-match by default. Confirm the same filter returns rows in **Logs Explorer** over the same window, and remember the window comes from `hours`, not from a `timestamp` clause in the filter. |
+| **Nothing from `gcp_list_projects` beyond what you configured** | The credential lacks `resourcemanager.projects.list`. Harmless — configured projects still work. |
+| **`gcp_audit_log_query` returns nothing for `data_access`** | Data Access audit logs are disabled by default. Enable them per service in **IAM & Admin → Audit Logs**, or query `activity` instead. |
+| **A GKE cluster is listed but has no `registered_as`** | No kubeconfig is registered for it, so the `kubernetes_*` tools cannot reach it. Run `opensre integrations add-gke-clusters --project '*'`, or investigate it through Cloud Logging and Monitoring. |
+| **`add-gke-clusters` says the plugin is not on PATH** | Install it with `gcloud components install gke-gcloud-auth-plugin`. Without it the generated kubeconfig cannot obtain a token, so the command refuses to write one. The container image already includes the plugin, so seeing this in a pod means the image predates that change. |
+| **`add-gke-clusters` registers a cluster but `kubernetes_*` calls fail to authenticate** | The auth plugin is resolving different credentials than OpenSRE. Point `GOOGLE_APPLICATION_CREDENTIALS` at the same service-account key, or run `gcloud auth application-default login`. |
+| **403 `pods is forbidden: User "system:anonymous"`** | The plugin returned no token, so the request went out unauthenticated. Application Default Credentials are missing where OpenSRE runs — check `gcloud auth application-default login` on a workstation, or that the pod's Kubernetes service account is annotated for Workload Identity. It is not an RBAC problem, despite the 403. |
+| **`add-gke-clusters` reports "no endpoint or CA certificate"** | The principal can list clusters but not read their master config. Add `roles/container.clusterViewer`. |
+| **A Cloud Run deploy "succeeded" but nothing changed** | The new revision never became ready, so the old one still serves every request. `gcp_list_cloud_run_services` flags this as `rollout_pending`; the reason is in `failing_conditions`. |
+| **A Cloud SQL instance is `RUNNABLE` but refuses writes** | Either it is out of disk — check `disk_pressure` and `out_of_disk_state` — or you are connected to a read replica, in which case `accepts_writes` is `false` and `replica_of` names the primary. |
+| **Every subscription reports `backlog_unknown`** | The principal has `roles/pubsub.viewer` but not `roles/monitoring.viewer`. The backlog metrics live in Cloud Monitoring, not in the Pub/Sub API. |
+| **A Pub/Sub backlog never drains** | Check `dead_letter_topic`. An empty value means a poison message is retried forever. For a `push` subscription, the failing consumer is the endpoint in `push_endpoint`, not a worker you can inspect. |
+| **`gcp_error_reporting_top_errors` returns nothing during a real incident** | Error Reporting only clusters exceptions that reach it. A service logging errors as plain text without a stack trace never appears. Use `gcp_logging_query` with `severity=ERROR`. |
+| **`partial_errors` on a multi-project listing** | One project denied the call while others answered; the results you got are real. The message names the project and the missing permission — usually one of the per-service viewer roles in [Prerequisites](#prerequisites). A project with the API switched off is not listed here — it is skipped, since it can hold nothing to find. |
+| **A project you expected results from is missing, with no error** | Its API is off, so it was skipped. Enable the API from the table in [Prerequisites](#prerequisites) — the role alone is not enough. |
+| **`unreachable_locations` / `unreachable_scopes` in a result** | Google could not reach a zone, so the listing is incomplete. Re-run; if it persists, check the [GCP status dashboard](https://status.cloud.google.com/). |
+| **An alert names a project and nothing there matches** | The project is the monitoring scope, not where the workload runs. Call `gcp_metrics_scope` on it, or `gcp_alerting` with `action="alerts"` and read `runtime_project_ids`. |
+| **`gcp_metrics_scope` returns numbers with blank `project_id`** | Read the `note` first — it distinguishes the causes. If `project_ids_resolved` is `false`, the credential lacks `resourcemanager.projects.list`; grant `roles/browser` at the folder or org level. If the listing was capped instead, that is a size limit and the fix is to name the projects you need, not to re-grant anything. If only *some* rows are blank they are listed in `unresolved_project_numbers`, and the usual cause is a project that has since been deleted. The numbers are correct in every case. |
+| **`gcp_alerting` reports `available: false`** | Cloud Monitoring did not serve that read for the project — either the API is off there, or the credential does not reach it. The `error` names which, and points at the sibling action that is still readable: `alerts` and `slos` fall back to `policies`, and `policies` falls back to `alerts`. |
+| **`gcp_alerting` finds a policy but no alert** | Alert policies are configuration; an enabled policy with nothing open is normal. Check `enabled` and `invalid_reason` — a disabled or invalid policy cannot fire at all. |
+
+## Security best practices
+
+- Grant only the viewer roles you need. `roles/logging.viewer` and `roles/monitoring.viewer` are the baseline; everything else is per-service and listed in [Prerequisites](#prerequisites). The integration is read-only and never writes to your projects.
+- No tool reads your data. Cloud SQL reports the instance, never its rows; Pub/Sub reports queue depth, never message payloads. The one place application content can surface is the representative stack trace in `gcp_error_reporting_top_errors`, which carries whatever your exception messages carry.
+- `gcp_alerting` drops the two places Cloud Monitoring puts a responder's identity: the "last modified by" email on Google's `MutationRecord`, and notification channels, which are returned as a count only. Channel configuration holds responder email addresses, phone numbers and webhook URLs; OpenSRE does not read `notificationChannels` and no tool exposes them. What it does return is your own free text — policy and SLO display names, documentation subjects, and the `userLabels` and log labels you set. If you put a name or an email in a policy label, it comes back.
+- Kubeconfigs written by `add-gke-clusters` contain no secret — endpoint, public CA certificate, and a delegation to `gke-gcloud-auth-plugin`. Tokens are minted per connection and never stored.
+- Prefer **Workload Identity** or **impersonation** over service-account keys — neither creates a long-lived credential to rotate.
+- If you must use a key, mount it as a file and point `GCP_SERVICE_ACCOUNT_KEY` at the path rather than putting the JSON in an env var.
+- Scope the viewer role at the project level unless you genuinely want the whole folder readable; `GCP_ADDITIONAL_PROJECTS` decides what OpenSRE queries, but IAM decides what it *could*.

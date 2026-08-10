@@ -25,6 +25,15 @@ from tools.interactive_shell.shared.investigation_launch import (
 _SAMPLE_ALERT_TEMPLATES = ("generic",)
 
 
+def _sample_alert_available_from_sources(sources: Any) -> bool:
+    """Check if sample alert tool should be available.
+
+    Requires investigation capability only. Gateway context is now supported
+    via detached investigations.
+    """
+    return capability_available_from_sources(sources, "investigation")
+
+
 def run_sample_alert(
     template_name: str,
     session: InvestigationSession,
@@ -122,10 +131,7 @@ alert_sample_tool = RegisteredTool(
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_sample_alert_action,
-    is_available=lambda sources: capability_available_from_sources(
-        sources,
-        "investigation",
-    ),
+    is_available=_sample_alert_available_from_sources,
 )
 
 

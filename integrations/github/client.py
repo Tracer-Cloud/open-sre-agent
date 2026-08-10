@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
 from urllib import error, parse, request
 
 from config.constants import GH_TOKEN_ENV, GITHUB_MCP_AUTH_TOKEN_ENV, GITHUB_TOKEN_ENV
+
+logger = logging.getLogger(__name__)
 
 JsonPayload = dict[str, Any] | list[Any]
 
@@ -138,6 +141,17 @@ class GitHubRestClient:
         url: str | None = self._url(path, params=params)
         items: list[dict[str, Any]] = []
         while url:
+            # Same-origin check for server-supplied pagination URLs
+            parsed_url = parse.urlparse(url)
+            parsed_base = parse.urlparse(self._base_url)
+            if parsed_url.scheme != parsed_base.scheme or parsed_url.netloc != parsed_base.netloc:
+                logger.warning(
+                    "Cross-origin GitHub pagination URL, stopping: %s (expected %s)",
+                    url,
+                    self._base_url,
+                )
+                break
+
             req = request.Request(
                 url,
                 method="GET",
@@ -178,6 +192,13 @@ class GitHubRestClient:
 
     def _url(self, path: str, *, params: dict[str, Any] | None = None) -> str:
         if path.startswith("http://") or path.startswith("https://"):
+            # Same-origin check for absolute URLs (pagination Link headers)
+            parsed_path = parse.urlparse(path)
+            parsed_base = parse.urlparse(self._base_url)
+            if parsed_path.scheme != parsed_base.scheme or parsed_path.netloc != parsed_base.netloc:
+                raise GitHubApiError(
+                    f"Cross-origin GitHub API request rejected: {path} (expected {self._base_url})"
+                )
             base = path
         else:
             base = f"{self._base_url}/{path.lstrip('/')}"

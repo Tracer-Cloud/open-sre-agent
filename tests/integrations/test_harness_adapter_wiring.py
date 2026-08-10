@@ -34,6 +34,7 @@ def test_gather_prompt_fragments_cover_every_registered_vendor() -> None:
 
     # Assert: one distinctive marker per vendor that owns a gather fragment.
     assert "github" in fragments.lower()
+    assert "kubernetes" in fragments.lower()
     assert "sentry" in fragments.lower()
     assert "slack" in fragments.lower()
 
@@ -45,6 +46,7 @@ def test_action_prompt_fragments_cover_every_registered_vendor() -> None:
     # Assert
     assert "slack_read_messages" in fragments
     assert "github" in fragments.lower()
+    assert "kubernetes" in fragments.lower()
     assert "telegram" in fragments.lower()
     assert "rocketchat" in fragments.lower()
 

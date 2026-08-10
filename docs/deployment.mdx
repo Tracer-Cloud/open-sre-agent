@@ -89,6 +89,43 @@ curl -X POST http://127.0.0.1:8000/investigate \
   -d '{"raw_alert":{"alert_name":"test"}}'
 ```
 
+Once the token is set, **loopback callers must send it too** — there is no
+local exemption.
+
+## Receiving alerts on Kubernetes
+
+To let a webhook sender outside the cluster reach `POST /alerts`, the Helm
+chart renders inbound routing for whichever mechanism your cluster runs. Set
+`ingress.kind` to `ingress` (a `networking.k8s.io/v1` Ingress), `istio` (a
+`VirtualService`, plus a `Gateway` if you want a dedicated one), or
+`gateway-api` (an `HTTPRoute`). It is `none` by default.
+
+```yaml
+ingress:
+  kind: istio
+  host: opensre.example.com
+  istio:
+    gateways: [istio-ingress/default]   # a Gateway that already exists
+```
+
+Three things to get right:
+
+- **Set `OPENSRE_ALERT_LISTENER_TOKEN` in the Secret.** Without it the alert
+  routes answer every caller through the ingress with `403`. The chart refuses
+  to render an ingress alongside a chart-managed Secret that has no token.
+- **Leave `ingress.paths` at its default `["/alerts"]`.** It is an allowlist.
+  `/health`, `/healthz`, `/readyz` and `/ok` are not token-gated, so routing
+  `/` publishes cluster health to anyone who resolves the hostname. Add
+  `/investigate` only deliberately — each call runs a full investigation.
+- **Check that the Gateway's certificate covers your hostname.** A Gateway
+  matching `*.example.com` may still hold a certificate with a fixed SAN list.
+  Routing is then correct while HTTPS fails, and `:80` works — so it does not
+  look like a routing bug. See the chart README for how to check.
+
+Point the sender at `https://<host>/alerts` with an
+`Authorization: Bearer <token>` header. Full value reference:
+[`deploy/helm/opensre/README.md`](https://github.com/Tracer-Cloud/opensre/blob/main/deploy/helm/opensre/README.md).
+
 ## Railway deployment
 
 Railway is still supported as a hosted runtime option.

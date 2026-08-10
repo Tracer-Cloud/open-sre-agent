@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import io
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -177,12 +177,21 @@ class FakeReasoningClient:
 
 
 class RecordingGatewaySink:
-    """Minimal gateway sink that records stream/finalize output for assertions."""
+    """Minimal gateway sink that records stream/finalize output for assertions.
+
+    Declares the redaction boundary because every real gateway sink does. Without
+    it the harness would compare the CLI against a sink no transport resembles,
+    and parity could read green while the two surfaces genuinely diverged.
+    """
+
+    redacts_raw_tool_output = True
 
     def __init__(self) -> None:
         self.lines: list[str] = []
         self.streamed: list[str] = []
+        self.finished: list[str] = []
         self.finalized: str | None = None
+        self.finalized_failed: bool = False
 
     def print(self, message: str = "") -> None:
         if message:
@@ -198,7 +207,7 @@ class RecordingGatewaySink:
         self,
         *,
         label: str,
-        chunks: Iterator[str],
+        chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
         defer_want_me_to_closer: bool = False,
     ) -> str:
@@ -207,14 +216,31 @@ class RecordingGatewaySink:
         self.streamed.append(text)
         return text
 
-    def finish_streamed_response(self, text: str) -> None:
-        self.finalize(text)
+    def set_tool_status(self, text: str, *, call_id: str | None = None) -> None:
+        _ = call_id
+        self.lines.append(f"[tool] {text}")
 
-    def finalize(self, text: str) -> None:
+    def end_tool_status(self, *, failed: bool, call_id: str | None = None) -> None:
+        _ = call_id
+        self.lines.append(f"[tool-end] failed={failed}")
+
+    def leave_tool_status_open(
+        self, *, call_id: str | None = None, title: str | None = None
+    ) -> None:
+        _ = (call_id, title)
+        self.lines.append("[tool-left-open]")
+
+    def finish_streamed_response(self, text: str) -> None:
+        self.finished.append(text)
+
+    def finalize(self, text: str, *, failed: bool = False) -> None:
         self.finalized = text
+        self.finalized_failed = failed
 
     @property
     def outbound_text(self) -> str:
+        if self.finished:
+            return self.finished[-1].strip()
         if self.finalized:
             return self.finalized.strip()
         if self.streamed:

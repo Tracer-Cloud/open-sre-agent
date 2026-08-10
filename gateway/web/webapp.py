@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from config.config import LLMSettings, get_environment
+from config.constants.agent_identity import agent_name
 from config.platform_bootstrap import ensure_project_platform_package
 from config.version import get_opensre_version
 from core.domain.alerts.inbox import (
@@ -36,8 +37,11 @@ ensure_project_platform_package()
 
 from bootstrap.process import WEB_PROFILE, configure_process  # noqa: E402
 from core.agent_harness import AgentSession  # noqa: E402
+from gateway.core.config.logging_config import configure_logging  # noqa: E402
 from gateway.core.runtime.readiness import is_gateway_ready  # noqa: E402
+from gateway.web.access_log import install_probe_access_log_filter  # noqa: E402
 from gateway.web.investigations import router as investigations_router  # noqa: E402
+from integrations.gcp.gke import start_gke_autoregistration  # noqa: E402
 from platform.observability.errors.sentry import capture_exception  # noqa: E402
 from tools.investigation.capability import resolve_investigation_context  # noqa: E402
 
@@ -45,7 +49,29 @@ from tools.investigation.capability import resolve_investigation_context  # noqa
 # Shared boot order lives in bootstrap.process (env → sentry → adapters).
 configure_process(WEB_PROFILE)
 
+# Kubernetes probes every few seconds would otherwise bury the access log in
+# identical 200s. Failing probes still log.
+install_probe_access_log_filter()
+
+# uvicorn attaches handlers to the `uvicorn*` loggers only and leaves the root
+# logger bare, so every application log line below WARNING is swallowed by
+# `logging.lastResort` — the web pod's own output was four uvicorn banner lines
+# and nothing else. The gateway process has always called this; the web process
+# never did, which is why a successful GKE registration here left no trace while
+# the identical code logged normally in the gateway. Idempotent: it no-ops when
+# the root logger already has a handler, so the in-process case
+# (`serve_webapp_in_thread`, where the gateway configured logging first) keeps
+# the gateway's formatting rather than getting a second one.
+configure_logging()
+
 logger = logging.getLogger(__name__)
+
+# Opt-in and backgrounded (off unless GCP_AUTO_REGISTER_GKE is set). The web
+# process runs investigations too, so it needs the same registered clusters the
+# gateway has — and it gets its own container filesystem, so a cluster added by
+# hand in the gateway pod is invisible here. Backgrounded because discovery is an
+# unbounded remote call and the readiness probe starts at 10s.
+start_gke_autoregistration(logger)
 
 # Cap on POST body size accepted from any caller (authed or not). Realistic
 # alert payloads top out around 50 KB, so 1 MiB is ~20× headroom.
@@ -217,7 +243,7 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     # Same process gate as chat / scheduler — busy-drop like GatewayTurnHandler.
     if not gate.try_acquire():
         return JSONResponse(
-            {"error": "OpenSRE is at capacity. Please try again shortly."},
+            {"error": f"{agent_name()} is at capacity. Please try again shortly."},
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 

@@ -130,6 +130,22 @@ def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
     )
 
 
+def _answered_turn_result(text: str) -> TurnResult:
+    """A turn that produced text but did not stream it — the common action path."""
+    return TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text=text,
+        ),
+        assistant_response_text=text,
+    )
+
+
 def test_turn_handler_continues_outer_loop_for_active_session_goal(
     monkeypatch: Any,
 ) -> None:
@@ -196,7 +212,21 @@ def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> 
     sink = MagicMock()
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("/", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("test"))
-    sink.finalize.assert_called_once_with("I didn't have anything to add for that.")
+    sink.finalize.assert_called_once_with("I didn't have anything to add for that.", failed=True)
+
+
+def test_an_unstreamed_answer_is_not_marked_failed(monkeypatch: Any) -> None:
+    """``answered`` means "already streamed", not "succeeded".
+
+    An ordinary action turn returns its answer to be finalized here, so keying
+    the failure flag off ``answered`` alone paints a red mark on the majority of
+    successful tool turns — worse than the missing mark it set out to fix.
+    """
+    _patch_headless_agent(monkeypatch, _answered_turn_result("Hawaii: +25C"))
+    sink = MagicMock()
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("weather", SessionCore(storage=InMemorySessionStorage()), sink, logging.getLogger("t"))
+    sink.finalize.assert_called_once_with("Hawaii: +25C", failed=False)
 
 
 def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) -> None:
@@ -261,8 +291,8 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     """Sinks without tool_hooks (Telegram today) run unhooked — documented host gap."""
 
     class _BareSink:
-        def finalize(self, text: str) -> None:
-            self.finalized = text
+        def finalize(self, text: str, *, failed: bool = False) -> None:
+            self.finalized = (text, failed)
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
@@ -285,9 +315,13 @@ def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any
         logging.getLogger("test"),
     )
 
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
+    # ``investigation`` is conditional rather than always-off: it is offered only
+    # where a notifier can deliver the report back. Nothing is bound here, so it
+    # stays disabled. The enabled side is pinned in
+    # ``gateway/tests/runtime/investigations/test_gateway_investigation_ports.py``.
+    assert session.available_capabilities["investigation"] == ()
 
 
 def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None:
@@ -311,10 +345,12 @@ def test_turn_handler_preserves_supported_capabilities(monkeypatch: Any) -> None
         logging.getLogger("test.gateway.capabilities"),
     )
 
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
 
+    # Overwritten, not preserved: an unroutable turn must not keep an investigation
+    # surface a previous caller left on the session.
+    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["shell_commands"] == ("shell",)
     assert session.available_capabilities["custom_gateway_capability"] == ("enabled",)
 
@@ -330,9 +366,9 @@ def test_turn_handler_capability_gating_is_stable_across_turns(monkeypatch: Any)
     handler("first turn", session, RecordingGatewaySink(), logger)
     handler("second turn", session, RecordingGatewaySink(), logger)
 
-    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["llm_provider"] == ()
     assert session.available_capabilities["task_cancel"] == ()
+    assert session.available_capabilities["investigation"] == ()
     assert session.available_capabilities["shell_commands"] == ("shell",)
 
 
@@ -394,3 +430,38 @@ def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any
     # Assert: the turn ran inside the lock. Calling agent_for directly would
     # leave this empty, since session_agent would never be entered.
     assert events == ["lock-acquired", "lock-released"]
+
+
+def test_the_gateway_finalizes_the_external_text_not_the_raw_dump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pins the gateway reads the wrong property."""
+    sink = RecordingGatewaySink()
+
+    turn_result = TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            response_text="RAW-DUMP-BODY",
+            external_response_text="<receipt>",
+        ),
+        assistant_response_text="",  # No assistant response
+        llm_run=None,
+    )
+
+    _patch_headless_agent(monkeypatch, turn_result)
+
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler(
+        "test message",
+        SessionCore(storage=InMemorySessionStorage()),
+        sink,
+        logging.getLogger("test"),
+    )
+
+    assert sink.finalized == "<receipt>"
+    assert "RAW-DUMP-BODY" not in sink.finalized

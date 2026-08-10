@@ -44,24 +44,205 @@ KUBECONFIG_NAMESPACE=production
 opensre integrations verify kubernetes
 ```
 
-A successful verification lists the namespaces visible to the configured credentials.
+A successful verification confirms the configured namespace is readable.
 
 ## Available tools
 
-| Tool | What it does |
-|---|---|
-| `kubernetes_list_pods` | List pods in a namespace with phase, readiness, and restart counts |
-| `kubernetes_get_pod_logs` | Fetch recent log lines from a pod container |
-| `kubernetes_list_deployments` | List deployments with desired/ready/available replica counts |
-| `kubernetes_get_events` | List cluster events — crash loops, OOM kills, scheduling failures |
-| `kubernetes_describe_pod` | Fetch full spec, status, and container states for a single pod |
-| `kubernetes_list_nodes` | List cluster nodes with conditions, capacity, and allocatable resources |
-| `kubernetes_list_services` | List services with their type, clusterIP, ports, and selector |
-| `kubernetes_list_statefulsets` | List StatefulSets with desired/ready/current/updated replica counts |
-| `kubernetes_list_daemonsets` | List DaemonSets with desired/current/ready/available counts |
-| `kubernetes_list_ingresses` | List Ingress resources with routing rules, host→service path mappings, and TLS config |
-| `kubernetes_list_configmaps` | List ConfigMaps with their key-value data |
-| `kubernetes_get_resource` | Fetch a single named resource by type and name (pods, deployments, statefulsets, daemonsets, services, ingresses, configmaps, replicasets, pvcs, nodes) |
+| Tool | What it does | Chat |
+|---|---|---|
+| `kubernetes_search_fleet` | Search for workloads and pods by name across all clusters in your fleet | ✓ |
+| `kubernetes_list_workloads` | List every workload kind in a namespace: Deployments, StatefulSets, DaemonSets, CronJobs, and Argo Rollouts | ✓ |
+| `kubernetes_list_pods` | List pods in a namespace with phase, readiness, and restart counts | ✓ |
+| `kubernetes_get_pod_logs` | Fetch recent log lines from a pod container (capped at 1000 lines/60KB) | ✓ |
+| `kubernetes_list_deployments` | List deployments with desired/ready/available replica counts |  |
+| `kubernetes_get_events` | List cluster events — crash loops, OOM kills, scheduling failures | ✓ |
+| `kubernetes_describe_pod` | Fetch full spec, status, and container states for a single pod | ✓ |
+| `kubernetes_list_namespaces` | List namespaces in the cluster | ✓ |
+| `kubernetes_list_nodes` | List cluster nodes with conditions, capacity, and allocatable resources | ✓ |
+| `kubernetes_list_services` | List services with their type, clusterIP, ports, and selector | ✓ |
+| `kubernetes_list_statefulsets` | List StatefulSets with desired/ready/current/updated replica counts |  |
+| `kubernetes_list_daemonsets` | List DaemonSets with desired/current/ready/available counts |  |
+| `kubernetes_list_rollouts` | List Argo Rollouts with strategy, phase, step, pause state, and revisions |  |
+| `kubernetes_list_ingresses` | List Ingress resources with routing rules, host→service path mappings, and TLS config |  |
+| `kubernetes_list_configmaps` | List ConfigMaps with their key-value data |  |
+| `kubernetes_get_resource` | Fetch a single named resource by type and name (pods, deployments, statefulsets, daemonsets, services, ingresses, configmaps, replicasets, pvcs, nodes, rollouts) |  |
+| `kubernetes_list_clusters` | List the registered clusters you can target by name (for multi-cluster setups) | ✓ |
+
+## Targeting multiple clusters
+
+You can register more than one cluster — for example a separate GKE cluster per
+GCP project (`gke-dev`, `gke-prod`) — and let an investigation or chat turn move between them.
+Each cluster is one named entry with its own kubeconfig context.
+
+Add clusters with the CLI. The connection is verified before it is saved:
+
+```bash
+# Interactive — prompts for name, kubeconfig path, context, and namespace
+opensre integrations add-cluster
+
+# Non-interactive — pass --name to skip the prompts (scripts / CI)
+opensre integrations add-cluster \
+  --name gke-prod \
+  --kubeconfig-path ~/.kube/config \
+  --context gke_my-prod-project_us-central1_prod \
+  --namespace default \
+  --tag env=prod
+
+# Review and remove registered clusters
+opensre integrations list-clusters
+opensre integrations remove-cluster gke-prod
+```
+
+`--kubeconfig` accepts inline YAML instead of `--kubeconfig-path`; `--tag` is
+repeatable; `--no-verify` skips the connectivity probe. Re-running
+`add-cluster` with an existing name updates that cluster in place.
+
+### Declaring clusters via env (containers / GitOps)
+
+`add-cluster` writes to the local store (`~/.opensre/integrations.json`), which
+is ephemeral inside a container and not shared across replicas. For a
+containerized or GitOps deployment, declare every cluster in one env var
+instead — `KUBERNETES_INSTANCES`, a JSON array read by each pod at startup:
+
+```bash
+KUBERNETES_INSTANCES='[
+  {"name":"gke-dev","tags":{"env":"dev"},"credentials":{"kubeconfig_path":"/etc/kube/dev","context":"gke_dev","namespace":"default"}},
+  {"name":"gke-prod","tags":{"env":"prod"},"credentials":{"kubeconfig":"<inline kubeconfig YAML>","context":"gke_prod","namespace":"default"}}
+]'
+```
+
+Each entry takes `name`, optional `tags`, and `credentials` (`kubeconfig` inline
+YAML **or** `kubeconfig_path`, plus optional `context`/`namespace`). When set it
+supersedes the single-cluster `KUBECONFIG*` vars; leave it unset to use those.
+It contains credentials, so treat it as a secret (in the Helm chart, put it in
+the Secret).
+
+A single cluster still works with no changes — `opensre integrations setup
+kubernetes` and the environment variables above register the default cluster;
+`add-cluster` (or `KUBERNETES_INSTANCES`) registers additional ones on top of it.
+
+Every `kubernetes_*` tool takes an optional `cluster` argument. Use `kubernetes_list_clusters` to see valid names. Pass this whenever the request names or implies a specific cluster or environment. Omitting it targets the default cluster only, which may not be the one asked about. On the tools that check whether a workload exists — `kubernetes_list_pods`, `kubernetes_list_deployments`, `kubernetes_list_statefulsets`, `kubernetes_list_daemonsets`, `kubernetes_list_workloads`, `kubernetes_list_rollouts` — an empty result from an unscoped call adds a `note` pointing at `kubernetes_search_fleet`, because a zero on one cluster is never on its own evidence the workload is absent fleet-wide. `kubernetes_get_resource` and `kubernetes_describe_pod` get the same pointer appended to their error when a by-name lookup 404s. Tools where an empty result is a legitimate answer on its own — `kubernetes_list_services`, `kubernetes_list_ingresses`, `kubernetes_list_nodes`, `kubernetes_list_configmaps`, `kubernetes_get_events` — do not carry this caveat:
+
+```
+> Compare pod restart counts between the dev and prod clusters
+```
+
+OpenSRE calls `kubernetes_list_clusters` to see `gke-dev` and `gke-prod`, then
+calls the other tools with `cluster="gke-dev"` and `cluster="gke-prod"` to reach
+each one.
+
+### Finding a workload when you do not know the cluster
+
+`kubernetes_search_fleet` matches a name substring against every registered
+cluster at once. Ask for it by describing the problem, not the tool. This is
+also the tool named in the `note` a single-cluster lookup adds when it comes
+back empty:
+
+```
+> Which cluster is payments-api running in?
+```
+
+It looks at workload owners first — Deployments, StatefulSets, DaemonSets,
+CronJobs and Argo Rollouts. Only if nothing matches anywhere does it fall back
+to listing individual pods, which is the expensive path. That fallback is what
+lets you paste a full pod name straight from an alert, replicaset hash and all:
+no owner is named `payments-api-6c8f9d7b4-2xqlp`, but the pod is.
+
+Searching every namespace is the point, so leave the namespace out unless the
+request names one. Naming a cluster narrows the search to it.
+
+**A negative result is only trustworthy when `clusters_failed` is empty and
+`partial` is false.** Clusters are searched in parallel under a 90-second
+budget; any that fail, or that the deadline cuts off, are listed in
+`clusters_failed` with a reason rather than being dropped. `partial` is also set
+when a server truncated a listing, in which case `truncated_kinds` names the
+kinds affected. A cluster that simply does not run Argo Rollouts is *not* a
+failure — it appears in `unavailable_kinds`, and "there are no Rollouts here"
+is a complete answer.
+
+Each match is just `cluster`, `namespace`, `kind`, `name`, `ready`, `desired`
+and `phase` — enough to point the next tool at the right place, and small
+enough that a 17-cluster fleet fits in one answer.
+
+### Namespace targeting
+
+For every tool except `kubernetes_search_fleet`, the effective namespace is the
+namespace in your request if you name one; otherwise the cluster's configured
+default namespace; otherwise `default`. Use `kubernetes_list_namespaces` to
+discover the options when the cluster is unfamiliar. Fleet search is the
+exception: omitting the namespace there searches every namespace.
+
+### Argo Rollouts
+
+On clusters running Argo Rollouts, the real workload may be a Rollout rather than a Deployment. `kubernetes_list_deployments` returns nothing for such services, while `kubernetes_list_workloads` covers every workload kind and reports which kinds it could not read.
+
+On clusters without Argo, Rollouts are reported as unavailable while everything else works normally.
+
+### Registering every GKE cluster at once
+
+If the [Google Cloud integration](/gcp) is configured, you do not have to add GKE
+clusters by hand. One command discovers them and registers each one:
+
+```bash
+opensre integrations add-gke-clusters --project '*'
+```
+
+Add `--dry-run` to see what it would do first. Re-running is safe — clusters
+already registered are skipped. It needs `gke-gcloud-auth-plugin` on PATH — the
+container image ships with it, so on a workstation install it with
+`gcloud components install gke-gcloud-auth-plugin`. The kubeconfigs it writes
+hold no credentials, only an instruction to ask that plugin for a token — using
+the same Application Default Credentials the GCP tools use. Full detail,
+including which identity the plugin authenticates as, is in
+[Google Cloud](/gcp#registering-your-gke-clusters-automatically).
+
+In a container the store is ephemeral, so a cluster registered this way is gone
+at the next restart. Set `GCP_AUTO_REGISTER_GKE=true` and every process registers
+the clusters as it starts instead, and again every 30 minutes so a cluster built
+later is picked up too — see
+[Registering at startup](/gcp#registering-at-startup-containers). It is off by
+default, and it stands down entirely when `KUBERNETES_INSTANCES` is set, because
+the store overrides the environment for the whole integration and would
+otherwise shadow the clusters you declared there.
+
+### When a cluster is discovered but not registered
+
+Every cluster is probed before it is stored, so one that answers nothing is
+skipped rather than registered broken. The common cause is network, not
+credentials: a control plane that restricts access by source address — GKE
+master authorized networks, an AWS security group, a VPN — silently drops
+packets from anywhere else, and the probe records a connect timeout after five
+seconds.
+
+Compare the two sides before touching IAM:
+
+```bash
+# What the agent's host looks like from outside — the address to allow.
+curl -s https://api.ipify.org
+
+# What the cluster currently allows.
+gcloud container clusters describe <cluster> --project <project> --location <location> \
+  --format='value(masterAuthorizedNetworksConfig.cidrBlocks)'
+```
+
+Running in a container behind Cloud NAT or a NAT gateway, that address belongs
+to the NAT, not the pod, and it can change unless the NAT holds a reserved
+static IP. Reserve one before you allow-list it.
+
+### Finding GKE clusters you have not registered
+
+`kubernetes_list_clusters` only knows about clusters someone registered here.
+`gcp_list_gke_clusters` asks GCP instead and lists every cluster in your
+projects, saying for each one whether a kubeconfig is registered
+(`registered_as`) or not. That is how an investigation or chat turn notices a cluster nobody
+added — and the name it reports is the one to pass as `cluster` once you
+register it.
+
+The match is on the kubeconfig `context`: register the cluster with the context
+`gcloud container clusters get-credentials` writes
+(`gke_<project>_<location>_<cluster>`), or name the entry after the cluster
+itself, and the two sides line up automatically. `add-gke-clusters` uses that
+same context, so clusters it registers are recognized immediately.
 
 ## Configuration reference
 
@@ -69,7 +250,7 @@ A successful verification lists the namespaces visible to the configured credent
 |---|---|---|---|
 | `kubeconfig` | `KUBECONFIG_CONTENT` or read from `KUBECONFIG` | — | Raw kubeconfig YAML (required) |
 | `context` | `KUBECONFIG_CONTEXT` | current context | Kubeconfig context to activate |
-| `namespace` | `KUBECONFIG_NAMESPACE` | `default` | Default namespace for tool queries |
+| `namespace` | `KUBECONFIG_NAMESPACE` | `default` | Fallback namespace when a request does not name one |
 
 ## Example: investigating a crash-looping pod
 
@@ -79,7 +260,7 @@ A successful verification lists the namespaces visible to the configured credent
 
 OpenSRE will:
 1. Call `kubernetes_list_pods` scoped to `production` to find pods with high restart counts
-2. Call `kubernetes_get_pod_logs` to read recent container output
+2. Call `kubernetes_get_pod_logs` to read recent container output (capped at 1000 lines and 60KB for safety)
 3. Call `kubernetes_get_events` with `involvedObject.name=payments-api` to surface Warning events
 4. Correlate the evidence into a root-cause summary
 
@@ -98,4 +279,16 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list"]
+  # Only on clusters running Argo Rollouts; omit it and Rollouts are reported
+  # as unreadable while every other kind still works.
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["get", "list"]
 ```
+
+Fleet search needs these verbs **cluster-scoped** — it lists pods and workload owners across all namespaces at once. A credential bound to a single namespace does not silently return less: the cluster shows up in `clusters_failed` with the API's own reason, so a fleet-wide "not found" stays distinguishable from "not allowed to look".
+
+On GKE, an identity with `roles/viewer` or `roles/container.viewer` can already list namespaces via the IAM authorizer, with no RBAC object needed. If instead the credential authenticates via RBAC only and lacks a cluster-wide binding, `kubernetes_list_namespaces` reports that it cannot enumerate and every other tool still works. A missing `argoproj.io` grant degrades Rollouts only.

@@ -16,13 +16,11 @@ channel it was posted to — see
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
-from typing import Any
 
 from gateway.core.runtime.approvals import (
     MAX_APPROVAL_WAIT_SECONDS,
     ApprovalBroker,
-    arguments_preview,
+    DecidedPrompts,
 )
 from gateway.transports.buzz.pending_approvals import PendingApprovals
 from integrations.buzz.client import BuzzClient
@@ -47,22 +45,24 @@ class BuzzApprovalPrompter:
         self._channel_id = channel_id
         self._requester_pubkey = requester_pubkey
         self._pending_approvals = pending_approvals
+        self._decided = DecidedPrompts()
 
     def request(
         self,
         *,
-        tool_name: str,
+        call_id: str,
+        headline: str,
         reason: str,
-        arguments: Mapping[str, Any],
+        details: str,
         expiry_seconds: float,
     ) -> tuple[bool, str]:
+        """Ask the channel for approval; returns (approved, decider's pubkey)."""
         approval_id = self._broker.create(platform="buzz", chat_id=self._channel_id)
-        preview = arguments_preview(arguments)
-        body = f"**Approval needed — `{tool_name}`**"
+        body = f"**Approval needed — {headline}**"
         if reason.strip():
             body += f"\n{reason.strip()}"
-        if preview:
-            body += f"\n```\n{preview}\n```"
+        if details.strip():
+            body += f"\n```\n{details.strip()}\n```"
         body += (
             f"\n\n`{self._requester_pubkey[:8]}…` — reply **approve** or **deny** "
             "to this message. Only you can answer it."
@@ -70,8 +70,8 @@ class BuzzApprovalPrompter:
         result = self._client.send_message(channel=self._channel_id, content=body)
         if not result["success"]:
             logger.warning(
-                "[buzz-gateway] approval prompt post failed tool=%s channel=%s error=%s",
-                tool_name,
+                "[buzz-gateway] approval prompt post failed headline=%s channel=%s error=%s",
+                headline,
                 self._channel_id,
                 result["error"],
             )
@@ -90,23 +90,39 @@ class BuzzApprovalPrompter:
         finally:
             self._pending_approvals.discard(event_id)
 
-        outcome = _outcome_text(tool_name, approved=approved, decided_by=decided_by)
-        edit_result = self._client.edit_message(event_id=event_id, content=outcome)
+        self._edit(event_id, _outcome_text(headline, approved=approved, decided_by=decided_by))
+        if approved:
+            # Keyed on call_id, not "the last prompt": a turn can run tools in
+            # parallel, so the receipt has to find its own message.
+            self._decided.remember(call_id, message_id=event_id, decided_by=decided_by)
+        return (approved, decided_by)
+
+    def attach_receipt(self, *, call_id: str, receipt: str) -> None:
+        """Replace the approved prompt's outcome with what the call produced."""
+        decision = self._decided.take(call_id)
+        if decision is None or not receipt.strip():
+            return
+        self._edit(
+            decision.message_id,
+            _outcome_text(receipt, approved=True, decided_by=decision.decided_by),
+        )
+
+    def _edit(self, event_id: str, content: str) -> None:
+        edit_result = self._client.edit_message(event_id=event_id, content=content)
         if not edit_result["success"]:
             logger.debug(
                 "[buzz-gateway] approval outcome edit failed event=%s error=%s",
                 event_id,
                 edit_result["error"],
             )
-        return (approved, decided_by)
 
 
-def _outcome_text(tool_name: str, *, approved: bool, decided_by: str) -> str:
+def _outcome_text(label: str, *, approved: bool, decided_by: str) -> str:
     if approved:
-        return f"✅ `{tool_name}` approved by `{decided_by[:8]}…`"
+        return f"✅ {label} — approved by `{decided_by[:8]}…`"
     if decided_by:
-        return f"🚫 `{tool_name}` denied by `{decided_by[:8]}…`"
-    return f"⏱ Approval request for `{tool_name}` expired — action skipped."
+        return f"🚫 {label} — denied by `{decided_by[:8]}…`"
+    return f"⏱ Approval request for {label} expired — action skipped."
 
 
 __all__ = ["BuzzApprovalPrompter"]

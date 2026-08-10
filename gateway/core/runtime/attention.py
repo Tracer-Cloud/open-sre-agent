@@ -17,6 +17,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import lru_cache
+
+from config.constants.agent_identity import agent_name
 
 # A mention keeps the bot listening to the thread this long; each engaged
 # turn refreshes it. After expiry a fresh @mention is required.
@@ -28,8 +31,22 @@ RATE_WINDOW_SECONDS = 10 * 60.0
 _MAX_TRACKED_THREADS = 1024
 
 _LEADING_USER_MENTION = re.compile(r"^\s*<@(?P<user>[^>]+)>")
-# Names people use to address the bot in prose without a real @mention.
-_BOT_NAME_HINT = re.compile(r"(?i)\bopen\s?sre\b")
+# Splits a name into the chunks people space out when typing it: "OpenSRE" ->
+# ("Open", "SRE"), "AcmeOps" -> ("Acme", "Ops"). Runs of capitals stay together.
+_NAME_CHUNK = re.compile(r"[A-Z]+(?![a-z])|[A-Z][a-z]*|[a-z]+|\d+")
+
+
+@lru_cache(maxsize=8)
+def _bot_name_hint(name: str) -> re.Pattern[str]:
+    """Match the bot's name written in prose, spaced or not, any case.
+
+    Cached because this runs per inbound message and the name only changes
+    between processes. Bounded because it is keyed on a single env value.
+    """
+    chunks = _NAME_CHUNK.findall(name) or [name]
+    return re.compile(r"(?i)\b" + r"\s?".join(re.escape(chunk) for chunk in chunks) + r"\b")
+
+
 _AFFIRMATIVES = frozenset(
     {
         "yes",
@@ -81,7 +98,7 @@ def is_addressed_to_bot(text: str, *, bot_user_id: str) -> bool:
     lower = bare.lower().rstrip(".!")
     if lower in _AFFIRMATIVES:
         return True
-    if _BOT_NAME_HINT.search(bare):
+    if _bot_name_hint(agent_name()).search(bare):
         return True
     return "?" in bare
 

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from integrations.github.client import GitHubApiError, GitHubRestClient
+from integrations.github.path_safety import repo_path, safe_owner, safe_repo
 from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.security_fix.errors import (
     ERR_ALERT_NOT_FOUND,
@@ -205,6 +206,14 @@ def gather_security_alert_context(
             "owner/repo is required unless alert_url or the workspace origin identifies a GitHub repo.",
         )
 
+    # Validate owner and repo names upfront to cover all downstream path builders
+    if safe_owner(repo_owner) is None:
+        raise GitHubSecurityFixError(ERR_INVALID_INPUT, f"Invalid GitHub owner name: {repo_owner}")
+    if safe_repo(repo_name) is None:
+        raise GitHubSecurityFixError(
+            ERR_INVALID_INPUT, f"Invalid GitHub repository name: {repo_name}"
+        )
+
     if normalized_type == "secret_scanning":
         raise GitHubSecurityFixError(
             ERR_UNSUPPORTED_ALERT_TYPE,
@@ -213,12 +222,20 @@ def gather_security_alert_context(
 
     client = GitHubRestClient(github_token)
     if number is not None:
+        # Safely coerce number to int - model-supplied values may be non-numeric
+        try:
+            safe_number = int(number)
+        except (TypeError, ValueError) as exc:
+            raise GitHubSecurityFixError(
+                ERR_INVALID_INPUT, f"Alert number must be a valid integer: {number}"
+            ) from exc
+
         return _get_exact_alert_context(
             client,
             owner=repo_owner,
             repo=repo_name,
             alert_type=normalized_type,
-            number=int(number),
+            number=safe_number,
         )
     if normalized_type != "auto":
         return _select_first_alert_context(
@@ -562,7 +579,7 @@ def _code_scanning_instances(
 ) -> list[dict[str, Any]]:
     try:
         return client.paginate(
-            f"/repos/{owner}/{repo}/code-scanning/alerts/{number}/instances",
+            repo_path(owner, repo, "code-scanning", "alerts", str(number), "instances"),
             params={"per_page": 10},
         )
     except GitHubApiError:
@@ -571,22 +588,22 @@ def _code_scanning_instances(
 
 def _alert_collection_path(owner: str, repo: str, alert_type: ResolvedAlertType) -> str:
     if alert_type == "dependabot":
-        return f"/repos/{owner}/{repo}/dependabot/alerts"
+        return repo_path(owner, repo, "dependabot", "alerts")
     if alert_type == "code_scanning":
-        return f"/repos/{owner}/{repo}/code-scanning/alerts"
+        return repo_path(owner, repo, "code-scanning", "alerts")
     if alert_type == "code_quality":
-        return f"/repos/{owner}/{repo}/code-quality/findings"
-    return f"/repos/{owner}/{repo}/secret-scanning/alerts"
+        return repo_path(owner, repo, "code-quality", "findings")
+    return repo_path(owner, repo, "secret-scanning", "alerts")
 
 
 def _alert_item_path(owner: str, repo: str, alert_type: ResolvedAlertType, number: int) -> str:
     if alert_type == "dependabot":
-        return f"/repos/{owner}/{repo}/dependabot/alerts/{number}"
+        return repo_path(owner, repo, "dependabot", "alerts", str(number))
     if alert_type == "code_scanning":
-        return f"/repos/{owner}/{repo}/code-scanning/alerts/{number}"
+        return repo_path(owner, repo, "code-scanning", "alerts", str(number))
     if alert_type == "code_quality":
-        return f"/repos/{owner}/{repo}/code-quality/findings/{number}"
-    return f"/repos/{owner}/{repo}/secret-scanning/alerts/{number}"
+        return repo_path(owner, repo, "code-quality", "findings", str(number))
+    return repo_path(owner, repo, "secret-scanning", "alerts", str(number))
 
 
 def _api_version(alert_type: ResolvedAlertType) -> str:

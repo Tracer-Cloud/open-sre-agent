@@ -16,6 +16,10 @@ which is why ``integrations._verifiers_loader`` intentionally skips scanning
 
 from __future__ import annotations
 
+from integrations.verification.instances import (
+    instance_names,
+    with_instance_inventory,
+)
 from integrations.verification.probe import (
     build_probe_verifier,
     register_probe_verifier,
@@ -38,10 +42,12 @@ __all__ = [
     "build_probe_verifier",
     "build_validation_verifier",
     "get_verifier",
+    "instance_names",
     "list_verifiers",
     "register_probe_verifier",
     "register_validation_verifier",
     "register_verifier",
     "result",
     "verify_with_validation_result",
+    "with_instance_inventory",
 ]

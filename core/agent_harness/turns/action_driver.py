@@ -15,10 +15,12 @@ from __future__ import annotations
 import json
 import logging
 import shlex
+import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
+from config.constants import INVESTIGATION_DISPATCH_TOOL_NAMES
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
@@ -42,6 +44,11 @@ from core.agent_harness.turns.assistant_handoff import (
 )
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
+from core.agent_harness.turns.tool_receipt import (
+    NO_ANSWER_FOOTER,
+    RenderedToolResult,
+    format_tool_dump_receipt,
+)
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -58,17 +65,14 @@ from core.execution import (
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
+from core.tool_framework.utils.call_identity import canonical_argument_signature
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
 from platform.observability.trace.spans import component_span
 
 log = logging.getLogger(__name__)
 
-# Local REPL tools covered by consecutive identical-batch suppress (oracle 202 /
-# 203): slash_invoke, shell_run, cli_exec. One rule — no per-tool carve-outs.
-_DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_run", "cli_exec"})
-
-# Hashable identity for one guarded call (no hot-path json.dumps).
+# Hashable identity for one guarded call.
 _ActionCallFingerprint = tuple[Any, ...]
 
 
@@ -82,7 +86,14 @@ def _coerce_fingerprint_quiet(value: Any) -> bool:
 
 
 def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
-    """Stable identity for one guarded action call (schema fields only)."""
+    """Stable identity for one action call (public schema fields only).
+
+    Every tool is compared; the three local REPL tools (oracle 202 / 203) get
+    their arguments normalized first, because the model respells those calls in
+    ways a generic comparison would read as different work — ``shell_run``
+    quiet as a bool or the string ``"true"``, padding around a ``cli_exec``
+    payload, ``slash_invoke`` args as a tuple or a list.
+    """
     if not isinstance(args, dict):
         args = {}
 
@@ -95,24 +106,31 @@ def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
     if name == "cli_exec":
         return (name, str(args.get("payload", "")).strip())
 
-    # shell_run
-    return (
-        name,
-        str(args.get("command", "")),
-        _coerce_fingerprint_quiet(args.get("quiet", False)),
-    )
+    if name == "shell_run":
+        return (
+            name,
+            str(args.get("command", "")),
+            _coerce_fingerprint_quiet(args.get("quiet", False)),
+        )
+
+    # Every other tool: whatever the model sent, compared order-independently.
+    return (name, canonical_argument_signature(args))
 
 
 def with_duplicate_action_call_guard(
     base: ToolExecutionHooks | None = None,
 ) -> ToolExecutionHooks:
-    """Block replaying guarded action calls already covered by the success snapshot.
+    """Block replaying an action call already covered by the success snapshot.
 
-    Suppress ``slash_invoke`` / ``shell_run`` / ``cli_exec`` when the call's
-    fingerprint is in ``last_fully_succeeded_batch`` *or* already succeeded
-    earlier in the current provider batch (same-batch duplicates). Guarded
-    tools are sequential, so ``batch_succeeded`` is visible to the next
-    ``before()`` in the batch.
+    Suppress *any* tool when the call's fingerprint is in
+    ``last_fully_succeeded_batch`` *or* was already claimed earlier in the
+    current provider batch. A batch of parallel-safe tools runs its calls
+    concurrently (``core.execution.execute_tool_calls``), so a fingerprint is
+    claimed in ``before()`` rather than on success in ``after()``: two
+    identical calls in one batch can both be inside ``before()`` before either
+    has a result, and a check that only ``after()`` updates would let both
+    through. A duplicate emitted beside its own original is a duplicate
+    whatever the original returns.
 
     Snapshot updates at the next batch boundary:
 
@@ -131,55 +149,58 @@ def with_duplicate_action_call_guard(
     """
     last_fully_succeeded_batch: frozenset[_ActionCallFingerprint] = frozenset()
     current_batch: frozenset[_ActionCallFingerprint] = frozenset()
+    batch_claimed: set[_ActionCallFingerprint] = set()
     batch_succeeded: set[_ActionCallFingerprint] = set()
     has_open_batch = False
+    # ``before()``/``after()`` run on the tool executor's worker threads.
+    lock = threading.Lock()
     base_before = base.before_tool_call if base is not None else None
     base_after = base.after_tool_call if base is not None else None
     base_update = base.on_tool_update if base is not None else None
     base_batch = base.before_tool_batch if base is not None else None
 
     def before_batch(tool_calls: Sequence[ToolCall]) -> None:
-        nonlocal last_fully_succeeded_batch, current_batch, batch_succeeded, has_open_batch
+        nonlocal last_fully_succeeded_batch, current_batch, batch_claimed, batch_succeeded
+        nonlocal has_open_batch
         if base_batch is not None:
             base_batch(tool_calls)
-        if has_open_batch and current_batch:
-            succeeded = frozenset(batch_succeeded)
-            if succeeded == current_batch:
-                last_fully_succeeded_batch = current_batch
-            elif succeeded:
-                # Mixed suppress/success: snapshot is only what newly ran.
-                # Do not retain suppressed members — that would block a later
-                # intentional standalone A after {A suppressed, C succeeded}.
-                last_fully_succeeded_batch = succeeded
-            # else: pure suppress or all-error — leave snapshot intact.
-        keys: list[_ActionCallFingerprint] = []
-        for tool_call in tool_calls:
-            if tool_call.name not in _DEDUPE_ACTION_TOOL_NAMES:
-                continue
-            keys.append(
+        with lock:
+            if has_open_batch and current_batch:
+                succeeded = frozenset(batch_succeeded)
+                if succeeded == current_batch:
+                    last_fully_succeeded_batch = current_batch
+                elif succeeded:
+                    # Mixed suppress/success: snapshot is only what newly ran.
+                    # Do not retain suppressed members — that would block a later
+                    # intentional standalone A after {A suppressed, C succeeded}.
+                    last_fully_succeeded_batch = succeeded
+                # else: pure suppress or all-error — leave snapshot intact.
+            current_batch = frozenset(
                 _action_call_fingerprint(tool_call.name, public_tool_input(tool_call.input))
+                for tool_call in tool_calls
             )
-        current_batch = frozenset(keys)
-        batch_succeeded = set()
-        has_open_batch = True
+            batch_claimed = set()
+            batch_succeeded = set()
+            has_open_batch = True
 
     def before(request: ToolExecutionRequest) -> BeforeToolCallResult | None:
         name = request.tool_call.name
-        # Membership across the prior success snapshot *and* earlier successes
-        # in this batch. Interleaved A -> B -> A still runs, because a fully
-        # successful {B} replaces the snapshot. Same-batch duplicates (two
-        # identical cli_exec in one provider response) hit batch_succeeded.
-        if name in _DEDUPE_ACTION_TOOL_NAMES:
-            key = _action_call_fingerprint(name, public_tool_input(request.arguments))
-            if key in last_fully_succeeded_batch or key in batch_succeeded:
-                return BeforeToolCallResult(
-                    blocked=True,
-                    reason=(
-                        f"Already ran {name} with identical arguments "
-                        "this turn. Do not repeat it; finish with no further tool calls."
-                    ),
-                    metadata={"suppressed_duplicate": True},
-                )
+        # Membership across the prior success snapshot *and* what this batch has
+        # already claimed. Interleaved A -> B -> A still runs, because a fully
+        # successful {B} replaces the snapshot.
+        key = _action_call_fingerprint(name, public_tool_input(request.arguments))
+        with lock:
+            duplicate = key in last_fully_succeeded_batch or key in batch_claimed
+            batch_claimed.add(key)
+        if duplicate:
+            return BeforeToolCallResult(
+                blocked=True,
+                reason=(
+                    f"Already ran {name} with identical arguments this turn. "
+                    "Use that result; do not repeat the call."
+                ),
+                metadata={"suppressed_duplicate": True},
+            )
         if base_before is not None:
             return base_before(request)
         return None
@@ -188,12 +209,12 @@ def with_duplicate_action_call_guard(
         request: ToolExecutionRequest,
         result: ToolExecutionResult,
     ) -> ToolExecutionPatch | None:
-        if request.tool_call.name in _DEDUPE_ACTION_TOOL_NAMES and not result.is_error:
-            batch_succeeded.add(
-                _action_call_fingerprint(
-                    request.tool_call.name, public_tool_input(request.arguments)
-                )
+        if not result.is_error:
+            key = _action_call_fingerprint(
+                request.tool_call.name, public_tool_input(request.arguments)
             )
+            with lock:
+                batch_succeeded.add(key)
         if base_after is not None:
             return base_after(request, result)
         return None
@@ -238,9 +259,6 @@ SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
         "task_cancel",
     }
 )
-INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
-    {"investigation_start", "alert_sample"}
-)
 # Tools whose user-facing event is rendered live by the surface's tool-event
 # observer (``tool_start``/``tool_end``), so the end-of-turn generic formatter
 # must stay silent for them: repeating their summary would double-print, and
@@ -254,6 +272,7 @@ class ActionTurnPlan:
     user_message: str
     llm: Any
     max_iterations: int
+    system: str
 
 
 @dataclass(frozen=True)
@@ -362,29 +381,29 @@ def _generic_tool_results(result: Any) -> list[tuple[ToolCall, Any]]:
     ]
 
 
-def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
+def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> RenderedToolResult:
     """Build a user-visible summary for one non-self-recording tool result."""
     if tool_call.name in _OBSERVER_RENDERED_TOOL_NAMES:
-        return ""
+        return RenderedToolResult.summary("")
     preferred_response = _preferred_tool_response_text(tool_result)
     if preferred_response:
-        return preferred_response
+        return RenderedToolResult.summary(preferred_response)
     details = getattr(tool_result, "details", None)
     if isinstance(details, dict):
         summary = details.get("summary")
         if isinstance(summary, str) and summary.strip():
-            return summary.strip()
+            return RenderedToolResult.summary(summary.strip())
         stdout = details.get("stdout")
         if details.get("ok") and isinstance(stdout, str) and stdout.strip():
-            return stdout.strip()
+            return RenderedToolResult.summary(stdout.strip())
         error = details.get("error")
         if error:
-            return str(error).strip()
+            return RenderedToolResult.summary(str(error).strip())
     if getattr(tool_result, "is_error", False):
-        return ""
+        return RenderedToolResult.summary("")
     content = _content_to_text(getattr(tool_result, "content", "")).strip()
     if not content:
-        return ""
+        return RenderedToolResult.summary("")
     # Prefer a nested summary when the tool returned a JSON object payload.
     try:
         parsed = json.loads(content)
@@ -393,21 +412,43 @@ def _format_generic_tool_payload(tool_call: ToolCall, tool_result: Any) -> str:
     if isinstance(parsed, dict):
         response_text = parsed.get("response_text")
         if isinstance(response_text, str) and response_text.strip():
-            return response_text.strip()
+            return RenderedToolResult.summary(response_text.strip())
         summary = parsed.get("summary")
         if isinstance(summary, str) and summary.strip():
-            return summary.strip()
+            return RenderedToolResult.summary(summary.strip())
         if parsed.get("ok") and isinstance(parsed.get("stdout"), str) and parsed["stdout"].strip():
-            return str(parsed["stdout"]).strip()
+            return RenderedToolResult.summary(str(parsed["stdout"]).strip())
         if parsed.get("error"):
-            return str(parsed["error"]).strip()
+            return RenderedToolResult.summary(str(parsed["error"]).strip())
+
+    # Raw dump fallback - this is where external differs from local
     args = public_tool_input(tool_call.input)
     if args:
-        return (
+        local_text = (
             f"{tool_call.name} input: {json.dumps(args, ensure_ascii=False, default=str)}"
             f"\n{tool_call.name} result: {content}"
         )
-    return f"{tool_call.name} result: {content}"
+    else:
+        local_text = f"{tool_call.name} result: {content}"
+
+    # Calculate item_count for the receipt
+    item_count = None
+    if isinstance(parsed, dict):
+        # Find the single largest value that is a list
+        largest_list = None
+        largest_size = 0
+        for value in parsed.values():
+            if isinstance(value, list) and len(value) > largest_size:
+                largest_list = value
+                largest_size = len(value)
+        if largest_list is not None:
+            item_count = len(largest_list)
+
+    external_text = format_tool_dump_receipt(
+        tool_call.name, args, payload_chars=len(content), item_count=item_count
+    )
+
+    return RenderedToolResult(local=local_text, external=external_text)
 
 
 def _preferred_tool_response_text(tool_result: Any) -> str:
@@ -492,13 +533,43 @@ def _asks_the_user(final_text: str) -> bool:
     return final_text.rstrip().endswith("?")
 
 
-def _response_text_from_generic_results(result: Any) -> str:
-    chunks: list[str] = []
+@dataclass(frozen=True)
+class _ComposedResponse:
+    """What one action turn will say locally and, if different, to chat."""
+
+    response_text: str
+    display_chunks: list[str]
+    use_final_text: bool
+    external_response_text: str | None = None
+    external_display_chunks: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True)
+class _GenericToolText:
+    """Joined generic-tool chunks for both surfaces, plus whether any differ."""
+
+    local: str
+    external: str
+    redacted: bool
+
+
+def _response_text_from_generic_results(result: Any) -> _GenericToolText:
+    local_chunks: list[str] = []
+    external_chunks: list[str] = []
+    redacted = False
+
     for tool_call, tool_result in _generic_tool_results(result):
         formatted = _format_generic_tool_payload(tool_call, tool_result)
-        if formatted:
-            chunks.append(formatted)
-    return "\n".join(chunks)
+        if formatted.local:
+            local_chunks.append(formatted.local)
+        if formatted.external:
+            external_chunks.append(formatted.external)
+        if formatted.local != formatted.external:
+            redacted = True
+
+    return _GenericToolText(
+        local="\n".join(local_chunks), external="\n".join(external_chunks), redacted=redacted
+    )
 
 
 def _is_user_facing_final_text(text: str) -> bool:
@@ -709,11 +780,12 @@ def _build_action_agent(
     else:
         factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
         llm = factory()
-        envelope = build_action_system_prompt_envelope(
-            # No turn plan means no surface is known here; setup facts are
-            # omitted rather than guessed (see _setup_state_for_surface).
-            turn_snapshot or TurnSnapshot.from_session(message, session, surface=None)
-        )
+        snapshot = turn_snapshot or TurnSnapshot.from_session(message, session, surface=None)
+        if not snapshot.active_tools:
+            # The only place both the resolved tool list and the snapshot are in
+            # scope. Prompt text that must not mandate an absent tool reads this.
+            snapshot = replace(snapshot, active_tools=tuple(agent_tools))
+        envelope = build_action_system_prompt_envelope(snapshot)
         # Cached half stays byte-identical across turns; ephemeral (conversation,
         # prior-action-facts) rides with the user message so Anthropic's system
         # cache_control breakpoint is not invalidated every turn.
@@ -754,6 +826,7 @@ def _build_action_agent(
         user_message=user_message,
         llm=llm,
         max_iterations=_MAX_TOOL_CALLING_ITERATIONS,
+        system=system,
     )
 
 
@@ -839,19 +912,23 @@ def _compose_response(
     result: Any,
     session: SessionStore,
     counts: _TurnCounts,
-) -> tuple[str, list[str], bool]:
+) -> _ComposedResponse:
     """Build the turn's response text and what to show on screen.
 
-    Returns ``(response_text, display_chunks, use_final_text)``. The two differ
-    on purpose: self-recording tools (shell, slash) already printed their own
-    output, so the console shows only the closing text, generic tool results and
-    any hint. ``response_text`` keeps the history as well, because persistence
-    and non-TTY surfaces have nothing else to read.
+    ``response_text`` and ``display_chunks`` differ on purpose: self-recording
+    tools (shell, slash) already printed their own output, so the console shows
+    only the closing text, generic tool results and any hint. ``response_text``
+    keeps the history as well, because persistence and non-TTY surfaces have
+    nothing else to read.
+
+    ``external_response_text`` is set only when a tool result had to be reduced
+    to a receipt for chat surfaces; ``None`` means ``response_text`` is already
+    safe to send anywhere.
 
     Consumes the session's pending outcome hint.
     """
     final_text = str(getattr(result, "final_text", "") or "").strip()
-    generic_text = _response_text_from_generic_results(result)
+    generic = _response_text_from_generic_results(result)
     hint = _pop_turn_outcome_hint(session)
     prefer_tool_response_text = _has_preferred_tool_response_text(result)
     # Self-recording tools (slash/shell/…) already rendered the real output.
@@ -878,13 +955,13 @@ def _compose_response(
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
-    display_chunks = [chunk for chunk in (final_text_chunk, generic_text, hint) if chunk]
+    display_chunks = [chunk for chunk in (final_text_chunk, generic.local, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
             _response_text_from_history_entries(counts.executed_entries),
             final_text_chunk,
-            generic_text,
+            generic.local,
             hint,
         )
         if chunk
@@ -896,7 +973,35 @@ def _compose_response(
     # A tool's explicit ``response_text`` also wins over chatty model closings.
     use_final_text = _is_user_facing_final_text(final_text) and not suppress_final
     response_text = final_text if use_final_text else "\n".join(response_chunks)
-    return response_text, display_chunks, use_final_text
+
+    # Chat surfaces get the receipt variant only when a payload was reduced.
+    # ``use_final_text`` short-circuits: the model wrote its own closing report,
+    # so ``response_text`` is model prose with nothing to replace.
+    external_response_text: str | None = None
+    external_display_chunks: tuple[str, ...] | None = None
+    if generic.redacted and not use_final_text:
+        external_parts = [
+            chunk
+            for chunk in (
+                _response_text_from_history_entries(counts.executed_entries),
+                final_text_chunk,
+                generic.external,
+                hint,
+            )
+            if chunk
+        ]
+        external_response_text = "\n".join([*external_parts, NO_ANSWER_FOOTER])
+        external_display_chunks = tuple(
+            chunk for chunk in (final_text_chunk, generic.external, hint) if chunk
+        )
+
+    return _ComposedResponse(
+        response_text=response_text,
+        display_chunks=display_chunks,
+        use_final_text=use_final_text,
+        external_response_text=external_response_text,
+        external_display_chunks=external_display_chunks,
+    )
 
 
 def _show_response(
@@ -905,6 +1010,7 @@ def _show_response(
     handled: bool,
     final_text: str,
     display_chunks: list[str],
+    external_display_chunks: tuple[str, ...] | None = None,
 ) -> None:
     """Show the turn's answer, or leave a blank line after silent tool work.
 
@@ -915,11 +1021,19 @@ def _show_response(
         output.stream(label="OpenSRE", chunks=iter([final_text]))
         return
     if display_chunks:
+        chunks = display_chunks
+        if external_display_chunks is not None and getattr(
+            output, "redacts_raw_tool_output", False
+        ):
+            # Boundary redaction: the terminal keeps the raw evidence, a shared
+            # chat surface gets the receipt. Same rule AGENTS.md sets for
+            # exception detail (CWE-209), applied to tool payloads.
+            chunks = list(external_display_chunks)
         output.print()
         output.render_response_header("assistant")
         # Literal text: the sink decides how to render it safely. The harness
         # must not reach for terminal-markup helpers.
-        output.print("\n".join(display_chunks))
+        output.print("\n".join(chunks))
         return
     if handled:
         output.print()
@@ -1049,7 +1163,7 @@ def _run_action_turn(
         )
 
     counts = _count_turn(result, session, history_start)
-    response_text, display_chunks, use_final_text = _compose_response(result, session, counts)
+    composed = _compose_response(result, session, counts)
     cancelled = tool_resources_cancel_requested(tool_resources) or bool(
         getattr(result, "cancelled", False)
     )
@@ -1061,7 +1175,7 @@ def _run_action_turn(
     # return structured JSON users should not see raw. Stash only those results.
     if (
         not cancelled
-        and response_text.strip()
+        and composed.response_text.strip()
         and counts.generic_success_count > 0
         and not session.last_command_observation
         and _should_stash_observation(
@@ -1069,14 +1183,15 @@ def _run_action_turn(
             tools_by_name={getattr(t, "name", ""): t for t in agent_tools},
         )
     ):
-        session.last_command_observation = response_text
+        session.last_command_observation = composed.response_text
     if not cancelled:
         _show_response(
             args.output,
             handled=counts.handled,
             # use_final_text means the composed text *is* the closing message.
-            final_text=response_text if use_final_text else "",
-            display_chunks=display_chunks,
+            final_text=composed.response_text if composed.use_final_text else "",
+            display_chunks=composed.display_chunks,
+            external_display_chunks=composed.external_display_chunks,
         )
 
     log.debug(
@@ -1093,8 +1208,9 @@ def _run_action_turn(
         counts.executed_success_count,
         False,
         False if cancelled else counts.handled,
-        response_text="" if cancelled else response_text,
-        handoff_contents=() if cancelled else handoff_contents,
+        response_text="" if cancelled else composed.response_text,
+        external_response_text=(None if cancelled else composed.external_response_text),
+        handoff_contents=handoff_contents,
         assistant_handoffs=() if cancelled else counts.assistant_handoffs,
         handoff_requires_gather=(False if cancelled else counts.handoff_requires_gather),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),

@@ -256,3 +256,40 @@ not an available tool that turn.
 post-hoc rewriting of LLM-selected tool calls, and any deterministic mapping from
 non-`/`-prefixed text to an action. Those compete with the LLM and were removed
 for good reason.
+
+### The duplicate-call guard covers every tool
+
+Addendum — Aug 8, 2026.
+
+**Decision:** within a single turn, an action call the runtime has already run
+with identical arguments is blocked rather than run again. This applies to every
+tool, not just the local REPL ones (`slash_invoke`, `cli_exec`, `shell_run`) the
+guard originally shipped with.
+
+**Why:** a model that gets a result it cannot use asks for the same thing again.
+On a live turn that loop fetched one pod's logs fourteen times, produced 14 MB of
+outbound text, and ended with no answer at all. Nothing about that loop belongs
+to a particular tool, so restricting the guard to three of them left the tools
+most likely to return an unusable payload unguarded.
+
+**What counts as the same call.** The tool name plus its model-supplied arguments,
+compared independently of key order. Injected credentials are excluded — they are
+merged in after selection, and including them would make every call look unique.
+The three local REPL tools additionally normalize the spellings a model varies
+between (`quiet` as `true` or `"true"`, whitespace around a `cli_exec` payload,
+`slash_invoke` args as a list or a tuple).
+
+**Scope — one batch wide, deliberately.** The guard remembers the last fully
+successful batch, so `A → B → A` runs `A` twice. "Do that again now that I have
+looked at something else" is a real request and is indistinguishable from an
+accidental replay. Only an immediate replay is suppressed. A call that failed can
+always be retried; only a call that succeeded is held.
+
+**Consequences.**
+
+- A blocked call is returned to the model as an error — that is how it is told to
+  stop asking. It is **not** a failure to show the reader: the chat timeline reads
+  `suppressed_duplicate` alongside `is_error` and closes that row as complete, so
+  no ✗ appears for work the runtime declined on purpose.
+- The guard fails open. An argument value that cannot be canonicalized compares
+  unequal, and the call runs as it did before the guard existed.

@@ -32,6 +32,7 @@ from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,
+    InvestigationPortsFactory,
     SlashPortsFactory,
 )
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
@@ -94,6 +95,7 @@ def build_default_headless_agent(
     tool_action_logger: LoggerLike | None = None,
     observer_factory: ActionObserverFactory | None = None,
     subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
+    investigation_ports_factory: InvestigationPortsFactory | None = None,
     slash_ports_factory: SlashPortsFactory | None = None,
     prompts: PromptContextProvider | None = None,
     gather: GatherPorts | None = None,
@@ -130,6 +132,7 @@ def build_default_headless_agent(
             tool_action_logger=tool_action_logger or logger,
             observer_factory=observer_factory,
             subprocess_presenter_factory=_resolved_presenter_factory(subprocess_presenter_factory),
+            investigation_ports_factory=investigation_ports_factory,
             slash_ports_factory=slash_ports_factory,
         ),
         # ``is not None``, not ``or``: a provider defining __bool__ would be

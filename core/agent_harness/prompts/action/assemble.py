@@ -83,8 +83,7 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
             provenance="core.agent_harness.turns.turn_snapshot",
         )
     )
-    # Volatile before ephemeral so render_cached + render_ephemeral reassemble
-    # into render() and the cache breakpoint can sit after memory.
+    blocks.extend(investigation_dispatch_blocks(turn_snapshot))
     memory_block = long_term_memory_block()
     if memory_block:
         blocks.append(
@@ -136,6 +135,21 @@ def build_action_system_prompt_envelope(turn_snapshot: TurnSnapshot) -> PromptEn
     )
 
 
+_GATE_NOTE_DISPATCH_AVAILABLE = (
+    "This listing does NOT gate diagnostic→investigation. Cause/why / "
+    "figure-out questions → assistant_handoff + gather + Want-me-to "
+    "investigate offer. Explicit investigate/RCA/diagnose/analyze/"
+    "root-cause verbs → investigation_start ALWAYS (even when this line "
+    "is none).\n"
+)
+_GATE_NOTE_DISPATCH_UNAVAILABLE = (
+    "This listing does NOT gate diagnostic→investigation. Cause/why / "
+    "figure-out questions → assistant_handoff + gather. The investigation "
+    "pipeline cannot be dispatched from this surface — see INVESTIGATION "
+    "DISPATCH below, which overrides the investigation rules above.\n"
+)
+
+
 def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
     """Render which integrations are connected for this shell action turn."""
     known = turn_snapshot.configured_integrations_known
@@ -146,17 +160,54 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    # Listing does not gate diagnostic→investigation: why/figure-out always
-    # hand off for gather + Want-me-to; explicit investigate always dispatches.
-    # The list only tells the planner which sources gather can use.
-    gate_note = (
-        "This listing does NOT gate diagnostic→investigation. Cause/why / "
-        "figure-out questions → assistant_handoff + gather + Want-me-to "
-        "investigate offer. Explicit investigate/RCA/diagnose/analyze/"
-        "root-cause verbs → investigation_start ALWAYS (even when this line "
-        "is none).\n"
-    )
+    # Listing does not gate diagnostic→investigation (Phase 1b): why/figure-out
+    # always hand off for gather + Want-me-to; explicit investigate always
+    # dispatches. The list only tells the planner which sources gather can use.
+
+    # Use unavailable dispatch note only when active_tools is non-empty AND
+    # investigation_start is not in the tool list. Empty active_tools means
+    # "unknown" and must keep today's text — absence of information must never
+    # silently disable the mandate.
+    if turn_snapshot.active_tools and not turn_snapshot.has_active_tool("investigation_start"):
+        gate_note = _GATE_NOTE_DISPATCH_UNAVAILABLE
+    else:
+        gate_note = _GATE_NOTE_DISPATCH_AVAILABLE
+
     return f"CONNECTED INTEGRATIONS (this install, right now): {listing}\n{gate_note}\n"
+
+
+def investigation_dispatch_blocks(turn_snapshot: TurnSnapshot) -> tuple[PromptBlock, ...]:
+    """Return investigation dispatch block when investigation_start is missing."""
+    # Return empty tuple in the available and unknown cases
+    if not turn_snapshot.active_tools or turn_snapshot.has_active_tool("investigation_start"):
+        return ()
+
+    # Return tuple with dispatch block when investigation_start is missing from a populated tool list
+    dispatch_note = (
+        "INVESTIGATION DISPATCH (this surface, this turn): investigation_start and "
+        "alert_sample are NOT in your tool list. This OVERRIDES every rule above that "
+        "tells you to emit them, including the ones marked ALWAYS and highest-priority. "
+        "Calling a tool you have not been given fails and burns the turn.\n"
+        "- Explicit investigate / RCA / diagnose / analyze / root-cause instructions → "
+        "assistant_handoff. The gather pass queries the connected sources and the "
+        "assistant answers from that evidence.\n"
+        "- Sample / test / demo alert requests → assistant_handoff.\n"
+        "- Diagnostic and cause questions → assistant_handoff, unchanged.\n"
+        '- Do NOT substitute slash_invoke(command="/investigate"), shell_run with '
+        "`opensre investigate`, or any other tool as a stand-in. That pipeline runs "
+        "for minutes on this thread and the turn is cut off long before it returns.\n"
+        "- State once, plainly, that a full multi-stage investigation cannot be started "
+        "from here, then answer with the evidence you have.\n"
+    )
+    return (
+        PromptBlock(
+            id="investigation-dispatch",
+            kind=PromptBlockKind.RULE,
+            tier=PromptTier.CONTEXT,
+            content=dispatch_note,
+            provenance="core.agent_harness.turns.turn_snapshot",
+        ),
+    )
 
 
 def recent_conversation_block(turn_snapshot: TurnSnapshot) -> str:
@@ -260,6 +311,7 @@ __all__ = [
     "build_action_user_message",
     "connected_integrations_block",
     "interrupted_turn_recovery_block",
+    "investigation_dispatch_blocks",
     "long_term_memory_block",
     "prior_action_facts_block",
     "recent_conversation_block",

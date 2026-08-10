@@ -187,6 +187,14 @@ class TurnSnapshot:
     the action agent. Consumed from ``session.pending_recovery_note`` (popped:
     the note rides exactly one turn)."""
 
+    def has_active_tool(self, name: str) -> bool:
+        """Whether a tool named ``name`` is offered to the model this turn.
+
+        False is also returned when ``active_tools`` was never populated, so
+        callers must treat "no information" separately from "tool absent".
+        """
+        return any(str(getattr(tool, "name", "")) == name for tool in self.active_tools)
+
     @classmethod
     def from_session(
         cls,

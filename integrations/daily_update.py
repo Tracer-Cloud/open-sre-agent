@@ -237,7 +237,7 @@ def _resolve_user_display_name(login: str, token: str, cache: dict[str, str]) ->
     if cached is not None:
         return cached
 
-    url = f"{GITHUB_API_BASE_URL}/users/{parse.quote(login)}"
+    url = f"{GITHUB_API_BASE_URL}/users/{parse.quote(login, safe='')}"
     try:
         payload, _headers = _github_json(url, token)
     except RuntimeError:

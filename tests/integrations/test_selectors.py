@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from integrations.config_models import KubernetesIntegrationConfig
 from integrations.selectors import (
     get_default_instance,
     get_instance_by_name,
@@ -112,3 +113,38 @@ def test_select_instance_by_tags_only() -> None:
 def test_select_instance_by_name_no_match_returns_none() -> None:
     # Per docstring: name-based lookup doesn't silently fall back
     assert select_instance(_resolved_multi(), "grafana", name="nope") is None
+
+
+def test_get_instances_normalizes_a_model_config_to_a_dict() -> None:
+    """The list branch must hand back the same shape the flat branch does.
+
+    ``classify_integrations`` puts the classified *model* in
+    ``_all_<service>_instances`` while the flat fallback yields a dict, so a
+    caller written against one shape silently changed behavior the moment a
+    second instance (or a non-``default`` name) made the other branch run. The
+    failure is invisible: ``isinstance(config, dict)`` just turns False and
+    whatever it guards stops happening, with no error anywhere.
+    """
+    resolved = {
+        "kubernetes": KubernetesIntegrationConfig(kubeconfig_path="/p", context="ctx-a"),
+        "_all_kubernetes_instances": [
+            {
+                "name": "utility",
+                "tags": {},
+                "config": KubernetesIntegrationConfig(kubeconfig_path="/p", context="ctx-a"),
+                "integration_id": "env-kubernetes",
+            }
+        ],
+    }
+
+    config = get_instances(resolved, "kubernetes")[0]["config"]
+
+    assert isinstance(config, dict)
+    assert config["context"] == "ctx-a"
+
+
+def test_get_instances_leaves_a_dict_config_alone() -> None:
+    assert get_instances(_resolved_multi(), "grafana")[0]["config"] == {
+        "endpoint": "https://prod",
+        "api_key": "kp",
+    }

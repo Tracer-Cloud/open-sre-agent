@@ -5,7 +5,8 @@ claim and run the same queued investigation. Here the queue is a table and
 ``claim_next_queued`` takes the row with ``FOR UPDATE SKIP LOCKED``, so exactly
 one worker gets it.
 
-Selected when ``DATABASE_URL`` is set; requires the ``postgresql`` extra.
+Selected when ``DATABASE_URI`` (or ``DATABASE_URL``) is set; requires the
+``postgresql`` extra.
 """
 
 from __future__ import annotations
@@ -17,7 +18,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from gateway.core.storage.investigations.store import InvestigationRecord, InvestigationStatus
+from gateway.core.storage.investigations.store import (
+    InvestigationOrigin,
+    InvestigationRecord,
+    InvestigationStatus,
+)
 
 _POOL_MIN_CONNECTIONS = 1
 # Bounds concurrent server connections: the worker plus a burst of API threads.
@@ -40,7 +45,7 @@ _KEEPALIVES_COUNT = 3
 
 _COLUMNS = (
     "id, clerk_org_id, workspace_id, status, trigger, error, "
-    "report_local_path, report_s3_key, created_at, updated_at"
+    "report_local_path, report_s3_key, created_at, updated_at, origin"
 )
 
 _SCHEMA = """
@@ -59,8 +64,11 @@ CREATE TABLE IF NOT EXISTS investigations (
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS workspace_id TEXT;
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS error TEXT;
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS report_local_path TEXT;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS origin TEXT DEFAULT 'rest';
 CREATE INDEX IF NOT EXISTS investigations_status_created
     ON investigations (status, created_at);
+CREATE INDEX IF NOT EXISTS investigations_origin_status_created
+    ON investigations (origin, status, created_at);
 """
 
 
@@ -104,6 +112,7 @@ def _row_to_record(row: tuple[Any, ...]) -> InvestigationRecord:
         report_s3_key=row[7],
         created_at=row[8],
         updated_at=row[9],
+        origin=InvestigationOrigin(row[10]) if row[10] else InvestigationOrigin.REST,
     )
 
 
@@ -147,6 +156,7 @@ class PostgresInvestigationStore:
         *,
         clerk_org_id: str,
         trigger: dict[str, Any],
+        origin: InvestigationOrigin,
         workspace_id: str | None = None,
     ) -> InvestigationRecord:
         investigation_id = str(uuid.uuid4())
@@ -154,8 +164,8 @@ class PostgresInvestigationStore:
             cursor.execute(
                 f"""
                 INSERT INTO investigations
-                    (id, clerk_org_id, workspace_id, status, trigger, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s::jsonb, now(), now())
+                    (id, clerk_org_id, workspace_id, status, trigger, created_at, updated_at, origin)
+                VALUES (%s, %s, %s, %s, %s::jsonb, now(), now(), %s)
                 RETURNING {_COLUMNS}
                 """,
                 (
@@ -164,6 +174,7 @@ class PostgresInvestigationStore:
                     workspace_id,
                     InvestigationStatus.QUEUED.value,
                     json.dumps(trigger),
+                    origin.value,
                 ),
             )
             return _row_to_record(cursor.fetchone())
@@ -177,7 +188,7 @@ class PostgresInvestigationStore:
             row = cursor.fetchone()
             return _row_to_record(row) if row else None
 
-    def claim_next_queued(self) -> InvestigationRecord | None:
+    def claim_next_queued(self, *, origin: InvestigationOrigin) -> InvestigationRecord | None:
         with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 f"""
@@ -185,14 +196,32 @@ class PostgresInvestigationStore:
                 SET status = %s, updated_at = now()
                 WHERE id = (
                     SELECT id FROM investigations
-                    WHERE status = %s
+                    WHERE status = %s AND origin = %s
                     ORDER BY created_at
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
                 RETURNING {_COLUMNS}
                 """,
-                (InvestigationStatus.RUNNING.value, InvestigationStatus.QUEUED.value),
+                (InvestigationStatus.RUNNING.value, InvestigationStatus.QUEUED.value, origin.value),
+            )
+            row = cursor.fetchone()
+            return _row_to_record(row) if row else None
+
+    def claim(self, investigation_id: str) -> InvestigationRecord | None:
+        with self._connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE investigations
+                SET status = %s, updated_at = now()
+                WHERE id = %s AND status = %s
+                RETURNING {_COLUMNS}
+                """,
+                (
+                    InvestigationStatus.RUNNING.value,
+                    investigation_id,
+                    InvestigationStatus.QUEUED.value,
+                ),
             )
             row = cursor.fetchone()
             return _row_to_record(row) if row else None
@@ -240,3 +269,11 @@ class PostgresInvestigationStore:
             )
             row = cursor.fetchone()
             return _row_to_record(row) if row else None
+
+    def touch(self, investigation_id: str) -> None:
+        """Update the heartbeat timestamp for a running investigation."""
+        with self._connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE investigations SET updated_at = now() WHERE id = %s",
+                (investigation_id,),
+            )

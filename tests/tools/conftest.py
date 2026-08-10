@@ -8,8 +8,12 @@ Provides:
 
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Shared fixture factories (plain functions, called directly from tests)
@@ -318,3 +322,47 @@ class BaseToolContract:
             # If extract_params requires specific keys not in the state, skip silently.
             return
         assert isinstance(result, dict), "extract_params(sources) must return a dict"
+
+
+# ---------------------------------------------------------------------------
+# Sentry capture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sentry_events(monkeypatch: pytest.MonkeyPatch) -> list[BaseException]:
+    """Patch the Sentry SDK so every capture lands in a local list.
+
+    ``conftest`` sets ``OPENSRE_SENTRY_DISABLED=1`` to keep the suite offline,
+    so a test that asserts "this path reports nothing" would pass against a
+    path that reports everything. Re-enabling capture here is what gives an
+    absence-assertion any force.
+
+    Modelled on the richer fixture in ``test_telemetry.py``, which keeps its own
+    because it also asserts on the scope tags. This one only counts events.
+    """
+    monkeypatch.delenv("OPENSRE_SENTRY_DISABLED", raising=False)
+    monkeypatch.delenv("OPENSRE_NO_TELEMETRY", raising=False)
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+
+    events: list[BaseException] = []
+
+    class _Scope:
+        def __enter__(self) -> _Scope:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def set_tag(self, key: str, value: str) -> None:
+            """Ignored: this fixture asserts on counts, not on tags."""
+
+        def set_extra(self, key: str, value: object) -> None:
+            """Ignored: this fixture asserts on counts, not on extras."""
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentry_sdk",
+        SimpleNamespace(capture_exception=events.append, push_scope=_Scope),
+    )
+    return events

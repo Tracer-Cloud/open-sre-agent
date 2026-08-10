@@ -50,7 +50,7 @@ def test_gateway_status_slash_is_not_swallowed() -> None:
 
 
 def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Literal /investigate <template> must run the investigation slash handler."""
+    """Literal /investigate <template> must run the investigation slash handler without detaching."""
 
     def _fake_run_sample_alert_for_session(**_kwargs: object) -> dict[str, object]:
         return {"status": "completed", "summary": "parity investigation ok"}
@@ -60,6 +60,7 @@ def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -
         _fake_run_sample_alert_for_session,
     )
 
+    # No delivery target bound - should run synchronously
     sink = _run_gateway_slash("/investigate generic")
     assert sink.finalized is not None
     assert "I didn't have anything to add for that." not in sink.finalized
@@ -67,7 +68,7 @@ def test_gateway_investigate_slash_dispatches(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_gateway_investigate_discord_alert_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Discord maps slash alert text to /investigate alert:<text>."""
+    """Discord maps slash alert text to /investigate alert:<text> and runs synchronously without delivery target."""
 
     def _fake_run_investigation_for_session(**_kwargs: object) -> dict[str, object]:
         return {"status": "completed", "summary": "discord alert ok"}
@@ -77,6 +78,7 @@ def test_gateway_investigate_discord_alert_prefix(monkeypatch: pytest.MonkeyPatc
         _fake_run_investigation_for_session,
     )
 
+    # No delivery target bound - should run synchronously
     sink = _run_gateway_slash("/investigate alert:High error rate on checkout")
     assert sink.finalized is not None
     assert "failed" not in (sink.finalized or "").lower()

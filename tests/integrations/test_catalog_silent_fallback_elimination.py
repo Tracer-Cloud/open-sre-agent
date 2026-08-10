@@ -108,6 +108,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("vercel", "integrations.vercel", "VercelConfig"),
     ("opsgenie", "integrations.opsgenie", "OpsGenieIntegrationConfig"),
     ("incident_io", "integrations.incident_io", "IncidentIoIntegrationConfig"),
+    ("rootly", "integrations.rootly", "RootlyConfig"),
     ("jira", "integrations.jira", "JiraIntegrationConfig"),
     ("discord", "integrations.discord", "DiscordBotConfig"),
     ("telegram", "integrations.telegram", "TelegramBotConfig"),
@@ -225,6 +226,11 @@ _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
         "incident_io",
         {"INCIDENT_IO_API_KEY": "k"},
         "IncidentIoIntegrationConfig",
+    ),
+    (
+        "rootly",
+        {"ROOTLY_API_TOKEN": "t"},
+        "rootly_config_from_env",
     ),
     (
         "mariadb",

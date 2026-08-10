@@ -8,7 +8,7 @@ an Approve / Deny inline keyboard, and callback_query routing back to the broker
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 from gateway.core.runtime.approvals import (
@@ -16,7 +16,7 @@ from gateway.core.runtime.approvals import (
     DENY_ACTION_ID,
     MAX_APPROVAL_WAIT_SECONDS,
     ApprovalBroker,
-    arguments_preview,
+    DecidedPrompts,
 )
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from gateway.transports.telegram.settings import TelegramCallbackQuery
@@ -37,25 +37,26 @@ class TelegramApprovalPrompter:
         self._client = client
         self._broker = broker
         self._chat_id = chat_id
+        self._decided = DecidedPrompts()
 
     def request(
         self,
         *,
-        tool_name: str,
+        call_id: str,
+        headline: str,
         reason: str,
-        arguments: Mapping[str, Any],
+        details: str,
         expiry_seconds: float,
     ) -> tuple[bool, str]:
         approval_id = self._broker.create(
             platform="telegram",
             chat_id=self._chat_id,
         )
-        body = f"🔒 Approval needed — `{tool_name}`"
+        body = f"🔒 Approval needed — {headline}"
         if reason.strip():
             body += f"\n{reason.strip()}"
-        preview = arguments_preview(arguments)
-        if preview:
-            body += f"\n```\n{preview}\n```"
+        if details.strip():
+            body += f"\n```\n{details.strip()}\n```"
         ok, error, message_id = self._client.send_message(
             self._chat_id,
             body,
@@ -63,29 +64,45 @@ class TelegramApprovalPrompter:
         )
         if not ok or not message_id:
             logger.warning(
-                "[telegram-gateway] approval prompt post failed tool=%s chat=%s err=%s",
-                tool_name,
+                "[telegram-gateway] approval prompt post failed headline=%s chat=%s err=%s",
+                headline,
                 self._chat_id,
                 error,
             )
             return (False, "")
         timeout = min(float(expiry_seconds), MAX_APPROVAL_WAIT_SECONDS)
         approved, decided_by = self._broker.wait(approval_id, timeout=timeout)
-        outcome = _outcome_text(tool_name, approved=approved, decided_by=decided_by)
-        # Clear buttons so a late click cannot re-fire.
-        self._client.edit_message_text(
-            self._chat_id,
-            message_id,
-            outcome,
-            reply_markup={"inline_keyboard": []},
-        )
+        # Clearing the keyboard is part of the edit: a late click cannot re-fire.
+        self._edit(message_id, _outcome_text(headline, approved=approved, decided_by=decided_by))
+        if approved:
+            # Keyed on call_id, not "the last prompt": a turn can run tools in
+            # parallel, so the receipt has to find its own message.
+            self._decided.remember(call_id, message_id=message_id, decided_by=decided_by)
         logger.info(
-            "[telegram-gateway] approval tool=%s approved=%s decided_by=%s",
-            tool_name,
+            "[telegram-gateway] approval headline=%s approved=%s decided_by=%s",
+            headline,
             approved,
             decided_by or "(expired)",
         )
         return (approved, decided_by)
+
+    def attach_receipt(self, *, call_id: str, receipt: str) -> None:
+        """Replace the approved prompt's outcome with what the call produced."""
+        decision = self._decided.take(call_id)
+        if decision is None or not receipt.strip():
+            return
+        self._edit(
+            decision.message_id,
+            _outcome_text(receipt, approved=True, decided_by=decision.decided_by),
+        )
+
+    def _edit(self, message_id: str, text: str) -> None:
+        self._client.edit_message_text(
+            self._chat_id,
+            message_id,
+            text,
+            reply_markup={"inline_keyboard": []},
+        )
 
 
 def handle_callback_query(
@@ -156,10 +173,11 @@ def _approval_keyboard(approval_id: str) -> dict[str, Any]:
     }
 
 
-def _outcome_text(tool_name: str, *, approved: bool, decided_by: str) -> str:
-    who = f"by user {decided_by}" if decided_by else "(expired — no click)"
+def _outcome_text(label: str, *, approved: bool, decided_by: str) -> str:
+    if not decided_by:
+        return f"⏱ Approval request for {label} expired — action skipped."
     verb = "approved" if approved else "denied"
-    return f"🔒 `{tool_name}` {verb} {who}."
+    return f"🔒 {label} — {verb} by user {decided_by}."
 
 
 __all__ = [

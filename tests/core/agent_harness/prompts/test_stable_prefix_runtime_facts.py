@@ -27,7 +27,7 @@ def test_static_render_omits_live_keys() -> None:
     }
     static = render_static_runtime_facts(runtime)
     assert "OpenSRE version is 0.1" in static
-    assert "local timezone is Europe/Berlin" in static
+    assert "times are reported in timezone Europe/Berlin" in static
     assert "current time is" not in static
     assert "process uptime is" not in static
     assert "root disk is" not in static
@@ -51,7 +51,7 @@ def test_live_render_includes_only_live_keys() -> None:
     assert "root disk is 63.2% used with 120.5 GB free" in live
     assert "memory is 41.0% used with 9.4 GB available" in live
     assert "OpenSRE version is" not in live
-    assert "local timezone is" not in live  # tz is session-static
+    assert "times are reported in timezone" not in live  # tz is session-static
 
 
 def test_environment_block_keeps_static_facts_only() -> None:

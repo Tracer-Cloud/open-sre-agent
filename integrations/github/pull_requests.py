@@ -1,7 +1,11 @@
-"""Open GitHub pull requests from a local workspace.
+"""Open GitHub pull requests.
 
-Resolves the target repository from the workspace's ``origin`` remote and calls
-GitHub's REST API to create a pull request from an already-pushed feature branch.
+:func:`create_pull_request` is the REST call on its own: give it an owner/repo
+and two branch names and it opens the PR. :func:`open_pull_request` wraps it for
+callers that have a local checkout, resolving the target repository from the
+workspace's ``origin`` remote first — the workspace is the only part that needs
+``git``, which is why the two are separate.
+
 Tokens are resolved through the existing GitHub credential helper and never
 appear in the returned payload.
 """
@@ -11,7 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
+from integrations.github.path_safety import repo_path
 from integrations.github.repo_scope import detect_git_remote_repo_scope
+from integrations.github.write_errors import GitHubWriteError
 
 ERR_GITHUB_TOKEN = "github_token_missing"
 ERR_REPO_SCOPE = "repo_scope_unresolved"
@@ -26,13 +32,8 @@ class PullRequest:
     number: int
 
 
-class GitHubPullRequestError(Exception):
+class GitHubPullRequestError(GitHubWriteError):
     """Expected PR-open failure with a stable ``kind`` for callers to map."""
-
-    def __init__(self, kind: str, message: str) -> None:
-        super().__init__(message)
-        self.kind = kind
-        self.message = message
 
 
 def resolve_repo_scope(workspace: str) -> tuple[str, str]:
@@ -46,34 +47,31 @@ def resolve_repo_scope(workspace: str) -> tuple[str, str]:
     return scope
 
 
-def open_pull_request(
-    workspace: str,
+def create_pull_request(
+    client: GitHubRestClient,
     *,
+    owner: str,
+    repo: str,
     head_branch: str,
     base_branch: str,
     title: str,
     body: str,
-    github_token: str | None = None,
+    draft: bool = False,
 ) -> PullRequest:
-    """Open a PR from *head_branch* into *base_branch*."""
-    token = resolve_github_token(github_token)
-    if not token:
-        raise GitHubPullRequestError(
-            ERR_GITHUB_TOKEN,
-            "A GitHub token is required to open a PR. Set GITHUB_TOKEN or GH_TOKEN.",
-        )
+    """Open a PR from *head_branch* into *base_branch* on an explicit repo.
 
-    owner, repo = resolve_repo_scope(workspace)
-    client = GitHubRestClient(token)
+    Needs no local checkout — both branches must already exist on the remote.
+    """
     try:
         payload = client.request(
             "POST",
-            f"repos/{owner}/{repo}/pulls",
+            repo_path(owner, repo, "pulls"),
             body={
                 "title": title,
                 "head": head_branch,
                 "base": base_branch,
                 "body": body,
+                "draft": draft,
                 "maintainer_can_modify": True,
             },
         )
@@ -95,12 +93,42 @@ def open_pull_request(
     return PullRequest(url=url, number=number)
 
 
+def open_pull_request(
+    workspace: str,
+    *,
+    head_branch: str,
+    base_branch: str,
+    title: str,
+    body: str,
+    github_token: str | None = None,
+) -> PullRequest:
+    """Open a PR from *head_branch* into *base_branch* for a local workspace."""
+    token = resolve_github_token(github_token)
+    if not token:
+        raise GitHubPullRequestError(
+            ERR_GITHUB_TOKEN,
+            "A GitHub token is required to open a PR. Set GITHUB_TOKEN or GH_TOKEN.",
+        )
+
+    owner, repo = resolve_repo_scope(workspace)
+    return create_pull_request(
+        GitHubRestClient(token),
+        owner=owner,
+        repo=repo,
+        head_branch=head_branch,
+        base_branch=base_branch,
+        title=title,
+        body=body,
+    )
+
+
 __all__ = [
     "ERR_GITHUB_TOKEN",
     "ERR_PR_FAILED",
     "ERR_REPO_SCOPE",
     "GitHubPullRequestError",
     "PullRequest",
+    "create_pull_request",
     "open_pull_request",
     "resolve_repo_scope",
 ]

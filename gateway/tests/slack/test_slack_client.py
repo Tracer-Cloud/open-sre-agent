@@ -131,20 +131,53 @@ class _StreamingWebClient(_FakeWebClient):
         return {"ok": True}
 
 
+def _start(client: SlackWebApiClient) -> str | None:
+    """Open a stream with placeholder recipients; the ids are not the subject."""
+    return client.start_stream(
+        channel="C1",
+        thread_ts="1.0",
+        recipient_team_id="T1",
+        recipient_user_id="U1",
+    )
+
+
 def test_start_stream_returns_ts_and_requests_timeline_mode() -> None:
     web = _StreamingWebClient(start={"ts": "5.5"})
     client = SlackWebApiClient(web)  # type: ignore[arg-type]
 
-    assert client.start_stream(channel="C1", thread_ts="1.0") == "5.5"
+    assert _start(client) == "5.5"
     assert web.start_calls[0]["task_display_mode"] == "timeline"
+
+
+def test_start_stream_names_both_recipients() -> None:
+    """An org-wide install spans workspaces, so Slack infers neither.
+
+    Slack asks for them one at a time: sending only the team turns
+    ``missing_recipient_team_id`` into ``missing_recipient_user_id`` rather
+    than succeeding. Neither is a permanent-looking error, so streaming is
+    never disabled either — the call is re-attempted, and re-warned about, for
+    the life of the process.
+    """
+    web = _StreamingWebClient(start={"ts": "5.5"})
+    client = SlackWebApiClient(web)  # type: ignore[arg-type]
+
+    client.start_stream(
+        channel="C1",
+        thread_ts="1.0",
+        recipient_team_id="T0429",
+        recipient_user_id="U0429",
+    )
+
+    assert web.start_calls[0]["recipient_team_id"] == "T0429"
+    assert web.start_calls[0]["recipient_user_id"] == "U0429"
 
 
 def test_start_stream_caches_permanent_unsupported_error() -> None:
     web = _StreamingWebClient(start=_api_error("unknown_method"))
     client = SlackWebApiClient(web)  # type: ignore[arg-type]
 
-    assert client.start_stream(channel="C1", thread_ts="1.0") is None
-    assert client.start_stream(channel="C1", thread_ts="1.0") is None
+    assert _start(client) is None
+    assert _start(client) is None
     # Second call short-circuits without hitting the API again.
     assert len(web.start_calls) == 1
 
@@ -153,8 +186,8 @@ def test_start_stream_retries_after_transient_error() -> None:
     web = _StreamingWebClient(start=_api_error("internal_error"))
     client = SlackWebApiClient(web)  # type: ignore[arg-type]
 
-    assert client.start_stream(channel="C1", thread_ts="1.0") is None
-    assert client.start_stream(channel="C1", thread_ts="1.0") is None
+    assert _start(client) is None
+    assert _start(client) is None
     # Transient errors do not disable streaming for the process.
     assert len(web.start_calls) == 2
 

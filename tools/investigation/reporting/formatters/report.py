@@ -3,6 +3,7 @@
 import html
 import re
 
+from platform.common.duration import format_duration
 from tools.investigation.reporting.context import ReportContext
 from tools.investigation.reporting.formatters.base import (
     format_html_link,
@@ -523,7 +524,7 @@ def format_slack_message(ctx: ReportContext) -> str:
     cloudwatch_link = render_cloudwatch_link(ctx)
     meta_lines = []
     if duration_seconds is not None:
-        meta_lines.append(f"Timing: {duration_seconds}s")
+        meta_lines.append(f"Timing: {format_duration(duration_seconds)}")
     if alert_id:
         meta_lines.append(f"*Alert ID:* {alert_id}")
     meta_block = "\n" + "\n".join(meta_lines) if meta_lines else ""
@@ -655,7 +656,7 @@ def format_telegram_message(ctx: ReportContext) -> str:
 
     meta_bits: list[str] = []
     if duration_seconds is not None:
-        meta_bits.append(f"Timing: {duration_seconds}s")
+        meta_bits.append(f"Timing: {format_duration(duration_seconds)}")
     if alert_id:
         meta_bits.append(f"Alert ID: {alert_id}")
     if meta_bits:
@@ -710,7 +711,7 @@ def format_whatsapp_message(ctx: ReportContext) -> str:
 
     meta_bits: list[str] = []
     if duration_seconds is not None:
-        meta_bits.append(f"Timing: {duration_seconds}s")
+        meta_bits.append(f"Timing: {format_duration(duration_seconds)}")
     if alert_id:
         meta_bits.append(f"Alert ID: {alert_id}")
     if meta_bits:
@@ -849,7 +850,7 @@ def build_slack_blocks(ctx: ReportContext) -> list[dict]:
     # ── Meta context (duration / alert) at the bottom ──
     meta_parts = []
     if duration_seconds is not None:
-        meta_parts.append(f"Analyzed in {duration_seconds}s")
+        meta_parts.append(f"Analyzed in {format_duration(duration_seconds)}")
     if alert_id:
         meta_parts.append(f"Alert: {alert_id}")
     if meta_parts:

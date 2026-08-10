@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from core.agent_harness.tools.tool_context import (
     ACTION_TOOL_CONTEXT_RESOURCE_KEY,
     ActionToolContext,
@@ -813,3 +815,24 @@ def test_skill_guidance_attaches_to_security_fix_tool() -> None:
     assert "Workflow guidance:" in tool.description
     assert '<skill name="github-security-fix"' in tool.skill_guidance
     assert "Secret-scanning alerts are refused" in tool.skill_guidance
+
+
+def test_int_number_coercion_handles_non_numeric_strings() -> None:
+    """The int(number) coercion safely handles non-numeric input."""
+    from integrations.github.tools.security_fix.context import gather_security_alert_context
+    from integrations.github.tools.security_fix.errors import (
+        ERR_INVALID_INPUT,
+        GitHubSecurityFixError,
+    )
+
+    with pytest.raises(GitHubSecurityFixError) as exc_info:
+        gather_security_alert_context(
+            owner="owner",
+            repo="repo",
+            alert_type="dependabot",
+            alert_number="not-a-number",  # type: ignore
+            github_token="test-token",
+        )
+
+    assert exc_info.value.kind == ERR_INVALID_INPUT
+    assert "Alert number must be a valid integer" in str(exc_info.value)

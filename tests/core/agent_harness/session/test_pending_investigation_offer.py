@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import (
     DispatchablePendingOffer,
@@ -343,6 +344,61 @@ def test_run_turn_does_not_arm_investigation_when_capability_disabled() -> None:
     assert session.pending_investigation_offer is None
     # Closer left as the model wrote it — no force-normalize without a tool.
     assert "run a full investigation" in (first.assistant_response_text or "")
+
+
+def test_gateway_session_gather_path_defers_paint_and_flushes_once() -> None:
+    """T2: available_capabilities={'investigation': ()} + gather -> stream(defer=True) AND finish_streamed_response called once."""
+    from core.agent_harness.turns.orchestrator import run_turn
+
+    session = InMemorySessionStore()
+    session.available_capabilities = {"investigation": ()}  # Gateway disables investigation
+    finish_calls: list[str] = []
+
+    def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
+        _ = text
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=False,  # Force gather path
+            response_text="",
+            handoff_contents=(),
+        )
+
+    class FakeRun:
+        response_text = "Diagnostic answer with gather evidence."
+
+    # ``run_turn`` passes the AnswerRequest positionally, so reading it out of
+    # **kwargs silently never fires. Capture the positional argument instead
+    # and assert after the run.
+    deferred: list[bool] = []
+
+    def fake_answer(text: str, request: AnswerRequest) -> FakeRun:
+        _ = text
+        deferred.append(request.defer_want_me_to_closer)
+        return FakeRun()
+
+    class FakeOutput:
+        def finish_streamed_response(self, text: str) -> None:
+            finish_calls.append(text)
+
+    result = run_turn(
+        "diagnostic question",
+        session,
+        execute_actions=execute_actions,
+        answer=fake_answer,
+        gather=lambda *_a, **_k: "gathered evidence",
+        accounting=NoopTurnAccounting(),
+        output=FakeOutput(),  # type: ignore[arg-type]
+    )
+
+    assert result.final_intent == "cli_agent_fallback"
+    # The surface was told to hold the paint...
+    assert deferred == [True]
+    # ...so the orchestrator must flush it, capability guard or not.
+    assert len(finish_calls) == 1
+    assert "Diagnostic answer" in finish_calls[0]
 
 
 def test_run_turn_arms_then_yes_dispatches_investigation() -> None:

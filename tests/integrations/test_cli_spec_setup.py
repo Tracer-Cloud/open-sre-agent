@@ -51,6 +51,7 @@ import integrations.posthog.setup as posthog_setup
 import integrations.posthog_mcp.setup as posthog_mcp_setup
 import integrations.rds.setup as rds_setup
 import integrations.redis.setup as redis_setup
+import integrations.rootly.setup as rootly_setup
 import integrations.sentry.setup as sentry_setup
 import integrations.sentry_mcp.setup as sentry_mcp_setup
 import integrations.servicenow.setup as servicenow_setup
@@ -103,6 +104,11 @@ _ANSWERS: dict[str, dict[str, str]] = {
     },
     "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
+    "rootly": {
+        "api_token": "rootly-api-token",
+        "base_url": "https://api.rootly.example.com",
+        "timeout_seconds": "30",
+    },
     "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
     "mongodb_atlas": {
         "api_public_key": "atlas-public-key",
@@ -273,6 +279,7 @@ _CASES = [
     pytest.param(signoz_setup, "SIGNOZ_SETUP", cli._setup_signoz, id="signoz"),
     pytest.param(jenkins_setup, "JENKINS_SETUP", cli._setup_jenkins, id="jenkins"),
     pytest.param(pagerduty_setup, "PAGERDUTY_SETUP", cli._setup_pagerduty, id="pagerduty"),
+    pytest.param(rootly_setup, "ROOTLY_SETUP", cli._setup_rootly, id="rootly"),
     pytest.param(dagster_setup, "DAGSTER_SETUP", cli._setup_dagster, id="dagster"),
     pytest.param(temporal_setup, "TEMPORAL_SETUP", cli._setup_temporal, id="temporal"),
     pytest.param(helm_setup, "HELM_SETUP", cli._setup_helm, id="helm"),

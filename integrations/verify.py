@@ -27,7 +27,12 @@ from integrations.registry import (
 )
 from integrations.slack.verifier import RUNTIME_SEND_TEST_KEY as _SLACK_RUNTIME_SEND_TEST_KEY
 from integrations.store import get_integration
-from integrations.verification import VerifierFn, get_verifier, result
+from integrations.verification import (
+    VerifierFn,
+    get_verifier,
+    result,
+    with_instance_inventory,
+)
 from platform.terminal.theme import (
     DIM,
     ERROR,
@@ -131,10 +136,13 @@ def _verify_one(
     if current_service == "slack" and send_slack_test:
         config[_SLACK_RUNTIME_SEND_TEST_KEY] = True
 
+    # The verifier only ever sees the default instance's config, so the
+    # inventory is added here rather than asked of all 50+ verifiers.
     try:
-        return verifier(str(integration["source"]), config)
+        outcome = verifier(str(integration["source"]), config)
     except Exception as exc:
-        return result(current_service, str(integration.get("source", "-")), "failed", str(exc))
+        outcome = result(current_service, str(integration.get("source", "-")), "failed", str(exc))
+    return with_instance_inventory(outcome, integration)
 
 
 def verify_integrations(

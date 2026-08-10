@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from config.constants.agent_identity import AGENT_NAME_ENV
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate, is_addressed_to_bot
 
 _KEY = "T1:C1:100.1"
@@ -164,3 +167,24 @@ def test_is_addressed_to_bot_heuristics() -> None:
     assert is_addressed_to_bot("OpenSRE can you summarize", bot_user_id=_BOT)
     assert not is_addressed_to_bot(f"<@{_OTHER}> your turn?", bot_user_id=_BOT)
     assert not is_addressed_to_bot("pushed the fix to main", bot_user_id=_BOT)
+
+
+def test_a_renamed_bot_answers_to_its_own_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Renaming the app must not leave a dead wake word behind.
+
+    Without this, "hey acmeops, take a look" in an open thread is heard as
+    human-to-human chatter and the bot stays silent.
+    """
+    monkeypatch.setenv(AGENT_NAME_ENV, "AcmeOps")
+
+    assert is_addressed_to_bot("acmeops take a look at the checkout latency", bot_user_id=_BOT)
+    assert is_addressed_to_bot("Acme Ops can you summarize", bot_user_id=_BOT)
+    # The old name is no longer this bot's.
+    assert not is_addressed_to_bot("opensre shipped a release", bot_user_id=_BOT)
+
+
+def test_a_single_word_name_matches_whole_words_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(AGENT_NAME_ENV, "Nimbus")
+
+    assert is_addressed_to_bot("nimbus rerun that", bot_user_id=_BOT)
+    assert not is_addressed_to_bot("the nimbushill deploy went out", bot_user_id=_BOT)

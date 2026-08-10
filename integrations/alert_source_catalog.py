@@ -58,6 +58,9 @@ _ROUTING_TABLE: dict[str, AlertSourceRouting] = {
     "openobserve": routing(("openobserve",), ("openobserve",)),
     "betterstack": routing(("betterstack",), ("betterstack",)),
     "azure": routing(("azure", "azure_sql"), ("azure", "azure_sql")),
+    # GKE alerts land here too — seed kubernetes alongside gcp so a cluster with
+    # a registered kubeconfig is investigated with kubectl, not only Cloud Logging.
+    "gcp": routing(("gcp", "kubernetes"), ("gcp",)),
     "github": routing(("github",), ("github",)),
     "gitlab": routing(("gitlab",), ("gitlab",)),
     "bitbucket": routing(("bitbucket",), ("bitbucket",)),
@@ -112,6 +115,16 @@ _ALIASES_TABLE: dict[str, tuple[str, ...]] = {
     "openobserve": ("openobserve",),
     "betterstack": ("betterstack", "better stack"),
     "azure": ("azure",),
+    # Generic k8s terms stay under "kubernetes" — "gke" alone is what implies GCP.
+    "gcp": (
+        "gcp",
+        "google cloud",
+        "gke",
+        "cloud logging",
+        "cloud monitoring",
+        "stackdriver",
+        "cloud run",
+    ),
     "signoz": ("signoz",),
     "jenkins": ("jenkins",),
     "tempo": ("tempo",),

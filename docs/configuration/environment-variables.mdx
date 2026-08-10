@@ -10,7 +10,7 @@ All configuration options for OpenSRE can be set via environment variables. This
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `azure-openai`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`, `grok-cli`, `pi`) | `config` |
-| `LLM_MAX_TOKENS` | `4096` | Maximum tokens for LLM responses | `config` |
+| `LLM_MAX_TOKENS` | provider default | Overrides the response token budget for every provider and transport. Unset: each provider's own default (4096; 1024 for local Ollama tool calls). Ignored by CLI-backed providers. | `config` |
 | `OPENSRE_LLM_TRANSPORT` | `sdk` | LLM transport for API providers: `sdk` (native SDKs) or `litellm` | `core/llm/transport_mode` |
 
 ### Anthropic
@@ -135,6 +135,58 @@ All configuration options for OpenSRE can be set via environment variables. This
 | `PI_MODEL` | | Model override for Pi CLI (`provider/model`) | `config` |
 | `PI_AGENT_DIR` | | Pi agent config directory override | `integrations/llm_cli` |
 | `PI_CONFIG_DIR` | | Pi config directory override | `integrations/llm_cli` |
+
+## Logging
+
+| Variable | Default | Description | Module |
+|----------|---------|-------------|--------|
+| `OPENSRE_LOG_LEVEL` | `INFO` | How much the process logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `config/constants/logging` |
+
+Reach for `DEBUG` when a chat turn answers without using its tools. Before
+replying, the agent runs a short evidence-gathering pass over your connected
+integrations, and that pass can bail out for several reasons — the turn was
+cancelled, no integration is reachable, the model is unavailable, or a tool
+raised. Each reason is logged, so the level is usually the difference between
+"the bot ignored my question" and knowing which step gave up.
+
+An unrecognized value falls back to `INFO` rather than stopping the process, so
+a typo here can never keep a gateway from starting.
+
+## Time
+
+| Variable | Default | Description | Module |
+|----------|---------|-------------|--------|
+| `OPENSRE_DISPLAY_TIMEZONE` | host timezone | IANA name of the zone the agent quotes times in, e.g. `America/New_York` | `config/constants/timezone` |
+
+Set this on a chat gateway. Unset, the agent reports times in its host's zone —
+on a pod that is wherever the cluster happens to run, and rarely where anyone
+reading the answer sits, so every timestamp costs the reader a conversion before
+it can be lined up against an alert.
+
+With it set, the agent quotes the current time in that zone and labels it, and
+converts timestamps it reads out of logs, alerts, and incidents into the same
+zone while keeping the original in parentheses so you can check the arithmetic.
+
+This changes what the agent *says*, not the process clock, not stored data, and
+not what any tool sends to a vendor API. A zone name it cannot load falls back
+to the host zone rather than stopping the process.
+
+## Agent Identity
+
+| Variable | Default | Description | Module |
+|----------|---------|-------------|--------|
+| `OPENSRE_AGENT_NAME` | `OpenSRE` | Name the agent goes by in chat and in the terminal | `config/constants/agent_identity` |
+
+Set it to whatever your Slack, Discord, or Telegram bot is called. It changes
+how the agent introduces itself, the name in the Slack reply footer, and the
+wake word that lets a thread reply reach the bot without an `@mention`. It does
+**not** rename the product: the `opensre` CLI, its commands, and these docs stay
+OpenSRE.
+
+The name is not read from the chat platform. A Slack bot user's profile keeps
+its old name until the app is reinstalled, so auto-detection would confidently
+report a stale one — and a single gateway process can serve Slack, Discord, and
+Telegram at the same time, each with its own platform-side name.
 
 ## Output & Debugging
 
@@ -318,6 +370,9 @@ not a Mintlify docs-site page).
 | `BITBUCKET_MAX_RESULTS` | `25` | Max results per API call | `integrations/_catalog_impl` |
 | `INCIDENT_IO_BASE_URL` | | incident.io API URL | `integrations/_catalog_impl` |
 | `INCIDENT_IO_API_TOKEN` | | incident.io API token | `.env.example` |
+| `ROOTLY_API_TOKEN` | | Rootly API token | `integrations/_catalog_impl` |
+| `ROOTLY_BASE_URL` | `https://api.rootly.com` | Rootly API URL | `integrations/_catalog_impl` |
+| `ROOTLY_TIMEOUT_SECONDS` | `15` | Rootly per-request timeout | `integrations/_catalog_impl` |
 | `OPSGENIE_API_KEY` | | Opsgenie API key | `integrations/_catalog_impl` |
 | `OPSGENIE_REGION` | `us` | Opsgenie region (us/eu) | `integrations/_catalog_impl` |
 | `VERCEL_API_TOKEN` | | Vercel API token | `integrations/_catalog_impl` |
@@ -456,6 +511,8 @@ Many integrations support multi-instance configuration via JSON:
 | `CORALOGIX_INSTANCES` | JSON array of Coralogix instances |
 | `AWS_INSTANCES` | JSON array of AWS accounts |
 | `ARGOCD_INSTANCES` | JSON array of Argo CD instances |
+| `SPLUNK_INSTANCES` | JSON array of Splunk instances |
+| `KUBERNETES_INSTANCES` | JSON array of Kubernetes clusters (per-tool `cluster` selection) |
 
 See [multi-instance-integrations](/multi-instance-integrations) for detailed format.
 

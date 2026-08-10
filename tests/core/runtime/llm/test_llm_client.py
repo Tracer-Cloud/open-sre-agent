@@ -12,7 +12,6 @@ from core.llm import factory
 from core.llm.factory import reset_llm_clients
 from core.llm.shared import usage as usage_mod
 from core.llm.shared.openai_chat_completions import _RETRY_MAX_ATTEMPTS
-from core.llm.shared.structured_output import extract_json_payload
 
 
 class _FakeAnthropicMessages:
@@ -2236,37 +2235,6 @@ def test_format_openai_connection_error_timeout_returns_timeout_message() -> Non
     assert "timed out" in msg.lower()
     assert "Ollama" in msg
     assert "network connection" not in msg
-
-
-# ---------------------------------------------------------------------------
-# extract_json_payload — embedded code-fence handling (Sentry #1861)
-# ---------------------------------------------------------------------------
-
-
-def test_extract_json_payload_bare_json() -> None:
-    assert extract_json_payload('{"a": 1}') == {"a": 1}
-
-
-def test_extract_json_payload_leading_fence() -> None:
-    text = '```json\n{"a": 1}\n```'
-    assert extract_json_payload(text) == {"a": 1}
-
-
-def test_extract_json_payload_embedded_fence_with_preamble() -> None:
-    """LLM returns prose before the code block — Sentry #1861 root cause."""
-    text = 'Here is the JSON:\n\n```json\n{"location": "node.py"}\n```'
-    assert extract_json_payload(text) == {"location": "node.py"}
-
-
-def test_extract_json_payload_embedded_fence_trailing_braces_in_prose() -> None:
-    """Greedy regex would over-capture {key} in trailing prose; fence path must win."""
-    text = 'Sure!\n\n```json\n{"key": "value"}\n```\n\nThe {key} field represents the identifier.'
-    assert extract_json_payload(text) == {"key": "value"}
-
-
-def test_extract_json_payload_raises_when_no_json() -> None:
-    with pytest.raises(ValueError, match="LLM did not return valid JSON payload"):
-        extract_json_payload("This is plain text with no JSON.")
 
 
 # LLMClient.invoke / invoke_stream — usage-limit BadRequestError (HTTP 400) handling

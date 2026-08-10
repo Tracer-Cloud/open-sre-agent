@@ -94,6 +94,20 @@ branch with different literals.
 
 ### Docs under `docs/`
 
+**Keep docs in sync with every change — this is not optional.** Any change that
+adds, removes, or alters user-visible behavior, configuration, env vars, CLI
+commands, tools, or integrations MUST, in the *same* change:
+
+- **Update every existing doc the change affects** — feature pages, the relevant
+  reference/overview tables, `.env.example`, and any cross-cutting index page
+  (e.g. a new `<SERVICE>_INSTANCES` env means updating both the service page and
+  [docs/multi-instance-integrations.mdx](docs/multi-instance-integrations.mdx)).
+  Grep `docs/` for the feature/flag/command name before you finish; a stale doc
+  is a defect.
+- **Create a new page when no existing doc covers the behavior**, and wire it
+  into [`docs/docs.json`](docs/docs.json) `pages` (an unlisted `.mdx` is
+  unreachable — see Footguns).
+
 `docs/` is user-facing. Test every sentence: *does this change what the reader
 does?* If not, cut it.
 

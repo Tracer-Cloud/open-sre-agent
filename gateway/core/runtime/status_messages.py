@@ -20,6 +20,8 @@ INITIAL_STATUSES: tuple[str, ...] = (
     "📡 Pulling the latest signals…",
 )
 
+TOOL_STATUS_PREFIX: str = "⏳ "
+
 _WORKING_PLACEHOLDER = re.compile(r"working(\.{3}|…)?", re.IGNORECASE)
 
 
@@ -72,7 +74,7 @@ def status_from_tool_start(tool_name: str, tool_input: Any = None) -> str:
     name = tool_name.strip()
     if not name:
         return initial_status_message()
-    return f"⏳ {_tool_label(name)}…{_input_hint(tool_input)}"
+    return f"{TOOL_STATUS_PREFIX}{_tool_label(name)}…{_input_hint(tool_input)}"
 
 
 @lru_cache(maxsize=256)
@@ -105,6 +107,7 @@ def _input_hint(tool_input: Any) -> str:
 
 __all__ = [
     "EMPTY_RESPONSE_MESSAGE",
+    "TOOL_STATUS_PREFIX",
     "initial_status_message",
     "normalize_gateway_status",
     "status_from_response_label",

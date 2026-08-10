@@ -56,6 +56,7 @@ from integrations.posthog.setup import POSTHOG_SETUP
 from integrations.posthog_mcp.setup import POSTHOG_MCP_SETUP
 from integrations.rds.setup import RDS_SETUP
 from integrations.redis.setup import REDIS_SETUP
+from integrations.rootly.setup import ROOTLY_SETUP
 from integrations.sentry.setup import SENTRY_SETUP
 from integrations.sentry_mcp.setup import SENTRY_MCP_SETUP
 from integrations.servicenow.setup import SERVICENOW_SETUP
@@ -113,6 +114,11 @@ _SUBMITTED: dict[str, dict[str, str]] = {
     "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "telegram": {"bot_token": "123456:tg-bot-token", "default_chat_id": "-1001234567890"},
     "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
+    "rootly": {
+        "api_token": "rootly-api-token",
+        "base_url": "https://api.rootly.example.com",
+        "timeout_seconds": "30",
+    },
     "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
     "mongodb_atlas": {
         "api_public_key": "atlas-public-key",
@@ -314,6 +320,7 @@ _SPECS = [
     MONGODB_ATLAS_SETUP,
     PAGERDUTY_SETUP,
     POSTHOG_SETUP,
+    ROOTLY_SETUP,
     SENTRY_SETUP,
     SIGNOZ_SETUP,
     SMTP_SETUP,
@@ -416,15 +423,21 @@ def _restore_environment(written: _Persisted, monkeypatch: pytest.MonkeyPatch) -
 def _matches_catalog_value(got: Any, expected: str) -> bool:
     """Compare across env-string ↔ catalog-model normalizations.
 
-    Ports become ints; bools become True/False; comma/space-separated hints
-    become sequences. Neither change is a persistence bug — the names and
-    values still round-trip. An absent optional credential (``None``) matches
-    a blank submitted value — classifiers often omit empty keys.
+    Ports become ints; timeouts become floats (``"30"`` → ``30.0``); bools
+    become True/False; comma/space-separated hints become sequences. None of
+    these is a persistence bug — the names and values still round-trip. An
+    absent optional credential (``None``) matches a blank submitted value —
+    classifiers often omit empty keys.
     """
     if got is None:
         return expected == ""
     if isinstance(got, bool):
         return got is (expected.strip().lower() in ("true", "1", "yes"))
+    if isinstance(got, float):
+        try:
+            return got == float(expected)
+        except ValueError:
+            return False
     if isinstance(got, (list, tuple)):
         if "," in expected:
             return list(got) == [part.strip() for part in expected.split(",") if part.strip()]

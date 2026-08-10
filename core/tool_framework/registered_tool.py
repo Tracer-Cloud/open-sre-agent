@@ -15,6 +15,7 @@ from config.constants.investigation import DEFAULT_APPROVAL_EXPIRY_SECONDS
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
 from core.domain.types.tools import ToolSurface
+from core.tool_framework.approval_display import ApprovalDisplay
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel, ToolMetadata
 from core.tool_framework.registry_metadata import normalize_surfaces
@@ -80,6 +81,7 @@ class RegisteredTool:
     requires_approval: bool = False
     approval_reason: str = ""
     approval_expiry_seconds: int = DEFAULT_APPROVAL_EXPIRY_SECONDS
+    approval_display: ApprovalDisplay | None = field(default=None, repr=False)
     parallel_safe: bool = True
     accepts_runtime_context: bool = False
     origin_module: str = ""
@@ -214,6 +216,7 @@ class RegisteredTool:
         requires_approval: bool | None = None,
         approval_reason: str | None = None,
         approval_expiry_seconds: int | None = None,
+        approval_display: ApprovalDisplay | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
     ) -> RegisteredTool:
@@ -266,6 +269,11 @@ class RegisteredTool:
                 if approval_expiry_seconds is not None
                 else tool.__class__.approval_expiry_seconds
             ),
+            approval_display=(
+                approval_display
+                if approval_display is not None
+                else tool.__class__.approval_display
+            ),
             parallel_safe=bool(
                 parallel_safe if parallel_safe is not None else tool.__class__.parallel_safe
             ),
@@ -308,6 +316,7 @@ class RegisteredTool:
         requires_approval: bool | None = None,
         approval_reason: str | None = None,
         approval_expiry_seconds: int | None = None,
+        approval_display: ApprovalDisplay | None = None,
         parallel_safe: bool | None = None,
         accepts_runtime_context: bool | None = None,
     ) -> RegisteredTool:
@@ -352,6 +361,7 @@ class RegisteredTool:
                 if approval_expiry_seconds is not None
                 else DEFAULT_APPROVAL_EXPIRY_SECONDS
             ),
+            approval_display=approval_display,
             parallel_safe=True if parallel_safe is None else bool(parallel_safe),
             accepts_runtime_context=bool(accepts_runtime_context),
             origin_module=func.__module__,

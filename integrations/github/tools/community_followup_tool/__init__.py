@@ -12,6 +12,7 @@ from integrations.github.helpers import (
     github_creds,
     github_source_available,
 )
+from integrations.github.path_safety import repo_path
 from integrations.github.tools.workflow import summarize_community_followups_from_comments
 
 
@@ -73,7 +74,7 @@ def summarize_community_followups(
             comments
             if comments is not None
             else GitHubRestClient(github_token).paginate(
-                f"/repos/{owner}/{repo}/issues/comments",
+                repo_path(owner, repo, "issues", "comments"),
                 params={"per_page": max(1, min(per_page, 100))},
             )
         )

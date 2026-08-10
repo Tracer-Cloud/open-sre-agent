@@ -12,6 +12,7 @@ from integrations.github.helpers import (
     github_creds,
     github_source_available,
 )
+from integrations.github.path_safety import repo_path
 from integrations.github.tools.workflow import (
     GitHubIssueMutationProposal,
     PullRequestStatus,
@@ -143,7 +144,7 @@ def list_github_work_items(
         params["labels"] = labels.strip()
     try:
         raw_items = GitHubRestClient(github_token).paginate(
-            f"/repos/{owner}/{repo}/issues", params=params
+            repo_path(owner, repo, "issues"), params=params
         )
     except GitHubApiError as exc:
         return tool_unavailable(
@@ -279,7 +280,7 @@ def summarize_github_pr_status(
     client = GitHubRestClient(github_token)
     try:
         raw_prs = client.paginate(
-            f"/repos/{owner}/{repo}/pulls",
+            repo_path(owner, repo, "pulls"),
             params={"state": state, "per_page": max(1, min(per_page, 100))},
         )
         prs: list[dict[str, Any]] = []
@@ -287,7 +288,7 @@ def summarize_github_pr_status(
             number = list_pr.get("number")
             if not isinstance(number, int):
                 continue
-            detail_pr = client.request("GET", f"/repos/{owner}/{repo}/pulls/{number}")
+            detail_pr = client.request("GET", repo_path(owner, repo, "pulls", str(number)))
             if not isinstance(detail_pr, dict):
                 detail_pr = list_pr
             sha = str((detail_pr.get("head") or {}).get("sha", ""))
@@ -295,7 +296,7 @@ def summarize_github_pr_status(
             if include_checks and sha:
                 check_payload = client.request(
                     "GET",
-                    f"/repos/{owner}/{repo}/commits/{sha}/check-runs",
+                    repo_path(owner, repo, "commits", sha, "check-runs"),
                     params={"per_page": 100},
                 )
                 if isinstance(check_payload, dict) and isinstance(
@@ -395,7 +396,10 @@ def list_github_security_alerts(
             continue
         try:
             payload = client.paginate(
-                f"/repos/{owner}/{repo}/{endpoint}", params={"state": state, "per_page": 100}
+                # ``endpoint`` is a trusted two-segment literal from
+                # _ALERT_ENDPOINTS; repo_path takes one segment per argument.
+                repo_path(owner, repo, *endpoint.split("/")),
+                params={"state": state, "per_page": 100},
             )
         except GitHubApiError as exc:
             errors[kind] = str(exc)
@@ -654,7 +658,7 @@ def execute_github_issue_mutation(
                     "side_effect": "existing_github_issue",
                     "issue": existing_items[0],
                 }
-            issue = client.request("POST", f"/repos/{owner}/{repo}/issues", body=parsed.payload)
+            issue = client.request("POST", repo_path(owner, repo, "issues"), body=parsed.payload)
             return {
                 "source": "github",
                 "available": True,
@@ -665,7 +669,7 @@ def execute_github_issue_mutation(
         issue_number = parsed.target.get("issue_number")
         if not isinstance(issue_number, int):
             return _mutation_rejected("proposal target.issue_number is required")
-        client.request("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
+        client.request("GET", repo_path(owner, repo, "issues", str(issue_number)))
         comment_body = str(parsed.payload.get("comment_body", ""))
         comment_already_recorded = _marker_exists_on_issue(
             client,
@@ -677,7 +681,7 @@ def execute_github_issue_mutation(
         if comment_body and not comment_already_recorded:
             client.request(
                 "POST",
-                f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+                repo_path(owner, repo, "issues", str(issue_number), "comments"),
                 body={"body": comment_body},
             )
         if parsed.operation == "update":
@@ -688,7 +692,7 @@ def execute_github_issue_mutation(
             }
             issue = (
                 client.request(
-                    "PATCH", f"/repos/{owner}/{repo}/issues/{issue_number}", body=patch_body
+                    "PATCH", repo_path(owner, repo, "issues", str(issue_number)), body=patch_body
                 )
                 if patch_body
                 else {"number": issue_number}
@@ -703,7 +707,7 @@ def execute_github_issue_mutation(
             }
         issue = client.request(
             "PATCH",
-            f"/repos/{owner}/{repo}/issues/{issue_number}",
+            repo_path(owner, repo, "issues", str(issue_number)),
             body={"state": "closed", "state_reason": "completed"},
         )
         return {

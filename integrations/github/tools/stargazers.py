@@ -16,6 +16,7 @@ from integrations.github.helpers import (
     github_creds,
     github_source_available,
 )
+from integrations.github.path_safety import repo_path
 
 _DEFAULT_WINDOW_DAYS = 30
 _MIN_WINDOW_DAYS = 1
@@ -140,7 +141,21 @@ def get_github_star_history(
     start_day = end_day - timedelta(days=window_days - 1)
     window_start = datetime.combine(start_day, time.min, tzinfo=UTC)
     client = GitHubRestClient(github_token)
-    repository_path = f"/repos/{owner}/{repo}"
+    # Above the request's ``try`` on purpose: its handler files telemetry, and a
+    # model guessing owner/repo must not cost one Sentry error per guess. The
+    # tool surface expects a returned dict, never a raised GitHubApiError.
+    try:
+        repository_path = repo_path(owner, repo)
+    except GitHubApiError as exc:
+        return tool_unavailable(
+            "github",
+            str(exc),
+            owner=owner,
+            repo=repo,
+            repository=f"{owner}/{repo}",
+            daily=[],
+            stargazers_count=0,
+        )
 
     try:
         repo_payload = client.request("GET", repository_path)

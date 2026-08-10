@@ -23,6 +23,12 @@ from config.llm_models import (
 )
 from core.llm.types import ModelType
 
+#: Tool-calling budget for the local Ollama agent client, deliberately below the
+#: 4096 every other tier gets: local models generate slowly, and an agent turn
+#: emits a tool call rather than prose, so a smaller cap bounds latency without
+#: truncating real output. Reasoning/classification/toolcall keep 4096.
+OLLAMA_AGENT_MAX_TOKENS: Final[int] = 1024
+
 
 @dataclass(frozen=True)
 class OpenAICompatProvider:
@@ -34,6 +40,7 @@ class OpenAICompatProvider:
     settings_prefix: str
     temperature: float | None = None
     api_key_default: str = ""
+    agent_max_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +52,7 @@ class ResolvedOpenAICompatProvider:
     config: LLMModelConfig
     base_url: str
     api_key_env: str
+    agent_max_tokens: int
     temperature: float | None = None
     api_key_default: str = ""
 
@@ -93,6 +101,7 @@ OPENAI_COMPATIBLE_PROVIDERS: Final[dict[str, OpenAICompatProvider]] = {
         "OLLAMA_API_KEY",
         "ollama",
         api_key_default="ollama",
+        agent_max_tokens=OLLAMA_AGENT_MAX_TOKENS,
     ),
 }
 
@@ -128,6 +137,7 @@ def resolve_openai_compat_provider(
         config=spec.config,
         base_url=base_url,
         api_key_env=spec.api_key_env,
+        agent_max_tokens=spec.agent_max_tokens or spec.config.max_tokens,
         temperature=spec.temperature,
         api_key_default=spec.api_key_default,
     )

@@ -20,6 +20,7 @@ from typing import Any
 
 from rich.console import Console
 
+from config.constants.agent_identity import agent_name
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
@@ -49,8 +50,6 @@ from platform.observability.trace.spans import traced_session
 
 SlashPortsFactory = Callable[[], Any]
 
-_DEFAULT_BUSY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
-
 
 class GatewayTurnHandler:
     """Services one inbound gateway message per call (a :data:`GatewayAgentCallback`).
@@ -73,7 +72,7 @@ class GatewayTurnHandler:
         console: Console,
         slash_ports_factory: SlashPortsFactory | None = None,
         gate: TurnConcurrencyGate | None = None,
-        busy_message: str = _DEFAULT_BUSY_MESSAGE,
+        busy_message: str | None = None,
     ) -> None:
         self._console = console
         self._pool = SessionAgentPool(
@@ -83,7 +82,13 @@ class GatewayTurnHandler:
         # Gateway already bootstrapped env at process start; turns must not reload.
         self._session_api = AgentSession(SessionConfig(load_env=False))
         self._gate = gate
-        self._busy_message = busy_message
+        # Resolved here, not as a default argument: a module-level default binds
+        # the agent's name at import, before the process env is necessarily in
+        # place. This notice is posted into the channel, so it must not name a
+        # bot nobody knows.
+        self._busy_message = busy_message or (
+            f"{agent_name()} is at capacity. Please try again shortly."
+        )
 
     def __call__(
         self,
@@ -165,12 +170,17 @@ class GatewayTurnHandler:
                     cancel_requested=_cancel_requested,
                     on_progress=_on_progress,
                 ).last_result
-                outbound_text = turn_result.primary_response_text
-                logger.debug(
-                    "gateway_turn done intent=%s answered=%s outbound_chars=%s",
+                # external_primary_response_text, not primary_response_text: the
+                # gateway is an external chat surface, and the action-phase
+                # fallback can carry a receipt with raw tool payloads redacted
+                # only on the external variant (CWE-209).
+                outbound_text = turn_result.external_primary_response_text
+                logger.info(
+                    "gateway_turn done intent=%s answered=%s outbound_chars=%s raw_chars=%s",
                     turn_result.final_intent,
                     turn_result.answered,
                     len(outbound_text),
+                    len(turn_result.primary_response_text),
                 )
                 # Host soft-timeout (or stop) already owns the sink terminal
                 # message — do not overwrite it with empty/fallback finalize.
@@ -179,7 +189,14 @@ class GatewayTurnHandler:
                 # via the sink. Otherwise always finalize so the placeholder never hangs —
                 # even when the turn produced no text.
                 if not turn_result.answered and not cancelled:
-                    sink.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
+                    # ``answered`` means "already streamed", not "succeeded": an
+                    # ordinary action turn returns its answer here and is a success.
+                    # A receipt or the fallback message is not an answer, and the
+                    # timeline must not put a tick beside one.
+                    sink.finalize(
+                        outbound_text or EMPTY_RESPONSE_MESSAGE,
+                        failed=not turn_result.produced_an_answer,
+                    )
                 if surface:
                     capture_gateway_turn_completed(
                         surface=surface,

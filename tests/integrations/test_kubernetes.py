@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from kubernetes import client as k8s_client
 
 from integrations.config_models import KubernetesIntegrationConfig
 from integrations.kubernetes import classify
@@ -122,6 +124,43 @@ def test_build_clients_passes_colon_separated_kubeconfig_path_through() -> None:
         client._build_clients()
 
     assert mock_load.call_args.kwargs["config_file"] == colon_path
+
+
+def _bounded_core_v1() -> Any:
+    from integrations.kubernetes.client import KubernetesClient
+
+    cfg = KubernetesIntegrationConfig(kubeconfig_path="/home/user/.kube/config")
+    client = KubernetesClient(cfg)
+    with patch("integrations.kubernetes.client.k8s_config.load_kube_config"):
+        core_v1, _, _ = client._build_clients()
+    return core_v1
+
+
+def test_requests_carry_a_default_timeout() -> None:
+    """An unreachable control plane must fail in seconds, not minutes.
+
+    A cluster that does not authorize this host drops the packets instead of
+    refusing the connection, so an unbounded connect hangs until the OS gives
+    up — long enough for one such cluster to stall registration of every
+    cluster queued behind it.
+    """
+    from integrations.kubernetes.client import _REQUEST_TIMEOUT
+
+    core_v1 = _bounded_core_v1()
+
+    with patch.object(k8s_client.ApiClient, "call_api") as mock_call:
+        core_v1.list_namespaced_pod(namespace="default", limit=1)
+
+    assert mock_call.call_args.kwargs["_request_timeout"] == _REQUEST_TIMEOUT
+
+
+def test_an_explicit_request_timeout_wins() -> None:
+    core_v1 = _bounded_core_v1()
+
+    with patch.object(k8s_client.ApiClient, "call_api") as mock_call:
+        core_v1.list_namespaced_pod(namespace="default", limit=1, _request_timeout=1.5)
+
+    assert mock_call.call_args.kwargs["_request_timeout"] == 1.5
 
 
 # ---------------------------------------------------------------------------

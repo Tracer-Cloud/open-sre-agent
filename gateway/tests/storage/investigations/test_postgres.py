@@ -10,7 +10,7 @@ from gateway.core.storage.investigations.postgres import (
     PostgresInvestigationStore,
     _bounded_connect_timeout,
 )
-from gateway.core.storage.investigations.store import InvestigationStatus
+from gateway.core.storage.investigations.store import InvestigationOrigin, InvestigationStatus
 
 
 def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
@@ -89,7 +89,7 @@ def test_one_pool_and_every_connection_returned(monkeypatch: pytest.MonkeyPatch)
 
     store = PostgresInvestigationStore("postgresql://example/db")
     store.get("missing-id")
-    store.claim_next_queued()
+    store.claim_next_queued(origin=InvestigationOrigin.REST)
 
     assert len(fake_pool_cls.instances) == 1
     pool = fake_pool_cls.instances[0]
@@ -175,6 +175,7 @@ def _queued_row(investigation_id: str = "inv-1", org: str = "org_a") -> tuple[An
         None,
         "2026-08-01T00:00:00+00:00",
         "2026-08-01T00:00:01+00:00",
+        "rest",
     )
 
 

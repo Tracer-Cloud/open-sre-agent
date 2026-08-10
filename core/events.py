@@ -255,6 +255,7 @@ def tuple_payload_from_event(event: RuntimeEvent) -> tuple[str, dict[str, Any]] 
                 "name": event.tool_name,
                 "input": event.args,
                 "output": event.result,
+                "is_error": event.is_error,
                 **event.data,
             },
         )

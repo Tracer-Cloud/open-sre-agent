@@ -16,6 +16,7 @@ from config.constants.investigation import (
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import LLMInvokeFailure
 from core.state.evidence import EvidenceEntry
+from core.tool_framework.utils.call_identity import canonical_argument_signature
 from platform.common.truncation import truncate
 
 _MAX_CACHED_RESULT_CHARS = 8_000
@@ -23,11 +24,7 @@ _MAX_CACHED_RESULT_CHARS = 8_000
 
 def tool_call_signature(tool_call: ToolCall) -> str:
     """Stable identity for a tool call: ``name`` + canonicalised arguments."""
-    try:
-        args = json.dumps(tool_call.input, sort_keys=True, default=str)
-    except (TypeError, ValueError):
-        args = repr(tool_call.input)
-    return f"{tool_call.name}::{args}"
+    return f"{tool_call.name}::{canonical_argument_signature(tool_call.input)}"
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,9 @@ from core.agent.mixins import EventEmitterMixin, SteeringMixin, ToolFilterMixin
 from core.events import (
     MessageUpdateEvent,
     RuntimeEvent,
+    ToolExecutionEndEvent,
     runtime_event_from_tuple,
+    tool_result_is_error,
     tuple_payload_from_event,
 )
 from core.messages import UserRuntimeMessage
@@ -201,3 +203,47 @@ def test_follow_up_ignores_blank_message() -> None:
     s = _Steering()
     s.follow_up("  ")
     assert s._pop_follow_up_message() is None
+
+
+def test_tool_end_payload_carries_the_authoritative_error_flag() -> None:
+    """The gateway paints a timeline row red from this key and nothing else.
+
+    ``ToolExecutionEndEvent.is_error`` is computed in ``core/execution.py`` from
+    the *truthiness* of the result's ``error``. Dropping it from the tuple
+    payload leaves surfaces to re-derive the outcome, and the obvious
+    re-derivation — ``tool_result_is_error``, which tests key *presence* —
+    grades every success payload that carries ``"error": None`` as a failure.
+    """
+    event = ToolExecutionEndEvent(
+        tool_call_id="call-1",
+        tool_name="kubernetes_get_pod_logs",
+        args={"pod_name": "api-worker"},
+        result={"lines": ["boom"], "error": "pod not found"},
+        is_error=True,
+        iteration=1,
+    )
+
+    payload = tuple_payload_from_event(event)
+    assert payload is not None
+    kind, data = payload
+    assert kind == "tool_end"
+    assert data["is_error"] is True
+
+
+def test_a_success_payload_that_carries_error_none_is_not_an_error() -> None:
+    """Pins the 38 success payloads across the codebase that set ``"error": None``."""
+    event = ToolExecutionEndEvent(
+        tool_call_id="call-2",
+        tool_name="kubernetes_get_pod_logs",
+        args={"pod_name": "api-worker"},
+        result={"lines": ["all good"], "error": None},
+        is_error=False,
+        iteration=1,
+    )
+
+    payload = tuple_payload_from_event(event)
+    assert payload is not None
+    _, data = payload
+    assert data["is_error"] is False
+    # The trap this guards: presence-based classification says otherwise.
+    assert tool_result_is_error(event.result) is True

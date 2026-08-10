@@ -53,14 +53,12 @@ def test_handoff_turn_does_not_also_speak_the_action_closing() -> None:
     result = _Result([(call, {"ok": True})], _ACTION_CLOSING)
 
     # Act
-    _response_text, display_chunks, _use_final_text = _compose_response(
-        result, _Session(), _counts(("greeting",))
-    )
+    composed = _compose_response(result, _Session(), _counts(("greeting",)))
 
     # Assert: display_chunks is what reaches the console. Leaving the closing
     # here prints a greeting the LLM is about to print again, so the user reads
     # two replies to one message.
-    assert _ACTION_CLOSING not in "\n".join(display_chunks)
+    assert _ACTION_CLOSING not in "\n".join(composed.display_chunks)
 
 
 def test_non_handoff_turn_still_speaks_its_closing() -> None:
@@ -71,9 +69,7 @@ def test_non_handoff_turn_still_speaks_its_closing() -> None:
     result = _Result([(call, {"ok": True})], closing)
 
     # Act
-    _response_text, display_chunks, _use_final_text = _compose_response(
-        result, _Session(), _counts(())
-    )
+    composed = _compose_response(result, _Session(), _counts(()))
 
     # Assert: suppressing here would leave the turn silent.
-    assert closing in "\n".join(display_chunks)
+    assert closing in "\n".join(composed.display_chunks)

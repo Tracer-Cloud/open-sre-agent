@@ -94,7 +94,7 @@ def test_open_pull_request_builds_payload(mock_scope: MagicMock) -> None:
     assert pr == PullRequest(url="https://github.com/acme/app/pull/7", number=7)
     method, path = client.request.call_args.args
     body = client.request.call_args.kwargs["body"]
-    assert (method, path) == ("POST", "repos/acme/app/pulls")
+    assert (method, path) == ("POST", "/repos/acme/app/pulls")
     assert body["head"] == "opensre/sentry-fix-1-x"
     assert body["base"] == "main"
 

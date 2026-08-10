@@ -44,6 +44,7 @@ class EffectiveIntegrations(StrictConfigModel):
     opsgenie: EffectiveIntegrationEntry | None = None
     pagerduty: EffectiveIntegrationEntry | None = None
     incident_io: EffectiveIntegrationEntry | None = None
+    rootly: EffectiveIntegrationEntry | None = None
     notion: EffectiveIntegrationEntry | None = None
     prefect: EffectiveIntegrationEntry | None = None
     posthog: EffectiveIntegrationEntry | None = None
@@ -67,6 +68,7 @@ class EffectiveIntegrations(StrictConfigModel):
     mysql: EffectiveIntegrationEntry | None = None
     snowflake: EffectiveIntegrationEntry | None = None
     azure: EffectiveIntegrationEntry | None = None
+    gcp: EffectiveIntegrationEntry | None = None
     openobserve: EffectiveIntegrationEntry | None = None
     opensearch: EffectiveIntegrationEntry | None = None
     alertmanager: EffectiveIntegrationEntry | None = None
