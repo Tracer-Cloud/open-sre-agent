@@ -23,10 +23,13 @@ def test_metric_policy_is_authoritative_and_suppresses_investigate() -> None:
 
 
 def test_incident_policy_ignores_preferred_sources() -> None:
+    def _prefer_incident(kind: str) -> tuple[str, ...]:
+        return tuple(source for source in ("posthog_mcp",) if kind == "incident")
+
     need = classify_evidence_need(
         handoff_contents=("evidence_kind:incident",),
         resolved_integrations={},
-        preferred_sources_for=lambda kind: ("posthog_mcp",) if kind == "incident" else (),
+        preferred_sources_for=_prefer_incident,
     )
     assert need.kind == "incident"
     assert need.preferred_sources == ()
@@ -37,7 +40,7 @@ def test_setup_kind_can_opt_into_authoritative_degradation_via_policy() -> None:
     """Adding authoritative behavior for an existing kind is a policy row, not a classify branch."""
 
     def _prefer_setup(kind: EvidenceKind) -> tuple[str, ...]:
-        return ("vault_mcp",) if kind is EvidenceKind.SETUP else ()
+        return tuple(source for source in ("vault_mcp",) if kind is EvidenceKind.SETUP)
 
     with temporary_evidence_kind_policy(
         EvidenceKind.SETUP,
