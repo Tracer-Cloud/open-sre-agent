@@ -238,19 +238,22 @@ class InMemorySessionStorage:
         if hasattr(session, "session_goal"):
             from core.agent_harness.session.session_goal import (
                 SESSION_GOAL_STATE_CUSTOM_TYPE,
+                session_goal_state_is_empty,
                 session_goal_state_snapshot,
             )
 
-            self._append(
-                session.session_id,
-                "custom_message",
-                {
-                    "custom_type": SESSION_GOAL_STATE_CUSTOM_TYPE,
-                    "content": session_goal_state_snapshot(session),
-                    "display": False,
-                },
-            )
-            records = self._files.get(session.session_id, records)
+            goal_state = session_goal_state_snapshot(session)
+            if not session_goal_state_is_empty(goal_state):
+                self._append(
+                    session.session_id,
+                    "custom_message",
+                    {
+                        "custom_type": SESSION_GOAL_STATE_CUSTOM_TYPE,
+                        "content": goal_state,
+                        "display": False,
+                    },
+                )
+                records = self._files.get(session.session_id, records)
         if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
             for role, content in session.agent.messages:
                 self._append(

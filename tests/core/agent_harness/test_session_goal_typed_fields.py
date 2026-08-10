@@ -71,3 +71,46 @@ def test_a_checklist_implies_the_goal_is_attached() -> None:
 
     assert handoff.session_goal is True
     assert handoff.session_goal_items == ("one", "two")
+
+
+def test_the_typed_cap_survives_the_projection_to_a_goal() -> None:
+    """A cap on the handoff must reach SessionGoal, not fall back to the default.
+
+    ``session_goal_from_assistant_handoffs`` projects typed fields to tags; an
+    unprojected cap silently becomes the default budget, so a small goal runs
+    too long and a large one ends early as budget-exhausted.
+    """
+    from core.agent_harness.session.session_goal import session_goal_from_assistant_handoffs
+
+    handoff = AssistantHandoff.from_tool_input(
+        {"content": "Three turns.", "session_goal": True, "session_goal_max_turns": 3}
+    )
+
+    goal = session_goal_from_assistant_handoffs((handoff,), condition="three turns")
+
+    assert goal is not None
+    assert goal.max_outer_turns == 3
+
+
+def test_flushing_a_goalless_session_adds_no_in_memory_record() -> None:
+    """The in-memory backend must not append empty goal state either.
+
+    ``jsonl`` was fixed; the in-memory store had the same ``hasattr`` guard, so
+    an empty synthetic record still became the transcript's last entry and
+    re-parented the leaf.
+    """
+    from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+    from core.agent_harness.session.session_core import SessionCore
+    from core.agent_harness.session.session_goal import SESSION_GOAL_STATE_CUSTOM_TYPE
+
+    storage = InMemorySessionStorage()
+    session = SessionCore(storage=storage)
+    storage.open_session(session)
+    session.record("cli_agent", "hello", ok=True)
+    storage.flush(session)
+
+    records = storage.read(session.session_id)
+    goal_records = [
+        record for record in records if record.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert goal_records == []

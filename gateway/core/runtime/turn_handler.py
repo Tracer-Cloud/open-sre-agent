@@ -48,6 +48,18 @@ SlashPortsFactory = Callable[[], Any]
 _DEFAULT_BUSY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
 
 
+def sink_supports_continuation(sink: Any) -> bool:
+    """Whether ``sink`` can open a fresh response per continuation turn.
+
+    A chat sink is one message: the transport streams edits into it and
+    finalizes once. Multi-turn goal continuation runs several turns per inbound
+    message, so on a single-response sink the later turns would stream into an
+    already-finished stream and drop or overwrite the earlier reply. Opt-in, so
+    a transport that gains the ability declares it rather than inheriting it.
+    """
+    return bool(getattr(sink, "supports_continuation", False))
+
+
 class GatewayTurnHandler:
     """Services one inbound gateway message per call (a :data:`GatewayAgentCallback`).
 
@@ -146,13 +158,16 @@ class GatewayTurnHandler:
                     if rendered:
                         logger.debug("gateway_session_goal_progress\n%s", rendered)
 
-                turn_result = run_until_session_goal(
-                    _chat,
-                    session,
-                    text,
-                    cancel_requested=_cancel_requested,
-                    on_progress=_on_progress,
-                ).last_result
+                if sink_supports_continuation(sink):
+                    turn_result = run_until_session_goal(
+                        _chat,
+                        session,
+                        text,
+                        cancel_requested=_cancel_requested,
+                        on_progress=_on_progress,
+                    ).last_result
+                else:
+                    turn_result = _chat(text)
                 outbound_text = turn_result.primary_response_text
                 logger.debug(
                     "gateway_turn done intent=%s answered=%s outbound_chars=%s",

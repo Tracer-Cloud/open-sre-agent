@@ -168,7 +168,9 @@ def session_goal_from_assistant_handoffs(
     projected: list[str] = []
     for handoff in handoffs:
         if handoff.session_goal:
-            projected.append(f"session_goal:{handoff.session_goal}")
+            projected.append("session_goal:continue")
+            if handoff.session_goal_max_turns is not None:
+                projected.append(f"session_goal_max_turns:{handoff.session_goal_max_turns}")
         for item in handoff.session_goal_items:
             projected.append(f"session_goal_item:{item}")
     if not projected:
