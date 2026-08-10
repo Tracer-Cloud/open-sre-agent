@@ -17,6 +17,7 @@ class HandoffField(StrEnum):
     CONTENT = "content"
     EVIDENCE_KIND = "evidence_kind"
     SESSION_GOAL = "session_goal"
+    SESSION_GOAL_MAX_TURNS = "session_goal_max_turns"
     SESSION_GOAL_ITEMS = "session_goal_items"
     SESSION_GOAL_ITEM = "session_goal_item"
     REQUIRES_GATHER = "requires_gather"

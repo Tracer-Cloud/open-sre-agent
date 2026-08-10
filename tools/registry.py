@@ -229,12 +229,24 @@ def resolve_tool_display_name(tool_name: str) -> str:
     return tool_name.replace("_", " ")
 
 
+def _activity_source_badge(source: str) -> str:
+    """Human source name for progress lines.
+
+    Registry sources often end in ``_mcp`` (transport qualifier). Drop that
+    last segment so badges read ``Posthog`` / ``Sentry``, not ``Posthog Mcp``.
+    """
+    parts = [part for part in str(source).replace("-", "_").split("_") if part]
+    if len(parts) > 1 and parts[-1].casefold() == "mcp":
+        parts = parts[:-1]
+    return " ".join(parts).title()
+
+
 def resolve_tool_activity_labels(tool_name: str) -> tuple[str, str]:
     """Return ``(source_badge, short_label)`` from registry metadata."""
     tool = _load_registry_tool_map().get(tool_name)
     if tool is None:
         return "Tools", tool_name.replace("_", " ")
-    source = str(tool.source).replace("_", " ").title()
+    source = _activity_source_badge(str(tool.source))
     display = tool.display_name or tool.name.replace("_", " ")
     prefix = f"{source} "
     if display.lower().startswith(prefix.lower()):

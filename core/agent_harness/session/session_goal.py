@@ -39,6 +39,9 @@ class SessionGoalStatus:
     CANCELLED = "cancelled"
 
 
+# Outer turns a goal may run before the host stops on budget.
+_DEFAULT_MAX_OUTER_TURNS = 5
+
 _ACHIEVED_TAG = "session_goal:achieved"
 _DONE_TAG = re.compile(r"session_goal:done=([0-9,\s]+)")
 # Whole-token progress tags removed before the user sees the reply.
@@ -104,8 +107,8 @@ def session_goal_from_handoffs(
     separators are both accepted (schema docs use ``=``; content tags often use
     ``:``):
 
-    - ``session_goal:continue`` / ``session_goal=continue``
-    - ``session_goal:max_turns=<n>`` / ``session_goal=max_turns=<n>;steps=<n>``
+    - ``session_goal:continue`` — attach an outer goal
+    - ``session_goal_max_turns:<n>`` — outer-turn cap (typed on the tool schema)
     - ``session_goal_item:<text>`` / ``session_goal_item=<text>``
     - ``session_goal:achieved`` / ``session_goal:done=…`` — progress tags, not
       attach tags.
@@ -125,23 +128,18 @@ def session_goal_from_handoffs(
     if attach_tag is None and not checklist:
         return None
 
-    max_turns = 5
+    max_turns = _DEFAULT_MAX_OUTER_TURNS
     step_count: int | None = None
     body = attach_tag or "continue"
-    if body != "continue":
-        for part in body.split(";"):
-            piece = part.strip()
-            if piece.startswith("max_turns="):
-                try:
-                    max_turns = max(1, int(piece.split("=", 1)[1].strip()))
-                except ValueError:
-                    continue
-            elif piece.startswith("steps="):
-                try:
-                    step_count = max(1, int(piece.split("=", 1)[1].strip()))
-                    max_turns = max(max_turns, step_count)
-                except ValueError:
-                    continue
+    for raw in handoff_contents:
+        cap = find_tag_suffix(raw, "session_goal_max_turns")
+        if cap is None:
+            continue
+        try:
+            max_turns = max(1, int(cap.strip()))
+        except ValueError:
+            continue
+        break
 
     if checklist and step_count is None:
         step_count = len(checklist)

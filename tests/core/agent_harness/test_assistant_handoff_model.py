@@ -29,11 +29,13 @@ def test_session_goal_fields_decode_to_model() -> None:
     handoff = AssistantHandoff.from_tool_input(
         {
             "content": "Run the checklist.",
-            "session_goal": "max_turns=5;steps=5",
+            "session_goal": True,
+            "session_goal_max_turns": 5,
             "session_goal_items": ["gather", "analyze"],
         }
     )
-    assert handoff.session_goal == "max_turns=5;steps=5"
+    assert handoff.session_goal is True
+    assert handoff.session_goal_max_turns == 5
     assert handoff.session_goal_items == ("gather", "analyze")
     goal = session_goal_from_assistant_handoffs((handoff,))
     assert goal is not None

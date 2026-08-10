@@ -512,6 +512,15 @@ def test_local_llama_handoff_guidance_block() -> None:
     assert build_handoff_guidance_block(("docs:datadog_setup",)) == ""
 
 
+def test_l0_degraded_guidance_structures_a_useful_local_close() -> None:
+    """Missing analytics source: structured close (sentence → how → draft query)."""
+    block = build_handoff_guidance_block(("evidence_tier:L0_degraded:posthog_mcp",))
+    assert "draft query" in block.lower() or "draft" in block.lower()
+    assert "Want me to" in block
+    assert "fenced code block" in block.lower() or "draft" in block.lower()
+    assert "invent metric numbers" in block.lower()
+
+
 def test_database_query_handoff_guidance_block_matches_prefix() -> None:
     """Oracle 332/331: ``database_query:*`` tags inject connect/query guidance."""
     block = build_handoff_guidance_block(("database_query:mysql_active_connections",))

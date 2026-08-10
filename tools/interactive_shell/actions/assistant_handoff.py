@@ -12,6 +12,7 @@ from core.agent_harness.tools.tool_context import (
     string_property,
 )
 from core.agent_harness.turns.evidence_kind import EVIDENCE_KIND_VALUES
+from core.agent_harness.turns.handoff_keys import HandoffField
 from core.tool_framework.registered_tool import RegisteredTool
 
 
@@ -29,16 +30,22 @@ def run_assistant_handoff(
     context: Any,
     requires_gather: bool = True,
     evidence_kind: str | None = None,
-    session_goal: str | None = None,
+    session_goal: bool | None = None,
+    session_goal_max_turns: int | None = None,
     session_goal_items: list[str] | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {"content": content, "requires_gather": requires_gather}
+    payload: dict[str, Any] = {
+        HandoffField.CONTENT: content,
+        HandoffField.REQUIRES_GATHER: requires_gather,
+    }
     if evidence_kind is not None:
-        payload["evidence_kind"] = evidence_kind
+        payload[HandoffField.EVIDENCE_KIND] = evidence_kind
     if session_goal is not None:
-        payload["session_goal"] = session_goal
+        payload[HandoffField.SESSION_GOAL] = session_goal
+    if session_goal_max_turns is not None:
+        payload[HandoffField.SESSION_GOAL_MAX_TURNS] = session_goal_max_turns
     if session_goal_items is not None:
-        payload["session_goal_items"] = session_goal_items
+        payload[HandoffField.SESSION_GOAL_ITEMS] = session_goal_items
     return execute_with_action_context(
         payload,
         context,
@@ -58,7 +65,7 @@ assistant_handoff_tool = RegisteredTool(
     ),
     input_schema=object_schema(
         properties={
-            "content": string_property(
+            HandoffField.CONTENT: string_property(
                 description=(
                     "Concise assistant handoff text for informational, ambiguous, "
                     "or non-executable requests. Prefer structured tags when the "
@@ -69,7 +76,7 @@ assistant_handoff_tool = RegisteredTool(
                 ),
                 min_length=1,
             ),
-            "evidence_kind": string_property(
+            HandoffField.EVIDENCE_KIND: string_property(
                 description=(
                     "Closed evidence category for harness policy. Use metric_read for "
                     "product-analytics metrics/counts over a time window; incident for "
@@ -79,20 +86,27 @@ assistant_handoff_tool = RegisteredTool(
                 ),
                 enum=EVIDENCE_KIND_VALUES,
             ),
-            "session_goal": string_property(
-                description=(
-                    "Attach an outer multi-turn SessionGoal. Use continue, or "
-                    "max_turns=<n>, or max_turns=<n>;steps=<n>. Omit when the ask "
-                    "is a single-turn answer."
+            HandoffField.SESSION_GOAL: {
+                "type": "boolean",
+                "description": (
+                    "True to attach an outer multi-turn goal so the host keeps "
+                    "working without asking. Omit for a single-turn answer."
                 ),
-            ),
-            "session_goal_items": string_array_property(
+            },
+            HandoffField.SESSION_GOAL_MAX_TURNS: {
+                "type": "integer",
+                "minimum": 1,
+                "description": (
+                    "Outer-turn cap for the goal. Omit to use the default. Requires session_goal."
+                ),
+            },
+            HandoffField.SESSION_GOAL_ITEMS: string_array_property(
                 description=(
                     "Checklist success criteria for the outer SessionGoal "
                     "(one string per item, in order). Requires session_goal."
                 ),
             ),
-            "requires_gather": {
+            HandoffField.REQUIRES_GATHER: {
                 "type": "boolean",
                 "description": (
                     "Whether the assistant needs a live evidence-gather pass before "
@@ -103,7 +117,7 @@ assistant_handoff_tool = RegisteredTool(
                 ),
             },
         },
-        required=("content",),
+        required=(HandoffField.CONTENT,),
     ),
     source="interactive_shell",
     surfaces=("action",),

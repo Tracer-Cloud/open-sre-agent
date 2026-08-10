@@ -582,10 +582,9 @@ schema fields over burying tags in content prose:
   decides L0 vs L1 from that field plus live connectivity. Omit only for pure
   explain/docs chat about analytics with no number request.
 - evidence_kind=incident — bare incident / symptom handoffs.
-- session_goal=continue — multi-step or "keep going until done" work that should
+- session_goal=true — multi-step or "keep going until done" work that should
   continue across turns without asking whether to continue.
-- session_goal=max_turns=<n>;steps=<n> — same, with an explicit outer-turn cap
-  and optional step count (for example max_turns=5;steps=5).
+- session_goal_max_turns=<n> — optional outer-turn cap for that goal.
 - session_goal_items=["…", …] — checklist success criteria (one string per
   item, in order). The host tracks completion via session_goal:done=<index>
   in later replies; do not invent checklist items from synonyms.

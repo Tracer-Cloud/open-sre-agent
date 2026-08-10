@@ -4,13 +4,7 @@ from __future__ import annotations
 
 import logging
 
-# Third-party libraries that become very noisy at INFO during normal gateway
-# operation (long-poll getUpdates, Telegram send/edit, OpenAI completions).
-_QUIET_LOGGER_NAMES = (
-    "httpx",
-    "httpcore",
-    "openai",
-)
+from platform.logging.quiet_third_party import quiet_noisy_third_party_loggers
 
 # Routine authorized inbound audits are still emitted at INFO for other surfaces
 # (Hermes, ops tooling) but are hidden in the dedicated gateway process.
@@ -37,11 +31,6 @@ class _GatewayProcessLogFilter(logging.Filter):
         return True
 
 
-def _quiet_noisy_loggers() -> None:
-    for name in _QUIET_LOGGER_NAMES:
-        logging.getLogger(name).setLevel(logging.WARNING)
-
-
 def configure_logging() -> logging.Logger:
     """Configure root logging for the dedicated Telegram gateway process."""
     gateway_logger = logging.getLogger("gateway")
@@ -57,5 +46,5 @@ def configure_logging() -> logging.Logger:
         handler.addFilter(_GatewayProcessLogFilter())
         logging.basicConfig(level=logging.INFO, handlers=[handler])
 
-    _quiet_noisy_loggers()
+    quiet_noisy_third_party_loggers()
     return gateway_logger

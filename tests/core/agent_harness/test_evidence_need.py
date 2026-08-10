@@ -84,6 +84,8 @@ def test_upgrade_cta_names_setup_command_for_missing_source() -> None:
     assert cta is not None
     assert _FAKE_ANALYTICS in cta
     assert f"/integrations setup {_FAKE_ANALYTICS}" in cta
+    assert "can't return a live number" in cta
+    assert "ask again" in cta.lower()
 
 
 def test_evidence_kind_from_handoffs_parses_tag() -> None:

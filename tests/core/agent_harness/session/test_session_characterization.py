@@ -30,7 +30,7 @@ _CORE_FIELDS = (
     "pending_investigation_offer",
     "pending_user_choice",
     "pending_recovery_note",
-    # Milestone #4: outer goal + the evidence-tier upgrade CTA it can offer.
+    # Outer multi-turn goal, plus the evidence-tier upgrade CTA it can offer.
     "session_goal",
     "pending_integration_setup_offer",
     "offered_upgrade_ctas",

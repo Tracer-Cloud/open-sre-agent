@@ -90,15 +90,21 @@ def _format_gathering_progress_line(
     *,
     repeat_index: int,
 ) -> str:
-    source, label = resolve_tool_activity_labels(tool_name)
-    call_display = f"{source} · {label}" if label else source
+    """Soft status line — source name, not tool-method chatter.
+
+    Prefer ``· checking PostHog…`` over
+    ``· gathering via Posthog Mcp · list posthog tools…`` so the transcript
+    reads like exploration progress, not an MCP debug log.
+    """
+    source, _label = resolve_tool_activity_labels(tool_name)
+    display = source.strip()
     if repeat_index > 1:
-        call_display = f"{call_display} ({repeat_index})"
-    safe_display = escape(call_display)
+        display = f"{display} ({repeat_index})"
+    safe_display = escape(display)
     hint = _tool_input_hint(tool_input)
     if hint:
-        return f"· gathering via {safe_display} — {escape(hint)}…"
-    return f"· gathering via {safe_display}…"
+        return f"· checking {safe_display} — {escape(hint)}…"
+    return f"· checking {safe_display}…"
 
 
 def _resolve_gather_integrations(

@@ -195,7 +195,7 @@ def test_format_gathering_progress_line_shows_repeat_index_and_hint() -> None:
         {"metric_name": "pipeline_runs_total"},
         repeat_index=2,
     )
-    assert line.startswith("· gathering via Grafana · Mimir (2) — pipeline_runs_total…")
+    assert line.startswith("· checking Grafana (2) — pipeline_runs_total…")
 
 
 def test_format_gathering_progress_line_escapes_display_and_hint_markup(
@@ -261,8 +261,8 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
         agent_factory=_stub_agent_factory(_fake_run),
     )
     output = console.file.getvalue()
-    assert "Grafana · Mimir — pipeline_runs_total" in output
-    assert "Grafana · Mimir (2) — http_errors_total" in output
+    assert "checking Grafana — pipeline_runs_total" in output
+    assert "checking Grafana (2) — http_errors_total" in output
 
 
 def test_resolve_gather_integrations_enriches_github_from_repo_url() -> None:

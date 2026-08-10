@@ -35,7 +35,11 @@ async def run_repl_async(
 ) -> int:
     """Run the shell on an existing event loop and return its exit code."""
     from platform.analytics.cli import identify_saved_github_username
+    from platform.logging import quiet_noisy_third_party_loggers
 
+    # Keep MCP schema-cache warnings / httpx chatter off the transcript —
+    # progress is soft status lines, not library WARNINGs.
+    quiet_noisy_third_party_loggers()
     identify_saved_github_username()
 
     cfg = config or ReplConfig.load()

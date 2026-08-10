@@ -80,7 +80,7 @@ def test_session_goal_from_handoffs_equals_form() -> None:
     goal = session_goal_from_handoffs(("session_goal=continue",))
     assert goal is not None
     assert goal.condition == "continue"
-    goal = session_goal_from_handoffs(("session_goal=max_turns=3;steps=3",))
+    goal = session_goal_from_handoffs(("session_goal=continue", "session_goal_max_turns:3"))
     assert goal is not None
     assert goal.max_outer_turns == 3
 

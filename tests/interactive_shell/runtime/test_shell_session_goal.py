@@ -143,7 +143,7 @@ def test_execute_shell_turn_does_not_loop_on_user_prose_alone() -> None:
 
 
 def test_execute_shell_turn_continues_from_typed_assistant_handoff() -> None:
-    """Schema-only session_goal (no content tags) must still multi-turn like Cursor."""
+    """Schema-only session_goal (no content tags) must still multi-turn."""
     session = Session()
     console = Console(force_terminal=False)
     answer_calls: list[str] = []

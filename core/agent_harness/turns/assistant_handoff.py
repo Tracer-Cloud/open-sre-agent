@@ -26,13 +26,18 @@ def _evidence_kind_from_value(value: Any) -> EvidenceKind | None:
         return None
 
 
-def _session_goal_body(value: Any) -> str | None:
-    if not isinstance(value, str):
+def _session_goal_attach(value: Any) -> bool | None:
+    """Whether the planner asked to attach an outer goal."""
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def _session_goal_max_turns(value: Any) -> int | None:
+    """Outer-turn cap as a number; anything else is no cap."""
+    if isinstance(value, bool) or not isinstance(value, int):
         return None
-    body = value.strip()
-    if not body or body == "achieved" or body.startswith("done="):
-        return None
-    return body
+    return max(1, value)
 
 
 def _session_goal_items_from_value(value: Any) -> tuple[str, ...]:
@@ -53,7 +58,8 @@ class AssistantHandoff:
 
     content: str = ""
     evidence_kind: EvidenceKind | None = None
-    session_goal: str | None = None
+    session_goal: bool | None = None
+    session_goal_max_turns: int | None = None
     session_goal_items: tuple[str, ...] = ()
     requires_gather: bool = True
 
@@ -65,9 +71,8 @@ class AssistantHandoff:
         if kind is None and content:
             kind = _evidence_kind_from_value(first_tag_token(content, HandoffField.EVIDENCE_KIND))
 
-        session_goal = _session_goal_body(handoff_input.get(HandoffField.SESSION_GOAL))
-        if session_goal is None and content:
-            session_goal = _session_goal_body(find_tag_suffix(content, HandoffField.SESSION_GOAL))
+        session_goal = _session_goal_attach(handoff_input.get(HandoffField.SESSION_GOAL))
+        max_turns = _session_goal_max_turns(handoff_input.get(HandoffField.SESSION_GOAL_MAX_TURNS))
 
         items = _session_goal_items_from_value(handoff_input.get(HandoffField.SESSION_GOAL_ITEMS))
         if not items and content:
@@ -80,6 +85,7 @@ class AssistantHandoff:
             content=content,
             evidence_kind=kind,
             session_goal=session_goal,
+            session_goal_max_turns=max_turns,
             session_goal_items=items,
             requires_gather=requires_gather,
         )
@@ -94,11 +100,13 @@ class AssistantHandoff:
         if self.content:
             tags.append(self.content)
         if self.evidence_kind is not None:
-            tags.append(f"evidence_kind:{self.evidence_kind.value}")
-        if self.session_goal is not None:
-            tags.append(f"session_goal:{self.session_goal}")
+            tags.append(f"{HandoffField.EVIDENCE_KIND}:{self.evidence_kind.value}")
+        if self.session_goal:
+            tags.append(f"{HandoffField.SESSION_GOAL}:continue")
+            if self.session_goal_max_turns is not None:
+                tags.append(f"{HandoffField.SESSION_GOAL_MAX_TURNS}:{self.session_goal_max_turns}")
         for item in self.session_goal_items:
-            tags.append(f"session_goal_item:{item}")
+            tags.append(f"{HandoffField.SESSION_GOAL_ITEM}:{item}")
         return tuple(tags)
 
 

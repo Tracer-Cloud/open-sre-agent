@@ -35,13 +35,15 @@ def test_session_goal_fields_emit_attach_and_checklist_tags() -> None:
     tags = handoff_contents_from_tool_input(
         {
             "content": "Run the five-step checklist.",
-            "session_goal": "max_turns=5;steps=5",
+            "session_goal": True,
+            "session_goal_max_turns": 5,
             "session_goal_items": ["gather", "analyze", "report"],
         }
     )
     assert tags == (
         "Run the five-step checklist.",
-        "session_goal:max_turns=5;steps=5",
+        "session_goal:continue",
+        "session_goal_max_turns:5",
         "session_goal_item:gather",
         "session_goal_item:analyze",
         "session_goal_item:report",

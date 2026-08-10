@@ -27,11 +27,20 @@ _FIVE_STEP_ASK = (
 
 def test_session_goal_from_structured_handoff_not_user_prose() -> None:
     goal = session_goal_from_handoffs(
-        ("session_goal:max_turns=5;steps=5",),
+        (
+            "session_goal:continue",
+            "session_goal_max_turns:5",
+            "session_goal_item:one",
+            "session_goal_item:two",
+            "session_goal_item:three",
+            "session_goal_item:four",
+            "session_goal_item:five",
+        ),
         condition=_FIVE_STEP_ASK,
     )
     assert goal is not None
     assert goal.max_outer_turns == 5
+    # Step count comes from the checklist, not from a packed ``steps=`` token.
     assert goal.step_count == 5
     assert goal.status == SessionGoalStatus.ACTIVE
 
@@ -117,7 +126,7 @@ def test_action_handoff_attaches_session_goal() -> None:
 
 
 def test_typed_assistant_handoff_attaches_session_goal_without_content_tags() -> None:
-    """Cursor-parity: schema fields alone must attach + drive the outer loop.
+    """Schema fields alone must attach and drive the outer loop.
 
     Tag strings in ``handoff_contents`` are legacy; a planner that only fills
     ``session_goal`` / ``session_goal_items`` on the tool JSON must still win.

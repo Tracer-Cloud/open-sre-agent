@@ -172,10 +172,10 @@ def format_upgrade_cta(
     commands = "\n".join(f"- `{setup_command_for(name)}`" for name in need.missing)
     subject = "that source" if len(need.missing) == 1 else "those sources"
     return (
-        f"I don't have {names} connected in this session, so this answer is not "
-        f"live data from {subject}. Connecting it unlocks the authoritative "
-        "numbers for this ask.\n\n"
-        f"To connect:\n{commands}"
+        f"I don't have {names} connected in this session, so I can't return a "
+        f"live number from {subject}.\n\n"
+        "Connect it, then ask again for the authoritative count:\n"
+        f"{commands}"
     )
 
 
