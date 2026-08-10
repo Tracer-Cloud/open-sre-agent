@@ -250,6 +250,26 @@ def llm_span(
     return timed_span(span_kind="llm", name=name, attributes=attrs)
 
 
+def loop_span(
+    name: str,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> AbstractContextManager[dict[str, Any]]:
+    """Time one bounded loop such as a ReAct run."""
+    return timed_span(span_kind="loop", name=name, attributes=attributes)
+
+
+def loop_iteration_span(
+    name: str,
+    *,
+    iteration: int,
+    attributes: dict[str, Any] | None = None,
+) -> AbstractContextManager[dict[str, Any]]:
+    """Time one iteration inside a bounded loop."""
+    attrs = {"iteration": iteration, **(attributes or {})}
+    return timed_span(span_kind="loop_iteration", name=name, attributes=attrs)
+
+
 def emit_route(
     name: str,
     *,
@@ -311,6 +331,8 @@ __all__ = [
     "get_session_trace_sink",
     "is_session_trace_active",
     "llm_span",
+    "loop_iteration_span",
+    "loop_span",
     "mark_span_outcome",
     "set_session_trace_sink",
     "stage_span",
