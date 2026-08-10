@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, replace
-from typing import Any, Literal
+from typing import Any
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.ports import (
@@ -41,32 +41,25 @@ from core.agent_harness.prompts.assistant import (
     build_cli_agent_turn_prompt,
 )
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
-from core.agent_harness.prompts.memory.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.pending_offer import (
-    PendingIntegrationSetupOffer,
-    arm_pending_integration_setup_offer,
-    arm_pending_investigation_offer,
     clear_unconfirmed_pending_offers,
     consume_confirmed_pending_offer,
-    finalize_gather_investigation_offer,
     first_pending_offer,
     is_pending_offer_confirmation,
 )
-from core.agent_harness.session.session_goal import (
-    attach_session_goal_from_handoffs,
-    session_goal_is_active,
+from core.agent_harness.session.session_goal import attach_session_goal_from_handoffs
+from core.agent_harness.turns.answer_finalize import (
+    finalize_routed_answer,
+    finish_streamed_response,
 )
-from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.evidence_need import (
     EvidenceNeed,
     classify_evidence_need,
-    cta_offered_key,
-    format_upgrade_cta,
     handoff_tag_for,
     should_skip_gather,
-    should_suppress_investigation_offer,
 )
+from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
@@ -75,12 +68,15 @@ from core.agent_harness.turns.turn_results import (
     ToolCallingTurnResult,
     TurnResult,
 )
+from core.agent_harness.turns.turn_route import (
+    TurnRoute,
+    TurnRoutingInput,
+    route_turn,
+    routing_input_from_result,
+)
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
-from platform.harness_ports import (
-    integration_setup_command,
-    preferred_evidence_sources_for,
-)
+from platform.harness_ports import preferred_evidence_sources_for
 from platform.observability.trace.spans import component_span, emit_route
 
 log = logging.getLogger(__name__)
@@ -253,85 +249,9 @@ def _response_text(run: Any | None) -> str:
     return text or ""
 
 
-@dataclass(frozen=True)
-class TurnRoutingInput:
-    """Minimal facts the turn router decides on, snapshotted from the world."""
-
-    action_handled: bool
-    executed_success_count: int
-    has_observation: bool
-    investigation_dispatched: bool = False
-
-
-@dataclass(frozen=True)
-class TurnRoute:
-    """The chosen turn path."""
-
-    intent: Literal["summarize_observation", "handled_without_llm", "gather_and_answer"]
-
-
-def _is_literal_slash_command(text: str) -> bool:
-    """True when the user submitted an explicit ``/slash`` command line."""
-    return text.strip().startswith("/")
-
-
-def _route_turn(
-    routing: TurnRoutingInput,
-    *,
-    user_text: str = "",
-    handoff_contents: tuple[str, ...] = (),
-) -> TurnRoute:
-    """Decide the turn path from routing facts (pure)."""
-    if (
-        routing.investigation_dispatched
-        and routing.action_handled
-        and not _is_literal_slash_command(user_text)
-    ):
-        if routing.has_observation and routing.executed_success_count > 0:
-            return TurnRoute(intent="summarize_observation")
-        return TurnRoute(intent="handled_without_llm")
-    if (
-        routing.action_handled
-        and routing.has_observation
-        and routing.executed_success_count > 0
-        and not _is_literal_slash_command(user_text)
-    ):
-        return TurnRoute(intent="summarize_observation")
-    if routing.action_handled and not handoff_contents:
-        return TurnRoute(intent="handled_without_llm")
-    return TurnRoute(intent="gather_and_answer")
-
-
-def _routing_input_from_result(
-    action_result: ToolCallingTurnResult, observation: str | None
-) -> TurnRoutingInput:
-    return TurnRoutingInput(
-        action_handled=action_result.handled,
-        executed_success_count=action_result.executed_success_count,
-        has_observation=observation is not None,
-        investigation_dispatched=action_result.investigation_dispatched,
-    )
-
-
-def _is_prior_investigation_follow_up_handoff(handoff_contents: tuple[str, ...]) -> bool:
-    """True when the action planner handed off a session-prior-investigation follow-up."""
-    return is_prior_investigation_follow_up(handoff_contents)
-
-
-def _is_non_investigation_handoff(handoff_contents: tuple[str, ...]) -> bool:
-    """True for setup/query handoffs that must not force an investigate Want-me-to.
-
-    ``finalize_gather_investigation_offer`` rewrites any existing Want-me-to
-    closer to "run a full investigation". That is correct for diagnostic gather
-    turns, but wrong for ``database_query:*`` / ``provider:*`` handoffs where the
-    next step is connect/setup guidance.
-    """
-    from core.agent_harness.turns.handoff_tag_parse import handoff_has_tag
-
-    return any(
-        handoff_has_tag(content, "database_query") or handoff_has_tag(content, "provider")
-        for content in handoff_contents
-    )
+# Back-compat aliases for tests/importers that still use private names.
+_route_turn = route_turn
+_routing_input_from_result = routing_input_from_result
 
 
 @dataclass(frozen=True)
@@ -409,7 +329,7 @@ def _gather_and_answer(
     skip_gather = (
         not handoff_requires_gather
         or (
-            _is_prior_investigation_follow_up_handoff(handoff_contents)
+            is_prior_investigation_follow_up_handoff(handoff_contents)
             and turn_plan.snapshot.last_state is not None
         )
         or skip_for_evidence
@@ -445,75 +365,6 @@ def _gather_and_answer(
     if host_cancel_requested(output):
         return None
     return run, observation
-
-
-def _finish_streamed_response(output: OutputSink | None, text: str) -> None:
-    """Flush deferred/rewritten gather paint on surfaces that support it."""
-    if output is None:
-        return
-    finish = getattr(output, "finish_streamed_response", None)
-    if callable(finish):
-        finish(text)
-        return
-    # Gateway sinks expose ``finalize`` for an in-place edit of the answer.
-    finalize = getattr(output, "finalize", None)
-    if callable(finalize):
-        finalize(text)
-
-
-def _offered_upgrade_ctas(session: SessionStore) -> set[str]:
-    """Session-scoped CTA dedupe set (created on first use).
-
-    Stored as a duck-typed attribute on the concrete session object — not on
-    :class:`SessionStore` — so Protocol typing stays narrow.
-    """
-    holder: Any = session
-    offered = getattr(holder, "offered_upgrade_ctas", None)
-    if not isinstance(offered, set):
-        offered = set()
-        holder.offered_upgrade_ctas = offered
-    return offered
-
-
-def _append_upgrade_cta(
-    session: SessionStore,
-    response_text: str,
-    evidence_need: EvidenceNeed,
-) -> str:
-    """Append one UpgradeCTA when L0_degraded and not already awaiting accept.
-
-    Also arms a structured setup offer so bare ``yes`` expands to the connect
-    slash without keyword intent routing. Dedupes while a pending setup offer
-    for the missing source is still armed; re-offers when the user asks again
-    after that offer was cleared (moved on / declined).
-    """
-    key = cta_offered_key(evidence_need)
-    cta = format_upgrade_cta(
-        evidence_need,
-        setup_command_for=integration_setup_command,
-    )
-    if key is None or cta is None:
-        return response_text
-    offered = _offered_upgrade_ctas(session)
-    pending = getattr(session, "pending_integration_setup_offer", None)
-    pending_matches = (
-        isinstance(pending, PendingIntegrationSetupOffer)
-        and bool(evidence_need.missing)
-        and pending.service_id == evidence_need.missing[0]
-    )
-    if key in offered and pending_matches:
-        return response_text
-    if key in offered and not pending_matches:
-        offered.discard(key)
-    offered.add(key)
-    if evidence_need.missing:
-        arm_pending_integration_setup_offer(session, service_id=evidence_need.missing[0])
-    base = (response_text or "").rstrip()
-    if not base:
-        return cta
-    if cta in base:
-        return base
-    return f"{base}\n\n{cta}"
 
 
 def run_turn(
@@ -704,61 +555,21 @@ def run_turn(
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
-        # Append a deterministic upgrade CTA after the answer so
-        # missing-integration closes do not depend on the model remembering.
-        streamed_text = outcome.response_text
-        if should_suppress_investigation_offer(evidence_need) or should_skip_gather(evidence_need):
-            outcome = replace(
-                outcome,
-                response_text=_append_upgrade_cta(session, outcome.response_text, evidence_need),
-            )
-        # Only a rewrite needs re-emitting. An answered turn already streamed its
-        # text, so flushing it again makes the sink finalize a duplicate.
-        text_changed_after_streaming = outcome.response_text != streamed_text
-
-        # Arm structured investigate-accept. Gather answers force the canonical
-        # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
-        # Skip when this turn already confirmed a pending offer, when the
-        # surface disabled the investigation capability (gateway), when the
-        # handoff is setup/query guidance, or when L0 metric degradation
-        # applies — otherwise yes expands to /investigate alert:… with no
-        # investigation capability (or the wrong next step for a MySQL/MCP
-        # connect request / a pure analytics read).
-        suppress_investigate = should_suppress_investigation_offer(
-            evidence_need
-        ) or session_goal_is_active(session)
-        if (
-            not confirms_pending
-            and capability_not_explicitly_disabled(session, "investigation")
-            and not suppress_investigate
-        ):
-            if (
-                route.intent == "gather_and_answer"
-                and not _is_prior_investigation_follow_up_handoff(handoff_contents)
-                and not _is_non_investigation_handoff(handoff_contents)
-            ):
-                response_text, _offer = finalize_gather_investigation_offer(
-                    session,
-                    user_text=original_user_text,
-                    assistant_text=outcome.response_text,
-                    observation=outcome.evidence_for_offer,
-                )
-                outcome = replace(outcome, response_text=response_text)
-                _finish_streamed_response(output, response_text)
-            else:
-                arm_pending_investigation_offer(
-                    session,
-                    user_text=original_user_text,
-                    assistant_text=outcome.response_text,
-                    observation=outcome.evidence_for_offer,
-                )
-                # Follow-up / setup-query gather answers may still have deferred
-                # paint if a prior path set defer=True; flush so non-TTY hosts
-                # see text.
-                if route.intent == "gather_and_answer":
-                    _finish_streamed_response(output, outcome.response_text)
-        elif route.intent == "gather_and_answer" and text_changed_after_streaming:
-            _finish_streamed_response(output, outcome.response_text)
+        # Post-route seam only: CTA / Want-me-to / stream flush. Never gate
+        # route selection on locals from finalize (see answer_finalize).
+        finalized = finalize_routed_answer(
+            session=session,
+            route_intent=route.intent,
+            response_text=outcome.response_text,
+            evidence_for_offer=outcome.evidence_for_offer,
+            evidence_need=evidence_need,
+            handoff_contents=handoff_contents,
+            original_user_text=original_user_text,
+            confirms_pending=confirms_pending,
+        )
+        outcome = replace(outcome, response_text=finalized.response_text)
+        if finalized.finish_stream:
+            finish_streamed_response(output, finalized.response_text)
 
         return accounting.finalize(
             TurnResult(
@@ -771,6 +582,8 @@ def run_turn(
 
 
 __all__ = [
+    "TurnRoute",
+    "TurnRoutingInput",
     "run_turn",
     "stream_answer",
 ]

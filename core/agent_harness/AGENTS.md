@@ -83,13 +83,22 @@ subpackage. Default port implementations live with the concern they serve, not i
   single instantiation site for `core.agent.Agent` across all surfaces
   (action, evidence, gateway). See "Agent construction pattern" below.
 - `turns/` — the turn drivers that orchestrate `core.agent.Agent`:
-  - `orchestrator.py` — `run_turn`: the three-path routing
-    (summarize-observation / handled / gather+answer). Resolves integrations
-    **once** at the top of the turn onto the frozen `turn_snapshot`, so
-    `turn_snapshot.resolved_integrations` is the single source of truth for
-    what the turn knows. Downstream components (e.g.
+  - `orchestrator.py` — `run_turn` sequences three seams (do not merge them):
+    1. **route decide** — pure `turn_route.route_turn` (no I/O, no stream flags)
+    2. **route execute** — summarize / handled / gather+answer effects
+    3. **answer finalize** — `answer_finalize.finalize_routed_answer` (CTA,
+       Want-me-to, stream flush). Stream rewrite locals
+       (`text_changed_after_streaming`) stay inside finalize and must **never**
+       gate route selection.
+    Resolves integrations **once** at the top of the turn onto the frozen
+    `turn_snapshot`, so `turn_snapshot.resolved_integrations` is the single
+    source of truth for what the turn knows. Downstream components (e.g.
     `action_driver._resolved_integrations_for_turn`) read it from there rather
     than re-resolving. Do NOT reintroduce per-component integration resolution.
+  - `turn_route.py` / `answer_finalize.py` / `handoff_policy.py` — the seams
+    above, extracted so post-answer bookkeeping cannot regress into routing.
+  - Outer `SessionGoal` vs local shell multi-step are also separate concerns:
+    prompt fragments in `prompts/action/multi_step_policy.py`.
   - `action_driver.py` — `ActionTurnRunner`: one action tool-calling turn
     over the ports, via a `_build_action_agent` factory that returns an
     `ActionTurnPlan`.

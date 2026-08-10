@@ -1,0 +1,76 @@
+"""Unit tests for the post-route answer finalize seam."""
+
+from __future__ import annotations
+
+from core.agent_harness.session.session_core import SessionCore
+from core.agent_harness.session.session_goal import SessionGoal, attach_session_goal
+from core.agent_harness.turns.answer_finalize import finalize_routed_answer
+from core.agent_harness.turns.assistant_handoff import AssistantHandoff
+from core.agent_harness.turns.evidence_need import (
+    EvidenceKind,
+    EvidenceNeed,
+    EvidenceTier,
+    classify_evidence_need,
+)
+
+
+def _metric_l0_need() -> EvidenceNeed:
+    return classify_evidence_need(
+        handoffs=(
+            AssistantHandoff(
+                content="count users",
+                evidence_kind=EvidenceKind.METRIC_READ,
+            ),
+        ),
+        preferred_sources_for=lambda _k: ("posthog",),
+        resolved_integrations={},
+    )
+
+
+def test_finalize_appends_cta_and_requests_stream_finish_when_text_changes() -> None:
+    session = SessionCore()
+    need = _metric_l0_need()
+    assert need.tier is EvidenceTier.L0_DEGRADED
+
+    result = finalize_routed_answer(
+        session=session,
+        route_intent="gather_and_answer",
+        response_text="Outline only.",
+        evidence_for_offer=None,
+        evidence_need=need,
+        handoff_contents=("evidence_kind:metric_read",),
+        original_user_text="how many users?",
+        confirms_pending=False,
+    )
+
+    assert "/integrations" in result.response_text or "posthog" in result.response_text.lower()
+    assert result.finish_stream is True
+
+
+def test_finalize_suppresses_investigate_when_session_goal_active() -> None:
+    session = SessionCore()
+    attach_session_goal(session, SessionGoal(condition="checklist", max_outer_turns=3))
+    need = EvidenceNeed(
+        kind=EvidenceKind.INCIDENT,
+        preferred_sources=(),
+        connected=(),
+        missing=(),
+        tier=EvidenceTier.L1,
+        required_for_authoritative=False,
+    )
+
+    result = finalize_routed_answer(
+        session=session,
+        route_intent="gather_and_answer",
+        response_text="Step 1 done.",
+        evidence_for_offer="evidence",
+        evidence_need=need,
+        handoff_contents=("session_goal:max_turns=3",),
+        original_user_text="keep going",
+        confirms_pending=False,
+    )
+
+    assert session.pending_investigation_offer is None
+    assert "Want me to" not in result.response_text
+    # No CTA rewrite → no forced re-flush when investigate is suppressed.
+    assert result.finish_stream is False
