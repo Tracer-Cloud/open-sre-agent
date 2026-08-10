@@ -706,11 +706,15 @@ def run_turn(
 
         # Append a deterministic upgrade CTA after the answer so
         # missing-integration closes do not depend on the model remembering.
+        streamed_text = outcome.response_text
         if should_suppress_investigation_offer(evidence_need) or should_skip_gather(evidence_need):
             outcome = replace(
                 outcome,
                 response_text=_append_upgrade_cta(session, outcome.response_text, evidence_need),
             )
+        # Only a rewrite needs re-emitting. An answered turn already streamed its
+        # text, so flushing it again makes the sink finalize a duplicate.
+        text_changed_after_streaming = outcome.response_text != streamed_text
 
         # Arm structured investigate-accept. Gather answers force the canonical
         # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
@@ -753,7 +757,7 @@ def run_turn(
                 # see text.
                 if route.intent == "gather_and_answer":
                     _finish_streamed_response(output, outcome.response_text)
-        elif route.intent == "gather_and_answer":
+        elif route.intent == "gather_and_answer" and text_changed_after_streaming:
             _finish_streamed_response(output, outcome.response_text)
 
         return accounting.finalize(

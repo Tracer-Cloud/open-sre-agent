@@ -63,8 +63,7 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
     )
     attach_session_goal(session, goal)
     console.print(
-        f"[{HIGHLIGHT}]session goal set[/] "
-        f"(max_turns={max_turns}): {_rich_escape(condition)}"
+        f"[{HIGHLIGHT}]session goal set[/] (max_turns={max_turns}): {_rich_escape(condition)}"
     )
     return True
 

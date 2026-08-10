@@ -14,6 +14,8 @@ from core.agent_harness.session.pending_offer import (
     PendingIntegrationSetupOffer,
     first_pending_offer,
 )
+from core.agent_harness.turns.assistant_handoff import AssistantHandoff
+from core.agent_harness.turns.evidence_need import EvidenceKind
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.session import Session
@@ -31,6 +33,24 @@ def _action_metric_handoff() -> ToolCallingTurnResult:
         handoff_contents=(
             "evidence_kind:metric_read",
             "Look up the Windows user count in product analytics.",
+        ),
+    )
+
+
+def _action_metric_handoff_typed() -> ToolCallingTurnResult:
+    """Schema-field path: evidence_kind on AssistantHandoff, no content tag."""
+    return ToolCallingTurnResult(
+        planned_count=0,
+        executed_count=0,
+        executed_success_count=0,
+        has_unhandled_clause=True,
+        handled=False,
+        handoff_contents=("Look up the Windows user count in product analytics.",),
+        assistant_handoffs=(
+            AssistantHandoff(
+                content="Look up the Windows user count in product analytics.",
+                evidence_kind=EvidenceKind.METRIC_READ,
+            ),
         ),
     )
 
@@ -131,6 +151,27 @@ def test_without_evidence_kind_handoff_does_not_skip_gather() -> None:
     )
 
     assert gather_calls == [_WINDOWS_USERS_ASK]
+
+
+def test_typed_evidence_kind_schema_field_skips_gather_like_content_tag() -> None:
+    """Planner fills evidence_kind on tool JSON — must match tag-path L0 behavior."""
+    session = Session()
+    session.resolved_integrations_cache = {}
+    gather_calls: list[str] = []
+
+    run_turn(
+        _WINDOWS_USERS_ASK,
+        session,
+        execute_actions=lambda *_a, **_k: _action_metric_handoff_typed(),
+        gather=lambda text, *_a, **_k: gather_calls.append(text) or "should-not-run",
+        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Connect PostHog."})(),
+        accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
+    )
+
+    assert gather_calls == []
+    offer = first_pending_offer(session)
+    assert isinstance(offer, PendingIntegrationSetupOffer)
+    assert offer.service_id == "posthog_mcp"
 
 
 def test_upgrade_cta_reoffers_when_user_asks_again() -> None:

@@ -9,9 +9,11 @@ from core.agent_harness.session.session_goal import (
     SessionGoal,
     SessionGoalStatus,
     attach_session_goal,
+    session_goal_from_assistant_handoffs,
     session_goal_from_handoffs,
     session_goal_is_active,
 )
+from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -112,6 +114,55 @@ def test_action_handoff_attaches_session_goal() -> None:
     assert session_goal_is_active(session)
     assert session.session_goal is not None
     assert session.session_goal.max_outer_turns == 5
+
+
+def test_typed_assistant_handoff_attaches_session_goal_without_content_tags() -> None:
+    """Cursor-parity: schema fields alone must attach + drive the outer loop.
+
+    Tag strings in ``handoff_contents`` are legacy; a planner that only fills
+    ``session_goal`` / ``session_goal_items`` on the tool JSON must still win.
+    """
+    session = SessionCore()
+    typed = AssistantHandoff(
+        content="Start the checklist.",
+        session_goal="max_turns=5;steps=5",
+        session_goal_items=(
+            "List the goal",
+            "Name step one",
+            "Name step two",
+            "Name step three",
+            "Confirm all five are done",
+        ),
+    )
+    # Prefer typed decode path (same as action_driver → orchestrator).
+    assert session_goal_from_assistant_handoffs((typed,)) is not None
+
+    def _execute(*_a: object, **_k: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=True,
+            handled=False,
+            # Deliberately omit session_goal tags — schema fields must suffice.
+            handoff_contents=("Start the checklist.",),
+            assistant_handoffs=(typed,),
+        )
+
+    run_turn(
+        _FIVE_STEP_ASK,
+        session,
+        execute_actions=_execute,
+        gather=lambda *_a, **_k: "evidence",
+        answer=lambda *_a, **_k: type("Run", (), {"response_text": "Step 1."})(),
+        accounting=DefaultTurnAccounting(session, _FIVE_STEP_ASK),
+    )
+
+    assert session_goal_is_active(session)
+    assert session.session_goal is not None
+    assert session.session_goal.max_outer_turns == 5
+    assert session.session_goal.step_count == 5
+    assert len(session.session_goal.checklist) == 5
 
 
 def test_five_step_outer_loop_continues_until_achieved() -> None:

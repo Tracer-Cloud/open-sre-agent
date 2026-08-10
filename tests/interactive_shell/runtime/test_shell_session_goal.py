@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from rich.console import Console
 
 from core.agent_harness.session.session_goal import SessionGoalStatus
+from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
@@ -139,3 +140,62 @@ def test_execute_shell_turn_does_not_loop_on_user_prose_alone() -> None:
 
     assert len(answer_calls) == 1
     assert session.session_goal is None
+
+
+def test_execute_shell_turn_continues_from_typed_assistant_handoff() -> None:
+    """Schema-only session_goal (no content tags) must still multi-turn like Cursor."""
+    session = Session()
+    console = Console(force_terminal=False)
+    answer_calls: list[str] = []
+    execute_calls = 0
+
+    def _execute(text: str, *_a: object, **_k: object) -> ToolCallingTurnResult:
+        nonlocal execute_calls
+        execute_calls += 1
+        if execute_calls == 1:
+            return ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=True,
+                handled=False,
+                handoff_contents=("Work the checklist.",),
+                assistant_handoffs=(
+                    AssistantHandoff(
+                        content="Work the checklist.",
+                        session_goal="max_turns=5;steps=5",
+                        session_goal_items=("a", "b", "c", "d", "e"),
+                    ),
+                ),
+            )
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=True,
+            handled=False,
+            handoff_contents=("Continue.",),
+        )
+
+    def _answer(text: str, *_a: object, **_k: object) -> MagicMock:
+        answer_calls.append(text)
+        n = len(answer_calls)
+        body = "session_goal:achieved" if n >= 5 else f"Completed step {n} of 5."
+        return MagicMock(response_text=body)
+
+    result = execute_shell_turn(
+        _FIVE_STEP,
+        session,
+        console,
+        recorder=None,
+        is_tty=False,
+        execute_actions=_execute,
+        gather_evidence=lambda *_a, **_k: "e",
+        answer_agent=_answer,
+    )
+
+    assert len(answer_calls) == 5
+    assert session.session_goal is not None
+    assert session.session_goal.status == SessionGoalStatus.ACHIEVED
+    assert session.session_goal.checklist == ("a", "b", "c", "d", "e")
+    assert "session_goal:" not in (result.assistant_response_text or "")

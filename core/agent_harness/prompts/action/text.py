@@ -468,19 +468,21 @@ invocation with no surrounding natural language — such as
 shell request; use shell_run directly.
 
 Local multi-step workflows: an IMPERATIVE request to create, generate, write,
-build, or run something locally — a script, a file, or a sequence of steps —
-is shell_run work, NOT a handoff, even when the message contains no literal
-command text. Do NOT hand off just to describe commands the user could run
-themselves. HOW you execute depends on what the user asked for:
+build, or run something locally — a script, a file, or a local compute sequence
+with side effects — is shell_run work, NOT a handoff, even when the message
+contains no literal command text. Do NOT hand off just to describe commands
+the user could run themselves. HOW you execute depends on what the user asked
+for:
 * User asked for a SCRIPT ("create/write a script ... and run it") → one
   shell_run to write the script, one to run it. The script owns the loop.
-* User asked for SEQUENTIAL STEPS ("run N steps", "step by step", "each step
-  depends on / uses the previous one") → you MUST keep control of the loop:
-  emit exactly ONE shell_run per step via the DATA-DEPENDENT chain rule —
-  run step 1, observe its result, then emit step 2 populated from that
-  result, and continue until every requested step has run. Do NOT collapse
-  the steps into a single script, one-liner, or program, even though that
-  would produce the same final output — stepwise execution with observation
+* User asked for LOCAL SEQUENTIAL STEPS with compute/file side effects
+  ("run N steps", "each step writes/reads a file", "generate random numbers
+  into a running total") → you MUST keep control of the loop: emit exactly
+  ONE shell_run per step via the DATA-DEPENDENT chain rule — run step 1,
+  observe its result, then emit step 2 populated from that result, and
+  continue until every requested step has run. Do NOT collapse the steps
+  into a single script, one-liner, or program, even though that would
+  produce the same final output — stepwise execution with observation
   between steps IS the requested behavior, not an implementation detail.
   Persist state across steps in a file (read the running state, update it,
   write it back) so each step provably consumes the previous step's output.
@@ -502,6 +504,13 @@ Examples (all shell_run, executed in THIS turn):
   calls, one per step, each reading the total the previous step wrote;
   never one combined script
 * "make demo_numbers.txt with a running total and show me the final result"
+Conversational keep-going checklists (assistant_handoff + session_goal — NOT
+shell_run): when the user wants a multi-step chat checklist / walkthrough
+with no local create/run/file work — "walk through these N steps in chat",
+"checklist without asking whether to continue", "keep going until every
+item is done" — emit assistant_handoff with session_goal (and preferably
+session_goal_items). The host outer loop continues turns; do not invent
+shell side effects to "prove" progress.
 Still assistant_handoff (no execution requested):
 * capability questions — "do you support consecutive steps?", "can you loop?"
 * explicit plan-only requests — "do not write any code yet; first create a

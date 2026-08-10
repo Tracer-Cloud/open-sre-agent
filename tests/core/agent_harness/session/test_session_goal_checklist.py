@@ -10,8 +10,10 @@ from core.agent_harness.session.session_goal import (
     attach_session_goal,
     default_evaluate_session_goal,
     format_session_goal_checklist,
+    session_goal_from_assistant_handoffs,
     session_goal_from_handoffs,
 )
+from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
@@ -31,6 +33,24 @@ def test_checklist_items_from_structured_handoff_tags() -> None:
     assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
     assert goal.completed == frozenset()
     assert goal.max_outer_turns == 5
+
+
+def test_checklist_items_from_typed_assistant_handoff_fields() -> None:
+    goal = session_goal_from_assistant_handoffs(
+        (
+            AssistantHandoff(
+                content="run the checklist",
+                session_goal="max_turns=5;steps=3",
+                session_goal_items=("List the goal", "Name step one", "Confirm done"),
+            ),
+        ),
+        condition="run the checklist",
+    )
+
+    assert goal is not None
+    assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
+    assert goal.max_outer_turns == 5
+    assert goal.step_count == 3
 
 
 def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:

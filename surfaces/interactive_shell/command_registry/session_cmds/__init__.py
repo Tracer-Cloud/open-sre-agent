@@ -56,7 +56,7 @@ COMMANDS: list[SlashCommand] = [
     ),
     SlashCommand(
         "/goal",
-        "Show, set, or clear the outer session goal (multi-step continuation).",
+        "Show, set, or clear the outer session goal for multi-step continuation.",
         _cmd_goal,
         usage=(
             "/goal",

@@ -134,6 +134,7 @@ class GatewayTurnHandler:
                     tool_hooks=getattr(sink, "tool_hooks", None),
                     console=turn_console,
                 )
+
                 def _chat(message: str) -> Any:
                     return self._session_api.chat(message, agent=agent)
 

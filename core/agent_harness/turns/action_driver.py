@@ -36,12 +36,12 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
-from core.agent_harness.turns.conversation_recording import record_conversation_turn
-from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
 from core.agent_harness.turns.assistant_handoff import (
     AssistantHandoff,
     assistant_handoffs_from_tool_inputs,
 )
+from core.agent_harness.turns.conversation_recording import record_conversation_turn
+from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot

@@ -38,9 +38,7 @@ def test_session_goal_state_snapshot_includes_cta_and_pending() -> None:
         SessionGoal(condition="keep going", max_outer_turns=3, checklist=("one", "two")),
     )
     session.offered_upgrade_ctas.add("cta:posthog_mcp")
-    session.pending_integration_setup_offer = PendingIntegrationSetupOffer(
-        service_id="posthog_mcp"
-    )
+    session.pending_integration_setup_offer = PendingIntegrationSetupOffer(service_id="posthog_mcp")
 
     snapshot = session_goal_state_snapshot(session)
     other = SessionCore(storage=InMemorySessionStorage())

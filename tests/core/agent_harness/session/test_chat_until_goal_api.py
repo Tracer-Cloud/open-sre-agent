@@ -15,9 +15,7 @@ class _FakeDispatcher:
     def dispatch(self, message: str) -> TurnResult:
         self.calls.append(message)
         body = (
-            "working session_goal:done=0"
-            if len(self.calls) == 1
-            else "done session_goal:achieved"
+            "working session_goal:done=0" if len(self.calls) == 1 else "done session_goal:achieved"
         )
         return TurnResult(
             final_intent="cli_agent_handled",

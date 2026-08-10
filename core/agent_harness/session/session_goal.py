@@ -245,9 +245,7 @@ def session_goal_from_payload(payload: Any) -> SessionGoal | None:
             step_count = None
     checklist_raw = payload.get("checklist") or ()
     checklist = tuple(
-        item.strip()
-        for item in checklist_raw
-        if isinstance(item, str) and item.strip()
+        item.strip() for item in checklist_raw if isinstance(item, str) and item.strip()
     )
     completed_raw = payload.get("completed") or ()
     completed: set[int] = set()
@@ -288,12 +286,15 @@ def session_goal_state_snapshot(session: Any) -> dict[str, Any]:
         else None
     )
     return {
-        "session_goal": (
-            session_goal_to_payload(goal) if isinstance(goal, SessionGoal) else None
-        ),
+        "session_goal": (session_goal_to_payload(goal) if isinstance(goal, SessionGoal) else None),
         "offered_upgrade_ctas": offered_keys,
         "pending_integration_setup_offer": pending_payload,
     }
+
+
+def session_goal_state_is_empty(snapshot: dict[str, Any]) -> bool:
+    """True when the snapshot carries no goal, no offered CTA, and no pending offer."""
+    return not any(snapshot.values())
 
 
 def apply_session_goal_state(session: Any, payload: Any) -> None:
@@ -305,11 +306,7 @@ def apply_session_goal_state(session: Any, payload: Any) -> None:
         session.session_goal = goal
     offered_raw = payload.get("offered_upgrade_ctas") or ()
     if hasattr(session, "offered_upgrade_ctas"):
-        keys = {
-            str(key)
-            for key in offered_raw
-            if isinstance(key, str) and key.strip()
-        }
+        keys = {str(key) for key in offered_raw if isinstance(key, str) and key.strip()}
         session.offered_upgrade_ctas = keys
     pending_raw = payload.get("pending_integration_setup_offer")
     if hasattr(session, "pending_integration_setup_offer"):
@@ -467,6 +464,7 @@ __all__ = [
     "session_goal_from_handoffs",
     "session_goal_from_payload",
     "session_goal_is_active",
+    "session_goal_state_is_empty",
     "session_goal_state_snapshot",
     "session_goal_to_payload",
     "strip_session_goal_progress_tags",

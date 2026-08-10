@@ -1,4 +1,4 @@
-""" /goal slash sugar over SessionGoal. """
+"""/goal slash sugar over SessionGoal."""
 
 from __future__ import annotations
 

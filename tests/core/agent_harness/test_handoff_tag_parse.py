@@ -54,12 +54,10 @@ def test_first_tag_token_rejects_embedded_key_without_boundary() -> None:
 
 def test_find_tag_suffix_keeps_session_goal_body_with_embedded_equals() -> None:
     assert (
-        find_tag_suffix("session_goal=max_turns=5;steps=5", "session_goal")
-        == "max_turns=5;steps=5"
+        find_tag_suffix("session_goal=max_turns=5;steps=5", "session_goal") == "max_turns=5;steps=5"
     )
     assert (
-        find_tag_suffix("session_goal:max_turns=5;steps=5", "session_goal")
-        == "max_turns=5;steps=5"
+        find_tag_suffix("session_goal:max_turns=5;steps=5", "session_goal") == "max_turns=5;steps=5"
     )
 
 
