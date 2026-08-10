@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,17 +47,25 @@ _DUPLICATE_RESULT_KEY = "_opensre_duplicate_result"
 # ``id(content)`` and hold a strong reference — keeping the object alive is what
 # makes its id safe to trust, since a collected object's id can be reused by an
 # unrelated one. ``size`` then catches in-place truncation of that same object.
-_CONTENT_CACHE_MAX = 4_096
+#
+# Bounding by entry count alone is not enough: tool results routinely carry
+# multi-megabyte payloads, so a handful of large entries could still retain
+# gigabytes of memory well under a count cap. The cache is bounded by total
+# retained size instead, evicting the least-recently-used entry first, so
+# large payloads from completed investigations are reclaimed instead of
+# sitting alive in a long-lived worker until thousands of unrelated inserts.
+_CONTENT_CACHE_MAX_CHARS = 8_000_000
 
 
-@dataclass(frozen=True) 
+@dataclass(frozen=True)
 class _ContentEstimate:
     content: Any
     size: tuple[int, int]
     tokens: int
 
 
-_CONTENT_CACHE: dict[int, _ContentEstimate] = {}
+_CONTENT_CACHE: OrderedDict[int, _ContentEstimate] = OrderedDict()
+_CONTENT_CACHE_CHARS = 0
 
 
 def strip_internal_message_markers(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -211,11 +220,30 @@ def _content_size(content: Any) -> tuple[int, int]:
     return (0, 0)
 
 
+def _content_chars(size: tuple[int, int]) -> int:
+    """Approximate retained chars for ``size``, used to bound cache memory."""
+    return size[0] + size[1]
+
+
+def _clear_content_cache() -> None:
+    """Drop every cached estimate and reset the tracked size (tests only)."""
+    global _CONTENT_CACHE_CHARS
+    _CONTENT_CACHE.clear()
+    _CONTENT_CACHE_CHARS = 0
+
+
 def _cache_content_estimate(content: Any, tokens: int) -> int:
     """Cache ``tokens`` against ``content`` identity and return it."""
-    if len(_CONTENT_CACHE) >= _CONTENT_CACHE_MAX:
-        _CONTENT_CACHE.clear()
-    _CONTENT_CACHE[id(content)] = _ContentEstimate(content, _content_size(content), tokens)
+    global _CONTENT_CACHE_CHARS
+    existing = _CONTENT_CACHE.pop(id(content), None)
+    if existing is not None:
+        _CONTENT_CACHE_CHARS -= _content_chars(existing.size)
+    size = _content_size(content)
+    while _CONTENT_CACHE and _CONTENT_CACHE_CHARS + _content_chars(size) > _CONTENT_CACHE_MAX_CHARS:
+        _, evicted = _CONTENT_CACHE.popitem(last=False)
+        _CONTENT_CACHE_CHARS -= _content_chars(evicted.size)
+    _CONTENT_CACHE[id(content)] = _ContentEstimate(content, size, tokens)
+    _CONTENT_CACHE_CHARS += _content_chars(size)
     return tokens
 
 
@@ -243,8 +271,10 @@ def _message_token_estimate(message: dict[str, Any]) -> int:
     identity so shallow provider-payload copies still hit.
     """
     content = message.get("content", "")
-    cached = _CONTENT_CACHE.get(id(content))
+    key = id(content)
+    cached = _CONTENT_CACHE.get(key)
     if cached is not None and cached.content is content and cached.size == _content_size(content):
+        _CONTENT_CACHE.move_to_end(key)
         return cached.tokens
     return _cache_content_estimate(content, _compute_message_token_estimate(message))
 

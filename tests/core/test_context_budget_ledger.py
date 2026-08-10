@@ -146,7 +146,7 @@ def test_ledger_slices_match_a_fresh_estimate_after_mixed_trim() -> None:
 
 def test_second_enforce_under_ceiling_does_not_redump_cached_content() -> None:
     """Cross-think reuse: content-identity cache skips json.dumps on later enforces."""
-    budget._CONTENT_CACHE.clear()
+    budget._clear_content_cache()
     messages = _over_budget_transcript(exchanges=4, payload=2_000)
     budget.enforce_context_budget(messages, fixed_overhead_tokens=0, ceiling=100_000)
 
@@ -166,7 +166,7 @@ def test_second_enforce_under_ceiling_does_not_redump_cached_content() -> None:
 
 def test_shallow_provider_copy_reuses_content_estimate_cache() -> None:
     """ReactLoop shallow-copies provider payloads; shared content must cache-hit."""
-    budget._CONTENT_CACHE.clear()
+    budget._clear_content_cache()
     original = _tool_result("t0", "payload " * 500)
     first = budget._message_token_estimate(original)
     copied = dict(original)
@@ -195,7 +195,7 @@ def test_content_cache_rejects_stale_entry_at_a_reused_id() -> None:
     ``(block_count, text_char_sum)`` — without being the same object. The
     identity check (not just the size) must reject a stale hit.
     """
-    budget._CONTENT_CACHE.clear()
+    budget._clear_content_cache()
     real_content = [{"type": "tool_use", "id": "t1", "name": "noop", "input": {}}]
     real_tokens = budget._compute_message_token_estimate({"content": real_content})
 
@@ -212,7 +212,7 @@ def test_content_cache_rejects_stale_entry_at_a_reused_id() -> None:
 
 def test_truncate_invalidates_content_estimate_cache() -> None:
     """After truncation mutates content, the cache must match a fresh compute."""
-    budget._CONTENT_CACHE.clear()
+    budget._clear_content_cache()
     ceiling = 50_000
     big = "y" * 1_000_000
     messages = [{"role": "user", "content": [{"type": "text", "text": big}]}]
@@ -228,9 +228,35 @@ def test_truncate_invalidates_content_estimate_cache() -> None:
     assert messages[0]["content"][0]["text"].endswith(budget._TRUNCATION_MARKER)
 
 
+def test_content_cache_evicts_by_size_not_just_entry_count() -> None:
+    """Large tool-result payloads must be reclaimed once the cache's retained-
+    size budget is exceeded, not merely once an entry-count cap is hit.
+
+    A long-lived worker processes many investigations; content from ones that
+    finished must not sit alive in this cache indefinitely just because fewer
+    than a few thousand *other* entries have been inserted since.
+    """
+    budget._clear_content_cache()
+    chunk_chars = 2_000_000  # 6 chunks (12MB) exceeds the 8MB retained-size cap.
+    kept: list[list[dict[str, Any]]] = []
+    for index in range(6):
+        content = [{"type": "text", "text": f"chunk{index} " + "z" * chunk_chars}]
+        budget._message_token_estimate({"content": content})
+        kept.append(content)
+
+    total_cached_chars = sum(
+        budget._content_chars(entry.size) for entry in budget._CONTENT_CACHE.values()
+    )
+    assert total_cached_chars <= budget._CONTENT_CACHE_MAX_CHARS
+    assert len(budget._CONTENT_CACHE) < len(kept)
+    # The earliest (least-recently-used) entries are evicted first.
+    assert id(kept[0]) not in budget._CONTENT_CACHE
+    assert id(kept[-1]) in budget._CONTENT_CACHE
+
+
 def test_multi_think_shallow_copies_bound_json_dumps() -> None:
     """Growing transcript across thinks should dump new blocks, not the whole history."""
-    budget._CONTENT_CACHE.clear()
+    budget._clear_content_cache()
     payload = "x" * 20_000
     provider_messages: list[dict[str, Any]] = [{"role": "user", "content": "alert"}]
     dumps_calls = 0
