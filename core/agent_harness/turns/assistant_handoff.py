@@ -10,25 +10,20 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from core.agent_harness.turns.evidence_kind import EvidenceKind
+from core.agent_harness.turns.handoff_keys import HandoffField
 from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, first_tag_token
-
-if TYPE_CHECKING:
-    from core.agent_harness.turns.evidence_need import EvidenceKind
-
-_EVIDENCE_KIND_VALUES = frozenset({"metric_read", "incident", "setup", "other"})
 
 
 def _evidence_kind_from_value(value: Any) -> EvidenceKind | None:
-    from core.agent_harness.turns.evidence_need import EvidenceKind
-
     if not isinstance(value, str):
         return None
-    token = value.strip().lower()
-    if token not in _EVIDENCE_KIND_VALUES:
+    try:
+        return EvidenceKind(value.strip().lower())
+    except ValueError:
         return None
-    return EvidenceKind(token)
 
 
 def _session_goal_body(value: Any) -> str | None:
@@ -65,22 +60,22 @@ class AssistantHandoff:
     @classmethod
     def from_tool_input(cls, handoff_input: Mapping[str, Any]) -> AssistantHandoff:
         """Decode tool args: schema fields win; content tags fill gaps only."""
-        content = str(handoff_input.get("content", "")).strip()
-        kind = _evidence_kind_from_value(handoff_input.get("evidence_kind"))
+        content = str(handoff_input.get(HandoffField.CONTENT, "")).strip()
+        kind = _evidence_kind_from_value(handoff_input.get(HandoffField.EVIDENCE_KIND))
         if kind is None and content:
-            kind = _evidence_kind_from_value(first_tag_token(content, "evidence_kind"))
+            kind = _evidence_kind_from_value(first_tag_token(content, HandoffField.EVIDENCE_KIND))
 
-        session_goal = _session_goal_body(handoff_input.get("session_goal"))
+        session_goal = _session_goal_body(handoff_input.get(HandoffField.SESSION_GOAL))
         if session_goal is None and content:
-            session_goal = _session_goal_body(find_tag_suffix(content, "session_goal"))
+            session_goal = _session_goal_body(find_tag_suffix(content, HandoffField.SESSION_GOAL))
 
-        items = _session_goal_items_from_value(handoff_input.get("session_goal_items"))
+        items = _session_goal_items_from_value(handoff_input.get(HandoffField.SESSION_GOAL_ITEMS))
         if not items and content:
-            buried = find_tag_suffix(content, "session_goal_item")
+            buried = find_tag_suffix(content, HandoffField.SESSION_GOAL_ITEM)
             if buried:
                 items = (buried,)
 
-        requires_gather = handoff_input.get("requires_gather", True) is not False
+        requires_gather = handoff_input.get(HandoffField.REQUIRES_GATHER, True) is not False
         return cls(
             content=content,
             evidence_kind=kind,

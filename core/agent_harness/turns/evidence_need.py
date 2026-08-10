@@ -14,19 +14,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+from core.agent_harness.turns.evidence_kind import EvidenceKind, policy_for
+from core.agent_harness.turns.handoff_keys import HandoffField, HandoffTag
 from core.agent_harness.turns.handoff_tag_parse import first_tag_token
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.assistant_handoff import AssistantHandoff
-
-
-class EvidenceKind(StrEnum):
-    """What the action planner said this turn is asking for."""
-
-    METRIC_READ = "metric_read"
-    INCIDENT = "incident"
-    SETUP = "setup"
-    OTHER = "other"
 
 
 class EvidenceTier(StrEnum):
@@ -63,7 +56,7 @@ def evidence_kind_from_handoffs(handoff_contents: Sequence[str]) -> EvidenceKind
     is the kind. Parsing is plain string splits — not regex, not user-text scan.
     """
     for raw in handoff_contents:
-        token = first_tag_token(raw, "evidence_kind")
+        token = first_tag_token(raw, HandoffField.EVIDENCE_KIND)
         if token is None:
             continue
         try:
@@ -94,6 +87,9 @@ def classify_evidence_need(
     Prefer ``handoffs`` (:class:`AssistantHandoff` fields). Fall back to parsing
     ``handoff_contents`` tags only when no structured kind is present. Never
     infers intent from user text.
+
+    Kind-specific behavior comes from :func:`policy_for` — do not add
+    ``if kind is …`` branches here when introducing a new evidence kind.
     """
     resolved_kind = kind
     if resolved_kind is None and handoffs:
@@ -106,9 +102,15 @@ def classify_evidence_need(
         resolved_kind = evidence_kind_from_handoffs(handoff_contents)
     resolved_kind = resolved_kind or EvidenceKind.OTHER
     connected = _connected_names(resolved_integrations)
-    preferred = preferred_sources_for(resolved_kind) if preferred_sources_for is not None else ()
+    policy = policy_for(resolved_kind)
+    if policy.ignore_preferred_sources:
+        preferred: tuple[str, ...] = ()
+    else:
+        preferred = (
+            preferred_sources_for(resolved_kind) if preferred_sources_for is not None else ()
+        )
 
-    if resolved_kind is EvidenceKind.METRIC_READ and preferred:
+    if policy.requires_authoritative_source and preferred:
         present = tuple(name for name in preferred if name in connected)
         absent = tuple(name for name in preferred if name not in connected)
         if absent:
@@ -129,16 +131,6 @@ def classify_evidence_need(
             required_for_authoritative=True,
         )
 
-    if resolved_kind is EvidenceKind.INCIDENT:
-        return EvidenceNeed(
-            kind=resolved_kind,
-            preferred_sources=(),
-            connected=tuple(sorted(connected)),
-            missing=(),
-            tier=EvidenceTier.L0 if not connected else EvidenceTier.L1,
-            required_for_authoritative=False,
-        )
-
     return EvidenceNeed(
         kind=resolved_kind,
         preferred_sources=preferred,
@@ -157,10 +149,10 @@ def should_skip_gather(need: EvidenceNeed) -> bool:
 def should_suppress_investigation_offer(need: EvidenceNeed) -> bool:
     """True when Want-me-to investigate would be the wrong closer.
 
-    Any metric/read ask (live or degraded) should not close with a full
-    investigation offer — the next step is a query/setup, not RCA.
+    Driven by :class:`~core.agent_harness.turns.evidence_kind.EvidenceKindPolicy`
+    (e.g. metric/read → query/setup next, not RCA).
     """
-    return need.kind is EvidenceKind.METRIC_READ
+    return policy_for(need.kind).suppress_investigation_offer
 
 
 def format_upgrade_cta(
@@ -207,7 +199,7 @@ def handoff_tag_for(need: EvidenceNeed) -> str | None:
     if need.tier != EvidenceTier.L0_DEGRADED or not need.missing:
         return None
     missing = ",".join(need.missing)
-    return f"evidence_tier:{EvidenceTier.L0_DEGRADED.value}:{missing}"
+    return f"{HandoffTag.EVIDENCE_TIER}:{EvidenceTier.L0_DEGRADED}:{missing}"
 
 
 __all__ = [

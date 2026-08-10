@@ -7,8 +7,9 @@ from core.agent_harness.session.pending_offer import (
     PendingIntegrationSetupOffer,
     first_pending_offer,
 )
+from core.agent_harness.turns.answer_finalize import append_upgrade_cta
 from core.agent_harness.turns.evidence_need import classify_evidence_need
-from core.agent_harness.turns.orchestrator import _append_upgrade_cta, run_turn
+from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from platform.harness_ports import preferred_evidence_sources_for
 from surfaces.interactive_shell.session import Session
@@ -46,11 +47,11 @@ def test_cta_dedupes_while_pending_offer_is_armed() -> None:
         resolved_integrations={},
         preferred_sources_for=preferred_evidence_sources_for,
     )
-    first = _append_upgrade_cta(session, "Draft outline.", need)
+    first = append_upgrade_cta(session, "Draft outline.", need)
     assert "/integrations setup posthog_mcp" in first
     assert isinstance(first_pending_offer(session), PendingIntegrationSetupOffer)
 
-    second = _append_upgrade_cta(session, first, need)
+    second = append_upgrade_cta(session, first, need)
     assert second == first
     assert second.count("/integrations setup posthog_mcp") == 1
 

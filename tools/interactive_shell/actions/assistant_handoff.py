@@ -11,6 +11,7 @@ from core.agent_harness.tools.tool_context import (
     string_array_property,
     string_property,
 )
+from core.agent_harness.turns.evidence_kind import EVIDENCE_KIND_VALUES
 from core.tool_framework.registered_tool import RegisteredTool
 
 
@@ -73,9 +74,10 @@ assistant_handoff_tool = RegisteredTool(
                     "Closed evidence category for harness policy. Use metric_read for "
                     "product-analytics metrics/counts over a time window; incident for "
                     "bare symptom/incident handoffs; setup for connect/configure asks; "
-                    "other only when none of those apply."
+                    "other only when none of those apply. Enum is derived from "
+                    "EvidenceKind — do not hard-code a parallel list."
                 ),
-                enum=("metric_read", "incident", "setup", "other"),
+                enum=EVIDENCE_KIND_VALUES,
             ),
             "session_goal": string_property(
                 description=(

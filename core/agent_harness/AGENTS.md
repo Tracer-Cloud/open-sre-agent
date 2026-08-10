@@ -28,6 +28,13 @@ Outer `SessionGoal` (`session/session_goal.py` + `turns/session_goal_loop.py`) i
 **not** the inner ReAct `Goal` / `goal_review`. While a session goal is active,
 `run_turn` suppresses investigation Want-me-to closers.
 
+**Evidence kinds (open/closed):** vocabulary + per-kind policy live in
+`turns/evidence_kind.py` (`EvidenceKind` + `EvidenceKindPolicy`). Add a kind by
+extending the enum and registering its policy row — do **not** grow
+`if kind is …` branches in `classify_evidence_need`. Tool schema `enum` is
+`EVIDENCE_KIND_VALUES` (derived), not a parallel hard-coded list. Preferred
+integration ids stay opt-in via `platform.harness_ports.register_preferred_evidence_source`.
+
 **No keyword intent routing around the action agent.** Do not scan user text
 with regex/keywords to skip gather, attach goals, or bypass `execute_actions`.
 Policy keys off typed `AssistantHandoff` (`turns/assistant_handoff.py`) —

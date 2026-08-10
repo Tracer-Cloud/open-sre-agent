@@ -18,7 +18,9 @@ from core.agent_harness.prompts.memory.prior_investigation import (
     PRIOR_INVESTIGATION_RECALL_SECONDS,
     STALE_PRIOR_INVESTIGATION_NOTE,
 )
-from core.agent_harness.turns.orchestrator import _is_prior_investigation_follow_up_handoff
+from core.agent_harness.turns.handoff_policy import (
+    is_prior_investigation_follow_up_handoff,
+)
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from integrations.github.gather_prompt import github_gather_prompt_fragment
 
@@ -245,7 +247,7 @@ def test_action_prompt_teaches_the_follow_up_handoff_tag() -> None:
 
     # Assert: the emitted value must satisfy the orchestrator's prefix check.
     assert 'assistant_handoff(content="follow_up:prior_investigation")' in prompt
-    assert _is_prior_investigation_follow_up_handoff(("follow_up:prior_investigation",))
+    assert is_prior_investigation_follow_up_handoff(("follow_up:prior_investigation",))
 
 
 def test_assistant_has_guidance_for_the_follow_up_tag() -> None:
