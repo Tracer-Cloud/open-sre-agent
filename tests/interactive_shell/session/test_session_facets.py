@@ -19,8 +19,10 @@ from surfaces.interactive_shell.session.session import Session
 # Includes pending_schedule_offer (structured yes → /cron confirmations),
 # pending_investigation_offer (structured yes → investigation dispatch),
 # pending_user_choice (structured decision → /choose selection menu), and
-# pending_recovery_note (WAL recovery note for the first turn after /resume).
-_CORE_FIELD_COUNT = 23
+# pending_recovery_note (WAL recovery note for the first turn after /resume),
+# and the Milestone #4 goal trio (session_goal, pending_integration_setup_offer,
+# offered_upgrade_ctas).
+_CORE_FIELD_COUNT = 26
 _FACET_FIELDS = ("alerts", "terminal")
 
 
