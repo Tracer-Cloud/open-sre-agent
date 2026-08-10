@@ -228,3 +228,38 @@ def test_reclassify_leaves_missing_source_l0_unchanged() -> None:
         )
         is need
     )
+
+
+def test_successful_result_values_are_not_read_as_config_failures() -> None:
+    """Query data must not look like an auth error.
+
+    Failure detection scans observation prose near the source name. Bare
+    ``401`` / ``403`` / ``forbidden`` also occur as ordinary values — a count,
+    a campaign name — so matching them alone discards an authoritative answer
+    and tells the user to reconnect a source that is working.
+    """
+    from core.agent_harness.turns.evidence_need import _preferred_sources_with_config_failure
+
+    sources = ("posthog_mcp",)
+
+    # A successful query whose count happens to be 401.
+    counted = 'Tool: posthog_mcp query -> {"results": [["Windows", 401]], "status": "ok"}'
+    assert _preferred_sources_with_config_failure(counted, sources) == ()
+
+    # A successful query whose row text contains "forbidden".
+    named = 'Tool: posthog_mcp -> rows: [["forbidden-city-campaign", 12]]'
+    assert _preferred_sources_with_config_failure(named, sources) == ()
+
+
+def test_a_real_auth_failure_is_still_detected() -> None:
+    """Tightening the markers must not blind the detector to genuine failures."""
+    from core.agent_harness.turns.evidence_need import _preferred_sources_with_config_failure
+
+    sources = ("posthog_mcp",)
+    for observation in (
+        "Tool: posthog_mcp -> error: 401 Unauthorized, invalid api key",
+        "Tool: posthog_mcp -> HTTP 403 Forbidden",
+        "Tool: posthog_mcp -> posthog is not configured",
+        "Tool: posthog_mcp -> authentication failed",
+    ):
+        assert _preferred_sources_with_config_failure(observation, sources) == sources, observation

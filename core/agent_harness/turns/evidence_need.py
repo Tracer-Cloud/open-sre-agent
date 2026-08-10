@@ -46,20 +46,30 @@ PreferredSourcesForKind = Callable[[EvidenceKind], tuple[str, ...]]
 SetupCommandForSource = Callable[[str], str]
 
 # Auth/config failure signatures in gather observation text (preferred-source
-# scoped). Application query noise — HogQL syntax, empty results — must not
-# match. Same spirit as source_circuit_breaker connectivity markers.
-_CONFIG_FAILURE_MARKERS = (
+# scoped). Every marker is a phrase that cannot appear as ordinary result data.
+# Bare ``401`` / ``403`` / ``forbidden`` were matched before and fired on real
+# answers — a count of 401, a campaign named "forbidden-city" — discarding the
+# result and telling the user to reconnect a healthy source. Status codes are
+# only a failure next to the word that makes them one.
+_CONFIG_FAILURE_PHRASES = (
     "not configured",
-    "unauthorized",
     "authentication failed",
     "authentication error",
     "invalid api key",
     "invalid token",
     "missing credentials",
     "missing api key",
-    "forbidden",
-    "401",
-    "403",
+    "unauthorized",
+    "401 unauthorized",
+    "403 forbidden",
+    "http 401",
+    "http 403",
+    "status 401",
+    "status 403",
+    "error 401",
+    "error 403",
+    "permission denied",
+    "access denied",
     '"available": false',
     '"available":false',
 )
@@ -188,7 +198,8 @@ def _source_mentioned(observation_lower: str, source: str) -> bool:
 
 
 def _window_has_config_failure(window: str) -> bool:
-    return any(marker in window for marker in _CONFIG_FAILURE_MARKERS)
+    """True when the window shows an auth/config failure, not a result value."""
+    return any(phrase in window for phrase in _CONFIG_FAILURE_PHRASES)
 
 
 def _preferred_sources_with_config_failure(
