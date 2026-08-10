@@ -5,10 +5,10 @@ from collections.abc import Generator
 import pytest
 
 from platform.terminal.theme import DEFAULT_THEME_NAME, set_active_theme
+from tools.investigation.reporting.formatters.base import slack_links_to_plain_text
 from tools.investigation.reporting.renderers.terminal import (
     _rich_line_with_links,
     _strip_mrkdwn,
-    _strip_slack_links,
     render_report,
 )
 
@@ -125,7 +125,7 @@ def test_strip_mrkdwn(raw: str, expected: str) -> None:
             "A (https://a.test) and B (https://b.test)",
         ),
         # No Slack-style link -> passthrough (including bare URLs, which
-        # _strip_slack_links is not responsible for).
+        # slack_links_to_plain_text is not responsible for).
         ("plain text", "plain text"),
         (
             "https://example.com without angle brackets",
@@ -135,8 +135,8 @@ def test_strip_mrkdwn(raw: str, expected: str) -> None:
         ("", ""),
     ],
 )
-def test_strip_slack_links(raw: str, expected: str) -> None:
-    assert _strip_slack_links(raw) == expected
+def test_slack_links_to_plain_text(raw: str, expected: str) -> None:
+    assert slack_links_to_plain_text(raw) == expected
 
 
 @pytest.mark.parametrize(

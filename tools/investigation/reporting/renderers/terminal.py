@@ -10,14 +10,16 @@ from rich.text import Text
 
 from platform.observability import get_output_format
 from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
+from tools.investigation.reporting.formatters.base import (
+    SLACK_LINK_RE,
+    slack_links_to_plain_text,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 _URL_RE = re.compile(r"https?://\S+")
-# Matches Slack-style links: <url|label> or <url>
-_SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
 
 
 def _rich_line_with_links(text: str) -> Text:
@@ -25,7 +27,7 @@ def _rich_line_with_links(text: str) -> Text:
     result = Text()
     cursor = 0
 
-    for m in _SLACK_LINK_RE.finditer(text):
+    for m in SLACK_LINK_RE.finditer(text):
         # Text before the match
         if m.start() > cursor:
             result.append(text[cursor : m.start()])
@@ -47,17 +49,6 @@ def _rich_line_with_links(text: str) -> Text:
         result.append(remaining[sub_cursor:])
 
     return result
-
-
-def _strip_slack_links(text: str) -> str:
-    """Convert Slack <url|label> to plain 'label (url)' for plain text mode."""
-
-    def _repl(m: re.Match[str]) -> str:
-        url = str(m.group(1))
-        label = m.group(2)
-        return f"{label} ({url})" if label else url
-
-    return _SLACK_LINK_RE.sub(_repl, text)
 
 
 def _strip_mrkdwn(text: str) -> str:
@@ -251,5 +242,5 @@ def _render_rich_report(slack_message: str) -> str:
 
 
 def _render_plain_report(slack_message: str) -> str:
-    clean = _strip_slack_links(_strip_mrkdwn(slack_message))
+    clean = slack_links_to_plain_text(_strip_mrkdwn(slack_message))
     return f"\n{clean}\n"
