@@ -8,9 +8,11 @@ from typing import Any
 
 import pytest
 
+from config.constants import OPENSRE_OPERATIONS_LOG_PATH_ENV
 from core.agent import Agent
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.llm.types import AgentLLMResponse, ToolCall
+from platform.observability.operations_log import read_operations
 from platform.observability.trace.spans import (
     NoopSessionTraceSink,
     bind_session_trace,
@@ -184,6 +186,41 @@ def test_agent_run_skips_llm_span_when_noop() -> None:
     )
     result = agent.run([{"role": "user", "content": "hello"}])
     assert result.final_text == "done"
+
+
+def test_agent_run_writes_operations_log_without_prompt_content(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log_path = tmp_path / "operations.jsonl"
+    monkeypatch.setenv(OPENSRE_OPERATIONS_LOG_PATH_ENV, str(log_path))
+    agent = Agent(
+        llm=_NoToolLLM(),
+        system="sys",
+        tools=[],
+        resolved_integrations={},
+        max_iterations=1,
+    )
+
+    result = agent.run([{"role": "user", "content": "hello secret prompt"}])
+
+    assert result.final_text == "done"
+    records = read_operations(path=log_path)
+    events = [record["event"] for record in records]
+    assert events == [
+        "agent_loop_started",
+        "agent_loop_iteration",
+        "agent_loop_finished",
+    ]
+    run_ids = {record["data"]["run_id"] for record in records}
+    assert len(run_ids) == 1
+    finished = records[-1]["data"]
+    assert finished["stop_reason"] == "no_tools_needed"
+    assert finished["iterations_used"] == 1
+    assert finished["final_text_chars"] == len("done")
+    serialized = json.dumps(records)
+    assert "hello secret prompt" not in serialized
+    assert '"done"' not in serialized
 
 
 def test_agent_run_emits_loop_iteration_outcomes_for_tool_round(

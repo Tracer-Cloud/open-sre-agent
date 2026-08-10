@@ -153,7 +153,13 @@ not `opensre cron add`. See [Sentry](/sentry#morning-digest-scheduled).
 - **Task definitions** are stored in `~/.opensre/scheduler_tasks.json` (JSON + filelock)
 - **Execution history** is stored in `~/.opensre/scheduler.db` (SQLite with WAL mode)
 - **Interactive-shell loop messages** are stored in `~/.opensre/scheduler_loop_messages.jsonl`
+- **Operational breadcrumbs** are appended to `~/.opensre/operations_log.jsonl`
+  with loop lifecycle and run status metadata, not prompt or message bodies
 - Both survive process restarts — `opensre cron list` and `opensre cron logs` read from disk
+
+Set `OPENSRE_OPERATIONS_LOG_PATH` to write the operations log somewhere else, or
+`OPENSRE_OPERATIONS_LOG_DISABLED=1` to turn it off. Set
+`OPENSRE_OPERATIONS_LOG_MAX_BYTES` to change the rotation threshold.
 
 ## REPL
 

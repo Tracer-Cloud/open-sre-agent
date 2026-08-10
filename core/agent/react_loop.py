@@ -12,6 +12,7 @@ host can drive it. ``run_react_loop`` is the one-line functional entry.
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -48,6 +49,7 @@ from core.llm.types import ToolCall
 from core.messages import MessageMapper
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
+from platform.observability.operations_log import record_operation
 from platform.observability.trace.redaction import redact_sensitive
 from platform.observability.trace.spans import (
     llm_span,
@@ -106,6 +108,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._cancelled = False
         self._iterations_used = 0
         self._stop_reason = "iteration_cap"
+        self._operation_run_id = uuid.uuid4().hex[:12]
         self._conclusion = ConclusionHandler(host, self._messages, self._runtime_tools)
 
     def run(self) -> AgentRunResult:
@@ -119,6 +122,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 }
             )
         )
+        self._record_loop_operation("agent_loop_started")
         with loop_span(
             "react_loop",
             attributes={
@@ -141,15 +145,18 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                             break
                 run_result = self._finalize()
                 self._mark_loop_span(loop_attrs)
+                self._record_loop_finished()
                 return run_result
             except KeyboardInterrupt as exc:
                 self._mark_cancelled()
                 self._mark_loop_error(loop_attrs, exc)
+                self._record_loop_finished(error=exc)
                 raise
             except BaseException as exc:
                 self._hit_cap = False
                 self._stop_reason = "error"
                 self._mark_loop_error(loop_attrs, exc)
+                self._record_loop_finished(error=exc)
                 raise
             finally:
                 note_progress = getattr(self._host, "_note_react_run_progress", None)
@@ -182,8 +189,30 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                     message_count=len(self._messages),
                     executed_count=len(self._executed),
                 )
+                self._record_loop_operation(
+                    "agent_loop_iteration_failed",
+                    {
+                        "iteration": iteration,
+                        "exception_type": type(exc).__name__,
+                        "message_count": len(self._messages),
+                        "executed_count": len(self._executed),
+                    },
+                )
                 raise
             self._mark_iteration_span(span_attrs, result)
+            self._record_loop_operation(
+                "agent_loop_iteration",
+                {
+                    "iteration": iteration,
+                    "outcome": result.outcome,
+                    "should_stop": result.should_stop,
+                    "requested_tool_count": result.requested_tool_count,
+                    "tool_error_count": result.tool_error_count,
+                    "terminated_tool_count": result.terminated_tool_count,
+                    "message_count": len(self._messages),
+                    "executed_count": len(self._executed),
+                },
+            )
             return result
 
     def _run_iteration_body(self, iteration: int) -> _IterationResult:
@@ -506,6 +535,46 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             executed_count=len(self._executed),
             tool_result_count=len(self._tool_results),
         )
+
+    def _record_loop_operation(
+        self,
+        event: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        record_operation(event, {**self._operation_base(), **(data or {})})
+
+    def _record_loop_finished(self, *, error: BaseException | None = None) -> None:
+        data: dict[str, Any] = {
+            "stop_reason": self._stop_reason,
+            "hit_iteration_cap": self._hit_cap,
+            "terminated_by_tool": self._terminated_by_tool,
+            "cancelled": self._cancelled,
+            "iterations_used": self._iterations_used,
+            "message_count": len(self._messages),
+            "executed_count": len(self._executed),
+            "tool_result_count": len(self._tool_results),
+            "final_text_chars": len(self._final_text),
+        }
+        if error is not None:
+            data["exception_type"] = type(error).__name__
+        self._record_loop_operation("agent_loop_finished", data)
+
+    def _operation_base(self) -> dict[str, Any]:
+        model = getattr(self._llm, "model_id", None) or getattr(self._llm, "_model", None)
+        provider = getattr(self._llm, "_provider_label", None) or getattr(
+            self._llm, "provider", None
+        )
+        tool_names = [str(getattr(tool, "name", "tool")) for tool in self._runtime_tools]
+        return {
+            "run_id": self._operation_run_id,
+            "component": "react_loop",
+            "model": str(model or "unknown"),
+            "provider": str(provider or "unknown"),
+            "max_iterations": self._max_iterations,
+            "tool_count": len(self._runtime_tools),
+            "tool_names": tool_names,
+            "tool_schema_count": len(self._tool_schemas),
+        }
 
 
 def run_react_loop[RuntimeToolT: RuntimeTool](

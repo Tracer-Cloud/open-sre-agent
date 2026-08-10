@@ -104,6 +104,10 @@ Separately from typed-command history, the interactive shell records each LLM tu
 | `OPENSRE_PROMPT_LOG_REDACT` | `1` | Set to `0` to log/send raw prompt and response text without redaction. |
 | `OPENSRE_PROMPT_LOG_PATH` | `~/.opensre/prompt_log.jsonl` | Override the local JSONL file path. |
 
+The separate operations log at `~/.opensre/operations_log.jsonl` records agent
+and scheduler lifecycle breadcrumbs such as loop start, iteration outcome, loop
+creation, and delivery status. It does not store prompt or response bodies.
+
 PostHog forwarding for this event additionally honors the global telemetry opt-outs: set **`OPENSRE_NO_TELEMETRY=1`**, `OPENSRE_ANALYTICS_DISABLED=1`, or `DO_NOT_TRACK=1` to stop all PostHog traffic (including `$ai_generation`) without touching the local JSONL file. See [Environment Variables](/configuration/environment-variables#telemetry-monitoring).
 
 ### Config file

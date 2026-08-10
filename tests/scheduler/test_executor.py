@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
+from config.constants import OPENSRE_OPERATIONS_LOG_PATH_ENV
+from platform.observability.operations_log import read_operations
 from platform.scheduler.executor import execute_task
 from platform.scheduler.local_delivery import get_loop_messages
 from platform.scheduler.loop_constants import LOOP_CHANNELS_PARAM
@@ -168,6 +170,46 @@ class TestExecutor:
         assert len(messages) == 1
         assert messages[0].name == "Local loop"
         assert messages[0].message == "Scheduled report"
+
+    def test_execution_logs_operations_without_message_body(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        log_path = tmp_path / "operations.jsonl"
+        monkeypatch.setenv(OPENSRE_OPERATIONS_LOG_PATH_ENV, str(log_path))
+        task = ScheduledTask(
+            id="test_ops_log",
+            name="Local loop",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Sensitive scheduled report body",
+            ),
+            patch("platform.scheduler.executor._deliver_interactive_shell") as mock_deliver,
+        ):
+            mock_deliver.return_value = (True, "", "local:1")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        records = read_operations(path=log_path)
+        events = [record["event"] for record in records]
+        assert events == [
+            "scheduled_task_execution_started",
+            "scheduled_task_execution_completed",
+        ]
+        completed = records[-1]["data"]
+        assert completed["task_id"] == "test_ops_log"
+        assert completed["fire_time"] == "2026-01-01T09:00"
+        assert completed["status"] == "success"
+        assert completed["message_chars"] == len("Sensitive scheduled report body")
+        assert completed["message_id"] == "local:1"
+        assert "Sensitive scheduled report body" not in json.dumps(records)
 
     def test_loop_fanout_builds_message_once(self) -> None:
         task = ScheduledTask(
