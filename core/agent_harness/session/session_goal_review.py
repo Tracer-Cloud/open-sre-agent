@@ -96,6 +96,8 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
         if confirmed is True:
             return SessionGoalStatus.ACHIEVED
         # False or None → keep working (never false-complete on reviewer failure).
+        # Structured evaluate may already have attached ACHIEVED on ``session``;
+        # overwrite status so the outer loop's session reread cannot defeat this.
         reason = (
             "LLM confirm: not reached"
             if confirmed is False
@@ -103,10 +105,11 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
         )
         if session is not None:
             stored = getattr(session, "session_goal", None)
-            if isinstance(stored, SessionGoal):
-                attach_session_goal(session, stored.with_reason(reason))
-            else:
-                attach_session_goal(session, goal.with_reason(reason))
+            base = stored if isinstance(stored, SessionGoal) else goal
+            attach_session_goal(
+                session,
+                base.with_status(SessionGoalStatus.ACTIVE).with_reason(reason),
+            )
         return SessionGoalStatus.ACTIVE
 
     return _evaluate

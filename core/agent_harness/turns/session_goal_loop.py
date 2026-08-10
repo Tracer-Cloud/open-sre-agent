@@ -140,6 +140,11 @@ def _finish_outer_turn(
     stored = getattr(session, "session_goal", None)
     if isinstance(stored, SessionGoal):
         active = stored
+    # Evaluate return is authoritative — optional reviewers may keep ACTIVE after
+    # structured evaluate briefly attached ACHIEVED on the session.
+    if active.status != next_status:
+        active = active.with_status(next_status)
+        attach_session_goal(session, active)
     last = _scrub_progress_tags(last)
 
     if next_status != SessionGoalStatus.ACTIVE:
@@ -147,12 +152,13 @@ def _finish_outer_turn(
         active = _paint(session, active, on_progress, rederive=False)
         return active, last, True
 
-    # Still active: one honest paint with the evaluate reason (not a pre-eval guess).
-    active = _paint(session, active, on_progress, rederive=False)
     if active.turns_used >= active.max_outer_turns:
         active = active.with_status(SessionGoalStatus.BUDGET_EXHAUSTED)
         active = _paint(session, active, on_progress)
         return active, last, True
+
+    # Still active under budget: one paint with the evaluate reason.
+    active = _paint(session, active, on_progress, rederive=False)
     return active, last, False
 
 
@@ -187,8 +193,9 @@ def run_until_session_goal(
         attach_session_goal(session, goal)
 
     pre = getattr(session, "session_goal", None)
-    had_active_before = isinstance(pre, SessionGoal) and pre.status == SessionGoalStatus.ACTIVE
-    if had_active_before:
+    had_active_before = False
+    if isinstance(pre, SessionGoal) and pre.status == SessionGoalStatus.ACTIVE:
+        had_active_before = True
         _announce_working(session, pre, on_progress)
 
     last = chat(message)

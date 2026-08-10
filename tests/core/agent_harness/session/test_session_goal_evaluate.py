@@ -320,7 +320,65 @@ def test_llm_evaluator_rejects_soft_achieve() -> None:
     )
     assert status == SessionGoalStatus.ACTIVE
     assert session.session_goal is not None
+    assert session.session_goal.status == SessionGoalStatus.ACTIVE
     assert "not reached" in session.session_goal.last_reason.lower()
+
+
+def test_llm_reject_survives_outer_loop_session_reread() -> None:
+    """Reviewer ACTIVE must win over structured ACHIEVED left on the session."""
+
+    class _LLM:
+        model_id = "test"
+
+        def invoke(self, messages, *, system=None, tools=None):  # noqa: ANN001
+            _ = (messages, system, tools)
+            return type("R", (), {"content": "NOT_REACHED"})()
+
+        def tool_schemas(self, tools):  # noqa: ANN001
+            _ = tools
+            return []
+
+    session = SessionCore()
+    paints: list[str] = []
+
+    def _chat(message: str) -> TurnResult:
+        _ = message
+        return _result("Patched. session_goal:achieved", executed=1, success=1)
+
+    outcome = run_until_session_goal(
+        _chat,
+        session,
+        "go",
+        goal=SessionGoal(condition="finish migration", max_outer_turns=2),
+        evaluate=build_session_goal_llm_evaluator(_LLM()),  # type: ignore[arg-type]
+        on_progress=lambda g: paints.append(g.status),
+    )
+
+    assert outcome.goal.status == SessionGoalStatus.BUDGET_EXHAUSTED
+    assert SessionGoalStatus.ACHIEVED not in paints
+    assert session.session_goal is not None
+    assert session.session_goal.status == SessionGoalStatus.BUDGET_EXHAUSTED
+
+
+def test_budget_exhaustion_paints_once() -> None:
+    session = SessionCore()
+    paints: list[str] = []
+
+    def _chat(message: str) -> TurnResult:
+        _ = message
+        return _result("still working")
+
+    outcome = run_until_session_goal(
+        _chat,
+        session,
+        "go",
+        goal=SessionGoal(condition="never done", max_outer_turns=1, host_owned=True),
+        on_progress=lambda g: paints.append(f"{g.status}:{g.last_reason}"),
+    )
+
+    assert outcome.goal.status == SessionGoalStatus.BUDGET_EXHAUSTED
+    budget_paints = [p for p in paints if p.startswith(SessionGoalStatus.BUDGET_EXHAUSTED)]
+    assert len(budget_paints) == 1
 
 
 def test_llm_evaluator_confirms_soft_achieve() -> None:
