@@ -129,6 +129,7 @@ def session_goal_from_handoffs(
         return None
 
     max_turns = _DEFAULT_MAX_OUTER_TURNS
+    explicit_cap = False
     step_count: int | None = None
     body = attach_tag or "continue"
     for raw in handoff_contents:
@@ -137,13 +138,17 @@ def session_goal_from_handoffs(
             continue
         try:
             max_turns = max(1, int(cap.strip()))
+            explicit_cap = True
         except ValueError:
             continue
         break
 
     if checklist and step_count is None:
         step_count = len(checklist)
-        max_turns = max(max_turns, step_count)
+        # Default budget may stretch to fit a checklist; an explicit typed cap
+        # is a hard ceiling (budget_exhausted if items remain).
+        if not explicit_cap:
+            max_turns = max(max_turns, step_count)
 
     goal_condition = condition.strip() or body
     if len(goal_condition) > 400:

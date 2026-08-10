@@ -339,6 +339,46 @@ def test_finalize_after_streamed_answer_does_not_duplicate_text() -> None:
     assert len(client.stream_stops) == 1
 
 
+def test_goal_continuation_delivers_a_second_streamed_answer() -> None:
+    """After stopStream, a later outer-turn answer must not silently vanish.
+
+    ``run_until_session_goal`` reuses one sink across iterations. The first
+    turn stops the Slack stream; a second ``stream``/``finalize`` must open a
+    fresh stream (or post) so continuation text reaches the thread.
+    """
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    first = sink.stream(label="assistant", chunks=["step one"])
+    second = sink.stream(label="assistant", chunks=["step two"])
+
+    assert first == "step one"
+    assert second == "step two"
+    assert len(client.stream_starts) == 2
+    assert len(client.stream_stops) == 2
+    markdown = "".join(
+        c["text"] for c in client.all_streamed_chunks() if c["type"] == "markdown_text"
+    )
+    assert "step one" in markdown
+    assert "step two" in markdown
+
+
+def test_finalize_after_finished_stream_posts_continuation_text() -> None:
+    """A finalize-only continuation after stopStream must not claim success and drop."""
+    client = _FakeMessagingClient(stream_ok=True)
+    sink = _sink(client)
+
+    sink.stream(label="assistant", chunks=["step one"])
+    sink.finalize("step two from finalize")
+
+    markdown = "".join(
+        c["text"] for c in client.all_streamed_chunks() if c["type"] == "markdown_text"
+    )
+    posted = " ".join(post["text"] for post in client.posts)
+    assert "step two from finalize" in markdown or "step two from finalize" in posted
+    assert len(client.stream_starts) >= 2 or "step two from finalize" in posted
+
+
 def test_error_after_partial_stream_appends_error_copy() -> None:
     client = _FakeMessagingClient(stream_ok=True)
     sink = _sink(client)

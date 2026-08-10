@@ -92,6 +92,31 @@ def test_the_typed_cap_survives_the_projection_to_a_goal() -> None:
     assert goal.max_outer_turns == 3
 
 
+def test_an_explicit_cap_is_not_raised_to_fit_a_longer_checklist() -> None:
+    """A typed ``session_goal_max_turns`` is a hard budget, even under a checklist.
+
+    Raising the cap to ``len(checklist)`` lets a planner's smaller explicit
+    budget be exceeded before the loop runs. Honor the typed cap; the outer
+    loop stops on ``budget_exhausted`` when items remain.
+    """
+    from core.agent_harness.session.session_goal import session_goal_from_assistant_handoffs
+
+    handoff = AssistantHandoff.from_tool_input(
+        {
+            "content": "Five items, three turns.",
+            "session_goal": True,
+            "session_goal_max_turns": 3,
+            "session_goal_items": ["one", "two", "three", "four", "five"],
+        }
+    )
+
+    goal = session_goal_from_assistant_handoffs((handoff,), condition="five items")
+
+    assert goal is not None
+    assert goal.max_outer_turns == 3
+    assert len(goal.checklist) == 5
+
+
 def test_flushing_a_goalless_session_adds_no_in_memory_record() -> None:
     """The in-memory backend must not append empty goal state either.
 
@@ -114,3 +139,43 @@ def test_flushing_a_goalless_session_adds_no_in_memory_record() -> None:
         record for record in records if record.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
     ]
     assert goal_records == []
+
+
+def test_an_explicit_cap_is_not_raised_by_a_longer_checklist() -> None:
+    """A planner that caps at 2 means 2, even with five checklist items.
+
+    The checklist raises the *default* budget so a five-step goal is not cut
+    short. It must not raise a cap the planner set deliberately, or an explicit
+    limit silently becomes advisory.
+    """
+    from core.agent_harness.session.session_goal import session_goal_from_handoffs
+
+    goal = session_goal_from_handoffs(
+        (
+            "session_goal:continue",
+            "session_goal_max_turns:2",
+            "session_goal_item:one",
+            "session_goal_item:two",
+            "session_goal_item:three",
+            "session_goal_item:four",
+            "session_goal_item:five",
+        ),
+        condition="capped at two",
+    )
+
+    assert goal is not None
+    assert goal.max_outer_turns == 2
+    assert goal.step_count == 5
+
+
+def test_a_checklist_still_raises_the_default_budget() -> None:
+    """Without an explicit cap, a long checklist must not exhaust the default."""
+    from core.agent_harness.session.session_goal import session_goal_from_handoffs
+
+    goal = session_goal_from_handoffs(
+        tuple(["session_goal:continue"] + [f"session_goal_item:{n}" for n in range(1, 8)]),
+        condition="seven steps",
+    )
+
+    assert goal is not None
+    assert goal.max_outer_turns == 7

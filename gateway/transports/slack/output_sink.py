@@ -160,7 +160,7 @@ class SlackOutputSink:
 
     def _finalize(self, text: str) -> None:
         with self._lock:
-            if self._turn_stream.started:
+            if self._turn_stream.is_open:
                 if self._turn_stream.finish(text, blocks=self._closing_blocks()):
                     logger.info(
                         "outbound channel=%s thread_ts=%s mode=stream chars=%d",
@@ -176,6 +176,20 @@ class SlackOutputSink:
                     self._channel_id,
                     self._thread_ts,
                 )
+            elif self._turn_stream.closed:
+                # Prior stopStream (outer goal continuation, or a raced finalize).
+                # Open a fresh stream so later-turn text is not treated as already
+                # delivered; if start fails, fall through to classic post.
+                if self._turn_stream.ensure_started_for_continuation() and self._turn_stream.finish(
+                    text, blocks=self._closing_blocks()
+                ):
+                    logger.info(
+                        "outbound channel=%s thread_ts=%s mode=stream-continuation chars=%d",
+                        self._channel_id,
+                        self._thread_ts,
+                        len(text),
+                    )
+                    return
         final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
         blocks = self._final_blocks(text)
         mode = "edit"
@@ -269,7 +283,10 @@ class _TurnStream:
         self._update_interval = update_interval_seconds
         self._on_started = on_started
         self._ts: str | None = None
-        self._dead = False
+        # Successful stopStream — next ensure_started may open a fresh stream.
+        self._closed = False
+        # chat.startStream failed — stay on the placeholder path; do not re-probe.
+        self._unavailable = False
         self._broken = False
         self._task_seq = 0
         self._open_task: tuple[str, str] | None = None  # (id, title)
@@ -284,6 +301,27 @@ class _TurnStream:
     @property
     def started(self) -> bool:
         return self._ts is not None
+
+    @property
+    def is_open(self) -> bool:
+        """True while a stream is live and can still accept finish/append."""
+        return (
+            self._ts is not None and not self._closed and not self._broken and not self._unavailable
+        )
+
+    @property
+    def dead(self) -> bool:
+        """True after a successful stop (continuation may reopen) or a failed start."""
+        return self._closed or self._unavailable
+
+    @property
+    def closed(self) -> bool:
+        """True after a successful ``stopStream`` — safe to open a continuation stream."""
+        return self._closed
+
+    def ensure_started_for_continuation(self) -> bool:
+        """Reset a finished stream and open a new one for the next outer turn."""
+        return self._ensure_started()
 
     def note_task(self, title: str) -> bool:
         """Show ``title`` as the new in-progress timeline task."""
@@ -319,7 +357,7 @@ class _TurnStream:
         """
         if self._ts is None:
             return False
-        if self._dead:
+        if self._closed:
             # Already finished once (e.g. a timeout finalize raced the answer);
             # the streamed message stands as delivered.
             return True
@@ -344,22 +382,37 @@ class _TurnStream:
                 self._channel_id,
                 self._ts,
             )
-        self._dead = True
+        self._closed = True
         return True
 
     def _ensure_started(self) -> bool:
-        if self._dead or self._broken:
+        if self._broken or self._unavailable:
             return False
+        if self._closed:
+            # Prior response stopped (outer goal continuation). Open a fresh
+            # stream instead of treating later appends as already delivered.
+            self._reset_for_continuation()
         if self._ts is not None:
             return True
         ts = self._client.start_stream(channel=self._channel_id, thread_ts=self._thread_ts)
         if ts is None:
-            self._dead = True
+            self._unavailable = True
             return False
         self._ts = ts
         self._last_flush = time.monotonic()
         self._on_started()
         return True
+
+    def _reset_for_continuation(self) -> None:
+        """Clear a finished stream so the next outer turn can start another."""
+        self._ts = None
+        self._closed = False
+        self._broken = False
+        self._task_seq = 0
+        self._open_task = None
+        self._sent_text = ""
+        self._pending_parts.clear()
+        self._last_flush = 0.0
 
     def _flush_text(self, *, include_task_close: bool = False) -> None:
         chunks: list[dict[str, object]] = []
