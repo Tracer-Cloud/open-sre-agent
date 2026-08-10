@@ -254,6 +254,22 @@ def test_content_cache_evicts_by_size_not_just_entry_count() -> None:
     assert id(kept[-1]) in budget._CONTENT_CACHE
 
 
+def test_content_cache_skips_a_single_entry_larger_than_the_cap() -> None:
+    """An entry that alone exceeds the retained-size budget must never be
+    inserted. Evicting everything else and inserting it anyway would still
+    leave the process retaining more than the stated bound until some later,
+    unrelated insert happened to evict it.
+    """
+    budget._clear_content_cache()
+    huge_content = [{"type": "text", "text": "z" * (budget._CONTENT_CACHE_MAX_CHARS + 1)}]
+
+    tokens = budget._message_token_estimate({"content": huge_content})
+
+    assert tokens == budget._compute_message_token_estimate({"content": huge_content})
+    assert id(huge_content) not in budget._CONTENT_CACHE
+    assert budget._CONTENT_CACHE_CHARS == 0
+
+
 def test_multi_think_shallow_copies_bound_json_dumps() -> None:
     """Growing transcript across thinks should dump new blocks, not the whole history."""
     budget._clear_content_cache()

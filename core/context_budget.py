@@ -233,17 +233,26 @@ def _clear_content_cache() -> None:
 
 
 def _cache_content_estimate(content: Any, tokens: int) -> int:
-    """Cache ``tokens`` against ``content`` identity and return it."""
+    """Cache ``tokens`` against ``content`` identity and return it.
+
+    An entry bigger than the whole budget is left uncached rather than
+    inserted after emptying the cache: inserting it anyway would strongly
+    retain it above the stated bound until some later, unrelated insert
+    happened to evict it.
+    """
     global _CONTENT_CACHE_CHARS
     existing = _CONTENT_CACHE.pop(id(content), None)
     if existing is not None:
         _CONTENT_CACHE_CHARS -= _content_chars(existing.size)
     size = _content_size(content)
-    while _CONTENT_CACHE and _CONTENT_CACHE_CHARS + _content_chars(size) > _CONTENT_CACHE_MAX_CHARS:
+    content_chars = _content_chars(size)
+    if content_chars > _CONTENT_CACHE_MAX_CHARS:
+        return tokens
+    while _CONTENT_CACHE and _CONTENT_CACHE_CHARS + content_chars > _CONTENT_CACHE_MAX_CHARS:
         _, evicted = _CONTENT_CACHE.popitem(last=False)
         _CONTENT_CACHE_CHARS -= _content_chars(evicted.size)
     _CONTENT_CACHE[id(content)] = _ContentEstimate(content, size, tokens)
-    _CONTENT_CACHE_CHARS += _content_chars(size)
+    _CONTENT_CACHE_CHARS += content_chars
     return tokens
 
 
