@@ -96,3 +96,58 @@ def test_flush_persists_session_goal_state_and_restore_context_applies_it() -> N
     assert restored.session_goal is not None
     assert restored.session_goal.completed == frozenset({0})
     assert restored.offered_upgrade_ctas == {"cta:posthog_mcp"}
+
+
+def test_clearing_a_goal_writes_a_tombstone_so_resume_does_not_revive_it() -> None:
+    """An empty flush after a prior goal must clear resume, not suppress the write.
+
+    Skipping empty snapshots avoids leaf noise for sessions that never had a
+    goal. Once a non-empty ``session_goal_state`` exists, a later clear must
+    append a tombstone or resume keeps the old goal / CTA state authoritative.
+    """
+    from core.agent_harness.session.session_goal import (
+        clear_session_goal,
+        session_goal_state_is_empty,
+    )
+
+    storage = InMemorySessionStorage()
+    session = SessionCore(storage=storage)
+    storage.open_session(session)
+    storage.append_turn(session, "chat", "start")
+    attach_session_goal(
+        session,
+        SessionGoal(condition="keep going", max_outer_turns=3, checklist=("one", "two")),
+    )
+    session.offered_upgrade_ctas.add("cta:posthog_mcp")
+    storage.flush(session)
+
+    clear_session_goal(session)
+    session.offered_upgrade_ctas.clear()
+    session.pending_integration_setup_offer = None
+    # Continue past the first flush's leaf so a second flush can run (same as
+    # resume → more turns → close).
+    storage.append_turn(session, "chat", "after clear")
+    storage.flush(session)
+
+    goal_records = [
+        record
+        for record in storage.read(session.session_id)
+        if record.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert len(goal_records) >= 2
+    assert session_goal_state_is_empty(goal_records[-1]["content"])
+
+    restored = SessionCore(storage=InMemorySessionStorage())
+    SessionManager(storage=InMemorySessionStorage()).restore_context(
+        restored,
+        {
+            "cli_agent_messages": [],
+            "accumulated_context": {},
+            "session_goal_state": goal_records[-1]["content"],
+            "history": [],
+        },
+    )
+    assert not session_goal_is_active(restored)
+    assert restored.session_goal is None
+    assert restored.offered_upgrade_ctas == set()
+    assert restored.pending_integration_setup_offer is None

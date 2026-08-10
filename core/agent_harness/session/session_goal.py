@@ -16,7 +16,7 @@ Inner ``core.agent.goals.Goal`` / ``goal_review`` stay the per-turn ReAct gate.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
@@ -302,6 +302,26 @@ def session_goal_state_is_empty(snapshot: dict[str, Any]) -> bool:
     return not any(snapshot.values())
 
 
+def should_persist_session_goal_state(
+    snapshot: dict[str, Any],
+    *,
+    prior_records: Sequence[Mapping[str, Any]],
+) -> bool:
+    """Whether flush should append ``snapshot`` as a ``session_goal_state`` record.
+
+    Non-empty state always persists. An empty snapshot is skipped only when the
+    transcript has never stored goal/CTA state — otherwise it is a tombstone so
+    resume does not revive a cleared goal.
+    """
+    if not session_goal_state_is_empty(snapshot):
+        return True
+    return any(
+        record.get("type") == "custom_message"
+        and record.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+        for record in prior_records
+    )
+
+
 def apply_session_goal_state(session: Any, payload: Any) -> None:
     """Rehydrate outer goal / CTA state from a flush snapshot."""
     if not isinstance(payload, dict):
@@ -472,5 +492,6 @@ __all__ = [
     "session_goal_state_is_empty",
     "session_goal_state_snapshot",
     "session_goal_to_payload",
+    "should_persist_session_goal_state",
     "strip_session_goal_progress_tags",
 ]
