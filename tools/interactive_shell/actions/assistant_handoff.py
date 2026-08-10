@@ -8,6 +8,7 @@ from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,
     object_schema,
+    string_array_property,
     string_property,
 )
 from core.tool_framework.registered_tool import RegisteredTool
@@ -22,10 +23,23 @@ def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext)
 
 
 def run_assistant_handoff(
-    *, content: str, context: Any, requires_gather: bool = True
+    *,
+    content: str,
+    context: Any,
+    requires_gather: bool = True,
+    evidence_kind: str | None = None,
+    session_goal: str | None = None,
+    session_goal_items: list[str] | None = None,
 ) -> dict[str, Any]:
+    payload: dict[str, Any] = {"content": content, "requires_gather": requires_gather}
+    if evidence_kind is not None:
+        payload["evidence_kind"] = evidence_kind
+    if session_goal is not None:
+        payload["session_goal"] = session_goal
+    if session_goal_items is not None:
+        payload["session_goal_items"] = session_goal_items
     return execute_with_action_context(
-        {"content": content, "requires_gather": requires_gather},
+        payload,
         context,
         execute_assistant_handoff_tool,
     )
@@ -38,7 +52,8 @@ assistant_handoff_tool = RegisteredTool(
         "Use for informational, conversational, ambiguous, or non-actionable requests, "
         "including a bare pasted alert JSON/YAML/key-value blob or bare incident statement "
         "when the user did not explicitly ask to investigate, analyze, diagnose, RCA, or "
-        "root-cause it."
+        "root-cause it. For metric/count asks set evidence_kind=metric_read; for multi-step "
+        "continuation set session_goal (and optional session_goal_items)."
     ),
     input_schema=object_schema(
         properties={
@@ -47,9 +62,33 @@ assistant_handoff_tool = RegisteredTool(
                     "Concise assistant handoff text for informational, ambiguous, "
                     "or non-executable requests. Prefer structured tags when the "
                     "topic is known — e.g. docs:datadog_setup, chat:greeting, "
-                    "provider:local_llama_connect for vague local-model setup."
+                    "provider:local_llama_connect for vague local-model setup. "
+                    "Do not bury evidence_kind / session_goal in prose when the "
+                    "dedicated fields below apply — set those fields instead."
                 ),
                 min_length=1,
+            ),
+            "evidence_kind": string_property(
+                description=(
+                    "Closed evidence category for harness policy. Use metric_read for "
+                    "product-analytics metrics/counts over a time window; incident for "
+                    "bare symptom/incident handoffs; setup for connect/configure asks; "
+                    "other only when none of those apply."
+                ),
+                enum=("metric_read", "incident", "setup", "other"),
+            ),
+            "session_goal": string_property(
+                description=(
+                    "Attach an outer multi-turn SessionGoal. Use continue, or "
+                    "max_turns=<n>, or max_turns=<n>;steps=<n>. Omit when the ask "
+                    "is a single-turn answer."
+                ),
+            ),
+            "session_goal_items": string_array_property(
+                description=(
+                    "Checklist success criteria for the outer SessionGoal "
+                    "(one string per item, in order). Requires session_goal."
+                ),
             ),
             "requires_gather": {
                 "type": "boolean",

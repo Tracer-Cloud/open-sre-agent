@@ -78,6 +78,7 @@ class JsonlSessionRepo:
             branch = _branch_to(entries, target_entry)
             messages = _messages_for_branch(branch)
             context = _accumulated_context_for_branch(branch)
+            goal_state = _session_goal_state_for_branch(branch)
             history = _history_for_branch(branch)
             turn_details = _turn_details_for_branch(branch)
             return {
@@ -88,6 +89,7 @@ class JsonlSessionRepo:
                 "started_at": header.get("created_at"),
                 "cli_agent_messages": messages,
                 "accumulated_context": context,
+                "session_goal_state": goal_state,
                 "history": history,
                 "turn_details": turn_details,
                 "has_snapshot": False,
@@ -360,6 +362,22 @@ def _accumulated_context_for_branch(branch: list[dict[str, Any]]) -> dict[str, A
             if isinstance(content, dict):
                 context.update(content)
     return context
+
+
+def _session_goal_state_for_branch(branch: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the last ``session_goal_state`` custom message on the branch."""
+    from core.agent_harness.session.session_goal import SESSION_GOAL_STATE_CUSTOM_TYPE
+
+    latest: dict[str, Any] | None = None
+    for rec in branch:
+        if rec.get("type") != "custom_message":
+            continue
+        if rec.get("custom_type") != SESSION_GOAL_STATE_CUSTOM_TYPE:
+            continue
+        content = rec.get("content")
+        if isinstance(content, dict):
+            latest = content
+    return latest
 
 
 def _count_turns(entries: list[dict[str, Any]]) -> int:

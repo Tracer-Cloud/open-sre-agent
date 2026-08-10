@@ -146,9 +146,9 @@ def connected_integrations_block(turn_snapshot: TurnSnapshot) -> str:
         listing = "none"
     else:
         listing = "unknown"
-    # Listing does not gate diagnostic→investigation (Phase 1b): why/figure-out
-    # always hand off for gather + Want-me-to; explicit investigate always
-    # dispatches. The list only tells the planner which sources gather can use.
+    # Listing does not gate diagnostic→investigation: why/figure-out always
+    # hand off for gather + Want-me-to; explicit investigate always dispatches.
+    # The list only tells the planner which sources gather can use.
     gate_note = (
         "This listing does NOT gate diagnostic→investigation. Cause/why / "
         "figure-out questions → assistant_handoff + gather + Want-me-to "

@@ -130,6 +130,62 @@ def _empty_turn_result(*, llm_run: Any = None) -> TurnResult:
     )
 
 
+def test_turn_handler_continues_outer_loop_for_active_session_goal(
+    monkeypatch: Any,
+) -> None:
+    """Gateway wraps chat in run_until_session_goal like the interactive shell."""
+    from core.agent_harness.session.session_goal import SessionGoal, attach_session_goal
+
+    agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
+    calls: list[str] = []
+
+    def _dispatch(message: str) -> TurnResult:
+        calls.append(message)
+        if len(calls) == 1:
+            return TurnResult(
+                final_intent="cli_agent_handled",
+                action_result=ToolCallingTurnResult(
+                    planned_count=0,
+                    executed_count=0,
+                    executed_success_count=0,
+                    has_unhandled_clause=False,
+                    handled=True,
+                ),
+                assistant_response_text="step one session_goal:done=0",
+            )
+        return TurnResult(
+            final_intent="cli_agent_handled",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=True,
+            ),
+            assistant_response_text="all done session_goal:achieved",
+        )
+
+    agent_cls.return_value.dispatch.side_effect = _dispatch
+    session = SessionCore(storage=InMemorySessionStorage())
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="two-step",
+            max_outer_turns=3,
+            checklist=("one", "two"),
+        ),
+    )
+    sink = MagicMock()
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("go", session, sink, logging.getLogger("test"))
+
+    assert len(calls) == 2
+    sink.finalize.assert_called_once()
+    finalized = sink.finalize.call_args.args[0]
+    assert "session_goal:achieved" not in finalized
+    assert "all done" in finalized
+
+
 def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
     """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
     _patch_headless_agent(monkeypatch, _empty_turn_result())

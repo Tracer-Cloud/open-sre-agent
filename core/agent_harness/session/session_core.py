@@ -27,11 +27,13 @@ from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
 from core.agent_harness.session.pending_choice import PendingUserChoice
 from core.agent_harness.session.pending_offer import (
+    PendingIntegrationSetupOffer,
     PendingInvestigationOffer,
     PendingScheduleOffer,
 )
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from core.agent_harness.session.persistence.ports import SessionStorage
+from core.agent_harness.session.session_goal import SessionGoal
 from core.state import MutableAgentState
 from platform.common.task_registry import TaskRegistry
 
@@ -149,6 +151,15 @@ class SessionCore:
 
     pending_investigation_offer: PendingInvestigationOffer | None = None
     """Structured investigation awaiting bare yes — armed after Want-me-to closer."""
+
+    session_goal: SessionGoal | None = None
+    """Outer cross-turn goal (multi-step / keep-going). Distinct from inner ReAct Goal."""
+
+    offered_upgrade_ctas: set[str] = field(default_factory=set)
+    """Session-scoped UpgradeCTA dedupe keys (``cta:service_id``)."""
+
+    pending_integration_setup_offer: PendingIntegrationSetupOffer | None = None
+    """Structured integrations-setup awaiting bare yes — armed after L0 UpgradeCTA."""
 
     pending_user_choice: PendingUserChoice | None = None
     """Structured multiple-choice question queued for the ``/choose`` selection
@@ -387,6 +398,9 @@ class SessionCore:
         self.last_synthetic_observation_path = None
         self.pending_schedule_offer = None
         self.pending_investigation_offer = None
+        self.pending_integration_setup_offer = None
+        self.session_goal = None
+        self.offered_upgrade_ctas.clear()
         self.pending_user_choice = None
         self.pending_recovery_note = None
         if rotate_identity:

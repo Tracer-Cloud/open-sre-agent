@@ -45,8 +45,11 @@ _SCHEDULE_OFFER_MARKERS = (
 )
 
 # Session attribute names that hold a pending affirmative (priority order for yes).
+# Setup sits above investigation so an L0 UpgradeCTA "yes" connects the source
+# instead of starting an investigation.
 _PENDING_OFFER_ATTRS: tuple[str, ...] = (
     "pending_schedule_offer",
+    "pending_integration_setup_offer",
     "pending_investigation_offer",
 )
 
@@ -108,6 +111,27 @@ class PendingScheduleOffer:
         if chat:
             dest = f"{self.provider} ({chat})"
         return f"schedule this as a recurring {self.kind} {cadence} to {dest}"
+
+
+@dataclass(frozen=True, slots=True)
+class PendingIntegrationSetupOffer:
+    """Connect a missing integration the user has been offered (L0 UpgradeCTA)."""
+
+    service_id: str
+
+    def to_slash_command(self) -> str:
+        """Literal slash dispatched without an LLM round-trip."""
+        service = self.service_id.strip()
+        return f"/integrations setup {shlex.quote(service)}" if service else ""
+
+    def to_dispatch_message(self) -> str:
+        return self.to_slash_command()
+
+    def matches_expanded(self, expanded: str) -> bool:
+        return isinstance(expanded, str) and expanded.startswith("/integrations setup ")
+
+    def want_me_to_body(self) -> str:
+        return f"connect `{self.service_id}` now"
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +315,32 @@ def clear_competing_pending_offers(session: Any, *, keep_attr: str) -> None:
             setattr(session, attr, None)
 
 
+def clear_unconfirmed_pending_offers(session: Any) -> None:
+    """Drop every pending affirmative when the user starts a non-confirm turn.
+
+    Prevents a stale L0 setup / investigation / schedule offer from capturing a
+    later bare ``yes`` after the user has moved on.
+    """
+    for attr in _PENDING_OFFER_ATTRS:
+        if hasattr(session, attr):
+            setattr(session, attr, None)
+
+
+def arm_pending_integration_setup_offer(
+    session: Any,
+    *,
+    service_id: str,
+) -> PendingIntegrationSetupOffer | None:
+    """Arm ``pending_integration_setup_offer`` after an L0 UpgradeCTA."""
+    service = service_id.strip()
+    if not service or not hasattr(session, "pending_integration_setup_offer"):
+        return None
+    offer = PendingIntegrationSetupOffer(service_id=service)
+    session.pending_integration_setup_offer = offer
+    clear_competing_pending_offers(session, keep_attr="pending_integration_setup_offer")
+    return offer
+
+
 def arm_pending_investigation_offer(
     session: Any,
     *,
@@ -354,10 +404,13 @@ def _sync_last_assistant_message(session: Any, text: str) -> None:
 __all__ = [
     "DispatchablePendingOffer",
     "PendingInvestigationOffer",
+    "PendingIntegrationSetupOffer",
     "PendingScheduleOffer",
+    "arm_pending_integration_setup_offer",
     "arm_pending_investigation_offer",
     "assistant_offers_full_investigation",
     "clear_competing_pending_offers",
+    "clear_unconfirmed_pending_offers",
     "consume_confirmed_pending_offer",
     "ensure_canonical_investigation_closer",
     "finalize_gather_investigation_offer",

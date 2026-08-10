@@ -19,9 +19,22 @@ are separate layers.
 |------|------|
 | Process boot (once) | `configure_process(PROFILE)` — adapters only; not agent construction |
 | Happy path | `AgentSession.start()` → repeated `.chat` / `.investigate` |
+| Multi-step / keep-going | `AgentSession.start()` → `.chat_until_goal(...)` (outer `SessionGoal` loop) |
 | Custom host | **`build_default_headless_agent(...)`** (only factory) → `attach_agent` once → many `.chat` |
-| Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `.chat` |
+| Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `run_until_session_goal` (same outer policy as shell) |
 | Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
+
+Outer `SessionGoal` (`session/session_goal.py` + `turns/session_goal_loop.py`) is
+**not** the inner ReAct `Goal` / `goal_review`. While a session goal is active,
+`run_turn` suppresses investigation Want-me-to closers.
+
+**No keyword intent routing around the action agent.** Do not scan user text
+with regex/keywords to skip gather, attach goals, or bypass `execute_actions`.
+Policy keys off typed `AssistantHandoff` (`turns/assistant_handoff.py`) —
+schema fields first; content tags are decode fallback only. Legacy tag tuples
+(`evidence_kind:…`, `session_goal:…`, `session_goal_item:…`, `database_query:…`)
+and explicit host APIs remain for older readers. Checklist progress uses
+`session_goal:done=<index>` in replies.
 
 Do **not** duplicate the default port stack outside `build_default_headless_agent`.
 Shell uses a TTY `ChatDispatcher` (same `AgentSession.chat` / `run_turn`) —

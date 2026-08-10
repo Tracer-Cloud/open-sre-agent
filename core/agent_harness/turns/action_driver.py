@@ -38,6 +38,10 @@ from core.agent_harness.prompts import (
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
 from core.agent_harness.turns.goal_review import build_goal_reviewer, tap_executed_tool_names
+from core.agent_harness.turns.assistant_handoff import (
+    AssistantHandoff,
+    assistant_handoffs_from_tool_inputs,
+)
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
@@ -827,6 +831,7 @@ class _TurnCounts:
     handled: bool
     investigation_dispatched: bool
     handoff_contents: tuple[str, ...]
+    assistant_handoffs: tuple[AssistantHandoff, ...] = ()
     handoff_requires_gather: bool = True
 
 
@@ -936,6 +941,7 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
         for tc, _output in result.executed
         if tc.name == "assistant_handoff"
     ]
+    assistant_handoffs = assistant_handoffs_from_tool_inputs(handoff_inputs)
     return _TurnCounts(
         executed_entries=executed_entries,
         executed_count=len(executed_entries) + generic_executed_count,
@@ -949,19 +955,13 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
             tc.name in INVESTIGATION_DISPATCH_TOOL_NAMES for tc, _output in result.executed
         ),
         handoff_contents=tuple(
-            content
-            for handoff_input in handoff_inputs
-            for content in (str(handoff_input.get("content", "")).strip(),)
-            if content
+            tag for handoff in assistant_handoffs for tag in handoff.to_handoff_contents()
         ),
+        assistant_handoffs=assistant_handoffs,
         # Gather stays required unless every handoff this turn opted out; a
         # single gather-needing handoff must not be starved by another's opt-out.
         handoff_requires_gather=(
-            not handoff_inputs
-            or any(
-                handoff_input.get("requires_gather", True) is not False
-                for handoff_input in handoff_inputs
-            )
+            not assistant_handoffs or any(handoff.requires_gather for handoff in assistant_handoffs)
         ),
     )
 
@@ -1094,7 +1094,8 @@ def _run_action_turn(
         False,
         False if cancelled else counts.handled,
         response_text="" if cancelled else response_text,
-        handoff_contents=handoff_contents,
+        handoff_contents=() if cancelled else handoff_contents,
+        assistant_handoffs=() if cancelled else counts.assistant_handoffs,
         handoff_requires_gather=(False if cancelled else counts.handoff_requires_gather),
         investigation_dispatched=(False if cancelled else counts.investigation_dispatched),
         cancelled=cancelled,

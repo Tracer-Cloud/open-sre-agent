@@ -42,6 +42,8 @@ if TYPE_CHECKING:
     from core.agent_harness.investigation_api import AlertInput, InvestigationResult
     from core.agent_harness.ports import OutputSink, PromptContextProvider
     from core.agent_harness.session.session_core import SessionCore
+    from core.agent_harness.session.session_goal import SessionGoal
+    from core.agent_harness.turns.session_goal_loop import SessionGoalRunResult
     from core.agent_harness.turns.turn_results import TurnResult
 
 
@@ -105,6 +107,7 @@ class AgentSession:
         self._config = config or SessionConfig()
         self._session_manager = self._config.session_manager or SessionManager()
         self._agent: ChatDispatcher | None = None
+        self._bound_session: SessionCore | None = None
 
     def resolve_env_variables(self) -> None:
         """Load local OpenSRE env defaults into the process, once.
@@ -224,6 +227,7 @@ class AgentSession:
         startup = agent_session.startup()
         if prepare_session is not None:
             prepare_session(startup.session)
+        agent_session._bound_session = startup.session
         agent_session._attach_default_headless(
             session=startup.session,
             output=output if output is not None else BufferOutputSink(),
@@ -294,6 +298,40 @@ class AgentSession:
                 "(call attach_agent first, or pass agent=)."
             )
         return target.dispatch(message)
+
+    def chat_until_goal(
+        self,
+        message: str,
+        *,
+        goal: SessionGoal | None = None,
+        evaluate: Callable[..., str] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+        on_progress: Callable[[SessionGoal], None] | None = None,
+    ) -> SessionGoalRunResult:
+        """Run :meth:`chat` in a loop until the outer :class:`SessionGoal` completes.
+
+        Pass ``goal=`` explicitly, or let the first action turn attach one via a
+        ``session_goal:`` handoff tag. Does not scan user prose for intent.
+        Caps at ``goal.max_outer_turns``. Honors ``cancel_requested`` between turns.
+        ``on_progress`` receives the goal after each turn (checklist UI).
+        """
+        from core.agent_harness.turns.session_goal_loop import run_until_session_goal
+
+        session = self._bound_session
+        if session is None:
+            raise RuntimeError(
+                "AgentSession.chat_until_goal requires a bound session "
+                "(call AgentSession.start() first)."
+            )
+        return run_until_session_goal(
+            self.chat,
+            session,
+            message,
+            goal=goal,
+            evaluate=evaluate,
+            cancel_requested=cancel_requested,
+            on_progress=on_progress,
+        )
 
     def investigate(
         self,

@@ -9,7 +9,10 @@ session, or analytics coupling. The interactive shell's accounting layer
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 
 # Distinguishes the two zero-count outcomes that need different analytics:
 # a normal tool-calling run that completed without planning actions ("completed"),
@@ -31,6 +34,8 @@ class ToolCallingTurnResult:
     handled: bool
     response_text: str = ""
     handoff_contents: tuple[str, ...] = ()
+    #: Typed handoffs (schema decode). Prefer over parsing ``handoff_contents``.
+    assistant_handoffs: tuple[AssistantHandoff, ...] = ()
     # False when every handoff this turn declared ``requires_gather=false``:
     # the action work already produced what the reply needs, so the assistant
     # answers from it without a live evidence-gather sweep.

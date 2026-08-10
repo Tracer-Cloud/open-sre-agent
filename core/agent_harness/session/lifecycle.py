@@ -269,6 +269,11 @@ class SessionManager:
         context = data.get("accumulated_context")
         if isinstance(context, dict):
             session.accumulated_context = dict(context)
+        goal_state = data.get("session_goal_state")
+        if isinstance(goal_state, dict):
+            from core.agent_harness.session.session_goal import apply_session_goal_state
+
+            apply_session_goal_state(session, goal_state)
         history = data.get("history")
         if isinstance(history, list):
             session.history = [dict(item) for item in history if isinstance(item, dict)]

@@ -43,6 +43,10 @@ def install_harness_adapters() -> None:
     register_integrations()
     register_tools()
     harness_ports.set_subprocess_presenter_factory(headless_subprocess_presenter_factory)
+    # Shell / REPL / gateway slash surface: CTA must name a runnable command.
+    harness_ports.set_integration_setup_command(
+        lambda service_id: f"/integrations setup {service_id}"
+    )
     install_investigation_api()
 
 

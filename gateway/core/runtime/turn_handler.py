@@ -23,6 +23,8 @@ from rich.console import Console
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
+from core.agent_harness.session.session_goal import SessionGoal, format_session_goal_checklist
+from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cancel
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
@@ -52,7 +54,10 @@ class GatewayTurnHandler:
     One :class:`HeadlessAgent` is kept per logical session and reused across
     turns; per-turn sinks, accounting, and tool hooks are rebound via
     :meth:`HeadlessAgent.bind_turn`. Concurrent turns for different sessions
-    stay isolated. Chat goes through :meth:`AgentSession.chat`.
+    stay isolated. Chat goes through :func:`run_until_session_goal` (one action
+    turn; outer continuation only when a ``SessionGoal`` is attached via
+    structured handoff or an explicit host attach — same policy as the
+    interactive shell).
 
     When ``gate`` is set, capacity is checked here before the turn runs — the
     manager must not wrap this class in a second "turn handler".
@@ -129,7 +134,24 @@ class GatewayTurnHandler:
                     tool_hooks=getattr(sink, "tool_hooks", None),
                     console=turn_console,
                 )
-                turn_result = self._session_api.chat(text, agent=agent)
+                def _chat(message: str) -> Any:
+                    return self._session_api.chat(message, agent=agent)
+
+                def _cancel_requested() -> bool:
+                    return isinstance(cancel, threading.Event) and cancel.is_set()
+
+                def _on_progress(goal: SessionGoal) -> None:
+                    rendered = format_session_goal_checklist(goal)
+                    if rendered:
+                        logger.debug("gateway_session_goal_progress\n%s", rendered)
+
+                turn_result = run_until_session_goal(
+                    _chat,
+                    session,
+                    text,
+                    cancel_requested=_cancel_requested,
+                    on_progress=_on_progress,
+                ).last_result
                 outbound_text = turn_result.primary_response_text
                 logger.debug(
                     "gateway_turn done intent=%s answered=%s outbound_chars=%s",

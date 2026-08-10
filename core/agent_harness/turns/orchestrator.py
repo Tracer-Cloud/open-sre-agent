@@ -43,14 +43,30 @@ from core.agent_harness.prompts.assistant import (
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.prompts.memory.prior_investigation import is_prior_investigation_follow_up
 from core.agent_harness.session.pending_offer import (
+    PendingIntegrationSetupOffer,
+    arm_pending_integration_setup_offer,
     arm_pending_investigation_offer,
+    clear_unconfirmed_pending_offers,
     consume_confirmed_pending_offer,
     finalize_gather_investigation_offer,
     first_pending_offer,
     is_pending_offer_confirmation,
 )
+from core.agent_harness.session.session_goal import (
+    attach_session_goal_from_handoffs,
+    session_goal_is_active,
+)
 from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
+from core.agent_harness.turns.evidence_need import (
+    EvidenceNeed,
+    classify_evidence_need,
+    cta_offered_key,
+    format_upgrade_cta,
+    handoff_tag_for,
+    should_skip_gather,
+    should_suppress_investigation_offer,
+)
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
@@ -61,6 +77,10 @@ from core.agent_harness.turns.turn_results import (
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from core.llm_invoke_errors import is_cli_timeout_error
+from platform.harness_ports import (
+    integration_setup_command,
+    preferred_evidence_sources_for,
+)
 from platform.observability.trace.spans import component_span, emit_route
 
 log = logging.getLogger(__name__)
@@ -306,8 +326,10 @@ def _is_non_investigation_handoff(handoff_contents: tuple[str, ...]) -> bool:
     turns, but wrong for ``database_query:*`` / ``provider:*`` handoffs where the
     next step is connect/setup guidance.
     """
+    from core.agent_harness.turns.handoff_tag_parse import handoff_has_tag
+
     return any(
-        content.startswith("database_query:") or content.startswith("provider:")
+        handoff_has_tag(content, "database_query") or handoff_has_tag(content, "provider")
         for content in handoff_contents
     )
 
@@ -363,9 +385,10 @@ def _gather_and_answer(
     turn_plan: TurnPlan,
     handoff_requires_gather: bool = True,
     output: OutputSink | None = None,
+    evidence_need: EvidenceNeed | None = None,
 ) -> tuple[Any | None, str | None] | None:
     """Run gather+answer, or ``None`` when the host cancelled mid-path."""
-    # Two cases skip the live gather loop:
+    # Three cases skip the live gather loop:
     # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
     #    own tool work already produced what the reply needs, and a fresh sweep
     #    would answer a different question (observed live: a completed CI
@@ -378,22 +401,30 @@ def _gather_and_answer(
     #    emitting the tag *is* the judgement that the user means that incident,
     #    so a clock must not override it and answer with current conditions
     #    instead of what happened.
+    # 3. Metric/read asks whose authoritative source is missing
+    #    (``L0_degraded``): gather would only thrash empty MCP discovery.
     if host_cancel_requested(output):
         return None
-    skip_gather = not handoff_requires_gather or (
-        _is_prior_investigation_follow_up_handoff(handoff_contents)
-        and turn_plan.snapshot.last_state is not None
+    skip_for_evidence = evidence_need is not None and should_skip_gather(evidence_need)
+    skip_gather = (
+        not handoff_requires_gather
+        or (
+            _is_prior_investigation_follow_up_handoff(handoff_contents)
+            and turn_plan.snapshot.last_state is not None
+        )
+        or skip_for_evidence
     )
     gathered = None if skip_gather else gather(text, turn_plan=turn_plan)
     if host_cancel_requested(output):
         return None
     if skip_gather:
-        log.debug(
-            "gather skipped: %s",
-            "answer-only handoff (requires_gather=false)"
-            if not handoff_requires_gather
-            else "follow_up handoff with prior investigation state",
-        )
+        if skip_for_evidence:
+            reason = "L0_degraded — authoritative integration missing"
+        elif not handoff_requires_gather:
+            reason = "answer-only handoff (requires_gather=false)"
+        else:
+            reason = "follow_up handoff with prior investigation state"
+        log.debug("gather skipped: %s", reason)
 
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
@@ -428,6 +459,61 @@ def _finish_streamed_response(output: OutputSink | None, text: str) -> None:
     finalize = getattr(output, "finalize", None)
     if callable(finalize):
         finalize(text)
+
+
+def _offered_upgrade_ctas(session: SessionStore) -> set[str]:
+    """Session-scoped CTA dedupe set (created on first use).
+
+    Stored as a duck-typed attribute on the concrete session object — not on
+    :class:`SessionStore` — so Protocol typing stays narrow.
+    """
+    holder: Any = session
+    offered = getattr(holder, "offered_upgrade_ctas", None)
+    if not isinstance(offered, set):
+        offered = set()
+        holder.offered_upgrade_ctas = offered
+    return offered
+
+
+def _append_upgrade_cta(
+    session: SessionStore,
+    response_text: str,
+    evidence_need: EvidenceNeed,
+) -> str:
+    """Append one UpgradeCTA when L0_degraded and not already awaiting accept.
+
+    Also arms a structured setup offer so bare ``yes`` expands to the connect
+    slash without keyword intent routing. Dedupes while a pending setup offer
+    for the missing source is still armed; re-offers when the user asks again
+    after that offer was cleared (moved on / declined).
+    """
+    key = cta_offered_key(evidence_need)
+    cta = format_upgrade_cta(
+        evidence_need,
+        setup_command_for=integration_setup_command,
+    )
+    if key is None or cta is None:
+        return response_text
+    offered = _offered_upgrade_ctas(session)
+    pending = getattr(session, "pending_integration_setup_offer", None)
+    pending_matches = (
+        isinstance(pending, PendingIntegrationSetupOffer)
+        and bool(evidence_need.missing)
+        and pending.service_id == evidence_need.missing[0]
+    )
+    if key in offered and pending_matches:
+        return response_text
+    if key in offered and not pending_matches:
+        offered.discard(key)
+    offered.add(key)
+    if evidence_need.missing:
+        arm_pending_integration_setup_offer(session, service_id=evidence_need.missing[0])
+    base = (response_text or "").rstrip()
+    if not base:
+        return cta
+    if cta in base:
+        return base
+    return f"{base}\n\n{cta}"
 
 
 def run_turn(
@@ -478,6 +564,10 @@ def run_turn(
     # Offer is consumed only once the command lands — clearing here would burn
     # it on a rejected ``cron add``, leaving a second "yes" with nothing to expand.
     confirms_pending = is_pending_offer_confirmation(session, expanded)
+    if not confirms_pending:
+        # User moved on: drop stale bare-yes offers so a later "yes" cannot
+        # connect the wrong integration or start an old investigation.
+        clear_unconfirmed_pending_offers(session)
     text = expanded
 
     # Snapshot session state before any turn mutations. Both the action agent
@@ -511,7 +601,25 @@ def run_turn(
         log.debug("turn cancelled after action; skipping gather/answer")
         return aborted
 
+    # Policy from typed AssistantHandoff fields (schema decode); tag strings
+    # are legacy fallback only — never user-text keywords.
+    attach_session_goal_from_handoffs(
+        session,
+        action_result.handoff_contents,
+        condition=text,
+        handoffs=action_result.assistant_handoffs,
+    )
+    evidence_need = classify_evidence_need(
+        handoff_contents=action_result.handoff_contents,
+        handoffs=action_result.assistant_handoffs,
+        resolved_integrations=turn_plan.resolved_integrations,
+        preferred_sources_for=preferred_evidence_sources_for,
+    )
+
     handoff_contents = action_result.handoff_contents
+    tier_tag = handoff_tag_for(evidence_need)
+    if tier_tag is not None and tier_tag not in handoff_contents:
+        handoff_contents = (*handoff_contents, tier_tag)
     observation = session.last_command_observation
     route = _route_turn(
         _routing_input_from_result(action_result, observation),
@@ -582,6 +690,7 @@ def run_turn(
                     turn_plan=turn_plan,
                     handoff_requires_gather=action_result.handoff_requires_gather,
                     output=output,
+                    evidence_need=evidence_need,
                 )
             if gathered_outcome is None:
                 return _cancelled_turn_result(accounting, action_result)
@@ -595,14 +704,30 @@ def run_turn(
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
 
+        # Append a deterministic upgrade CTA after the answer so
+        # missing-integration closes do not depend on the model remembering.
+        if should_suppress_investigation_offer(evidence_need) or should_skip_gather(evidence_need):
+            outcome = replace(
+                outcome,
+                response_text=_append_upgrade_cta(session, outcome.response_text, evidence_need),
+            )
+
         # Arm structured investigate-accept. Gather answers force the canonical
         # Want-me-to closer (dogfood: dual paste/integrations menus broke yes).
         # Skip when this turn already confirmed a pending offer, when the
-        # surface disabled the investigation capability (gateway), or when the
-        # handoff is setup/query guidance — otherwise yes expands to
-        # /investigate alert:… with no investigation capability (or the wrong
-        # next step for a MySQL/MCP connect request).
-        if not confirms_pending and capability_not_explicitly_disabled(session, "investigation"):
+        # surface disabled the investigation capability (gateway), when the
+        # handoff is setup/query guidance, or when L0 metric degradation
+        # applies — otherwise yes expands to /investigate alert:… with no
+        # investigation capability (or the wrong next step for a MySQL/MCP
+        # connect request / a pure analytics read).
+        suppress_investigate = should_suppress_investigation_offer(
+            evidence_need
+        ) or session_goal_is_active(session)
+        if (
+            not confirms_pending
+            and capability_not_explicitly_disabled(session, "investigation")
+            and not suppress_investigate
+        ):
             if (
                 route.intent == "gather_and_answer"
                 and not _is_prior_investigation_follow_up_handoff(handoff_contents)
@@ -628,6 +753,8 @@ def run_turn(
                 # see text.
                 if route.intent == "gather_and_answer":
                     _finish_streamed_response(output, outcome.response_text)
+        elif route.intent == "gather_and_answer":
+            _finish_streamed_response(output, outcome.response_text)
 
         return accounting.finalize(
             TurnResult(

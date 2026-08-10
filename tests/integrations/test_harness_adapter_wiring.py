@@ -68,6 +68,32 @@ def test_gateway_persona_fragment_is_registered() -> None:
     assert "never call it the 'interactive shell'" in persona
 
 
+def test_integration_setup_command_uses_slash_form() -> None:
+    assert harness_ports.integration_setup_command("posthog_mcp") == (
+        "/integrations setup posthog_mcp"
+    )
+
+
+def test_preferred_evidence_sources_opt_in_from_posthog_mcp_package() -> None:
+    # Assert: PostHog MCP opts itself in; core still has no vendor list.
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == ("posthog_mcp",)
+    assert harness_ports.preferred_evidence_sources_for("incident") == ()
+
+
+def test_preferred_evidence_sources_are_additive_across_vendors() -> None:
+    harness_ports.register_preferred_evidence_source("metric_read", "other_analytics")
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == (
+        "posthog_mcp",
+        "other_analytics",
+    )
+
+
+def test_omitting_vendor_registration_leaves_metric_read_unpreferred() -> None:
+    """If no vendor opts in, metric asks must not invent a preferred source."""
+    harness_ports.clear_preferred_evidence_sources()
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == ()
+
+
 def test_message_context_stripper_handles_slack_prefix() -> None:
     # Arrange
     text = "[Slack channel_id=C123 thread_ts=1.2] who is on the team?"
@@ -130,4 +156,5 @@ def test_reset_clears_every_vendor_registry() -> None:
     assert harness_ports.action_prompt_vendor_fragments() == ""
     assert harness_ports.assistant_prompt_vendor_fragments() == ""
     assert harness_ports.gateway_persona_fragments() == ""
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == ()
     assert harness_ports._vcs_repo_scope_providers == []

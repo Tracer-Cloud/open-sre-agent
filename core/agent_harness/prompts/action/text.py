@@ -598,6 +598,27 @@ when the topic is known — for example docs:datadog_setup, chat:greeting,
 provider:local_llama_connect for vague local-model connection requests, or
 database_query:<topic> when the user asks to query/read a named database tool
 (MySQL, MariaDB, etc.) that is not a first-party setup-wizard target.
+Also set these structured assistant_handoff fields when they apply (the harness
+keys policy off them; it does not scan user prose for intent). Prefer the
+schema fields over burying tags in content prose:
+- evidence_kind=metric_read — REQUIRED on every handoff that asks for a
+  product-analytics metric or count over a time window (unique users, OS
+  breakdown, retention, events, pageviews, “how many … in the last N days”).
+  Emit this even when an analytics integration appears connected — the harness
+  decides L0 vs L1 from that field plus live connectivity. Omit only for pure
+  explain/docs chat about analytics with no number request.
+- evidence_kind=incident — bare incident / symptom handoffs.
+- session_goal=continue — multi-step or "keep going until done" work that should
+  continue across turns without asking whether to continue.
+- session_goal=max_turns=<n>;steps=<n> — same, with an explicit outer-turn cap
+  and optional step count (for example max_turns=5;steps=5).
+- session_goal_items=["…", …] — checklist success criteria (one string per
+  item, in order). The host tracks completion via session_goal:done=<index>
+  in later replies; do not invent checklist items from synonyms.
+Legacy content-string tags still work if you must put them in content
+(``evidence_kind:metric_read`` or ``evidence_kind=metric_read``, same for
+``session_goal`` / ``session_goal_item``). Prefer the schema fields above so the
+kind is never mixed with prose.
 
 assistant_handoff has two modes, chosen with requires_gather:
 - requires_gather=true (the default) — the assistant runs a live evidence-gather

@@ -37,6 +37,7 @@ def register_harness_adapters() -> None:
     _register_alert_detail_fields()
     _register_secondary_tool_sources()
     _register_gateway_persona()
+    _register_preferred_evidence_sources()
 
 
 def _register_vcs_repo_scope_providers() -> None:
@@ -187,6 +188,22 @@ def _register_gateway_persona() -> None:
 
     clear_gateway_persona_fragments()
     register_gateway_persona_fragment(gateway_persona_prompt_fragment)
+
+
+def _register_preferred_evidence_sources() -> None:
+    """Let vendor packages opt into ask kinds they can authoritatively answer.
+
+    No central default list — each integration registers itself. Skip a
+    vendor's ``register_*_evidence_sources`` call to stop treating it as
+    preferred (no L0 CTA for that id).
+    """
+    from integrations.posthog_mcp.evidence_sources import (
+        register_posthog_mcp_evidence_sources,
+    )
+    from platform.harness_ports import clear_preferred_evidence_sources
+
+    clear_preferred_evidence_sources()
+    register_posthog_mcp_evidence_sources()
 
 
 def _register_cli_llm_adapters() -> None:

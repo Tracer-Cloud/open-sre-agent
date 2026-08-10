@@ -6,6 +6,8 @@ from core.agent_harness.prompts.assistant.text import HANDOFF_GUIDANCE
 
 # Prefix keys in ``HANDOFF_GUIDANCE`` (trailing ``:``) match any tag with that prefix.
 _HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = (
+    "evidence_tier:L0_degraded",
+    "session_goal:",
     "database_query:",
     "incident_description:",
 )

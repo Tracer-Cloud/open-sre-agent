@@ -359,6 +359,18 @@ class JsonlSessionStorage:
                     content=dict(session.accumulated_context),
                     display=False,
                 )
+            if hasattr(session, "session_goal"):
+                from core.agent_harness.session.session_goal import (
+                    SESSION_GOAL_STATE_CUSTOM_TYPE,
+                    session_goal_state_snapshot,
+                )
+
+                self.append_custom_message(
+                    session.session_id,
+                    custom_type=SESSION_GOAL_STATE_CUSTOM_TYPE,
+                    content=session_goal_state_snapshot(session),
+                    display=False,
+                )
             if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
                 for role, content in session.agent.messages:
                     self.append_message(

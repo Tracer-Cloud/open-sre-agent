@@ -74,6 +74,32 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "mean, do NOT ask for alert context, and do NOT suggest starting a new "
         "investigation.\n\n"
     ),
+    # Metric/read ask with the authoritative integration missing.
+    # Prefix key: ``build_handoff_guidance_block`` matches ``evidence_tier:L0_degraded:…``.
+    "evidence_tier:L0_degraded": (
+        "The turn's authoritative live source is NOT connected in this session "
+        "(evidence tier L0_degraded; the service id is the suffix after "
+        "`evidence_tier:L0_degraded:`). Say plainly that live data was not "
+        "queried because that source is missing — never claim it is connected, "
+        "never imply a live query already ran, and never invent metric numbers. "
+        "Answer with local value only: how to measure, a draft query labeled as "
+        "draft/verify-after-connect, and what to check once connected. "
+        "Do NOT offer a full incident investigation. Do NOT close with "
+        "**Want me to:** (no live query offer, no investigation offer). "
+        "Do NOT thrash on empty tool listings. The harness appends one "
+        "integration upgrade CTA after your reply — do not duplicate that CTA "
+        "and do not open an onboarding wizard unprompted. A bare user yes after "
+        "that CTA will run the connect slash; do not invent a second Want-me-to.\n\n"
+    ),
+    # Outer SessionGoal checklist progress (host loop / continuation nudges).
+    "session_goal:": (
+        "An outer session goal is active. When you finish a checklist item, "
+        "include the structured tag `session_goal:done=<0-based-index>` "
+        "(comma-separate multiple). When every item is done, include "
+        "`session_goal:achieved`. Put those tags on their own at the end of "
+        "the reply; the harness strips them before the user sees the text. "
+        "Do not ask whether to continue while the goal is active.\n\n"
+    ),
     # Prefix key: ``build_handoff_guidance_block`` matches any
     # ``database_query:<topic>`` tag (mysql_active_connections, mariadb_dashboard, …).
     "database_query:": (
