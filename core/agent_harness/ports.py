@@ -309,6 +309,7 @@ __all__ = [
     "RunRecordFactory",
     "SessionBindable",
     "SessionStore",
+    "SubprocessPresenterFactory",
     "ToolEventObserver",
     "ToolProvider",
     "ToolRegistry",
