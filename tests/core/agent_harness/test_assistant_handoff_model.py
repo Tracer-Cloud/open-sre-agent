@@ -67,3 +67,14 @@ def test_requires_gather_defaults_true() -> None:
         ).requires_gather
         is False
     )
+
+
+def test_session_goal_content_tag_attaches_when_schema_omitted() -> None:
+    handoff = AssistantHandoff.from_tool_input({"content": "session_goal:five_step_checklist"})
+    assert handoff.session_goal is True
+    assert "session_goal:continue" in handoff.to_handoff_contents()
+
+
+def test_session_goal_achieved_content_tag_is_not_attach() -> None:
+    handoff = AssistantHandoff.from_tool_input({"content": "Done.\nsession_goal:achieved"})
+    assert handoff.session_goal is not True

@@ -33,6 +33,20 @@ def _session_goal_attach(value: Any) -> bool | None:
     return None
 
 
+def _session_goal_from_content(content: str) -> bool | None:
+    """Lift a legacy content tag into an attach flag (schema field preferred)."""
+    if not content:
+        return None
+    body = find_tag_suffix(content, HandoffField.SESSION_GOAL)
+    if body is None:
+        return None
+    # Progress tags are not attach.
+    if body == "achieved" or body.startswith("done="):
+        return None
+    # ``session_goal=true`` / ``session_goal:continue`` / checklist labels.
+    return True
+
+
 def _session_goal_max_turns(value: Any) -> int | None:
     """Outer-turn cap as a number; anything else is no cap."""
     if isinstance(value, bool) or not isinstance(value, int):
@@ -80,13 +94,14 @@ class AssistantHandoff:
         # half-state the host must guess at.
         if session_goal is None and items:
             session_goal = True
-        # A checklist is only meaningful under a goal, so items imply attach.
-        # Otherwise a planner that sends items without the flag leaves a
-        # half-state the host must guess at.
+        if session_goal is None and content:
+            session_goal = _session_goal_from_content(content)
         if not items and content:
             buried = find_tag_suffix(content, HandoffField.SESSION_GOAL_ITEM)
             if buried:
                 items = (buried,)
+                if session_goal is None:
+                    session_goal = True
 
         requires_gather = handoff_input.get(HandoffField.REQUIRES_GATHER, True) is not False
         return cls(

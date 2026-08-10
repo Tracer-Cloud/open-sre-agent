@@ -89,8 +89,9 @@ assistant_handoff_tool = RegisteredTool(
             HandoffField.SESSION_GOAL: {
                 "type": "boolean",
                 "description": (
-                    "True to attach an outer multi-turn goal so the host keeps "
-                    "working without asking. Omit for a single-turn answer."
+                    "REQUIRED true for multi-step / keep-going chat checklists "
+                    "so the host continues across turns without asking. Omit "
+                    "only for a single-turn answer."
                 ),
             },
             HandoffField.SESSION_GOAL_MAX_TURNS: {

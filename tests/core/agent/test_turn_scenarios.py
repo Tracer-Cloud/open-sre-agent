@@ -62,7 +62,7 @@ class ExpectedAction(TypedDict):
     scenario: NotRequired[str]
     template: NotRequired[str]
     evidence_kind: NotRequired[str]
-    session_goal: NotRequired[bool | str]
+    session_goal: NotRequired[bool]
     session_goal_items: NotRequired[list[str]]
 
 
@@ -170,13 +170,26 @@ def _build_actual_action(action: ToolCall) -> ExpectedAction:
         session_goal = action.input.get("session_goal")
         if isinstance(session_goal, bool):
             expected["session_goal"] = session_goal
-        elif isinstance(session_goal, str) and session_goal.strip():
-            expected["session_goal"] = session_goal.strip()
         raw_items = action.input.get("session_goal_items")
         if isinstance(raw_items, list):
             items = [str(item).strip() for item in raw_items if str(item).strip()]
             if items:
                 expected["session_goal_items"] = items
+        # Legacy content tags still attach a goal when the boolean was omitted.
+        if "session_goal" not in expected and not expected.get("session_goal_items"):
+            from core.agent_harness.turns.assistant_handoff import AssistantHandoff
+
+            decoded = AssistantHandoff.from_tool_input(
+                {
+                    "content": str(action.input.get("content", "")),
+                    "session_goal": action.input.get("session_goal"),
+                    "session_goal_items": action.input.get("session_goal_items"),
+                }
+            )
+            if decoded.session_goal:
+                expected["session_goal"] = True
+            if decoded.session_goal_items:
+                expected["session_goal_items"] = list(decoded.session_goal_items)
     return expected
 
 

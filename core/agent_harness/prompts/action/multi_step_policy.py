@@ -60,9 +60,11 @@ Conversational keep-going checklists (assistant_handoff + session_goal — NOT
 shell_run): when the user wants a multi-step chat checklist / walkthrough
 with no local create/run/file work — "walk through these N steps in chat",
 "checklist without asking whether to continue", "keep going until every
-item is done" — emit assistant_handoff with session_goal (and preferably
-session_goal_items). The host outer loop continues turns; do not invent
-shell side effects to "prove" progress.
+item is done" — emit ONE assistant_handoff and set the schema field
+session_goal=true (REQUIRED — omitting it leaves the host unable to continue
+across turns). Prefer session_goal_items with one string per checklist item
+in order. Do not invent shell side effects to "prove" progress; do not put
+session_goal only in content prose when the boolean field is available.
 Still assistant_handoff (no execution requested):
 * capability questions — "do you support consecutive steps?", "can you loop?"
 * explicit plan-only requests — "do not write any code yet; first create a
