@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -13,7 +14,6 @@ from core.agent_harness.investigation_api import (
     reset_investigation_payload_runner_for_tests,
 )
 from gateway.web import webapp
-from http import HTTPStatus
 
 _LOOPBACK = ("127.0.0.1", 40000)
 _REMOTE = ("203.0.113.9", 40000)
@@ -154,7 +154,10 @@ def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     install_investigation_payload_runner(lambda **_: _fake_payload())
     remote = TestClient(webapp.app, client=_REMOTE)
 
-    assert remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}}).status_code == HTTPStatus.UNAUTHORIZED
+    assert (
+        remote.post("/investigate", json={"raw_alert": {"alert_name": "x"}}).status_code
+        == HTTPStatus.UNAUTHORIZED
+    )
     assert (
         remote.post(
             "/investigate",
