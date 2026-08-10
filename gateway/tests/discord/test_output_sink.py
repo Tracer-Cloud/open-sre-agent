@@ -124,3 +124,29 @@ def test_sink_accepts_tool_hooks_attribute(
         tool_hooks=hooks,
     )
     assert sink.tool_hooks is hooks
+
+
+def test_a_second_goal_turn_posts_instead_of_overwriting(
+    _patch_discord_client: dict[str, Any],
+) -> None:
+    """Outer-goal continuation runs several turns through one sink.
+
+    The first answer replaces the placeholder by editing it. A later turn must
+    deliver a new message — editing the same one overwrites an answer the user
+    already read, and returning early would drop the later turn entirely.
+    """
+    # Arrange.
+    sink = DiscordOutputSink(bot_token="t", channel_id="c", edit_interval_seconds=0.0)
+    sink._message_id = "msg-1"
+
+    # Act: two turns of one continued goal.
+    sink.finalize("turn one answer")
+    posts_after_first = len(_patch_discord_client["posts"])
+    sink.finalize("turn two answer")
+
+    # Assert: turn two was delivered, and not by overwriting turn one.
+    assert len(_patch_discord_client["posts"]) > posts_after_first, (
+        "second goal turn was dropped instead of posted"
+    )
+    assert "turn two answer" in _patch_discord_client["posts"][-1]
+    assert "turn one answer" in _patch_discord_client["edits"][0]
