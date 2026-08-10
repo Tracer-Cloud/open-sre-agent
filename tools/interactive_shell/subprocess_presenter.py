@@ -1,4 +1,10 @@
-"""Headless subprocess presenter for gateway and other non-TTY agent surfaces."""
+"""Subprocess presenter for non-TTY agent surfaces (gateway, scheduled, embedded).
+
+Lives beside its process helpers in ``tools`` rather than in ``gateway``: every
+non-TTY host needs it, and ``core.agent_harness`` may import neither package.
+:func:`bootstrap.adapters.install_harness_adapters` registers it on the
+harness port so the default agent can execute shell tools after process boot.
+"""
 
 from __future__ import annotations
 

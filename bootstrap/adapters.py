@@ -31,13 +31,18 @@ def install_harness_adapters() -> None:
     nothing until both registries have been installed. Also installs the
     investigation payload runner used by :meth:`AgentSession.investigate`.
     """
+    import platform.harness_ports as harness_ports
     from integrations.harness_adapters import (
         register_harness_adapters as register_integrations,
     )
     from tools.harness_adapters import register_harness_adapters as register_tools
+    from tools.interactive_shell.subprocess_presenter import (
+        headless_subprocess_presenter_factory,
+    )
 
     register_integrations()
     register_tools()
+    harness_ports.set_subprocess_presenter_factory(headless_subprocess_presenter_factory)
     install_investigation_api()
 
 

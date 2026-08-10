@@ -22,13 +22,17 @@ from rich.console import Console
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.ports import OutputSink, PromptContextProvider, TurnAccounting
+from core.agent_harness.ports import (
+    OutputSink,
+    PromptContextProvider,
+    SubprocessPresenterFactory,
+    TurnAccounting,
+)
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,
     SlashPortsFactory,
-    SubprocessPresenterFactory,
 )
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
@@ -58,6 +62,24 @@ def _resolve_gather(
     if not gather_enabled:
         return GATHER_DISABLED
     return GatherPorts(enabled=True, max_iterations=gather_max_iterations)
+
+
+def _resolved_presenter_factory(
+    explicit: SubprocessPresenterFactory | None,
+) -> SubprocessPresenterFactory | None:
+    """Return the caller's presenter, else the one registered at process boot.
+
+    Without this the default port stack has no presenter, so ``shell_run``
+    refuses every call and the agent degrades into describing a plan it cannot
+    run. A host that wants different behavior (a TTY console) still passes its
+    own factory and wins.
+    """
+    if explicit is not None:
+        return explicit
+    import platform.harness_ports as harness_ports
+
+    registered: SubprocessPresenterFactory | None = harness_ports.get_subprocess_presenter_factory()
+    return registered
 
 
 def build_default_headless_agent(
@@ -107,7 +129,7 @@ def build_default_headless_agent(
             console,
             tool_action_logger=tool_action_logger or logger,
             observer_factory=observer_factory,
-            subprocess_presenter_factory=subprocess_presenter_factory,
+            subprocess_presenter_factory=_resolved_presenter_factory(subprocess_presenter_factory),
             slash_ports_factory=slash_ports_factory,
         ),
         # ``is not None``, not ``or``: a provider defining __bool__ would be

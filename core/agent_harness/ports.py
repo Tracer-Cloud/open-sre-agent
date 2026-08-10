@@ -314,3 +314,12 @@ __all__ = [
     "ToolRegistry",
     "TurnAccounting",
 ]
+
+
+# Builds the presenter that streams a subprocess tool's output. The concrete
+# presenter lives in ``tools`` (process helpers), so this seam is how a host
+# hands one to the agent without ``core`` importing ``tools``.
+SubprocessPresenterFactory = Callable[
+    [Any, Any, "ConfirmFn | None", bool | None, bool],
+    Any,
+]

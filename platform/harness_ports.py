@@ -22,6 +22,8 @@ from core.tool_framework.registered_tool import RegisteredTool
 if TYPE_CHECKING:
     from core.agent_harness.ports import ToolRegistry
 
+from core.agent_harness.ports import SubprocessPresenterFactory
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -676,6 +678,7 @@ def reset_harness_ports() -> None:
     clear_assistant_prompt_fragments()
     clear_gateway_persona_fragments()
     clear_message_context_prefix_strippers()
+    set_subprocess_presenter_factory(None)
 
     # Core leaf registries (populated by integrations/harness_adapters).
     from core.domain.alerts.alert_source import (
@@ -695,3 +698,24 @@ def reset_harness_ports() -> None:
     clear_alert_detail_fields()
     clear_taxonomy_profiles()
     clear_anchor_parsers()
+
+
+# --- Subprocess presenter -------------------------------------------------
+#
+# Streaming shell/CLI output needs a presenter that lives in ``tools`` (its
+# process helpers) and is therefore invisible to ``core.agent_harness``.
+# Registering it here lets the default agent execute shell tools instead of
+# refusing them, without core importing tools or gateway.
+
+_subprocess_presenter_factory: SubprocessPresenterFactory | None = None
+
+
+def set_subprocess_presenter_factory(factory: SubprocessPresenterFactory | None) -> None:
+    """Register (or clear) the presenter the default agent gives shell tools."""
+    global _subprocess_presenter_factory
+    _subprocess_presenter_factory = factory
+
+
+def get_subprocess_presenter_factory() -> SubprocessPresenterFactory | None:
+    """Return the registered presenter factory, or ``None`` before boot."""
+    return _subprocess_presenter_factory
