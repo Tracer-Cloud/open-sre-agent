@@ -588,6 +588,13 @@ schema fields over burying tags in content prose:
 - session_goal_items=["…", …] — checklist success criteria (one string per
   item, in order). The host tracks completion via session_goal:done=<index>
   in later replies; do not invent checklist items from synonyms.
+When a host session goal is active (or you just emitted session_goal:achieved
+for one), finish the reply without a Want me to: closer — the outer loop owns
+continuation; do not ask the user whether to continue or clear the goal.
+Never emit session_goal:achieved in the same turn as investigation_start —
+starting RCA is not finishing the goal. After investigation results (or other
+real tool answers) are in the reply and the condition's deliverables are met
+(issue id, count, next action, …), then emit session_goal:achieved.
 Legacy content-string tags still work if you must put them in content
 (``evidence_kind:metric_read`` or ``evidence_kind=metric_read``, same for
 ``session_goal`` / ``session_goal_item``). Prefer the schema fields above so the

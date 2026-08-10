@@ -65,6 +65,53 @@ def test_bare_achieved_without_checklist_or_tools_stays_active() -> None:
     assert "no tool evidence" in verdict.reason
     assert session.session_goal is not None
     assert "no tool evidence" in session.session_goal.last_reason
+    assert session.session_goal.status == SessionGoalStatus.ACTIVE
+
+
+def test_host_owned_achieved_without_tools_completes() -> None:
+    """``/goal set`` prose goals may achieve on the tag alone (Claude-shaped)."""
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="list three steps",
+        max_outer_turns=3,
+        host_owned=True,
+    )
+    attach_session_goal(session, goal)
+
+    verdict = evaluate_session_goal(
+        goal,
+        _result("1. a\n2. b\n3. c\nsession_goal:achieved"),
+        session=session,
+    )
+
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert session.session_goal is not None
+    assert session.session_goal.status == SessionGoalStatus.ACHIEVED
+
+
+def test_handoff_does_not_replace_host_owned_goal_after_achieve() -> None:
+    from core.agent_harness.session.session_goal import attach_session_goal_from_handoffs
+
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="list three steps",
+            max_outer_turns=3,
+            host_owned=True,
+            status=SessionGoalStatus.ACHIEVED,
+        ),
+    )
+    again = attach_session_goal_from_handoffs(
+        session,
+        ("session_goal:continue", "session_goal_item:one", "session_goal_item:two"),
+        condition="list three steps",
+    )
+    assert again is not None
+    assert again.host_owned is True
+    assert again.max_outer_turns == 3
+    assert again.status == SessionGoalStatus.ACHIEVED
+    assert again.checklist == ()
 
 
 def test_achieved_with_tool_evidence_completes_condition_only_goal() -> None:
@@ -75,6 +122,50 @@ def test_achieved_with_tool_evidence_completes_condition_only_goal() -> None:
     )
     assert verdict.status == SessionGoalStatus.ACHIEVED
     assert verdict.reason == "achieved with tool evidence"
+
+
+def test_achieved_ignored_while_investigation_dispatched() -> None:
+    """Starting RCA must not close a daily-work goal before deliverables exist."""
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="Sentry spike: issue id + next action",
+        max_outer_turns=6,
+        host_owned=True,
+    )
+    attach_session_goal(session, goal)
+    result = TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            investigation_dispatched=True,
+        ),
+        assistant_response_text="Dispatching investigation. session_goal:achieved",
+    )
+    verdict = evaluate_session_goal(goal, result, session=session)
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert "investigation" in verdict.reason
+    assert session.session_goal is not None
+    assert session.session_goal.status == SessionGoalStatus.ACTIVE
+
+
+def test_turn_has_session_goal_evidence_false_when_investigation_dispatched() -> None:
+    result = TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            investigation_dispatched=True,
+        ),
+        assistant_response_text="started",
+    )
+    assert turn_has_session_goal_evidence(result) is False
 
 
 def test_achieved_ignored_when_checklist_incomplete() -> None:

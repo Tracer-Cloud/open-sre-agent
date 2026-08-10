@@ -39,11 +39,19 @@ def test_goal_set_show_and_clear() -> None:
 def test_goal_set_queues_condition_as_immediate_turn() -> None:
     """Claude-shaped: setting a goal starts work without a separate prompt."""
     session = Session()
-    console, _buf = _console()
+    console, buf = _console()
 
-    assert _cmd_goal(session, console, ["set", "all auth tests pass"])
+    assert _cmd_goal(session, console, ["set", "--max-turns", "3", "all auth tests pass"])
     assert session.terminal.pending_prompt_default == "all auth tests pass"
     assert session.terminal.pending_prompt_autosubmit is True
+    assert session.session_goal is not None
+    assert session.session_goal.host_owned is True
+    assert session.session_goal.max_outer_turns == 3
+    assert session.session_goal.started_at is not None
+    out = buf.getvalue()
+    assert "◎ /goal active" in out
+    assert "—" not in out.split("◎ /goal active", 1)[1].split("\n", 1)[0]
+    assert "+0 tokens" in out
 
 
 def test_goal_show_prints_active_duration_and_tokens() -> None:

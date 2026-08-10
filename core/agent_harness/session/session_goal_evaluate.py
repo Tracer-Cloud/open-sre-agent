@@ -5,8 +5,12 @@ claim, not proof. This module is the independent host check:
 
 * Checklist complete (via ``done=`` indices) → achieved.
 * ``achieved`` with an incomplete checklist → stay active (ignore the tag).
-* ``achieved`` with no checklist → require tool evidence on the turn, or stay
-  active.
+* ``achieved`` while ``investigation_dispatched`` this turn → stay active
+  (starting RCA is not finishing the goal).
+* ``achieved`` on a **host-owned** (``/goal set``) goal → achieved without tools
+  when no investigation was dispatched.
+* ``achieved`` with no checklist on a handoff goal → require tool evidence, or
+  stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
   tool-evidence path (:mod:`session_goal_review`).
 """
@@ -47,13 +51,26 @@ def _reply_text(result: Any) -> str:
     return ""
 
 
+def turn_dispatched_investigation(result: Any) -> bool:
+    """True when this turn started an RCA pipeline (not yet a finished answer)."""
+    action = getattr(result, "action_result", None)
+    if action is None:
+        return False
+    return bool(getattr(action, "investigation_dispatched", False))
+
+
 def turn_has_session_goal_evidence(result: Any) -> bool:
     """True when the turn ran a tool **successfully** — not prose, not a claim.
 
     A tool that ran and errored is not evidence the goal was met, so a failed
     call must not let an ``achieved`` claim through. ``executed_count`` alone
     would say yes to a turn whose only action failed.
+
+    Dispatching ``investigation_start`` is not finishing evidence for an outer
+    goal — that work lands in later turns / the investigation report.
     """
+    if turn_dispatched_investigation(result):
+        return False
     action = getattr(result, "action_result", None)
     if action is None:
         return False
@@ -86,6 +103,7 @@ def evaluate_session_goal(
     current = apply_session_goal_progress(current, text)
 
     claimed = _ACHIEVED_TAG in text
+    dispatched = turn_dispatched_investigation(result)
 
     if current.checklist:
         if current.checklist_complete:
@@ -111,11 +129,20 @@ def evaluate_session_goal(
             else:
                 reason = f"checklist {done}/{total} done — next: {nxt[1]}"
             verdict = SessionGoalVerdict(status=SessionGoalStatus.ACTIVE, reason=reason)
+    elif claimed and dispatched:
+        verdict = SessionGoalVerdict(
+            status=SessionGoalStatus.ACTIVE,
+            reason="achieved tag ignored; investigation still running",
+        )
     elif claimed:
-        if turn_has_session_goal_evidence(result):
+        if current.host_owned or turn_has_session_goal_evidence(result):
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
-                reason="achieved with tool evidence",
+                reason=(
+                    "achieved (host-set goal)"
+                    if current.host_owned and not turn_has_session_goal_evidence(result)
+                    else "achieved with tool evidence"
+                ),
             )
         else:
             verdict = SessionGoalVerdict(
@@ -123,13 +150,25 @@ def evaluate_session_goal(
                 reason="achieved tag ignored; no tool evidence yet",
             )
     else:
-        verdict = SessionGoalVerdict(
-            status=SessionGoalStatus.ACTIVE,
-            reason="waiting for session_goal:achieved with tool evidence",
-        )
+        if dispatched:
+            verdict = SessionGoalVerdict(
+                status=SessionGoalStatus.ACTIVE,
+                reason="investigation running — continue after results",
+            )
+        elif current.host_owned:
+            verdict = SessionGoalVerdict(
+                status=SessionGoalStatus.ACTIVE,
+                reason="waiting for session_goal:achieved",
+            )
+        else:
+            verdict = SessionGoalVerdict(
+                status=SessionGoalStatus.ACTIVE,
+                reason="waiting for session_goal:achieved with tool evidence",
+            )
 
     if session is not None:
-        attach_session_goal(session, current.with_reason(verdict.reason))
+        updated = current.with_status(verdict.status).with_reason(verdict.reason)
+        attach_session_goal(session, updated)
     return verdict
 
 
@@ -147,5 +186,6 @@ __all__ = [
     "SessionGoalVerdict",
     "default_evaluate_session_goal",
     "evaluate_session_goal",
+    "turn_dispatched_investigation",
     "turn_has_session_goal_evidence",
 ]

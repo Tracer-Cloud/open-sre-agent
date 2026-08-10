@@ -59,8 +59,9 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
         condition=condition,
         max_outer_turns=max_turns,
         status=SessionGoalStatus.ACTIVE,
+        host_owned=True,
     )
-    attach_session_goal(session, goal)
+    goal = attach_session_goal(session, goal)
     # Claude-shaped: setting starts work immediately with the condition as the
     # directive — queue autosubmit on the REPL prompt loop.
     session.terminal.set_auto_command(condition)

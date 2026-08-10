@@ -79,6 +79,9 @@ class SessionGoal:
     # Session token totals when the goal was attached — delta is goal spend.
     token_baseline_input: int = 0
     token_baseline_output: int = 0
+    # True when attached via ``/goal set`` (host-owned). Handoff must not replace
+    # it after achieve, and prose ``session_goal:achieved`` does not need tools.
+    host_owned: bool = False
 
     def with_status(self, status: str) -> SessionGoal:
         return replace(self, status=status)
@@ -215,9 +218,16 @@ def attach_session_goal_from_handoffs(
     condition: str = "",
     handoffs: Sequence[AssistantHandoff] = (),
 ) -> SessionGoal | None:
-    """Attach a goal from typed handoffs (preferred) or legacy tag strings."""
+    """Attach a goal from typed handoffs (preferred) or legacy tag strings.
+
+    Host-owned goals (``/goal set``) stay authoritative until the user clears
+    or replaces them — handoff must not open a fresh default-cap loop after
+    the slash goal achieves.
+    """
+    existing = getattr(session, "session_goal", None)
+    if isinstance(existing, SessionGoal) and existing.host_owned:
+        return existing
     if session_goal_is_active(session):
-        existing = getattr(session, "session_goal", None)
         return existing if isinstance(existing, SessionGoal) else None
     detected = None
     if handoffs:
@@ -352,6 +362,7 @@ def session_goal_to_payload(goal: SessionGoal) -> dict[str, Any]:
         "last_reason": goal.last_reason,
         "token_baseline_input": int(goal.token_baseline_input),
         "token_baseline_output": int(goal.token_baseline_output),
+        "host_owned": bool(goal.host_owned),
     }
     if goal.started_at is not None:
         payload["started_at"] = float(goal.started_at)
@@ -408,6 +419,7 @@ def session_goal_from_payload(payload: Any) -> SessionGoal | None:
         token_out = max(0, int(payload.get("token_baseline_output", 0) or 0))
     except (TypeError, ValueError):
         token_in, token_out = 0, 0
+    host_owned = bool(payload.get("host_owned", False))
     return SessionGoal(
         condition=condition.strip(),
         max_outer_turns=max_outer,
@@ -420,6 +432,7 @@ def session_goal_from_payload(payload: Any) -> SessionGoal | None:
         started_at=started_at,
         token_baseline_input=token_in,
         token_baseline_output=token_out,
+        host_owned=host_owned,
     )
 
 
@@ -570,6 +583,8 @@ def derive_session_goal_reason(goal: SessionGoal) -> str:
             return f"checklist {done}/{total} done"
         _index, item = nxt
         return f"checklist {done}/{total} done — next: {item}"
+    if goal.host_owned:
+        return "waiting for session_goal:achieved"
     return "waiting for session_goal:achieved with tool evidence"
 
 
@@ -674,6 +689,15 @@ def continuation_nudge(goal: SessionGoal) -> str:
             "Take the next unfinished item now. When you complete an item, include "
             "`session_goal:done=<index>` (comma-separate multiple). When every "
             "item is done, you may also include `session_goal:achieved`."
+        )
+    if goal.host_owned:
+        return (
+            "[session_goal] Continue the active goal without asking whether to "
+            f"continue. Goal: {goal.condition}\n\n"
+            f"{reason_block}"
+            "Answer the condition directly. Do not run `/goal` as a tool. When the "
+            "condition is met, include the exact tag `session_goal:achieved` in "
+            "your reply (no further tool work required for a host-set goal)."
         )
     return (
         "[session_goal] Continue the active goal without asking whether to "

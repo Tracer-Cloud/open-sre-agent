@@ -74,3 +74,46 @@ def test_finalize_suppresses_investigate_when_session_goal_active() -> None:
     assert "Want me to" not in result.response_text
     # No CTA rewrite → no forced re-flush when investigate is suppressed.
     assert result.finish_stream is False
+
+
+def test_finalize_strips_want_me_to_when_host_owned_goal_just_achieved() -> None:
+    """Evaluate marks ACHIEVED before finalize — still strip the closer."""
+    from core.agent_harness.session.session_goal import SessionGoalStatus
+
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="list three steps",
+            max_outer_turns=3,
+            host_owned=True,
+            status=SessionGoalStatus.ACHIEVED,
+        ),
+    )
+    need = EvidenceNeed(
+        kind=EvidenceKind.INCIDENT,
+        preferred_sources=(),
+        connected=(),
+        missing=(),
+        tier=EvidenceTier.L1,
+        required_for_authoritative=False,
+    )
+
+    result = finalize_routed_answer(
+        session=session,
+        route_intent="cli_agent_handled",
+        response_text=(
+            "1. a\n2. b\n3. c\n\n"
+            "Want me to: mark this goal achieved now with /goal clear?"
+        ),
+        evidence_for_offer=None,
+        evidence_need=need,
+        handoff_contents=(),
+        original_user_text="list three steps",
+        confirms_pending=False,
+    )
+
+    assert session.pending_investigation_offer is None
+    assert "Want me to" not in result.response_text
+    assert "1. a" in result.response_text
+    assert result.finish_stream is False
