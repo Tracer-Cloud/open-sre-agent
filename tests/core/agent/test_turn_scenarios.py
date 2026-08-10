@@ -62,7 +62,7 @@ class ExpectedAction(TypedDict):
     scenario: NotRequired[str]
     template: NotRequired[str]
     evidence_kind: NotRequired[str]
-    session_goal: NotRequired[str]
+    session_goal: NotRequired[bool | str]
     session_goal_items: NotRequired[list[str]]
 
 
@@ -168,7 +168,9 @@ def _build_actual_action(action: ToolCall) -> ExpectedAction:
         if isinstance(evidence_kind, str) and evidence_kind.strip():
             expected["evidence_kind"] = evidence_kind.strip()
         session_goal = action.input.get("session_goal")
-        if isinstance(session_goal, str) and session_goal.strip():
+        if isinstance(session_goal, bool):
+            expected["session_goal"] = session_goal
+        elif isinstance(session_goal, str) and session_goal.strip():
             expected["session_goal"] = session_goal.strip()
         raw_items = action.input.get("session_goal_items")
         if isinstance(raw_items, list):
@@ -269,7 +271,18 @@ def _assert_planned_actions_match(
                     f"{actual.get('evidence_kind')!r} != {expected_kind_field!r}"
                 )
             expected_goal = expected.get("session_goal")
-            if expected_goal is not None:
+            if expected_goal is True:
+                # ``session_goal_items`` implies attach (see AssistantHandoff),
+                # so a planner may send either and still meet the contract.
+                attached = bool(actual.get("session_goal")) or bool(
+                    actual.get("session_goal_items")
+                )
+                assert attached, (
+                    f"assistant_handoff[{index}] attached no session goal: "
+                    f"session_goal={actual.get('session_goal')!r} "
+                    f"session_goal_items={actual.get('session_goal_items')!r}"
+                )
+            elif expected_goal is not None:
                 assert actual.get("session_goal") == expected_goal, (
                     f"assistant_handoff[{index}] session_goal "
                     f"{actual.get('session_goal')!r} != {expected_goal!r}"
@@ -407,6 +420,52 @@ def test_build_actual_action_keeps_assistant_handoff_ontology_fields() -> None:
         ],
     )
     _assert_planned_actions_match([actual], expected)
+
+
+def test_planning_match_accepts_checklist_items_as_session_goal_attach() -> None:
+    """Live planners often omit ``session_goal`` when they emit items (CI 347)."""
+    actual = _build_actual_action(
+        ToolCall(
+            id="h1",
+            name="assistant_handoff",
+            input={
+                "content": "session_goal=true\nchat:checklist_walkthrough",
+                "session_goal_items": [
+                    "List the goal in one sentence",
+                    "Name step one",
+                ],
+            },
+        )
+    )
+    assert "session_goal" not in actual
+    assert actual["session_goal_items"] == [
+        "List the goal in one sentence",
+        "Name step one",
+    ]
+
+    expected = cast(
+        "list[ExpectedAction]",
+        [
+            {
+                "kind": "assistant_handoff",
+                "content": "any non-empty handoff body",
+                "source": "llm",
+                "session_goal": True,
+            }
+        ],
+    )
+    _assert_planned_actions_match([actual], expected)
+
+
+def test_build_actual_action_keeps_boolean_session_goal() -> None:
+    actual = _build_actual_action(
+        ToolCall(
+            id="h1",
+            name="assistant_handoff",
+            input={"content": "Walk the checklist.", "session_goal": True},
+        )
+    )
+    assert actual["session_goal"] is True
 
 
 def test_planning_match_ignores_handoff_after_terminal_action_only() -> None:
@@ -715,3 +774,26 @@ def test_oracle_match_collapses_duplicate_investigation_dispatch() -> None:
         ],
         expected,
     ) == [{"type": "alert", "text_normalized": "windows crash", "ok": True}]
+
+
+def test_oracle_match_strips_session_goal_continuation_history() -> None:
+    """Outer-loop nudges must not fail planner-contract history expectations."""
+    from tests.core.agent._oracle_runtime import normalize_history_for_oracle_match
+
+    user_turn = {
+        "type": "cli_agent",
+        "text_normalized": "walk through this 5-item checklist",
+        "ok": True,
+    }
+    continuation = {
+        "type": "cli_agent",
+        "text_normalized": (
+            "[session_goal] continue the active goal without asking whether to continue. "
+            "goal: walk through this 5-item checklist"
+        ),
+        "ok": True,
+    }
+    assert normalize_history_for_oracle_match(
+        [user_turn, continuation, dict(continuation)],
+        [],
+    ) == [user_turn]

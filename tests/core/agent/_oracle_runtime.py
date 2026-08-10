@@ -299,12 +299,30 @@ def strip_redundant_integrations_list_history(
     ]
 
 
+def strip_session_goal_continuation_history(
+    actual_history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop outer-loop continuation nudges from oracle history.
+
+    ``execute_shell_turn`` may call ``run_until_session_goal``, which records each
+    ``[session_goal] Continue…`` nudge as another ``cli_agent`` history row.
+    Planner-contract fixtures (e.g. 347) expect only the user's first turn; host
+    continuation is covered by SessionGoal unit tests, not live oracle history.
+    """
+    return [
+        entry
+        for entry in actual_history
+        if not str(entry.get("text_normalized", "")).lstrip().startswith("[session_goal]")
+    ]
+
+
 def normalize_history_for_oracle_match(
     actual_history: list[dict[str, Any]],
     expected_actions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Collapse duplicate alert rows when a single investigation dispatch is expected."""
-    filtered = strip_redundant_integrations_list_history(actual_history, expected_actions)
+    """Collapse known host-loop extras so fixtures pin the user turn under test."""
+    filtered = strip_session_goal_continuation_history(actual_history)
+    filtered = strip_redundant_integrations_list_history(filtered, expected_actions)
     if len(expected_actions) != 1:
         return filtered
     if str(expected_actions[0].get("kind", "")).strip() != "investigation":
