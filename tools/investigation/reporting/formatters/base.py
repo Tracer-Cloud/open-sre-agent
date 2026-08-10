@@ -1,10 +1,13 @@
 """Base formatting utilities for report generation."""
 
+from __future__ import annotations
+
 import html
 import re
 
-# Matches Slack-style links: <url|label> or <url>
-SLACK_LINK_RE = re.compile(r"<(https?://[^|>]+)(?:\|([^>]+))?>")
+from config.constants import SLACK_LINK_RE
+
+__all__ = ["format_html_link", "format_slack_link", "shorten_text", "slack_links_to_plain_text"]
 
 
 def shorten_text(text: str, max_chars: int = 120, suffix: str = "...") -> str:

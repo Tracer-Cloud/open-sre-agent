@@ -8,12 +8,10 @@ import sys
 from rich.console import Console
 from rich.text import Text
 
+from config.constants import SLACK_LINK_RE
 from platform.observability import get_output_format
 from platform.terminal.theme import BRAND, DIM, HIGHLIGHT, WARNING
-from tools.investigation.reporting.formatters.base import (
-    SLACK_LINK_RE,
-    slack_links_to_plain_text,
-)
+from tools.investigation.reporting.formatters.base import slack_links_to_plain_text
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers

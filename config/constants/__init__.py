@@ -236,6 +236,7 @@ from config.constants.redis import (
     REDIS_SSL_ENV,
     REDIS_USERNAME_ENV,
 )
+from config.constants.reporting import SLACK_LINK_RE
 from config.constants.runtime_metadata import (
     GITHUB_REPO_ENV,
     GITHUB_REPOSITORY_ENV,
@@ -523,6 +524,7 @@ __all__ = [
     "SIGNOZ_URL_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
+    "SLACK_LINK_RE",
     "SMTP_DEFAULT_TO_ENV",
     "SMTP_FROM_ADDRESS_ENV",
     "SMTP_HOST_ENV",
