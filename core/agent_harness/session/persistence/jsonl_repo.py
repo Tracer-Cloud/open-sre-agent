@@ -366,7 +366,7 @@ def _accumulated_context_for_branch(branch: list[dict[str, Any]]) -> dict[str, A
 
 def _session_goal_state_for_branch(branch: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the last ``session_goal_state`` custom message on the branch."""
-    from core.agent_harness.session.session_goal import SESSION_GOAL_STATE_CUSTOM_TYPE
+    from core.agent_harness.session.session_goal_persist import SESSION_GOAL_STATE_CUSTOM_TYPE
 
     latest: dict[str, Any] | None = None
     for rec in branch:

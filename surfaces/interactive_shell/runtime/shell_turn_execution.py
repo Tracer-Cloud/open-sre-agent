@@ -18,8 +18,8 @@ from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.session.session_goal import (
     SessionGoal,
-    format_session_goal_progress,
 )
+from core.agent_harness.session.session_goal_paint import format_session_goal_progress
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.session_goal_loop import run_until_session_goal

@@ -23,8 +23,8 @@ from rich.console import Console
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.session_goal import (
-    SessionGoal,
+from core.agent_harness.session.session_goal import SessionGoal
+from core.agent_harness.session.session_goal_paint import (
     format_session_goal_progress,
     format_session_goal_status_line,
 )

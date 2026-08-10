@@ -15,9 +15,9 @@ from core.agent_harness.session.session_goal import (
     SessionGoalStatus,
     attach_session_goal,
     clear_session_goal,
-    format_session_goal_progress,
     session_goal_is_active,
 )
+from core.agent_harness.session.session_goal_paint import format_session_goal_progress
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 

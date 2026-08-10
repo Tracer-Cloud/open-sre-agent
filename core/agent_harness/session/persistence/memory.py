@@ -236,7 +236,7 @@ class InMemorySessionStorage:
             )
             records = self._files.get(session.session_id, records)
         if hasattr(session, "session_goal"):
-            from core.agent_harness.session.session_goal import (
+            from core.agent_harness.session.session_goal_persist import (
                 SESSION_GOAL_STATE_CUSTOM_TYPE,
                 session_goal_state_snapshot,
                 should_persist_session_goal_state,

@@ -126,7 +126,7 @@ def test_flushing_a_goalless_session_adds_no_in_memory_record() -> None:
     """
     from core.agent_harness.session.persistence.memory import InMemorySessionStorage
     from core.agent_harness.session.session_core import SessionCore
-    from core.agent_harness.session.session_goal import SESSION_GOAL_STATE_CUSTOM_TYPE
+    from core.agent_harness.session.session_goal_persist import SESSION_GOAL_STATE_CUSTOM_TYPE
 
     storage = InMemorySessionStorage()
     session = SessionCore(storage=storage)

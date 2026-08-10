@@ -5,13 +5,15 @@ from __future__ import annotations
 from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
 from core.agent_harness.session.pending_offer import PendingIntegrationSetupOffer
 from core.agent_harness.session.session_goal import (
-    SESSION_GOAL_STATE_CUSTOM_TYPE,
     SessionGoal,
     SessionGoalStatus,
-    apply_session_goal_state,
     attach_session_goal,
-    session_goal_from_payload,
     session_goal_is_active,
+)
+from core.agent_harness.session.session_goal_persist import (
+    SESSION_GOAL_STATE_CUSTOM_TYPE,
+    apply_session_goal_state,
+    session_goal_from_payload,
     session_goal_state_snapshot,
     session_goal_to_payload,
 )
@@ -106,10 +108,8 @@ def test_clearing_a_goal_writes_a_tombstone_so_resume_does_not_revive_it() -> No
     goal. Once a non-empty ``session_goal_state`` exists, a later clear must
     append a tombstone or resume keeps the old goal / CTA state authoritative.
     """
-    from core.agent_harness.session.session_goal import (
-        clear_session_goal,
-        session_goal_state_is_empty,
-    )
+    from core.agent_harness.session.session_goal import clear_session_goal
+    from core.agent_harness.session.session_goal_persist import session_goal_state_is_empty
 
     storage = InMemorySessionStorage()
     session = SessionCore(storage=storage)
@@ -166,11 +166,11 @@ def test_clearing_a_goal_is_persisted_so_resume_does_not_revive_it() -> None:
     from core.agent_harness.session.persistence.memory import InMemorySessionStorage
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.session.session_goal import (
-        SESSION_GOAL_STATE_CUSTOM_TYPE,
         SessionGoal,
         attach_session_goal,
         clear_session_goal,
     )
+    from core.agent_harness.session.session_goal_persist import SESSION_GOAL_STATE_CUSTOM_TYPE
 
     storage = InMemorySessionStorage()
     session = SessionCore(storage=storage)

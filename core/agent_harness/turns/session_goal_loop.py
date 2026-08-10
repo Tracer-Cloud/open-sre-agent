@@ -13,15 +13,21 @@ from typing import Any
 
 from core.agent_harness.session.session_goal import (
     SessionGoal,
+    SessionGoalReason,
     SessionGoalStatus,
     apply_session_goal_progress,
     attach_session_goal,
-    continuation_nudge,
-    refresh_session_goal_reason,
     session_goal_is_active,
     strip_session_goal_progress_tags,
 )
-from core.agent_harness.session.session_goal_evaluate import default_evaluate_session_goal
+from core.agent_harness.session.session_goal_evaluate import (
+    default_evaluate_session_goal,
+    session_goal_reply_text,
+)
+from core.agent_harness.session.session_goal_paint import (
+    continuation_nudge,
+    refresh_session_goal_reason,
+)
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 ChatFn = Callable[[str], TurnResult]
@@ -44,13 +50,9 @@ def _empty_turn_result() -> TurnResult:
     )
 
 
-def _reply_text(result: TurnResult) -> str:
-    return (result.assistant_response_text or result.primary_response_text or "").strip()
-
-
 def _refresh_active(session: Any, active: SessionGoal, result: TurnResult) -> SessionGoal:
     """Merge checklist progress from the reply and keep session in sync."""
-    updated = apply_session_goal_progress(active, _reply_text(result))
+    updated = apply_session_goal_progress(active, session_goal_reply_text(result))
     attach_session_goal(session, updated)
     return updated
 
@@ -107,7 +109,7 @@ def _announce_working(
     """Paint a clear 'working now' line before an outer ``chat`` starts."""
     next_turn = min(active.turns_used + 1, active.max_outer_turns)
     working = active.with_reason(
-        f"working — starting outer turn {next_turn}/{active.max_outer_turns}"
+        SessionGoalReason.working_outer_turn(next_turn, active.max_outer_turns)
     )
     attach_session_goal(session, working)
     if on_progress is not None:
@@ -132,7 +134,7 @@ def _finish_outer_turn(
         return active, _scrub_progress_tags(last), True
 
     if getattr(session, "pending_user_choice", None) is not None:
-        active = active.with_reason("paused — waiting for your choice")
+        active = active.with_reason(SessionGoalReason.PAUSED_USER_CHOICE)
         active = _paint(session, active, on_progress, rederive=False)
         return active, _scrub_progress_tags(last), True
 
@@ -148,7 +150,6 @@ def _finish_outer_turn(
     last = _scrub_progress_tags(last)
 
     if next_status != SessionGoalStatus.ACTIVE:
-        active = active.with_status(next_status)
         active = _paint(session, active, on_progress, rederive=False)
         return active, last, True
 

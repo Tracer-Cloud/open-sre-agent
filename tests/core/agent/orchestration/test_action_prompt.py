@@ -521,6 +521,16 @@ def test_l0_degraded_guidance_structures_a_useful_local_close() -> None:
     assert "invent metric numbers" in block.lower()
 
 
+def test_l0_degraded_config_guidance_is_distinct_from_missing_source() -> None:
+    """Connected-but-auth-failed uses the config: suffix guidance block."""
+    config = build_handoff_guidance_block(("evidence_tier:L0_degraded:config:posthog_mcp",))
+    missing = build_handoff_guidance_block(("evidence_tier:L0_degraded:posthog_mcp",))
+    assert "credentials or configuration" in config.lower() or "auth/config" in config.lower()
+    assert "NOT connected" not in config
+    assert config != missing
+    assert "Want me to" in config
+
+
 def test_database_query_handoff_guidance_block_matches_prefix() -> None:
     """Oracle 332/331: ``database_query:*`` tags inject connect/query guidance."""
     block = build_handoff_guidance_block(("database_query:mysql_active_connections",))

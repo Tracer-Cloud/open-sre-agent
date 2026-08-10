@@ -52,8 +52,8 @@ class _ComputeThenSlackLLM:
 
     The action driver additionally asks the same LLM one goal-review question
     at conclusion time (``build_goal_reviewer``); that call is answered with
-    ``GOAL_REACHED`` and tracked separately so the loop-turn counter keeps
-    asserting the "two or three turns" expectation.
+    structured ``{"verdict": "GOAL_REACHED"}`` and tracked separately so the
+    loop-turn counter keeps asserting the "two or three turns" expectation.
     """
 
     def __init__(self) -> None:
@@ -74,7 +74,7 @@ class _ComputeThenSlackLLM:
         _ = tools
         if system is not None and "GOAL_REACHED" in system:
             self.review_calls += 1
-            return AgentLLMResponse(content="GOAL_REACHED")
+            return AgentLLMResponse(content='{"verdict": "GOAL_REACHED"}')
         self.turns += 1
         shell_output = self._shell_output(messages)
         if not shell_output:

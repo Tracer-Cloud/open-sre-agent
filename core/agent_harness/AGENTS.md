@@ -28,10 +28,16 @@ Outer `SessionGoal` (`session/session_goal.py` + `turns/session_goal_loop.py`) i
 **not** the inner ReAct `Goal` / `goal_review`. While a session goal is active,
 `run_turn` suppresses investigation Want-me-to closers. Completion is judged by
 `session/session_goal_evaluate.py` (independent of model self-report): checklist
-complete via `done=` indices, or `session_goal:achieved` **only** with tool
-evidence when there is no checklist — bare `achieved` is ignored. Optional LLM
+complete via `done=` indices; condition-only handoff goals need
+`session_goal:achieved` **with tool evidence** (bare `achieved` ignored);
+**host-owned** (`/goal set`) condition-only goals may achieve on the tag alone
+(explicit slash-path rule). Host reason strings live in `SessionGoalReason` —
+never embed `session_goal:…` tag grammar in painted reasons. Paint/nudges:
+`session_goal_paint.py`. Flush/restore: `session_goal_persist.py`. Optional LLM
 confirm for the tool-evidence path: `build_session_goal_llm_evaluator` in
-`session/session_goal_review.py` (pass as `evaluate=` to the outer loop).
+`session/session_goal_review.py` (pass as `evaluate=` to the outer loop) —
+closed `SessionGoalConfirmVerdict` via structured output, not free-text scrape.
+No host wires it by default; opt in when a second opinion is worth the tokens.
 
 **Evidence kinds (open/closed):** vocabulary + per-kind policy live in
 `turns/evidence_kind.py` (`EvidenceKind` + `EvidenceKindPolicy`). Add a kind by
@@ -39,6 +45,14 @@ extending the enum and registering its policy row — do **not** grow
 `if kind is …` branches in `classify_evidence_need`. Tool schema `enum` is
 `EVIDENCE_KIND_VALUES` (derived), not a parallel hard-coded list. Preferred
 integration ids stay opt-in via `platform.harness_ports.register_preferred_evidence_source`.
+
+**Evidence tiers / degradation:** `classify_evidence_need` is connectivity-first
+(`L0_degraded` + skip gather when a preferred authoritative source is missing).
+After an L1 gather, `reclassify_evidence_need_after_gather` may flip to
+`L0_degraded` with `EvidenceDegradeCause.CONFIG_FAILURE` when the observation
+shows auth/config failure on a preferred source — then finalize appends a
+reconnect UpgradeCTA. HogQL / empty-result failures stay L1 (no CTA). Do not
+scan user prose for this; inspect gather observation only.
 
 **No keyword intent routing around the action agent.** Do not scan user text
 with regex/keywords to skip gather, attach goals, or bypass `execute_actions`.

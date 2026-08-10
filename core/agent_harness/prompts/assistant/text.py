@@ -96,6 +96,24 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "and do not open an onboarding wizard unprompted. A bare user yes after "
         "that CTA will run the connect slash; do not invent a second Want-me-to.\n\n"
     ),
+    # Connected preferred source failed auth/config after gather.
+    # Prefix: ``evidence_tier:L0_degraded:config:<ids>`` (matched before plain L0).
+    "evidence_tier:L0_degraded:config": (
+        "The turn's authoritative live source IS registered in this session, "
+        "but gather failed because of credentials or configuration "
+        "(evidence tier L0_degraded config; service ids follow "
+        "`evidence_tier:L0_degraded:config:`). Be honest about the failure — "
+        "do not invent a live count.\n"
+        "Structure the reply like this:\n"
+        "1. One plain sentence: the named source failed auth/config (quote "
+        "the error briefly if present in the tool results).\n"
+        "2. How to measure once credentials work (property names / draft "
+        "query labeled as draft — never invent metric numbers as fact).\n"
+        "Do NOT claim the query succeeded. Do NOT offer a full incident "
+        "investigation. Do NOT close with **Want me to:**. The harness "
+        "appends one reconnect/setup CTA after your reply — do not duplicate "
+        "it and do not open an onboarding wizard unprompted.\n\n"
+    ),
     # Outer SessionGoal checklist progress (host loop / continuation nudges).
     "session_goal:": (
         "An outer session goal is active. When you finish a checklist item, "

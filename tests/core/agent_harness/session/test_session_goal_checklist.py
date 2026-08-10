@@ -82,8 +82,8 @@ def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:
     )
 
 
-def test_format_session_goal_checklist_shows_progress() -> None:
-    from core.agent_harness.session.session_goal import format_session_goal_progress
+def test_format_session_goal_progress_shows_checklist() -> None:
+    from core.agent_harness.session.session_goal_paint import format_session_goal_progress
 
     goal = SessionGoal(
         condition="ship the checklist",
@@ -106,7 +106,7 @@ def test_format_session_goal_checklist_shows_progress() -> None:
 
 
 def test_format_session_goal_status_line_is_compact() -> None:
-    from core.agent_harness.session.session_goal import format_session_goal_status_line
+    from core.agent_harness.session.session_goal_paint import format_session_goal_status_line
 
     goal = SessionGoal(
         condition="two-step",
@@ -123,10 +123,8 @@ def test_format_session_goal_status_line_is_compact() -> None:
 
 
 def test_format_session_goal_progress_active_header_includes_duration() -> None:
-    from core.agent_harness.session.session_goal import (
-        format_session_goal_progress,
-        mark_session_goal_started,
-    )
+    from core.agent_harness.session.session_goal import mark_session_goal_started
+    from core.agent_harness.session.session_goal_paint import format_session_goal_progress
 
     goal = mark_session_goal_started(
         SessionGoal(condition="finish migrate", max_outer_turns=5, turns_used=1),
@@ -148,7 +146,7 @@ def test_format_session_goal_progress_active_header_includes_duration() -> None:
 
 
 def test_format_duration_and_token_compacts() -> None:
-    from core.agent_harness.session.session_goal import (
+    from core.agent_harness.session.session_goal_paint import (
         format_duration_compact,
         format_token_count_compact,
     )
@@ -162,8 +160,8 @@ def test_format_duration_and_token_compacts() -> None:
 
 
 def test_session_goal_payload_round_trips_started_at_and_token_baseline() -> None:
-    from core.agent_harness.session.session_goal import (
-        mark_session_goal_started,
+    from core.agent_harness.session.session_goal import mark_session_goal_started
+    from core.agent_harness.session.session_goal_persist import (
         session_goal_from_payload,
         session_goal_to_payload,
     )
@@ -217,7 +215,7 @@ def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
 
 
 def test_nudge_lists_unfinished_checklist_items() -> None:
-    from core.agent_harness.session.session_goal import continuation_nudge
+    from core.agent_harness.session.session_goal_paint import continuation_nudge
 
     goal = SessionGoal(
         condition="x",

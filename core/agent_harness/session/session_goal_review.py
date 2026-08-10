@@ -7,28 +7,39 @@ tag + tool evidence path.
 
 Checklist completion stays structured-only (done indices are already host-tracked).
 Fails open to ACTIVE on LLM errors so a broken reviewer cannot false-complete.
+
+Confirm uses :func:`~core.agent_harness.closed_llm_verdict.invoke_closed_goal_verdict`
+(closed ``Literal`` enum) — not free-text scrape.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
+from core.agent_harness.closed_llm_verdict import (
+    ClosedGoalVerdict,
+    invoke_closed_goal_verdict,
+)
 from core.agent_harness.session.session_goal import (
     SessionGoal,
+    SessionGoalReason,
     SessionGoalStatus,
     attach_session_goal,
 )
-from core.agent_harness.session.session_goal_evaluate import evaluate_session_goal
+from core.agent_harness.session.session_goal_evaluate import (
+    evaluate_session_goal,
+    session_goal_reply_text,
+)
 from core.llm.types import AgentLLMClient
 
-log = logging.getLogger(__name__)
+# Backward-compatible name for the closed schema (tests / docs).
+SessionGoalConfirmVerdict = ClosedGoalVerdict
 
 _REVIEW_SYSTEM = (
     "You review whether an outer multi-turn session goal is met.\n"
-    "Reply with exactly one word: GOAL_REACHED or NOT_REACHED.\n"
-    "Reply GOAL_REACHED only when the assistant reply plus tools clearly "
-    "satisfy the goal condition. When in doubt, reply NOT_REACHED."
+    "Return JSON only. Set verdict to GOAL_REACHED only when the assistant "
+    "reply plus tools clearly satisfy the goal condition. When in doubt, "
+    "set verdict to NOT_REACHED."
 )
 
 
@@ -44,23 +55,15 @@ def _llm_confirms_achieved(
     reply: str,
 ) -> bool | None:
     """Return True/False from the model, or None on error / unclear."""
-    user = (
+    prompt = (
         f"Goal condition:\n{condition}\n\n"
         f"Latest assistant reply:\n{reply[:MAX_REVIEWED_REPLY_CHARS]}\n\n"
         "Is the goal reached?"
     )
-    try:
-        response = llm.invoke(
-            [{"role": "user", "content": user}],
-            system=_REVIEW_SYSTEM,
-        )
-    except Exception:
-        log.debug("session_goal LLM confirm failed", exc_info=True)
-        return None
-    content = (getattr(response, "content", None) or str(response) or "").strip().upper()
-    if "NOT_REACHED" in content:
+    verdict = invoke_closed_goal_verdict(llm, prompt=prompt, system=_REVIEW_SYSTEM)
+    if verdict == "NOT_REACHED":
         return False
-    if "GOAL_REACHED" in content:
+    if verdict == "GOAL_REACHED":
         return True
     return None
 
@@ -81,16 +84,11 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
         verdict = evaluate_session_goal(goal, result, session=session)
         if (
             verdict.status != SessionGoalStatus.ACHIEVED
-            or verdict.reason != "achieved with tool evidence"
+            or verdict.reason != SessionGoalReason.ACHIEVED_TOOL_EVIDENCE
         ):
             return verdict.status
 
-        reply = ""
-        text = getattr(result, "assistant_response_text", None)
-        if isinstance(text, str):
-            reply = text
-        elif hasattr(result, "primary_response_text"):
-            reply = str(result.primary_response_text or "")
+        reply = session_goal_reply_text(result)
 
         confirmed = _llm_confirms_achieved(llm, condition=goal.condition, reply=reply)
         if confirmed is True:
@@ -99,9 +97,9 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
         # Structured evaluate may already have attached ACHIEVED on ``session``;
         # overwrite status so the outer loop's session reread cannot defeat this.
         reason = (
-            "LLM confirm: not reached"
+            SessionGoalReason.LLM_CONFIRM_NOT_REACHED
             if confirmed is False
-            else "LLM confirm unavailable; staying active"
+            else SessionGoalReason.LLM_CONFIRM_UNAVAILABLE
         )
         if session is not None:
             stored = getattr(session, "session_goal", None)
@@ -115,4 +113,7 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
     return _evaluate
 
 
-__all__ = ["build_session_goal_llm_evaluator"]
+__all__ = [
+    "SessionGoalConfirmVerdict",
+    "build_session_goal_llm_evaluator",
+]

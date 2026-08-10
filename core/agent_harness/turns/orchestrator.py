@@ -60,8 +60,10 @@ from core.agent_harness.turns.evidence_need import (
     EvidenceNeed,
     classify_evidence_need,
     handoff_tag_for,
+    reclassify_evidence_need_after_gather,
     should_skip_gather,
 )
+from core.agent_harness.turns.handoff_keys import HandoffTag
 from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
@@ -309,8 +311,12 @@ def _gather_and_answer(
     handoff_requires_gather: bool = True,
     output: OutputSink | None = None,
     evidence_need: EvidenceNeed | None = None,
-) -> tuple[Any | None, str | None] | None:
-    """Run gather+answer, or ``None`` when the host cancelled mid-path."""
+) -> tuple[Any | None, str | None, EvidenceNeed | None] | None:
+    """Run gather+answer, or ``None`` when the host cancelled mid-path.
+
+    Returns ``(run, observation, evidence_need)``. ``evidence_need`` may flip
+    from L1 to L0_degraded after gather when preferred-source auth/config fails.
+    """
     # Three cases skip the live gather loop:
     # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
     #    own tool work already produced what the reply needs, and a fresh sweep
@@ -325,7 +331,8 @@ def _gather_and_answer(
     #    so a clock must not override it and answer with current conditions
     #    instead of what happened.
     # 3. Metric/read asks whose authoritative source is missing
-    #    (``L0_degraded``): gather would only thrash empty MCP discovery.
+    #    (``L0_degraded`` missing_source): gather would only thrash empty MCP
+    #    discovery. Config-failure L0 is decided *after* gather.
     if host_cancel_requested(output):
         return None
     skip_for_evidence = evidence_need is not None and should_skip_gather(evidence_need)
@@ -349,6 +356,26 @@ def _gather_and_answer(
             reason = "follow_up handoff with prior investigation state"
         log.debug("gather skipped: %s", reason)
 
+    # L1 → L0_degraded when gather observation shows preferred-source config/auth
+    # failure (not HogQL / empty-result noise). Refresh the handoff tag so the
+    # answer path gets reconnect guidance.
+    answer_handoffs = handoff_contents
+    if evidence_need is not None and not skip_gather:
+        prior = evidence_need
+        evidence_need = reclassify_evidence_need_after_gather(evidence_need, gathered)
+        if evidence_need is not prior:
+            tier_tag = handoff_tag_for(evidence_need)
+            if tier_tag is not None and tier_tag not in answer_handoffs:
+                # Drop a stale L1-era absence of L0 tag; replace any prior
+                # evidence_tier:L0_degraded:* with the config-failure tag.
+                answer_handoffs = tuple(
+                    tag
+                    for tag in answer_handoffs
+                    if not str(tag).startswith(f"{HandoffTag.EVIDENCE_TIER}:")
+                )
+                answer_handoffs = (*answer_handoffs, tier_tag)
+                log.debug("evidence reclassified after gather: %s", tier_tag)
+
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
     # Defer Want-me-to paint only when the gather closer rewrite will flush it.
@@ -360,14 +387,14 @@ def _gather_and_answer(
         AnswerRequest(
             tool_observation=observation,
             tool_observation_on_screen=observation is None,
-            handoff_contents=handoff_contents,
+            handoff_contents=answer_handoffs,
             turn_plan=turn_plan,
             defer_want_me_to_closer=not skip_gather,
         ),
     )
     if host_cancel_requested(output):
         return None
-    return run, observation
+    return run, observation, evidence_need
 
 
 def run_turn(
@@ -554,7 +581,9 @@ def run_turn(
                 )
             if gathered_outcome is None:
                 return _cancelled_turn_result(accounting, action_result)
-            run, gathered = gathered_outcome
+            run, gathered, updated_need = gathered_outcome
+            if updated_need is not None:
+                evidence_need = updated_need
             outcome = _RouteOutcome(
                 final_intent="cli_agent_fallback",
                 response_text=_response_text(run),

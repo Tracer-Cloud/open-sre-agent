@@ -29,8 +29,9 @@ import logging
 from dataclasses import dataclass, field
 
 from core.agent.goals import Goal, GoalObservation
+from core.agent_harness.closed_llm_verdict import invoke_closed_goal_verdict
 from core.events import RuntimeEvent, RuntimeEventCallback, ToolExecutionEndEvent
-from core.llm.types import AgentLLMClient, AgentLLMResponse
+from core.llm.types import AgentLLMClient
 
 log = logging.getLogger(__name__)
 
@@ -54,13 +55,12 @@ _SKIP_REVIEW_TOOL_NAMES = frozenset(
 
 _REVIEW_SYSTEM_PROMPT = (
     "You review whether an agent completed the user's goal this turn.\n"
-    "Reply with exactly one word: GOAL_REACHED or NOT_REACHED.\n"
-    "Reply NOT_REACHED only when the goal clearly required actions the agent "
-    "did not take — e.g. the user asked to change, create, or remove something "
-    "and the agent only looked it up.\n"
+    "Return JSON only. Set verdict to NOT_REACHED only when the goal clearly "
+    "required actions the agent did not take — e.g. the user asked to change, "
+    "create, or remove something and the agent only looked it up.\n"
     "An honest report of findings, an answer to a question, or a statement "
     "that there is nothing to act on all count as GOAL_REACHED. "
-    "When in doubt, reply GOAL_REACHED."
+    "When in doubt, set verdict to GOAL_REACHED."
 )
 
 _GOAL_SUCCESS_CRITERIA = (
@@ -70,14 +70,13 @@ _GOAL_SUCCESS_CRITERIA = (
 _GATHER_REVIEW_SYSTEM_PROMPT = (
     "You review whether an evidence-gathering agent fetched the data needed to "
     "answer the user's question this turn.\n"
-    "Reply with exactly one word: GOAL_REACHED or NOT_REACHED.\n"
-    "Reply NOT_REACHED when the agent stopped at discovery or setup — e.g. it "
-    "only listed available tools, fetched schemas, or described the query it "
-    "would run — without executing that query and reporting the resulting "
-    "data.\n"
+    "Return JSON only. Set verdict to NOT_REACHED when the agent stopped at "
+    "discovery or setup — e.g. it only listed available tools, fetched schemas, "
+    "or described the query it would run — without executing that query and "
+    "reporting the resulting data.\n"
     "A reply containing the requested data, or a clear statement that the "
     "connected data sources cannot provide it, counts as GOAL_REACHED. "
-    "When in doubt, reply GOAL_REACHED."
+    "When in doubt, set verdict to GOAL_REACHED."
 )
 
 _GATHER_SUCCESS_CRITERIA = (
@@ -131,16 +130,16 @@ class _LLMGoalReviewer:
         if self.reviews_remaining <= 0:
             return True
         self.reviews_remaining -= 1
-        try:
-            response: AgentLLMResponse = self.llm.invoke(
-                [{"role": "user", "content": self._review_message(observation)}],
-                system=self.system_prompt,
-            )
-        except Exception:  # noqa: BLE001 - review is advisory; it must not fail the turn
-            log.debug("goal review LLM call failed; accepting conclusion", exc_info=True)
+        # Fail open on transport/parse errors — a broken reviewer must not
+        # force extra ReAct iterations.
+        verdict = invoke_closed_goal_verdict(
+            self.llm,
+            prompt=self._review_message(observation),
+            system=self.system_prompt,
+        )
+        if verdict is None:
             return True
-        verdict = (response.content or "").strip().upper()
-        return "NOT_REACHED" not in verdict
+        return verdict != "NOT_REACHED"
 
     def _review_message(self, observation: GoalObservation) -> str:
         final_text = (observation.final_text or "").strip() or "(empty)"

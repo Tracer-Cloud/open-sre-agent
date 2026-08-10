@@ -15,10 +15,14 @@ def test_quiet_noisy_third_party_loggers_hides_mcp_schema_warnings() -> None:
     try:
         quiet_noisy_third_party_loggers()
         assert mcp.level == logging.ERROR
-        assert client.level == logging.ERROR
+        # Bare ``client`` is filter-only — do not ERROR-floor the whole logger.
+        assert client.level == previous_client
         assert logging.getLogger("httpx").level == logging.WARNING
         # Bare ``client`` logger (mcp SDK) must drop the schema-cache miss.
         assert any(type(f).__name__ == "_DropMcpSchemaValidationNoise" for f in client.filters)
+        noise_filter = next(
+            f for f in client.filters if type(f).__name__ == "_DropMcpSchemaValidationNoise"
+        )
         record = logging.LogRecord(
             name="client",
             level=logging.WARNING,
@@ -28,7 +32,17 @@ def test_quiet_noisy_third_party_loggers_hides_mcp_schema_warnings() -> None:
             args=(),
             exc_info=None,
         )
-        assert not client.filters[0].filter(record)
+        assert not noise_filter.filter(record)
+        other = logging.LogRecord(
+            name="client",
+            level=logging.WARNING,
+            pathname=__file__,
+            lineno=1,
+            msg="unrelated client warning",
+            args=(),
+            exc_info=None,
+        )
+        assert noise_filter.filter(other)
     finally:
         mcp.setLevel(previous_mcp)
         client.setLevel(previous_client)

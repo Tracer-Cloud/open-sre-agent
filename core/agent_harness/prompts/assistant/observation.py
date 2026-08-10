@@ -5,7 +5,9 @@ from __future__ import annotations
 from core.agent_harness.prompts.assistant.text import HANDOFF_GUIDANCE
 
 # Prefix keys in ``HANDOFF_GUIDANCE`` (trailing ``:``) match any tag with that prefix.
+# Longer ``L0_degraded:config`` must precede ``L0_degraded`` so config tags win.
 _HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = (
+    "evidence_tier:L0_degraded:config",
     "evidence_tier:L0_degraded",
     "session_goal:",
     "database_query:",

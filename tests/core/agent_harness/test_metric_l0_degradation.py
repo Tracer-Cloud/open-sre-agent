@@ -125,6 +125,85 @@ def test_metric_ask_with_source_connected_still_gathers() -> None:
     assert gather_calls == [_WINDOWS_USERS_ASK]
 
 
+def test_connected_source_auth_failure_gathers_then_appends_reconnect_cta() -> None:
+    """L1 gather that hits config/auth failure must CTA without skipping gather."""
+    session = Session()
+    session.resolved_integrations_cache = {"posthog_mcp": {"url": "https://mcp.example"}}
+    gather_calls: list[str] = []
+    answer_handoffs: list[tuple[str, ...]] = []
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return (
+            "Tool: posthog_mcp execute-sql\n"
+            "Result: {'available': false, 'error': '401 Unauthorized — invalid api key'}"
+        )
+
+    def _answer(text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+        answer_handoffs.append(tuple(request.handoff_contents or ()))
+        return type(
+            "Run",
+            (),
+            {
+                "response_text": (
+                    "PostHog returned 401 — credentials look wrong. "
+                    "Draft HogQL once reconnect works."
+                )
+            },
+        )()
+
+    result = run_turn(
+        _WINDOWS_USERS_ASK,
+        session,
+        execute_actions=lambda *_a, **_k: _action_metric_handoff(),
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
+    )
+
+    assert gather_calls == [_WINDOWS_USERS_ASK]
+    text = (result.assistant_response_text or "").strip()
+    assert "/integrations setup posthog_mcp" in text
+    assert "credentials or configuration" in text
+    assert any(
+        any(tag.startswith("evidence_tier:L0_degraded:config:") for tag in tags)
+        for tags in answer_handoffs
+    )
+    offer = first_pending_offer(session)
+    assert isinstance(offer, PendingIntegrationSetupOffer)
+    assert offer.service_id == "posthog_mcp"
+    assert session.pending_investigation_offer is None
+
+
+def test_connected_source_hogql_failure_gathers_without_cta() -> None:
+    """Query/syntax failures stay L1 — honest answer, no reconnect CTA."""
+    session = Session()
+    session.resolved_integrations_cache = {"posthog_mcp": {"url": "https://mcp.example"}}
+    gather_calls: list[str] = []
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: posthog_mcp\nResult: HogQL syntax error near WHERE"
+
+    result = run_turn(
+        _WINDOWS_USERS_ASK,
+        session,
+        execute_actions=lambda *_a, **_k: _action_metric_handoff(),
+        gather=_gather,
+        answer=lambda *_a, **_k: type(
+            "Run",
+            (),
+            {"response_text": "The HogQL query failed; try a simpler property."},
+        )(),
+        accounting=DefaultTurnAccounting(session, _WINDOWS_USERS_ASK),
+    )
+
+    assert gather_calls == [_WINDOWS_USERS_ASK]
+    text = (result.assistant_response_text or "").strip()
+    assert "/integrations setup" not in text
+    assert first_pending_offer(session) is None
+
+
 def test_without_evidence_kind_handoff_does_not_skip_gather() -> None:
     """User prose alone must not trigger L0 skip — action must tag the kind."""
     session = Session()
