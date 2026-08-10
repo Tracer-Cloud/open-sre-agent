@@ -118,9 +118,12 @@ class BuzzOutputSink:
         final = truncate(text, MAX_MESSAGE_SIZE, suffix="…")
         if self._event_id and self._edit_final(final):
             logger.info("outbound channel=%s text=%r", self._channel_id, _log_preview(final))
+            # Release the id so the next outer-goal turn cannot overwrite this answer.
+            self._event_id = ""
             return
         if self._send_final(final):
             logger.info("outbound channel=%s text=%r", self._channel_id, _log_preview(final))
+            self._event_id = ""
 
     def _edit_final(self, text: str) -> bool:
         result = self._client.edit_message(event_id=self._event_id, content=text)

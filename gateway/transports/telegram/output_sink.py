@@ -102,10 +102,16 @@ class GatewayOutputSink:
         self._edit_preview(self._status_text)
 
     def _edit_preview(self, text: str) -> None:
-        if not self._message_id:
-            return
         preview = truncate(text or self._status_text, MAX_MESSAGE_SIZE, suffix="…")
         with self._lock:
+            if not self._message_id:
+                # Prior answer was finalized (goal continuation). Open a fresh
+                # placeholder instead of editing the finished message.
+                ok, _, message_id = self._client.send_message(self._chat_id, preview)
+                if ok:
+                    self._message_id = message_id
+                    self._last_edit = time.monotonic()
+                return
             ok, _ = self._client.edit_message_text(self._chat_id, self._message_id, preview)
             if ok:
                 self._last_edit = time.monotonic()
@@ -118,9 +124,12 @@ class GatewayOutputSink:
         html_final = markdown_to_telegram_html(final)
         if self._message_id and self._edit_final(html_final, final):
             logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
+            # Release the id so the next outer turn cannot overwrite this answer.
+            self._message_id = ""
             return
         if self._send_final(html_final, final):
             logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
+            self._message_id = ""
 
     def _edit_final(self, html_text: str, plain_text: str) -> bool:
         # Render the answer's Markdown as Telegram HTML, falling back to plain text

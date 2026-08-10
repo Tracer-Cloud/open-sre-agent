@@ -176,3 +176,86 @@ def test_render_error_strips_raw_exception_detail() -> None:
     assert "sk-DO-NOT-LEAK" not in finalized
     assert "db-host" not in finalized
     assert "Something went wrong" in finalized
+
+
+def test_goal_continuation_keeps_both_streamed_answers() -> None:
+    """After finalize, a later outer-turn stream must not overwrite the first answer.
+
+    ``run_until_session_goal`` reuses one sink. Editing the same Telegram
+    message_id would replace step one with step two; continuation must send a
+    new message so both turns remain visible.
+    """
+    client = MagicMock(spec=TelegramBotClient)
+    client.send_message.side_effect = [
+        (True, "", "1"),  # initial placeholder
+        (True, "", "2"),  # continuation placeholder / answer
+    ]
+    client.edit_message_text.return_value = (True, "")
+    sink = GatewayOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+
+    first = sink.stream(label="assistant", chunks=["step one"])
+    second = sink.stream(label="assistant", chunks=["step two"])
+
+    assert first == "step one"
+    assert second == "step two"
+    # First answer edited into message 1; second turn must not keep editing 1.
+    edited_ids = [call.args[1] for call in client.edit_message_text.call_args_list]
+    assert "1" in edited_ids
+    # Continuation either edits a new id or lands as a fresh send.
+    assert "2" in edited_ids or client.send_message.call_count >= 2
+    # The first answer text must still be what message 1 last received.
+    edits_on_first = [
+        call.args[2] for call in client.edit_message_text.call_args_list if call.args[1] == "1"
+    ]
+    assert any("step one" in text for text in edits_on_first)
+    assert not any("step two" in text for text in edits_on_first)
+
+
+def test_finalize_after_finished_turn_sends_a_new_message() -> None:
+    """A finalize-only continuation must not overwrite the prior answer in place."""
+    client = MagicMock(spec=TelegramBotClient)
+    client.send_message.side_effect = [
+        (True, "", "1"),
+        (True, "", "2"),
+    ]
+    client.edit_message_text.return_value = (True, "")
+    sink = GatewayOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+
+    sink.finalize("step one")
+    sink.finalize("step two from finalize")
+
+    edits_on_first = [
+        call.args[2] for call in client.edit_message_text.call_args_list if call.args[1] == "1"
+    ]
+    assert any("step one" in text for text in edits_on_first)
+    assert not any("step two from finalize" in text for text in edits_on_first)
+    # Second answer arrives via a new send (or edit of a new id).
+    sent_texts = [call.args[1] for call in client.send_message.call_args_list]
+    assert any("step two from finalize" in text for text in sent_texts) or any(
+        call.args[1] == "2" and "step two from finalize" in call.args[2]
+        for call in client.edit_message_text.call_args_list
+    )
+
+
+def test_a_second_goal_turn_posts_a_new_message_instead_of_overwriting() -> None:
+    """Outer goal continuation runs several turns through one sink.
+
+    The first answer replaces the placeholder by editing it. A later turn must
+    not edit that same message — doing so overwrites the answer the user has
+    already read, so a five-step goal ends up showing only step five.
+    """
+    # Arrange.
+    client = MagicMock(spec=TelegramBotClient)
+    client.send_message.return_value = (True, "", "1")
+    client.edit_message_text.return_value = (True, "")
+    sink = GatewayOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+
+    # Act: two turns of one continued goal.
+    sink.finalize("turn one answer")
+    client.send_message.reset_mock()
+    sink.finalize("turn two answer")
+
+    # Assert: the second turn was delivered as its own message.
+    assert client.send_message.called, "second goal turn overwrote the first answer"
+    posted = client.send_message.call_args.args[1]
+    assert "turn two answer" in posted
