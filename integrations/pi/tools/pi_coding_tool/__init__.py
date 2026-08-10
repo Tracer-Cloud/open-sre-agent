@@ -14,7 +14,7 @@ Package layout (separation of concerns):
 This is the first **mutating** agent-callable tool, so it is deliberately gated,
 mirroring how ``execute_python_code`` is gated by availability:
 
-- ``side_effect_level = "mutating"``.
+- ``side_effect_level = SideEffectLevel.MUTATING``.
 - ``is_available`` returns True only when ``PI_CODING_ENABLED`` is set, so it is
   never offered to the agent unless the operator opts in.
 - ``surfaces = ("investigation",)`` — the surface the REPL assistant tool loop and

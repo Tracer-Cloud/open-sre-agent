@@ -124,23 +124,21 @@ def test_evidence_type_rejects_unknown() -> None:
         ToolMetadata.model_validate(_valid_kwargs(evidence_type="profiling"))
 
 
-def _run_mypy_snippet(code: str) -> tuple[int, str]:
-    """Helper to run mypy.api.run on a Python code snippet in a temporary file."""
-    import os
+def _run_mypy_snippet(code: str) -> str:
+    """Helper to run mypy.api.run on a Python code snippet in an isolated temporary directory."""
     import tempfile
+    from pathlib import Path
 
-    from mypy import api
+    api = pytest.importorskip("mypy.api")
 
-    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-        f.write(code)
-        f_path = f.name
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        snippet_file = tmp_path / "snippet.py"
+        cache_dir = tmp_path / ".mypy_cache"
+        snippet_file.write_text(code, encoding="utf-8")
 
-    try:
-        stdout, _stderr, exit_code = api.run([f_path])
-        return exit_code, stdout
-    finally:
-        if os.path.exists(f_path):
-            os.remove(f_path)
+        stdout, _stderr, _exit_code = api.run([str(snippet_file), "--cache-dir", str(cache_dir)])
+        return stdout
 
 
 def test_static_typechecking_rejects_side_effect_level_typos() -> None:
@@ -150,9 +148,8 @@ def test_static_typechecking_rejects_side_effect_level_typos() -> None:
 class Tool(BaseTool):
     side_effect_level = "reed_only"
 """
-    exit_code, stdout = _run_mypy_snippet(code)
-    assert exit_code != 0, f"Expected mypy typecheck to fail, but it succeeded:\n{stdout}"
-    assert "Incompatible types in assignment" in stdout
+    stdout = _run_mypy_snippet(code)
+    assert "Incompatible types in assignment" in stdout, stdout
 
 
 def test_static_typechecking_rejects_evidence_type_typos() -> None:
@@ -162,16 +159,16 @@ def test_static_typechecking_rejects_evidence_type_typos() -> None:
 class Tool(BaseTool):
     evidence_type = "metricz"
 """
-    exit_code, stdout = _run_mypy_snippet(code)
-    assert exit_code != 0, f"Expected mypy typecheck to fail, but it succeeded:\n{stdout}"
-    assert "Incompatible types in assignment" in stdout
+    stdout = _run_mypy_snippet(code)
+    assert "Incompatible types in assignment" in stdout, stdout
 
 
 @pytest.mark.xfail(
+    strict=True,
     reason=(
         "Blocked on Phase B: BaseTool.surfaces is ClassVar[tuple[ToolSurface | str, ...]] "
         "until Phase B migrates tool surface declarations to ToolSurface enums."
-    )
+    ),
 )
 def test_static_typechecking_rejects_surfaces_typos() -> None:
     """Verify static typechecking for surfaces typos.
@@ -183,8 +180,5 @@ def test_static_typechecking_rejects_surfaces_typos() -> None:
 class Tool(BaseTool):
     surfaces = ("investigaton",)
 """
-    exit_code, stdout = _run_mypy_snippet(code)
-    assert exit_code != 0, (
-        f"Expected mypy typecheck to fail for surfaces typo, but it succeeded:\n{stdout}"
-    )
-    assert "Incompatible types in assignment" in stdout
+    stdout = _run_mypy_snippet(code)
+    assert "Incompatible types in assignment" in stdout, stdout
