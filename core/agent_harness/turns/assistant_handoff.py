@@ -75,6 +75,11 @@ class AssistantHandoff:
         max_turns = _session_goal_max_turns(handoff_input.get(HandoffField.SESSION_GOAL_MAX_TURNS))
 
         items = _session_goal_items_from_value(handoff_input.get(HandoffField.SESSION_GOAL_ITEMS))
+        # A checklist is only meaningful under a goal, so items imply attach.
+        # Otherwise a planner that sends items without the flag leaves a
+        # half-state the host must guess at.
+        if session_goal is None and items:
+            session_goal = True
         if not items and content:
             buried = find_tag_suffix(content, HandoffField.SESSION_GOAL_ITEM)
             if buried:

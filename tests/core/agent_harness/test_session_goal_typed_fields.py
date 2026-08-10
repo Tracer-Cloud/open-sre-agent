@@ -56,3 +56,18 @@ def test_a_goal_is_not_attached_when_the_planner_says_no() -> None:
 
     assert handoff.session_goal is False
     assert session_goal_from_handoffs(handoff.to_handoff_contents(), condition="x") is None
+
+
+def test_a_checklist_implies_the_goal_is_attached() -> None:
+    """Items without the flag is a half-state; the model should not be able to make one.
+
+    Observed live: the planner emitted ``session_goal_items`` for a five-step
+    checklist and omitted ``session_goal``. A checklist only means anything
+    under a goal, so attach is derived rather than separately required.
+    """
+    handoff = AssistantHandoff.from_tool_input(
+        {"content": "Walk it.", "session_goal_items": ["one", "two"]}
+    )
+
+    assert handoff.session_goal is True
+    assert handoff.session_goal_items == ("one", "two")
