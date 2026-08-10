@@ -250,6 +250,12 @@ def test_successful_result_values_are_not_read_as_config_failures() -> None:
     named = 'Tool: posthog_mcp -> rows: [["forbidden-city-campaign", 12]]'
     assert _preferred_sources_with_config_failure(named, sources) == ()
 
+    # ...or "unauthorized" as a cohort / feature-flag name.
+    cohort = 'Tool: posthog_mcp -> rows: [["unauthorized-users-cohort", 87]]'
+    assert _preferred_sources_with_config_failure(cohort, sources) == ()
+    flag = 'Tool: posthog_mcp -> [["flag: unauthorized_banner", 12]]'
+    assert _preferred_sources_with_config_failure(flag, sources) == ()
+
 
 def test_a_real_auth_failure_is_still_detected() -> None:
     """Tightening the markers must not blind the detector to genuine failures."""
@@ -261,5 +267,7 @@ def test_a_real_auth_failure_is_still_detected() -> None:
         "Tool: posthog_mcp -> HTTP 403 Forbidden",
         "Tool: posthog_mcp -> posthog is not configured",
         "Tool: posthog_mcp -> authentication failed",
+        'Tool: posthog_mcp -> {"error": "unauthorized"}',
+        "Tool: posthog_mcp -> error: unauthorized",
     ):
         assert _preferred_sources_with_config_failure(observation, sources) == sources, observation
