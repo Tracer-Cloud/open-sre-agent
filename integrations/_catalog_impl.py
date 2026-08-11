@@ -260,8 +260,10 @@ from integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     INTEGRATION_SPECS_BY_SERVICE,
     SKIP_CLASSIFIED_SERVICES,
+    builtin_claimed_keys,
     external_integration_services,
     family_key,
+    normalize_service_key,
     service_key,
 )
 from integrations.rocketchat import classify as _classify_rocketchat
@@ -478,9 +480,31 @@ _EXTERNAL_ENV_LOADERS: dict[str, Any] = {}
 _EXTERNAL_ENV_PRESENCE: dict[str, Callable[[], bool]] = {}
 
 
+def _external_hook_key(service: str, *, hook: str) -> str:
+    """Return the key *hook* may be stored under, or raise if it is not allowed.
+
+    ``register_integration_spec`` already refuses built-in keys, but each hook
+    below can be called on its own, and a loader registered under ``github``
+    would emit a record that outranks the real one during the merge.
+
+    Normalized for the same reason the registry normalizes: every lookup here is
+    by a stripped, lower-cased key, so storing ``"GitHub"`` verbatim would both
+    slip past this check and register under a name nothing ever queries.
+    """
+    key = normalize_service_key(service)
+    if not key:
+        raise ValueError(f"Cannot register {hook} without a service name.")
+    if key in builtin_claimed_keys():
+        raise ValueError(
+            f"Cannot register {hook} for {service!r}: a built-in integration already "
+            "answers to that key."
+        )
+    return key
+
+
 def register_classifier(service: str, classify: _ClassifyFn) -> None:
     """Register the classifier for an integration shipped outside this repo."""
-    _EXTERNAL_CLASSIFIERS[service] = classify
+    _EXTERNAL_CLASSIFIERS[_external_hook_key(service, hook="a classifier")] = classify
 
 
 def register_env_loader(service: str, loader: Any) -> None:
@@ -488,9 +512,11 @@ def register_env_loader(service: str, loader: Any) -> None:
 
     The loader is called with no arguments during ``load_env_integrations`` and
     returns a record in the same shape ``_active_env_record`` produces, or None
-    when the integration is not configured in the environment.
+    when the integration is not configured in the environment. The record must
+    be for *service*: one naming a different integration is dropped, since the
+    merge that follows lets a later record replace an earlier one by service.
     """
-    _EXTERNAL_ENV_LOADERS[service] = loader
+    _EXTERNAL_ENV_LOADERS[_external_hook_key(service, hook="an environment loader")] = loader
 
 
 def register_env_presence(service: str, is_configured: Callable[[], bool]) -> None:
@@ -502,7 +528,7 @@ def register_env_presence(service: str, is_configured: Callable[[], bool]) -> No
     invisible to the welcome, REPL and health surfaces even though verification
     and tool resolution both see it.
     """
-    _EXTERNAL_ENV_PRESENCE[service] = is_configured
+    _EXTERNAL_ENV_PRESENCE[_external_hook_key(service, hook="a presence check")] = is_configured
 
 
 def external_env_presence_services() -> list[str]:
@@ -1880,8 +1906,20 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration=service)
         else:
-            if record:
-                integrations.append(record)
+            if not record:
+                continue
+            emitted = normalize_service_key(str(record.get("service", service)))
+            if emitted != service:
+                # The merge below replaces an earlier record with a later one of
+                # the same service, so an emitted name other than the registered
+                # one would let this loader stand in for another integration.
+                logger.warning(
+                    "load_env_integrations: loader registered for %r emitted %r; dropping it",
+                    service,
+                    emitted,
+                )
+                continue
+            integrations.append(record)
 
     return integrations
 

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, replace
 from typing import Any
 
 
@@ -449,6 +450,22 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
 #: can add itself without the module literal having to know about it.
 _EXTERNAL_SPECS: list[IntegrationSpec] = []
 
+#: Serialises registration so two plugins importing concurrently cannot
+#: interleave the conflict check with the table rebuild. Mirrors the lock
+#: ``tools.registry`` takes around external tool-package registration.
+_REGISTRATION_LOCK = threading.Lock()
+
+
+def normalize_service_key(key: str) -> str:
+    """Return *key* in the form the lookups are read with.
+
+    ``service_key`` and the classification path both lower-case and strip before
+    looking a service up, so a spec registered as ``"GitHub"`` would be stored
+    under a key nothing ever queries - and would slip past a conflict check that
+    compared raw strings.
+    """
+    return key.strip().lower()
+
 
 def _builtin_claimed_keys() -> frozenset[str]:
     """Return every key the built-in specs answer to.
@@ -459,9 +476,9 @@ def _builtin_claimed_keys() -> frozenset[str]:
     """
     claimed: set[str] = set()
     for spec in _BUILTIN_SPECS:
-        claimed.add(spec.service)
-        claimed.update(spec.aliases)
-        claimed.update(spec.family_members)
+        claimed.add(normalize_service_key(spec.service))
+        claimed.update(normalize_service_key(alias) for alias in spec.aliases)
+        claimed.update(normalize_service_key(member) for member in spec.family_members)
     return frozenset(claimed)
 
 
@@ -487,6 +504,27 @@ SUPPORTED_SETUP_SERVICES: list[str] = []
 CORE_VERIFY_SERVICES: set[str] = set()
 
 
+def _refill_mapping(target: dict[Any, Any], source: dict[Any, Any]) -> None:
+    """Make *target* match *source* without it ever going empty.
+
+    Clearing first leaves a window where a concurrent reader sees nothing:
+    ``service_key`` falls back to the identity on a miss, so an alias would
+    quietly resolve to itself and route to the wrong integration. Writing the
+    new entries before dropping the departed ones keeps every surviving key
+    continuously present.
+    """
+    target.update(source)
+    for key in [key for key in target if key not in source]:
+        del target[key]
+
+
+def _refill_set(target: set[Any], source: set[Any]) -> None:
+    """Make *target* match *source* without it ever going empty."""
+    target.update(source)
+    for item in list(target - source):
+        target.discard(item)
+
+
 def _rebuild_registry() -> None:
     """Recompute every lookup derived from the spec list.
 
@@ -505,8 +543,7 @@ def _rebuild_registry() -> None:
     # over a shipped integration's setup, verification and classification.
     by_precedence = (*_EXTERNAL_SPECS, *_BUILTIN_SPECS)
 
-    INTEGRATION_SPECS_BY_SERVICE.clear()
-    INTEGRATION_SPECS_BY_SERVICE.update({spec.service: spec for spec in by_precedence})
+    _refill_mapping(INTEGRATION_SPECS_BY_SERVICE, {spec.service: spec for spec in by_precedence})
 
     service_keys: dict[str, str] = {spec.service: spec.service for spec in by_precedence}
     for spec in by_precedence:
@@ -514,12 +551,11 @@ def _rebuild_registry() -> None:
             service_keys[alias] = spec.service
     for spec in _BUILTIN_SPECS:
         service_keys[spec.service] = spec.service
-    SERVICE_KEY_MAP.clear()
-    SERVICE_KEY_MAP.update(service_keys)
+    _refill_mapping(SERVICE_KEY_MAP, service_keys)
 
-    SKIP_CLASSIFIED_SERVICES.clear()
-    SKIP_CLASSIFIED_SERVICES.update(
-        spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
+    _refill_set(
+        SKIP_CLASSIFIED_SERVICES,
+        {spec.service for spec in INTEGRATION_SPECS if spec.skip_classification},
     )
 
     families: dict[str, str] = {spec.service: spec.service for spec in by_precedence}
@@ -528,8 +564,7 @@ def _rebuild_registry() -> None:
             families[member] = spec.service
     for spec in _BUILTIN_SPECS:
         families[spec.service] = spec.service
-    SERVICE_FAMILY_MAP.clear()
-    SERVICE_FAMILY_MAP.update(families)
+    _refill_mapping(SERVICE_FAMILY_MAP, families)
 
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES[:] = [
         spec.service for spec in INTEGRATION_SPECS if spec.direct_effective
@@ -555,8 +590,9 @@ def _rebuild_registry() -> None:
         )
     ]
 
-    CORE_VERIFY_SERVICES.clear()
-    CORE_VERIFY_SERVICES.update(spec.service for spec in INTEGRATION_SPECS if spec.core_verify)
+    _refill_set(
+        CORE_VERIFY_SERVICES, {spec.service for spec in INTEGRATION_SPECS if spec.core_verify}
+    )
 
 
 def register_integration_spec(spec: IntegrationSpec) -> None:
@@ -568,24 +604,61 @@ def register_integration_spec(spec: IntegrationSpec) -> None:
     does not accumulate duplicates.
 
     Raises ``ValueError`` when the spec claims a service name, alias or family
-    member that a built-in integration already answers to. Those keys index the
-    derived lookups, so accepting one would quietly point setup, verification,
-    classification or family bucketing at the plugin instead of the shipped
-    integration. Refusing at registration makes it a plugin bug with a clear
-    message rather than a misrouted investigation later.
+    member that another integration already answers to - built-in or a plugin
+    registered earlier. Those keys index the derived lookups, so accepting one
+    would quietly point setup, verification, classification or family bucketing
+    at the wrong integration. Refusing at registration makes it a plugin bug with
+    a clear message rather than a misrouted investigation later.
+
+    Two packages installed together are the case worth naming: whichever
+    imported last would otherwise win every key they share, and nothing would
+    report it.
     """
-    claimed = {spec.service, *spec.aliases, *spec.family_members}
+    service = normalize_service_key(spec.service)
+    if not service:
+        raise ValueError("An integration spec needs a non-empty service name.")
+
+    aliases = tuple(normalize_service_key(alias) for alias in spec.aliases)
+    family_members = tuple(normalize_service_key(member) for member in spec.family_members)
+    if not all(aliases) or not all(family_members):
+        raise ValueError(
+            f"Integration {service!r} has an empty alias or family member. Every key has "
+            "to be a name something can be looked up by."
+        )
+
+    # Stored normalized, so the tables only ever hold keys in the form the
+    # readers query with.
+    normalized = replace(spec, service=service, aliases=aliases, family_members=family_members)
+    claimed = {service, *aliases, *family_members}
+
     conflicts = sorted(claimed & _BUILTIN_CLAIMED_KEYS)
     if conflicts:
         raise ValueError(
-            f"Integration {spec.service!r} cannot claim {conflicts}: already used by a "
+            f"Integration {service!r} cannot claim {conflicts}: already used by a "
             "built-in integration as a service name, alias or family member. Pick keys "
             "unique to this integration."
         )
 
-    _EXTERNAL_SPECS[:] = [entry for entry in _EXTERNAL_SPECS if entry.service != spec.service]
-    _EXTERNAL_SPECS.append(spec)
-    _rebuild_registry()
+    with _REGISTRATION_LOCK:
+        # Re-registering the same service replaces its entry, so its own keys are
+        # not a conflict with itself.
+        others = [entry for entry in _EXTERNAL_SPECS if entry.service != service]
+        owner_by_key: dict[str, str] = {}
+        for entry in others:
+            for key in (entry.service, *entry.aliases, *entry.family_members):
+                owner_by_key.setdefault(key, entry.service)
+
+        taken = sorted(claimed & owner_by_key.keys())
+        if taken:
+            owners = ", ".join(f"{key!r} (registered by {owner_by_key[key]!r})" for key in taken)
+            raise ValueError(
+                f"Integration {service!r} cannot claim {owners}: another registered "
+                "integration already answers to those keys. Pick keys unique to this "
+                "integration."
+            )
+
+        _EXTERNAL_SPECS[:] = [*others, normalized]
+        _rebuild_registry()
 
 
 def external_integration_services() -> set[str]:
@@ -595,6 +668,16 @@ def external_integration_services() -> set[str]:
     to avoid discarding a plugin's service as unrecognised.
     """
     return {spec.service for spec in _EXTERNAL_SPECS}
+
+
+def builtin_claimed_keys() -> frozenset[str]:
+    """Return every key a built-in integration answers to.
+
+    Other registration hooks validate against this so a plugin cannot attach
+    itself to a shipped integration's key by a route that does not go through
+    :func:`register_integration_spec`.
+    """
+    return _BUILTIN_CLAIMED_KEYS
 
 
 _rebuild_registry()

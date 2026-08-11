@@ -225,3 +225,167 @@ def test_built_in_lookups_still_resolve_after_a_registration(registered_integrat
 
     assert service_key("github_mcp") == "github"
     assert family_key("grafana_local") == "grafana"
+
+
+@pytest.fixture
+def first_plugin() -> Iterator[str]:
+    """Register one external integration so a second one can collide with it."""
+    register_integration_spec(
+        IntegrationSpec(
+            service="plugin_a", aliases=("shared_alias",), family_members=("shared_kid",)
+        )
+    )
+
+    yield "plugin_a"
+
+    registry._EXTERNAL_SPECS[:] = [
+        spec for spec in registry._EXTERNAL_SPECS if spec.service != "plugin_a"
+    ]
+    registry._rebuild_registry()
+
+
+@pytest.mark.parametrize(
+    ("label", "spec"),
+    [
+        ("alias", IntegrationSpec(service="plugin_b", aliases=("shared_alias",))),
+        ("family member", IntegrationSpec(service="plugin_c", family_members=("shared_kid",))),
+        ("alias over their service", IntegrationSpec(service="plugin_d", aliases=("plugin_a",))),
+        ("service over their alias", IntegrationSpec(service="shared_alias")),
+    ],
+)
+def test_a_spec_cannot_claim_another_plugins_key(
+    first_plugin: str, label: str, spec: IntegrationSpec
+) -> None:
+    """Two plugins installed together must not silently fight over a key.
+
+    Whichever imported last would otherwise win, with nothing reporting it.
+    """
+    with pytest.raises(ValueError, match="another registered integration"):
+        register_integration_spec(spec)
+
+
+def test_re_registering_the_same_service_still_replaces_it(first_plugin: str) -> None:
+    """A reload re-registers the same spec; its own keys are not a self-conflict."""
+    from integrations.registry import service_key
+
+    register_integration_spec(
+        IntegrationSpec(service=first_plugin, aliases=("shared_alias",), setup_order=5)
+    )
+
+    assert service_key("shared_alias") == first_plugin
+    assert registry.INTEGRATION_SPECS_BY_SERVICE[first_plugin].setup_order == 5
+    assert [spec.service for spec in registry._EXTERNAL_SPECS].count(first_plugin) == 1
+
+
+@pytest.mark.parametrize(
+    ("hook", "register"),
+    [
+        ("classifier", lambda: register_classifier("github", _classify)),
+        ("env loader", lambda: register_env_loader("github", _env_record)),
+        ("presence check", lambda: register_env_presence("github", _is_configured)),
+    ],
+)
+def test_a_hook_cannot_attach_to_a_built_in_service(hook: str, register: Any) -> None:
+    """Each hook can be called without a spec, so each needs the same gate."""
+    with pytest.raises(ValueError, match="built-in integration"):
+        register()
+
+
+def test_an_env_loader_cannot_emit_another_integrations_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The merge replaces by service, so an impostor record would outrank the real one."""
+    monkeypatch.setenv("GITHUB_MCP_URL", "https://real.example")
+
+    def _impostor() -> dict[str, Any]:
+        return {
+            "service": "github",
+            "status": "active",
+            "source": "local env",
+            "config": {"url": "https://impostor.example"},
+        }
+
+    register_env_loader("acme_impostor", _impostor)
+    try:
+        github = [r for r in _catalog_impl.load_env_integrations() if r.get("service") == "github"]
+    finally:
+        _catalog_impl._EXTERNAL_ENV_LOADERS.pop("acme_impostor", None)
+
+    assert len(github) == 1
+    assert "impostor" not in str(github[0].get("config"))
+
+
+def test_the_cli_command_offers_a_registered_integration(
+    registered_with_setup_handler: list[str],
+) -> None:
+    """``click.Choice`` captured the service list when the decorator ran.
+
+    The command module is imported during CLI startup, before any plugin has
+    registered, so a captured list rejected the plugin with "is not one of"
+    before ``cmd_setup`` was reached.
+    """
+    import surfaces.cli.commands.integrations as integrations_group
+
+    setup_command = integrations_group.get_command(None, "setup")
+    assert setup_command is not None
+    assert SERVICE in list(setup_command.params[0].type.choices)
+
+
+def test_the_cli_command_still_rejects_an_unknown_service() -> None:
+    from click.testing import CliRunner
+
+    import surfaces.cli.commands.integrations as integrations_group
+
+    result = CliRunner().invoke(integrations_group, ["setup", "definitely_not_a_service"])
+
+    assert result.exit_code == 2
+
+
+@pytest.mark.parametrize("name", ["GitHub", " github", "github ", "GITHUB_MCP"])
+def test_a_built_in_key_is_claimed_whatever_the_casing(name: str) -> None:
+    """Readers strip and lower-case, so a raw string comparison would let these through."""
+    with pytest.raises(ValueError, match="built-in integration"):
+        register_integration_spec(IntegrationSpec(service=name, has_verifier=True))
+
+
+@pytest.mark.parametrize("name", ["", "   "])
+def test_a_spec_needs_a_service_name(name: str) -> None:
+    with pytest.raises(ValueError, match="non-empty service name"):
+        register_integration_spec(IntegrationSpec(service=name))
+
+
+def test_keys_are_stored_in_the_form_the_lookups_are_queried_with() -> None:
+    from integrations.registry import service_key
+
+    register_integration_spec(IntegrationSpec(service="  MixedCase  ", aliases=("Some Alias ",)))
+    try:
+        assert service_key("MIXEDCASE") == "mixedcase"
+        assert service_key("some alias") == "mixedcase"
+        assert "mixedcase" in registry.INTEGRATION_SPECS_BY_SERVICE
+    finally:
+        registry._EXTERNAL_SPECS[:] = [
+            spec for spec in registry._EXTERNAL_SPECS if spec.service != "mixedcase"
+        ]
+        registry._rebuild_registry()
+
+
+def test_a_rebuilt_table_never_drops_a_surviving_key() -> None:
+    """A reader must not catch the tables mid-rebuild.
+
+    ``service_key`` falls back to the identity on a miss, so a key that vanished
+    for an instant would resolve an alias to itself and route to the wrong
+    integration.
+    """
+    observed: list[bool] = []
+    table = {"keep": "keep", "drop": "drop"}
+
+    class _Watcher(dict[str, str]):
+        def __delitem__(self, key: str) -> None:
+            observed.append("keep" in self)
+            super().__delitem__(key)
+
+    watched = _Watcher(table)
+    registry._refill_mapping(watched, {"keep": "keep", "added": "added"})
+
+    assert all(observed), "a surviving key disappeared while the table was rebuilt"
+    assert watched == {"keep": "keep", "added": "added"}

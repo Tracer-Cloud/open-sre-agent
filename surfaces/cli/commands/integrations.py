@@ -11,11 +11,7 @@ from platform.analytics.cli import (
     capture_integration_verified,
     capture_integrations_listed,
 )
-from surfaces.cli.constants import (
-    MANAGED_INTEGRATION_SERVICES,
-    SETUP_SERVICES,
-    VERIFY_SERVICES,
-)
+from surfaces.cli import constants
 
 
 class IntegrationServiceChoice(click.Choice):
@@ -24,7 +20,22 @@ class IntegrationServiceChoice(click.Choice):
     Applies ``resolve_management_service`` before the enum check so management-only
     aliases (when defined) are accepted while keeping Click's friendly
     ``[[a|b|c]]`` usage/error display and shell completion.
+
+    The choices are read from :mod:`surfaces.cli.constants` on each access rather
+    than captured when the decorator runs. A plugin registers its integration
+    after this module is imported, and a list baked into the ``click.Command``
+    would reject it before ``cmd_setup`` ever saw it.
     """
+
+    def __init__(self, source: str) -> None:
+        # ``click.Choice.__init__`` only assigns ``choices`` and ``case_sensitive``;
+        # ``choices`` is a live property here, so set the other one directly.
+        self._source = source
+        self.case_sensitive = True
+
+    @property
+    def choices(self) -> tuple[str, ...]:  # type: ignore[override]
+        return tuple(getattr(constants, self._source))
 
     def convert(
         self,
@@ -46,7 +57,7 @@ def integrations() -> None:
 
 @integrations.command(name="setup")
 @click.argument(
-    "service", required=False, default=None, type=IntegrationServiceChoice(SETUP_SERVICES)
+    "service", required=False, default=None, type=IntegrationServiceChoice("SETUP_SERVICES")
 )
 def setup_integration(service: str | None) -> None:
     """Set up credentials for a service."""
@@ -57,7 +68,7 @@ def setup_integration(service: str | None) -> None:
     resolved_service = cmd_setup(service)
     capture_integration_setup_completed(resolved_service)
 
-    if resolved_service in VERIFY_SERVICES:
+    if resolved_service in constants.VERIFY_SERVICES:
         click.echo(f"  Verifying {resolved_service}...\n")
         exit_code = cmd_verify(resolved_service)
         if exit_code == 0:
@@ -75,7 +86,7 @@ def list_integrations() -> None:
 
 
 @integrations.command(name="show")
-@click.argument("service", type=IntegrationServiceChoice(MANAGED_INTEGRATION_SERVICES))
+@click.argument("service", type=IntegrationServiceChoice("MANAGED_INTEGRATION_SERVICES"))
 def show_integration(service: str) -> None:
     """Show details for a configured integration."""
     from integrations.cli import cmd_show
@@ -84,7 +95,7 @@ def show_integration(service: str) -> None:
 
 
 @integrations.command(name="remove")
-@click.argument("service", type=IntegrationServiceChoice(MANAGED_INTEGRATION_SERVICES))
+@click.argument("service", type=IntegrationServiceChoice("MANAGED_INTEGRATION_SERVICES"))
 def remove_integration(service: str) -> None:
     """Remove a configured integration."""
     from integrations.cli import cmd_remove
@@ -95,7 +106,7 @@ def remove_integration(service: str) -> None:
 
 @integrations.command(name="verify")
 @click.argument(
-    "service", required=False, default=None, type=IntegrationServiceChoice(VERIFY_SERVICES)
+    "service", required=False, default=None, type=IntegrationServiceChoice("VERIFY_SERVICES")
 )
 @click.option(
     "--send-slack-test", is_flag=True, help="Send a test message to the configured Slack webhook."
