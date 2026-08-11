@@ -1,0 +1,144 @@
+"""An out-of-tree integration has to survive the paths production actually uses.
+
+Each test here drives a public entry point rather than the structure beneath it.
+Asserting on ``EffectiveIntegrations`` or on ``registry.SUPPORTED_VERIFY_SERVICES``
+directly would pass even when the resolver drops the key and when every importing
+module is left holding a pre-registration snapshot.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
+
+from integrations import _catalog_impl, registry
+from integrations.catalog import (
+    load_env_integration_services,
+    register_classifier,
+    register_env_loader,
+    register_env_presence,
+    resolve_effective_integrations,
+)
+from integrations.registry import IntegrationSpec, register_integration_spec
+
+SERVICE = "acme_external"
+ENV_VAR = "ACME_EXTERNAL_API_KEY"
+
+
+def _classify(credentials: dict[str, Any], record_id: str) -> tuple[Any | None, str | None]:
+    return {"configured": True, "source": "local env"}, SERVICE
+
+
+def _env_record() -> dict[str, Any] | None:
+    if not os.getenv(ENV_VAR):
+        return None
+    return {
+        "service": SERVICE,
+        "status": "active",
+        "source": "local env",
+        "config": {"api_key": os.environ[ENV_VAR]},
+    }
+
+
+def _is_configured() -> bool:
+    return bool(os.getenv(ENV_VAR))
+
+
+@pytest.fixture
+def registered_integration(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """Register an external integration and remove it again afterwards.
+
+    Registration mutates module-level tables, so leaking one would change the
+    service lists every other test in the suite asserts against.
+    """
+    monkeypatch.setenv(ENV_VAR, "secret-value")
+
+    register_integration_spec(
+        IntegrationSpec(
+            service=SERVICE,
+            has_verifier=True,
+            setup_order=99,
+            direct_effective=True,
+        )
+    )
+    register_classifier(SERVICE, _classify)
+    register_env_loader(SERVICE, _env_record)
+    register_env_presence(SERVICE, _is_configured)
+
+    yield SERVICE
+
+    registry._EXTERNAL_SPECS[:] = [
+        spec for spec in registry._EXTERNAL_SPECS if spec.service != SERVICE
+    ]
+    registry._rebuild_registry()
+    _catalog_impl._EXTERNAL_CLASSIFIERS.pop(SERVICE, None)
+    _catalog_impl._EXTERNAL_ENV_LOADERS.pop(SERVICE, None)
+    _catalog_impl._EXTERNAL_ENV_PRESENCE.pop(SERVICE, None)
+
+
+def test_registration_reaches_a_module_that_imported_the_tables_earlier(
+    registered_integration: str,
+) -> None:
+    """``integrations.verify`` binds the service lists at import time.
+
+    It is imported long before a plugin registers, so a registration that
+    replaced the tables instead of updating them would never be seen here.
+    """
+    import integrations.verify as verify
+
+    assert registered_integration in verify.SUPPORTED_VERIFY_SERVICES
+
+
+def test_registration_reaches_a_second_hand_re_export(registered_integration: str) -> None:
+    """``integrations.app`` re-imports the list from ``integrations.verify``."""
+    import integrations.app as app
+
+    assert registered_integration in app.SUPPORTED_VERIFY_SERVICES
+
+
+def test_external_service_survives_effective_resolution(registered_integration: str) -> None:
+    """The resolver filters unknown keys before validating, so it must know this one."""
+    effective = resolve_effective_integrations(
+        store_integrations=[],
+        env_integrations=[_env_record() or {}],
+    )
+
+    assert registered_integration in effective
+
+
+def test_external_service_is_visible_to_the_startup_presence_check(
+    registered_integration: str,
+) -> None:
+    """The pre-prompt check is a separate list from the full environment loader."""
+    assert registered_integration in load_env_integration_services()
+
+
+def test_presence_check_stays_quiet_when_the_integration_is_unconfigured(
+    registered_integration: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(ENV_VAR, raising=False)
+
+    assert registered_integration not in load_env_integration_services()
+
+
+def test_a_failing_presence_predicate_does_not_break_startup(
+    registered_integration: str,
+) -> None:
+    """A plugin bug must degrade to "not configured", never to a failed launch."""
+
+    def _explode() -> bool:
+        raise RuntimeError("plugin is broken")
+
+    _catalog_impl._EXTERNAL_ENV_PRESENCE[registered_integration] = _explode
+
+    assert registered_integration not in load_env_integration_services()
+
+
+def test_built_in_integrations_are_unaffected(registered_integration: str) -> None:
+    import integrations.verify as verify
+
+    assert "github" in verify.SUPPORTED_VERIFY_SERVICES
+    assert len(verify.SUPPORTED_VERIFY_SERVICES) > 1

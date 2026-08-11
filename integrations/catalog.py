@@ -162,6 +162,8 @@ def load_env_integration_services() -> list[str]:
     add("mariadb", _all_env("MARIADB_HOST", "MARIADB_DATABASE"))
     add("opensearch", _env_is_set("OPENSEARCH_URL"))
 
+    services.extend(_catalog_impl.external_env_presence_services())
+
     return list(dict.fromkeys(services))
 
 
@@ -288,6 +290,13 @@ def configured_integration_health() -> list[tuple[str, str]]:
     return health
 
 
+# Re-exported so an out-of-tree integration registers through this facade
+# instead of reaching into the private implementation module.
+register_classifier = _catalog_impl.register_classifier
+register_env_loader = _catalog_impl.register_env_loader
+register_env_presence = _catalog_impl.register_env_presence
+
+
 __all__ = [
     "classify_integrations",
     "configured_integration_health",
@@ -297,5 +306,8 @@ __all__ = [
     "load_integrations",
     "merge_integrations_by_service",
     "merge_local_integrations",
+    "register_classifier",
+    "register_env_loader",
+    "register_env_presence",
     "resolve_effective_integrations",
 ]

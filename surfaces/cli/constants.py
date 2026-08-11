@@ -42,11 +42,11 @@ def __getattr__(name: str) -> tuple[str, ...]:
     if name == "SETUP_SERVICES":
         from integrations.registry import SUPPORTED_SETUP_SERVICES
 
-        return SUPPORTED_SETUP_SERVICES
+        return tuple(SUPPORTED_SETUP_SERVICES)
     if name == "VERIFY_SERVICES":
         from integrations.registry import SUPPORTED_VERIFY_SERVICES
 
-        return SUPPORTED_VERIFY_SERVICES
+        return tuple(SUPPORTED_VERIFY_SERVICES)
     if name == "MANAGED_INTEGRATION_SERVICES":
         from integrations.registry import (
             SUPPORTED_SETUP_SERVICES,

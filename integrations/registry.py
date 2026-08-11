@@ -450,41 +450,49 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
 _EXTERNAL_SPECS: list[IntegrationSpec] = []
 
 #: Every spec, built-in first so a plugin cannot shadow a shipped integration.
-INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = ()
+#:
+#: This and the tables below are filled by :func:`_rebuild_registry` and then
+#: updated **in place** on every later registration. That matters: readers use
+#: ``from integrations.registry import SUPPORTED_VERIFY_SERVICES``, which binds
+#: the object, not the name — rebinding here would leave every one of them
+#: holding the pre-registration snapshot. Mutating in place mirrors how
+#: ``tools.registry.register_external_tool_package`` extends its own list.
+INTEGRATION_SPECS: list[IntegrationSpec] = []
 
 INTEGRATION_SPECS_BY_SERVICE: dict[str, IntegrationSpec] = {}
 SERVICE_KEY_MAP: dict[str, str] = {}
-SKIP_CLASSIFIED_SERVICES: frozenset[str] = frozenset()
+SKIP_CLASSIFIED_SERVICES: set[str] = set()
 SERVICE_FAMILY_MAP: dict[str, str] = {}
-DIRECT_CLASSIFIED_EFFECTIVE_SERVICES: tuple[str, ...] = ()
-SUPPORTED_VERIFY_SERVICES: tuple[str, ...] = ()
-SUPPORTED_SETUP_SERVICES: tuple[str, ...] = ()
-CORE_VERIFY_SERVICES: frozenset[str] = frozenset()
+DIRECT_CLASSIFIED_EFFECTIVE_SERVICES: list[str] = []
+SUPPORTED_VERIFY_SERVICES: list[str] = []
+SUPPORTED_SETUP_SERVICES: list[str] = []
+CORE_VERIFY_SERVICES: set[str] = set()
 
 
 def _rebuild_registry() -> None:
     """Recompute every lookup derived from the spec list.
 
     The derived tables used to be computed once at import. A plugin registers
-    after import, so they are rebuilt on each registration instead. The module
-    names stay the same, which keeps every existing reader working unchanged.
+    after import, so they are rebuilt on each registration instead.
+
+    Every table is updated **in place**. Readers import these names directly,
+    which binds the object rather than the name, so replacing a table would
+    leave them on the snapshot taken before the plugin registered.
     """
-    global INTEGRATION_SPECS, INTEGRATION_SPECS_BY_SERVICE, SERVICE_KEY_MAP
-    global SKIP_CLASSIFIED_SERVICES, SERVICE_FAMILY_MAP
-    global DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, SUPPORTED_VERIFY_SERVICES
-    global SUPPORTED_SETUP_SERVICES, CORE_VERIFY_SERVICES
+    INTEGRATION_SPECS[:] = (*_BUILTIN_SPECS, *_EXTERNAL_SPECS)
 
-    INTEGRATION_SPECS = (*_BUILTIN_SPECS, *_EXTERNAL_SPECS)
-
-    INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}
+    INTEGRATION_SPECS_BY_SERVICE.clear()
+    INTEGRATION_SPECS_BY_SERVICE.update({spec.service: spec for spec in INTEGRATION_SPECS})
 
     service_keys: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
     for spec in INTEGRATION_SPECS:
         for alias in spec.aliases:
             service_keys[alias] = spec.service
-    SERVICE_KEY_MAP = service_keys
+    SERVICE_KEY_MAP.clear()
+    SERVICE_KEY_MAP.update(service_keys)
 
-    SKIP_CLASSIFIED_SERVICES = frozenset(
+    SKIP_CLASSIFIED_SERVICES.clear()
+    SKIP_CLASSIFIED_SERVICES.update(
         spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
     )
 
@@ -492,13 +500,14 @@ def _rebuild_registry() -> None:
     for spec in INTEGRATION_SPECS:
         for member in spec.family_members:
             families[member] = spec.service
-    SERVICE_FAMILY_MAP = families
+    SERVICE_FAMILY_MAP.clear()
+    SERVICE_FAMILY_MAP.update(families)
 
-    DIRECT_CLASSIFIED_EFFECTIVE_SERVICES = tuple(
+    DIRECT_CLASSIFIED_EFFECTIVE_SERVICES[:] = [
         spec.service for spec in INTEGRATION_SPECS if spec.direct_effective
-    )
+    ]
 
-    SUPPORTED_VERIFY_SERVICES = tuple(
+    SUPPORTED_VERIFY_SERVICES[:] = [
         spec.service
         for spec in sorted(
             (candidate for candidate in INTEGRATION_SPECS if candidate.has_verifier),
@@ -506,9 +515,9 @@ def _rebuild_registry() -> None:
                 candidate.verify_order if candidate.verify_order is not None else 10_000
             ),
         )
-    )
+    ]
 
-    SUPPORTED_SETUP_SERVICES = tuple(
+    SUPPORTED_SETUP_SERVICES[:] = [
         spec.service
         for spec in sorted(
             (candidate for candidate in INTEGRATION_SPECS if candidate.setup_order is not None),
@@ -516,9 +525,10 @@ def _rebuild_registry() -> None:
                 candidate.setup_order if candidate.setup_order is not None else 10_000
             ),
         )
-    )
+    ]
 
-    CORE_VERIFY_SERVICES = frozenset(spec.service for spec in INTEGRATION_SPECS if spec.core_verify)
+    CORE_VERIFY_SERVICES.clear()
+    CORE_VERIFY_SERVICES.update(spec.service for spec in INTEGRATION_SPECS if spec.core_verify)
 
 
 def register_integration_spec(spec: IntegrationSpec) -> None:
@@ -529,11 +539,18 @@ def register_integration_spec(spec: IntegrationSpec) -> None:
     Registering the same service twice replaces the earlier entry, so a reload
     does not accumulate duplicates.
     """
-    global _EXTERNAL_SPECS
-
-    _EXTERNAL_SPECS = [entry for entry in _EXTERNAL_SPECS if entry.service != spec.service]
+    _EXTERNAL_SPECS[:] = [entry for entry in _EXTERNAL_SPECS if entry.service != spec.service]
     _EXTERNAL_SPECS.append(spec)
     _rebuild_registry()
+
+
+def external_integration_services() -> set[str]:
+    """Return the services registered from outside this repository.
+
+    Callers that validate against a fixed set of known integrations need this
+    to avoid discarding a plugin's service as unrecognised.
+    """
+    return {spec.service for spec in _EXTERNAL_SPECS}
 
 
 _rebuild_registry()

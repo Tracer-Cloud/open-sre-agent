@@ -260,6 +260,7 @@ from integrations.registry import (
     DIRECT_CLASSIFIED_EFFECTIVE_SERVICES,
     INTEGRATION_SPECS_BY_SERVICE,
     SKIP_CLASSIFIED_SERVICES,
+    external_integration_services,
     family_key,
     service_key,
 )
@@ -472,6 +473,10 @@ _EXTERNAL_CLASSIFIERS: dict[str, _ClassifyFn] = {}
 #: returns an active record, or None when its variables are not set.
 _EXTERNAL_ENV_LOADERS: dict[str, Any] = {}
 
+#: Cheap "is this configured?" predicates for out-of-tree integrations, used by
+#: the startup-safe presence check that must not touch the keyring.
+_EXTERNAL_ENV_PRESENCE: dict[str, Callable[[], bool]] = {}
+
 
 def register_classifier(service: str, classify: _ClassifyFn) -> None:
     """Register the classifier for an integration shipped outside this repo."""
@@ -486,6 +491,30 @@ def register_env_loader(service: str, loader: Any) -> None:
     when the integration is not configured in the environment.
     """
     _EXTERNAL_ENV_LOADERS[service] = loader
+
+
+def register_env_presence(service: str, is_configured: Callable[[], bool]) -> None:
+    """Register the startup-safe presence check for an out-of-tree integration.
+
+    ``load_env_integration_services`` runs before the first prompt and must not
+    resolve secrets, so it cannot call the full loader registered above. Without
+    a predicate here an integration configured purely from the environment stays
+    invisible to the welcome, REPL and health surfaces even though verification
+    and tool resolution both see it.
+    """
+    _EXTERNAL_ENV_PRESENCE[service] = is_configured
+
+
+def external_env_presence_services() -> list[str]:
+    """Return the out-of-tree services whose environment variables are set."""
+    present: list[str] = []
+    for service, is_configured in _EXTERNAL_ENV_PRESENCE.items():
+        try:
+            if is_configured():
+                present.append(service)
+        except Exception as exc:  # a plugin predicate must not break startup
+            _report_env_loader_failure(exc, integration=service)
+    return present
 
 
 def _classify_service_instance(
@@ -2154,7 +2183,10 @@ def resolve_effective_integrations(
                 },
             )
 
-    known_keys = set(EffectiveIntegrations.model_fields)
+    # Registered plugins have no declared field on the model, so they have to be
+    # named here as well; without this the key is dropped as unrecognised one
+    # line before the model would have accepted it.
+    known_keys = set(EffectiveIntegrations.model_fields) | external_integration_services()
     unknown_keys = set(effective) - known_keys
     if unknown_keys:
         logger.warning(
