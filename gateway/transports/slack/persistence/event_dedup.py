@@ -35,6 +35,14 @@ _POOL_MAX_CONNECTIONS = 5
 # job: the delete runs with the insert and touches only expired rows.
 RETENTION_MINUTES = 60
 
+# An uncommitted row means "a delivery took this and has not confirmed yet".
+# Younger than this it is assumed to be in flight, so a concurrent duplicate is
+# refused; older it is assumed abandoned (release could not reach the database,
+# or the replica died between claim and confirm) and may be reclaimed. Must stay
+# well under Slack's retry interval so a genuine retry can still get through,
+# and comfortably above the claim→submit gap, which is a queue push.
+ABANDONED_CLAIM_SECONDS = 30
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS slack_handled_events (
     event_id TEXT PRIMARY KEY,
@@ -139,11 +147,12 @@ class PostgresSlackEventDeduplicator:
     def claim(self, event_id: str) -> bool:
         """Return True when this delivery may run the turn.
 
-        First insert wins. An *uncommitted* row (queued turn never confirmed —
-        typically release failed after a dead executor) may be reclaimed so a
-        Slack retry is not answered as an ignored duplicate. Committed rows
-        always refuse. A database failure returns True — dropping a real user
-        message to avoid a possible duplicate is worse.
+        First insert wins. A committed row always refuses. An uncommitted row
+        is refused while it is younger than ``ABANDONED_CLAIM_SECONDS`` — it
+        means a delivery is mid-flight, and reclaiming it would queue the same
+        turn twice — and reclaimed once older, which recovers a claim whose
+        release never reached the database. A database failure returns True:
+        dropping a real user message is worse than a possible duplicate.
         """
         try:
             with self._connection() as conn, conn.cursor() as cursor:
@@ -161,9 +170,11 @@ class PostgresSlackEventDeduplicator:
                     ON CONFLICT (event_id) DO UPDATE
                     SET handled_at = now()
                     WHERE slack_handled_events.committed IS FALSE
+                      AND slack_handled_events.handled_at
+                          < now() - %s::interval
                     RETURNING event_id
                     """,
-                    (event_id,),
+                    (event_id, f"{ABANDONED_CLAIM_SECONDS} seconds"),
                 )
                 return cursor.fetchone() is not None
         except Exception:
@@ -173,4 +184,8 @@ class PostgresSlackEventDeduplicator:
             return True
 
 
-__all__ = ["RETENTION_MINUTES", "PostgresSlackEventDeduplicator"]
+__all__ = [
+    "ABANDONED_CLAIM_SECONDS",
+    "RETENTION_MINUTES",
+    "PostgresSlackEventDeduplicator",
+]

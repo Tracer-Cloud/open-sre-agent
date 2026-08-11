@@ -153,3 +153,34 @@ def test_form_encoded_button_click_is_admitted_with_its_payload() -> None:
 def test_unsigned_button_click_is_rejected() -> None:
     # Arrange / Act / Assert.
     assert _admit_click(_CLICK, sign=False).status is SlackHttpStatus.REJECTED
+
+
+def test_overlapping_deliveries_only_admit_one_turn() -> None:
+    """Two copies of one event in flight must not both queue a turn.
+
+    A claim is provisional until the turn is dispatched. Reclaiming a
+    provisional entry is only correct once it looks abandoned — doing it while
+    the first delivery is still mid-flight duplicates the reply, the tool side
+    effects, and the spend.
+    """
+    # Arrange — nothing confirmed yet, as during a concurrent duplicate.
+    dedup = InMemorySlackEventDeduplicator()
+
+    # Act.
+    first = dedup.claim("Ev-overlap")
+    concurrent = dedup.claim("Ev-overlap")
+
+    # Assert.
+    assert first is True
+    assert concurrent is False
+
+
+def test_a_released_claim_is_available_again() -> None:
+    """Release is the in-flight exit: the retry must be able to take it."""
+    # Arrange / Act.
+    dedup = InMemorySlackEventDeduplicator()
+    dedup.claim("Ev-released")
+    dedup.release("Ev-released")
+
+    # Assert.
+    assert dedup.claim("Ev-released") is True

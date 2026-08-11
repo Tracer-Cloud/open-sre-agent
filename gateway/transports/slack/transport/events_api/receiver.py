@@ -14,7 +14,8 @@ worker the caller hands it to.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
@@ -30,6 +31,10 @@ RETRY_HEADER = "x-slack-retry-num"
 
 _URL_VERIFICATION_TYPE = "url_verification"
 _EVENT_CALLBACK_TYPE = "event_callback"
+
+# Kept in step with the Postgres store so single-replica and multi-replica
+# deployments admit and refuse the same deliveries.
+ABANDONED_CLAIM_SECONDS = 30.0
 
 
 class SlackHttpStatus(StrEnum):
@@ -82,26 +87,40 @@ class SlackEventDeduplicator(Protocol):
 
 
 class InMemorySlackEventDeduplicator:
-    """Single-process dedup. Correct only while exactly one replica runs."""
+    """Single-process dedup. Correct only while exactly one replica runs.
 
-    def __init__(self) -> None:
+    Mirrors the Postgres semantics so both behave alike: a claim is provisional
+    until confirmed, a provisional claim younger than the abandonment window is
+    refused (a concurrent duplicate must not queue a second turn), and an older
+    one is reclaimable (its delivery died before confirming).
+    """
+
+    def __init__(
+        self,
+        *,
+        abandoned_after_seconds: float = ABANDONED_CLAIM_SECONDS,
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._committed: set[str] = set()
-        self._provisional: set[str] = set()
+        self._provisional: dict[str, float] = {}
+        self._abandoned_after = abandoned_after_seconds
+        self._now = now
 
     def claim(self, event_id: str) -> bool:
         if event_id in self._committed:
             return False
-        # Reclaim uncommitted rows (mirrors Postgres) so a failed release does
-        # not permanently drop the event on Slack's retry.
-        self._provisional.add(event_id)
+        claimed_at = self._provisional.get(event_id)
+        if claimed_at is not None and self._now() - claimed_at < self._abandoned_after:
+            return False
+        self._provisional[event_id] = self._now()
         return True
 
     def release(self, event_id: str) -> bool:
-        self._provisional.discard(event_id)
+        self._provisional.pop(event_id, None)
         return True
 
     def confirm(self, event_id: str) -> bool:
-        self._provisional.discard(event_id)
+        self._provisional.pop(event_id, None)
         self._committed.add(event_id)
         return True
 

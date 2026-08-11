@@ -229,8 +229,14 @@ class _ReleaseFailsDeduplicator(InMemorySlackEventDeduplicator):
 
 
 def test_failed_release_does_not_permanently_drop_the_event_on_retry() -> None:
-    """When release cannot clear the claim, the retry must still reclaim it."""
-    dedup = _ReleaseFailsDeduplicator()
+    """A claim that could not be released is recovered once it looks abandoned.
+
+    Not immediately: while the window is open the claim means "a delivery is in
+    flight", and reclaiming it then would queue the turn twice. The retry that
+    matters arrives after Slack's retry delay, past the window.
+    """
+    clock = {"t": 0.0}
+    dedup = _ReleaseFailsDeduplicator(now=lambda: clock["t"])
     submitted: list[Any] = []
     alive = {"value": False}
 
@@ -264,10 +270,15 @@ def test_failed_release_does_not_permanently_drop_the_event_on_retry() -> None:
 
     first = client.post(EVENTS_PATH, content=body, headers=_headers(body))
     alive["value"] = True
-    retry = client.post(EVENTS_PATH, content=body, headers=_headers(body))
+    immediate = client.post(EVENTS_PATH, content=body, headers=_headers(body))
+    clock["t"] += 60.0  # past the abandonment window, as Slack's retry would be
+    later = client.post(EVENTS_PATH, content=body, headers=_headers(body))
 
+    # The failure is visible, the concurrent duplicate is refused, and the
+    # delayed retry recovers the event.
     assert first.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert retry.status_code == HTTPStatus.OK
+    assert immediate.status_code == HTTPStatus.OK  # admitted-and-ignored duplicate
+    assert later.status_code == HTTPStatus.OK
     assert len(submitted) == 1
 
 
