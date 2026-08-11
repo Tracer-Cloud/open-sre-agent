@@ -199,7 +199,7 @@ def test_default_accounting_is_resolved_fresh_per_message() -> None:
     from core.agent_harness.turns.headless_dispatch import InMemorySessionState, NullToolProvider
 
     class _PersistentState(InMemorySessionState):
-        storage = object()  # persistent-backed session selects DefaultTurnAccounting
+        store = object()  # persistent-backed session selects DefaultTurnAccounting
 
     agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentState())
 

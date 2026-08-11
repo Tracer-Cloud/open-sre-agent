@@ -19,7 +19,7 @@ from core.agent_harness.session.session_core import SessionCore
 _CORE_FIELDS = (
     "session_id",
     "started_at",
-    "storage",
+    "store",
     "resumed_from_name",
     "history",
     "last_state",
