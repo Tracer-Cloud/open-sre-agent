@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
@@ -46,26 +47,63 @@ _DUPLICATE_RESULT_KEY = "_opensre_duplicate_result"
 # dict is not. Plain lists cannot be weakly referenced, so entries key on
 # ``id(content)`` and hold a strong reference — keeping the object alive is what
 # makes its id safe to trust, since a collected object's id can be reused by an
-# unrelated one. ``size`` then catches in-place truncation of that same object.
+# unrelated one. ``retained_bytes`` then catches in-place size changes to that
+# same object.
 #
 # Bounding by entry count alone is not enough: tool results routinely carry
 # multi-megabyte payloads, so a handful of large entries could still retain
 # gigabytes of memory well under a count cap. The cache is bounded by total
-# retained size instead, evicting the least-recently-used entry first, so
-# large payloads from completed investigations are reclaimed instead of
-# sitting alive in a long-lived worker until thousands of unrelated inserts.
-_CONTENT_CACHE_MAX_CHARS = 8_000_000
+# retained bytes across the entire nested content graph, evicting the least-
+# recently-used entry first. This includes structured provider payloads such as
+# Bedrock Converse ``{"json": ...}`` tool results, not only text fields.
+_CONTENT_CACHE_MAX_BYTES = 8_000_000
 
 
 @dataclass(frozen=True)
 class _ContentEstimate:
     content: Any
-    size: tuple[int, int]
+    retained_bytes: int
     tokens: int
 
 
-_CONTENT_CACHE: OrderedDict[int, _ContentEstimate] = OrderedDict()
-_CONTENT_CACHE_CHARS = 0
+class _ContentEstimateCache:
+    """Size-bounded identity cache for serialized-content token estimates."""
+
+    def __init__(self, max_retained_bytes: int) -> None:
+        self.max_retained_bytes = max_retained_bytes
+        self.entries: OrderedDict[int, _ContentEstimate] = OrderedDict()
+        self.retained_bytes = 0
+
+    def get(self, content: Any, retained_bytes: int) -> _ContentEstimate | None:
+        key = id(content)
+        cached = self.entries.get(key)
+        if (
+            cached is None
+            or cached.content is not content
+            or cached.retained_bytes != retained_bytes
+        ):
+            return None
+        self.entries.move_to_end(key)
+        return cached
+
+    def put(self, content: Any, retained_bytes: int, tokens: int) -> None:
+        existing = self.entries.pop(id(content), None)
+        if existing is not None:
+            self.retained_bytes -= existing.retained_bytes
+        if retained_bytes > self.max_retained_bytes:
+            return
+        while self.entries and self.retained_bytes + retained_bytes > self.max_retained_bytes:
+            _, evicted = self.entries.popitem(last=False)
+            self.retained_bytes -= evicted.retained_bytes
+        self.entries[id(content)] = _ContentEstimate(content, retained_bytes, tokens)
+        self.retained_bytes += retained_bytes
+
+    def clear(self) -> None:
+        self.entries.clear()
+        self.retained_bytes = 0
+
+
+_CONTENT_CACHE = _ContentEstimateCache(_CONTENT_CACHE_MAX_BYTES)
 
 
 def strip_internal_message_markers(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -211,28 +249,43 @@ def context_budget_ceiling_for_model(model: str | None) -> int:
     return max(window - _RESPONSE_HEADROOM_TOKENS, _RESPONSE_HEADROOM_TOKENS)
 
 
-def _content_size(content: Any) -> tuple[int, int]:
-    """Cheap mutation check; changes whenever truncation rewrites ``content``."""
-    if isinstance(content, str):
-        return (len(content), 0)
-    if isinstance(content, list):
-        return (len(content), _sum_text_chars(content))
-    return (0, 0)
+def _content_retained_bytes(content: Any) -> int:
+    """Estimate bytes strongly retained through ``content``.
 
-
-def _content_chars(size: tuple[int, int]) -> int:
-    """Approximate retained chars for ``size``, used to bound cache memory."""
-    return size[0] + size[1]
+    Provider content is JSON-like but can contain shared objects. Walking by
+    identity counts each reachable object once and avoids looping on malformed
+    cyclic input. ``sys.getsizeof`` includes container storage as well as
+    scalar payloads, so nested structured results cannot bypass the cache cap.
+    """
+    retained_bytes = 0
+    seen: set[int] = set()
+    pending = [content]
+    while pending:
+        value = pending.pop()
+        identity = id(value)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        retained_bytes += sys.getsizeof(value)
+        if isinstance(value, dict):
+            pending.extend(value.keys())
+            pending.extend(value.values())
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            pending.extend(value)
+    return retained_bytes
 
 
 def _clear_content_cache() -> None:
     """Drop every cached estimate and reset the tracked size (tests only)."""
-    global _CONTENT_CACHE_CHARS
     _CONTENT_CACHE.clear()
-    _CONTENT_CACHE_CHARS = 0
 
 
-def _cache_content_estimate(content: Any, tokens: int) -> int:
+def _cache_content_estimate(
+    content: Any,
+    tokens: int,
+    *,
+    retained_bytes: int | None = None,
+) -> int:
     """Cache ``tokens`` against ``content`` identity and return it.
 
     An entry bigger than the whole budget is left uncached rather than
@@ -240,19 +293,9 @@ def _cache_content_estimate(content: Any, tokens: int) -> int:
     retain it above the stated bound until some later, unrelated insert
     happened to evict it.
     """
-    global _CONTENT_CACHE_CHARS
-    existing = _CONTENT_CACHE.pop(id(content), None)
-    if existing is not None:
-        _CONTENT_CACHE_CHARS -= _content_chars(existing.size)
-    size = _content_size(content)
-    content_chars = _content_chars(size)
-    if content_chars > _CONTENT_CACHE_MAX_CHARS:
-        return tokens
-    while _CONTENT_CACHE and _CONTENT_CACHE_CHARS + content_chars > _CONTENT_CACHE_MAX_CHARS:
-        _, evicted = _CONTENT_CACHE.popitem(last=False)
-        _CONTENT_CACHE_CHARS -= _content_chars(evicted.size)
-    _CONTENT_CACHE[id(content)] = _ContentEstimate(content, size, tokens)
-    _CONTENT_CACHE_CHARS += content_chars
+    if retained_bytes is None:
+        retained_bytes = _content_retained_bytes(content)
+    _CONTENT_CACHE.put(content, retained_bytes, tokens)
     return tokens
 
 
@@ -280,12 +323,15 @@ def _message_token_estimate(message: dict[str, Any]) -> int:
     identity so shallow provider-payload copies still hit.
     """
     content = message.get("content", "")
-    key = id(content)
-    cached = _CONTENT_CACHE.get(key)
-    if cached is not None and cached.content is content and cached.size == _content_size(content):
-        _CONTENT_CACHE.move_to_end(key)
+    retained_bytes = _content_retained_bytes(content)
+    cached = _CONTENT_CACHE.get(content, retained_bytes)
+    if cached is not None:
         return cached.tokens
-    return _cache_content_estimate(content, _compute_message_token_estimate(message))
+    return _cache_content_estimate(
+        content,
+        _compute_message_token_estimate(message),
+        retained_bytes=retained_bytes,
+    )
 
 
 def _refresh_message_token_estimate(message: dict[str, Any]) -> int:

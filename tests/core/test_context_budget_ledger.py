@@ -190,10 +190,9 @@ def test_content_cache_rejects_stale_entry_at_a_reused_id() -> None:
     """A cache entry keyed by ``id()`` must never be served for an unrelated
     object that happens to land at the same address after garbage collection.
 
-    Two different single-block ``tool_use`` contents (or two truncated
-    payloads landing on the same target length) can share a size —
-    ``(block_count, text_char_sum)`` — without being the same object. The
-    identity check (not just the size) must reject a stale hit.
+    Two different single-block ``tool_use`` contents can have the same retained
+    byte estimate without being the same object. The identity check (not just
+    the size) must reject a stale hit.
     """
     budget._clear_content_cache()
     real_content = [{"type": "tool_use", "id": "t1", "name": "noop", "input": {}}]
@@ -201,9 +200,9 @@ def test_content_cache_rejects_stale_entry_at_a_reused_id() -> None:
 
     # Seed a stale entry at this id for a *different* object with a matching
     # size but a deliberately wrong token count.
-    budget._CONTENT_CACHE[id(real_content)] = budget._ContentEstimate(
+    budget._CONTENT_CACHE.entries[id(real_content)] = budget._ContentEstimate(
         content=object(),
-        size=budget._content_size(real_content),
+        retained_bytes=budget._content_retained_bytes(real_content),
         tokens=real_tokens + 999_999,
     )
 
@@ -237,21 +236,18 @@ def test_content_cache_evicts_by_size_not_just_entry_count() -> None:
     than a few thousand *other* entries have been inserted since.
     """
     budget._clear_content_cache()
-    chunk_chars = 2_000_000  # 6 chunks (12MB) exceeds the 8MB retained-size cap.
+    chunk_chars = 2_000_000  # Six chunks exceed the 8MB retained-size cap.
     kept: list[list[dict[str, Any]]] = []
     for index in range(6):
         content = [{"type": "text", "text": f"chunk{index} " + "z" * chunk_chars}]
         budget._message_token_estimate({"content": content})
         kept.append(content)
 
-    total_cached_chars = sum(
-        budget._content_chars(entry.size) for entry in budget._CONTENT_CACHE.values()
-    )
-    assert total_cached_chars <= budget._CONTENT_CACHE_MAX_CHARS
-    assert len(budget._CONTENT_CACHE) < len(kept)
+    assert budget._CONTENT_CACHE.retained_bytes <= budget._CONTENT_CACHE_MAX_BYTES
+    assert len(budget._CONTENT_CACHE.entries) < len(kept)
     # The earliest (least-recently-used) entries are evicted first.
-    assert id(kept[0]) not in budget._CONTENT_CACHE
-    assert id(kept[-1]) in budget._CONTENT_CACHE
+    assert id(kept[0]) not in budget._CONTENT_CACHE.entries
+    assert id(kept[-1]) in budget._CONTENT_CACHE.entries
 
 
 def test_content_cache_skips_a_single_entry_larger_than_the_cap() -> None:
@@ -261,13 +257,32 @@ def test_content_cache_skips_a_single_entry_larger_than_the_cap() -> None:
     unrelated insert happened to evict it.
     """
     budget._clear_content_cache()
-    huge_content = [{"type": "text", "text": "z" * (budget._CONTENT_CACHE_MAX_CHARS + 1)}]
+    huge_content = [{"type": "text", "text": "z" * (budget._CONTENT_CACHE_MAX_BYTES + 1)}]
 
     tokens = budget._message_token_estimate({"content": huge_content})
 
     assert tokens == budget._compute_message_token_estimate({"content": huge_content})
-    assert id(huge_content) not in budget._CONTENT_CACHE
-    assert budget._CONTENT_CACHE_CHARS == 0
+    assert id(huge_content) not in budget._CONTENT_CACHE.entries
+    assert budget._CONTENT_CACHE.retained_bytes == 0
+
+
+def test_content_cache_counts_nested_bedrock_json_toward_the_cap() -> None:
+    """Structured Converse tool results must not bypass retention accounting."""
+    budget._clear_content_cache()
+    huge_content = [
+        {
+            "toolResult": {
+                "content": [{"json": {"payload": "z" * 2_000}}],
+                "toolUseId": "call-1",
+            }
+        }
+    ]
+
+    with patch.object(budget._CONTENT_CACHE, "max_retained_bytes", 1_000):
+        budget._message_token_estimate({"content": huge_content})
+
+    assert id(huge_content) not in budget._CONTENT_CACHE.entries
+    assert budget._CONTENT_CACHE.retained_bytes == 0
 
 
 def test_multi_think_shallow_copies_bound_json_dumps() -> None:
