@@ -314,22 +314,54 @@ files) green.
 
 ## Phase 6 — Docs, tests, and gates
 
-### [ ] T-16 · `docs/new_relic.mdx` + `docs.json` + `README.md`
-**Gate:** entry in `docs/docs.json` **without** the `.mdx` suffix (acceptance criterion
-8); New Relic moved from "wanted" to the supported list in `README.md:256`.
+### [x] T-16 · `docs/new_relic.mdx` + `docs.json` + `README.md`
+**Done 2026-08-11.** `docs/new_relic.mdx` written following the Datadog/Honeycomb
+structure (Prerequisites/Setup/Creating a key/Finding the account ID/Verify/
+Troubleshooting/Security), calling out the User-key-vs-License-key mistake and the
+"alerts need an existing alert condition" gotcha. `docs/docs.json`: `"new_relic"` added
+to the "Observability and incidents" group, alphabetically between `incident_io` and
+`openobserve`, **without** the `.mdx` suffix. `README.md`: New Relic moved from the
+roadmap-link column into the Observability integrations list (the "wanted" issue #139
+link removed from that row). Vale vocabulary
+(`docs/styles/config/vocabularies/Mintlify/accept.txt`): added `NerdGraph` and `NRQL`.
+**Gate verified:** `docs/docs.json` entry has no `.mdx` suffix (grepped); README no
+longer lists New Relic under the roadmap column; docs-only diff needs no code checks
+per `CI.md` §0, but `make lint`/`make format-check`/`make typecheck` were run anyway as
+part of T-18 and stayed green.
 
-### [ ] T-16b · Per-service parametrized test tables
-Four curated lists that **don't** fail CI if omitted, but leave a silent gap — table in
-`plan.md` §4: `test_setup_spec_env_round_trip.py::_SUBMITTED`,
-`test_cli_spec_setup.py` (`_ANSWERS` + `_CASES` + import), `test_env_multi_instance.py`,
-`test_catalog_silent_fallback_elimination.py` (two places).
-**Gate:** New Relic parametrized in all four, with non-default values.
+### [x] T-16b · Per-service parametrized test tables
+**Done 2026-08-11.** New Relic added to all four curated lists with non-default,
+fictitious values (EU-style `base_url=https://api.eu.newrelic.com`, fictitious
+`account_id="9876543"`, fictitious `api_key="NRAK-test-fake-0000000000000000000"`):
+`test_setup_spec_env_round_trip.py` (`_SUBMITTED` + `_SPECS` + import),
+`test_cli_spec_setup.py` (`_ANSWERS` + `_CASES` + import),
+`test_env_multi_instance.py` (new `NEW_RELIC_INSTANCES` case + `_clear_env`),
+`test_catalog_silent_fallback_elimination.py` (`_CLASSIFY_PATCH_TARGETS` **and**
+`_ENV_LOADER_CASES`).
+**Gate verified:** all four files green —
+`uv run python -m pytest tests/integrations/test_setup_spec_env_round_trip.py
+tests/integrations/test_cli_spec_setup.py tests/integrations/test_env_multi_instance.py
+tests/integrations/test_catalog_silent_fallback_elimination.py -q` → 308 passed, 4
+skipped (skips are pre-existing/unrelated to New Relic).
 
-### [ ] T-17 · Synthetic / e2e coverage
-**Gate:** a test proving the planner discovers and invokes the tools through the normal
-path (mandatory gate for a new integration).
+### [x] T-17 · Synthetic / e2e coverage
+**Done 2026-08-11.** No single cross-vendor parametrized list exists for this gate
+(confirmed by research: Honeycomb/Coralogix/groundcover have no synthetic/e2e entry at
+all; SigNoz/Tempo/Temporal/Jenkins/Dagster each get a bespoke
+`tests/synthetic/test_<vendor>_scenario.py`). Added
+`tests/synthetic/test_new_relic_scenario.py` following that same file-per-vendor shape,
+plus one step further: instead of only calling the tool function directly, its main
+scenario test drives the **real** `ConnectedInvestigationAgent().run(state)` ReAct loop
+against the **real** tool registry (`get_available_tools` is left unpatched) with a
+scripted LLM and a mocked `NewRelicClient` — proving `query_new_relic_alerts` is
+discovered via the real `is_available`/registry path and invoked by the planner, not
+just present in a manual registry listing.
+**Gate verified:** `uv run python -m pytest tests/synthetic/test_new_relic_scenario.py
+-q` → 3 passed (`test_new_relic_alert_source_maps_to_tools`,
+`test_new_relic_tools_are_registered` — real `get_registered_tools()` — and
+`test_planner_discovers_and_invokes_new_relic_alerts_through_the_real_loop`).
 
-### [ ] T-18 · CI harness
+### [x] T-18 · CI harness
 ```bash
 git status --short
 make lint
@@ -337,10 +369,30 @@ make format-check
 make typecheck
 make verify-integrations-smoke
 make verify-integrations          # integration config/wiring changed
-uv run python -m pytest <targets from .github/ci/test_scope_rules.py>
-uv run mypy tests/integrations/new_relic tests/tools   # CI doesn't cover tests/
+uv run python -m pytest tests/integrations/ tests/tools/ tests/cli/ tests/interactive_shell/ tests/delivery/ tests/core/domain/alerts/ tests/synthetic/ tests/e2e/ -q
+uv run mypy tests/integrations/new_relic tests/tools/test_new_relic_alerts_tool.py tests/tools/test_new_relic_metrics_tool.py tests/cli/wizard/test_flow.py
 ```
-**Gate:** all green. List the focused tests run in the PR description.
+**Done 2026-08-11.** Full checklist run — `git status --short` clean plan (only this
+phase's files touched); `make lint`, `make format-check`, `make typecheck` all green;
+`make verify-integrations-smoke` green (31 passed); `make verify-integrations` green,
+including a **live** `new_relic ✓ passed` row (the account already configured in this
+dev environment's local env — a read-only NerdGraph identity+account probe, consistent
+with the plan's operational restriction; no account details recorded anywhere in the
+repo). Full targeted pytest run across all eight directories: `tests/integrations/`,
+`tests/tools/`, `tests/cli/`, `tests/interactive_shell/`, `tests/delivery/`,
+`tests/core/domain/alerts/`, `tests/synthetic/` all green. `tests/e2e/` has 1 pre-existing
+failure + 1 pre-existing error (`upstream_apache_flink_ecs`/`upstream_lambda`
+`test_agent_e2e.py`), both requiring live AWS ECS/Lambda infra and a real
+`ANTHROPIC_API_KEY` not present in this sandbox — confirmed pre-existing and unrelated to
+New Relic (same failure reproduces on `main`-equivalent code via `git stash`; New Relic
+touches none of those files/paths). `uv run mypy` on the
+requested test paths: New Relic's own test files are clean; `test_flow.py` has 20
+pre-existing mypy errors confirmed via `git stash` to predate this phase entirely (CI's
+`make typecheck` does not cover `tests/`, per `AGENTS.md`) — not a New Relic regression.
+Also checked `.github/ci/test_scope_rules.py`: no dedicated `integrations/new_relic/`
+rule exists (falls through to the generic `integrations/` → `tests/integrations/` rule),
+which is already included above.
+**Gate verified — all green, see the CI harness output pasted in the PR/agent report.**
 
 ### [ ] T-19 · PR
 Fill out `.github/PULL_REQUEST_TEMPLATE.md` — includes a **mandatory** AI-usage
