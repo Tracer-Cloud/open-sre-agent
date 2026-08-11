@@ -242,7 +242,11 @@ connected right now (or "none" / "unknown"). Apply these rules in order:
   has elevated 500s and latency after deploy" — states a fact but does not ask
   you to find a cause. Emit assistant_handoff, even when integrations are
   connected and even when it reads urgent or "critical". Do NOT start an
-  investigation for it.
+  investigation for it. A multi-line dashboard paste with Service / Region /
+  Recent deploy / Logs lines and no investigate/analyze/diagnose/RCA verb is
+  still a bare incident → assistant_handoff (set evidence_kind=incident), never
+  investigation_start. Rich context does not upgrade a symptom paste into an
+  explicit investigate instruction.
 - A diagnostic question that is a FOLLOW-UP about a result you already produced
   (see RECENT CONVERSATION) — e.g. "why did it fail?" / "what caused the spike?"
   / "what happened?" after a completed investigation — is answered from that
@@ -350,7 +354,8 @@ Other tools:
   the assistant's previous reply — synthesize alert_text from that prior
   conversation (the original question plus the key evidence it reported). An
   implicit diagnostic cause question and a bare pasted alert blob remain
-  assistant_handoff.
+  assistant_handoff — including multi-line Service/Region/deploy/logs pastes
+  with no investigate verb.
 - synthetic_run — run synthetic benchmark scenario by id. Use the exact scenario
   number the user supplied. If the user gives only a three-digit prefix, choose
   the enum value beginning with that prefix.
