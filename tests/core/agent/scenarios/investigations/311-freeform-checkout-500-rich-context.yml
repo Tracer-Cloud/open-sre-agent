@@ -32,6 +32,7 @@ policy:
 planned_actions:
 - kind: assistant_handoff
   content: incident_description:checkout_api_500_db_timeout
+  evidence_kind: incident
   source: llm
 response_contract:
   must_contain_any: []
