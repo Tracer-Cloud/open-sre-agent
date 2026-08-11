@@ -279,6 +279,10 @@ not a Mintlify docs-site page).
 | `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `interactive_shell/ui/output`, `integrations/slack/delivery.py` |
 | `SLACK_BOT_TOKEN` | | Slack bot token | `scheduler/credentials`, `.env.example` |
 | `SLACK_ACCESS_TOKEN` | | Slack user token | `scheduler/credentials` |
+| `SLACK_GATEWAY_INBOUND_TRANSPORT` | `socket_mode` | How Slack delivers events: `socket_mode` or `events_api_http` | `transports/slack/settings` |
+| `SLACK_APP_TOKEN` | | App-level token (`xapp-…`). Required for `socket_mode` | `transports/slack/settings` |
+| `SLACK_SIGNING_SECRET` | | Request-signature secret. Required for `events_api_http` | `transports/slack/settings` |
+| `SLACK_GATEWAY_HTTP_PORT` | `3000` | Port the `events_api_http` listener binds | `transports/slack/settings` |
 | `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github/issue_comments` |
 | `DISCORD_BOT_TOKEN` | | Discord bot token | `scheduler/credentials`, `remote/server` |
 | `DISCORD_APPLICATION_ID` | | Discord application ID | `integrations/_catalog_impl` |

@@ -6,9 +6,15 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.transports.slack.settings import load_slack_gateway_settings
+from gateway.transports.slack.settings import (
+    SlackGatewayEnv,
+    SlackInboundTransport,
+    load_slack_gateway_settings,
+    require_transport_credential,
+)
 
 _STORE_PATH = "gateway.transports.slack.settings.get_integration"
 
@@ -174,3 +180,46 @@ def test_invalid_store_identity_policy_raises(monkeypatch: pytest.MonkeyPatch) -
         pytest.raises(GatewayConfigurationError, match="identity_policy"),
     ):
         load_slack_gateway_settings()
+
+
+def test_inbound_transport_and_port_come_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Choosing HTTP must be an explicit setting, not inferred from anything."""
+    # Arrange.
+    monkeypatch.setenv("SLACK_GATEWAY_INBOUND_TRANSPORT", "events_api_http")
+    monkeypatch.setenv("SLACK_GATEWAY_HTTP_PORT", "4000")
+
+    # Act.
+    env = SlackGatewayEnv()
+
+    # Assert.
+    assert env.gateway_inbound_transport is SlackInboundTransport.EVENTS_API_HTTP
+    assert env.gateway_http_port == 4000
+
+
+def test_unknown_transport_value_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A typo must fail at boot, not silently fall back to a socket."""
+    # Arrange.
+    monkeypatch.setenv("SLACK_GATEWAY_INBOUND_TRANSPORT", "webhook")
+
+    # Act / Assert.
+    with pytest.raises(ValidationError):
+        SlackGatewayEnv()
+
+
+def test_http_transport_requires_a_signing_secret() -> None:
+    """Without it there is no way to verify a request came from Slack."""
+    # Arrange / Act / Assert.
+    with pytest.raises(GatewayConfigurationError, match="signing secret"):
+        require_transport_credential(
+            SlackInboundTransport.EVENTS_API_HTTP, app_token="xapp-set", signing_secret=""
+        )
+
+
+def test_socket_transport_requires_an_app_token() -> None:
+    # Arrange / Act / Assert.
+    with pytest.raises(GatewayConfigurationError, match="app-level token"):
+        require_transport_credential(
+            SlackInboundTransport.SOCKET_MODE, app_token="", signing_secret="secret-set"
+        )

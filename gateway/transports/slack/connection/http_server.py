@@ -46,6 +46,10 @@ EVENTS_PATH = "/slack/events"
 # approvals and feedback silently stop working while turns still run.
 INTERACTIVITY_PATH = "/slack/interactivity"
 
+# How long a failed start waits for the listener thread to unwind before
+# giving up on it; the thread is a daemon, so it cannot block exit.
+_FAILED_START_JOIN_SECONDS = 5.0
+
 logger = logging.getLogger("gateway")
 
 
@@ -156,6 +160,12 @@ def serve_slack_http_in_thread(
         if not thread.is_alive():
             break
         time.sleep(0.05)
+    # Stop the listener before the executor. A bind that completes just after
+    # the deadline would otherwise keep serving Slack with no worker to run the
+    # turn — every request 500s and Slack retries it, while the gateway has
+    # already recorded Slack as unavailable.
+    server.should_exit = True
+    thread.join(timeout=_FAILED_START_JOIN_SECONDS)
     workers.shutdown(wait=False, cancel_futures=True)
     # GatewayTransportFailedError, not RuntimeError: start_transports catches
     # this and records Slack unavailable instead of aborting the gateway.

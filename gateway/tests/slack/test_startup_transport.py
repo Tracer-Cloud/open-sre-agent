@@ -104,8 +104,10 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
         def run(self) -> None:  # never binds
             return None
 
+    slow = _DeadServer()
+
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(http_server.uvicorn, "Server", lambda _config: _DeadServer())
+    monkeypatch.setattr(http_server.uvicorn, "Server", lambda _config: slow)
     monkeypatch.setattr(http_server.uvicorn, "Config", lambda *_a, **_k: object())
 
     # Act / Assert.
@@ -117,6 +119,9 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
                 workers=workers,
                 startup_timeout=0.2,
             )
+        # The listener must be told to exit, or a bind completing after the
+        # deadline keeps serving Slack with a dead executor behind it.
+        assert slow.should_exit is True
     finally:
         monkeypatch.undo()
         workers.shutdown(wait=False)
