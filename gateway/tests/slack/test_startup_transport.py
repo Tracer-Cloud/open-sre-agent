@@ -92,7 +92,7 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
     from concurrent.futures import ThreadPoolExecutor
 
     from gateway.core.runtime.errors import GatewayTransportFailedError
-    from gateway.transports.slack.transport.events_api import server as http_server
+    from gateway.transports.slack.transport.events_api import server as events_server
 
     workers = ThreadPoolExecutor(max_workers=1)
 
@@ -107,13 +107,13 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
     slow = _DeadServer()
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(http_server.uvicorn, "Server", lambda _config: slow)
-    monkeypatch.setattr(http_server.uvicorn, "Config", lambda *_a, **_k: object())
+    monkeypatch.setattr(events_server.uvicorn, "Server", lambda _config: slow)
+    monkeypatch.setattr(events_server.uvicorn, "Config", lambda *_a, **_k: object())
 
     # Act / Assert.
     try:
         with pytest.raises(GatewayTransportFailedError):
-            http_server.serve_slack_http_in_thread(
+            events_server.serve_slack_http_in_thread(
                 app=object(),  # never reached: the server stub does not bind
                 port=1,
                 workers=workers,
