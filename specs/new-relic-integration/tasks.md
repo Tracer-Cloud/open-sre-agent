@@ -49,7 +49,7 @@ Done in the 2026-08-11 review — results in `plan.md` §6. Points 2, 3, and 5 r
 plan errors fixed.
 **Remaining:** see T-02b.
 
-### [ ] T-01c · Create a synthetic fixture from the real payload
+### [x] T-01c · Create a synthetic fixture from the real payload
 **Depends on:** T-01b. The real payload (T-01b) stays **only** in this conversation — it
 never becomes a file in the repo. Recreate the same shape (fields, types, HTML-entity
 encoding in `operator`/`title`, an open+close pair sharing an `incidentId`, `threshold`
@@ -59,6 +59,15 @@ as a string) with **generic/fictitious** `conditionName`/`policyName`/`entity.na
 **Gate:** `tests/fixtures/new_relic/incidents_response.json` (or inlined per `plan.md`
 §4) contains no token that appears in the real payload captured in T-01b; T-10's test
 passes against this fixture.
+**Done 2026-08-11.** Fixture created with fictitious names (`checkout-latency`,
+`checkout-service`, `payments-worker`) reproducing every Decision-2 quirk: an
+open+close pair sharing one `incidentId` (lowercase `event`), a second pair using the
+docs' capitalized `Open`/`Close`, a third still-open incident on the same
+condition/entity (3 distinct `incidentId`s = flapping), HTML-entity-encoded
+`operator`/`title`, `threshold` as a JSON string, and `runbookUrl` populated on some
+rows / `null` on another. **Gate verified:** grepped for `arcotech`/`sre@arco`/the
+real account id — no matches; `python3 -m json.tool` confirms valid JSON;
+`tests/tools/test_new_relic_alerts_tool.py` parses it successfully (17 passing cases).
 
 ### [ ] T-02b · Confirm which `slash_catalog.py` to edit
 Both exist: `tools/interactive_shell/shared/slash_catalog.py:377` (has the `/template`
@@ -140,7 +149,7 @@ Done 2026-08-11. `# New Relic` block added (after Honeycomb) with
 
 ## Phase 3 — Tools
 
-### [ ] T-09 · `query_new_relic_metrics`
+### [x] T-09 · `query_new_relic_metrics`
 `new_relic_metrics_tool/` package with `tool.py` + `validation.py`. FR-7, NFR-3, NFR-4,
 NFR-8. Inject default `SINCE`/`LIMIT` when the model's NRQL doesn't include them — with
 the API's 5 s timeout, a query with no window is a guaranteed failure on a large
@@ -148,8 +157,16 @@ account.
 **Gate:** `BaseToolContract` green; default-injection test; a test that the `nrqlQuery`
 returned by T-10 is accepted as valid input (FR-7); `input_schema` with no
 `["type", "null"]`.
+**Done 2026-08-11.** `NewRelicMetricsTool` (class-based `BaseTool`); `validation.py`
+rejects empty/non-`SELECT`/mutation-shaped input, injects a default `SINCE`/`LIMIT`
+clause when the model's NRQL omits them, and clamps an oversized explicit `LIMIT` down
+to `NEW_RELIC_NRQL_LIMIT_MAX`. **Gate verified:**
+`tests/tools/test_new_relic_metrics_tool.py` — 20 passing cases, including
+`test_nrql_query_from_alerts_tool_round_trips_into_metrics_tool` (feeds the alerts
+tool's parsed `nrql_query` straight into `query_new_relic_metrics`) and the
+default-injection/clamp cases; `input_schema` has no `["type", "null"]` union.
 
-### [ ] T-10 · `query_new_relic_alerts`
+### [x] T-10 · `query_new_relic_alerts`
 **Depends on:** T-01c (synthetic fixture). `new_relic_alerts_tool/` package with
 `tool.py` + `results.py`. FR-6, NFR-4, NFR-8.
 **Gate:** `event` compared without a fixed casing (`LOWER(event)`, tested with both
@@ -160,10 +177,31 @@ derived `status`); different `incidentId`s of the same condition **don't** colla
 HTML entities (`&gt;=` → `>=`); `threshold` parsed from a string; `muted` flagged and
 **not** filtered; causal order preserved; truncation flagged; the parser runs against
 the T-01c fixture.
+**Done 2026-08-11.** `NewRelicAlertsTool` (class-based `BaseTool`) + `results.py`
+(`parse_incident_rows`), pairing raw rows by `incidentId` with `.lower()` comparison on
+`event`. **Gate verified:** `tests/tools/test_new_relic_alerts_tool.py` — 17 passing
+cases pin every quirk against the T-01c fixture: lowercase + capitalized `event` both
+pair correctly, 3 distinct `incidentId`s on `checkout-latency`/`checkout-service` stay 3
+records (flapping, not collapsed), `operator`/`title` HTML-entities decoded, `threshold`
+string `"3.0"` parsed to `3.0` with the raw string preserved, `muted: true` flagged (not
+filtered), causal (`openTime` ascending) order preserved, and `truncated` flips `True`
+when the raw row count hits the requested cap.
 
-### [ ] T-11 · `tools/registry_discovery.py` + telemetry
+### [x] T-11 · `tools/registry_discovery.py` + telemetry
 **Gate:** `tests/tools/test_registry.py` proves the real registry discovers both tools
 (acceptance criterion 3). `tests/tools/test_telemetry.py` updated.
+**Done 2026-08-11.** Added `"integrations.new_relic.tools"` to
+`INTEGRATION_TOOL_PACKAGES` (alphabetical, between `mysql` and `openclaw`); added
+`query_new_relic_alerts`/`query_new_relic_metrics` to
+`test_telemetry.py::_TOOLS_WITHOUT_DELIBERATE_CATCH` (both let unexpected exceptions
+escape to the global `BaseTool.__call__` wrapper — no deliberate catch-and-report
+pattern to migrate). **Gate verified:**
+`tools.registry.get_registered_tool_map()` returns both tool names with
+`source="new_relic"` against the real discovery path (not a mock);
+`test_every_registered_tool_is_migrated_or_allowlisted` and
+`test_every_migrated_tool_has_a_parameterised_failure_case` pass; full
+`tests/tools/test_registry.py` (36 tests) and `tests/tools/test_telemetry.py` (34
+tests) green.
 
 ---
 
