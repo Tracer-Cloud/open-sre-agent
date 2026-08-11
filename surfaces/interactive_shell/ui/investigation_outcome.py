@@ -35,6 +35,7 @@ _INTEGRATION_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("splunk", "splunk"),
     ("honeycomb", "honeycomb"),
     ("coralogix", "coralogix"),
+    ("new relic", "new_relic"),
     ("posthog", "posthog"),
     ("github", "github"),
     ("argocd", "argocd"),

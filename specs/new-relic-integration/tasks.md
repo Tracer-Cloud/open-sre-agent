@@ -226,11 +226,28 @@ the tools (acceptance criterion 4).
 
 ## Phase 5 — Onboarding and UI
 
-### [ ] T-15 · Wizard + UI labels
+### [x] T-15 · Wizard + UI labels
 `plan.md` §3.5 table — watch out for the **two** maps in
 `_integration_configurators.py`.
 **Gate:** `opensre onboard` shows New Relic in the Observability group and completes
 setup; `tests/cli/wizard/` covers the choice.
+**Done 2026-08-11.** All 7 files in the §3.5 table wired: `_configure_new_relic()`
+in `observability.py`; both the dispatch map (~L93) and the service-label map
+(~L128) in `_integration_configurators.py` (confirmed both existed, mirroring
+Honeycomb/Coralogix); `Choice(value="new_relic", ...)` in `onboard_integrations.py`;
+a sample-alert entry in `constants.py`; `banner_state.py` (replaced a pre-existing
+but dead `"newrelic"` key — never produced by the catalog — with the correct
+`"new_relic"` slug); `investigation_outcome.py` (used keyword `"new relic"`, not
+`"new_relic"`, since real client error messages contain the vendor name with a
+space, not an underscore); and 3 template-entry spots in
+`command_registry/investigation.py`. **Gate verified:**
+`tests/cli/wizard/test_flow.py::test_run_wizard_configures_new_relic` (new,
+mirrors the Honeycomb/Coralogix pattern) plus the full
+`tests/cli/wizard/`, `tests/cli/test_investigation_payload.py`, and
+`tests/interactive_shell/test_command_registry.py` suites (261 tests) green;
+`uv run mypy` on all 7 touched non-test files clean; `make lint` and
+`make format-check` clean on the touched files; full `make typecheck` (1729
+files) green.
 
 ---
 
