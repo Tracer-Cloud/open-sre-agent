@@ -479,3 +479,75 @@ def test_an_unattributable_hook_cannot_overwrite_an_existing_one() -> None:
             register_env_loader("unattributable_key", list)
     finally:
         _forget_hooks("unattributable_key")
+
+
+def test_only_one_package_wins_a_contested_hook_key() -> None:
+    """Claiming and installing must be one step.
+
+    Reading the owner and then writing lets every concurrent caller see the key
+    free, so the last writer takes it and the others never learn they lost.
+    """
+    import threading
+
+    modules = [_make_plugin_module(f"contender_{index}_stub") for index in range(8)]
+    won: list[str] = []
+    refused: list[str] = []
+    barrier = threading.Barrier(len(modules))
+
+    def claim(module: Any) -> None:
+        barrier.wait()
+        try:
+            register_classifier("contested_key", module.classify)
+            won.append(module.__name__)
+        except ValueError:
+            refused.append(module.__name__)
+
+    threads = [threading.Thread(target=claim, args=(module,)) for module in modules]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    try:
+        assert len(won) == 1, f"expected a single winner, got {won}"
+        assert len(refused) == len(modules) - 1
+        owner = _catalog_impl._EXTERNAL_HOOK_OWNERS["a classifier", "contested_key"]
+        assert owner == won[0]
+    finally:
+        import sys
+
+        _forget_hooks("contested_key")
+        for module in modules:
+            sys.modules.pop(module.__name__, None)
+
+
+def test_the_presence_sweep_survives_a_registration_from_another_thread() -> None:
+    """``load_env_integration_services`` iterates the hook map during startup."""
+    import sys
+    import threading
+
+    module = _make_plugin_module("sweeper_stub")
+    crashes: list[str] = []
+    stop = threading.Event()
+
+    def scan() -> None:
+        while not stop.is_set():
+            try:
+                load_env_integration_services()
+            except RuntimeError as exc:  # "dictionary changed size during iteration"
+                crashes.append(str(exc))
+
+    scanner = threading.Thread(target=scan)
+    scanner.start()
+    registered = [f"sweep_target_{index}" for index in range(200)]
+    try:
+        for service in registered:
+            register_env_presence(service, module.present)
+    finally:
+        stop.set()
+        scanner.join()
+        for service in registered:
+            _forget_hooks(service)
+        sys.modules.pop("sweeper_stub", None)
+
+    assert not crashes

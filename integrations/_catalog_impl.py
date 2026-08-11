@@ -6,6 +6,7 @@ import functools
 import json
 import logging
 import os
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -487,6 +488,11 @@ _EXTERNAL_ENV_PRESENCE: dict[str, Callable[[], bool]] = {}
 #: different one taking the key over.
 _EXTERNAL_HOOK_OWNERS: dict[tuple[str, str], str] = {}
 
+#: Serialises claiming a key with installing the callback. Reading the current
+#: owner and then writing is a check-then-act: two packages registering the same
+#: key concurrently could both see it free and the later one would win silently.
+_HOOK_REGISTRATION_LOCK = threading.Lock()
+
 
 def _hook_owner(callback: Any) -> str:
     """Return the top-level package *callback* was defined in, or "" if unknown.
@@ -505,8 +511,24 @@ def _hook_owner(callback: Any) -> str:
     return "" if root in {"functools", "builtins"} else root
 
 
+def _install_external_hook(
+    target: dict[str, Any], service: str, callback: Any, *, hook: str
+) -> None:
+    """Claim *service* for *callback* and install it into *target*, as one step.
+
+    Claiming and installing are a single critical section: read the owner, then
+    write, and two packages registering the same key concurrently would both see
+    it free and the later one would take it with nothing reported.
+    """
+    with _HOOK_REGISTRATION_LOCK:
+        target[_claim_external_hook(service, callback, hook=hook)] = callback
+
+
 def _claim_external_hook(service: str, callback: Any, *, hook: str) -> str:
     """Return the key *hook* may be stored under, or raise if it is not allowed.
+
+    Callers reach this through :func:`_install_external_hook`, which holds the
+    registration lock across the check and the write.
 
     ``register_integration_spec`` already refuses built-in keys and keys another
     plugin holds, but each hook below can be called without ever registering a
@@ -543,7 +565,7 @@ def _claim_external_hook(service: str, callback: Any, *, hook: str) -> str:
 
 def register_classifier(service: str, classify: _ClassifyFn) -> None:
     """Register the classifier for an integration shipped outside this repo."""
-    _EXTERNAL_CLASSIFIERS[_claim_external_hook(service, classify, hook="a classifier")] = classify
+    _install_external_hook(_EXTERNAL_CLASSIFIERS, service, classify, hook="a classifier")
 
 
 def register_env_loader(service: str, loader: Any) -> None:
@@ -555,8 +577,7 @@ def register_env_loader(service: str, loader: Any) -> None:
     be for *service*: one naming a different integration is dropped, since the
     merge that follows lets a later record replace an earlier one by service.
     """
-    key = _claim_external_hook(service, loader, hook="an environment loader")
-    _EXTERNAL_ENV_LOADERS[key] = loader
+    _install_external_hook(_EXTERNAL_ENV_LOADERS, service, loader, hook="an environment loader")
 
 
 def register_env_presence(service: str, is_configured: Callable[[], bool]) -> None:
@@ -568,14 +589,15 @@ def register_env_presence(service: str, is_configured: Callable[[], bool]) -> No
     invisible to the welcome, REPL and health surfaces even though verification
     and tool resolution both see it.
     """
-    key = _claim_external_hook(service, is_configured, hook="a presence check")
-    _EXTERNAL_ENV_PRESENCE[key] = is_configured
+    _install_external_hook(_EXTERNAL_ENV_PRESENCE, service, is_configured, hook="a presence check")
 
 
 def external_env_presence_services() -> list[str]:
     """Return the out-of-tree services whose environment variables are set."""
     present: list[str] = []
-    for service, is_configured in _EXTERNAL_ENV_PRESENCE.items():
+    # Snapshot: a plugin registering from another thread would otherwise turn
+    # this into "dictionary changed size during iteration" mid-startup.
+    for service, is_configured in list(_EXTERNAL_ENV_PRESENCE.items()):
         try:
             if is_configured():
                 present.append(service)
@@ -1941,7 +1963,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    for service, loader in _EXTERNAL_ENV_LOADERS.items():
+    for service, loader in list(_EXTERNAL_ENV_LOADERS.items()):
         try:
             record = loader()
         except Exception as exc:
