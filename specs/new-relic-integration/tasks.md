@@ -71,28 +71,43 @@ right file(s).
 
 ## Phase 1 — Integration
 
-### [ ] T-03 · `config/constants/new_relic.py` + re-export
-The 4 env names + `__all__`; re-export in `config/constants/__init__.py`.
-**Gate:** `uv run python -c "from config.constants import NEW_RELIC_API_KEY_ENV"`.
+### [x] T-03 · `config/constants/new_relic.py` + re-export
+Done 2026-08-11. Added the 4 env names plus the two vendor limits and two OpenSRE
+defaults, with `__all__`; re-exported from `config/constants/__init__.py`.
+**Gate verified:** `uv run python -c "from config.constants import NEW_RELIC_API_KEY_ENV"`
+prints `NEW_RELIC_API_KEY` with no import error.
 
-### [ ] T-04 · `integrations/new_relic/config.py` and `__init__.py`
-`NewRelicIntegrationConfig` + `classify()`. FR-1, FR-2.
-**Gate:** normalization test — empty `base_url` → US default; `api_key` without
-`account_id` → `classify` returns `(None, None)`.
+### [x] T-04 · `integrations/new_relic/config.py` and `__init__.py`
+Done 2026-08-11. `NewRelicIntegrationConfig` (api_key/account_id/base_url/integration_id)
++ `classify()`, mirroring Datadog's both-fields-required pattern. FR-1, FR-2.
+**Gate verified:** `uv run python -c` checks — `base_url=""` normalizes to
+`https://api.newrelic.com`; `classify({"api_key": ...}, ...)` (no `account_id`) returns
+`(None, None)`; `classify` with both fields returns `("new_relic")`. Also pinned in
+`tests/integrations/new_relic/test_client.py` fixtures (config used throughout).
 
-### [ ] T-05 · `integrations/new_relic/client.py`
-Plan §2. **No longer depends on T-01b** — the shape is confirmed by the docs; T-01b's
-real fixture hardens the test later, without blocking the code.
-Mandatory checking order: HTTP → `errors` → `data`. NFR-1, NFR-2, NFR-7 (5 s timeout as
-its own `error_type`, distinct from an empty result).
-**Gate:** `tests/integrations/new_relic/test_client.py` with the `plan.md` §4 cases
-passing, including `200 + errors` and **timeout ≠ empty**.
+### [x] T-05 · `integrations/new_relic/client.py`
+Done 2026-08-11. `NewRelicClient` with `is_configured`, `probe_access()`, `run_nrql()`
+(the only method that speaks GraphQL for data queries), `query_incidents()`, and
+`query_metrics()`. Mandatory checking order implemented in `_request_graphql`: HTTP
+status class → `errors` → `data`. NFR-1 (no raise, no stack trace), NFR-2 (API key never
+interpolated into any message), NFR-7 (`httpx.TimeoutException` and a
+timeout-worded GraphQL error both map to a distinct `error_type="timeout"`, never
+folded into an empty/successful result).
+**Gate verified:** `uv run python -m pytest tests/integrations/new_relic/test_client.py -v`
+— 12 passed, covering 200+errors, 401 vs. unreachable-account, 429/5xx, a realistic
+(synthetic) `NrAiIncident` fixture, empty ≠ error, and timeout ≠ empty.
 
-### [ ] T-06 · `verifier.py` + `setup.py`
-`register_probe_verifier`; `IntegrationSetupSpec` with 3 fields (`api_key`
-`secret=True`). FR-4, FR-5.
-**Gate:** `opensre integrations verify new_relic` distinguishes an invalid key, an
-unreachable account, and a 429 — three messages, none with a stack trace.
+### [x] T-06 · `verifier.py` + `setup.py`
+Done 2026-08-11. `verify_new_relic = register_probe_verifier("new_relic", ...)`;
+`NEW_RELIC_SETUP = IntegrationSetupSpec(...)` with 3 fields (`api_key` `secret=True`).
+FR-4, FR-5.
+**Gate verified:** `tests/integrations/new_relic/test_client.py` pins
+`probe_access()` returning distinct `ProbeResult.failed(...)` details for an invalid key
+(HTTP 401) vs. a valid key with an unreachable account (`actor.account` is `null`), and
+distinct `error_type`s (`rate_limited`/`server_error`) for 429/5xx — none of the three
+messages contain vendor stack-trace detail. `opensre integrations verify new_relic`
+itself is not yet reachable end-to-end: that requires the registry/CLI wiring in
+Phase 2 (T-07), which is out of this phase's scope.
 
 ---
 
