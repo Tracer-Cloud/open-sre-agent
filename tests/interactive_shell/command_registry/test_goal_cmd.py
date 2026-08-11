@@ -214,3 +214,53 @@ def test_goal_pause_flushes_so_resolve_keeps_paused() -> None:
     )
     assert session_goal_is_paused(restored)
     assert not session_goal_is_active(restored)
+
+
+def test_goal_pause_on_session_core_without_terminal() -> None:
+    """Gateway SessionCore has no ``terminal`` — pause must still flush.
+
+    Greptile P1: ``session.terminal.…`` raised AttributeError before
+    ``_persist_goal_state``, so the next inbound message restored ACTIVE.
+    """
+    from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
+    from core.agent_harness.session_goal.goal import (
+        SessionGoal,
+        SessionGoalStatus,
+        attach_session_goal,
+        session_goal_is_active,
+        session_goal_is_paused,
+    )
+    from core.agent_harness.session_goal.persist import SESSION_GOAL_STATE_CUSTOM_TYPE
+
+    store = InMemorySessionStore()
+    core = SessionCore(store=store)
+    store.open_session(core)
+    store.append_turn(core, "chat", "seed")
+    attach_session_goal(
+        core,
+        SessionGoal(
+            condition="ship the fix",
+            max_outer_turns=4,
+            status=SessionGoalStatus.ACTIVE,
+            host_owned=True,
+        ),
+    )
+    SessionManager.for_session(core).flush(core)
+    assert session_goal_is_active(core)
+    assert not hasattr(core, "terminal") or getattr(core, "terminal", None) is None
+
+    console, buf = _console()
+    assert _cmd_goal(core, console, ["pause"])
+    assert session_goal_is_paused(core)
+    assert "◎ /goal paused" in buf.getvalue()
+
+    goal_records = [
+        rec
+        for rec in store.read(core.session_id)
+        if rec.get("type") == "custom_message"
+        and rec.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert goal_records
+    payload = goal_records[-1]["content"]
+    assert isinstance(payload, dict)
+    assert payload.get("session_goal", {}).get("status") == "paused"

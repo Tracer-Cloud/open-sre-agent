@@ -14,6 +14,10 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 
 from core.agent_harness.session import SessionManager
+from core.agent_harness.session.terminal_access import (
+    clear_pending_autosubmit,
+    set_auto_command,
+)
 from core.agent_harness.session_goal.goal import (
     MAX_GOAL_CONDITION_CHARS,
     SessionGoal,
@@ -83,8 +87,9 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
         host_owned=True,
     )
     goal = attach_session_goal(session, goal)
-    # Setting starts work immediately: queue the condition on the REPL loop.
-    session.terminal.set_auto_command(condition)
+    # Setting starts work immediately: queue the condition on the REPL loop
+    # (no-op terminal → turn-outcome hint on headless SessionCore).
+    set_auto_command(session, condition)
     _persist_goal_state(session)
     console.print(format_session_goal_progress(goal, session=session), markup=False)
     console.print(
@@ -107,8 +112,9 @@ def _pause(session: Session, console: Console) -> bool:
     )
     paused = attach_session_goal(session, paused)
     # Drop any queued autosubmit so pause actually stops the next turn.
-    session.terminal.pending_prompt_default = None
-    session.terminal.pending_prompt_autosubmit = False
+    # Gateway SessionCore has no terminal facet — must not AttributeError
+    # before flush (or the next inbound message restores ACTIVE).
+    clear_pending_autosubmit(session)
     _persist_goal_state(session)
     console.print(format_session_goal_progress(paused, session=session), markup=False)
     console.print(f"[{DIM}]paused. {_HELP_FOOTER.replace('pause · ', '')}[/]")
@@ -130,7 +136,7 @@ def _resume(session: Session, console: Console) -> bool:
         else SessionGoalReason.WAITING_TOOL_EVIDENCE
     )
     resumed = attach_session_goal(session, resumed)
-    session.terminal.set_auto_command(resumed.condition)
+    set_auto_command(session, resumed.condition)
     _persist_goal_state(session)
     console.print(format_session_goal_progress(resumed, session=session), markup=False)
     console.print(
@@ -154,7 +160,7 @@ def _edit(session: Session, console: Console, args: list[str]) -> bool:
     edited = replace(goal, condition=condition)
     edited = attach_session_goal(session, edited)
     if session_goal_is_active(session):
-        session.terminal.set_auto_command(condition)
+        set_auto_command(session, condition)
     _persist_goal_state(session)
     console.print(format_session_goal_progress(edited, session=session), markup=False)
     if session_goal_is_active(session):

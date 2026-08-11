@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from core.agent_harness.session.terminal_access import clear_pending_autosubmit
 from core.agent_harness.session_goal.continuation import continuation_nudge
 from core.agent_harness.session_goal.evaluate import (
     default_evaluate_session_goal,
@@ -118,13 +119,7 @@ def _announce_working(
 
 def _clear_host_autosubmit(session: Any) -> None:
     """Drop any queued shell autosubmit when the session goal stops continuing."""
-    terminal = getattr(session, "terminal", None)
-    if terminal is None:
-        return
-    if hasattr(terminal, "pending_prompt_default"):
-        terminal.pending_prompt_default = None
-    if hasattr(terminal, "pending_prompt_autosubmit"):
-        terminal.pending_prompt_autosubmit = False
+    clear_pending_autosubmit(session)
 
 
 def _finish_outer_turn(
