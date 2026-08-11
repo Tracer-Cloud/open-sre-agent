@@ -39,20 +39,28 @@ class OpenSRENativeAgent(BaseInstalledAgent):
         *,
         benchmark_config_path: str | Path,
         bundle_path: str | Path,
+        model_provider: str | None = None,
         **kwargs: Any,
     ) -> None:
         self._benchmark_config_path = Path(benchmark_config_path).expanduser().resolve()
         self._bundle_path = Path(bundle_path).expanduser().resolve()
-        self._benchmark_settings = BenchmarkSettings.from_yaml(self._benchmark_config_path)
+        configured_settings = BenchmarkSettings.from_yaml(self._benchmark_config_path)
         self._build_manifest = validate_bundle(self._bundle_path)
 
-        configured_model = self._benchmark_settings.model.harbor_model
+        configured_model = configured_settings.model.harbor_model
         effective_model = model_name or configured_model
-        if effective_model != configured_model:
+        if model_provider is not None:
+            self._benchmark_settings = configured_settings.with_harbor_model_override(
+                model_provider,
+                effective_model,
+            )
+        elif effective_model != configured_model:
             raise ValueError(
                 f"Harbor model {effective_model!r} does not match benchmark config "
                 f"{configured_model!r}"
             )
+        else:
+            self._benchmark_settings = configured_settings
         super().__init__(
             logs_dir=logs_dir,
             model_name=effective_model,

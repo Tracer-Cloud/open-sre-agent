@@ -112,6 +112,36 @@ def test_nvidia_environment_uses_existing_native_provider_contract() -> None:
     assert values["LLM_MAX_TOKENS"] == "16384"
 
 
+def test_groq_environment_uses_existing_native_provider_contract() -> None:
+    values = native_environment_values(
+        ModelSettings(
+            harbor_model="groq/openai/gpt-oss-120b",
+            provider="groq",
+        )
+    )
+
+    assert values["LLM_PROVIDER"] == "groq"
+    assert values["GROQ_REASONING_MODEL"] == "openai/gpt-oss-120b"
+    assert values["GROQ_CLASSIFICATION_MODEL"] == "openai/gpt-oss-120b"
+    assert values["GROQ_TOOLCALL_MODEL"] == "openai/gpt-oss-120b"
+    assert values["LLM_MAX_TOKENS"] == "16384"
+
+
+def test_gemini_environment_uses_existing_native_provider_contract() -> None:
+    values = native_environment_values(
+        ModelSettings(
+            harbor_model="gemini/gemini-3.5-flash-lite",
+            provider="gemini",
+        )
+    )
+
+    assert values["LLM_PROVIDER"] == "gemini"
+    assert values["GEMINI_REASONING_MODEL"] == "gemini-3.5-flash-lite"
+    assert values["GEMINI_CLASSIFICATION_MODEL"] == "gemini-3.5-flash-lite"
+    assert values["GEMINI_TOOLCALL_MODEL"] == "gemini-3.5-flash-lite"
+    assert values["LLM_MAX_TOKENS"] == "16384"
+
+
 def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(
     monkeypatch,
 ) -> None:
@@ -230,6 +260,81 @@ def test_native_payload_uses_agent_conclusion_as_orca_report() -> None:
 
     assert payload["report"] == conclusion
     assert payload["root_cause_category"] == "dependency_failure"
+
+
+def test_native_payload_maps_terminal_healthy_disposition_to_empty_report(
+    tmp_path: Path,
+) -> None:
+    state = {
+        "slack_message": "OpenSRE channel-formatted report",
+        "problem_md": "users are reporting site issues",
+        "root_cause": "Unable to determine root cause",
+        "root_cause_category": "unknown",
+        "agent_messages": [
+            {"role": "assistant", "content": "Earlier investigation status"},
+            {"role": "assistant", "content": "Root cause category: healthy"},
+        ],
+    }
+
+    payload = NativeInvestigationRunner().build_payload(state)
+    destination = tmp_path / "report.md"
+    destination.write_text("stale report", encoding="utf-8")
+    written = NativeReportPolicy().write(payload, destination)
+
+    assert payload["root_cause_category"] == "healthy"
+    assert written == b""
+    assert destination.read_bytes() == b""
+
+
+def test_native_payload_rejects_iteration_cap_without_terminal_conclusion() -> None:
+    state = {
+        "slack_message": "Fallback report that must not be scored",
+        "problem_md": "users are reporting site issues",
+        "root_cause": "Unable to determine root cause",
+        "root_cause_category": "unknown",
+        "investigation_loop_count": 20,
+        "investigation_iteration_cap": 20,
+        "agent_messages": [
+            {
+                "role": "assistant",
+                "content": "I will inspect one more source.",
+                "tool_calls": [
+                    {
+                        "id": "last-call",
+                        "function": {
+                            "name": "list_local_source_tree",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            },
+            {"role": "tool", "content": "source listing", "tool_call_id": "last-call"},
+        ],
+    }
+
+    with pytest.raises(
+        NativeInvestigationIncompleteError,
+        match="iteration cap.*valid terminal ORCA conclusion",
+    ):
+        NativeInvestigationRunner().build_payload(state)
+
+
+def test_native_payload_rejects_invalid_terminal_conclusion() -> None:
+    state = {
+        "slack_message": "Fallback report that must not be scored",
+        "problem_md": "checkout failures",
+        "root_cause": "Unable to determine root cause",
+        "root_cause_category": "unknown",
+        "agent_messages": [
+            {"role": "assistant", "content": "Insufficient evidence."},
+        ],
+    }
+
+    with pytest.raises(
+        NativeInvestigationIncompleteError,
+        match="valid terminal ORCA conclusion",
+    ):
+        NativeInvestigationRunner().build_payload(state)
 
 
 def test_native_payload_propagates_llm_failure_instead_of_exporting_stale_text() -> None:

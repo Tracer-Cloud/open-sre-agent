@@ -8,7 +8,10 @@ import os
 import subprocess
 from pathlib import Path
 
-from tests.benchmarks.orcabench.config import BenchmarkSettings
+from tests.benchmarks.orcabench.config import (
+    BENCHMARK_PROVIDER_VALUES,
+    BenchmarkSettings,
+)
 from tests.benchmarks.orcabench.host.bundle import validate_bundle
 from tests.benchmarks.orcabench.host.snapshot import stage_snapshot
 
@@ -41,6 +44,11 @@ def _parser() -> argparse.ArgumentParser:
         default=opensre_repo / ".bench-cache/orcabench/snapshots",
     )
     parser.add_argument("--snapshot-image", default=DEFAULT_SNAPSHOT_IMAGE)
+    parser.add_argument("--provider", choices=BENCHMARK_PROVIDER_VALUES)
+    parser.add_argument(
+        "--model",
+        help="Provider-native model ID; requires --provider",
+    )
     parser.add_argument("--print-command", action="store_true")
     return parser
 
@@ -62,12 +70,12 @@ def build_harbor_command(
     orca_repo: Path,
     bundle: Path,
     config_path: Path,
+    settings: BenchmarkSettings,
     task_name: str,
     snapshot_cache: Path,
     dataset: str = DEFAULT_DATASET,
 ) -> tuple[str, ...]:
     """Build the single-task Harbor command with secret-safe env templates."""
-    settings = BenchmarkSettings.from_yaml(config_path)
     job_config = orca_repo / "job-config.yaml"
     mounts = json.dumps(
         [
@@ -95,6 +103,8 @@ def build_harbor_command(
         f"benchmark_config_path={config_path}",
         "--agent-kwarg",
         f"bundle_path={bundle}",
+        "--agent-kwarg",
+        f"model_provider={settings.model.provider}",
     ]
     command.extend(
         _environment_flags("--agent-env", settings.model.required_environment_names)
@@ -138,7 +148,10 @@ def run_one(args: argparse.Namespace) -> int:
     if not (orca_repo / "job-config.yaml").is_file():
         raise FileNotFoundError(f"ORCA job config is missing: {orca_repo / 'job-config.yaml'}")
     validate_bundle(bundle)
-    settings = BenchmarkSettings.from_yaml(config_path)
+    settings = BenchmarkSettings.from_yaml(config_path).with_model_override(
+        args.provider,
+        args.model,
+    )
     required_names = dict.fromkeys(
         settings.model.required_environment_names
         + settings.verifier.required_environment_names
@@ -152,6 +165,7 @@ def run_one(args: argparse.Namespace) -> int:
         orca_repo=orca_repo,
         bundle=bundle,
         config_path=config_path,
+        settings=settings,
         task_name=task_name,
         snapshot_cache=snapshot_cache,
         dataset=args.dataset,

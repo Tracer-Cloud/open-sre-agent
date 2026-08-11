@@ -3,8 +3,8 @@ profile: smoke
 mode: native
 
 model:
-  harbor_model: nvidia/z-ai/glm-5.2
-  provider: nvidia
+  harbor_model: gemini/gemini-3.5-flash-lite
+  provider: gemini
   transport: sdk
   reasoning_effort: medium
   max_tokens: 16384

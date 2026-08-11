@@ -253,6 +253,12 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         for iteration in range(MAX_INVESTIGATION_LOOPS):
             logger.debug("[agent] iteration=%d", iteration)
             self._emit("llm_start", {"iteration": iteration})
+            # Always reserve the bounded loop's final turn for a diagnosis. This
+            # reuses the same tool-free path as the duplicate-call stagnation
+            # breaker, while still allowing every earlier turn to gather fresh
+            # evidence.
+            if iteration == MAX_INVESTIGATION_LOOPS - 1:
+                force_conclusion = True
             active_tool_schemas: list[dict[str, Any]] = [] if force_conclusion else tool_schemas
             active_overhead = system_only_overhead if force_conclusion else full_overhead
             enforce_context_budget(

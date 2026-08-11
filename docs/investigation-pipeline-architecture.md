@@ -111,6 +111,9 @@ Guardrails inside the loop:
   `MAX_STAGNANT_ITERATIONS = 2` such iterations in a row (two nudges), tool
   access is stripped on the next turn to force a text-only conclusion rather
   than burning the rest of the loop budget.
+- **Finalization reserve** — regardless of whether calls are duplicates, the
+  final scheduled iteration strips tool access so a model that kept gathering
+  fresh evidence still gets a bounded, text-only conclusion turn.
 - **CLI-backed models** (Codex, Claude Code CLI) use a subclass,
   `CLIBackedInvestigationAgent`, that overrides conclusion acceptance to
   refuse an early stop until every planned tool has been called — these
@@ -140,6 +143,7 @@ Slack, GitLab writeback, local `report.md`, etc. See
 | Tool schema cap       | `MAX_AGENT_TOOL_SCHEMAS = 32`         | `tools/investigation/stages/gather_evidence/tools.py` | Bounds per-turn schema payload regardless of registry size.    |
 | Secondary tool reserve | `MAX_SECONDARY_FALLBACK_TOOLS = 3`    | `tools/investigation/stages/gather_evidence/tools.py` | Guarantees cheap reasoning/knowledge tools survive the cap.     |
 | Loop iteration cap    | `MAX_INVESTIGATION_LOOPS = 20`        | `config/constants/investigation.py`           | Worst-case runtime bound for the ReAct loop.                   |
+| Finalization reserve  | Final scheduled loop iteration        | `tools/investigation/stages/gather_evidence/agent.py` | Guarantees a tool-free conclusion attempt before the cap.      |
 | Stagnation breaker    | `MAX_STAGNANT_ITERATIONS = 2`         | `tools/investigation/stages/gather_evidence/tools.py` | Stops the loop from spinning on duplicate-only iterations.     |
 | Context budget        | `context_budget_ceiling_for_model()`  | `core/context_budget.py`                      | Evicts/truncates lowest-value evidence before the model's context limit. |
 | Pre-loop plan size    | `tool_budget` (default 10)            | `tools/investigation/stages/plan_evidence/node.py` | Shortlist size the plan hands the loop before it even starts.  |

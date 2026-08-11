@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -16,12 +18,26 @@ def _config_path() -> Path:
     return Path(__file__).resolve().parents[1] / "configs/native_one_task.yml"
 
 
-def _openrouter_config_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "configs/openrouter_smoke_one_task.yml"
+def _smoke_config_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "configs/smoke_one_task.yml"
 
 
-def _nvidia_config_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "configs/nvidia_smoke_one_task.yml"
+def test_host_config_import_does_not_eagerly_load_opensre_credentials() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import tests.benchmarks.orcabench.config; "
+                "assert 'config.llm_auth.provider_catalog' not in sys.modules"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_checked_in_config_is_native_and_model_route_is_explicit() -> None:
@@ -42,26 +58,82 @@ def test_checked_in_config_is_native_and_model_route_is_explicit() -> None:
     assert settings.verifier.enabled
 
 
-def test_openrouter_config_is_an_unverified_smoke_profile() -> None:
-    settings = BenchmarkSettings.from_yaml(_openrouter_config_path())
+def test_smoke_config_is_unverified_and_defaults_to_gemini() -> None:
+    settings = BenchmarkSettings.from_yaml(_smoke_config_path())
 
     assert settings.profile == "smoke"
-    assert settings.model.harbor_model == "openrouter/openrouter/free"
-    assert settings.model.opensre_model == "openrouter/free"
+    assert settings.model.harbor_model == "gemini/gemini-3.5-flash-lite"
+    assert settings.model.opensre_model == "gemini-3.5-flash-lite"
     assert settings.model.max_tokens == 16384
-    assert settings.model.required_environment_names == ("OPENROUTER_API_KEY",)
+    assert settings.model.required_environment_names == ("GEMINI_API_KEY",)
     assert not settings.verifier.enabled
     assert settings.verifier.required_environment_names == ()
 
 
-def test_nvidia_config_uses_native_glm_route_without_changing_other_routes() -> None:
-    settings = BenchmarkSettings.from_yaml(_nvidia_config_path())
+@pytest.mark.parametrize(
+    ("provider", "model", "harbor_model", "api_key_env"),
+    [
+        (
+            "openrouter",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+            "OPENROUTER_API_KEY",
+        ),
+        ("nvidia", "z-ai/glm-5.2", "nvidia/z-ai/glm-5.2", "NVIDIA_API_KEY"),
+        (
+            "gemini",
+            "gemini-3.5-flash-lite",
+            "gemini/gemini-3.5-flash-lite",
+            "GEMINI_API_KEY",
+        ),
+        (
+            "groq",
+            "openai/gpt-oss-120b",
+            "groq/openai/gpt-oss-120b",
+            "GROQ_API_KEY",
+        ),
+    ],
+)
+def test_runtime_model_override_preserves_smoke_policy(
+    provider: str,
+    model: str,
+    harbor_model: str,
+    api_key_env: str,
+) -> None:
+    settings = BenchmarkSettings.from_yaml(_smoke_config_path()).with_model_override(
+        provider,
+        model,
+    )
 
     assert settings.profile == "smoke"
-    assert settings.model.harbor_model == "nvidia/z-ai/glm-5.2"
-    assert settings.model.opensre_model == "z-ai/glm-5.2"
-    assert settings.model.required_environment_names == ("NVIDIA_API_KEY",)
+    assert settings.model.harbor_model == harbor_model
+    assert settings.model.opensre_model == model
+    assert settings.model.required_environment_names == (api_key_env,)
     assert not settings.verifier.enabled
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [("groq", None), (None, "llama-3.3-70b-versatile")],
+)
+def test_runtime_model_override_requires_provider_and_model_together(
+    provider: str | None,
+    model: str | None,
+) -> None:
+    with pytest.raises(ValueError, match="must be supplied together"):
+        BenchmarkSettings.from_yaml(_smoke_config_path()).with_model_override(
+            provider,
+            model,
+        )
+
+
+def test_model_settings_rejects_provider_outside_benchmark_allowlist() -> None:
+    raw = BenchmarkSettings.from_yaml(_smoke_config_path()).model_dump()
+    raw["model"]["provider"] = "deepseek"
+    raw["model"]["harbor_model"] = "deepseek/deepseek-chat"
+
+    with pytest.raises(ValueError, match="unsupported benchmark provider"):
+        BenchmarkSettings.model_validate(raw)
 
 
 def test_smoke_profile_rejects_enabled_verifier() -> None:

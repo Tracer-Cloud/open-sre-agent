@@ -114,9 +114,59 @@ def test_benchmark_profile_does_not_probe_source(tmp_path: Path) -> None:
     assert writer.writes == []
 
 
-def test_runner_marks_native_llm_failure_failed_without_writing_report(
+@pytest.mark.parametrize(
+    ("failure_state", "error_match"),
+    [
+        pytest.param(
+            {
+                "root_cause": "Error: provider rejected the request.",
+                "root_cause_category": "Investigation Error",
+                "causal_chain": ["LLM invoke failed: invalid tool-call history"],
+                "evidence_entries": [],
+                "agent_messages": [
+                    {"role": "assistant", "content": "unsupported provisional incident"}
+                ],
+            },
+            "did not complete",
+            id="llm-failure",
+        ),
+        pytest.param(
+            {
+                "root_cause": "Unable to determine root cause",
+                "root_cause_category": "unknown",
+                "evidence_entries": [],
+                "investigation_loop_count": 20,
+                "investigation_iteration_cap": 20,
+                "agent_messages": [
+                    {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "last-call",
+                                "function": {
+                                    "name": "query_grafana_logs",
+                                    "arguments": "{}",
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "content": "latest evidence",
+                        "tool_call_id": "last-call",
+                    },
+                ],
+            },
+            "iteration cap",
+            id="iteration-cap",
+        ),
+    ],
+)
+def test_runner_marks_incomplete_investigation_failed_without_writing_report(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    failure_state: dict[str, Any],
+    error_match: str,
 ) -> None:
     artifact_dir = tmp_path / "artifacts"
     report_path = tmp_path / "report.md"
@@ -146,15 +196,6 @@ def test_runner_marks_native_llm_failure_failed_without_writing_report(
     config_path.write_text(settings.to_json(), encoding="utf-8")
     instruction_path = tmp_path / "instruction.txt"
     instruction_path.write_text("test instruction", encoding="utf-8")
-    failure_state = {
-        "root_cause": "Error: provider rejected the request.",
-        "root_cause_category": "Investigation Error",
-        "causal_chain": ["LLM invoke failed: invalid tool-call history"],
-        "evidence_entries": [],
-        "agent_messages": [
-            {"role": "assistant", "content": "unsupported provisional incident"}
-        ],
-    }
     investigation = SimpleNamespace(
         investigate=lambda *_args, **_kwargs: failure_state,
         build_payload=NativeInvestigationRunner().build_payload,
@@ -174,7 +215,7 @@ def test_runner_marks_native_llm_failure_failed_without_writing_report(
     monkeypatch.setattr(runner, "parse_orca_task_context", lambda *_args: task_context)
     monkeypatch.setattr(runner, "check_grafana", lambda *_args: {"status": "ready"})
 
-    with pytest.raises(NativeInvestigationIncompleteError, match="did not complete"):
+    with pytest.raises(NativeInvestigationIncompleteError, match=error_match):
         runner.run(config_path, instruction_path)
 
     manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))

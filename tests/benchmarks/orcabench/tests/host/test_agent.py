@@ -45,6 +45,38 @@ def test_custom_agent_rejects_model_drift(tmp_path: Path) -> None:
         )
 
 
+def test_custom_agent_resolves_runtime_groq_model(tmp_path: Path) -> None:
+    agent = OpenSRENativeAgent(
+        logs_dir=tmp_path / "logs",
+        model_name="groq/openai/gpt-oss-120b",
+        model_provider="groq",
+        benchmark_config_path=_config_path(),
+        bundle_path=create_bundle(tmp_path),
+    )
+
+    settings = agent._runner_settings().benchmark
+    assert settings.model.provider == "groq"
+    assert settings.model.harbor_model == "groq/openai/gpt-oss-120b"
+    assert settings.model.opensre_model == "openai/gpt-oss-120b"
+    assert settings.model.required_environment_names == ("GROQ_API_KEY",)
+
+
+def test_custom_agent_resolves_runtime_gemini_model(tmp_path: Path) -> None:
+    agent = OpenSRENativeAgent(
+        logs_dir=tmp_path / "logs",
+        model_name="gemini/gemini-3.5-flash-lite",
+        model_provider="gemini",
+        benchmark_config_path=_config_path(),
+        bundle_path=create_bundle(tmp_path),
+    )
+
+    settings = agent._runner_settings().benchmark
+    assert settings.model.provider == "gemini"
+    assert settings.model.harbor_model == "gemini/gemini-3.5-flash-lite"
+    assert settings.model.opensre_model == "gemini-3.5-flash-lite"
+    assert settings.model.required_environment_names == ("GEMINI_API_KEY",)
+
+
 def test_post_run_summary_populates_harbor_context(tmp_path: Path) -> None:
     logs_dir = tmp_path / "logs"
     agent = OpenSRENativeAgent(

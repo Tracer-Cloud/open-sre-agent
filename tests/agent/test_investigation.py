@@ -1429,6 +1429,31 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
     )
 
 
+def test_run_reserves_final_iteration_for_tool_free_conclusion() -> None:
+    """A model making fresh calls every turn still receives one final text-only turn."""
+    tool = _fake_tool("query_logs")
+    tool_turn = 0
+
+    def invoke(messages: Any, system: Any, tools: Any) -> MagicMock:  # noqa: ARG001
+        nonlocal tool_turn
+        if not tools:
+            return _text_response(_incident_command_diagnosis("Final diagnosis: healthy."))
+        tool_turn += 1
+        return _tool_call_response(
+            [ToolCall(id=f"c{tool_turn}", name="query_logs", input={"page": tool_turn})]
+        )
+
+    with patch("tools.investigation.stages.gather_evidence.agent.MAX_INVESTIGATION_LOOPS", 4):
+        result, mock_llm = _run_agent_with_scripted_llm(invoke=invoke, tools=[tool])
+
+    assert mock_llm.invoke.call_count == 4
+    assert tool.run.call_count == 3
+    assert mock_llm.invoke.call_args_list[-1].kwargs["tools"] == []
+    assert result["agent_messages"][-1]["content"] == _incident_command_diagnosis(
+        "Final diagnosis: healthy."
+    )
+
+
 def test_truncate_content_distributes_across_multiple_blocks() -> None:
     """List content with several text slots is shrunk proportionally so the whole
     message lands near the budget instead of zeroing the first slot only."""

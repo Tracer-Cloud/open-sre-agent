@@ -5,7 +5,7 @@ orcabench/                           # One-task OpenSRE integration for ORCA-Ben
 ├── config.py                           # Validated shared configuration and manifests
 ├── configs/                          # Checked-in experiment configurations
 │   ├── native_one_task.yml             # Scored Gradient AI one-task configuration
-│   └── openrouter_smoke_one_task.yml   # Unscored OpenRouter one-task smoke configuration
+│   └── smoke_one_task.yml               # Unscored runtime-selectable one-task configuration
 ├── artifacts/                        # Redacted run-artifact schema and persistence
 │   ├── __init__.py                     # Public artifact exports
 │   ├── models.py                       # Run, usage, status, and error models
@@ -47,3 +47,16 @@ orcabench/                           # One-task OpenSRE integration for ORCA-Ben
         ├── test_health.py               # Real HTTP health-check test
         └── test_native.py               # Native connection and report tests
 ```
+
+The smoke configuration keeps experiment policy fixed while allowing the provider and
+provider-native model ID to be selected at launch. Supply both options together:
+
+```text
+--config tests/benchmarks/orcabench/configs/smoke_one_task.yml \
+--provider gemini \
+--model gemini-3.5-flash-lite
+```
+
+The benchmark route reuses OpenSRE's provider catalog. Currently allowed routes are
+`openai`, `openrouter`, `nvidia`, `gemini`, and `groq`; their existing OpenSRE
+credential variables are forwarded without embedding secret values in the command.

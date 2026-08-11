@@ -5,42 +5,36 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from config.llm_auth.provider_catalog import ProviderSpec
 
 SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
 class ProviderRoute:
-    """Names shared by Harbor, OpenSRE, and the host environment."""
+    """Benchmark-specific Harbor naming layered over OpenSRE provider metadata."""
 
     harbor_prefix: str
-    environment_prefix: str
-    api_key_env: str
-    base_url_env: str | None = None
+    additional_environment_names: tuple[str, ...] = ()
 
 
 PROVIDER_ROUTES = {
     "openai": ProviderRoute(
         harbor_prefix="gradient_ai/",
-        environment_prefix="OPENAI",
-        api_key_env="OPENAI_API_KEY",
-        base_url_env="OPENAI_BASE_URL",
+        additional_environment_names=("OPENAI_BASE_URL",),
     ),
-    "openrouter": ProviderRoute(
-        harbor_prefix="openrouter/",
-        environment_prefix="OPENROUTER",
-        api_key_env="OPENROUTER_API_KEY",
-    ),
-    "nvidia": ProviderRoute(
-        harbor_prefix="nvidia/",
-        environment_prefix="NVIDIA",
-        api_key_env="NVIDIA_API_KEY",
-    ),
+    "openrouter": ProviderRoute(harbor_prefix="openrouter/"),
+    "nvidia": ProviderRoute(harbor_prefix="nvidia/"),
+    "gemini": ProviderRoute(harbor_prefix="gemini/"),
+    "groq": ProviderRoute(harbor_prefix="groq/"),
 }
+BENCHMARK_PROVIDER_VALUES = tuple(PROVIDER_ROUTES)
 
 
 class StrictFrozenModel(BaseModel):
@@ -53,10 +47,20 @@ class ModelSettings(StrictFrozenModel):
     """OpenSRE's native LLM route for this experiment."""
 
     harbor_model: str = "gradient_ai/openai-gpt-5.5"
-    provider: Literal["openai", "openrouter", "nvidia"] = "openai"
+    provider: str = "openai"
     transport: Literal["sdk"] = "sdk"
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
     max_tokens: int = Field(default=16384, ge=1)
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, provider: str) -> str:
+        """Limit benchmark routes without duplicating the route allowlist."""
+        normalized = provider.strip().lower()
+        if normalized not in PROVIDER_ROUTES:
+            allowed = ", ".join(BENCHMARK_PROVIDER_VALUES)
+            raise ValueError(f"unsupported benchmark provider {provider!r}; choose: {allowed}")
+        return normalized
 
     @property
     def opensre_model(self) -> str:
@@ -69,12 +73,19 @@ class ModelSettings(StrictFrozenModel):
         return PROVIDER_ROUTES[self.provider]
 
     @property
+    def provider_spec(self) -> ProviderSpec:
+        """Return OpenSRE's canonical credential and model environment contract."""
+        from config.llm_auth.provider_catalog import require_provider_spec
+
+        return require_provider_spec(self.provider)
+
+    @property
     def required_environment_names(self) -> tuple[str, ...]:
         """Return secret/config names that Harbor must pass to the agent."""
-        names = [self.route.api_key_env]
-        if self.route.base_url_env is not None:
-            names.append(self.route.base_url_env)
-        return tuple(names)
+        return (
+            self.provider_spec.api_key_env,
+            *self.route.additional_environment_names,
+        )
 
     @model_validator(mode="after")
     def validate_native_route(self) -> Self:
@@ -85,6 +96,8 @@ class ModelSettings(StrictFrozenModel):
                 f"{self.route.harbor_prefix!r}"
             )
         model = self.opensre_model
+        if not model:
+            raise ValueError(f"{self.provider} model must be nonempty")
         if self.provider == "openai" and not model.startswith("openai-"):
             raise ValueError("Gradient AI route must identify an OpenAI model")
         if self.provider in {"openrouter", "nvidia"} and "/" not in model:
@@ -177,6 +190,53 @@ class BenchmarkSettings(StrictFrozenModel):
         if not isinstance(raw, dict):
             raise ValueError(f"benchmark config must contain a YAML mapping: {path}")
         return cls.model_validate(raw)
+
+    def with_model_override(
+        self,
+        provider: str | None,
+        model: str | None,
+    ) -> BenchmarkSettings:
+        """Return settings with one validated provider-native model override."""
+        if provider is None and model is None:
+            return self
+        if provider is None or model is None:
+            raise ValueError("--provider and --model must be supplied together")
+
+        normalized_provider = provider.strip().lower()
+        route = PROVIDER_ROUTES.get(normalized_provider)
+        if route is None:
+            allowed = ", ".join(BENCHMARK_PROVIDER_VALUES)
+            raise ValueError(f"unsupported benchmark provider {provider!r}; choose: {allowed}")
+        normalized_model = model.strip()
+        if not normalized_model:
+            raise ValueError("--model must be nonempty")
+
+        model_values = self.model.model_dump()
+        model_values.update(
+            {
+                "provider": normalized_provider,
+                "harbor_model": f"{route.harbor_prefix}{normalized_model}",
+            }
+        )
+        resolved_model = ModelSettings.model_validate(model_values)
+        return self.model_copy(update={"model": resolved_model})
+
+    def with_harbor_model_override(
+        self,
+        provider: str,
+        harbor_model: str,
+    ) -> BenchmarkSettings:
+        """Resolve Harbor's prefixed model through the same override validation."""
+        normalized_provider = provider.strip().lower()
+        route = PROVIDER_ROUTES.get(normalized_provider)
+        if route is None or not harbor_model.startswith(route.harbor_prefix):
+            raise ValueError(
+                f"Harbor model {harbor_model!r} does not match provider {provider!r}"
+            )
+        return self.with_model_override(
+            normalized_provider,
+            harbor_model.removeprefix(route.harbor_prefix),
+        )
 
 
 class BuildManifest(StrictFrozenModel):

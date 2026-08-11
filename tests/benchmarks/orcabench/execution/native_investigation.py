@@ -145,6 +145,51 @@ def _orca_conclusion_complete(text: str) -> bool:
     )
 
 
+def _assistant_message_has_tool_calls(message: dict[str, Any]) -> bool:
+    if message.get("tool_calls"):
+        return True
+    content = message.get("content")
+    return isinstance(content, list) and any(
+        isinstance(block, dict)
+        and (block.get("type") == "tool_use" or "toolUse" in block)
+        for block in content
+    )
+
+
+def _terminal_orca_conclusion(state: dict[str, Any]) -> str:
+    """Return the valid tool-free conclusion or fail the unscorable run."""
+    from core.messages.transcript import extract_last_assistant_text
+
+    raw_messages = state.get("agent_messages")
+    messages = raw_messages if isinstance(raw_messages, list) else []
+    terminal = messages[-1] if messages and isinstance(messages[-1], dict) else None
+    conclusion = ""
+    if (
+        terminal is not None
+        and terminal.get("role") == "assistant"
+        and not _assistant_message_has_tool_calls(terminal)
+    ):
+        conclusion = extract_last_assistant_text([terminal])
+    if conclusion and _orca_conclusion_complete(conclusion):
+        return conclusion
+
+    loop_count = state.get("investigation_loop_count")
+    iteration_cap = state.get("investigation_iteration_cap")
+    if (
+        isinstance(loop_count, int)
+        and isinstance(iteration_cap, int)
+        and iteration_cap > 0
+        and loop_count >= iteration_cap
+    ):
+        raise NativeInvestigationIncompleteError(
+            "OpenSRE investigation reached its iteration cap without a valid "
+            "terminal ORCA conclusion"
+        )
+    raise NativeInvestigationIncompleteError(
+        "OpenSRE investigation ended without a valid terminal ORCA conclusion"
+    )
+
+
 class NativeInvestigationRunner:
     """Bootstrap and invoke OpenSRE's public investigation capability once."""
 
@@ -194,15 +239,15 @@ class NativeInvestigationRunner:
 
     def build_payload(self, state: dict) -> dict[str, Any]:
         """Project native state into ORCA's disposition and report contract."""
-        from core.messages.transcript import extract_last_assistant_text
         from tools.investigation.capability import build_investigation_payload
 
         _raise_on_llm_failure(state)
+        conclusion = _terminal_orca_conclusion(state)
         payload = build_investigation_payload(state)
-        raw_messages = state.get("agent_messages")
-        messages = raw_messages if isinstance(raw_messages, list) else []
-        conclusion = extract_last_assistant_text(messages)
-        if conclusion:
-            payload["report"] = conclusion
-        payload["root_cause_category"] = state.get("root_cause_category", "")
+        payload["report"] = conclusion
+        payload["root_cause_category"] = (
+            "healthy"
+            if _ORCA_HEALTHY_DISPOSITION_RE.search(conclusion)
+            else state.get("root_cause_category", "")
+        )
         return payload

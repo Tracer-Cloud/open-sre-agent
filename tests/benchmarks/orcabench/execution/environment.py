@@ -21,13 +21,15 @@ def wait_for_path(path: Path, timeout_seconds: int) -> None:
 
 def native_environment_values(model: ModelSettings) -> dict[str, str]:
     """Build OpenSRE's provider-specific, secret-free runtime environment."""
-    model_prefix = model.route.environment_prefix
+    provider = model.provider_spec
+    if provider.classification_model_env is None or provider.toolcall_model_env is None:
+        raise ValueError(f"{model.provider} lacks benchmark model-slot metadata")
     return {
         "LLM_PROVIDER": model.provider,
         "OPENSRE_LLM_TRANSPORT": model.transport,
-        f"{model_prefix}_REASONING_MODEL": model.opensre_model,
-        f"{model_prefix}_CLASSIFICATION_MODEL": model.opensre_model,
-        f"{model_prefix}_TOOLCALL_MODEL": model.opensre_model,
+        provider.model_env: model.opensre_model,
+        provider.classification_model_env: model.opensre_model,
+        provider.toolcall_model_env: model.opensre_model,
         LLM_MAX_TOKENS_ENV: str(model.max_tokens),
         "OPENSRE_REASONING_EFFORT": model.reasoning_effort,
         "OPENSRE_MEMORY_DISABLED": "1",
