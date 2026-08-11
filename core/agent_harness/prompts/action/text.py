@@ -602,6 +602,10 @@ Never emit session_goal:achieved in the same turn as investigation_start —
 starting RCA is not finishing the goal. After investigation results (or other
 real tool answers) are in the reply and the condition's deliverables are met
 (issue id, count, next action, …), then emit session_goal:achieved.
+For metric_read / short checklists: when this turn's tools already produced
+the number and your reply reports it, finish the checklist in THAT reply —
+emit session_goal:done=0,1 (every completed index) and session_goal:achieved.
+Do not leave the host to run another outer turn that repeats the same answer.
 Legacy content-string tags still work if you must put them in content
 (``evidence_kind:metric_read`` or ``evidence_kind=metric_read``, same for
 ``session_goal`` / ``session_goal_item``). Prefer the schema fields above so the

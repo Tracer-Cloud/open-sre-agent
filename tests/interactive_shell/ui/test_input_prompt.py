@@ -19,7 +19,7 @@ from surfaces.interactive_shell.ui.input_prompt.completion import completion_pre
 from surfaces.interactive_shell.ui.input_prompt.layout import _prompt_line_width
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
-    _DEFAULT_PLACEHOLDER_TEXT,
+    DEFAULT_PLACEHOLDER_TEXT,
     _prompt_counter_text,
     _prompt_message,
     _prompt_rule_ansi,
@@ -187,14 +187,14 @@ class TestPromptRuleWidth:
 class TestResolvePromptPlaceholder:
     def test_default_when_no_session_context(self) -> None:
         session = Session()
-        assert _DEFAULT_PLACEHOLDER_TEXT in _placeholder_text(session)
+        assert DEFAULT_PLACEHOLDER_TEXT in _placeholder_text(session)
 
     def test_shows_trust_mode(self) -> None:
         session = Session()
         session.terminal.trust_mode = True
         text = _placeholder_text(session)
         assert "trust on" in text
-        assert _DEFAULT_PLACEHOLDER_TEXT not in text
+        assert DEFAULT_PLACEHOLDER_TEXT not in text
 
     def test_shows_running_task_count(self) -> None:
         session = Session()

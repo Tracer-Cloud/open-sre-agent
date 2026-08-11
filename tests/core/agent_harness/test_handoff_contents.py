@@ -11,6 +11,11 @@ def test_content_only_handoff_keeps_content_string() -> None:
 
 
 def test_structured_evidence_kind_emits_clean_tag() -> None:
+    """``metric_read`` emits a clean kind tag and implies SessionGoal attach.
+
+    Incomplete metric answers need the host continuation loop; omitting
+    ``session_goal`` would exit after one gather/answer turn.
+    """
     tags = handoff_contents_from_tool_input(
         {
             "content": "Count Windows users last 7 days.",
@@ -20,6 +25,7 @@ def test_structured_evidence_kind_emits_clean_tag() -> None:
     assert tags == (
         "Count Windows users last 7 days.",
         "evidence_kind:metric_read",
+        "session_goal:continue",
     )
     model = AssistantHandoff.from_tool_input(
         {
@@ -29,6 +35,7 @@ def test_structured_evidence_kind_emits_clean_tag() -> None:
     )
     assert model.evidence_kind is not None
     assert model.evidence_kind.value == "metric_read"
+    assert model.session_goal is True
 
 
 def test_session_goal_fields_emit_attach_and_checklist_tags() -> None:

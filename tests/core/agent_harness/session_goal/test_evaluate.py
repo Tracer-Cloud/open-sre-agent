@@ -330,6 +330,95 @@ def test_achieved_ignored_when_checklist_incomplete() -> None:
     assert "next: B" in verdict.reason
 
 
+def test_achieved_with_tool_evidence_completes_short_checklist() -> None:
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    goal = SessionGoal(
+        condition="how many windows users?",
+        checklist=("Query PostHog", "Report the number"),
+    )
+    verdict = evaluate_session_goal(
+        goal,
+        _result("262 Windows users. session_goal:achieved", executed=1, success=1),
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.CHECKLIST_COMPLETE_SAME_TURN
+
+
+def test_same_turn_tool_answer_completes_short_checklist_without_done_tags() -> None:
+    """metric_read often answers query+report in one turn and forgets done= tags."""
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="what windows users number did open opensre during last 7 days?",
+        checklist=(
+            "Query PostHog for distinct Windows users",
+            "Report the number to the user",
+        ),
+    )
+    attach_session_goal(session, goal)
+    verdict = evaluate_session_goal(
+        goal,
+        _result(
+            "I found: Windows had 262 distinct users.\n\nHere's what that looks like:",
+            executed=2,
+            success=2,
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.CHECKLIST_COMPLETE_SAME_TURN
+    assert session.session_goal is not None
+    assert session.session_goal.checklist_complete
+
+
+def test_same_turn_partial_done_tag_still_completes_short_checklist() -> None:
+    """Partial ``done=`` must not force a redundant outer turn.
+
+    Live Windows-users: model marks query ``done=0``, reports the count in
+    prose, forgets ``done=1`` / ``achieved`` — host must still finish.
+    """
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="what windows users number did open opensre during last 7 days?",
+        checklist=(
+            "Query PostHog for distinct Windows users who opened OpenSRE in last 7 days",
+            "Report the count to the user",
+        ),
+    )
+    attach_session_goal(session, goal)
+    verdict = evaluate_session_goal(
+        goal,
+        _result(
+            "I found: 17 distinct users invoked the OpenSRE CLI from Windows "
+            "in the last 7 days.\n\nsession_goal:done=0",
+            executed=4,
+            success=4,
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.CHECKLIST_COMPLETE_SAME_TURN
+    assert session.session_goal is not None
+    assert session.session_goal.checklist_complete
+
+
+def test_same_turn_tool_answer_does_not_false_complete_long_checklist() -> None:
+    goal = SessionGoal(
+        condition="five step walkthrough",
+        checklist=("A", "B", "C"),
+    )
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Started with A.", executed=1, success=1),
+    )
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert "checklist 0/3" in verdict.reason
+
+
 def test_checklist_complete_achieves_without_achieved_tag() -> None:
     from core.agent_harness.session_goal.goal import SessionGoalReason
 
@@ -496,3 +585,25 @@ def test_llm_evaluator_fails_closed_on_free_text_verdict() -> None:
     assert status == SessionGoalStatus.ACTIVE
     assert session.session_goal is not None
     assert session.session_goal.status == SessionGoalStatus.ACTIVE
+
+
+def test_achieved_claim_does_not_false_complete_a_long_checklist() -> None:
+    """A claim plus one tool must not close a multi-turn walkthrough.
+
+    The same-turn shortcut exists for query+report metric asks. On a longer
+    checklist the model must keep explicit ``done=`` tracking, or a first turn
+    that touched one item marks every remaining item done.
+    """
+    # Arrange — five steps, one successful tool, reply claims the goal is met
+    # while saying it only started step A.
+    goal = SessionGoal(condition="five step walkthrough", checklist=("A", "B", "C", "D", "E"))
+
+    # Act.
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Started with A. session_goal:achieved", executed=1, success=1),
+    )
+
+    # Assert — the claim is ignored, and B..E are still outstanding.
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert "checklist 0/5" in verdict.reason

@@ -60,6 +60,8 @@ class SessionGoalReason:
     ACHIEVED_HOST_SET = "achieved (host-set goal)"
     ACHIEVED_GENERIC = "goal achieved"
     CHECKLIST_COMPLETE = "checklist complete"
+    # Short checklist + tools + reply in one turn, but the model forgot done= tags.
+    CHECKLIST_COMPLETE_SAME_TURN = "checklist complete (same-turn answer)"
     WAITING_HOST_SIGNAL = "waiting for an achieved signal"
     WAITING_TOOL_EVIDENCE = "waiting for an achieved signal with tool evidence"
     WAITING_USER_CHOICE = "waiting for user choice"

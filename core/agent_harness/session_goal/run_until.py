@@ -171,8 +171,9 @@ def _finish_outer_turn(
         _clear_host_autosubmit(session)
         return active, last, True
 
-    # Still active under budget: one paint with the evaluate reason.
-    active = _paint(session, active, on_progress, rederive=False)
+    # Still active under budget: skip paint here — ``_announce_working`` owns
+    # the next status line so the TTY does not show two near-identical
+    # ``◎ /goal active`` blocks back-to-back before the continuation turn.
     return active, last, False
 
 
