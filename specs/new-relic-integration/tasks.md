@@ -69,12 +69,16 @@ rows / `null` on another. **Gate verified:** grepped for `arcotech`/`sre@arco`/t
 real account id — no matches; `python3 -m json.tool` confirms valid JSON;
 `tests/tools/test_new_relic_alerts_tool.py` parses it successfully (17 passing cases).
 
-### [ ] T-02b · Confirm which `slash_catalog.py` to edit
-Both exist: `tools/interactive_shell/shared/slash_catalog.py:377` (has the `/template`
-help) and `surfaces/interactive_shell/command_registry/slash_catalog.py` (not
-inspected).
-**Gate:** know whether the template list is duplicated in both; §3.4 points at the
-right file(s).
+### [x] T-02b · Confirm which `slash_catalog.py` to edit
+**Done 2026-08-11.** Read both in full. `surfaces/interactive_shell/command_registry/slash_catalog.py`
+does **not** duplicate the `/template` help text — it has no vendor list of its own. It
+imports `MCP_BY_COMMAND` from `tools/interactive_shell/shared/slash_catalog.py` and
+*derives* `SlashCommandSpec`s from the live `SLASH_COMMANDS` registry at call time
+(`_resolve_mcp_fields`, `build_slash_command_specs`); its only static string mentioning a
+vendor name is an unrelated `/integrations` positional-arg example ("datadog"), not the
+`/template` list. **Only** `tools/interactive_shell/shared/slash_catalog.py:376-379` (the
+`/template` entry) needed the New Relic addition — edited in T-14.
+**Gate verified:** confirmed by reading both files; the template list is not duplicated.
 
 ---
 
@@ -207,20 +211,77 @@ tests) green.
 
 ## Phase 4 — Investigation
 
-### [ ] T-12 · Routing and intake
+### [x] T-12 · Routing and intake
 `alert_source_catalog.py` (routing + aliases) and `intake/node.py`. FR-8.
 No regex/keyword routing outside the declarative tables.
 **Gate:** an alert mentioning "newrelic.com" classifies as `alert_source: "new_relic"`.
+**Done 2026-08-11.** `_ROUTING_TABLE["new_relic"] = routing(("new_relic",), ("new_relic",))`
+and `_ALIASES_TABLE["new_relic"] = ("new relic", "newrelic", "nrql", "nr alert")` added to
+`alert_source_catalog.py`; a `"new_relic" for New Relic or newrelic.com` detection line
+added to the `_EXTRACT_PROMPT` vendor list in `intake/node.py`, matching the format of the
+existing Datadog/Honeycomb/SigNoz lines exactly. No keyword/regex matching added outside
+these two declarative tables. **Gate verified:**
+`tests/core/domain/alerts/test_alert_source.py::test_primary_sources_for_alert_new_relic`
+(routing lookup) and
+`test_relevant_sources_matches_newrelic_url_in_alert_text` (an alert message containing
+`https://one.newrelic.com/...` resolves `relevant_sources_for_alert(..., ["new_relic", ...])
+== ["new_relic"]` via the registered alias, the same mechanism/test style used for `eks` in
+the same file); confirmed live via
+`seed_tool_sources_for_alert({"alert_source": "new_relic"}) == ("new_relic",)` against the
+real registered catalog (not a mock). Full `tests/core/domain/alerts/test_alert_source.py`
+(27 tests) green.
 
-### [ ] T-13 · Reporting
+### [x] T-13 · Reporting
 `provenance.py` and `evidence_catalog.py`. FR-10.
 **Gate:** the RCA report cites New Relic in the provenance and the evidence catalog.
+**Done 2026-08-11.** `provenance.py`: `PROVENANCE_SOURCE_ALIASES["new_relic_alerts"] =
+"new_relic"` plus a provenance block (label "New Relic", `account=<account_id>,
+window=<since_minutes>m`, mirroring the Datadog/Honeycomb `if <vendor>:` block shape).
+`evidence_catalog.py`: `SOURCE_ALIASES["new_relic"] = "new_relic_alerts"`, a new
+`_add_new_relic_alerts()` helper mirroring `_add_datadog_monitors()` (open-incident count in
+the label, incident count in the summary, top 3 `condition_name`s as the snippet), called
+from `build_evidence_catalog()` alongside the other vendor `_add_*` calls.
+**Known limitation, not New Relic-specific:** traced the real evidence-merge path
+(`tools/investigation/stages/gather_evidence/tools.py::merge_tool_evidence`) — only the
+Grafana tools have a flattening branch there; Datadog monitors/events, Honeycomb traces,
+Coralogix, and Betterstack have the identical gap (their `evidence_catalog.py` readers are
+only exercised by hand-built test state, never by the live ReAct loop, which only writes
+`evidence[tool_name]` = raw output for non-Grafana tools). New Relic's `_add_new_relic_alerts`
+follows the exact same pre-existing pattern as those vendors — not a new gap, and out of this
+task's declared file scope to fix project-wide. **Gate verified:**
+`tests/delivery/test_report_provenance.py::test_build_report_context_cites_new_relic_in_provenance_and_evidence_catalog`
+(new, mirrors `test_build_report_context_adds_additional_source_provenance`) — asserts both
+`ctx["source_provenance"]["new_relic"]["summary"]` and
+`ctx["evidence_catalog"]["evidence/new_relic/alerts"]["provenance"]`/`label`. Full
+`tests/delivery/test_report_provenance.py` (16 tests) green.
 
-### [ ] T-14 · Alert template
+### [x] T-14 · Alert template
 `alert_templates.py`, `config/constants/investigation.py`, `slash_catalog.py` (file
 confirmed by T-02b). FR-12.
 **Gate:** `opensre investigate --template new_relic` runs and invokes at least one of
 the tools (acceptance criterion 4).
+**Done 2026-08-11.** Added a `new_relic` entry to `_ALERT_TEMPLATES` in
+`alert_templates.py` (`alert_source: "new_relic"`, fictitious `checkout-latency`/
+`checkout-service` names, mirroring the Honeycomb/Coralogix template shape);
+`"new_relic"` appended to `ALERT_TEMPLATE_CHOICES` in `config/constants/investigation.py`;
+`/template` help text in `tools/interactive_shell/shared/slash_catalog.py` updated to list
+`new_relic`. **Gate verified:** the real CLI flag is `--print-template` (`--template` in
+the task/plan wording is shorthand) —
+`uv run opensre investigate --print-template new_relic` prints the correct JSON payload
+live (no mock); new smoke test
+`tests/cli/test_smoke.py::test_investigate_print_template_new_relic_smoke` pins this,
+mirroring the existing `generic`-template smoke test (the only `--print-template`
+end-to-end pattern in the suite — no vendor has a heavier "mocked full investigation"
+template test to follow). Tool invocation (acceptance criterion 4's other half) verified
+without live credentials by confirming the T-12 routing wiring end to end against the real
+catalog: `seed_tool_sources_for_alert({"alert_source": "new_relic"}) == ("new_relic",)`,
+and both `query_new_relic_alerts`/`query_new_relic_metrics` declare `source="new_relic"`
+(Phase 3), so a real investigation from this template auto-seeds at least one New Relic
+tool call once the integration is configured — the full live run needs a configured
+account and is deferred to the PR demo gate (T-19), per the New Relic key's read-only
+operational restriction. `tests/cli/test_args.py`'s `ALERT_TEMPLATE_CHOICES[0]`-based
+parametrization already covers the new template generically, no per-template edit needed
+there.
 
 ---
 

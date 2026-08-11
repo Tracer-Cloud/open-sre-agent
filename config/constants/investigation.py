@@ -25,6 +25,7 @@ ALERT_TEMPLATE_CHOICES: Final[tuple[str, ...]] = (
     "honeycomb",
     "coralogix",
     "splunk",
+    "new_relic",
 )
 
 __all__ = [

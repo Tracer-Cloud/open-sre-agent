@@ -64,6 +64,7 @@ Extract these fields from the message text:
   - "kubernetes" for CrashLoopBackOff, OOMKilled, Kubernetes pods, kube_namespace, or any generic Kubernetes/k8s alert not tied to AWS EKS
   - "alertmanager" for Prometheus/Alertmanager-specific fields
   - "signoz" for SigNoz, signoz.io, or signoz_metrics
+  - "new_relic" for New Relic or newrelic.com
   Leave null if truly unknown.
 - kube_namespace: Kubernetes namespace if mentioned
 - cloudwatch_log_group: AWS CloudWatch log group if mentioned
