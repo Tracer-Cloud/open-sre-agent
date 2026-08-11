@@ -442,6 +442,15 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
         setup_order=51,
         verify_order=53,
     ),
+    IntegrationSpec(
+        service="new_relic",
+        aliases=("newrelic", "new relic"),
+        has_verifier=True,
+        direct_effective=True,
+        core_verify=True,
+        setup_order=53,
+        verify_order=59,
+    ),
 )
 
 INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}

@@ -196,6 +196,12 @@ def _setup_coralogix() -> None:
     _run_spec_setup(CORALOGIX_SETUP)
 
 
+def _setup_new_relic() -> None:
+    from integrations.new_relic.setup import NEW_RELIC_SETUP
+
+    _run_spec_setup(NEW_RELIC_SETUP)
+
+
 def _setup_aws() -> None:
     from integrations.aws.setup import AWS_SETUP
 
@@ -746,6 +752,7 @@ _HANDLERS: dict[str, Any] = {
     "pagerduty": _setup_pagerduty,
     "kubernetes": _setup_kubernetes,
     "servicenow": _setup_servicenow,
+    "new_relic": _setup_new_relic,
 }
 
 

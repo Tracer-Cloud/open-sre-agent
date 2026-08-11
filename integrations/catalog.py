@@ -88,6 +88,10 @@ def load_env_integration_services() -> list[str]:
     add("honeycomb", _any_env("HONEYCOMB_API_KEY", "HONEYCOMB_INSTANCES"))
     add("coralogix", _any_env("CORALOGIX_API_KEY", "CORALOGIX_INSTANCES"))
     add(
+        "new_relic",
+        _all_env("NEW_RELIC_API_KEY", "NEW_RELIC_ACCOUNT_ID") or _env_is_set("NEW_RELIC_INSTANCES"),
+    )
+    add(
         "aws",
         _any_env("AWS_INSTANCES", "AWS_ROLE_ARN")
         or _all_env("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),

@@ -113,19 +113,28 @@ Phase 2 (T-07), which is out of this phase's scope.
 
 ## Phase 2 — Integration wiring
 
-### [ ] T-07 · `registry.py`, `_catalog_impl.py`, `catalog.py`, `effective_models.py`, `cli.py`
-**Depends on:** T-06. `plan.md` §3.3 table.
-FR-3 (`resolve_env_credential`, never `os.getenv` for the key), FR-11, NFR-5.
-Watch out: `catalog.py` uses `_all_env` (not `_any_env`), and `setup_order`/
-`verify_order` must be **unique** with a matching entry in `_HANDLERS` — the 4
-invariants in `plan.md` §3.3 are CI gates.
-**Gate:** with `NEW_RELIC_API_KEY` + `NEW_RELIC_ACCOUNT_ID` in the environment,
-`opensre integrations show` lists `new_relic` (acceptance criterion 1).
-`uv run python -m pytest tests/integrations/test_registry.py tests/integrations/test_registry_invariants.py tests/integrations/test_verify.py`
+### [x] T-07 · `registry.py`, `_catalog_impl.py`, `catalog.py`, `effective_models.py`, `cli.py`
+Done 2026-08-11. `IntegrationSpec(service="new_relic", ...)` added with free
+`setup_order=53`/`verify_order=59` slots; `_catalog_impl.py` env-loader block
+(dual `api_key`+`account_id` gate, mirroring Datadog); `catalog.py` uses
+`_all_env("NEW_RELIC_API_KEY", "NEW_RELIC_ACCOUNT_ID")` (not `_any_env`, FR-2);
+`EffectiveIntegrations.new_relic` field added; `_setup_new_relic()` registered
+in `cli.py`'s `_HANDLERS`.
+**Gate verified:** `tests/integrations/test_registry.py`,
+`test_registry_invariants.py`, `test_verify.py`, and
+`test_verification_registry.py` (89 tests) all green — this also fixes the
+Phase-1-known `test_list_verifiers_matches_supported_services` regression.
+`NEW_RELIC_API_KEY=... NEW_RELIC_ACCOUNT_ID=... opensre health` lists
+`new_relic  local env  FAILED  New Relic API returned HTTP 401.` (fake key,
+live 401 as expected — proves env discovery + verify wiring, acceptance
+criterion 1).
 
-### [ ] T-08 · `.env.example`
-`# New Relic` block + commented `NEW_RELIC_INSTANCES=`.
-**Gate:** `git status --short` shows no modified `.env`.
+### [x] T-08 · `.env.example`
+Done 2026-08-11. `# New Relic` block added (after Honeycomb) with
+`NEW_RELIC_API_KEY=`, `NEW_RELIC_ACCOUNT_ID=`, and a commented-out
+`# NEW_RELIC_INSTANCES=` line.
+**Gate verified:** `git status --short` shows no modified `.env`, only
+`.env.example`.
 
 ---
 
