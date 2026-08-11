@@ -7,7 +7,7 @@ from surfaces.interactive_shell.session import Session
 
 
 def _session(storage: InMemorySessionStore) -> Session:
-    return Session(storage=storage)
+    return Session(store=storage)
 
 
 def test_open_then_record_appends_turn() -> None:

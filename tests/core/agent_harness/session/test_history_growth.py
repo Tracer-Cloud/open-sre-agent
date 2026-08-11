@@ -36,7 +36,7 @@ class _NullStorage:
 
 
 def _session() -> SessionCore:
-    return SessionCore(storage=cast_storage(_NullStorage()))
+    return SessionCore(store=cast_storage(_NullStorage()))
 
 
 def cast_storage(obj: Any) -> SessionStore:

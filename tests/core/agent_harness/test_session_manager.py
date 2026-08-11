@@ -34,7 +34,7 @@ def test_open_store_opens_bootstrapped_session() -> None:
     storage = InMemorySessionStore()
     opened: list[str] = []
     storage.open_session = lambda session: opened.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = Session(session_id="boot-only")
     manager.bootstrap(session, hydrate_integrations=False, persistent_tasks=False)
@@ -48,7 +48,7 @@ def test_create_opens_storage_and_returns_session() -> None:
     storage = InMemorySessionStore()
     opened: list[str] = []
     storage.open_session = lambda session: opened.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = manager.create()
 
@@ -73,7 +73,7 @@ def test_resolve_restores_context_and_reopens_storage() -> None:
             "history": [{"type": "shell", "text": "ls", "ok": True}],
         }
     )
-    manager = SessionManager(storage=storage, repo=repo)
+    manager = SessionManager(store=storage, repo=repo)
 
     session = manager.resolve("sess-1")
 
@@ -103,7 +103,7 @@ def test_rotate_closes_old_and_creates_new() -> None:
     storage = InMemorySessionStore()
     flushed: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = manager.rotate(old_session_id="old-1", new_session_id="new-1")
 
@@ -132,7 +132,7 @@ def test_rotate_restores_outgoing_transcript_for_memory_extraction(
             ]
         }
     )
-    manager = SessionManager(storage=storage, repo=repo)
+    manager = SessionManager(store=storage, repo=repo)
 
     manager.rotate(old_session_id="old-1", new_session_id="new-1")
 
@@ -145,7 +145,7 @@ def test_rotate_without_old_id_skips_close() -> None:
     storage = InMemorySessionStore()
     flushed: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     manager.rotate(new_session_id="new-1")
 
@@ -165,7 +165,7 @@ def test_created_session_persists_through_manager_storage() -> None:
     # session.record() writes to the same place the manager opens/flushes —
     # not the default JSONL field on Session.
     storage = InMemorySessionStore()
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = manager.create()
     assert session.store is storage
@@ -178,7 +178,7 @@ def test_close_persists_and_releases_resources() -> None:
     storage = InMemorySessionStore()
     flushed: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = Session(session_id="s-close")
     session.store = storage
@@ -196,7 +196,7 @@ def test_close_releases_resources_before_memory_extraction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     storage = InMemorySessionStore()
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
     session = Session(session_id="s-close-order")
     session.store = storage
     session.agent.messages = [("user", "remember eks-prod-1"), ("assistant", "saved")]
@@ -230,7 +230,7 @@ def test_close_flush_failure_does_not_crash_teardown() -> None:
         raise OSError("disk full")
 
     storage.flush = _boom  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
     session = Session(session_id="s-fail")
     session.store = storage
     session.terminal.prompt_refresh_fn = lambda: None
@@ -246,7 +246,7 @@ def test_rotate_in_place_flushes_clears_and_opens_new_id() -> None:
     opened: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
     storage.open_session = lambda session: opened.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = Session(session_id="old-id")
     session.store = storage
@@ -271,7 +271,7 @@ def test_rotate_in_place_schedules_extraction_before_clear(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     storage = InMemorySessionStore()
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
     session = Session(session_id="old-id")
     session.store = storage
     session.agent.messages = [("user", "my name is Ada"), ("assistant", "noted")]
@@ -300,7 +300,7 @@ def test_rebind_for_resume_switches_id_and_reopens_storage() -> None:
     reopened: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
     storage.reopen_session = lambda session_id: reopened.append(session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = Session(session_id="live-id")
     session.store = storage
@@ -320,7 +320,7 @@ def test_rebind_for_resume_same_id_clears_without_flush() -> None:
     storage = InMemorySessionStore()
     flushed: list[str] = []
     storage.flush = lambda session: flushed.append(session.session_id)  # type: ignore[method-assign]
-    manager = SessionManager(storage=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
+    manager = SessionManager(store=storage, repo=SimpleNamespace(load_session=lambda _sid: None))
 
     session = Session(session_id="same-id")
     session.store = storage

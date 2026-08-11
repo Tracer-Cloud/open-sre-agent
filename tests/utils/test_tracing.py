@@ -70,7 +70,7 @@ def test_traceable_emits_component_span_when_sink_active(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     @traceable(name="investigation")
     def run_investigation() -> str:
@@ -98,7 +98,7 @@ def test_traceable_marks_error_status_when_callable_raises(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     @traceable("failing_component")
     def boom() -> None:

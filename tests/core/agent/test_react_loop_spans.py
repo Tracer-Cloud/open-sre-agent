@@ -124,7 +124,7 @@ def _activate_trace(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
     return path
 
 

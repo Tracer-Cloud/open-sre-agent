@@ -53,7 +53,7 @@ def test_run_connected_investigation_emits_stage_spans(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     state = make_initial_state(raw_alert="alert text")
     with (
@@ -110,7 +110,7 @@ def test_run_connected_investigation_skips_later_stages_on_noise(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     state = make_initial_state(raw_alert="noise")
     with (

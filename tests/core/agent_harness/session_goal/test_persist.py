@@ -72,7 +72,7 @@ def test_session_goal_state_snapshot_includes_cta_and_pending() -> None:
 
 def test_flush_persists_session_goal_state_and_restore_context_applies_it() -> None:
     storage = InMemorySessionStore()
-    session = SessionCore(storage=storage)
+    session = SessionCore(store=storage)
     storage.open_session(session)
     storage.append_turn(session, "chat", "start")
     attach_session_goal(
@@ -127,7 +127,7 @@ def test_clearing_a_goal_writes_a_tombstone_so_resume_does_not_revive_it() -> No
     from core.agent_harness.session_goal.persist import session_goal_state_is_empty
 
     storage = InMemorySessionStore()
-    session = SessionCore(storage=storage)
+    session = SessionCore(store=storage)
     storage.open_session(session)
     storage.append_turn(session, "chat", "start")
     attach_session_goal(
@@ -188,7 +188,7 @@ def test_clearing_a_goal_is_persisted_so_resume_does_not_revive_it() -> None:
     from core.agent_harness.session_goal.persist import SESSION_GOAL_STATE_CUSTOM_TYPE
 
     storage = InMemorySessionStore()
-    session = SessionCore(storage=storage)
+    session = SessionCore(store=storage)
     storage.open_session(session)
     session.record("cli_agent", "start", ok=True)
     attach_session_goal(session, SessionGoal(condition="finish it", max_outer_turns=3))

@@ -535,7 +535,7 @@ def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
     try:
         with bind_session_trace(session_id):
             result = execute_tool_calls([_call()], [_tool()], {})[0]
@@ -581,7 +581,7 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
     try:
         with bind_session_trace(session_id):
             result = execute_tool_calls([_call("missing")], [], {})[0]

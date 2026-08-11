@@ -103,7 +103,7 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
 
 def test_default_turn_accounting_persists_action_only_context() -> None:
     storage = InMemorySessionStore()
-    session = Session(storage=storage)
+    session = Session(store=storage)
     storage.open_session(session)
 
     def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
