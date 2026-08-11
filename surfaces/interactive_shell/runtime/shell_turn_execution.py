@@ -21,6 +21,7 @@ from core.agent_harness.session.session_goal import (
 )
 from core.agent_harness.session.session_goal_paint import format_session_goal_progress
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from core.agent_harness.turns.turn_plan import TurnPlan
@@ -94,7 +95,9 @@ class _ShellTurnBindings:
             request=request,
         )
 
-    def gather_evidence(self, text: str, *, turn_plan: TurnPlan | None = None) -> str | None:
+    def gather_evidence(
+        self, text: str, *, turn_plan: TurnPlan | None = None
+    ) -> str | GatheredEvidence | None:
         resolved = turn_plan.resolved_integrations if turn_plan is not None else None
         return self.gather(
             text,

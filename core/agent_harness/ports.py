@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
@@ -266,8 +267,13 @@ class StreamAnswerFn(Protocol):
 class EvidenceGatherer(Protocol):
     """Bound evidence-gather callable handed to ``run_turn``."""
 
-    def __call__(self, text: str, *, turn_plan: Any = None) -> str | None:
-        """Gather read-only evidence for ``text``, or return None."""
+    def __call__(self, text: str, *, turn_plan: Any = None) -> str | GatheredEvidence | None:
+        """Gather read-only evidence for ``text``, or return None.
+
+        Prefer :class:`~core.agent_harness.turns.gather_observation.GatheredEvidence`
+        (observation text + structured tool payloads). Legacy ``str`` return
+        values are still accepted by the orchestrator.
+        """
 
 
 class ExecuteActions(Protocol):
@@ -303,6 +309,7 @@ __all__ = [
     "ErrorReporter",
     "EvidenceGatherer",
     "ExecuteActions",
+    "GatheredEvidence",
     "OutputSink",
     "PromptContextProvider",
     "ReasoningClientProvider",

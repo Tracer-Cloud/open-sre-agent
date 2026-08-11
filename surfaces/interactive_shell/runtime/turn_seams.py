@@ -14,6 +14,7 @@ from typing import Any, Protocol
 from rich.console import Console
 
 from core.agent_harness.ports import AnswerRequest, OutputSink
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
@@ -54,7 +55,7 @@ class GatherEvidence(Protocol):
         console: Console,
         *,
         resolved_integrations: dict[str, Any] | None = None,
-    ) -> str | None:
+    ) -> str | GatheredEvidence | None:
         """Gather evidence for the message, or return None when nothing applies."""
 
 

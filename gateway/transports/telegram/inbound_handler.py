@@ -17,7 +17,7 @@ from gateway.transports.telegram.approvals import TelegramApprovalPrompter
 from gateway.transports.telegram.inbound_security import (
     enforce_inbound_telegram_message_security,
 )
-from gateway.transports.telegram.output_sink import GatewayOutputSink
+from gateway.transports.telegram.output_sink import TelegramOutputSink
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from gateway.transports.telegram.principal import (
     PrincipalResolutionError,
@@ -87,7 +87,7 @@ async def handle_polled_inbound_telegram_message(
                 preview,
             )
 
-            sink = GatewayOutputSink(
+            sink = TelegramOutputSink(
                 client=client,
                 chat_id=event.chat_id,
                 edit_interval_seconds=settings.stream_edit_interval_seconds,

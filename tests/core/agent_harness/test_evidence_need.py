@@ -186,7 +186,11 @@ def test_reclassify_after_gather_flips_on_auth_failure() -> None:
 
     flipped = reclassify_evidence_need_after_gather(
         need,
-        f"Tool: {_FAKE_ANALYTICS}\nResult: error 401 unauthorized — invalid api key",
+        (
+            f"Tool: {_FAKE_ANALYTICS} execute-sql\n"
+            "Result: {'source': 'fake_analytics', 'available': False, "
+            "'error': '401 Unauthorized — invalid api key'}"
+        ),
     )
 
     assert flipped.tier == EvidenceTier.L0_DEGRADED
@@ -224,50 +228,91 @@ def test_reclassify_leaves_missing_source_l0_unchanged() -> None:
     assert (
         reclassify_evidence_need_after_gather(
             need,
-            f"{_FAKE_ANALYTICS} 401 unauthorized",
+            (
+                f"Tool: {_FAKE_ANALYTICS}\n"
+                "Result: {'source': 'fake_analytics', 'available': False, "
+                "'error': '401 Unauthorized'}"
+            ),
         )
         is need
     )
 
 
 def test_successful_result_values_are_not_read_as_config_failures() -> None:
-    """Query data must not look like an auth error.
+    """Ordinary result values must not look like tool_unavailable.
 
-    Failure detection scans observation prose near the source name. Bare
-    ``401`` / ``403`` / ``forbidden`` also occur as ordinary values — a count,
-    a campaign name — so matching them alone discards an authoritative answer
-    and tells the user to reconnect a source that is working.
+    Greptile P1: a successful preferred-source result that *mentions*
+    ``unauthorized access``, ``permission denied``, or nested
+    ``"available": false`` as data must stay L1 — never discard it and tell
+    the user to reconnect.
     """
     from core.agent_harness.turns.evidence_need import _preferred_sources_with_config_failure
 
     sources = ("posthog_mcp",)
 
     # A successful query whose count happens to be 401.
-    counted = 'Tool: posthog_mcp query -> {"results": [["Windows", 401]], "status": "ok"}'
-    assert _preferred_sources_with_config_failure(counted, sources) == ()
+    counted = 'Tool: posthog_mcp query\nResult: {"results": [["Windows", 401]], "status": "ok"}'
+    assert _preferred_sources_with_config_failure(sources, observation=counted) == ()
 
-    # A successful query whose row text contains "forbidden".
-    named = 'Tool: posthog_mcp -> rows: [["forbidden-city-campaign", 12]]'
-    assert _preferred_sources_with_config_failure(named, sources) == ()
-
-    # ...or "unauthorized" as a cohort / feature-flag name.
-    cohort = 'Tool: posthog_mcp -> rows: [["unauthorized-users-cohort", 87]]'
-    assert _preferred_sources_with_config_failure(cohort, sources) == ()
-    flag = 'Tool: posthog_mcp -> [["flag: unauthorized_banner", 12]]'
-    assert _preferred_sources_with_config_failure(flag, sources) == ()
+    # Prose / names that used to trip the old phrase list.
+    for observation in (
+        'Tool: posthog_mcp\nResult: {"rows": [["forbidden-city-campaign", 12]]}',
+        'Tool: posthog_mcp\nResult: {"rows": [["unauthorized-users-cohort", 87]]}',
+        'Tool: posthog_mcp\nResult: {"rows": [["unauthorized access", 3]]}',
+        'Tool: posthog_mcp\nResult: {"rows": [["permission denied events", 9]]}',
+        'Tool: posthog_mcp\nResult: {"rows": [["access denied page", 1]]}',
+        # Nested available:false without top-level error (feature-flag shape).
+        'Tool: posthog_mcp\nResult: {"flags": {"unauthorized_banner": {"available": false}}}',
+        # available:false without error — not the typed envelope.
+        'Tool: posthog_mcp\nResult: {"source": "posthog_mcp", "available": false}',
+        # Free-text auth wording without an envelope — fail closed (no degrade).
+        "Tool: posthog_mcp\nResult: error: 401 Unauthorized, invalid api key",
+        "Tool: posthog_mcp\nResult: permission denied",
+    ):
+        assert _preferred_sources_with_config_failure(sources, observation=observation) == (), (
+            observation
+        )
 
 
 def test_a_real_auth_failure_is_still_detected() -> None:
-    """Tightening the markers must not blind the detector to genuine failures."""
+    """Typed tool_unavailable envelopes still flip preferred sources."""
     from core.agent_harness.turns.evidence_need import _preferred_sources_with_config_failure
 
     sources = ("posthog_mcp",)
     for observation in (
-        "Tool: posthog_mcp -> error: 401 Unauthorized, invalid api key",
-        "Tool: posthog_mcp -> HTTP 403 Forbidden",
-        "Tool: posthog_mcp -> posthog is not configured",
-        "Tool: posthog_mcp -> authentication failed",
-        'Tool: posthog_mcp -> {"error": "unauthorized"}',
-        "Tool: posthog_mcp -> error: unauthorized",
+        "Tool: posthog_mcp execute-sql\n"
+        "Result: {'source': 'posthog_mcp', 'available': False, "
+        "'error': '401 Unauthorized — invalid api key'}",
+        "Tool: posthog_mcp\n"
+        'Result: {"source": "posthog", "available": false, "error": "not configured"}',
+        # Envelope without source — Tool: line supplies the vendor.
+        "Tool: posthog_mcp list_tools\n"
+        "Result: {'available': False, 'error': 'authentication failed'}",
+        # JSON envelope embedded without Tool:/Result: wrapper.
+        '{"source": "posthog_mcp", "available": false, "error": "invalid api key"}',
     ):
-        assert _preferred_sources_with_config_failure(observation, sources) == sources, observation
+        assert (
+            _preferred_sources_with_config_failure(sources, observation=observation) == sources
+        ), observation
+
+
+def test_structured_tool_results_flip_without_scraping_observation() -> None:
+    """GatheredEvidence.tool_results is the preferred reclassify path."""
+    from core.agent_harness.turns.gather_observation import GatheredEvidence
+    from core.tool_framework.utils.tool_availability import tool_unavailable
+
+    need = _l1_metric_need()
+    # Observation looks like a happy path; structured payload says otherwise.
+    gathered = GatheredEvidence(
+        observation=f"Tool: {_FAKE_ANALYTICS}\nResult: windows_users=42",
+        tool_results=(
+            (
+                f"{_FAKE_ANALYTICS} execute-sql",
+                tool_unavailable(_FAKE_ANALYTICS, "401 Unauthorized"),
+            ),
+        ),
+    )
+    flipped = reclassify_evidence_need_after_gather(need, gathered)
+    assert flipped.tier == EvidenceTier.L0_DEGRADED
+    assert flipped.degrade_cause == EvidenceDegradeCause.CONFIG_FAILURE
+    assert flipped.missing == (_FAKE_ANALYTICS,)

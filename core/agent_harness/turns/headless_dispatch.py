@@ -55,6 +55,7 @@ from core.agent_harness.turns.action_driver import (
 )
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
@@ -251,7 +252,9 @@ class HeadlessAgent:
             request=request,
         )
 
-    def _gather(self, text: str, *, turn_plan: TurnPlan | None = None) -> str | None:
+    def _gather(
+        self, text: str, *, turn_plan: TurnPlan | None = None
+    ) -> str | GatheredEvidence | None:
         if not self._gather_ports.enabled:
             return None
         from core.agent_harness.turns.host_cancel import host_cancel_requested

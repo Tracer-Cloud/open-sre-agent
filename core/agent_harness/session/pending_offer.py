@@ -238,12 +238,10 @@ def _compact_evidence_lines(observation: str) -> list[str]:
     noise to the intake alert parser, so only a compact outcome per tool goes
     into the alert text.
     """
+    from core.agent_harness.turns.gather_observation import iter_tool_result_blocks
+
     lines: list[str] = []
-    for block in observation.split("\n\n"):
-        if not block.startswith("Tool: "):
-            continue
-        name = block.split("\n", 1)[0][len("Tool: ") :].strip()
-        _, _, result = block.partition("\nResult: ")
+    for name, result in iter_tool_result_blocks(observation):
         outcome = " ".join(result.split()) or "(no result)"
         if len(outcome) > _MAX_EVIDENCE_LINE_CHARS:
             outcome = outcome[:_MAX_EVIDENCE_LINE_CHARS] + "…"

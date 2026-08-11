@@ -29,6 +29,10 @@ from core.agent_harness.prompts.memory.conversation import (
     format_recent_conversation,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.gather_observation import (
+    GatheredEvidence,
+    tool_results_from_executed,
+)
 from core.agent_harness.turns.goal_review import build_gather_goal_reviewer
 from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
 from core.domain.alerts.alert_source import secondary_tool_sources
@@ -255,13 +259,14 @@ def gather_tool_evidence(
     resolved_integrations: dict[str, Any] | None = None,
     max_iterations: int | None = None,
     is_cancelled: Callable[[], bool] | None = None,
-) -> str | None:
+) -> GatheredEvidence | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
-    Returns a formatted observation block when at least one tool was executed;
-    otherwise ``None`` so the caller falls back to the normal text-only answer.
-    Any failure is reported and swallowed (returns ``None``) — gathering must
-    never break the conversational turn.
+    Returns :class:`GatheredEvidence` (prompt text + structured tool payloads)
+    when at least one tool was executed; otherwise ``None`` so the caller
+    falls back to the normal text-only answer. Any failure is reported and
+    swallowed (returns ``None``) — gathering must never break the
+    conversational turn.
     """
 
     def _run_gather_turn() -> Any | None:
@@ -357,11 +362,15 @@ def gather_tool_evidence(
         if persist is not None:
             persist(result.executed)
         log.debug("gather_evidence done tools_executed=%s", len(result.executed))
-        return _format_observation(result.executed)
+        return GatheredEvidence(
+            observation=_format_observation(result.executed),
+            tool_results=tool_results_from_executed(result.executed),
+        )
 
 
 __all__ = [
     "GatherAgentFactory",
+    "GatheredEvidence",
     "MAX_REPORT_GATHER_ITERATIONS",
     "PersistToolCalls",
     "gather_tool_evidence",

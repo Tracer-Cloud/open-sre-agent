@@ -18,6 +18,7 @@ from rich.markup import escape
 
 from core.agent_harness.turns import evidence_driver
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -160,11 +161,12 @@ def gather_integration_tool_evidence(
     *,
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
-) -> str | None:
+) -> str | GatheredEvidence | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
-    Returns a formatted observation block when at least one tool was executed;
-    otherwise ``None`` so the caller falls back to the normal text-only answer.
+    Returns :class:`~core.agent_harness.turns.gather_observation.GatheredEvidence`
+    (or legacy observation text) when at least one tool was executed; otherwise
+    ``None`` so the caller falls back to the normal text-only answer.
     ``resolved_integrations`` is the turn's resolved view; it is forwarded so the
     gather phase reuses it instead of resolving again.
     """

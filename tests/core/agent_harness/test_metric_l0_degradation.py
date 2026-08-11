@@ -134,9 +134,11 @@ def test_connected_source_auth_failure_gathers_then_appends_reconnect_cta() -> N
 
     def _gather(text: str, *_args: object, **_kwargs: object) -> str:
         gather_calls.append(text)
+        # Typed tool_unavailable envelope (Python repr — how gather often
+        # stringifies dict results). Must not rely on prose "401" alone.
         return (
             "Tool: posthog_mcp execute-sql\n"
-            "Result: {'available': false, 'error': '401 Unauthorized — invalid api key'}"
+            "Result: {'available': False, 'error': '401 Unauthorized — invalid api key'}"
         )
 
     def _answer(text: str, request: AnswerRequest, **_kwargs: Any) -> Any:

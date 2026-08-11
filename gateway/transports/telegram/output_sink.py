@@ -1,4 +1,4 @@
-"""Gateway output sink with typing indicator and throttled message streaming."""
+"""Telegram output sink with typing indicator and throttled message streaming."""
 
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ def _log_preview(text: str) -> str:
     return preview
 
 
-class GatewayOutputSink:
-    """Stream assistant output back through the active messaging transport."""
+class TelegramOutputSink:
+    """Stream assistant output back through the Telegram Bot API."""
 
     def __init__(
         self,

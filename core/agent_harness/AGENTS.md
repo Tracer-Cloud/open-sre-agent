@@ -49,10 +49,13 @@ integration ids stay opt-in via `platform.harness_ports.register_preferred_evide
 **Evidence tiers / degradation:** `classify_evidence_need` is connectivity-first
 (`L0_degraded` + skip gather when a preferred authoritative source is missing).
 After an L1 gather, `reclassify_evidence_need_after_gather` may flip to
-`L0_degraded` with `EvidenceDegradeCause.CONFIG_FAILURE` when the observation
-shows auth/config failure on a preferred source — then finalize appends a
-reconnect UpgradeCTA. HogQL / empty-result failures stay L1 (no CTA). Do not
-scan user prose for this; inspect gather observation only.
+`L0_degraded` with `EvidenceDegradeCause.CONFIG_FAILURE` only for a typed
+`tool_unavailable` envelope (`{"source", "available": False, "error"}`).
+Prefer `GatheredEvidence.tool_results` from the gather loop; fall back to
+`split`/`partition` on the rendered `Tool:`/`Result:` observation (see
+`gather_observation.iter_tool_result_blocks`) — never regex or phrase lists.
+HogQL / empty-result failures and ordinary values that mention auth words stay
+L1 (no CTA).
 
 **No keyword intent routing around the action agent.** Do not scan user text
 with regex/keywords to skip gather, attach goals, or bypass `execute_actions`.

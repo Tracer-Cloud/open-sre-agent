@@ -63,6 +63,7 @@ from core.agent_harness.turns.evidence_need import (
     reclassify_evidence_need_after_gather,
     should_skip_gather,
 )
+from core.agent_harness.turns.gather_observation import coerce_gathered_evidence
 from core.agent_harness.turns.handoff_keys import HandoffTag
 from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
@@ -344,7 +345,7 @@ def _gather_and_answer(
         )
         or skip_for_evidence
     )
-    gathered = None if skip_gather else gather(text, turn_plan=turn_plan)
+    gathered_raw = None if skip_gather else gather(text, turn_plan=turn_plan)
     if host_cancel_requested(output):
         return None
     if skip_gather:
@@ -356,9 +357,11 @@ def _gather_and_answer(
             reason = "follow_up handoff with prior investigation state"
         log.debug("gather skipped: %s", reason)
 
-    # L1 → L0_degraded when gather observation shows preferred-source config/auth
-    # failure (not HogQL / empty-result noise). Refresh the handoff tag so the
-    # answer path gets reconnect guidance.
+    gathered = coerce_gathered_evidence(gathered_raw)
+
+    # L1 → L0_degraded when gather shows preferred-source config/auth failure
+    # (typed tool_unavailable envelopes; not HogQL / empty-result noise).
+    # Refresh the handoff tag so the answer path gets reconnect guidance.
     answer_handoffs = handoff_contents
     if evidence_need is not None and not skip_gather:
         prior = evidence_need
@@ -381,7 +384,7 @@ def _gather_and_answer(
     # Defer Want-me-to paint only when the gather closer rewrite will flush it.
     # Follow-ups skip that rewrite; deferring on non-TTY would hold the whole
     # answer forever (oracle / CI consoles use force_terminal=False).
-    observation = gathered if gathered else None
+    observation = gathered.observation if gathered is not None else None
     run = answer(
         text,
         AnswerRequest(

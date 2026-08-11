@@ -5,22 +5,36 @@ This module turns those tags + connected integrations into an
 :class:`EvidenceNeed` so the orchestrator can skip empty gather and append a CTA.
 
 After an L1 gather, :func:`reclassify_evidence_need_after_gather` may flip the
-need to ``L0_degraded`` when preferred-source failures look like config/auth
-(not HogQL / empty-result noise).
+need to ``L0_degraded`` when preferred-source tools return the typed
+``tool_unavailable`` envelope (``available: False`` + ``error``). Prefer
+structured ``tool_results`` from :class:`GatheredEvidence`; the observation
+string is a fallback parsed with plain ``split``/``partition`` (no regex, no
+phrase lists). Ordinary result values that mention auth words stay L1.
 
 Do not scan user prose here — see workspace rule no-keyword-intent-routing.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import ast
+import json
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.turns.evidence_kind import EvidenceKind, policy_for
+from core.agent_harness.turns.gather_observation import (
+    GatheredEvidence,
+    coerce_gathered_evidence,
+    iter_tool_result_blocks,
+)
 from core.agent_harness.turns.handoff_keys import HandoffField, HandoffTag
 from core.agent_harness.turns.handoff_tag_parse import first_tag_token
+from core.tool_framework.utils.tool_availability import (
+    envelope_source_id,
+    is_tool_unavailable_envelope,
+)
 
 if TYPE_CHECKING:
     from core.agent_harness.turns.assistant_handoff import AssistantHandoff
@@ -44,39 +58,6 @@ class EvidenceDegradeCause(StrEnum):
 PreferredSourcesForKind = Callable[[EvidenceKind], tuple[str, ...]]
 # Renders the surface command that connects ``service_id`` (core knows no slash syntax).
 SetupCommandForSource = Callable[[str], str]
-
-# Auth/config failure signatures in gather observation text (preferred-source
-# scoped). Every marker is a phrase that cannot appear as ordinary result data.
-# Bare ``401`` / ``403`` / ``forbidden`` were matched before and fired on real
-# answers — a count of 401, a campaign named "forbidden-city" — discarding the
-# result and telling the user to reconnect a healthy source. Status codes are
-# only a failure next to the word that makes them one.
-_CONFIG_FAILURE_PHRASES = (
-    "not configured",
-    "authentication failed",
-    "authentication error",
-    "invalid api key",
-    "invalid token",
-    "missing credentials",
-    "missing api key",
-    "401 unauthorized",
-    'error": "unauthorized',
-    'error":"unauthorized',
-    "error: unauthorized",
-    "unauthorized request",
-    "unauthorized access",
-    "403 forbidden",
-    "http 401",
-    "http 403",
-    "status 401",
-    "status 403",
-    "error 401",
-    "error 403",
-    "permission denied",
-    "access denied",
-    '"available": false',
-    '"available":false',
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,69 +170,197 @@ def classify_evidence_need(
     )
 
 
-def _source_mentioned(observation_lower: str, source: str) -> bool:
-    """True when the observation names this preferred source (or a close alias)."""
+def _source_aliases(source: str) -> frozenset[str]:
     needle = source.lower().strip()
     if not needle:
-        return False
-    if needle in observation_lower:
-        return True
-    # ``posthog_mcp`` observations often say ``posthog`` / ``PostHog MCP``.
+        return frozenset()
+    aliases = {needle}
     base = needle.removesuffix("_mcp")
-    return bool(base) and base in observation_lower
+    if base:
+        aliases.add(base)
+    return frozenset(aliases)
 
 
-def _window_has_config_failure(window: str) -> bool:
-    """True when the window shows an auth/config failure, not a result value."""
-    return any(phrase in window for phrase in _CONFIG_FAILURE_PHRASES)
+def _source_mentioned(text: str, source: str) -> bool:
+    """True when *text* names this preferred source (or a close alias)."""
+    lowered = text.lower()
+    return any(alias in lowered for alias in _source_aliases(source))
+
+
+def _try_parse_mapping(raw: str) -> dict[str, Any] | None:
+    """Parse a gather Result payload into a dict, or return None."""
+    text = raw.strip()
+    if not text:
+        return None
+    # Prefer JSON; gather often embeds Python repr (single quotes).
+    for loader in (json.loads, ast.literal_eval):
+        try:
+            value = loader(text)
+        except (TypeError, ValueError, SyntaxError, RecursionError, json.JSONDecodeError):
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
+
+
+def _iter_brace_objects(text: str) -> Iterator[str]:
+    """Yield top-level ``{…}`` slices (string-aware enough for gather blobs)."""
+    start = -1
+    depth = 0
+    in_str: str | None = None
+    escape = False
+    for i, ch in enumerate(text):
+        if in_str is not None:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == in_str:
+                in_str = None
+            continue
+        if ch in {'"', "'"}:
+            in_str = ch
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                yield text[start : i + 1]
+                start = -1
+
+
+def _payload_as_unavailable(payload: Any) -> dict[str, Any] | None:
+    """Return a typed unavailable envelope from a raw tool output, if any."""
+    if is_tool_unavailable_envelope(payload):
+        return payload
+    if isinstance(payload, str):
+        parsed = _try_parse_mapping(payload)
+        if parsed is not None and is_tool_unavailable_envelope(parsed):
+            return parsed
+        for blob in _iter_brace_objects(payload):
+            inner = _try_parse_mapping(blob)
+            if inner is not None and is_tool_unavailable_envelope(inner):
+                return inner
+    return None
+
+
+def _iter_unavailable_hits(
+    *,
+    observation: str | None,
+    tool_results: Sequence[tuple[str, Any]],
+) -> Iterator[tuple[str | None, dict[str, Any]]]:
+    """Yield ``(tool_line_hint, envelope)`` for typed unavailable payloads."""
+    # Structured gather outputs win — no string scrape when the loop still
+    # has raw tool payloads.
+    if tool_results:
+        for tool_name, payload in tool_results:
+            envelope = _payload_as_unavailable(payload)
+            if envelope is not None:
+                yield (tool_name.strip() or None), envelope
+        return
+
+    text = (observation or "").strip()
+    if not text:
+        return
+
+    blocks = list(iter_tool_result_blocks(text))
+    if blocks:
+        for tool_hint, result in blocks:
+            envelope = _payload_as_unavailable(result)
+            if envelope is not None:
+                yield (tool_hint or None), envelope
+        return
+
+    # Fallback: envelopes embedded without a Tool:/Result: wrapper.
+    for blob in _iter_brace_objects(text):
+        payload = _try_parse_mapping(blob)
+        if payload is not None and is_tool_unavailable_envelope(payload):
+            yield None, payload
+
+
+def _envelope_matches_preferred(
+    *,
+    tool_hint: str | None,
+    payload: dict[str, Any],
+    preferred: str,
+) -> bool:
+    """True when this unavailable envelope is about *preferred*."""
+    source = envelope_source_id(payload)
+    if source is not None:
+        aliases = _source_aliases(preferred)
+        if source.lower() in aliases or any(a in source.lower() for a in aliases):
+            return True
+    return _source_mentioned(tool_hint, preferred) if tool_hint else False
 
 
 def _preferred_sources_with_config_failure(
-    observation: str,
     preferred: tuple[str, ...],
+    *,
+    observation: str | None = None,
+    tool_results: Sequence[tuple[str, Any]] = (),
 ) -> tuple[str, ...]:
-    """Return preferred source ids whose local observation window looks like auth/config failure."""
-    lowered = observation.lower()
+    """Return preferred source ids that returned a tool_unavailable envelope.
+
+    Ordinary result values that mention ``unauthorized``, ``permission denied``,
+    or nested ``"available": false`` without the typed ``error`` field do **not**
+    count — that was the Greptile P1 false-positive class.
+    """
+    if not preferred:
+        return ()
+    if not tool_results and not (observation or "").strip():
+        return ()
+
     failed: list[str] = []
-    for source in preferred:
-        if not _source_mentioned(lowered, source):
-            continue
-        # Prefer a window around the source name so unrelated 401s elsewhere
-        # do not poison this preferred vendor.
-        idx = lowered.find(source.lower())
-        if idx < 0:
-            base = source.lower().removesuffix("_mcp")
-            idx = lowered.find(base) if base else -1
-        if idx < 0:
-            continue
-        start = max(0, idx - 160)
-        end = min(len(lowered), idx + len(source) + 240)
-        window = lowered[start:end]
-        if _window_has_config_failure(window):
-            failed.append(source)
+    seen: set[str] = set()
+    for tool_hint, payload in _iter_unavailable_hits(
+        observation=observation, tool_results=tool_results
+    ):
+        for source in preferred:
+            if source in seen:
+                continue
+            if _envelope_matches_preferred(tool_hint=tool_hint, payload=payload, preferred=source):
+                failed.append(source)
+                seen.add(source)
     return tuple(failed)
 
 
 def reclassify_evidence_need_after_gather(
     need: EvidenceNeed,
-    observation: str | None,
+    gathered: str | GatheredEvidence | None,
+    *,
+    tool_results: Sequence[tuple[str, Any]] | None = None,
 ) -> EvidenceNeed:
     """Flip L1 → L0_degraded when gather shows preferred-source config/auth failure.
 
+    Failure is detected only via the structured ``tool_unavailable`` envelope
+    (``available: False`` + ``error``). Prefer ``GatheredEvidence.tool_results``
+    (or the ``tool_results`` kwarg); fall back to ``split``/``partition`` on the
+    observation string — never phrase lists over prose.
     HogQL / empty-result failures stay L1 (honest answer, no UpgradeCTA).
     Missing-source L0 is decided before gather and is left unchanged.
     """
-    if (
-        need.tier != EvidenceTier.L1
-        or not need.required_for_authoritative
-        or not need.connected
-        or not observation
-        or not observation.strip()
-    ):
+    if need.tier != EvidenceTier.L1 or not need.required_for_authoritative or not need.connected:
+        return need
+
+    evidence = coerce_gathered_evidence(gathered)
+    results = tuple(tool_results) if tool_results is not None else ()
+    if evidence is not None and not results:
+        results = evidence.tool_results
+    observation = evidence.observation if evidence is not None else None
+    if not results and not (observation or "").strip():
         return need
 
     preferred = need.preferred_sources or need.connected
-    failed = _preferred_sources_with_config_failure(observation, preferred)
+    failed = _preferred_sources_with_config_failure(
+        preferred,
+        observation=observation,
+        tool_results=results,
+    )
     if not failed:
         return need
 
