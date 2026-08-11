@@ -11,18 +11,18 @@ import pytest
 from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
 from platform.observability.trace.hook import traceable
 from platform.observability.trace.spans import (
-    NoopSessionTraceSink,
+    NoopSessionTraceStore,
     bind_session_trace,
-    set_session_trace_sink,
+    set_session_trace_store,
 )
-from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
 
 @pytest.fixture(autouse=True)
-def _reset_session_trace_sink() -> Any:
-    set_session_trace_sink(NoopSessionTraceSink())
+def _reset_session_trace_store() -> Any:
+    set_session_trace_store(NoopSessionTraceStore())
     yield
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_traceable_is_near_free_passthrough_when_noop() -> None:
@@ -70,7 +70,7 @@ def test_traceable_emits_component_span_when_sink_active(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
 
     @traceable(name="investigation")
     def run_investigation() -> str:
@@ -98,7 +98,7 @@ def test_traceable_marks_error_status_when_callable_raises(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(storage=storage))
 
     @traceable("failing_component")
     def boom() -> None:

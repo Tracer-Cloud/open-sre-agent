@@ -1,11 +1,11 @@
 """Tests for the interactive-shell tool-gathering pass.
 
 ``gather_integration_tool_evidence`` runs a bounded tool-calling loop over the same
-registered tools the investigation uses and returns the collected outputs as a
-formatted observation block (or ``None`` when there is nothing to add). These
-tests exercise the no-tools, executed-results, no-executed, and exception paths
-without any live LLM by stubbing ``agent_factory`` and monkeypatching tool
-discovery / LLM load where needed.
+registered tools the investigation uses and returns :class:`GatheredEvidence`
+(formatted observation + structured tool payloads), or ``None`` when there is
+nothing to add. These tests exercise the no-tools, executed-results, no-executed,
+and exception paths without any live LLM by stubbing ``agent_factory`` and
+monkeypatching tool discovery / LLM load where needed.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from rich.console import Console
 import core as runtime_module
 import platform.harness_ports as harness_ports
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.llm.types import ToolCall
 from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _format_gathering_progress_line,
@@ -120,17 +121,20 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     ) -> runtime_module.AgentRunResult:
         return runtime_module.AgentRunResult(messages=[], final_text="", executed=executed)
 
-    observation = gather_integration_tool_evidence(
+    gathered = gather_integration_tool_evidence(
         "any open issues?",
         session,
         _console(),
         agent_factory=_stub_agent_factory(_fake_run),
     )
 
-    assert observation is not None
+    assert gathered is not None
+    assert isinstance(gathered, GatheredEvidence)
+    observation = gathered.observation
     assert "search_github_issues" in observation
     assert '"owner": "o"' in observation
     assert '"repo": "r"' in observation
+    assert gathered.tool_results == (("search_github_issues", {"issues": ["#1", "#2"]}),)
 
 
 def test_no_executed_returns_none(monkeypatch: Any) -> None:

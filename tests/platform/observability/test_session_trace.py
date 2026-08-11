@@ -19,34 +19,34 @@ from platform.observability.trace.process_stats import (
     sample_turn_boundary_stats,
 )
 from platform.observability.trace.spans import (
-    NoopSessionTraceSink,
+    NoopSessionTraceStore,
     bind_session_trace,
     component_span,
     current_trace_session_id,
     emit_route,
     emit_span,
     emit_thread_boundary,
-    get_session_trace_sink,
+    get_session_trace_store,
     is_session_trace_active,
     llm_span,
     mark_span_outcome,
-    set_session_trace_sink,
+    set_session_trace_store,
     stage_span,
     timed_span,
     tool_span,
     traced_session,
 )
-from surfaces.interactive_shell.session.trace_sink import (
-    JsonlSessionTraceSink,
-    jsonl_trace_sink_for_session,
+from surfaces.interactive_shell.session.trace_store import (
+    JsonlSessionTraceStore,
+    jsonl_trace_store_for_session,
 )
 
 
 @pytest.fixture(autouse=True)
-def _reset_session_trace_sink() -> Any:
-    set_session_trace_sink(NoopSessionTraceSink())
+def _reset_session_trace_store() -> Any:
+    set_session_trace_store(NoopSessionTraceStore())
     yield
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
 
 
 def _seed_session_jsonl(tmp_path: Path, session_id: str) -> Path:
@@ -64,7 +64,7 @@ def _activate_jsonl_sink(tmp_path: Path, session_id: str, monkeypatch: pytest.Mo
         lambda sid: tmp_path / f"{sid}.jsonl",
     )
     path = _seed_session_jsonl(tmp_path, session_id)
-    set_session_trace_sink(JsonlSessionTraceSink(storage=JsonlSessionStorage()))
+    set_session_trace_store(JsonlSessionTraceStore(storage=JsonlSessionStorage()))
     return path
 
 
@@ -397,7 +397,7 @@ def test_traced_session_noop_when_session_id_missing() -> None:
     assert attrs["note"] == "still mutable"
 
 
-def test_jsonl_trace_sink_writes_trace_span(
+def test_jsonl_trace_store_writes_trace_span(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     session_id = "sess-thread-test"
@@ -412,30 +412,30 @@ def test_jsonl_trace_sink_writes_trace_span(
     assert attrs["phase"] == "turn_start"
     assert attrs["thread_count"] >= 1
     assert isinstance(attrs["threads"], list)
-    set_session_trace_sink(NoopSessionTraceSink())
-    assert isinstance(get_session_trace_sink(), NoopSessionTraceSink)
+    set_session_trace_store(NoopSessionTraceStore())
+    assert isinstance(get_session_trace_store(), NoopSessionTraceStore)
 
 
-def test_jsonl_trace_sink_for_session_uses_jsonl_or_noop() -> None:
+def test_jsonl_trace_store_for_session_uses_jsonl_or_noop() -> None:
     from core.agent_harness.session import InMemorySessionStorage
     from surfaces.interactive_shell.session import Session
 
     jsonl_session = Session(storage=JsonlSessionStorage())
-    assert isinstance(jsonl_trace_sink_for_session(jsonl_session), JsonlSessionTraceSink)
+    assert isinstance(jsonl_trace_store_for_session(jsonl_session), JsonlSessionTraceStore)
 
     memory_session = Session(storage=InMemorySessionStorage())
-    assert isinstance(jsonl_trace_sink_for_session(memory_session), NoopSessionTraceSink)
+    assert isinstance(jsonl_trace_store_for_session(memory_session), NoopSessionTraceStore)
 
-    assert isinstance(jsonl_trace_sink_for_session(object()), NoopSessionTraceSink)
+    assert isinstance(jsonl_trace_store_for_session(object()), NoopSessionTraceStore)
 
 
-def test_set_session_trace_sink_none_restores_noop() -> None:
+def test_set_session_trace_store_none_restores_noop() -> None:
     class _RecordingSink:
         def emit(self, *_a: Any, **_k: Any) -> str:
             return "id"
 
-    set_session_trace_sink(_RecordingSink())  # type: ignore[arg-type]
+    set_session_trace_store(_RecordingSink())  # type: ignore[arg-type]
     assert is_session_trace_active()
-    set_session_trace_sink(None)
+    set_session_trace_store(None)
     assert not is_session_trace_active()
-    assert isinstance(get_session_trace_sink(), NoopSessionTraceSink)
+    assert isinstance(get_session_trace_store(), NoopSessionTraceStore)

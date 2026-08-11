@@ -2,7 +2,7 @@
 
 Design for production safety
 ----------------------------
-* Default sink is :class:`NoopSessionTraceSink` — emit paths return immediately
+* Default store is :class:`NoopSessionTraceStore` — emit paths return immediately
   after an ``isinstance`` check (no timing, no sampling, no I/O).
 * Expensive work (RSS / thread enumeration, JSONL append) runs **only** when a
   real sink is registered (REPL with JSONL storage).
@@ -32,7 +32,7 @@ SPAN_STATUS_OK = "ok"
 SPAN_STATUS_ERROR = "error"
 
 
-class SessionTraceSink(Protocol):
+class SessionTraceStore(Protocol):
     """Append-only session trace spans (routes, stages, threads, resources)."""
 
     def emit(
@@ -49,7 +49,7 @@ class SessionTraceSink(Protocol):
         """Persist one span; return entry id (empty when persistence is unavailable)."""
 
 
-class NoopSessionTraceSink:
+class NoopSessionTraceStore:
     """Default sink before a surface registers a JSONL adapter."""
 
     def emit(
@@ -67,21 +67,21 @@ class NoopSessionTraceSink:
         return ""
 
 
-_sink: SessionTraceSink = NoopSessionTraceSink()
+_sink: SessionTraceStore = NoopSessionTraceStore()
 
 
-def get_session_trace_sink() -> SessionTraceSink:
+def get_session_trace_store() -> SessionTraceStore:
     return _sink
 
 
-def set_session_trace_sink(sink: SessionTraceSink | None) -> None:
+def set_session_trace_store(sink: SessionTraceStore | None) -> None:
     global _sink
-    _sink = sink if sink is not None else NoopSessionTraceSink()
+    _sink = sink if sink is not None else NoopSessionTraceStore()
 
 
 def is_session_trace_active() -> bool:
     """True when a non-noop sink is registered (JSONL / ATM path)."""
-    return not isinstance(_sink, NoopSessionTraceSink)
+    return not isinstance(_sink, NoopSessionTraceStore)
 
 
 def current_trace_session_id() -> str | None:
@@ -317,24 +317,24 @@ def mark_span_outcome(
 
 
 __all__ = [
-    "NoopSessionTraceSink",
+    "NoopSessionTraceStore",
     "SPAN_STATUS_ATTR",
     "SPAN_STATUS_ERROR",
     "SPAN_STATUS_OK",
-    "SessionTraceSink",
+    "SessionTraceStore",
     "bind_session_trace",
     "component_span",
     "current_trace_session_id",
     "emit_route",
     "emit_span",
     "emit_thread_boundary",
-    "get_session_trace_sink",
+    "get_session_trace_store",
     "is_session_trace_active",
     "llm_span",
     "loop_iteration_span",
     "loop_span",
     "mark_span_outcome",
-    "set_session_trace_sink",
+    "set_session_trace_store",
     "stage_span",
     "timed_span",
     "tool_span",
