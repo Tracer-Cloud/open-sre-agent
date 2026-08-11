@@ -43,7 +43,7 @@ def _bounded_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
     return {"truncated": serialized[:_INTENT_ARGS_MAX_CHARS]}
 
 
-class JsonlSessionStorage:
+class JsonlSessionStore:
     """Per-session v2 JSONL writer.
 
     The first line is a session header. Every following line is an append-only
@@ -360,7 +360,7 @@ class JsonlSessionStorage:
                     display=False,
                 )
             if hasattr(session, "session_goal"):
-                from core.agent_harness.session.session_goal_persist import (
+                from core.agent_harness.session_goal.persist import (
                     SESSION_GOAL_STATE_CUSTOM_TYPE,
                     session_goal_state_snapshot,
                     should_persist_session_goal_state,
@@ -505,7 +505,7 @@ class JsonlSessionStorage:
     def _read_records(path: Path) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         for line in path.read_text(encoding="utf-8").splitlines():
-            rec = JsonlSessionStorage._loads_record(line)
+            rec = JsonlSessionStore._loads_record(line)
             if rec is not None:
                 records.append(rec)
         return records

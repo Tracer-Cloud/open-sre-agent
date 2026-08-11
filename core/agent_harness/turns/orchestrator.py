@@ -32,7 +32,7 @@ from core.agent_harness.ports import (
     PromptContextProvider,
     ReasoningClientProvider,
     RunRecordFactory,
-    SessionStore,
+    SessionState,
     StreamAnswerFn,
     TurnAccounting,
 )
@@ -47,7 +47,7 @@ from core.agent_harness.session.pending_offer import (
     first_pending_offer,
     is_pending_offer_confirmation,
 )
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.goal import (
     attach_session_goal_from_handoffs,
     session_goal_is_active,
 )
@@ -170,11 +170,11 @@ def _stream_response(
     )
 
 
-def _record_answer_turn(session: SessionStore, message: str, assistant_text: str) -> None:
+def _record_answer_turn(session: SessionState, message: str, assistant_text: str) -> None:
     record_conversation_turn(session, message, assistant_text)
 
 
-def _record_action_only_turn(session: SessionStore, message: str, assistant_text: str) -> None:
+def _record_action_only_turn(session: SessionState, message: str, assistant_text: str) -> None:
     text = assistant_text.strip()
     if not text:
         return
@@ -187,7 +187,7 @@ def _record_action_only_turn(session: SessionStore, message: str, assistant_text
 def stream_answer(
     # Direct answer (no tools) shared by the interactive shell and headless surfaces.
     message: str,
-    session: SessionStore,
+    session: SessionState,
     output: OutputSink,
     *,
     prompts: PromptContextProvider,
@@ -402,7 +402,7 @@ def _gather_and_answer(
 
 def run_turn(
     text: str,
-    session: SessionStore,
+    session: SessionState,
     *,
     execute_actions: ExecuteActions,
     answer: StreamAnswerFn,

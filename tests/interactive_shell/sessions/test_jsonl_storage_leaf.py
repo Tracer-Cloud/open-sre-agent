@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 
 from config.constants import paths
-from core.agent_harness.session.persistence import jsonl_storage
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence import jsonl_store
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.paths import session_path
 
 
@@ -47,7 +47,7 @@ def _records(session_id: str) -> list[dict[str, Any]]:
 
 def test_appends_chain_parent_to_previous_record() -> None:
     # Arrange
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
 
@@ -66,7 +66,7 @@ def test_appends_chain_parent_to_previous_record() -> None:
 
 def test_trace_span_does_not_become_the_leaf() -> None:
     # Arrange
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="q")
@@ -89,7 +89,7 @@ def test_trace_span_does_not_become_the_leaf() -> None:
 
 def test_append_after_leaf_marker_continues_from_the_marked_leaf() -> None:
     # Arrange: a flushed session ends in a "leaf" end-marker.
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_turn(session, "chat", "hello")
@@ -100,7 +100,7 @@ def test_append_after_leaf_marker_continues_from_the_marked_leaf() -> None:
     marked_leaf_parent = records[-1]["parent_id"]
 
     # Act: a resumed process appends again.
-    resumed = JsonlSessionStorage()
+    resumed = JsonlSessionStore()
     resumed.append_message(session.session_id, role="user", content="again")
 
     # Assert: the new entry continues from the leaf the marker pointed at.
@@ -110,13 +110,13 @@ def test_append_after_leaf_marker_continues_from_the_marked_leaf() -> None:
 
 def test_fresh_instance_resumes_from_existing_file() -> None:
     # Arrange: one instance writes, another (new process) appends later.
-    first = JsonlSessionStorage()
+    first = JsonlSessionStore()
     session = _session()
     first.open_session(session)
     first.append_message(session.session_id, role="user", content="q")
 
     # Act
-    second = JsonlSessionStorage()
+    second = JsonlSessionStore()
     second.append_message(session.session_id, role="assistant", content="a")
 
     # Assert
@@ -126,14 +126,14 @@ def test_fresh_instance_resumes_from_existing_file() -> None:
 
 def test_reopen_session_drops_tip_cache_and_rescan() -> None:
     """reopen_session must forget the in-memory tip so disk is the source of truth."""
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="q")
     assert any(key[0] == session.session_id for key in storage._leaf_ids)
 
     # Another writer advances the tip on disk while this instance still caches "q".
-    other = JsonlSessionStorage()
+    other = JsonlSessionStore()
     other.append_message(session.session_id, role="assistant", content="a")
 
     storage.reopen_session(session.session_id)
@@ -149,12 +149,12 @@ def test_reopen_session_drops_tip_cache_and_rescan() -> None:
 
 def test_tip_cache_invalidates_when_file_changes_out_of_band() -> None:
     """Warm tip must not parent off a stale id after another writer appends."""
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="q")
 
-    other = JsonlSessionStorage()
+    other = JsonlSessionStore()
     other.append_message(session.session_id, role="assistant", content="a")
 
     # No reopen_session — file (mtime, size) must invalidate the warm tip.
@@ -169,7 +169,7 @@ def test_explicit_parent_still_advances_the_leaf() -> None:
     """A child written with an explicit parent is still the newest record."""
     # Arrange / Act: a tool call writes a call + result pair (the result
     # carries an explicit parent), then a message follows.
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_tool_call(
@@ -198,7 +198,7 @@ def test_a_burst_of_appends_reads_the_file_at_most_once(
     that the leaf is known and further appends must not read at all.
     """
     # Arrange
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
 
@@ -230,7 +230,7 @@ def test_a_burst_of_appends_reads_the_file_at_most_once(
 def test_cold_leaf_scan_stops_at_the_tail(monkeypatch: pytest.MonkeyPatch) -> None:
     """Resuming a large session must not JSON-parse every historical line."""
     # Arrange: a file with many records, then a fresh instance (cold cache).
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     for i in range(200):
@@ -243,10 +243,10 @@ def test_cold_leaf_scan_stops_at_the_tail(monkeypatch: pytest.MonkeyPatch) -> No
         parsed["count"] += 1
         return real_loads(s, *args, **kwargs)
 
-    monkeypatch.setattr(jsonl_storage.json, "loads", counting_loads)
+    monkeypatch.setattr(jsonl_store.json, "loads", counting_loads)
 
     # Act: one append from a cold instance.
-    fresh = JsonlSessionStorage()
+    fresh = JsonlSessionStore()
     fresh.append_message(session.session_id, role="assistant", content="tail")
 
     # Assert: far fewer parses than records — the scan works from the tail.
@@ -259,7 +259,7 @@ def test_cold_leaf_scan_does_not_read_text_the_whole_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Cold tip resolve must not Path.read_text the session JSONL."""
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     for i in range(50):
@@ -274,7 +274,7 @@ def test_cold_leaf_scan_does_not_read_text_the_whole_file(
 
     monkeypatch.setattr(Path, "read_text", forbid_session_read_text)
 
-    fresh = JsonlSessionStorage()
+    fresh = JsonlSessionStore()
     fresh.append_message(session.session_id, role="assistant", content="tail")
 
     # Restore before asserting file contents (assert path uses read_text).
@@ -287,7 +287,7 @@ def test_cold_leaf_scan_reads_only_a_trailing_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Large sessions must not pull the whole file into one read buffer."""
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     # Inflate past the default window so a full-file read would be obvious.
@@ -297,7 +297,7 @@ def test_cold_leaf_scan_reads_only_a_trailing_window(
 
     path = session_path(session.session_id)
     file_size = path.stat().st_size
-    assert file_size > jsonl_storage._TAIL_SCAN_CHUNK_BYTES
+    assert file_size > jsonl_store._TAIL_SCAN_CHUNK_BYTES
 
     read_bytes = {"total": 0, "max_single": 0}
     real_open = Path.open
@@ -319,13 +319,13 @@ def test_cold_leaf_scan_reads_only_a_trailing_window(
 
     monkeypatch.setattr(Path, "open", counting_open)
 
-    fresh = JsonlSessionStorage()
+    fresh = JsonlSessionStore()
     fresh.append_message(session.session_id, role="assistant", content="tail")
 
-    assert read_bytes["max_single"] <= jsonl_storage._TAIL_SCAN_CHUNK_BYTES, (
+    assert read_bytes["max_single"] <= jsonl_store._TAIL_SCAN_CHUNK_BYTES, (
         f"single read was {read_bytes['max_single']} bytes — full file is {file_size}"
     )
-    assert read_bytes["total"] <= jsonl_storage._TAIL_SCAN_CHUNK_BYTES, (
+    assert read_bytes["total"] <= jsonl_store._TAIL_SCAN_CHUNK_BYTES, (
         f"cold tip scan read {read_bytes['total']} bytes of a {file_size}-byte file"
     )
     monkeypatch.setattr(Path, "open", real_open)
@@ -337,7 +337,7 @@ def test_cold_leaf_scan_skips_trailing_trace_spans(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Trailing diagnostic spans must not force a full-history parse."""
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="q")
@@ -353,9 +353,9 @@ def test_cold_leaf_scan_skips_trailing_trace_spans(
         parsed["count"] += 1
         return real_loads(s, *args, **kwargs)
 
-    monkeypatch.setattr(jsonl_storage.json, "loads", counting_loads)
+    monkeypatch.setattr(jsonl_store.json, "loads", counting_loads)
 
-    fresh = JsonlSessionStorage()
+    fresh = JsonlSessionStore()
     fresh.append_message(session.session_id, role="assistant", content="a")
 
     assert parsed["count"] < 10

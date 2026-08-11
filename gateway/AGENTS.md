@@ -170,7 +170,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 
 | Concern | Slack | Telegram | Discord | Web |
 |---------|-------|----------|---------|-----|
-| Cancel / stop mid-turn | **yes** — soft timeout + user `/stop` via `ActiveTurnCancels` → `sink.turn_cancel` | **yes** — same | **yes** — same | **partial** — queued investigate cancel only |
+| Cancel / stop mid-turn | **yes** — soft timeout + user `/stop` via `ActiveTurnRegistry` → `sink.turn_cancel` | **yes** — same | **yes** — same | **partial** — queued investigate cancel only |
 | Approvals / `before_tool_call` | **yes** — Block Kit + `approval_tool_hooks` | **yes** — inline keyboard + `approval_tool_hooks` | **yes** — components + `approval_tool_hooks` | **n/a** — Path-2 |
 | Tool resolution | **yes** — live `DefaultToolProvider(session)` | **yes** — same | **yes** — same | **n/a** — investigate runner |
 | Sink redaction | **yes** — `user_facing_error_message` | **yes** — same | **yes** — same | **yes** — `type(exc).__name__` only |
@@ -184,7 +184,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 - Path-2 web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `sink.turn_cancel` so the ReAct loop / remaining tools stop cooperatively
-  (shell `cancel_requested` parity via `CancelConsole` + `ActiveTurnCancels`).
+  (shell `cancel_requested` parity via `CancelConsole` + `ActiveTurnRegistry`).
   Orchestrator skips gather/answer and reports `final_intent=cli_agent_cancelled`;
   the live sink stops draining stream chunks when the Event fires. `/stop` is
   handled **outside** the per-conversation turn lock so it can interrupt an

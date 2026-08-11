@@ -53,7 +53,7 @@ async def run_repl_async(
         return run_initial_input(initial_input, session, out)
 
     # Open the session file now that we know this is an interactive REPL run.
-    SessionManager.for_session(session).open_storage(session)
+    SessionManager.for_session(session).open_store(session)
 
     try:
         if resume_session_id:

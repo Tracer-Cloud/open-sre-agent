@@ -516,7 +516,7 @@ def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
     import json
     from pathlib import Path
 
-    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
     from platform.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
@@ -525,10 +525,10 @@ def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
     from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: Path(tmp_path) / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-tool-exec"
     path = Path(tmp_path) / f"{session_id}.jsonl"
     path.write_text(
@@ -562,7 +562,7 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
     import json
     from pathlib import Path
 
-    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
     from platform.observability.trace.spans import (
         NoopSessionTraceStore,
         bind_session_trace,
@@ -571,10 +571,10 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
     from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: Path(tmp_path) / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-tool-unknown"
     path = Path(tmp_path) / f"{session_id}.jsonl"
     path.write_text(
@@ -614,12 +614,12 @@ def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: 
     import json
     from pathlib import Path
 
-    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
     from platform.observability.trace.spans import set_session_trace_store
     from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda sid: Path(tmp_path) / f"{sid}.jsonl",
     )
     path = Path(tmp_path) / f"{session_id}.jsonl"
@@ -627,7 +627,7 @@ def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: 
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_store(JsonlSessionTraceStore(storage=JsonlSessionStorage()))
+    set_session_trace_store(JsonlSessionTraceStore(store=JsonlSessionStore()))
     return path
 
 

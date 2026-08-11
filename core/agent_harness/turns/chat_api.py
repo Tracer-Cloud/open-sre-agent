@@ -17,7 +17,7 @@ from core.agent_harness.ports import (
     EvidenceGatherer,
     ExecuteActions,
     OutputSink,
-    SessionStore,
+    SessionState,
     StreamAnswerFn,
     TurnAccounting,
 )
@@ -45,7 +45,7 @@ class ChatTurnBindings:
 
 def dispatch_chat_turn(
     message: str,
-    session: SessionStore,
+    session: SessionState,
     bindings: ChatTurnBindings,
 ) -> TurnResult:
     """Run one chat turn. Thin facade over :func:`run_turn`.

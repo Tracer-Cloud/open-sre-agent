@@ -790,7 +790,7 @@ def test_oracle_match_collapses_duplicate_investigation_dispatch() -> None:
 
 
 def test_oracle_match_strips_session_goal_continuation_history() -> None:
-    """Outer-loop nudges must not fail planner-contract history expectations."""
+    """Session-goal nudges must not fail planner-contract history expectations."""
     from tests.core.agent._oracle_runtime import normalize_history_for_oracle_match
 
     user_turn = {

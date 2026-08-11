@@ -1,6 +1,6 @@
-"""Optional LLM confirm for outer SessionGoal after structured evidence passes.
+"""Optional LLM confirm for SessionGoal after structured evidence passes.
 
-Structured :func:`~core.agent_harness.session.session_goal_evaluate.evaluate_session_goal`
+Structured :func:`~core.agent_harness.session_goal.evaluate.evaluate_session_goal`
 is the default host judge. This module adds a second, independent model check
 only when that judge would achieve a **condition-only** goal via the achieved
 tag + tool evidence path.
@@ -20,15 +20,15 @@ from core.agent_harness.closed_llm_verdict import (
     ClosedGoalVerdict,
     invoke_closed_goal_verdict,
 )
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.evaluate import (
+    evaluate_session_goal,
+    session_goal_reply_text,
+)
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
     SessionGoalReason,
     SessionGoalStatus,
     attach_session_goal,
-)
-from core.agent_harness.session.session_goal_evaluate import (
-    evaluate_session_goal,
-    session_goal_reply_text,
 )
 from core.llm.types import AgentLLMClient
 
@@ -36,7 +36,7 @@ from core.llm.types import AgentLLMClient
 SessionGoalConfirmVerdict = ClosedGoalVerdict
 
 _REVIEW_SYSTEM = (
-    "You review whether an outer multi-turn session goal is met.\n"
+    "You review whether an session goal is met.\n"
     "Return JSON only. Set verdict to GOAL_REACHED only when the assistant "
     "reply plus tools clearly satisfy the goal condition. When in doubt, "
     "set verdict to NOT_REACHED."
@@ -44,7 +44,7 @@ _REVIEW_SYSTEM = (
 
 
 # The reviewer only needs the closing reply to judge the condition; a longer
-# tail costs tokens on every outer turn without changing the verdict.
+# tail costs tokens on every session-goal turn without changing the verdict.
 MAX_REVIEWED_REPLY_CHARS = 4000
 
 
@@ -69,7 +69,7 @@ def _llm_confirms_achieved(
 
 
 def build_session_goal_llm_evaluator(llm: AgentLLMClient):
-    """Return an ``evaluate(goal, result, *, session=) -> status`` for the outer loop.
+    """Return an ``evaluate(goal, result, *, session=) -> status`` for the session-goal loop.
 
     Uses structured evaluate first. When that would achieve via tool evidence
     (no checklist), asks ``llm`` to confirm. Checklist achieves are trusted.
@@ -95,7 +95,7 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
             return SessionGoalStatus.ACHIEVED
         # False or None → keep working (never false-complete on reviewer failure).
         # Structured evaluate may already have attached ACHIEVED on ``session``;
-        # overwrite status so the outer loop's session reread cannot defeat this.
+        # overwrite status so the session-goal loop's session reread cannot defeat this.
         reason = (
             SessionGoalReason.LLM_CONFIRM_NOT_REACHED
             if confirmed is False

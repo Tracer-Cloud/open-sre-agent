@@ -118,7 +118,7 @@ class BuzzOutputSink:
         final = truncate(text, MAX_MESSAGE_SIZE, suffix="…")
         if self._event_id and self._edit_final(final):
             logger.info("outbound channel=%s text=%r", self._channel_id, _log_preview(final))
-            # Release the id so the next outer-goal turn cannot overwrite this answer.
+            # Release the id so the next session-goal turn cannot overwrite this answer.
             self._event_id = ""
             return
         if self._send_final(final):

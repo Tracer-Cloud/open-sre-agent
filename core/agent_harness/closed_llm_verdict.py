@@ -1,6 +1,6 @@
 """Closed ``GOAL_REACHED`` / ``NOT_REACHED`` confirm via structured output.
 
-Shared by the outer SessionGoal LLM confirm and the inner ReAct goal reviewer.
+Shared by the SessionGoal LLM confirm and the ReAct goal reviewer.
 Uses a Pydantic ``Literal`` enum (JSON Schema ``enum``) — not free-text scrape.
 """
 

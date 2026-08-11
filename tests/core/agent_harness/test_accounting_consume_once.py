@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.headless_adapters import NullToolProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -54,7 +54,7 @@ def _stub_dispatch(monkeypatch: Any) -> None:
 
 def test_dispatch_consumes_bound_accounting(monkeypatch: Any) -> None:
     _stub_dispatch(monkeypatch)
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     first = _SpyAccounting("first")
     agent = HeadlessAgent(tools=NullToolProvider(), session=session, accounting=first)
     agent.dispatch("one")
@@ -67,7 +67,7 @@ def test_second_dispatch_without_rebind_does_not_reuse_prior_accounting(
     monkeypatch: Any,
 ) -> None:
     _stub_dispatch(monkeypatch)
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     first = _SpyAccounting("first")
     agent = HeadlessAgent(tools=NullToolProvider(), session=session)
     agent.bind_turn(accounting=first)
@@ -78,7 +78,7 @@ def test_second_dispatch_without_rebind_does_not_reuse_prior_accounting(
 
 def test_bind_turn_supplies_fresh_accounting_each_message(monkeypatch: Any) -> None:
     _stub_dispatch(monkeypatch)
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     agent = HeadlessAgent(tools=NullToolProvider(), session=session)
     a = _SpyAccounting("a")
     b = _SpyAccounting("b")

@@ -6,10 +6,10 @@ Two different keep-going shapes — do not collapse them:
   turn via chained ``shell_run`` (data-dependent loop inside the planner).
 * **Conversational SessionGoal** — chat checklist / walkthrough with *no*
   local side effects; ``assistant_handoff`` sets ``session_goal`` so the host
-  outer loop (``run_until_session_goal``) continues turns.
+  session-goal loop (``run_until_session_goal``) continues turns.
 
 Cross-wiring these caused live scenario 347 to invent ``/tmp`` state files
-instead of attaching an outer goal. Keep the fragments separate so tests can
+instead of attaching an session goal. Keep the fragments separate so tests can
 pin each contract.
 """
 

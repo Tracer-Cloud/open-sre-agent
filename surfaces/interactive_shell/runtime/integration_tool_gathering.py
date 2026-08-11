@@ -131,10 +131,10 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
     Arguments and results are redacted and bounded before writing; failures are
     swallowed so logging never breaks the turn.
     """
-    from core.agent_harness.session import default_session_storage
+    from core.agent_harness.session import default_session_store
     from platform.observability.trace.redaction import redact_sensitive
 
-    storage = default_session_storage()
+    store = default_session_store()
     for tc, output in executed:
         with contextlib.suppress(Exception):
             body = (
@@ -145,7 +145,7 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
             arguments = (
                 redact_sensitive(tc.input) if isinstance(tc.input, dict) else {"value": tc.input}
             )
-            storage.append_tool_call(
+            store.append_tool_call(
                 session.session_id,
                 tool=str(tc.name),
                 arguments=arguments,

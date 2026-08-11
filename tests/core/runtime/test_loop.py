@@ -180,7 +180,7 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
     assert first.assistant_response_text == "hello from headless"
     assert second.assistant_response_text == "hello from headless"
     # Both turns landed on the same shared session — reuse, not a fresh store per call.
-    assert len(agent._store.cli_agent_messages) == 4
+    assert len(agent._session.cli_agent_messages) == 4
 
 
 def test_provided_accounting_is_consumed_once() -> None:
@@ -196,12 +196,12 @@ def test_provided_accounting_is_consumed_once() -> None:
 
 def test_default_accounting_is_resolved_fresh_per_message() -> None:
     from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-    from core.agent_harness.turns.headless_dispatch import InMemorySessionStore, NullToolProvider
+    from core.agent_harness.turns.headless_dispatch import InMemorySessionState, NullToolProvider
 
-    class _PersistentStore(InMemorySessionStore):
-        storage = object()  # a persistent-backed store selects DefaultTurnAccounting
+    class _PersistentState(InMemorySessionState):
+        storage = object()  # persistent-backed session selects DefaultTurnAccounting
 
-    agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentStore())
+    agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentState())
 
     first = agent._take_accounting("msg-a")
     second = agent._take_accounting("msg-b")

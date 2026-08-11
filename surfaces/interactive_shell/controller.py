@@ -40,7 +40,7 @@ from surfaces.interactive_shell.runtime.loop_scheduler import (
     start_loop_scheduler,
 )
 from surfaces.interactive_shell.runtime.turn_host import (
-    AgentTurnRuntime,
+    AgentTurnResources,
     run_agent_turn,
     run_agent_turn_queue,
     run_input_loop,
@@ -175,7 +175,7 @@ class InteractiveShellController:
         )
         from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
 
-        self.turn_runtime = AgentTurnRuntime(
+        self.turn_runtime = AgentTurnResources(
             session=self.session,
             state=self.state,
             spinner=self.spinner,

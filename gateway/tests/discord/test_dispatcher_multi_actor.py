@@ -15,7 +15,7 @@ import pytest
 from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal
-from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
+from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
 from gateway.core.billing.credits_client import CreditsOutcome
 from gateway.core.storage import FileBindingStore, SessionResolver
 from gateway.transports.discord.dispatcher import DiscordTurnDispatcher
@@ -47,7 +47,7 @@ def resolver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SessionResolver
     monkeypatch.setattr(SessionCore, "hydrate_configured_integrations", lambda _self: None)
     store = FileBindingStore(tmp_path / "bindings.json")
     repo = SimpleNamespace(load_session=lambda _session_id: None)
-    manager = SessionManager(storage=InMemorySessionStorage(), repo=repo)
+    manager = SessionManager(store=InMemorySessionStore(), repo=repo)
     return SessionResolver(store, manager=manager, platform="discord")
 
 

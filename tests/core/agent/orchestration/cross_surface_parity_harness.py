@@ -16,7 +16,7 @@ from typing import Any, Literal
 from rich.console import Console
 
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
-from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.gather_ports import GatherPorts
@@ -227,7 +227,7 @@ def console() -> Console:
 
 
 def fresh_session(*, integrations: dict[str, Any] | None = None) -> Session:
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     session.resolved_integrations_cache = dict(integrations or {})
     return session
 

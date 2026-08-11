@@ -20,7 +20,7 @@ from core.agent_harness.session.pending_offer import (
 )
 from core.agent_harness.session.want_me_to import offer_from_assistant_content
 from core.agent_harness.turns.action_driver import _literal_slash_tool_call
-from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 
@@ -61,7 +61,7 @@ def test_yes_uses_pending_investigation_not_prose() -> None:
 
 def test_arm_clears_competing_schedule_offer() -> None:
     """Only one pending affirmative — investigate arm drops schedule."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
         kind="daily_summary",
         cron="0 8 * * 1-5",
@@ -113,7 +113,7 @@ def test_want_me_to_body_is_canonical_closer() -> None:
 
 
 def test_arm_pending_investigation_offer_sets_session() -> None:
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
         kind="daily_summary",
         cron="0 8 * * 1-5",
@@ -204,7 +204,7 @@ def test_ensure_canonical_closer_leaves_schedule_only_alone() -> None:
 
 def test_finalize_gather_leaves_offerless_answer_unarmed() -> None:
     """A gather answer with no closer arms nothing and reaches the user as-is."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     resolved = "Root cause found: the 14:02 deploy. Rolled back; latency recovered."
     session.cli_agent_messages = [
         ("user", "why is checkout 502?"),
@@ -224,7 +224,7 @@ def test_finalize_gather_leaves_offerless_answer_unarmed() -> None:
 
 
 def test_finalize_gather_rewrites_and_arms_dogfood_dual_menu() -> None:
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     broken = (
         "Empty evidence.\n\n**Want me to:**\n"
         "1. run a full investigation once you paste…, or\n"
@@ -249,7 +249,7 @@ def test_finalize_gather_rewrites_and_arms_dogfood_dual_menu() -> None:
 
 def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
     """Regression: gather dual Want-me-to must not steal bare yes from investigate."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     seen: list[str] = []
 
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
@@ -313,7 +313,7 @@ def test_run_turn_dogfood_dual_menu_yes_still_starts_investigation() -> None:
 
 def test_run_turn_does_not_arm_investigation_when_capability_disabled() -> None:
     """Gateway disables investigation — do not arm a pending that cannot dispatch."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.available_capabilities = {"investigation": ()}
 
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
@@ -347,7 +347,7 @@ def test_run_turn_does_not_arm_investigation_when_capability_disabled() -> None:
 
 def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
     """Multi-turn accept path: diagnostic answer arms offer; yes expands+consumes."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     seen: list[str] = []
 
     def execute_actions(text: str, **_kwargs: object) -> ToolCallingTurnResult:
@@ -417,7 +417,7 @@ def test_run_turn_arms_then_yes_dispatches_investigation() -> None:
 
 
 def test_failed_investigation_keeps_pending_offer() -> None:
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_investigation_offer = PendingInvestigationOffer(
         alert_text="why is checkout 502?"
     )
@@ -462,7 +462,7 @@ def test_dispatchable_protocol_and_consume_helpers() -> None:
     assert isinstance(investigation, DispatchablePendingOffer)
     assert schedule.to_dispatch_message() == schedule.to_slash_command()
 
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_schedule_offer = schedule
     session.pending_investigation_offer = investigation
     # Schedule attr wins priority when both are set.

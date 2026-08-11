@@ -1893,12 +1893,12 @@ class TestResumeCommand:
         from unittest.mock import patch
 
         from core.agent_harness.session import (
-            JsonlSessionStorage,
+            JsonlSessionStore,
             default_session_repo,
         )
         from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
-        SessionStore = JsonlSessionStorage()
+        SessionState = JsonlSessionStore()
         session = Session()
         old_id = session.session_id
         target_id = "old-abc-1234567890"
@@ -1907,7 +1907,7 @@ class TestResumeCommand:
             "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
-            SessionStore.open_session(session)
+            SessionState.open_session(session)
             session.record("chat", "pre-resume turn")
 
             # Pre-create a finalized target session file to resume into.
@@ -2053,10 +2053,10 @@ class TestResumeCommand:
         """History display uses REPL turn order and includes slash commands."""
         from unittest.mock import patch
 
-        from core.agent_harness.session import JsonlSessionStorage
+        from core.agent_harness.session import JsonlSessionStore
         from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
-        SessionStore = JsonlSessionStorage()
+        SessionState = JsonlSessionStore()
         data = {
             "session_id": "display-test-abc123456789",
             "name": "My Session",
@@ -2079,7 +2079,7 @@ class TestResumeCommand:
             "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
-            SessionStore.open_session(session)
+            SessionState.open_session(session)
             _apply_resume_data(data, session, console)
 
         output = buf.getvalue()
@@ -2673,7 +2673,7 @@ class TestRunCliCommand:
     ) -> None:
         """Gateway/headless surfaces need the real exit status for slash analytics."""
         from core.agent_harness.session import SessionCore
-        from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+        from core.agent_harness.session.persistence.memory import InMemorySessionStore
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
@@ -2693,7 +2693,7 @@ class TestRunCliCommand:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom\n")
 
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
-        session = SessionCore(storage=InMemorySessionStorage())
+        session = SessionCore(store=InMemorySessionStore())
         session.record("slash", "/remote health", ok=True)
         console, _buf = _capture()
         assert m.run_cli_command(console, ["remote", "health"], session=session) is False

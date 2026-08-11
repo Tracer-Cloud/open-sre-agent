@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -37,7 +37,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
         factory,
     )
 
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     sink = MagicMock()
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hello gateway", session, sink, logging.getLogger("test.gateway.module"))
@@ -82,7 +82,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         MagicMock(return_value=agent),
     )
 
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     sink = MagicMock()
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("why", session, sink, logging.getLogger("test.gateway.module.answer"))
@@ -111,7 +111,7 @@ def test_run_turn_routes_unhandled_action_to_answer_callback() -> None:
         def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     result = run_turn(
         "question?",
         session,
@@ -156,7 +156,7 @@ def test_run_turn_builds_turn_plan_for_action_path(
         def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     run_turn(
         "hi",
         session,
@@ -198,7 +198,7 @@ def test_run_turn_passes_turn_plan_to_gather(
         def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     run_turn(
         "hi",
         session,
@@ -239,7 +239,7 @@ def test_run_turn_passes_turn_plan_to_answer(
         def finalize(self, result: TurnResult) -> TurnResult:
             return result
 
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     run_turn(
         "why is it down?",
         session,
@@ -270,7 +270,7 @@ def test_action_tools_uses_passed_resolved_integrations(
         _fake_build,
     )
     provider = DefaultToolProvider(
-        Session(storage=InMemorySessionStorage()), Console(force_terminal=False)
+        Session(store=InMemorySessionStore()), Console(force_terminal=False)
     )
     turn_resolved = {"github": {"configured": True}}
 
@@ -299,7 +299,7 @@ def test_action_tools_falls_back_to_session_resolve_when_none(
         lambda _session: dict(session_resolved),
     )
     provider = DefaultToolProvider(
-        Session(storage=InMemorySessionStorage()), Console(force_terminal=False)
+        Session(store=InMemorySessionStore()), Console(force_terminal=False)
     )
 
     provider.action_tools(confirm_fn=None, is_tty=False)

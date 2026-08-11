@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.channels import TransportName
@@ -239,7 +239,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
 
     GatewayManager().start_gateway(wait=False)
     callback = background_kwargs["handle_callback_to_gateway_agent"]
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     client = MagicMock()
     client.send_message.return_value = (True, "", "message-1")
     client.edit_message_text.return_value = (True, "")
@@ -247,7 +247,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     async def _run_message() -> None:
         executor = ThreadPoolExecutor(max_workers=1)
         try:
-            from gateway.core.runtime.active_turns import ActiveTurnCancels
+            from gateway.core.runtime.active_turns import ActiveTurnRegistry
             from gateway.core.runtime.approvals import ApprovalBroker
 
             await handle_polled_inbound_telegram_message(
@@ -265,7 +265,7 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
                 chat_locks={},
                 turn_semaphore=asyncio.Semaphore(1),
                 approvals=ApprovalBroker(),
-                active_cancels=ActiveTurnCancels(),
+                active_cancels=ActiveTurnRegistry(),
                 handle_callback_to_gateway_agent=callback,
             )
         finally:

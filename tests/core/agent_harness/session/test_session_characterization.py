@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 
 from core.agent_harness.accounting.token_usage import TokenUsage
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.session.session_core import SessionCore
 
 # Every surface-agnostic field on SessionCore. The 7 former integration fields collapsed
@@ -48,7 +48,7 @@ _CORE_FIELDS = (
 
 
 def _session() -> SessionCore:
-    return SessionCore(storage=InMemorySessionStorage())
+    return SessionCore(store=InMemorySessionStore())
 
 
 def test_session_core_carries_exactly_the_core_fields_and_no_facets() -> None:

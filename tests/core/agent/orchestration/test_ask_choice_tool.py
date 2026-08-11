@@ -15,7 +15,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.tools.tool_context import ActionToolContext
-from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+from core.agent_harness.turns.headless_adapters import InMemorySessionState
 from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.actions.ask_choice import (
     ask_user_choice_tool,
@@ -100,7 +100,7 @@ def test_explicit_non_tty_turn_falls_back() -> None:
 
 
 def test_headless_session_without_terminal_falls_back() -> None:
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     ctx = _ctx(session=session)
 
     result = execute_ask_user_choice_tool({"title": _TITLE, "options": _OPTIONS}, ctx)

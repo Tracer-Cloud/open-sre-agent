@@ -302,7 +302,7 @@ def strip_redundant_integrations_list_history(
 def strip_session_goal_continuation_history(
     actual_history: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Drop outer-loop continuation nudges from oracle history.
+    """Drop session-goal continuation nudges from oracle history.
 
     ``execute_shell_turn`` may call ``run_until_session_goal``, which records each
     ``[session_goal] Continue…`` nudge as another ``cli_agent`` history row.

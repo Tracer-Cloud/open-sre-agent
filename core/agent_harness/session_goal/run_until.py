@@ -1,4 +1,4 @@
-"""Outer continuation loop around ``chat`` for an active :class:`SessionGoal`.
+"""Session-goal continuation loop around ``chat`` for an active :class:`SessionGoal`.
 
 One iteration = one ``chat`` turn (always through the action agent). Goals are
 attached explicitly or by structured action handoff tags — never by scanning
@@ -11,22 +11,21 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.continuation import continuation_nudge
+from core.agent_harness.session_goal.evaluate import (
+    default_evaluate_session_goal,
+    session_goal_reply_text,
+)
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
     SessionGoalReason,
     SessionGoalStatus,
     apply_session_goal_progress,
     attach_session_goal,
-    session_goal_is_active,
-    strip_session_goal_progress_tags,
-)
-from core.agent_harness.session.session_goal_evaluate import (
-    default_evaluate_session_goal,
-    session_goal_reply_text,
-)
-from core.agent_harness.session.session_goal_paint import (
-    continuation_nudge,
     refresh_session_goal_reason,
+    session_goal_is_active,
+    session_goal_is_paused,
+    strip_session_goal_progress_tags,
 )
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
@@ -106,10 +105,10 @@ def _announce_working(
     active: SessionGoal,
     on_progress: ProgressFn | None,
 ) -> SessionGoal:
-    """Paint a clear 'working now' line before an outer ``chat`` starts."""
+    """Paint a clear 'working now' line before a session-goal ``chat`` starts."""
     next_turn = min(active.turns_used + 1, active.max_outer_turns)
     working = active.with_reason(
-        SessionGoalReason.working_outer_turn(next_turn, active.max_outer_turns)
+        SessionGoalReason.working_session_turn(next_turn, active.max_outer_turns)
     )
     attach_session_goal(session, working)
     if on_progress is not None:
@@ -194,6 +193,13 @@ def run_until_session_goal(
         attach_session_goal(session, goal)
 
     pre = getattr(session, "session_goal", None)
+    # User ``/goal pause``: allow one free chat, never session-goal continuation.
+    if goal is None and isinstance(pre, SessionGoal) and pre.status == SessionGoalStatus.PAUSED:
+        last = chat(message)
+        stored = getattr(session, "session_goal", None)
+        kept = stored if isinstance(stored, SessionGoal) else pre
+        return SessionGoalRunResult(goal=kept, last_result=last, turn_count=kept.turns_used)
+
     had_active_before = False
     if isinstance(pre, SessionGoal) and pre.status == SessionGoalStatus.ACTIVE:
         had_active_before = True
@@ -202,6 +208,9 @@ def run_until_session_goal(
     last = chat(message)
     active = getattr(session, "session_goal", None)
     if not isinstance(active, SessionGoal) or not session_goal_is_active(session):
+        # Paused after the first chat (e.g. slash during turn) — keep state.
+        if isinstance(active, SessionGoal) and session_goal_is_paused(session):
+            return SessionGoalRunResult(goal=active, last_result=last, turn_count=active.turns_used)
         synthetic = SessionGoal(
             condition=message.strip() or "(none)",
             max_outer_turns=1,
@@ -212,7 +221,7 @@ def run_until_session_goal(
 
     # ``/goal set`` attaches a host-owned goal mid-turn and queues autosubmit.
     # That attach turn must not count against the budget or run evaluate —
-    # the next submitted condition is the first real outer turn.
+    # the next submitted condition is the first real session-goal turn.
     if not had_active_before and active.host_owned and active.turns_used == 0:
         return SessionGoalRunResult(goal=active, last_result=last, turn_count=0)
 

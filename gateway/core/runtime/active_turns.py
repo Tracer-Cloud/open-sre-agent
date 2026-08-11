@@ -23,7 +23,7 @@ class _TrackedTurn:
     on_user_stop: Callable[[], None] | None = None
 
 
-class ActiveTurnCancels:
+class ActiveTurnRegistry:
     """Thread-safe map of conversation key → in-flight cancel Event."""
 
     def __init__(self) -> None:
@@ -74,6 +74,6 @@ def is_stop_command(text: str) -> bool:
 
 
 __all__ = [
-    "ActiveTurnCancels",
+    "ActiveTurnRegistry",
     "is_stop_command",
 ]

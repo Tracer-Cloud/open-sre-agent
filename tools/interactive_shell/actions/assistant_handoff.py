@@ -98,12 +98,12 @@ assistant_handoff_tool = RegisteredTool(
                 "type": "integer",
                 "minimum": 1,
                 "description": (
-                    "Outer-turn cap for the goal. Omit to use the default. Requires session_goal."
+                    "Session-goal turn cap for the goal. Omit to use the default. Requires session_goal."
                 ),
             },
             HandoffField.SESSION_GOAL_ITEMS: string_array_property(
                 description=(
-                    "Checklist success criteria for the outer SessionGoal "
+                    "Checklist success criteria for the SessionGoal "
                     "(one string per item, in order). Requires session_goal."
                 ),
             ),

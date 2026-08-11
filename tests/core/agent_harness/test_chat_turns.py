@@ -29,7 +29,7 @@ def _empty_action() -> ToolCallingTurnResult:
 
 
 def test_chat_requires_attached_agent() -> None:
-    harness = AgentSession(SessionConfig(load_env=False, open_storage=False))
+    harness = AgentSession(SessionConfig(load_env=False, open_store=False))
     try:
         harness.chat("hi")
     except RuntimeError as exc:

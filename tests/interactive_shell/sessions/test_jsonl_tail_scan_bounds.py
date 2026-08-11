@@ -23,9 +23,9 @@ from typing import Any
 import pytest
 
 from config.constants import paths
-from core.agent_harness.session.persistence.jsonl_storage import (
+from core.agent_harness.session.persistence.jsonl_store import (
     _TAIL_SCAN_CHUNK_BYTES,
-    JsonlSessionStorage,
+    JsonlSessionStore,
 )
 from core.agent_harness.session.persistence.paths import session_path
 
@@ -60,7 +60,7 @@ def test_cold_scan_io_is_linear_over_trailing_spans(
     the quadratic factor the expanding re-read produced.
     """
     # Arrange: one real message, then ~4 windows of trailing trace spans.
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="tip")
@@ -106,7 +106,7 @@ def test_cold_scan_io_is_linear_over_trailing_spans(
     monkeypatch.setattr(Path, "open", counting_open)
 
     # Act: cold instance resolves the tip.
-    fresh = JsonlSessionStorage()
+    fresh = JsonlSessionStore()
     fresh.append_message(session.session_id, role="user", content="after")
 
     # Assert: linear I/O — at most ~2× the file, not the quadratic ~2.5×+
@@ -125,7 +125,7 @@ def test_cold_scan_io_is_linear_over_trailing_spans(
 def test_trailing_session_record_is_skipped_not_a_chain_fork() -> None:
     """A stray header mid-file must not reset the parent chain."""
     # Arrange: normal session, then a concatenated stray header line.
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session()
     storage.open_session(session)
     storage.append_message(session.session_id, role="user", content="real-tip")
@@ -133,7 +133,7 @@ def test_trailing_session_record_is_skipped_not_a_chain_fork() -> None:
     _write_line(path, {"type": "session", "version": 2, "id": "stray"})
 
     # Act: cold instance appends.
-    fresh = JsonlSessionStorage()
+    fresh = JsonlSessionStore()
     fresh.append_message(session.session_id, role="assistant", content="next")
 
     # Assert: chained to the real tip, not orphaned at the fork.
@@ -148,7 +148,7 @@ def test_tip_cache_is_scoped_to_the_file_not_just_the_session_id(
 ) -> None:
     """The same session id under two homes must not share a cached tip."""
     # Arrange: one storage instance, same id, two storage homes.
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session("shared-id")
 
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "home-a")

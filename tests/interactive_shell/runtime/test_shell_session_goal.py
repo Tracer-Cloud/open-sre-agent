@@ -1,4 +1,4 @@
-"""Shell continues outer SessionGoal only after structured action handoff."""
+"""Shell continues SessionGoal only after structured action handoff."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from core.agent_harness.session.session_goal import SessionGoalStatus
+from core.agent_harness.session_goal.goal import SessionGoalStatus
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
@@ -111,7 +111,7 @@ def test_execute_shell_turn_prints_checklist_progress(capsys: Any) -> None:
     )
 
     painted = capsys.readouterr().out
-    assert "Session goal" in painted
+    assert "◎ /goal" in painted
     assert "Checklist:" in painted
     assert "Alpha" in painted and "Beta" in painted
     assert "turn " in painted

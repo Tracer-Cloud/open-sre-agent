@@ -59,7 +59,7 @@ _AGENT_TURN_KIND = "agent"
 
 
 @dataclass(frozen=True)
-class AgentTurnRuntime:
+class AgentTurnResources:
     """Immutable dependencies for running one submitted shell turn."""
 
     session: Session
@@ -76,7 +76,7 @@ class AgentTurnRuntime:
 
 
 def _streaming_console(
-    runtime: AgentTurnRuntime, cancel_event: threading.Event
+    runtime: AgentTurnResources, cancel_event: threading.Event
 ) -> StreamingConsole:
     """Spinner-aware console for one turn, writing where the caller asked.
 
@@ -104,7 +104,7 @@ def _streaming_console(
     )
 
 
-async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
+async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     """Set up shell presentation for one turn and drive its lifecycle."""
     dispatch_cancel = threading.Event()
     console = _streaming_console(runtime, dispatch_cancel)
@@ -154,7 +154,7 @@ async def run_agent_turn(runtime: AgentTurnRuntime, text: str) -> None:
 
 async def _run_agent_turn_loop(
     *,
-    runtime: AgentTurnRuntime,
+    runtime: AgentTurnResources,
     text: str,
     output: StreamingConsole,
     recorder: PromptRecorder | None,
@@ -282,7 +282,7 @@ async def run_agent_turn_queue(
 
 
 __all__ = [
-    "AgentTurnRuntime",
+    "AgentTurnResources",
     "run_agent_turn",
     "run_agent_turn_queue",
     "run_input_loop",

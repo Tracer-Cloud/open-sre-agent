@@ -1,7 +1,7 @@
-"""Persist / restore outer SessionGoal (+ L0 CTA) flush state.
+"""Persist / restore SessionGoal (+ L0 CTA) flush state.
 
-Leaf module: imports :mod:`session_goal` only — do not import this from
-``session_goal`` (avoids ``py/cyclic-import``).
+Leaf module: imports :mod:`core.agent_harness.session_goal.goal` only —
+do not import this from ``goal`` (avoids ``py/cyclic-import``).
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from core.agent_harness.session.session_goal import SessionGoal, SessionGoalStatus
+from core.agent_harness.session_goal.goal import SessionGoal, SessionGoalStatus
 
 # Persisted on flush as ``custom_message`` / ``custom_type`` (last write wins).
 SESSION_GOAL_STATE_CUSTOM_TYPE = "session_goal_state"
@@ -103,7 +103,7 @@ def session_goal_from_payload(payload: Any) -> SessionGoal | None:
 
 
 def session_goal_state_snapshot(session: Any) -> dict[str, Any]:
-    """Flush payload for outer goal + L0 CTA dedupe / pending setup offer."""
+    """Flush payload for session goal + L0 CTA dedupe / pending setup offer."""
     goal = getattr(session, "session_goal", None)
     offered = getattr(session, "offered_upgrade_ctas", None)
     offered_keys = (
@@ -151,7 +151,7 @@ def should_persist_session_goal_state(
 
 
 def apply_session_goal_state(session: Any, payload: Any) -> None:
-    """Rehydrate outer goal / CTA state from a flush snapshot."""
+    """Rehydrate session goal / CTA state from a flush snapshot."""
     if not isinstance(payload, dict):
         return
     goal = session_goal_from_payload(payload.get("session_goal"))

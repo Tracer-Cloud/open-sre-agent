@@ -1,4 +1,4 @@
-"""Outer session goal — cross-turn continuation (distinct from inner ReAct Goal).
+"""Session goal — cross-turn continuation (distinct from ReAct Goal).
 
 Attach via an explicit host call (:func:`attach_session_goal`) or from a
 structured action-agent handoff tag ``session_goal:…``. Do not detect goals by
@@ -7,17 +7,18 @@ scanning user prose (no keyword / regex intent routing).
 Checklist success criteria use ``session_goal_item:…`` handoffs; progress uses
 ``session_goal:done=<indices>`` in the assistant reply.
 
-The host loop (:mod:`core.agent_harness.turns.session_goal_loop`) calls ``chat``
+The host loop (:mod:`core.agent_harness.session_goal.run_until`) calls ``chat``
 until the goal is achieved, cleared, cancelled, or hits ``max_outer_turns``.
 
 Related leaf modules (import them directly — this module must not import them):
 
-* :mod:`session_goal_evaluate` — structured completion
-* :mod:`session_goal_review` — optional LLM confirm
-* :mod:`session_goal_paint` — progress paint / nudges
-* :mod:`session_goal_persist` — flush / restore
+* :mod:`core.agent_harness.session_goal.evaluate` — structured completion
+* :mod:`core.agent_harness.session_goal.confirm` — optional LLM confirm
+* :mod:`core.agent_harness.session_goal.progress` — progress / status-line formatting only
+* :mod:`core.agent_harness.session_goal.continuation` — session-goal continuation prompts
+* :mod:`core.agent_harness.session_goal.persist` — flush / restore
 
-Inner ``core.agent.goals.Goal`` / ``goal_review`` stay the per-turn ReAct gate.
+ReAct ``core.agent.goals.Goal`` / ``goal_review`` stay the per-turn ReAct gate.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ class SessionGoalStatus:
     """Status names for :class:`SessionGoal`."""
 
     ACTIVE = "active"
+    PAUSED = "paused"
     ACHIEVED = "achieved"
     CLEARED = "cleared"
     BUDGET_EXHAUSTED = "budget_exhausted"
@@ -62,7 +64,9 @@ class SessionGoalReason:
     WAITING_TOOL_EVIDENCE = "waiting for an achieved signal with tool evidence"
     WAITING_USER_CHOICE = "waiting for user choice"
     PAUSED_USER_CHOICE = "paused — waiting for your choice"
-    BUDGET_EXHAUSTED = "outer turn budget exhausted"
+    # Distinct from PAUSED_USER_CHOICE: user ran ``/goal pause`` (status=paused).
+    PAUSED_BY_USER = "paused by you"
+    BUDGET_EXHAUSTED = "session-goal turn budget exhausted"
     CANCELLED = "goal cancelled"
     CLEARED = "goal cleared"
     LLM_CONFIRM_NOT_REACHED = "LLM confirm: not reached"
@@ -76,8 +80,8 @@ class SessionGoalReason:
         return reason.startswith(SessionGoalReason.WORKING_PREFIX)
 
     @staticmethod
-    def working_outer_turn(turn: int, max_turns: int) -> str:
-        return f"working — starting outer turn {turn}/{max_turns}"
+    def working_session_turn(turn: int, max_turns: int) -> str:
+        return f"working — starting session-goal turn {turn}/{max_turns}"
 
     @staticmethod
     def budget_exhausted(turns_used: int, max_outer_turns: int) -> str:
@@ -102,7 +106,7 @@ class SessionGoalReason:
 MAX_GOAL_REASON_CHARS = 240
 MAX_GOAL_CONDITION_CHARS = 400
 
-# Outer turns a goal may run before the host stops on budget.
+# Session-goal turns a goal may run before the host stops on budget.
 _DEFAULT_MAX_OUTER_TURNS = 5
 
 _DONE_TAG = re.compile(r"session_goal:done=([0-9,\s]+)")
@@ -126,13 +130,13 @@ class SessionGoal:
     completed: frozenset[int] = frozenset()
     # Last host/evaluator reason shown in progress paint and continuation nudges.
     last_reason: str = ""
-    # Wall-clock start for ``◎ /goal active`` duration (``time.time()``).
+    # Wall-clock start for ``/goal`` duration paint (``time.time()``).
     started_at: float | None = None
     # Session token totals when the goal was attached — delta is goal spend.
     token_baseline_input: int = 0
     token_baseline_output: int = 0
-    # True when attached via ``/goal set``. While ACTIVE, handoff must not
-    # replace it. Host-owned condition-only goals may achieve on the
+    # True when attached via ``/goal set``. While ACTIVE or PAUSED, handoff
+    # must not replace it. Host-owned condition-only goals may achieve on the
     # ``session_goal:achieved`` tag without tool evidence (product rule for the
     # slash path — handoff goals still require tools).
     host_owned: bool = False
@@ -190,8 +194,8 @@ def session_goal_from_handoffs(
     separators are both accepted (schema docs use ``=``; content tags often use
     ``:``):
 
-    - ``session_goal:continue`` — attach an outer goal
-    - ``session_goal_max_turns:<n>`` — outer-turn cap (typed on the tool schema)
+    - ``session_goal:continue`` — attach an session goal
+    - ``session_goal_max_turns:<n>`` — session-goal turn cap (typed on the tool schema)
     - ``session_goal_item:<text>`` / ``session_goal_item=<text>``
     - ``session_goal:achieved`` / ``session_goal:done=…`` — progress tags, not
       attach tags.
@@ -274,18 +278,13 @@ def attach_session_goal_from_handoffs(
 ) -> SessionGoal | None:
     """Attach a goal from typed handoffs (preferred) or legacy tag strings.
 
-    An **active** host-owned goal (``/goal set``) stays authoritative — handoff
-    must not replace it mid-flight. Terminal host-owned goals (achieved /
-    cleared / …) may be replaced so a later handoff can start fresh work.
+    An **attached** goal (``active`` or ``paused``, including host-owned
+    ``/goal set``) stays authoritative — handoff must not replace it
+    mid-flight. Terminal goals (achieved / cleared / …) may be replaced so a
+    later handoff can start fresh work.
     """
     existing = getattr(session, "session_goal", None)
-    if (
-        isinstance(existing, SessionGoal)
-        and existing.host_owned
-        and existing.status == SessionGoalStatus.ACTIVE
-    ):
-        return existing
-    if session_goal_is_active(session):
+    if session_goal_is_attached(session):
         return existing if isinstance(existing, SessionGoal) else None
     detected = None
     if handoffs:
@@ -390,12 +389,28 @@ def session_goal_token_delta(
 
 
 def session_goal_is_active(session: Any) -> bool:
-    """True when the session holds an active outer goal."""
+    """True when the session holds an active (running) session goal."""
     goal = getattr(session, "session_goal", None)
     if goal is None:
         return False
     # ``session`` is duck-typed, so the comparison is Any-typed without this.
     return bool(goal.status == SessionGoalStatus.ACTIVE)
+
+
+def session_goal_is_paused(session: Any) -> bool:
+    """True when the session holds a user-paused session goal."""
+    goal = getattr(session, "session_goal", None)
+    if goal is None:
+        return False
+    return bool(goal.status == SessionGoalStatus.PAUSED)
+
+
+def session_goal_is_attached(session: Any) -> bool:
+    """True when a goal still owns the session (``active`` or ``paused``)."""
+    goal = getattr(session, "session_goal", None)
+    if goal is None:
+        return False
+    return bool(goal.status in (SessionGoalStatus.ACTIVE, SessionGoalStatus.PAUSED))
 
 
 def _done_indices_from_text(text: str) -> frozenset[int]:
@@ -436,6 +451,40 @@ def strip_session_goal_progress_tags(text: str) -> str:
     return cleaned.strip()
 
 
+def derive_session_goal_reason(goal: SessionGoal) -> str:
+    """Structured reason from goal state (no LLM).
+
+    Used by evaluate/paint/nudge so hosts stay honest and cheap. Returns a
+    :class:`SessionGoalReason` string — never tag grammar.
+    """
+    if goal.status == SessionGoalStatus.ACHIEVED:
+        return SessionGoalReason.ACHIEVED_GENERIC
+    if goal.status == SessionGoalStatus.PAUSED:
+        return SessionGoalReason.PAUSED_BY_USER
+    if goal.status == SessionGoalStatus.BUDGET_EXHAUSTED:
+        return SessionGoalReason.budget_exhausted(goal.turns_used, goal.max_outer_turns)
+    if goal.status == SessionGoalStatus.CANCELLED:
+        return SessionGoalReason.CANCELLED
+    if goal.status == SessionGoalStatus.CLEARED:
+        return SessionGoalReason.CLEARED
+    if goal.checklist:
+        done = len(goal.completed & frozenset(range(len(goal.checklist))))
+        total = len(goal.checklist)
+        nxt = goal.next_checklist_item
+        if nxt is None:
+            return SessionGoalReason.checklist_progress(done, total)
+        _index, item = nxt
+        return SessionGoalReason.checklist_progress(done, total, item)
+    if goal.host_owned:
+        return SessionGoalReason.WAITING_HOST_SIGNAL
+    return SessionGoalReason.WAITING_TOOL_EVIDENCE
+
+
+def refresh_session_goal_reason(goal: SessionGoal) -> SessionGoal:
+    """Attach a fresh :func:`derive_session_goal_reason` on ``goal``."""
+    return goal.with_reason(derive_session_goal_reason(goal))
+
+
 __all__ = [
     "MAX_GOAL_CONDITION_CHARS",
     "MAX_GOAL_REASON_CHARS",
@@ -446,11 +495,15 @@ __all__ = [
     "attach_session_goal",
     "attach_session_goal_from_handoffs",
     "clear_session_goal",
+    "derive_session_goal_reason",
     "mark_session_goal_started",
+    "refresh_session_goal_reason",
     "session_goal_elapsed_seconds",
     "session_goal_from_assistant_handoffs",
     "session_goal_from_handoffs",
     "session_goal_is_active",
+    "session_goal_is_attached",
+    "session_goal_is_paused",
     "session_goal_token_delta",
     "strip_session_goal_progress_tags",
 ]

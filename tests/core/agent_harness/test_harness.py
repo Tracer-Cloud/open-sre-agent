@@ -75,7 +75,7 @@ def test_load_or_create_session_creates_when_no_session_id() -> None:
             "hydrate_integrations": True,
             "warm_integrations": False,
             "persistent_tasks": True,
-            "open_storage": True,
+            "open_store": True,
         }
     ]
     assert manager.resolve_calls == []
@@ -113,7 +113,7 @@ def test_load_or_create_session_forwards_explicit_warm_integrations() -> None:
         {
             "hydrate_integrations": True,
             "persistent_tasks": True,
-            "open_storage": True,
+            "open_store": True,
             "warm_integrations": True,
         }
     ]

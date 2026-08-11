@@ -10,7 +10,7 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
@@ -24,7 +24,7 @@ def _gateway_console() -> Console:
 
 
 def _run_gateway_slash(message: str) -> RecordingGatewaySink:
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     sink = RecordingGatewaySink()
     handler = GatewayTurnHandler(
         console=_gateway_console(),

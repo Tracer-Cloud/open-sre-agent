@@ -9,7 +9,7 @@ Example::
 
     from core.agent_harness.turns.headless_dispatch import (
         HeadlessAgent,
-        InMemorySessionStore,
+        InMemorySessionState,
         NullToolProvider,
         StaticReasoningClientProvider,
     )
@@ -42,7 +42,7 @@ from core.agent_harness.ports import (
     ReasoningClientProvider,
     RunRecordFactory,
     SessionBindable,
-    SessionStore,
+    SessionState,
     ToolProvider,
     TurnAccounting,
 )
@@ -60,7 +60,7 @@ from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
-    InMemorySessionStore,
+    InMemorySessionState,
     NoopErrorReporter,
     NoopTurnAccounting,
     NullToolProvider,
@@ -109,7 +109,7 @@ class HeadlessAgent:
         self,
         *,
         tools: ToolProvider,
-        session: SessionStore | None = None,
+        session: SessionState | None = None,
         output: OutputSink | None = None,
         prompts: PromptContextProvider | None = None,
         reasoning: ReasoningClientProvider | None = None,
@@ -122,14 +122,14 @@ class HeadlessAgent:
         tool_hooks: ToolExecutionHooks | None = None,
     ) -> None:
         self._tools = tools
-        self._store: SessionStore = session if session is not None else InMemorySessionStore()
+        self._session: SessionState = session if session is not None else InMemorySessionState()
         self._output: OutputSink = output if output is not None else BufferOutputSink()
         self._prompts: PromptContextProvider = (
             prompts
             if prompts is not None
             else (
-                DefaultPromptContextProvider(self._store)
-                if supports_default_prompt_context(self._store)
+                DefaultPromptContextProvider(self._session)
+                if supports_default_prompt_context(self._session)
                 else EmptyPromptContextProvider()
             )
         )
@@ -153,7 +153,7 @@ class HeadlessAgent:
             tool_hooks=self._tool_hooks,
         )
 
-    def bind_session(self, session: SessionStore) -> None:
+    def bind_session(self, session: SessionState) -> None:
         """Retarget this agent at a freshly resolved session.
 
         Gateway ``SessionManager.resolve`` returns a new ``SessionCore`` each
@@ -164,7 +164,7 @@ class HeadlessAgent:
         are rebound — silent ``getattr`` skips are avoided so a missing binder
         on a session-aware default port is a type/test gap, not a runtime miss.
         """
-        self._store = session
+        self._session = session
         for port in (self._tools, self._prompts, self._reasoning, self._run_factory):
             if isinstance(port, SessionBindable):
                 port.bind_session(session)
@@ -175,7 +175,7 @@ class HeadlessAgent:
         output: OutputSink | None = None,
         accounting: TurnAccounting | None = None,
         tool_hooks: ToolExecutionHooks | None | _Unmentioned = _UNMENTIONED,
-        session: SessionStore | None = None,
+        session: SessionState | None = None,
         console: Any | None = None,
     ) -> None:
         """Swap turn-scoped ports so one agent can serve many turns.
@@ -220,8 +220,8 @@ class HeadlessAgent:
         self._accounting = None
         if accounting is not None:
             return accounting
-        if hasattr(self._store, "storage"):
-            return DefaultTurnAccounting(self._store, message)
+        if hasattr(self._session, "store"):
+            return DefaultTurnAccounting(self._session, message)
         return NoopTurnAccounting()
 
     def _execute_actions(
@@ -234,7 +234,7 @@ class HeadlessAgent:
     ) -> ToolCallingTurnResult:
         return self._action_runner.run(
             text,
-            self._store,
+            self._session,
             turn_plan=turn_plan,
             is_tty=is_tty,
             confirm_fn=confirm_fn,
@@ -243,7 +243,7 @@ class HeadlessAgent:
     def _answer(self, text: str, request: AnswerRequest) -> object:
         return stream_answer(
             text,
-            self._store,
+            self._session,
             self._output,
             prompts=self._prompts,
             reasoning=self._reasoning,
@@ -264,7 +264,7 @@ class HeadlessAgent:
         resolved = turn_plan.resolved_integrations if turn_plan is not None else None
         return gather_tool_evidence(
             text,
-            self._store,
+            self._session,
             error_reporter=self._error_reporter,
             resolved_integrations=resolved,
             max_iterations=self._gather_ports.max_iterations,
@@ -277,7 +277,7 @@ class HeadlessAgent:
         """Run one full turn for ``message`` via the common chat host API."""
         return dispatch_chat_turn(
             message,
-            self._store,
+            self._session,
             ChatTurnBindings(
                 execute_actions=self._execute_actions,
                 answer=self._answer,
@@ -295,7 +295,7 @@ __all__ = [
     "BufferOutputSink",
     "EmptyPromptContextProvider",
     "HeadlessAgent",
-    "InMemorySessionStore",
+    "InMemorySessionState",
     "NoopErrorReporter",
     "NoopTurnAccounting",
     "NullToolProvider",

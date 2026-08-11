@@ -20,7 +20,7 @@ from config.runtime_metadata import (
 )
 from config.runtime_metadata import probes as probes_module
 from config.version import get_opensre_version
-from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
+from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
 
 
 @pytest.fixture(autouse=True)
@@ -261,10 +261,10 @@ def test_merge_runtime_into_inputs_does_not_overwrite_caller_key() -> None:
 
 def test_session_bootstrap_populates_runtime_metadata() -> None:
     manager = SessionManager(
-        storage=InMemorySessionStorage(),
+        store=InMemorySessionStore(),
         repo=SimpleNamespace(load_session=lambda _sid: None),
     )
-    session = manager.create(hydrate_integrations=False, persistent_tasks=False, open_storage=False)
+    session = manager.create(hydrate_integrations=False, persistent_tasks=False, open_store=False)
     assert session.runtime_metadata["opensre_version"] == get_opensre_version()
     assert "runtime_env" in session.runtime_metadata
     assert "opensre_build" in session.runtime_metadata

@@ -23,12 +23,12 @@ from rich.console import Console
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.session_goal import SessionGoal
-from core.agent_harness.session.session_goal_paint import (
+from core.agent_harness.session_goal.goal import SessionGoal
+from core.agent_harness.session_goal.progress import (
     format_session_goal_progress,
     format_session_goal_status_line,
 )
-from core.agent_harness.turns.session_goal_loop import run_until_session_goal
+from core.agent_harness.session_goal.run_until import run_until_session_goal
 from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cancel
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
@@ -59,7 +59,7 @@ class GatewayTurnHandler:
     turns; per-turn sinks, accounting, and tool hooks are rebound via
     :meth:`HeadlessAgent.bind_turn`. Concurrent turns for different sessions
     stay isolated. Chat goes through :func:`run_until_session_goal` (one action
-    turn; outer continuation only when a ``SessionGoal`` is attached via
+    turn; session-goal continuation only when a ``SessionGoal`` is attached via
     structured handoff or an explicit host attach — same policy as the
     interactive shell).
 

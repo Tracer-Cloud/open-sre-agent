@@ -28,7 +28,7 @@ from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
     OutputSink,
-    SessionStore,
+    SessionState,
     ToolProvider,
 )
 from core.agent_harness.prompts import (
@@ -335,7 +335,7 @@ def _history_entry_fallback(item: dict[str, Any]) -> str:
     return f"{kind} ({status})"
 
 
-def _pop_turn_outcome_hint(session: SessionStore) -> str:
+def _pop_turn_outcome_hint(session: SessionState) -> str:
     # Outcome hint lives on the shell terminal facet; other sessions have none.
     terminal = getattr(session, "terminal", None)
     pop_hint = getattr(terminal, "pop_turn_outcome_hint", None)
@@ -539,7 +539,7 @@ def _should_stash_observation(
 
 
 def _turn_resolved_integrations(
-    session: SessionStore,
+    session: SessionState,
     turn_plan: TurnPlan | None,
 ) -> dict[str, Any]:
     """The turn's single resolved-integration view: from the plan, else resolve once.
@@ -554,7 +554,7 @@ def _turn_resolved_integrations(
     return dict(resolve_and_cache_integrations(session))
 
 
-def _persist_tool_calling_error(session: SessionStore, user_text: str, error_text: str) -> None:
+def _persist_tool_calling_error(session: SessionState, user_text: str, error_text: str) -> None:
     record_conversation_turn(session, user_text, error_text)
 
 
@@ -566,7 +566,7 @@ def _render_tool_calling_error(output: OutputSink, message: str) -> None:
 
 def _stage_action_llm_failure(
     message: str,
-    session: SessionStore,
+    session: SessionState,
     *,
     client: Any | None,
     error_text: str,
@@ -659,7 +659,7 @@ def _literal_slash_tool_call(message: str, agent_tools: list[Any]) -> ToolCall |
 def _build_action_agent(
     *,
     message: str,
-    session: SessionStore,
+    session: SessionState,
     agent_tools: list[Any],
     turn_snapshot: TurnSnapshot | None,
     resolved_integrations: dict[str, Any],
@@ -792,7 +792,7 @@ class ActionTurnRunner:
     def run(
         self,
         message: str,
-        session: SessionStore,
+        session: SessionState,
         *,
         turn_plan: TurnPlan | None = None,
         is_tty: bool | None = None,
@@ -837,7 +837,7 @@ class _TurnCounts:
 
 def _compose_response(
     result: Any,
-    session: SessionStore,
+    session: SessionState,
     counts: _TurnCounts,
 ) -> tuple[str, list[str], bool]:
     """Build the turn's response text and what to show on screen.
@@ -925,7 +925,7 @@ def _show_response(
         output.print()
 
 
-def _count_turn(result: Any, session: SessionStore, history_start: int) -> _TurnCounts:
+def _count_turn(result: Any, session: SessionState, history_start: int) -> _TurnCounts:
     """Count what ran, from the history rows this turn added plus the results."""
     executed_entries = [
         item
@@ -968,7 +968,7 @@ def _count_turn(result: Any, session: SessionStore, history_start: int) -> _Turn
 
 def _run_action_turn(
     message: str,
-    session: SessionStore,
+    session: SessionState,
     args: _ActionTurnArgs,
 ) -> ToolCallingTurnResult:
     turn_plan = args.turn_plan

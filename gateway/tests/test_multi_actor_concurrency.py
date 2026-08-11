@@ -25,7 +25,7 @@ from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.paths import session_path, sessions_dir
 from gateway.core.storage.session.file_bindings import FileBindingStore
 
@@ -265,7 +265,7 @@ def test_multiprocess_alice_bob_bind_no_corrupt_json(bindings_path: Path) -> Non
 @pytest.mark.usefixtures("host")
 def test_concurrent_alice_bob_session_appends_do_not_mix() -> None:
     """Scoped writers append into different trees; neither sees the other's lines."""
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     barrier = threading.Barrier(2)
     errors: list[Exception] = []
     paths_seen: dict[str, str] = {}
@@ -325,7 +325,7 @@ def test_same_session_concurrent_appends_remain_line_parseable() -> None:
     actor. The test pins whether the append-only writer is still safe under
     accidental double-entry — a regression tripwire for data corruption.
     """
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "shared-sess"
     with bound_storage_scope(_scope(ALICE)):
         storage.open_session(_SessionStub(session_id))

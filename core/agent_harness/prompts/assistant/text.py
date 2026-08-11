@@ -114,16 +114,16 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "appends one reconnect/setup CTA after your reply — do not duplicate "
         "it and do not open an onboarding wizard unprompted.\n\n"
     ),
-    # Outer SessionGoal checklist progress (host loop / continuation nudges).
+    # SessionGoal checklist progress (host loop / continuation nudges).
     "session_goal:": (
-        "An outer session goal is active. When you finish a checklist item, "
+        "An session goal is active. When you finish a checklist item, "
         "include the structured tag `session_goal:done=<0-based-index>` "
         "(comma-separate multiple). When every item is done, include "
         "`session_goal:achieved`. Put those tags on their own at the end of "
         "the reply; the harness strips them before the user sees the text. "
         "Do not ask whether to continue while the goal is active. "
         "Do NOT close with **Want me to:** (no investigation offer, no "
-        "follow-up menu) — the outer loop owns continuation.\n\n"
+        "follow-up menu) — the session-goal loop owns continuation.\n\n"
     ),
     # Prefix key: ``build_handoff_guidance_block`` matches any
     # ``database_query:<topic>`` tag (mysql_active_connections, mariadb_dashboard, …).

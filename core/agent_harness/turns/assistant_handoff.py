@@ -27,7 +27,7 @@ def _evidence_kind_from_value(value: Any) -> EvidenceKind | None:
 
 
 def _session_goal_attach(value: Any) -> bool | None:
-    """Whether the planner asked to attach an outer goal."""
+    """Whether the planner asked to attach an session goal."""
     if isinstance(value, bool):
         return value
     return None
@@ -48,7 +48,7 @@ def _session_goal_from_content(content: str) -> bool | None:
 
 
 def _session_goal_max_turns(value: Any) -> int | None:
-    """Outer-turn cap as a number; anything else is no cap."""
+    """Session-goal turn cap as a number; anything else is no cap."""
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return max(1, value)

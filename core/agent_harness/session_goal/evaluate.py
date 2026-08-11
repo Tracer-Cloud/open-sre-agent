@@ -1,4 +1,4 @@
-"""Outer SessionGoal completion — structured verdict, not model self-report alone.
+"""SessionGoal completion — structured verdict, not model self-report alone.
 
 The action/assistant model may emit ``session_goal:achieved``. That tag is a
 claim, not proof. This module is the independent host check:
@@ -12,7 +12,7 @@ claim, not proof. This module is the independent host check:
 * ``achieved`` with no checklist on a handoff goal → require tool evidence, or
   stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
-  tool-evidence path (:mod:`session_goal_review`).
+  tool-evidence path (:mod:`core.agent_harness.session_goal.confirm`).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
     SessionGoalReason,
     SessionGoalStatus,
@@ -45,7 +45,7 @@ _LEGACY_WAITING_WITH_TAG = (
 
 @dataclass(frozen=True, slots=True)
 class SessionGoalVerdict:
-    """Host decision for one outer-loop evaluation."""
+    """Host decision for one session-goal evaluation."""
 
     status: str
     reason: str
@@ -91,7 +91,7 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
     call must not let an ``achieved`` claim through. ``executed_count`` alone
     would say yes to a turn whose only action failed.
 
-    Dispatching ``investigation_start`` is not finishing evidence for an outer
+    Dispatching ``investigation_start`` is not finishing evidence for a session
     goal — that work lands in later turns / the investigation report.
     """
     if turn_dispatched_investigation(result):
@@ -112,7 +112,7 @@ def evaluate_session_goal(
     *,
     session: Any | None = None,
 ) -> SessionGoalVerdict:
-    """Independent structured evaluation of an outer session goal."""
+    """Independent structured evaluation of an session goal."""
     if session is not None and getattr(session, "pending_user_choice", None) is not None:
         return SessionGoalVerdict(
             status=SessionGoalStatus.ACTIVE,

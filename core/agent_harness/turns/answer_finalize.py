@@ -10,19 +10,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.ports import OutputSink, SessionStore
+from core.agent_harness.ports import OutputSink, SessionState
 from core.agent_harness.session.pending_offer import (
     PendingIntegrationSetupOffer,
     arm_pending_integration_setup_offer,
     arm_pending_investigation_offer,
     finalize_gather_investigation_offer,
 )
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session.want_me_to import strip_want_me_to_closer
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
     SessionGoalStatus,
-    session_goal_is_active,
+    session_goal_is_attached,
 )
-from core.agent_harness.session.want_me_to import strip_want_me_to_closer
 from core.agent_harness.tools.tool_context import capability_not_explicitly_disabled
 from core.agent_harness.turns.evidence_need import (
     EvidenceNeed,
@@ -39,13 +39,14 @@ from core.agent_harness.turns.turn_route import RouteIntent
 from platform.harness_ports import integration_setup_command
 
 
-def should_suppress_want_me_to_for_session_goal(session: SessionStore) -> bool:
-    """True while an outer goal is active, or a host-owned goal just achieved.
+def should_suppress_want_me_to_for_session_goal(session: SessionState) -> bool:
+    """True while an session goal is attached, or a host-owned goal just achieved.
 
     Evaluate often marks ACHIEVED before answer finalize runs. Suppressing only
-    on ``session_goal_is_active`` lets Want-me-to leak on the achieving turn.
+    on active status lets Want-me-to leak on the achieving turn.
+    Attached includes ``paused`` so a user-paused ``/goal`` still owns the UX.
     """
-    if session_goal_is_active(session):
+    if session_goal_is_attached(session):
         return True
     goal = getattr(session, "session_goal", None)
     return (
@@ -76,7 +77,7 @@ def finish_streamed_response(output: OutputSink | None, text: str) -> None:
         finalize(text)
 
 
-def _offered_upgrade_ctas(session: SessionStore) -> set[str]:
+def _offered_upgrade_ctas(session: SessionState) -> set[str]:
     holder: Any = session
     offered = getattr(holder, "offered_upgrade_ctas", None)
     if not isinstance(offered, set):
@@ -86,7 +87,7 @@ def _offered_upgrade_ctas(session: SessionStore) -> set[str]:
 
 
 def append_upgrade_cta(
-    session: SessionStore,
+    session: SessionState,
     response_text: str,
     evidence_need: EvidenceNeed,
 ) -> str:
@@ -128,7 +129,7 @@ def append_upgrade_cta(
 
 def finalize_routed_answer(
     *,
-    session: SessionStore,
+    session: SessionState,
     route_intent: RouteIntent,
     response_text: str,
     evidence_for_offer: str | None,

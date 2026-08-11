@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.confirm import build_session_goal_llm_evaluator
+from core.agent_harness.session_goal.evaluate import (
+    evaluate_session_goal,
+    turn_has_session_goal_evidence,
+)
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
     SessionGoalStatus,
     attach_session_goal,
 )
-from core.agent_harness.session.session_goal_evaluate import (
-    evaluate_session_goal,
-    turn_has_session_goal_evidence,
-)
-from core.agent_harness.session.session_goal_review import build_session_goal_llm_evaluator
-from core.agent_harness.turns.session_goal_loop import run_until_session_goal
+from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -52,10 +52,10 @@ def test_turn_has_session_goal_evidence_requires_a_tool_that_succeeded() -> None
 
 def test_waiting_for_reason_is_not_an_achieved_claim() -> None:
     """Host waiting copy must never count as a ``session_goal:achieved`` claim."""
-    from core.agent_harness.session.session_goal import SessionGoalReason
-    from core.agent_harness.session.session_goal_evaluate import (
+    from core.agent_harness.session_goal.evaluate import (
         reply_claims_session_goal_achieved,
     )
+    from core.agent_harness.session_goal.goal import SessionGoalReason
 
     assert reply_claims_session_goal_achieved("session_goal:achieved") is True
     assert reply_claims_session_goal_achieved("All done.\nsession_goal:achieved") is True
@@ -80,7 +80,7 @@ def test_waiting_for_reason_is_not_an_achieved_claim() -> None:
 
 def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
     """Regression: /goal set turn captured status text and falsely achieved."""
-    from core.agent_harness.session.session_goal import SessionGoalReason
+    from core.agent_harness.session_goal.goal import SessionGoalReason
 
     session = SessionCore()
     goal = SessionGoal(
@@ -108,7 +108,7 @@ def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
 
 def test_goal_set_attach_turn_does_not_consume_outer_budget() -> None:
     """``/goal set`` attach + autosubmit: first work turn is the next chat."""
-    from core.agent_harness.session.session_goal import SessionGoalReason
+    from core.agent_harness.session_goal.goal import SessionGoalReason
 
     session = SessionCore()
     turns: list[str] = []
@@ -183,7 +183,7 @@ def test_host_owned_achieved_without_tools_completes() -> None:
 
 
 def test_handoff_does_not_replace_active_host_owned_goal() -> None:
-    from core.agent_harness.session.session_goal import attach_session_goal_from_handoffs
+    from core.agent_harness.session_goal.goal import attach_session_goal_from_handoffs
 
     session = SessionCore()
     attach_session_goal(
@@ -207,9 +207,36 @@ def test_handoff_does_not_replace_active_host_owned_goal() -> None:
     assert again.checklist == ()
 
 
+def test_handoff_does_not_replace_paused_host_owned_goal() -> None:
+    from core.agent_harness.session_goal.goal import attach_session_goal_from_handoffs
+
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="list three steps",
+            max_outer_turns=3,
+            host_owned=True,
+            status=SessionGoalStatus.PAUSED,
+            turns_used=1,
+        ),
+    )
+    again = attach_session_goal_from_handoffs(
+        session,
+        ("session_goal:continue", "session_goal_item:one"),
+        condition="other",
+    )
+    assert again is not None
+    assert again.host_owned is True
+    assert again.status == SessionGoalStatus.PAUSED
+    assert again.turns_used == 1
+    assert again.condition == "list three steps"
+    assert again.checklist == ()
+
+
 def test_handoff_may_replace_terminal_host_owned_goal() -> None:
     """After a slash goal finishes, handoff can start a new goal."""
-    from core.agent_harness.session.session_goal import attach_session_goal_from_handoffs
+    from core.agent_harness.session_goal.goal import attach_session_goal_from_handoffs
 
     session = SessionCore()
     attach_session_goal(
@@ -233,7 +260,7 @@ def test_handoff_may_replace_terminal_host_owned_goal() -> None:
 
 
 def test_achieved_with_tool_evidence_completes_condition_only_goal() -> None:
-    from core.agent_harness.session.session_goal import SessionGoalReason
+    from core.agent_harness.session_goal.goal import SessionGoalReason
 
     goal = SessionGoal(condition="finish migration", max_outer_turns=3)
     verdict = evaluate_session_goal(
@@ -304,7 +331,7 @@ def test_achieved_ignored_when_checklist_incomplete() -> None:
 
 
 def test_checklist_complete_achieves_without_achieved_tag() -> None:
-    from core.agent_harness.session.session_goal import SessionGoalReason
+    from core.agent_harness.session_goal.goal import SessionGoalReason
 
     goal = SessionGoal(
         condition="checklist",

@@ -129,7 +129,7 @@ def test_sink_accepts_tool_hooks_attribute(
 def test_a_second_goal_turn_posts_instead_of_overwriting(
     _patch_discord_client: dict[str, Any],
 ) -> None:
-    """Outer-goal continuation runs several turns through one sink.
+    """Session-goal continuation runs several turns through one sink.
 
     The first answer replaces the placeholder by editing it. A later turn must
     deliver a new message — editing the same one overwrites an answer the user

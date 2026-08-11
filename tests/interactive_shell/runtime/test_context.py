@@ -122,7 +122,7 @@ def test_create_context_registers_jsonl_session_trace_store(
 def test_create_context_uses_noop_trace_store_for_in_memory_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from core.agent_harness.session import InMemorySessionStorage
+    from core.agent_harness.session import InMemorySessionStore
     from platform.observability.trace.spans import (
         NoopSessionTraceStore,
         get_session_trace_store,
@@ -138,7 +138,7 @@ def test_create_context_uses_noop_trace_store_for_in_memory_session(
     set_session_trace_store(NoopSessionTraceStore())
     try:
         create_repl_runtime_context(
-            session=Session(storage=InMemorySessionStorage()),
+            session=Session(store=InMemorySessionStore()),
             hydrate_integrations=False,
             persistent_tasks=False,
         )

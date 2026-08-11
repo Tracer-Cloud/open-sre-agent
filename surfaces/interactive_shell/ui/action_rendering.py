@@ -86,7 +86,7 @@ class ActionRenderObserver:
             return
         if kind == "tool_update":
             with contextlib.suppress(Exception):
-                self.session.storage.append_tool_update(
+                self.session.store.append_tool_update(
                     self.session.session_id,
                     tool=str(data.get("name") or "tool"),
                     update=data.get("update"),

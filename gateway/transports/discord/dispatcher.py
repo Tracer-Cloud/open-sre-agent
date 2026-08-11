@@ -20,7 +20,7 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.runtime.active_turns import ActiveTurnCancels, is_stop_command
+from gateway.core.runtime.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
 from gateway.core.runtime.conversation_locks import ConversationLockRegistry
@@ -72,7 +72,7 @@ class DiscordTurnDispatcher:
         self._logger = logger
         self._bot_user_id = bot_user_id
         self._approvals = approvals or ApprovalBroker()
-        self._active_cancels = ActiveTurnCancels()
+        self._active_cancels = ActiveTurnRegistry()
         self._attention = ThreadAttentionGate()
         self._conversation_locks = ConversationLockRegistry()
         self._resolver_lock = threading.Lock()

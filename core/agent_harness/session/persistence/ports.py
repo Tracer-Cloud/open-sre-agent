@@ -4,7 +4,7 @@ These protocols decouple the in-memory session object (:class:`Session`)
 and the slash-command surfaces from any concrete persistence backend. Two
 roles are kept deliberately separate, mirroring a storage-vs-repository split:
 
-- :class:`SessionStorage` — per-session lifecycle and entry writes for a single
+- :class:`SessionStore` — per-session lifecycle and entry writes for a single
   logical session (open, append, flush, reopen). Backends: JSONL (production)
   and in-memory (tests).
 - :class:`SessionRepo` — cross-session queries over every stored session
@@ -24,7 +24,7 @@ CHAT_KINDS: frozenset[str] = frozenset({"chat", "cli_agent", "follow_up"})
 
 
 class SessionPersistenceSource(Protocol):
-    """Fields a :class:`SessionStorage` backend reads off a live session."""
+    """Fields a :class:`SessionStore` backend reads off a live session."""
 
     session_id: str
     started_at: float
@@ -33,7 +33,7 @@ class SessionPersistenceSource(Protocol):
 
 
 @runtime_checkable
-class SessionStorage(Protocol):
+class SessionStore(Protocol):
     """Per-session persistence backend for one logical session."""
 
     def open_session(self, session: SessionPersistenceSource) -> None:

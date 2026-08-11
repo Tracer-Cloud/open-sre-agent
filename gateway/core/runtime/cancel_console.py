@@ -1,7 +1,7 @@
 """Gateway console wrapper: Rich console + ``cancel_requested`` (shell parity).
 
 One Event per turn (``sink.turn_cancel``). Soft timeout and ``/stop``
-(:class:`~gateway.core.runtime.active_turns.ActiveTurnCancels`) both ``set()``
+(:class:`~gateway.core.runtime.active_turns.ActiveTurnRegistry`) both ``set()``
 it. :class:`GatewayTurnHandler` binds this wrapper so tools and ReAct see
 ``cancel_requested`` like the interactive shell's ``StreamingConsole``.
 

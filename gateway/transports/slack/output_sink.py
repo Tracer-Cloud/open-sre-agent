@@ -177,7 +177,7 @@ class SlackOutputSink:
                     self._thread_ts,
                 )
             elif self._turn_stream.closed:
-                # Prior stopStream (outer goal continuation, or a raced finalize).
+                # Prior stopStream (session goal continuation, or a raced finalize).
                 # Open a fresh stream so later-turn text is not treated as already
                 # delivered; if start fails, fall through to classic post.
                 if self._turn_stream.ensure_started_for_continuation() and self._turn_stream.finish(
@@ -389,7 +389,7 @@ class _TurnStream:
         if self._broken or self._unavailable:
             return False
         if self._closed:
-            # Prior response stopped (outer goal continuation). Open a fresh
+            # Prior response stopped (session goal continuation). Open a fresh
             # stream instead of treating later appends as already delivered.
             self._reset_for_continuation()
         if self._ts is not None:

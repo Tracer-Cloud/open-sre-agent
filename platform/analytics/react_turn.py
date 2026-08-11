@@ -18,7 +18,7 @@ from typing import Any, Literal
 from core.agent import Agent
 from core.agent.run_io import AgentRunResult
 from core.agent_harness.accounting.token_accounting import resolve_model_name, resolve_provider_name
-from core.agent_harness.ports import SessionStore
+from core.agent_harness.ports import SessionState
 from core.messages import RuntimeMessageLike
 from platform.analytics.cli import capture_react_turn_completed
 from platform.analytics.investigation_loop import bound_loop_metrics
@@ -51,7 +51,7 @@ def resolve_react_stop_reason(
     return "completed"
 
 
-def _session_investigation_id(session: SessionStore | None) -> str | None:
+def _session_investigation_id(session: SessionState | None) -> str | None:
     if session is None:
         return None
     investigation_id = getattr(session, "last_investigation_id", None)
@@ -60,7 +60,7 @@ def _session_investigation_id(session: SessionStore | None) -> str | None:
     return None
 
 
-def _session_investigation_loop_count(session: SessionStore | None) -> int | None:
+def _session_investigation_loop_count(session: SessionState | None) -> int | None:
     bound = bound_loop_metrics()
     if bound is not None:
         return bound[0]
@@ -74,7 +74,7 @@ def _session_investigation_loop_count(session: SessionStore | None) -> int | Non
     return None
 
 
-def _resolve_cli_session_id(session: SessionStore | None) -> str:
+def _resolve_cli_session_id(session: SessionState | None) -> str:
     bound = get_cli_session_id()
     if bound:
         return bound
@@ -106,7 +106,7 @@ def emit_react_turn_completed(
     iteration_cap: int,
     duration_ms: int,
     llm: Any,
-    session: SessionStore | None = None,
+    session: SessionState | None = None,
     error: BaseException | None = None,
     cancelled: bool = False,
 ) -> None:
@@ -151,7 +151,7 @@ def run_react_agent_with_telemetry(
     phase: ReactPhase,
     iteration_cap: int,
     llm: Any,
-    session: SessionStore | None = None,
+    session: SessionState | None = None,
 ) -> AgentRunResult:
     """Run ``agent.run`` and emit exactly one ``react_turn_completed`` event."""
     started = time.monotonic()

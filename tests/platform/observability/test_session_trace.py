@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from platform.observability.trace import process_stats
 from platform.observability.trace.process_stats import (
     sample_resource_snapshot,
@@ -60,11 +60,11 @@ def _seed_session_jsonl(tmp_path: Path, session_id: str) -> Path:
 
 def _activate_jsonl_sink(tmp_path: Path, session_id: str, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda sid: tmp_path / f"{sid}.jsonl",
     )
     path = _seed_session_jsonl(tmp_path, session_id)
-    set_session_trace_store(JsonlSessionTraceStore(storage=JsonlSessionStorage()))
+    set_session_trace_store(JsonlSessionTraceStore(store=JsonlSessionStore()))
     return path
 
 
@@ -417,13 +417,13 @@ def test_jsonl_trace_store_writes_trace_span(
 
 
 def test_jsonl_trace_store_for_session_uses_jsonl_or_noop() -> None:
-    from core.agent_harness.session import InMemorySessionStorage
+    from core.agent_harness.session import InMemorySessionStore
     from surfaces.interactive_shell.session import Session
 
-    jsonl_session = Session(storage=JsonlSessionStorage())
+    jsonl_session = Session(store=JsonlSessionStore())
     assert isinstance(jsonl_trace_store_for_session(jsonl_session), JsonlSessionTraceStore)
 
-    memory_session = Session(storage=InMemorySessionStorage())
+    memory_session = Session(store=InMemorySessionStore())
     assert isinstance(jsonl_trace_store_for_session(memory_session), NoopSessionTraceStore)
 
     assert isinstance(jsonl_trace_store_for_session(object()), NoopSessionTraceStore)

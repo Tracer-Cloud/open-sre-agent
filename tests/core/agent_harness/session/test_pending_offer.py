@@ -7,7 +7,7 @@ import pytest
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 from core.agent_harness.session.pending_offer import PendingScheduleOffer
 from core.agent_harness.tools.tool_context import ActionToolContext
-from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from tools.interactive_shell.actions.propose_scheduled_delivery import (
@@ -52,7 +52,7 @@ def test_yes_uses_pending_schedule_not_prose() -> None:
 
 
 def test_propose_tool_sets_session_pending_offer() -> None:
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.record(
         "shell",
         "curl -s 'wttr.in/Amsterdam?format=3'",
@@ -93,7 +93,7 @@ def test_propose_tool_sets_session_pending_offer() -> None:
 
 def test_propose_alone_without_briefing_work_is_rejected() -> None:
     """User symptom: 'give me a morning report' → only Want me to, no weather."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     ctx = ActionToolContext(session=session, console=object())
     result = execute_propose_scheduled_delivery_tool(
         {
@@ -114,7 +114,7 @@ def test_propose_alone_without_briefing_work_is_rejected() -> None:
 
 
 def test_run_turn_consumes_pending_schedule_on_yes() -> None:
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
         kind="daily_summary",
         cron="0 8 * * 1-5",
@@ -232,10 +232,10 @@ def test_slash_tool_rebuild_keeps_cron_expression_for_dispatch() -> None:
     from rich.console import Console
 
     from core.agent_harness.tools.tool_context import ActionToolContext
-    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+    from core.agent_harness.turns.headless_adapters import InMemorySessionState
 
     ctx = ActionToolContext(
-        session=InMemorySessionStore(),
+        session=InMemorySessionState(),
         console=Console(force_terminal=False, highlight=False),
         slash_ports=_Ports(),
         is_tty=False,
@@ -318,13 +318,13 @@ def test_a_failed_schedule_keeps_the_offer_for_a_second_try() -> None:
     """
     # Arrange
     from core.agent_harness.turns.headless_adapters import (
-        InMemorySessionStore,
+        InMemorySessionState,
         NoopTurnAccounting,
     )
     from core.agent_harness.turns.orchestrator import run_turn
     from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
         kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
@@ -356,13 +356,13 @@ def test_a_successful_schedule_consumes_the_offer() -> None:
     """The mirror case: once it lands, a later bare yes must not re-add it."""
     # Arrange
     from core.agent_harness.turns.headless_adapters import (
-        InMemorySessionStore,
+        InMemorySessionState,
         NoopTurnAccounting,
     )
     from core.agent_harness.turns.orchestrator import run_turn
     from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.pending_schedule_offer = PendingScheduleOffer(
         kind="daily_summary", cron="0 8 * * 1-5", timezone="UTC", provider="slack"
     )
@@ -401,12 +401,12 @@ def test_a_stale_fetch_from_an_earlier_turn_does_not_unlock_the_offer() -> None:
     """
     # Arrange
     from core.agent_harness.tools.tool_context import ActionToolContext
-    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+    from core.agent_harness.turns.headless_adapters import InMemorySessionState
     from tools.interactive_shell.actions.propose_scheduled_delivery import (
         execute_propose_scheduled_delivery_tool,
     )
 
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     # An earlier turn fetched weather and news.
     session.record("shell", "curl -s 'wttr.in/Amsterdam?format=3'", ok=True)
     session.record("shell", "curl -s 'https://feeds.bbci.co.uk/news/rss.xml'", ok=True)
@@ -438,9 +438,9 @@ def test_the_turn_boundary_reaches_the_tool_context_in_production() -> None:
     """
     # Arrange
     from core.agent_harness.tools.tool_provider import DefaultToolProvider
-    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+    from core.agent_harness.turns.headless_adapters import InMemorySessionState
 
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.record("shell", "curl -s 'wttr.in/Amsterdam?format=3'", ok=True)
     session.record("shell", "curl -s 'https://feeds.bbci.co.uk/news/rss.xml'", ok=True)
 

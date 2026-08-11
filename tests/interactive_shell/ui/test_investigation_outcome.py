@@ -227,9 +227,9 @@ def test_run_foreground_investigation_skips_feedback_on_headless_session(
 ) -> None:
     """Gateway SessionCore must not block on the RCA feedback picker."""
     from core.agent_harness.session import SessionCore
-    from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+    from core.agent_harness.session.persistence.memory import InMemorySessionStore
 
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     console = Console(force_terminal=False, color_system=None, highlight=False)
     task = MagicMock(spec=TaskRecord)
     task.cancel_requested = False

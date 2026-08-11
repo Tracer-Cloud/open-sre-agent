@@ -584,14 +584,14 @@ schema fields over burying tags in content prose:
 - evidence_kind=incident — bare incident / symptom handoffs.
 - session_goal=true — REQUIRED on every handoff for multi-step or
   "keep going until done" chat checklists / walkthroughs (no local shell
-  work). The host outer loop keys off this boolean; omitting it drops
+  work). The host session-goal loop keys off this boolean; omitting it drops
   continuation. Prefer session_goal_items=["…", …] for checklist criteria.
-- session_goal_max_turns=<n> — optional outer-turn cap for that goal.
+- session_goal_max_turns=<n> — optional session-goal turn cap for that goal.
 - session_goal_items=["…", …] — checklist success criteria (one string per
   item, in order). The host tracks completion via session_goal:done=<index>
   in later replies; do not invent checklist items from synonyms.
 When a host session goal is active (or you just emitted session_goal:achieved
-for one), finish the reply without a Want me to: closer — the outer loop owns
+for one), finish the reply without a Want me to: closer — the session-goal loop owns
 continuation; do not ask the user whether to continue or clear the goal.
 Never emit session_goal:achieved in the same turn as investigation_start —
 starting RCA is not finishing the goal. After investigation results (or other

@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 from gateway.core.runtime.active_turns import (
-    ActiveTurnCancels,
+    ActiveTurnRegistry,
     is_stop_command,
 )
 
@@ -21,7 +21,7 @@ def test_is_stop_command_accepts_common_forms() -> None:
 
 
 def test_request_stop_sets_event_and_runs_callback() -> None:
-    registry = ActiveTurnCancels()
+    registry = ActiveTurnRegistry()
     event = threading.Event()
     seen: list[str] = []
 
@@ -34,7 +34,7 @@ def test_request_stop_sets_event_and_runs_callback() -> None:
 
 
 def test_track_unregisters_even_when_turn_raises() -> None:
-    registry = ActiveTurnCancels()
+    registry = ActiveTurnRegistry()
     event = threading.Event()
     try:
         with registry.track("chat-1", event):
@@ -45,7 +45,7 @@ def test_track_unregisters_even_when_turn_raises() -> None:
 
 
 def test_newer_track_replaces_key() -> None:
-    registry = ActiveTurnCancels()
+    registry = ActiveTurnRegistry()
     first = threading.Event()
     second = threading.Event()
     with registry.track("chat-1", first), registry.track("chat-1", second):

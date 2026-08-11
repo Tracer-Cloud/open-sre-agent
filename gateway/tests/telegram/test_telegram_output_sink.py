@@ -238,7 +238,7 @@ def test_finalize_after_finished_turn_sends_a_new_message() -> None:
 
 
 def test_a_second_goal_turn_posts_a_new_message_instead_of_overwriting() -> None:
-    """Outer goal continuation runs several turns through one sink.
+    """Session goal continuation runs several turns through one sink.
 
     The first answer replaces the placeholder by editing it. A later turn must
     not edit that same message — doing so overwrites the answer the user has

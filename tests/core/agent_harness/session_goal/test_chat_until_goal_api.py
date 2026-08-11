@@ -1,10 +1,10 @@
-"""AgentSession.chat_until_goal wraps the outer SessionGoal loop."""
+"""AgentSession.chat_until_goal wraps the SessionGoal loop."""
 
 from __future__ import annotations
 
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.session_goal import SessionGoal, SessionGoalStatus
+from core.agent_harness.session_goal.goal import SessionGoal, SessionGoalStatus
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 

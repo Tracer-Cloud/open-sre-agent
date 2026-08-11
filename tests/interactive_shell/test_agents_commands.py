@@ -18,7 +18,7 @@ from surfaces.interactive_shell.session import Session
 from tools.system.fleet_monitoring import config as config_mod
 from tools.system.fleet_monitoring.conflicts import DEFAULT_WINDOW_SECONDS, FileWriteConflict
 from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry
-from tools.system.fleet_monitoring.tail import AttachUnsupported, TailBuffer
+from tools.system.fleet_monitoring.tail import AttachUnsupportedError, TailBuffer
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -519,7 +519,7 @@ class TestAgentsTrace:
 
     def test_attach_unsupported_renders_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _refuse(_pid: int) -> _FakeSession:
-            raise AttachUnsupported("stdout is on a terminal; live tail not supported")
+            raise AttachUnsupportedError("stdout is on a terminal; live tail not supported")
 
         monkeypatch.setattr(agents_trace, "attach", _refuse)
 

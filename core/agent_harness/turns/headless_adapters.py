@@ -26,8 +26,8 @@ from core.agent_harness.turns.turn_results import (
 
 
 @dataclass
-class InMemorySessionStore:
-    """List-backed :class:`core.agent_harness.ports.SessionStore` for headless runs."""
+class InMemorySessionState:
+    """List-backed :class:`core.agent_harness.ports.SessionState` for headless runs."""
 
     session_id: str = "headless"
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)

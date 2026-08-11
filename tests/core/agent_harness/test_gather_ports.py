@@ -72,7 +72,7 @@ class TestAgentForwardsThePorts:
 
         agent = headless_dispatch.HeadlessAgent(
             tools=headless_dispatch.NullToolProvider(),
-            session=headless_dispatch.InMemorySessionStore(),
+            session=headless_dispatch.InMemorySessionState(),
             gather=GatherPorts(on_progress=_on_progress, persist=_persist, max_iterations=9),
         )
 
@@ -96,7 +96,7 @@ class TestAgentForwardsThePorts:
 
         agent = headless_dispatch.HeadlessAgent(
             tools=headless_dispatch.NullToolProvider(),
-            session=headless_dispatch.InMemorySessionStore(),
+            session=headless_dispatch.InMemorySessionState(),
             gather=GatherPorts(enabled=False),
         )
 

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.evaluate import default_evaluate_session_goal
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
     SessionGoalStatus,
     apply_session_goal_progress,
@@ -11,9 +12,8 @@ from core.agent_harness.session.session_goal import (
     session_goal_from_assistant_handoffs,
     session_goal_from_handoffs,
 )
-from core.agent_harness.session.session_goal_evaluate import default_evaluate_session_goal
+from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
-from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -83,7 +83,7 @@ def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:
 
 
 def test_format_session_goal_progress_shows_checklist() -> None:
-    from core.agent_harness.session.session_goal_paint import format_session_goal_progress
+    from core.agent_harness.session_goal.progress import format_session_goal_progress
 
     goal = SessionGoal(
         condition="ship the checklist",
@@ -106,7 +106,7 @@ def test_format_session_goal_progress_shows_checklist() -> None:
 
 
 def test_format_session_goal_status_line_is_compact() -> None:
-    from core.agent_harness.session.session_goal_paint import format_session_goal_status_line
+    from core.agent_harness.session_goal.progress import format_session_goal_status_line
 
     goal = SessionGoal(
         condition="two-step",
@@ -123,8 +123,8 @@ def test_format_session_goal_status_line_is_compact() -> None:
 
 
 def test_format_session_goal_progress_active_header_includes_duration() -> None:
-    from core.agent_harness.session.session_goal import mark_session_goal_started
-    from core.agent_harness.session.session_goal_paint import format_session_goal_progress
+    from core.agent_harness.session_goal.goal import mark_session_goal_started
+    from core.agent_harness.session_goal.progress import format_session_goal_progress
 
     goal = mark_session_goal_started(
         SessionGoal(condition="finish migrate", max_outer_turns=5, turns_used=1),
@@ -146,7 +146,7 @@ def test_format_session_goal_progress_active_header_includes_duration() -> None:
 
 
 def test_format_duration_and_token_compacts() -> None:
-    from core.agent_harness.session.session_goal_paint import (
+    from core.agent_harness.session_goal.progress import (
         format_duration_compact,
         format_token_count_compact,
     )
@@ -160,8 +160,8 @@ def test_format_duration_and_token_compacts() -> None:
 
 
 def test_session_goal_payload_round_trips_started_at_and_token_baseline() -> None:
-    from core.agent_harness.session.session_goal import mark_session_goal_started
-    from core.agent_harness.session.session_goal_persist import (
+    from core.agent_harness.session_goal.goal import mark_session_goal_started
+    from core.agent_harness.session_goal.persist import (
         session_goal_from_payload,
         session_goal_to_payload,
     )
@@ -215,7 +215,7 @@ def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
 
 
 def test_nudge_lists_unfinished_checklist_items() -> None:
-    from core.agent_harness.session.session_goal_paint import continuation_nudge
+    from core.agent_harness.session_goal.continuation import continuation_nudge
 
     goal = SessionGoal(
         condition="x",
@@ -265,7 +265,7 @@ def test_outer_loop_nudge_carries_reason_after_partial_progress() -> None:
 
 
 def test_strip_session_goal_progress_tags_hides_harness_tokens() -> None:
-    from core.agent_harness.session.session_goal import strip_session_goal_progress_tags
+    from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 
     raw = "Finished step two.\nsession_goal:done=1\nMore prose. session_goal:achieved"
     cleaned = strip_session_goal_progress_tags(raw)

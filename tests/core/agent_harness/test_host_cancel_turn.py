@@ -6,7 +6,7 @@ import threading
 from typing import Any
 
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import (
@@ -83,7 +83,7 @@ def test_run_turn_cancelled_action_skips_gather_and_answer() -> None:
 
     result = run_turn(
         "question?",
-        SessionCore(storage=InMemorySessionStorage()),
+        SessionCore(store=InMemorySessionStore()),
         execute_actions=execute_actions,
         answer=answer,
         gather=gather,
@@ -114,7 +114,7 @@ def test_run_turn_cancel_during_gather_skips_answer() -> None:
 
     result = run_turn(
         "question?",
-        SessionCore(storage=InMemorySessionStorage()),
+        SessionCore(store=InMemorySessionStore()),
         execute_actions=execute_actions,
         answer=answer,
         gather=gather,

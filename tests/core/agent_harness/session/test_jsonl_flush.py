@@ -1,4 +1,4 @@
-"""Characterization + cost tests for ``JsonlSessionStorage.flush``.
+"""Characterization + cost tests for ``JsonlSessionStore.flush``.
 
 ``flush`` closes a session by appending a ``leaf`` record carrying the turn
 counts. It reached those counts by re-parsing the whole session file after each
@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.paths import session_path
 
 
@@ -43,7 +43,7 @@ def _session(session_id: str = "sess-flush", **overrides: Any) -> Any:
     )
 
 
-def _seed_turns(storage: JsonlSessionStorage, session: Any) -> None:
+def _seed_turns(storage: JsonlSessionStore, session: Any) -> None:
     """Two chat turns and one alert turn, written the way the runtime writes them.
 
     ``append_turn`` puts ``kind`` at the record top level, which is where the
@@ -70,7 +70,7 @@ def test_flush_leaf_counts_survive_context_and_message_appends(storage_home: Pat
     turns seeded here and nothing else.
     """
     # Arrange
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session(
         accumulated_context={"cluster": "prod"},
         messages=[("user", "hello"), ("assistant", "hi")],
@@ -91,7 +91,7 @@ def test_flush_leaf_counts_survive_context_and_message_appends(storage_home: Pat
 def test_flush_still_persists_context_and_messages(storage_home: Path) -> None:
     """Both appends must still reach the file, whatever flush does with records."""
     # Arrange
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session(
         accumulated_context={"cluster": "prod"},
         messages=[("user", "hello")],
@@ -122,7 +122,7 @@ def test_flush_parses_the_session_file_once(
     cost two extra full passes on the exit path.
     """
     # Arrange
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session = _session(
         accumulated_context={"cluster": "prod"},
         messages=[("user", "hello")],
@@ -131,13 +131,13 @@ def test_flush_parses_the_session_file_once(
     _seed_turns(storage, session)
 
     reads: list[str] = []
-    real_read_records = JsonlSessionStorage._read_records
+    real_read_records = JsonlSessionStore._read_records
 
     def _counting_read(path: Path) -> list[dict[str, Any]]:
         reads.append(str(path))
         return real_read_records(path)
 
-    monkeypatch.setattr(JsonlSessionStorage, "_read_records", staticmethod(_counting_read))
+    monkeypatch.setattr(JsonlSessionStore, "_read_records", staticmethod(_counting_read))
 
     # Act
     storage.flush(session)

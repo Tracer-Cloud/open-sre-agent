@@ -17,7 +17,7 @@ from core.agent_harness.prompts.memory.prior_investigation import (
 from platform.harness_ports import gather_prompt_vendor_fragments
 
 if TYPE_CHECKING:
-    from core.agent_harness.ports import SessionStore
+    from core.agent_harness.ports import SessionState
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
 _PRIOR_INVESTIGATION_GATHER_RULE = (
@@ -67,7 +67,7 @@ _GATHER_BASE = (
 )
 
 
-def build_gather_system_prompt_envelope(session: SessionStore) -> PromptEnvelope:
+def build_gather_system_prompt_envelope(session: SessionState) -> PromptEnvelope:
     """Assemble the gather prompt as tiered blocks.
 
     Same layering as the action prompt: instructions and vendor recipes are
@@ -105,7 +105,7 @@ def build_gather_system_prompt_envelope(session: SessionStore) -> PromptEnvelope
             kind=PromptBlockKind.CONTEXT,
             tier=PromptTier.CONTEXT,
             content=f"Configured integrations in this session: {configured}.",
-            provenance="core.agent_harness.ports.SessionStore",
+            provenance="core.agent_harness.ports.SessionState",
         )
     )
     last_state = getattr(session, "last_state", None)
@@ -130,7 +130,7 @@ def build_gather_system_prompt_envelope(session: SessionStore) -> PromptEnvelope
     return PromptEnvelope.from_blocks(blocks, separator="", metadata={"prompt": "gather_system"})
 
 
-def build_gather_system_prompt(session: SessionStore) -> str:
+def build_gather_system_prompt(session: SessionState) -> str:
     """Build the system prompt for one evidence-gathering turn.
 
     The gather pass calls read-only integration tools to collect evidence for a

@@ -93,7 +93,7 @@ class DiscordOutputSink:
         if not chunks:
             return
         with self._lock:
-            # Release the placeholder so a later outer-goal turn posts a new
+            # Release the placeholder so a later session-goal turn posts a new
             # message instead of overwriting the answer already delivered.
             message_id = self._message_id
             self._message_id = ""

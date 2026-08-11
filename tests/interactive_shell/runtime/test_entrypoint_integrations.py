@@ -289,13 +289,13 @@ def test_run_repl_async_failed_resume_flushes_starter_session(
 
     session = Session()
     flushed: list[str] = []
-    original_flush = session.storage.flush
+    original_flush = session.store.flush
 
     def _track_flush(current_session: Session) -> None:
         flushed.append(current_session.session_id)
         original_flush(current_session)
 
-    monkeypatch.setattr(session.storage, "flush", _track_flush)
+    monkeypatch.setattr(session.store, "flush", _track_flush)
 
     class _PromptSession:
         history = None
@@ -593,12 +593,12 @@ def test_turn_output_and_prompt_echo_reach_the_supplied_console() -> None:
     from rich.console import Console
 
     from surfaces.interactive_shell.runtime.turn_host import (
-        AgentTurnRuntime,
+        AgentTurnResources,
         _streaming_console,
     )
 
     captured = Console(file=StringIO(), force_terminal=False, width=80)
-    runtime = AgentTurnRuntime(
+    runtime = AgentTurnResources(
         session=Session(),
         state=SimpleNamespace(),
         spinner=SimpleNamespace(streaming=False, bytes_in=0),
@@ -630,12 +630,12 @@ def test_turn_output_reaches_capture_and_record_on_the_supplied_console() -> Non
     from rich.console import Console
 
     from surfaces.interactive_shell.runtime.turn_host import (
-        AgentTurnRuntime,
+        AgentTurnResources,
         _streaming_console,
     )
 
-    def build_runtime(console: Console) -> AgentTurnRuntime:
-        return AgentTurnRuntime(
+    def build_runtime(console: Console) -> AgentTurnResources:
+        return AgentTurnResources(
             session=Session(),
             state=SimpleNamespace(),
             spinner=SimpleNamespace(streaming=False, bytes_in=0),
@@ -662,11 +662,11 @@ def test_turn_output_falls_back_to_the_shell_terminal() -> None:
     import threading
 
     from surfaces.interactive_shell.runtime.turn_host import (
-        AgentTurnRuntime,
+        AgentTurnResources,
         _streaming_console,
     )
 
-    runtime = AgentTurnRuntime(
+    runtime = AgentTurnResources(
         session=Session(),
         state=SimpleNamespace(),
         spinner=SimpleNamespace(streaming=False, bytes_in=0),

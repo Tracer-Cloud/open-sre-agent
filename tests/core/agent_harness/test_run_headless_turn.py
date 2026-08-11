@@ -64,7 +64,7 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
 
     result = _Session.run_headless_turn(
         "summarize sentry",
-        config=SessionConfig(load_env=False, open_storage=False),
+        config=SessionConfig(load_env=False, open_store=False),
         logger=MagicMock(),
         gather_enabled=True,
         is_tty=False,
@@ -113,7 +113,7 @@ def test_run_headless_turn_prepare_session_runs_before_agent_build(
 
     _Session.run_headless_turn(
         "hi",
-        config=SessionConfig(load_env=False, open_storage=False),
+        config=SessionConfig(load_env=False, open_store=False),
         prepare_session=_prepare,
     )
 

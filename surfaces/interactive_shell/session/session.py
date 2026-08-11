@@ -91,7 +91,7 @@ class Session(SessionCore):
         timestamps and future uses have complete data.
         """
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
-        self.storage.append_turn(self, "incoming_alert", alert.text)
+        self.store.append_turn(self, "incoming_alert", alert.text)
         self.alerts.add(alert)
 
     def clear(self, *, rotate_identity: bool = True) -> None:

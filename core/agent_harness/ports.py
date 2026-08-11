@@ -54,7 +54,7 @@ class OutputSink(Protocol):
 
 
 @runtime_checkable
-class SessionStore(Protocol):
+class SessionState(Protocol):
     """Mutable per-session state the engine reads and writes.
 
     ``Session`` satisfies this structurally. The fields mirror what the
@@ -98,7 +98,7 @@ class SessionBindable(Protocol):
     only invokes it when the port structurally matches.
     """
 
-    def bind_session(self, session: SessionStore) -> None:
+    def bind_session(self, session: SessionState) -> None:
         """Point this port at ``session`` (same logical session, new object)."""
 
 
@@ -248,7 +248,7 @@ class AnswerRequest:
     tool_observation: str | None = None
     tool_observation_on_screen: bool = True
     handoff_contents: tuple[str, ...] = ()
-    # ``Any`` rather than ``TurnPlan``: that type imports ``SessionStore`` from
+    # ``Any`` rather than ``TurnPlan``: that type imports ``SessionState`` from
     # here, so naming it — even under ``TYPE_CHECKING`` — closes an import cycle
     # this repo's check rejects.
     turn_plan: Any = None
@@ -315,7 +315,7 @@ __all__ = [
     "ReasoningClientProvider",
     "RunRecordFactory",
     "SessionBindable",
-    "SessionStore",
+    "SessionState",
     "SubprocessPresenterFactory",
     "ToolEventObserver",
     "ToolProvider",

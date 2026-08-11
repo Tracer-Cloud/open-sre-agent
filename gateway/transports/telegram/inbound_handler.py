@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
-from gateway.core.runtime.active_turns import ActiveTurnCancels
+from gateway.core.runtime.active_turns import ActiveTurnRegistry
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
@@ -40,7 +40,7 @@ async def handle_polled_inbound_telegram_message(
     chat_locks: dict[str, asyncio.Lock],
     turn_semaphore: asyncio.Semaphore,
     approvals: ApprovalBroker,
-    active_cancels: ActiveTurnCancels,
+    active_cancels: ActiveTurnRegistry,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
 ) -> None:

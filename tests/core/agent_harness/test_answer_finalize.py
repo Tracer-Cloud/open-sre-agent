@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.agent_harness.session.session_core import SessionCore
-from core.agent_harness.session.session_goal import SessionGoal, attach_session_goal
+from core.agent_harness.session_goal.goal import SessionGoal, attach_session_goal
 from core.agent_harness.turns.answer_finalize import finalize_routed_answer
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.evidence_need import (
@@ -107,7 +107,7 @@ def test_finalize_flushes_gather_when_goal_active_even_without_closer() -> None:
 
 def test_finalize_strips_want_me_to_when_host_owned_goal_just_achieved() -> None:
     """Evaluate marks ACHIEVED before finalize — still strip the closer."""
-    from core.agent_harness.session.session_goal import SessionGoalStatus
+    from core.agent_harness.session_goal.goal import SessionGoalStatus
 
     session = SessionCore()
     attach_session_goal(

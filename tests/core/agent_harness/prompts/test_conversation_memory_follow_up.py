@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
-from core.agent_harness.turns.headless_adapters import InMemorySessionStore, NoopTurnAccounting
+from core.agent_harness.turns.headless_adapters import InMemorySessionState, NoopTurnAccounting
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 
@@ -103,7 +103,7 @@ def test_schedule_yes_without_pending_offer_does_not_scrape_prose() -> None:
 
 def test_run_turn_expands_yes_before_execute_actions() -> None:
     """Gateway Slack 'yes' must not reach the action agent as a bare affirmative."""
-    session = InMemorySessionStore()
+    session = InMemorySessionState()
     session.cli_agent_messages = [
         ("user", "[Slack channel_id=C1]\nwho is on the team?"),
         (

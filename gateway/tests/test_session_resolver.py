@@ -6,7 +6,7 @@ import pytest
 
 from config.principal import Principal
 from core.agent_harness.prompts import build_action_system_prompt
-from core.agent_harness.session import InMemorySessionStorage, SessionCore, SessionManager
+from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 from gateway.core.storage import FileBindingStore, SessionResolver
 
@@ -25,7 +25,7 @@ def resolver(tmp_path, monkeypatch) -> SessionResolver:
     store = FileBindingStore(tmp_path / "bindings.json")
     # A mutable fake repo whose load_session each test can override.
     repo = SimpleNamespace(load_session=lambda _session_id: None)
-    manager = SessionManager(storage=InMemorySessionStorage(), repo=repo)
+    manager = SessionManager(store=InMemorySessionStore(), repo=repo)
     resolver = SessionResolver(store, manager=manager)
     resolver._fake_repo = repo  # test handle to swap load_session
     return resolver

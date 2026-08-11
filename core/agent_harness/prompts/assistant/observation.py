@@ -50,7 +50,7 @@ _OFF_SCREEN_FRAMING_NO_WANT_ME_TO = (
     "Live data was just gathered from the connected integrations to answer the "
     "user's question; the tool results are below and are NOT otherwise shown to "
     "the user. Answer using **I found:** and **Here's what that looks like:** — "
-    "omit **Want me to:** entirely (an outer session goal owns continuation). "
+    "omit **Want me to:** entirely (an session goal owns continuation). "
     "Cite concrete findings (issues, log lines, or metrics). If the data does "
     "not contain the answer, say so plainly. You have ALREADY queried the "
     "connected sources, so do NOT tell the user to paste an alert or to run "
@@ -99,7 +99,7 @@ def build_observation_block(
 ) -> str:
     """Wrap freshly-gathered tool output so the assistant summarizes it directly.
 
-    When ``omit_want_me_to`` is true (outer session goal active), skip the
+    When ``omit_want_me_to`` is true (session goal active), skip the
     Want-me-to closer — the host loop owns continuation.
     """
     if not tool_observation or not tool_observation.strip():

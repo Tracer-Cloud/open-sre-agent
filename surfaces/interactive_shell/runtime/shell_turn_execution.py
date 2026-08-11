@@ -16,14 +16,14 @@ from rich.console import Console
 
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.ports import AnswerRequest, OutputSink
-from core.agent_harness.session.session_goal import (
+from core.agent_harness.session_goal.goal import (
     SessionGoal,
 )
-from core.agent_harness.session.session_goal_paint import format_session_goal_progress
+from core.agent_harness.session_goal.progress import format_session_goal_progress
+from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.host_cancel import host_cancel_requested
-from core.agent_harness.turns.session_goal_loop import run_until_session_goal
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
@@ -193,7 +193,7 @@ def execute_shell_turn(
             # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
             console.print(rendered, markup=False)
 
-    # Always one action-agent turn first. Outer loop continues only when that
+    # Always one action-agent turn first. Session-goal loop continues only when that
     # turn (or a prior turn) attached a SessionGoal via structured handoff /
     # explicit host attach — never via user-text keyword detection.
     return run_until_session_goal(

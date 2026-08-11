@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session.session_goal import session_goal_from_assistant_handoffs
+from core.agent_harness.session_goal.goal import session_goal_from_assistant_handoffs
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.evidence_need import EvidenceKind, classify_evidence_need
 

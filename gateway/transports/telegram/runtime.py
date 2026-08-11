@@ -8,7 +8,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from gateway.core.runtime.active_turns import ActiveTurnCancels
+from gateway.core.runtime.active_turns import ActiveTurnRegistry
 from gateway.core.runtime.approvals import ApprovalBroker
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
@@ -28,7 +28,7 @@ class TelegramPollingRuntime:
     chat_locks: dict[str, asyncio.Lock]
     executor: ThreadPoolExecutor
     approvals: ApprovalBroker
-    active_cancels: ActiveTurnCancels
+    active_cancels: ActiveTurnRegistry
 
 
 InitializeTelegramPollingRuntime = Callable[[GatewaySettings], TelegramPollingRuntime]
@@ -53,7 +53,7 @@ def initialize_telegram_polling_runtime(settings: GatewaySettings) -> TelegramPo
             thread_name_prefix="GatewayTurn",
         ),
         approvals=ApprovalBroker(),
-        active_cancels=ActiveTurnCancels(),
+        active_cancels=ActiveTurnRegistry(),
     )
 
 

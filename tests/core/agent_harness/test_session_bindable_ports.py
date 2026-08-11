@@ -11,7 +11,7 @@ from core.agent_harness.turns.default_reasoning_client import DefaultReasoningCl
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
-    InMemorySessionStore,
+    InMemorySessionState,
     NullToolProvider,
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
@@ -49,7 +49,7 @@ class _SpyTools:
 
 
 def test_default_and_null_tool_providers_are_session_and_console_bindable() -> None:
-    tools = DefaultToolProvider(InMemorySessionStore(), console=object())
+    tools = DefaultToolProvider(InMemorySessionState(), console=object())
     assert isinstance(tools, SessionBindable)
     assert isinstance(tools, ConsoleBindable)
     null = NullToolProvider()
@@ -64,8 +64,8 @@ def test_headless_default_ports_are_session_bindable() -> None:
 
 
 def test_headless_agent_bind_session_invokes_session_bindable() -> None:
-    first = InMemorySessionStore(session_id="a")
-    second = InMemorySessionStore(session_id="b")
+    first = InMemorySessionState(session_id="a")
+    second = InMemorySessionState(session_id="b")
     tools = _SpyTools()
     agent = HeadlessAgent(tools=tools, session=first)
     agent.bind_session(second)
@@ -74,7 +74,7 @@ def test_headless_agent_bind_session_invokes_session_bindable() -> None:
 
 def test_headless_agent_bind_turn_console_invokes_console_bindable() -> None:
     tools = _SpyTools()
-    agent = HeadlessAgent(tools=tools, session=InMemorySessionStore())
+    agent = HeadlessAgent(tools=tools, session=InMemorySessionState())
     agent.bind_turn(console="second")
     assert tools.consoles == ["second"]
 
@@ -97,7 +97,7 @@ def test_headless_agent_bind_turn_output_retargets_reasoning() -> None:
     reasoning = DefaultReasoningClientProvider(output=first)
     agent = HeadlessAgent(
         tools=NullToolProvider(),
-        session=InMemorySessionStore(),
+        session=InMemorySessionState(),
         output=first,
         reasoning=reasoning,
     )

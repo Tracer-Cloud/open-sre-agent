@@ -79,7 +79,7 @@ def _headless_config(**overrides: Any) -> SessionConfig:
         load_env=False,
         hydrate_integrations=False,
         persistent_tasks=False,
-        open_storage=False,
+        open_store=False,
         **overrides,
     )
 
@@ -294,7 +294,7 @@ def test_resume_config_reaches_session_manager() -> None:
             load_env=False,
             hydrate_integrations=False,
             persistent_tasks=False,
-            open_storage=False,
+            open_store=False,
             session_manager=manager,  # type: ignore[arg-type]
         )
     )

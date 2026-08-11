@@ -114,7 +114,7 @@ def test_headless_agent_dispatch_uses_dispatch_chat_turn(monkeypatch: Any) -> No
     assert len(captured) == 1
     message, session, bindings = captured[0]
     assert message == "ping"
-    assert session is agent._store
+    assert session is agent._session
     assert isinstance(bindings, ChatTurnBindings)
     assert bindings.is_tty is agent._is_tty
 

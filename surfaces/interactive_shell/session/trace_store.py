@@ -5,15 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from platform.observability.trace.spans import NoopSessionTraceStore, SessionTraceStore
 
 
 @dataclass
 class JsonlSessionTraceStore:
-    """Write ``trace_span`` records through the session's JSONL storage backend."""
+    """Write ``trace_span`` records through the session's JSONL store."""
 
-    storage: JsonlSessionStorage
+    store: JsonlSessionStore
 
     def emit(
         self,
@@ -26,7 +26,7 @@ class JsonlSessionTraceStore:
         attributes: dict[str, Any] | None = None,
         parent_id: str | None = None,
     ) -> str:
-        return self.storage.append_trace_span(
+        return self.store.append_trace_span(
             session_id,
             span_kind=span_kind,
             name=name,
@@ -38,12 +38,12 @@ class JsonlSessionTraceStore:
 
 
 def jsonl_trace_store_for_session(session: Any) -> SessionTraceStore:
-    """Return a JSONL sink wired to ``session.storage``, or a Noop sink for
+    """Return a JSONL store bound to ``session.store``, or a Noop store for
     non-JSONL (e.g. in-memory) sessions so tests don't leak trace files to disk."""
-    storage = getattr(session, "storage", None)
-    if not isinstance(storage, JsonlSessionStorage):
+    store = getattr(session, "store", None)
+    if not isinstance(store, JsonlSessionStore):
         return NoopSessionTraceStore()
-    return JsonlSessionTraceStore(storage=storage)
+    return JsonlSessionTraceStore(store=store)
 
 
 __all__ = ["JsonlSessionTraceStore", "jsonl_trace_store_for_session"]

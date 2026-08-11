@@ -15,7 +15,7 @@ def _client() -> MagicMock:
 
 
 def test_a_second_goal_turn_sends_a_new_message() -> None:
-    """Outer-goal continuation runs several turns through one sink.
+    """Session-goal continuation runs several turns through one sink.
 
     Turn one replaces the placeholder by editing it; turn two must be its own
     message. Editing the same event again silently replaces an answer the user

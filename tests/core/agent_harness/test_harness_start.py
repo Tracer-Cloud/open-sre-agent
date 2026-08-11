@@ -63,7 +63,7 @@ def _headless_config(**overrides: Any) -> Any:
         load_env=False,
         hydrate_integrations=False,
         persistent_tasks=False,
-        open_storage=False,
+        open_store=False,
         **overrides,
     )
 
