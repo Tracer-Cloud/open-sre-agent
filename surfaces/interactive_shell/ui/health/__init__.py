@@ -21,6 +21,7 @@ from platform.terminal.theme import (
     SECONDARY,
     WARNING,
 )
+from surfaces.interactive_shell.ui.components.rendering import print_repl_table
 
 
 def status_badge(status: str) -> Text:
@@ -126,7 +127,7 @@ def render_health_report(
             result["detail"] or "-",
         )
 
-    console.print(table)
+    print_repl_table(console, table)
     console.print()
 
     if counts["failed"] > 0:

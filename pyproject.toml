@@ -145,10 +145,6 @@ postgresql = [
 azure_sql = [
     "pyodbc>=5.1.0,<6.0.0",
 ]
-cdk = [
-    "aws-cdk-lib>=2.170.0",
-    "constructs>=10.3.0",
-]
 
 [tool.setuptools.packages.find]
 include = [
@@ -212,7 +208,7 @@ ignore_names = [
   "validate_*_config",                             # integration config validators
   "*_config_from_env",                             # env-backed integration helpers
   "describe_llm_*", "llm_provider_*", "has_credentials_*",
-  "get_account_*", "get_datasource_uids",
+  "get_account_*",
   "configure_grafana_cloud", "apply_otel_env_defaults", "validate_grafana_cloud_config",
   "on_thread_*", "on_assistant_*", "on_cron_*",
   "discord_interactions", "health_check",

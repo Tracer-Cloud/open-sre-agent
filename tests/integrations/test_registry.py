@@ -22,7 +22,9 @@ def test_registry_declares_each_service_once() -> None:
 
 
 def test_registry_supported_lists_are_derived_from_specs() -> None:
-    expected_verify = tuple(
+    # Lists, not tuples: the derived tables are mutated in place on registration
+    # so that readers holding an imported reference keep seeing current data.
+    expected_verify = [
         spec.service
         for spec in sorted(
             (candidate for candidate in INTEGRATION_SPECS if candidate.has_verifier),
@@ -30,8 +32,8 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
                 candidate.verify_order if candidate.verify_order is not None else 10_000
             ),
         )
-    )
-    expected_setup = tuple(
+    ]
+    expected_setup = [
         spec.service
         for spec in sorted(
             (candidate for candidate in INTEGRATION_SPECS if candidate.setup_order is not None),
@@ -39,7 +41,7 @@ def test_registry_supported_lists_are_derived_from_specs() -> None:
                 candidate.setup_order if candidate.setup_order is not None else 10_000
             ),
         )
-    )
+    ]
 
     assert expected_verify == SUPPORTED_VERIFY_SERVICES
     assert expected_setup == SUPPORTED_SETUP_SERVICES

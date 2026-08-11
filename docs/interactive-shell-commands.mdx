@@ -748,7 +748,7 @@ Prints guidance only — does not kill processes:
 
 ### `/background`
 
-Session-local async investigation mode. Launch an RCA, keep using the shell, and get the finished report delivered to email or Telegram.
+Session-local async investigation mode. Launch an RCA, keep using the shell, and get the finished report delivered to email, Telegram, Rocket.Chat, or Buzz.
 
 | Subcommand | What it does |
 | --- | --- |
@@ -758,7 +758,7 @@ Session-local async investigation mode. Launch an RCA, keep using the shell, and
 | `/background show <task_id>` | Full RCA summary plus per-channel notification result |
 | `/background use <task_id>` | Promote a completed RCA into active follow-up context |
 | `/background notify list` | Show the current completion channels |
-| `/background notify set <channel[,channel...]>` | Set channels — `email`, `telegram`, or both |
+| `/background notify set <channel[,channel...]>` | Set channels — `email`, `telegram`, `rocketchat`, `buzz`, or a combination |
 
 ```text
 /background on
@@ -767,7 +767,7 @@ Session-local async investigation mode. Launch an RCA, keep using the shell, and
 /background show <task_id>
 ```
 
-Channels are **off by default** and reset on REPL restart. `email` requires the [`smtp`](/smtp) integration; `telegram` requires the [`telegram`](/messaging/telegram) integration. Interactive shell only — there is no `opensre background …` CLI command. Full guide: [Background investigations](/background-investigations).
+Channels are **off by default** and reset on REPL restart. `email` requires the [`smtp`](/smtp) integration; `telegram` requires [`telegram`](/messaging/telegram); `rocketchat` requires [`rocketchat`](/messaging/rocketchat); `buzz` requires [`buzz`](/messaging/buzz). Interactive shell only — there is no `opensre background …` CLI command. Full guide: [Background investigations](/background-investigations).
 
 ---
 

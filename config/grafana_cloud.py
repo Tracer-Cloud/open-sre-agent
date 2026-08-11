@@ -4,6 +4,14 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from config.constants.grafana import (
+    GRAFANA_INSTANCE_URL_ENV,
+    GRAFANA_LOKI_DATASOURCE_UID_ENV,
+    GRAFANA_MIMIR_DATASOURCE_UID_ENV,
+    GRAFANA_READ_TOKEN_ENV,
+    GRAFANA_TEMPO_DATASOURCE_UID_ENV,
+)
+
 DEFAULT_INSTANCE_URL = "https://tracerbio.grafana.net"
 DEFAULT_LOKI_UID = "grafanacloud-logs"
 DEFAULT_TEMPO_UID = "grafanacloud-traces"
@@ -53,18 +61,18 @@ def get_account_instance_url(account_id: str) -> str:
 
 
 def get_grafana_read_token() -> str:
-    return get_env("GRAFANA_READ_TOKEN", "")
+    return get_env(GRAFANA_READ_TOKEN_ENV, "")
 
 
 def get_grafana_instance_url() -> str:
-    return get_env("GRAFANA_INSTANCE_URL", DEFAULT_INSTANCE_URL)
+    return get_env(GRAFANA_INSTANCE_URL_ENV, DEFAULT_INSTANCE_URL)
 
 
 def get_datasource_uids() -> tuple[str, str, str]:
     load_env()
-    loki_uid = _get_env("GRAFANA_LOKI_DATASOURCE_UID", DEFAULT_LOKI_UID)
-    tempo_uid = _get_env("GRAFANA_TEMPO_DATASOURCE_UID", DEFAULT_TEMPO_UID)
-    mimir_uid = _get_env("GRAFANA_MIMIR_DATASOURCE_UID", DEFAULT_MIMIR_UID)
+    loki_uid = _get_env(GRAFANA_LOKI_DATASOURCE_UID_ENV, DEFAULT_LOKI_UID)
+    tempo_uid = _get_env(GRAFANA_TEMPO_DATASOURCE_UID_ENV, DEFAULT_TEMPO_UID)
+    mimir_uid = _get_env(GRAFANA_MIMIR_DATASOURCE_UID_ENV, DEFAULT_MIMIR_UID)
     return loki_uid, tempo_uid, mimir_uid
 
 

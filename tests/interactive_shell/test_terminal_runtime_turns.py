@@ -125,19 +125,32 @@ def test_turn_needs_exclusive_stdin_for_integration_remove(
 def test_turn_needs_exclusive_stdin_for_background_tables(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Bare ``/background`` defaults to the status table, so the next prompt must
-    wait for the drain; otherwise the redraw's CPR response lands in the incoming
-    prompt buffer. Arg-bearing forms follow ``/integrations list`` above and stay
-    out of the menu gate."""
+    """``/background`` status/list/show print Rich tables; exclusive stdin keeps
+    the next ``prompt_async()`` from racing the table render and leaking CPR
+    bytes into the prompt buffer. Mutating forms like ``on`` stay ungated."""
     monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
     session = Session()
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/background", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background status", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background list", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background show", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background show abc12", session) is True
 
-    assert loop_input_policy.turn_needs_exclusive_stdin("/background list", session) is False
     assert loop_input_policy.turn_needs_exclusive_stdin("/background on", session) is False
     # Bare command words are not recognized under literal-/slash gating.
     assert loop_input_policy.turn_needs_exclusive_stdin("background", session) is False
+
+
+def test_turn_needs_exclusive_stdin_for_health(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``/health`` prints the Integration Checks Rich table."""
+    monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
+    session = Session()
+
+    assert loop_input_policy.turn_needs_exclusive_stdin("/health", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("health", session) is False
 
 
 def test_turn_needs_exclusive_stdin_for_onboard(

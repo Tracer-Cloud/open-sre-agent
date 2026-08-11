@@ -225,8 +225,9 @@ not a Mintlify docs-site page).
 |----------|---------|-------------|--------|
 | `GRAFANA_INSTANCE_URL` | | Grafana instance URL | `integrations/_catalog_impl` |
 | `GRAFANA_READ_TOKEN` | | Grafana API token | `integrations/_catalog_impl` |
-| `GRAFANA_LOKI_DATASOURCE_UID` | | UID of Loki datasource in Grafana | `.env.example` |
-| `GRAFANA_TEMPO_DATASOURCE_UID` | | UID of Tempo datasource in Grafana | `.env.example` |
+| `GRAFANA_LOKI_DATASOURCE_UID` | | UID of Loki datasource in Grafana (fallback when auto-discovery misses it) | `.env.example` |
+| `GRAFANA_TEMPO_DATASOURCE_UID` | | UID of Tempo datasource in Grafana (fallback when auto-discovery misses it) | `.env.example` |
+| `GRAFANA_MIMIR_DATASOURCE_UID` | | UID of Mimir/Prometheus datasource in Grafana (fallback when auto-discovery misses it) | `.env.example` |
 | `GRAFANA_VERIFY_SSL` | `true` | Verify Grafana SSL certificate | `integrations/_catalog_impl` |
 | `GRAFANA_CA_BUNDLE` | | Path to a CA bundle for Grafana TLS verification (self-signed/internal CA) | `integrations/_catalog_impl` |
 | `DD_API_KEY` | | Datadog API key | `integrations/_catalog_impl` |

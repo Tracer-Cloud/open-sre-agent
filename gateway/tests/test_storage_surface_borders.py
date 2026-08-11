@@ -64,7 +64,6 @@ def test_telegram_package_never_imports_slack_or_discord_principal() -> None:
     """Telegram uses its own principal module — never Slack/Discord peers."""
     banned = (
         "gateway.transports.slack.inbound.principal",
-        "gateway.transports.slack.installs",
         "gateway.transports.discord.principal",
         "gateway.core.storage.principal_resolve",
         "gateway.core.storage.slack_installs",

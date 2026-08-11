@@ -18,8 +18,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from platform.deployment_ec2.client import DEFAULT_REGION
 from platform.deployment_ec2.config import (
+    DEFAULT_REGION,
     GATEWAY_AMI_GIT_REF_ENV,
     GATEWAY_AMI_NAME_PREFIX,
     GATEWAY_BUILDER_INSTANCE_TYPE,
