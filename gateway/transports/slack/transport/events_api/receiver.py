@@ -65,36 +65,45 @@ class SlackEventDeduplicator(Protocol):
     can receive the retry, so this must be shared across processes to be
     correct — an in-process implementation silently duplicates turns as soon
     as a second replica exists.
+
+    Lifecycle: ``claim`` (provisional) → ``confirm`` after the turn is queued,
+    or ``release`` when the queue rejects the work. Uncommitted claims may be
+    reclaimed so a failed ``release`` does not permanently drop the event.
     """
 
     def claim(self, event_id: str) -> bool:
-        """Return True the first time ``event_id`` is seen, False after."""
+        """Return True when this delivery may run the turn."""
 
     def release(self, event_id: str) -> bool:
         """Undo a claim whose turn never started; False when it could not be undone."""
 
-    def confirm(self, event_id: str) -> None:
-        """Mark a claim whose turn started, so it is never re-claimed."""
+    def confirm(self, event_id: str) -> bool:
+        """Finalize a claim after the turn has been queued."""
 
 
 class InMemorySlackEventDeduplicator:
     """Single-process dedup. Correct only while exactly one replica runs."""
 
     def __init__(self) -> None:
-        self._seen: set[str] = set()
+        self._committed: set[str] = set()
+        self._provisional: set[str] = set()
 
     def claim(self, event_id: str) -> bool:
-        if event_id in self._seen:
+        if event_id in self._committed:
             return False
-        self._seen.add(event_id)
+        # Reclaim uncommitted rows (mirrors Postgres) so a failed release does
+        # not permanently drop the event on Slack's retry.
+        self._provisional.add(event_id)
         return True
 
     def release(self, event_id: str) -> bool:
-        self._seen.discard(event_id)
+        self._provisional.discard(event_id)
         return True
 
-    def confirm(self, event_id: str) -> None:
-        """No-op: an in-process claim is never provisional."""
+    def confirm(self, event_id: str) -> bool:
+        self._provisional.discard(event_id)
+        self._committed.add(event_id)
+        return True
 
 
 def _header(headers: Mapping[str, str], name: str) -> str:

@@ -131,22 +131,17 @@ def build_slack_http_app(
         if outcome.status is SlackHttpStatus.ACCEPTED and outcome.message is not None:
             try:
                 submit_turn(outcome.message)
-                # Dispatched: the claim is no longer provisional.
-                deduplicator.confirm(outcome.event_id)
             except RuntimeError:
-                # The turn executor is gone: the listener outlived a failed
-                # start or a stop. Release the claim first — admission already
-                # recorded it, and a retry refused as a duplicate would drop the
-                # event entirely. Then 503 so Slack retries against a healthy
-                # replica rather than 500 on every delivery.
+                # Executor gone (failed start / stop). Release the provisional
+                # claim, then 503 so Slack retries. If release fails, still 500
+                # to page — but the next ``claim`` may reclaim the uncommitted
+                # row, so the event is not permanently answered as a duplicate.
                 released = deduplicator.release(outcome.event_id)
                 logger.warning("slack http accepted an event with no turn executor")
                 if not released:
-                    # The claim survived, so Slack's retry may be refused as a
-                    # duplicate and the event lost. 500 rather than 503: this is
-                    # not a clean "try again", and it must page as a server fault.
                     logger.error(
-                        "slack http could not release event %s; retry may be dropped",
+                        "slack http could not release event %s; retry may reclaim "
+                        "the provisional claim",
                         outcome.event_id,
                     )
                     return JSONResponse(
@@ -155,6 +150,13 @@ def build_slack_http_app(
                     )
                 return JSONResponse(
                     {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
+                )
+            if not deduplicator.confirm(outcome.event_id):
+                # Turn is already queued; prefer 200 over 5xx (which would
+                # invite a reclaim double-run).
+                logger.error(
+                    "slack http queued event %s but could not confirm the claim",
+                    outcome.event_id,
                 )
         return JSONResponse({"ok": True})
 

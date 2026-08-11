@@ -72,15 +72,16 @@ def test_unsigned_request_is_rejected_before_any_parsing() -> None:
 
 def test_a_retried_delivery_does_not_start_a_second_turn() -> None:
     """Slack retries on a slow or failed answer; the user must not see two replies."""
-    # Arrange — same event_id delivered twice, as a retry would.
+    # Arrange — same event_id delivered twice after the first turn was queued.
     dedup = InMemorySlackEventDeduplicator()
 
     # Act.
     first = _admit(_MENTION, dedup=dedup)
+    assert first.status is SlackHttpStatus.ACCEPTED
+    assert dedup.confirm(first.event_id) is True
     second = _admit(_MENTION, dedup=dedup)
 
     # Assert.
-    assert first.status is SlackHttpStatus.ACCEPTED
     assert second.status is SlackHttpStatus.IGNORED
     assert second.message is None
 

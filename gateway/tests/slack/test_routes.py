@@ -24,6 +24,7 @@ from gateway.transports.slack.transport.events_api.receiver import (
 from gateway.transports.slack.transport.events_api.server import (
     EVENTS_PATH,
     INTERACTIVITY_PATH,
+    ListenerGate,
     build_slack_http_app,
 )
 from gateway.transports.slack.transport.events_api.signature import expected_signature
@@ -47,6 +48,7 @@ def _client(submitted: list[Any]) -> TestClient:
         approvals=ApprovalBroker(),
         deduplicator=InMemorySlackEventDeduplicator(),
         submit_turn=submitted.append,
+        gate=ListenerGate(),
     )
     return TestClient(app)
 
@@ -145,6 +147,7 @@ def test_event_gets_503_when_the_turn_executor_is_gone() -> None:
         approvals=ApprovalBroker(),
         deduplicator=InMemorySlackEventDeduplicator(),
         submit_turn=_dead_executor,
+        gate=ListenerGate(),
     )
     payload = {
         "type": "event_callback",
@@ -189,6 +192,7 @@ def test_a_503ed_event_is_not_swallowed_as_a_duplicate_on_retry() -> None:
         approvals=ApprovalBroker(),
         deduplicator=dedup,
         submit_turn=_submit,
+        gate=ListenerGate(),
     )
     payload = {
         "type": "event_callback",
@@ -215,3 +219,102 @@ def test_a_503ed_event_is_not_swallowed_as_a_duplicate_on_retry() -> None:
     assert first.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert retry.status_code == HTTPStatus.OK
     assert len(submitted) == 1
+
+
+class _ReleaseFailsDeduplicator(InMemorySlackEventDeduplicator):
+    """Leaves the provisional claim in place — Greptile's failed-release case."""
+
+    def release(self, _event_id: str) -> bool:
+        return False
+
+
+def test_failed_release_does_not_permanently_drop_the_event_on_retry() -> None:
+    """When release cannot clear the claim, the retry must still reclaim it."""
+    dedup = _ReleaseFailsDeduplicator()
+    submitted: list[Any] = []
+    alive = {"value": False}
+
+    def _submit(message: Any) -> None:
+        if not alive["value"]:
+            raise RuntimeError("cannot schedule new futures after shutdown")
+        submitted.append(message)
+
+    app = build_slack_http_app(
+        settings=_settings(),
+        approvals=ApprovalBroker(),
+        deduplicator=dedup,
+        submit_turn=_submit,
+        gate=ListenerGate(),
+    )
+    payload = {
+        "type": "event_callback",
+        "event_id": "Ev-release-fail",
+        "team_id": "T1",
+        "event": {
+            "type": "app_mention",
+            "user": "U1",
+            "text": "<@UBOT> status?",
+            "channel": "C1",
+            "channel_type": "channel",
+            "ts": "1700000000.000100",
+        },
+    }
+    body = json.dumps(payload).encode()
+    client = TestClient(app)
+
+    first = client.post(EVENTS_PATH, content=body, headers=_headers(body))
+    alive["value"] = True
+    retry = client.post(EVENTS_PATH, content=body, headers=_headers(body))
+
+    assert first.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert retry.status_code == HTTPStatus.OK
+    assert len(submitted) == 1
+
+
+def test_a_closed_listener_acts_on_nothing_on_either_route() -> None:
+    """A uvicorn thread can outlive a failed start or a stop.
+
+    Interactivity is handled inline, never through the executor, so without an
+    explicit gate a residual listener would keep resolving approvals for a
+    transport the gateway has already reported as unavailable.
+    """
+    # Arrange — the gate the failed-start and stop paths close.
+    submitted: list[Any] = []
+    gate = ListenerGate()
+    approvals = ApprovalBroker()
+    app = build_slack_http_app(
+        settings=_settings(),
+        approvals=approvals,
+        deduplicator=InMemorySlackEventDeduplicator(),
+        submit_turn=submitted.append,
+        gate=gate,
+    )
+    client = TestClient(app)
+    event_body = json.dumps(
+        {
+            "type": "event_callback",
+            "event_id": "Ev-closed",
+            "team_id": "T1",
+            "event": {
+                "type": "app_mention",
+                "user": "U1",
+                "text": "<@UBOT> hi",
+                "channel": "C1",
+                "channel_type": "channel",
+                "ts": "1700000000.000100",
+            },
+        }
+    ).encode()
+    click_body = urlencode(
+        {"payload": json.dumps({"type": "block_actions", "user": {"id": "U1"}, "actions": []})}
+    ).encode()
+
+    # Act.
+    gate.accepting = False
+    event = client.post(EVENTS_PATH, content=event_body, headers=_headers(event_body))
+    click = client.post(INTERACTIVITY_PATH, content=click_body, headers=_headers(click_body))
+
+    # Assert — both refused, and no turn was queued.
+    assert event.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert click.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert submitted == []
