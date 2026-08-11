@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -480,12 +481,38 @@ _EXTERNAL_ENV_LOADERS: dict[str, Any] = {}
 _EXTERNAL_ENV_PRESENCE: dict[str, Callable[[], bool]] = {}
 
 
-def _external_hook_key(service: str, *, hook: str) -> str:
+#: Which package registered each hook, keyed by ``(hook, service)``. The hook
+#: maps themselves store only the callable, and the entry has to be attributable
+#: to decide whether a second registration is the same plugin reloading or a
+#: different one taking the key over.
+_EXTERNAL_HOOK_OWNERS: dict[tuple[str, str], str] = {}
+
+
+def _hook_owner(callback: Any) -> str:
+    """Return the top-level package *callback* was defined in, or "" if unknown.
+
+    Owner is inferred rather than passed in so the hook signatures stay as they
+    are. A plugin that reloads produces a new function object from the same
+    package, which has to keep working; a different package must not.
+    """
+    target = callback
+    while isinstance(target, functools.partial):
+        target = target.func
+    module = str(getattr(target, "__module__", "") or "")
+    root = module.split(".", 1)[0]
+    # ``functools`` is what a partial reports through its type, and a builtin
+    # says nothing about who registered it - neither identifies a plugin.
+    return "" if root in {"functools", "builtins"} else root
+
+
+def _claim_external_hook(service: str, callback: Any, *, hook: str) -> str:
     """Return the key *hook* may be stored under, or raise if it is not allowed.
 
-    ``register_integration_spec`` already refuses built-in keys, but each hook
-    below can be called on its own, and a loader registered under ``github``
-    would emit a record that outranks the real one during the merge.
+    ``register_integration_spec`` already refuses built-in keys and keys another
+    plugin holds, but each hook below can be called without ever registering a
+    spec. Two packages registering under the same key would otherwise be settled
+    by import order, with the later one classifying, loading or reporting
+    presence for the earlier one's integration.
 
     Normalized for the same reason the registry normalizes: every lookup here is
     by a stripped, lower-cased key, so storing ``"GitHub"`` verbatim would both
@@ -499,12 +526,24 @@ def _external_hook_key(service: str, *, hook: str) -> str:
             f"Cannot register {hook} for {service!r}: a built-in integration already "
             "answers to that key."
         )
+
+    owner = _hook_owner(callback)
+    previous = _EXTERNAL_HOOK_OWNERS.get((hook, key))
+    if previous is not None and (not owner or previous != owner):
+        held_by = f"{previous!r}" if previous else "another package"
+        raise ValueError(
+            f"Cannot register {hook} for {key!r}: already registered by {held_by}. "
+            "Two packages cannot share one integration's hooks; pick a key unique to "
+            "this integration."
+        )
+
+    _EXTERNAL_HOOK_OWNERS[(hook, key)] = owner
     return key
 
 
 def register_classifier(service: str, classify: _ClassifyFn) -> None:
     """Register the classifier for an integration shipped outside this repo."""
-    _EXTERNAL_CLASSIFIERS[_external_hook_key(service, hook="a classifier")] = classify
+    _EXTERNAL_CLASSIFIERS[_claim_external_hook(service, classify, hook="a classifier")] = classify
 
 
 def register_env_loader(service: str, loader: Any) -> None:
@@ -516,7 +555,8 @@ def register_env_loader(service: str, loader: Any) -> None:
     be for *service*: one naming a different integration is dropped, since the
     merge that follows lets a later record replace an earlier one by service.
     """
-    _EXTERNAL_ENV_LOADERS[_external_hook_key(service, hook="an environment loader")] = loader
+    key = _claim_external_hook(service, loader, hook="an environment loader")
+    _EXTERNAL_ENV_LOADERS[key] = loader
 
 
 def register_env_presence(service: str, is_configured: Callable[[], bool]) -> None:
@@ -528,7 +568,8 @@ def register_env_presence(service: str, is_configured: Callable[[], bool]) -> No
     invisible to the welcome, REPL and health surfaces even though verification
     and tool resolution both see it.
     """
-    _EXTERNAL_ENV_PRESENCE[_external_hook_key(service, hook="a presence check")] = is_configured
+    key = _claim_external_hook(service, is_configured, hook="a presence check")
+    _EXTERNAL_ENV_PRESENCE[key] = is_configured
 
 
 def external_env_presence_services() -> list[str]:

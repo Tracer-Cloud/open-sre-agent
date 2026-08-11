@@ -74,9 +74,17 @@ def registered_integration(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
         spec for spec in registry._EXTERNAL_SPECS if spec.service != SERVICE
     ]
     registry._rebuild_registry()
-    _catalog_impl._EXTERNAL_CLASSIFIERS.pop(SERVICE, None)
-    _catalog_impl._EXTERNAL_ENV_LOADERS.pop(SERVICE, None)
-    _catalog_impl._EXTERNAL_ENV_PRESENCE.pop(SERVICE, None)
+    _forget_hooks(SERVICE)
+
+
+def _forget_hooks(service: str) -> None:
+    """Drop every hook registered for *service*, ownership record included."""
+    _catalog_impl._EXTERNAL_CLASSIFIERS.pop(service, None)
+    _catalog_impl._EXTERNAL_ENV_LOADERS.pop(service, None)
+    _catalog_impl._EXTERNAL_ENV_PRESENCE.pop(service, None)
+    for hook, key in list(_catalog_impl._EXTERNAL_HOOK_OWNERS):
+        if key == service:
+            del _catalog_impl._EXTERNAL_HOOK_OWNERS[hook, key]
 
 
 def test_registration_reaches_a_module_that_imported_the_tables_earlier(
@@ -309,7 +317,7 @@ def test_an_env_loader_cannot_emit_another_integrations_record(
     try:
         github = [r for r in _catalog_impl.load_env_integrations() if r.get("service") == "github"]
     finally:
-        _catalog_impl._EXTERNAL_ENV_LOADERS.pop("acme_impostor", None)
+        _forget_hooks("acme_impostor")
 
     assert len(github) == 1
     assert "impostor" not in str(github[0].get("config"))
@@ -389,3 +397,85 @@ def test_a_rebuilt_table_never_drops_a_surviving_key() -> None:
 
     assert all(observed), "a surviving key disappeared while the table was rebuilt"
     assert watched == {"keep": "keep", "added": "added"}
+
+
+def _make_plugin_module(name: str) -> Any:
+    """Return a throwaway module standing in for a separately installed plugin.
+
+    Ownership is inferred from where the callback was defined, so two plugins
+    have to come from two modules for the check to mean anything.
+    """
+    import sys
+    import types
+
+    module = types.ModuleType(name)
+    exec(  # noqa: S102 - building a stand-in plugin module is the point
+        "def classify(credentials, record_id):\n"
+        "    return None, None\n"
+        "def load():\n"
+        "    return None\n"
+        "def present():\n"
+        "    return True\n",
+        module.__dict__,
+    )
+    sys.modules[name] = module
+    return module
+
+
+@pytest.fixture
+def two_plugin_modules() -> Iterator[tuple[Any, Any]]:
+    import sys
+
+    alpha = _make_plugin_module("plugin_alpha_stub")
+    beta = _make_plugin_module("plugin_beta_stub")
+
+    yield alpha, beta
+
+    _forget_hooks("shared_hook_key")
+    sys.modules.pop("plugin_alpha_stub", None)
+    sys.modules.pop("plugin_beta_stub", None)
+
+
+@pytest.mark.parametrize(
+    ("hook", "attribute", "register"),
+    [
+        ("classifier", "classify", register_classifier),
+        ("env loader", "load", register_env_loader),
+        ("presence check", "present", register_env_presence),
+    ],
+)
+def test_a_second_plugin_cannot_take_over_a_hook(
+    two_plugin_modules: tuple[Any, Any], hook: str, attribute: str, register: Any
+) -> None:
+    """Assignment into the hook map was last-write-wins, settled by import order."""
+    alpha, beta = two_plugin_modules
+
+    register("shared_hook_key", getattr(alpha, attribute))
+
+    with pytest.raises(ValueError, match="already registered by"):
+        register("shared_hook_key", getattr(beta, attribute))
+
+
+def test_the_owning_plugin_can_re_register_its_own_hook(
+    two_plugin_modules: tuple[Any, Any],
+) -> None:
+    """A reload hands back a new function object from the same package."""
+    alpha, _beta = two_plugin_modules
+
+    register_classifier("shared_hook_key", alpha.classify)
+    exec(  # noqa: S102 - stands in for the module being reloaded
+        "def classify(credentials, record_id):\n    return None, None\n", alpha.__dict__
+    )
+    register_classifier("shared_hook_key", alpha.classify)
+
+    assert _catalog_impl._EXTERNAL_CLASSIFIERS["shared_hook_key"] is alpha.classify
+
+
+def test_an_unattributable_hook_cannot_overwrite_an_existing_one() -> None:
+    """A callable with no package of its own identifies nobody, so it may not replace."""
+    register_env_loader("unattributable_key", dict)
+    try:
+        with pytest.raises(ValueError, match="already registered by"):
+            register_env_loader("unattributable_key", list)
+    finally:
+        _forget_hooks("unattributable_key")
