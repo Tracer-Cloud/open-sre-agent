@@ -142,3 +142,46 @@ def test_built_in_integrations_are_unaffected(registered_integration: str) -> No
 
     assert "github" in verify.SUPPORTED_VERIFY_SERVICES
     assert len(verify.SUPPORTED_VERIFY_SERVICES) > 1
+
+
+@pytest.fixture
+def registered_with_setup_handler(registered_integration: str) -> Iterator[list[str]]:
+    """Add the ``_HANDLERS`` entry a plugin appends, and record invocations."""
+    import integrations.cli as cli
+
+    calls: list[str] = []
+
+    def _handler() -> None:
+        calls.append(registered_integration)
+
+    cli._HANDLERS[registered_integration] = _handler
+
+    yield calls
+
+    cli._HANDLERS.pop(registered_integration, None)
+
+
+def test_setup_offers_a_registered_integration(registered_with_setup_handler: list[str]) -> None:
+    """``setup_services`` was a tuple built at import from the registry and the
+    handler map, so it could not see a plugin that arrives after either."""
+    import integrations.cli as cli
+
+    assert SERVICE in cli.setup_services()
+
+
+def test_setup_dispatches_to_a_registered_integration(
+    registered_with_setup_handler: list[str],
+) -> None:
+    """The gate in ``cmd_setup`` rejected an unknown service with ``_die``."""
+    import integrations.cli as cli
+
+    assert cli.cmd_setup(SERVICE) == SERVICE
+    assert registered_with_setup_handler == [SERVICE]
+
+
+def test_help_text_lists_a_registered_integration(
+    registered_with_setup_handler: list[str],
+) -> None:
+    import integrations.cli as cli
+
+    assert SERVICE in ", ".join(cli.setup_services())
