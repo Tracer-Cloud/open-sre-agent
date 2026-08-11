@@ -102,6 +102,11 @@ class AssistantHandoff:
                 items = (buried,)
                 if session_goal is None:
                     session_goal = True
+        # Metric counts need a number; omitting session_goal would drop the
+        # host continuation loop after an incomplete gather/answer turn.
+        # Explicit ``session_goal=false`` still opts out of attach.
+        if session_goal is None and kind == EvidenceKind.METRIC_READ:
+            session_goal = True
 
         requires_gather = handoff_input.get(HandoffField.REQUIRES_GATHER, True) is not False
         return cls(

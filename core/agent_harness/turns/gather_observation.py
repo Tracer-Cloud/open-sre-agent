@@ -1,6 +1,7 @@
 """Gather observation blocks: structured outcome + plain Tool/Result parsing.
 
-Gather renders executed tools as ``\\n\\n``-joined paragraphs::
+Gather renders executed tools as ``\\n\\n``-joined paragraphs, **newest
+first** (so head truncation keeps late count/SQL results)::
 
     Tool: <name>
     Arguments: …
@@ -10,7 +11,7 @@ Callers that only have the rendered string should split with
 :func:`iter_tool_result_blocks` (same shape as
 ``pending_offer._compact_evidence_lines``) — not regex. Prefer
 :class:`GatheredEvidence.tool_results` when the gather loop still has the
-raw ``(tool_name, payload)`` pairs.
+raw ``(tool_name, payload)`` pairs (those stay chronological).
 """
 
 from __future__ import annotations
@@ -32,6 +33,9 @@ class GatheredEvidence:
 
     observation: str
     tool_results: tuple[tuple[str, Any], ...] = ()
+    #: The gather loop stopped at its iteration cap instead of concluding, so
+    #: these results are whatever it had reached, not a finished answer.
+    truncated: bool = False
 
 
 def iter_tool_result_blocks(observation: str) -> Iterator[tuple[str, str]]:

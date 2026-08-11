@@ -73,6 +73,46 @@ def test_a_checklist_implies_the_goal_is_attached() -> None:
     assert handoff.session_goal_items == ("one", "two")
 
 
+def test_metric_read_implies_the_goal_is_attached() -> None:
+    """Count asks without ``session_goal`` still need the host continuation loop.
+
+    Observed live: planner set ``evidence_kind=metric_read`` for Windows-users
+    and omitted ``session_goal``. Gather got the SQL row but the answer was
+    incomplete; without attach, ``run_until`` exited after one turn.
+    """
+    from core.agent_harness.session_goal.goal import session_goal_from_assistant_handoffs
+    from core.agent_harness.turns.evidence_kind import EvidenceKind
+
+    handoff = AssistantHandoff.from_tool_input(
+        {
+            "content": "Windows users last 7 days.",
+            "evidence_kind": "metric_read",
+        }
+    )
+
+    assert handoff.evidence_kind == EvidenceKind.METRIC_READ
+    assert handoff.session_goal is True
+    goal = session_goal_from_assistant_handoffs((handoff,), condition="Windows users last 7 days")
+    assert goal is not None
+    assert goal.condition == "Windows users last 7 days"
+
+
+def test_metric_read_explicit_false_opts_out_of_attach() -> None:
+    """``session_goal=false`` wins over the metric_read default."""
+    from core.agent_harness.session_goal.goal import session_goal_from_assistant_handoffs
+
+    handoff = AssistantHandoff.from_tool_input(
+        {
+            "content": "One-shot metric.",
+            "evidence_kind": "metric_read",
+            "session_goal": False,
+        }
+    )
+
+    assert handoff.session_goal is False
+    assert session_goal_from_assistant_handoffs((handoff,), condition="one-shot") is None
+
+
 def test_the_typed_cap_survives_the_projection_to_a_goal() -> None:
     """A cap on the handoff must reach SessionGoal, not fall back to the default.
 

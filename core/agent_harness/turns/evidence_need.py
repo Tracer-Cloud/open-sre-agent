@@ -53,6 +53,7 @@ class EvidenceDegradeCause(StrEnum):
 
     MISSING_SOURCE = "missing_source"
     CONFIG_FAILURE = "config_failure"
+    GATHER_TRUNCATED = "gather_truncated"
 
 
 PreferredSourcesForKind = Callable[[EvidenceKind], tuple[str, ...]]
@@ -361,16 +362,28 @@ def reclassify_evidence_need_after_gather(
         observation=observation,
         tool_results=results,
     )
-    if not failed:
-        return need
+    if failed:
+        return replace(
+            need,
+            tier=EvidenceTier.L0_DEGRADED,
+            connected=(),
+            missing=failed,
+            degrade_cause=EvidenceDegradeCause.CONFIG_FAILURE,
+        )
 
-    return replace(
-        need,
-        tier=EvidenceTier.L0_DEGRADED,
-        connected=(),
-        missing=failed,
-        degrade_cause=EvidenceDegradeCause.CONFIG_FAILURE,
-    )
+    # The loop ran out of iterations instead of concluding, so the preferred
+    # source never answered. A finished gather that returned nothing stays L1 —
+    # an empty result is an honest answer, a cut-off one is not.
+    if evidence is not None and evidence.truncated:
+        return replace(
+            need,
+            tier=EvidenceTier.L0_DEGRADED,
+            connected=(),
+            missing=tuple(preferred),
+            degrade_cause=EvidenceDegradeCause.GATHER_TRUNCATED,
+        )
+
+    return need
 
 
 def should_skip_gather(need: EvidenceNeed) -> bool:

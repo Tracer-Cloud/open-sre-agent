@@ -280,6 +280,67 @@ def test_without_goal_outer_loop_is_single_chat() -> None:
     assert outcome.goal.status == SessionGoalStatus.CLEARED
 
 
+def test_metric_read_handoff_without_session_goal_flag_continues_outer_loop() -> None:
+    """``evidence_kind=metric_read`` alone attaches a goal so incomplete answers continue."""
+    ask = "how many Windows users in the last 7 days?"
+    session = SessionCore()
+    typed = AssistantHandoff.from_tool_input({"content": ask, "evidence_kind": "metric_read"})
+    assert typed.session_goal is True
+
+    def _execute(*_a: object, **_k: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=True,
+            handled=False,
+            handoff_contents=(ask,),
+            assistant_handoffs=(typed,),
+        )
+
+    run_turn(
+        ask,
+        session,
+        execute_actions=_execute,
+        gather=lambda *_a, **_k: "schema only",
+        answer=lambda *_a, **_k: type(
+            "Run",
+            (),
+            {"response_text": "Schema found; no count yet."},
+        )(),
+        accounting=DefaultTurnAccounting(session, ask),
+    )
+    assert session_goal_is_active(session)
+
+    turns: list[str] = []
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        if len(turns) == 1:
+            body = "Still no number."
+        else:
+            body = "17 Windows users. session_goal:achieved"
+        return TurnResult(
+            final_intent="cli_agent_handled",
+            action_result=ToolCallingTurnResult(
+                planned_count=1,
+                executed_count=1,
+                executed_success_count=1,
+                has_unhandled_clause=False,
+                handled=True,
+            ),
+            assistant_response_text=body,
+            llm_run=None,
+        )
+
+    # Goal already active from the handoff turn — continue until achieved.
+    outcome = run_until_session_goal(_chat, session, ask)
+
+    assert len(turns) >= 2
+    assert outcome.goal.status == SessionGoalStatus.ACHIEVED
+    assert "17" in (outcome.last_result.assistant_response_text or "")
+
+
 def test_paused_goal_outer_loop_is_single_chat_without_turn_bump() -> None:
     """``/goal pause`` keeps state; host must not continue or spend budget."""
     session = SessionCore()

@@ -15,6 +15,7 @@ from core.agent_harness.turns.evidence_need import (
     should_skip_gather,
     should_suppress_investigation_offer,
 )
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 
 _FAKE_ANALYTICS = "analytics_source"
 
@@ -316,3 +317,34 @@ def test_structured_tool_results_flip_without_scraping_observation() -> None:
     assert flipped.tier == EvidenceTier.L0_DEGRADED
     assert flipped.degrade_cause == EvidenceDegradeCause.CONFIG_FAILURE
     assert flipped.missing == (_FAKE_ANALYTICS,)
+
+
+def test_truncated_gather_degrades_but_a_finished_empty_gather_does_not() -> None:
+    """The cut-off flag decides the tier, not the observation text.
+
+    A gather that ran out of iterations never reached the answer, so the turn
+    must proceed without that source. A gather that finished and found nothing
+    is an honest empty answer and stays L1.
+    """
+    # Arrange — identical evidence, differing only in how the loop ended.
+    need = _l1_metric_need()
+    assert need.tier == EvidenceTier.L1
+    observation = f"Tool: {_FAKE_ANALYTICS}\nResult: event definitions listed"
+    cut_off = GatheredEvidence(observation=observation, truncated=True)
+    finished = GatheredEvidence(observation=observation, truncated=False)
+
+    # Act.
+    after_cut_off = reclassify_evidence_need_after_gather(need, cut_off)
+    after_finished = reclassify_evidence_need_after_gather(need, finished)
+
+    # Assert — only the truncated run degrades.
+    assert after_cut_off.tier == EvidenceTier.L0_DEGRADED
+    assert after_cut_off.degrade_cause == EvidenceDegradeCause.GATHER_TRUNCATED
+    assert after_cut_off.missing == (_FAKE_ANALYTICS,)
+    assert after_finished is need
+
+    # The answer path gets plain L0 guidance ("answer without live data"),
+    # not the config-failure reconnect prompt.
+    tag = handoff_tag_for(after_cut_off)
+    assert tag == f"evidence_tier:L0_degraded:{_FAKE_ANALYTICS}"
+    assert ":config:" not in tag

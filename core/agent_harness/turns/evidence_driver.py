@@ -124,9 +124,15 @@ def _truncate(text: str, limit: int) -> str:
 
 
 def _format_observation(executed: list[tuple[Any, Any]]) -> str:
-    """Render executed (tool_call, output) pairs into a compact prompt block."""
+    """Render executed (tool_call, output) pairs into a compact prompt block.
+
+    Newest tools first so head truncation at ``_MAX_OBSERVATION_CHARS`` keeps
+    late results (e.g. ``execute-sql`` after bulky schema discovery).
+    """
     blocks: list[str] = []
-    for tc, output in executed:
+    # Chronological ``executed`` → reverse so the answer prompt sees the last
+    # tool first; ``text[:limit]`` then drops the oldest discovery noise.
+    for tc, output in reversed(executed):
         args = json.dumps(tc.input, default=str, sort_keys=True)
         body = output if isinstance(output, str) else json.dumps(output, default=str)
         blocks.append(
@@ -365,6 +371,7 @@ def gather_tool_evidence(
         return GatheredEvidence(
             observation=_format_observation(result.executed),
             tool_results=tool_results_from_executed(result.executed),
+            truncated=bool(result.hit_iteration_cap),
         )
 
 
