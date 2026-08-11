@@ -125,3 +125,33 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
     finally:
         monkeypatch.undo()
         workers.shutdown(wait=False)
+
+
+def test_http_without_a_shared_store_refuses_to_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Process-local dedup must be a decision, not a default.
+
+    Each replica would keep its own handled-event set, so a Slack retry runs
+    the turn twice — a warning log does not prevent that, a boot failure does.
+    """
+    # Arrange.
+    from gateway.core.runtime.errors import GatewayConfigurationError
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv(startup_module.LOCAL_DEDUP_ENV, raising=False)
+
+    # Act / Assert.
+    with pytest.raises(GatewayConfigurationError, match="DATABASE_URL"):
+        startup_module._build_deduplicator(logging.getLogger("test"))
+
+
+def test_local_dedup_is_allowed_when_explicitly_waived(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv(startup_module.LOCAL_DEDUP_ENV, "1")
+
+    # Act.
+    dedup = startup_module._build_deduplicator(logging.getLogger("test"))
+
+    # Assert.
+    assert dedup.claim("Ev1") is True
+    assert dedup.claim("Ev1") is False

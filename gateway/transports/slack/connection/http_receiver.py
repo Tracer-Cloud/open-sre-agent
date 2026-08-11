@@ -52,6 +52,9 @@ class SlackHttpOutcome:
     status: SlackHttpStatus
     challenge: str = ""
     message: SlackInboundMessage | None = None
+    #: Set on ACCEPTED so a caller that fails to start the turn can release
+    #: the claim; otherwise the retry is refused and the event is lost.
+    event_id: str = ""
     reason: str = ""
 
 
@@ -67,6 +70,9 @@ class SlackEventDeduplicator(Protocol):
     def claim(self, event_id: str) -> bool:
         """Return True the first time ``event_id`` is seen, False after."""
 
+    def release(self, event_id: str) -> None:
+        """Undo a claim whose turn never started, so the retry can run it."""
+
 
 class InMemorySlackEventDeduplicator:
     """Single-process dedup. Correct only while exactly one replica runs."""
@@ -79,6 +85,9 @@ class InMemorySlackEventDeduplicator:
             return False
         self._seen.add(event_id)
         return True
+
+    def release(self, event_id: str) -> None:
+        self._seen.discard(event_id)
 
 
 def _header(headers: Mapping[str, str], name: str) -> str:
@@ -195,7 +204,7 @@ def admit_slack_http_request(
     message = parse_events_api_payload(payload)
     if message is None:
         return SlackHttpOutcome(SlackHttpStatus.IGNORED, reason="not a chat event")
-    return SlackHttpOutcome(SlackHttpStatus.ACCEPTED, message=message)
+    return SlackHttpOutcome(SlackHttpStatus.ACCEPTED, message=message, event_id=event_id)
 
 
 __all__ = [

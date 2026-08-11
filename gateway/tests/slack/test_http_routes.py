@@ -166,3 +166,52 @@ def test_event_gets_503_when_the_turn_executor_is_gone() -> None:
 
     # Assert.
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+
+
+def test_a_503ed_event_is_not_swallowed_as_a_duplicate_on_retry() -> None:
+    """Admission claims the id before dispatch; a failed dispatch must release it.
+
+    Otherwise the retry is refused as a duplicate, answered 200, and the user's
+    message is dropped with no turn ever running.
+    """
+    # Arrange — first delivery hits a dead executor, the retry finds a live one.
+    dedup = InMemorySlackEventDeduplicator()
+    submitted: list[Any] = []
+    alive = {"value": False}
+
+    def _submit(message: Any) -> None:
+        if not alive["value"]:
+            raise RuntimeError("cannot schedule new futures after shutdown")
+        submitted.append(message)
+
+    app = build_slack_http_app(
+        settings=_settings(),
+        approvals=ApprovalBroker(),
+        deduplicator=dedup,
+        submit_turn=_submit,
+    )
+    payload = {
+        "type": "event_callback",
+        "event_id": "Ev-retry",
+        "team_id": "T1",
+        "event": {
+            "type": "app_mention",
+            "user": "U1",
+            "text": "<@UBOT> status?",
+            "channel": "C1",
+            "channel_type": "channel",
+            "ts": "1700000000.000100",
+        },
+    }
+    body = json.dumps(payload).encode()
+    client = TestClient(app)
+
+    # Act — the failed delivery, then Slack's retry once the replica recovers.
+    first = client.post(EVENTS_PATH, content=body, headers=_headers(body))
+    alive["value"] = True
+    retry = client.post(EVENTS_PATH, content=body, headers=_headers(body))
+
+    # Assert — the retry actually runs the turn.
+    assert first.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert retry.status_code == HTTPStatus.OK
+    assert len(submitted) == 1

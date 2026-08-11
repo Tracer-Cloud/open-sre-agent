@@ -12,6 +12,7 @@ import logging
 import os
 from collections.abc import Callable, Mapping
 
+from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.transports.slack.connection.http_receiver import (
     InMemorySlackEventDeduplicator,
@@ -36,6 +37,13 @@ from gateway.transports.slack.settings import (
 
 SlackWorker = SlackGatewayBackground | SlackHttpServerHandle
 
+#: Opt in to single-replica dedup when no shared store is configured.
+LOCAL_DEDUP_ENV = "SLACK_GATEWAY_ALLOW_LOCAL_DEDUP"
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes"}
+
 
 def _start_socket_mode(
     *, settings: SlackGatewaySettings, logger: logging.Logger, handler: GatewayAgentCallback
@@ -58,9 +66,17 @@ def _build_deduplicator(logger: logging.Logger) -> SlackEventDeduplicator:
         )
 
         return PostgresSlackEventDeduplicator(dsn)
+    if not _env_flag(LOCAL_DEDUP_ENV):
+        raise GatewayConfigurationError(
+            "Slack Events API HTTP needs a shared event store: set DATABASE_URL. "
+            "Without one each replica keeps its own handled-event set, so a Slack "
+            f"retry runs the turn twice. Set {LOCAL_DEDUP_ENV}=1 to accept "
+            "process-local dedup on a single replica."
+        )
     logger.warning(
-        "[slack-gateway] DATABASE_URL unset: event dedup is process-local — run a "
-        "single replica, or a Slack retry will run the turn twice"
+        "[slack-gateway] %s: event dedup is process-local — safe only while "
+        "exactly one replica runs",
+        LOCAL_DEDUP_ENV,
     )
     return InMemorySlackEventDeduplicator()
 

@@ -112,8 +112,11 @@ def build_slack_http_app(
                 submit_turn(outcome.message)
             except RuntimeError:
                 # The turn executor is gone: the listener outlived a failed
-                # start or a stop. Answer 503 so Slack retries later against a
-                # healthy replica, rather than 500 on every delivery.
+                # start or a stop. Release the claim first — admission already
+                # recorded it, and a retry refused as a duplicate would drop the
+                # event entirely. Then 503 so Slack retries against a healthy
+                # replica rather than 500 on every delivery.
+                deduplicator.release(outcome.event_id)
                 logger.warning("slack http accepted an event with no turn executor")
                 return JSONResponse(
                     {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
