@@ -23,7 +23,7 @@ from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBA
 from config.principal import Actor, Principal
 from config.scope_context import current_scope
 from gateway.core.billing.credits_client import CreditsOutcome
-from gateway.transports.slack.inbound.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.inbound.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.inbound.events import SlackInboundMessage
 from gateway.transports.slack.inbound.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
@@ -124,8 +124,8 @@ def _dispatcher(
     resolver: _RecordingResolver,
     handler: Any,
     messaging: _Messaging | None = None,
-) -> _SlackTurnDispatcher:
-    return _SlackTurnDispatcher(
+) -> SlackTurnDispatcher:
+    return SlackTurnDispatcher(
         settings=SlackGatewaySettings(
             bot_token="xoxb-test",
             app_token="xapp-test",

@@ -1,0 +1,137 @@
+"""Slack's own HTTP listener for Events API inbound.
+
+A dedicated app on its own port, not a route added to :mod:`gateway.web`: that
+app is the health and alert surface, and the package DAG forbids it importing a
+chat transport. Keeping the listener here also keeps the two inbound transports
+symmetrical — Socket Mode owns its connection in :mod:`.worker`, Events API
+owns its server here.
+
+Slack retries any delivery it does not see answered within three seconds, so
+both routes verify, hand the message to ``handler`` on a worker thread, and
+return immediately. The turn never runs inside the request.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+
+import uvicorn
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse
+
+from gateway.transports.slack.connection.http_receiver import (
+    SlackEventDeduplicator,
+    SlackHttpStatus,
+    admit_slack_http_request,
+)
+from gateway.transports.slack.inbound.events import SlackInboundMessage
+
+#: Starts a turn for one inbound message without blocking the request.
+SubmitTurn = Callable[[SlackInboundMessage], None]
+
+EVENTS_PATH = "/slack/events"
+# Slack posts button clicks to a separate request URL. Without this route
+# approvals and feedback silently stop working while turns still run.
+INTERACTIVITY_PATH = "/slack/interactivity"
+
+logger = logging.getLogger("gateway")
+
+
+@dataclass
+class SlackHttpServerHandle:
+    """A running Slack HTTP listener."""
+
+    server: uvicorn.Server
+    thread: threading.Thread
+    workers: ThreadPoolExecutor
+    bound_host: str
+    bound_port: int
+
+    @property
+    def bound_address(self) -> str:
+        return f"{self.bound_host}:{self.bound_port}"
+
+    def stop(self, *, timeout: float = 8.0) -> bool:
+        """Stop serving and report whether the listener thread ended in time.
+
+        Signature matches ``gateway.channels.chat.TransportWorker`` so the
+        composition root can hold either inbound transport in one handle.
+        """
+        self.server.should_exit = True
+        self.thread.join(timeout=timeout)
+        self.workers.shutdown(wait=False, cancel_futures=True)
+        return not self.thread.is_alive()
+
+
+def build_slack_http_app(
+    *,
+    signing_secret: str,
+    deduplicator: SlackEventDeduplicator,
+    submit_turn: SubmitTurn,
+) -> FastAPI:
+    """Return the Slack listener app.
+
+    ``submit_turn`` takes one :class:`SlackInboundMessage` and starts the turn
+    without blocking — the route must answer Slack first.
+    """
+    app = FastAPI()
+
+    async def _admit(request: Request) -> Response:
+        body = await request.body()  # raw bytes: the signature covers them exactly
+        outcome = admit_slack_http_request(
+            headers=dict(request.headers),
+            body=body,
+            signing_secret=signing_secret,
+            deduplicator=deduplicator,
+        )
+        if outcome.status is SlackHttpStatus.REJECTED:
+            # Detail stays server-side (CWE-209): the caller is unauthenticated.
+            logger.warning("slack http rejected: %s", outcome.reason)
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if outcome.status is SlackHttpStatus.CHALLENGE:
+            return PlainTextResponse(outcome.challenge)
+        if outcome.status is SlackHttpStatus.ACCEPTED and outcome.message is not None:
+            submit_turn(outcome.message)
+        return JSONResponse({"ok": True})
+
+    app.add_api_route(EVENTS_PATH, _admit, methods=["POST"])
+    app.add_api_route(INTERACTIVITY_PATH, _admit, methods=["POST"])
+    return app
+
+
+def serve_slack_http_in_thread(
+    *,
+    app: FastAPI,
+    host: str = "0.0.0.0",
+    port: int,
+    workers: ThreadPoolExecutor,
+    startup_timeout: float = 10.0,
+) -> SlackHttpServerHandle:
+    """Start uvicorn on ``app`` and wait until it is bound."""
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_config=None))
+    thread = threading.Thread(target=server.run, name="slack-http", daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + startup_timeout
+    while time.monotonic() < deadline:
+        if server.started and server.servers:
+            bound = server.servers[0].sockets[0].getsockname()
+            return SlackHttpServerHandle(server, thread, workers, str(bound[0]), int(bound[1]))
+        if not thread.is_alive():
+            break
+        time.sleep(0.05)
+    raise RuntimeError(f"Slack HTTP listener on {host}:{port} failed to start")
+
+
+__all__ = [
+    "EVENTS_PATH",
+    "INTERACTIVITY_PATH",
+    "SlackHttpServerHandle",
+    "build_slack_http_app",
+    "serve_slack_http_in_thread",
+]

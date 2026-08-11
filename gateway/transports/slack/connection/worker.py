@@ -10,22 +10,17 @@ from slack_sdk.socket_mode import SocketModeClient
 from slack_sdk.socket_mode.client import BaseSocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
-from slack_sdk.web import WebClient
 
-from gateway.core.runtime.approvals import ApprovalBroker
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
-from gateway.core.storage import SessionResolver
-from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
-from gateway.transports.slack.client import SlackWebApiClient
+from gateway.core.storage.session.binding_store import BindingStore
 from gateway.transports.slack.connection.heartbeat import (
     DEFAULT_HEARTBEAT_PATH,
     ConnectionHeartbeat,
 )
-from gateway.transports.slack.inbound.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.connection.turn_stack import build_slack_turn_stack
 from gateway.transports.slack.inbound.events import parse_events_api_payload
 from gateway.transports.slack.outbound.approvals import handle_block_actions_payload
-from gateway.transports.slack.outbound.channel_intro import ChannelIntroGreeter
 from gateway.transports.slack.outbound.feedback import record_feedback_payload
 from gateway.transports.slack.settings import SlackGatewaySettings
 
@@ -75,15 +70,6 @@ class SlackGatewayBackground:
         return stopped
 
 
-def _resolve_bot_user_id(web_client: WebClient, logger: logging.Logger) -> str:
-    """Return the bot's own Slack user id via auth.test, or '' on failure."""
-    try:
-        return str(web_client.auth_test().get("user_id") or "")
-    except Exception:
-        logger.debug("[slack-gateway] auth.test for bot_user_id failed", exc_info=True)
-        return ""
-
-
 def start_slack_gateway_background(
     *,
     settings: SlackGatewaySettings,
@@ -91,28 +77,13 @@ def start_slack_gateway_background(
     handler: GatewayAgentCallback,
 ) -> SlackGatewayBackground:
     """Connect to Slack over Socket Mode and dispatch inbound messages until stopped."""
-    web_client = WebClient(token=settings.bot_token)
-    socket_client = SocketModeClient(app_token=settings.app_token, web_client=web_client)
-    executor = ThreadPoolExecutor(
-        max_workers=settings.max_concurrent_turns,
-        thread_name_prefix="SlackGatewayTurn",
-    )
-    # Resolve the bot's own user id once so thread seeding can label the bot's
-    # replies by author, not by fragile text-shape matching.
-    bot_user_id = _resolve_bot_user_id(web_client, logger)
-    approvals = ApprovalBroker()
-    messaging = SlackWebApiClient(web_client)
-    greeter = ChannelIntroGreeter(messaging=messaging, bot_user_id=bot_user_id)
-    bindings = open_binding_store()
-    dispatcher = _SlackTurnDispatcher(
-        settings=settings,
-        messaging=messaging,
-        session_resolver=SessionResolver(bindings, platform=_PLATFORM_SLACK),
-        handler=handler,
-        logger=logger,
-        bot_user_id=bot_user_id,
-        approvals=approvals,
-    )
+    stack = build_slack_turn_stack(settings=settings, logger=logger, handler=handler)
+    socket_client = SocketModeClient(app_token=settings.app_token, web_client=stack.web_client)
+    executor = stack.executor
+    approvals = stack.approvals
+    greeter = stack.greeter
+    dispatcher = stack.dispatcher
+    bindings = stack.bindings
 
     def _on_request(client: BaseSocketModeClient, request: SocketModeRequest) -> None:
         # Ack first: Slack redelivers any envelope not acked within 3 seconds.

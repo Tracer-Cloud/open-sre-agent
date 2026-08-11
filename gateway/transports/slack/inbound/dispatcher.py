@@ -54,7 +54,7 @@ _ROTATE_SESSION = "__ROTATE_SESSION__"
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
 # UNAVAILABLE outcomes run the turn instead, so a misconfiguration or webapp
 # outage never masquerades to users as "out of credits".
-class _SlackTurnDispatcher:
+class SlackTurnDispatcher:
     """Runs authorized inbound Slack messages through the gateway agent callback."""
 
     def __init__(

@@ -13,7 +13,7 @@ import pytest
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal, StorageScope
 from gateway.core.billing.credits_client import CreditsOutcome
-from gateway.transports.slack.inbound.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.inbound.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.inbound.events import SlackInboundMessage
 from gateway.transports.slack.inbound.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
@@ -165,8 +165,8 @@ def _dispatcher(
     resolver: _FakeSessionResolver,
     handler: Any,
     bot_user_id: str = "",
-) -> _SlackTurnDispatcher:
-    return _SlackTurnDispatcher(
+) -> SlackTurnDispatcher:
+    return SlackTurnDispatcher(
         settings=settings,
         messaging=messaging,
         session_resolver=resolver,  # type: ignore[arg-type]
@@ -454,7 +454,7 @@ def _gated_dispatcher(
     handler: Any,
     has_session: bool = True,
     allowed_user_ids: list[str] | None = None,
-) -> _SlackTurnDispatcher:
+) -> SlackTurnDispatcher:
     return _dispatcher(
         settings=_settings(allowed_user_ids or ["U1"]),
         messaging=messaging,

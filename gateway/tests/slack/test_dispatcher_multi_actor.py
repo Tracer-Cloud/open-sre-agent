@@ -1,7 +1,7 @@
 """Dispatcher-level concurrency: many teammates, distinct sessions, no binding loss.
 
 Complements ``gateway/tests/test_multi_actor_concurrency.py`` (store layer) by
-driving ``_SlackTurnDispatcher._run_turn`` the way the Socket Mode pool does —
+driving ``SlackTurnDispatcher._run_turn`` the way the Socket Mode pool does —
 several threads, real ``SessionResolver`` + ``FileBindingStore``, mocked LLM
 handler.
 """
@@ -24,7 +24,7 @@ from config.principal import Principal
 from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
 from gateway.core.billing.credits_client import CreditsOutcome
 from gateway.core.storage import FileBindingStore, SessionResolver
-from gateway.transports.slack.inbound.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.inbound.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.inbound.events import SlackInboundMessage
 from gateway.transports.slack.inbound.principal import slack_scope
 from gateway.transports.slack.inbound.security import SlackInboundDecision
@@ -124,7 +124,7 @@ def _join(threads: list[threading.Thread], timeout: float = 30.0) -> None:
 
 
 def _run_turn(
-    dispatcher: _SlackTurnDispatcher,
+    dispatcher: SlackTurnDispatcher,
     *,
     user_id: str,
     thread_ts: str,
@@ -175,7 +175,7 @@ def test_concurrent_alice_bob_different_threads_keep_distinct_sessions(
             turns.append((text, session.session_id))
         sink.finalize("ok")
 
-    dispatcher = _SlackTurnDispatcher(
+    dispatcher = SlackTurnDispatcher(
         settings=_settings(),
         messaging=_FakeMessagingClient(),
         session_resolver=resolver,
@@ -255,7 +255,7 @@ def test_same_thread_alice_bob_interleaved_turns_stay_isolated(
         time.sleep(0.02)
         sink.finalize("ok")
 
-    dispatcher = _SlackTurnDispatcher(
+    dispatcher = SlackTurnDispatcher(
         settings=_settings(),
         messaging=_FakeMessagingClient(),
         session_resolver=resolver,
@@ -330,7 +330,7 @@ def test_many_actors_parallel_turns_all_bindings_survive(
                 break
         sink.finalize("ok")
 
-    dispatcher = _SlackTurnDispatcher(
+    dispatcher = SlackTurnDispatcher(
         settings=_settings(),
         messaging=_FakeMessagingClient(),
         session_resolver=resolver,

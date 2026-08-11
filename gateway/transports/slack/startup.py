@@ -1,29 +1,84 @@
 """Start the Slack chat worker for the gateway.
 
-Owns everything that is particular to the Slack Socket Mode transport: loading
-Slack settings and starting the background Socket Mode worker. The message
-handler it drives is transport-agnostic and injected by the composition root,
-so this module holds no agent/dispatch logic.
+Owns what is particular to starting Slack: loading settings and bringing up the
+configured inbound transport. Socket Mode holds one WebSocket; Events API HTTP
+serves signed POSTs on its own port. The message handler is transport-agnostic
+and injected by the composition root, so this module holds no dispatch logic.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Mapping
 
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.transports.slack.connection.http_receiver import (
+    InMemorySlackEventDeduplicator,
+)
+from gateway.transports.slack.connection.http_server import (
+    SlackHttpServerHandle,
+    build_slack_http_app,
+    serve_slack_http_in_thread,
+)
+from gateway.transports.slack.connection.turn_stack import build_slack_turn_stack
 from gateway.transports.slack.connection.worker import (
     SlackGatewayBackground,
     start_slack_gateway_background,
 )
-from gateway.transports.slack.settings import SlackGatewaySettings, load_slack_gateway_settings
+from gateway.transports.slack.inbound.events import SlackInboundMessage
+from gateway.transports.slack.settings import (
+    SlackGatewaySettings,
+    SlackInboundTransport,
+    load_slack_gateway_settings,
+)
+
+SlackWorker = SlackGatewayBackground | SlackHttpServerHandle
+
+
+def _start_socket_mode(
+    *, settings: SlackGatewaySettings, logger: logging.Logger, handler: GatewayAgentCallback
+) -> SlackWorker:
+    return start_slack_gateway_background(settings=settings, logger=logger, handler=handler)
+
+
+def _start_events_api_http(
+    *, settings: SlackGatewaySettings, logger: logging.Logger, handler: GatewayAgentCallback
+) -> SlackWorker:
+    stack = build_slack_turn_stack(settings=settings, logger=logger, handler=handler)
+
+    def _submit_turn(message: SlackInboundMessage) -> None:
+        # The route must answer Slack within three seconds, so the turn runs
+        # on the shared executor rather than inside the request.
+        stack.executor.submit(stack.dispatcher.dispatch, message)
+
+    app = build_slack_http_app(
+        signing_secret=settings.signing_secret,
+        # Single-process dedup: correct only while one replica runs. Replace
+        # with the shared store before scaling out, or retries duplicate turns.
+        deduplicator=InMemorySlackEventDeduplicator(),
+        submit_turn=_submit_turn,
+    )
+    handle = serve_slack_http_in_thread(app=app, port=settings.http_port, workers=stack.executor)
+    logger.info("[slack-gateway] events api listening on %s", handle.bound_address)
+    return handle
+
+
+# One row per inbound transport — adding a transport adds a row, not a branch.
+_TRANSPORT_STARTERS: Mapping[
+    SlackInboundTransport,
+    Callable[..., SlackWorker],
+] = {
+    SlackInboundTransport.SOCKET_MODE: _start_socket_mode,
+    SlackInboundTransport.EVENTS_API_HTTP: _start_events_api_http,
+}
 
 
 def start_slack_worker(
     *,
     logger: logging.Logger,
     handler: GatewayAgentCallback,
-) -> tuple[SlackGatewayBackground, SlackGatewaySettings]:
-    """Load Slack settings and start the Socket Mode background worker.
+) -> tuple[SlackWorker, SlackGatewaySettings]:
+    """Load Slack settings and start the configured inbound transport.
 
     ``handler`` is the transport-agnostic per-message callback. Returns the
     running worker plus the resolved settings for the composition root to hold.
@@ -31,12 +86,9 @@ def start_slack_worker(
     the composition root decides whether that is fatal.
     """
     settings = load_slack_gateway_settings()
-    worker = start_slack_gateway_background(
-        settings=settings,
-        logger=logger,
-        handler=handler,
-    )
+    start = _TRANSPORT_STARTERS[settings.inbound_transport]
+    worker = start(settings=settings, logger=logger, handler=handler)
     return worker, settings
 
 
-__all__ = ["start_slack_worker"]
+__all__ = ["SlackWorker", "start_slack_worker"]

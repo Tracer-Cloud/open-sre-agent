@@ -1,0 +1,110 @@
+"""Events API HTTP admission: signed, fresh, and exactly-once."""
+
+from __future__ import annotations
+
+import json
+
+from gateway.transports.slack.connection.http_receiver import (
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+    InMemorySlackEventDeduplicator,
+    SlackHttpStatus,
+    admit_slack_http_request,
+)
+from gateway.transports.slack.connection.signature import expected_signature
+
+_SECRET = "8f742231b10e8888abcd99yyyzzz85a5"
+_NOW = 1_700_000_000.0
+_TIMESTAMP = str(int(_NOW))
+
+_MENTION = {
+    "type": "event_callback",
+    "event_id": "Ev123",
+    "team_id": "T1",
+    "event": {
+        "type": "app_mention",
+        "user": "U1",
+        "text": "<@UBOT> what is failing?",
+        "channel": "C1",
+        "channel_type": "channel",
+        "ts": "1700000000.000100",
+    },
+}
+
+
+def _admit(payload: dict[str, object], *, dedup: object | None = None, sign: bool = True):
+    body = json.dumps(payload).encode()
+    signature = (
+        expected_signature(signing_secret=_SECRET, timestamp=_TIMESTAMP, body=body)
+        if sign
+        else "v0=deadbeef"
+    )
+    return admit_slack_http_request(
+        headers={SIGNATURE_HEADER: signature, TIMESTAMP_HEADER: _TIMESTAMP},
+        body=body,
+        signing_secret=_SECRET,
+        deduplicator=dedup or InMemorySlackEventDeduplicator(),
+        now=_NOW,
+    )
+
+
+def test_accepts_a_signed_mention_and_returns_the_parsed_message() -> None:
+    # Arrange / Act.
+    outcome = _admit(_MENTION)
+
+    # Assert.
+    assert outcome.status is SlackHttpStatus.ACCEPTED
+    assert outcome.message is not None
+    assert outcome.message.channel_id == "C1"
+
+
+def test_unsigned_request_is_rejected_before_any_parsing() -> None:
+    """An attacker's payload must not reach the parser, let alone a turn."""
+    # Arrange / Act.
+    outcome = _admit(_MENTION, sign=False)
+
+    # Assert.
+    assert outcome.status is SlackHttpStatus.REJECTED
+    assert outcome.message is None
+
+
+def test_a_retried_delivery_does_not_start_a_second_turn() -> None:
+    """Slack retries on a slow or failed answer; the user must not see two replies."""
+    # Arrange — same event_id delivered twice, as a retry would.
+    dedup = InMemorySlackEventDeduplicator()
+
+    # Act.
+    first = _admit(_MENTION, dedup=dedup)
+    second = _admit(_MENTION, dedup=dedup)
+
+    # Assert.
+    assert first.status is SlackHttpStatus.ACCEPTED
+    assert second.status is SlackHttpStatus.IGNORED
+    assert second.message is None
+
+
+def test_url_verification_returns_the_challenge() -> None:
+    # Arrange / Act.
+    outcome = _admit({"type": "url_verification", "challenge": "abc123"})
+
+    # Assert.
+    assert outcome.status is SlackHttpStatus.CHALLENGE
+    assert outcome.challenge == "abc123"
+
+
+def test_event_callback_without_an_event_id_is_refused() -> None:
+    """Without an id there is no dedup key, so it cannot be admitted safely."""
+    # Arrange.
+    payload = {key: value for key, value in _MENTION.items() if key != "event_id"}
+
+    # Act / Assert.
+    assert _admit(payload).status is SlackHttpStatus.REJECTED
+
+
+def test_non_chat_events_are_ignored_not_rejected() -> None:
+    """A verified Slack event we do not handle is not an auth failure."""
+    # Arrange.
+    payload = dict(_MENTION, event={"type": "reaction_added", "user": "U1"})
+
+    # Act / Assert.
+    assert _admit(payload).status is SlackHttpStatus.IGNORED

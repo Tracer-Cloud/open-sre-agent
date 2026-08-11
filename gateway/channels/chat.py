@@ -88,7 +88,7 @@ class ChatStartup:
 
 TRANSPORTS: tuple[TransportSpec, ...] = (
     TransportSpec(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
-    TransportSpec(TransportName.SLACK, start_slack_worker, "connected via socket mode"),
+    TransportSpec(TransportName.SLACK, start_slack_worker, "inbound connected"),
     TransportSpec(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
     TransportSpec(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
 )
