@@ -284,6 +284,7 @@ not a Mintlify docs-site page).
 | `SLACK_APP_TOKEN` | | App-level token (`xapp-…`). Required for `socket_mode` | `transports/slack/settings` |
 | `SLACK_SIGNING_SECRET` | | Request-signature secret. Required for `events_api_http` | `transports/slack/settings` |
 | `SLACK_GATEWAY_HTTP_PORT` | `3000` | Port the `events_api_http` listener binds | `transports/slack/settings` |
+| `SLACK_GATEWAY_ALLOW_LOCAL_DEDUP` | | Accept process-local event dedup when `DATABASE_URL` is unset. Single replica only — a Slack retry reaching a second replica runs the turn twice | `transports/slack/startup` |
 | `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github/issue_comments` |
 | `DISCORD_BOT_TOKEN` | | Discord bot token | `scheduler/credentials`, `remote/server` |
 | `DISCORD_APPLICATION_ID` | | Discord application ID | `integrations/_catalog_impl` |
