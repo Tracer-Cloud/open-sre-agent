@@ -54,7 +54,7 @@ def test_a_silo_can_serve_slack(monkeypatch: pytest.MonkeyPatch) -> None:
     resolved empty, while the same control plane injected its Slack bot token.
     """
     # Arrange
-    from gateway.transports.slack.inbound.principal import resolve_slack_principal
+    from gateway.transports.slack.processing.principal import resolve_slack_principal
 
     monkeypatch.setenv(ORGANIZATION_ID_ENV, "org_fargate")
     monkeypatch.delenv("OPENSRE_SILO_TEAM_IDS", raising=False)

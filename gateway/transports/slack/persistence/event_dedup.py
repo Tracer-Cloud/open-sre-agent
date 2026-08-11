@@ -75,7 +75,7 @@ class PostgresSlackEventDeduplicator:
         finally:
             pool.putconn(conn)
 
-    def release(self, event_id: str) -> None:
+    def release(self, event_id: str) -> bool:
         """Drop a claim whose turn never started so the retry can run it.
 
         Without this, a delivery admitted but not dispatched (executor gone) is
@@ -84,11 +84,18 @@ class PostgresSlackEventDeduplicator:
         try:
             with self._connection() as conn, conn.cursor() as cursor:
                 cursor.execute("DELETE FROM slack_handled_events WHERE event_id = %s", (event_id,))
+            return True
         except Exception:
-            logger.warning(
-                "[slack-gateway] could not release event claim; retry will be refused",
+            # The claim stands. If the store is still unreachable when the retry
+            # arrives, ``claim`` fails open and the turn runs; if it recovers
+            # first, the retry is refused and this event is lost — hence ERROR.
+            logger.error(
+                "[slack-gateway] could not release event claim %s; a retry may be "
+                "refused as a duplicate",
+                event_id,
                 exc_info=True,
             )
+            return False
 
     def claim(self, event_id: str) -> bool:
         """Return True only for the first delivery of ``event_id``.

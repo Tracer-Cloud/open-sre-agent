@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gateway.transports.slack.connection.signature import (
+from gateway.transports.slack.transport.events_api.signature import (
     MAX_TIMESTAMP_AGE_SECONDS,
     expected_signature,
     verify_slack_signature,

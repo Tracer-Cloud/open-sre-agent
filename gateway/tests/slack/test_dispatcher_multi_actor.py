@@ -24,10 +24,10 @@ from config.principal import Principal
 from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
 from gateway.core.billing.credits_client import CreditsOutcome
 from gateway.core.storage import FileBindingStore, SessionResolver
-from gateway.transports.slack.inbound.dispatcher import SlackTurnDispatcher
-from gateway.transports.slack.inbound.events import SlackInboundMessage
-from gateway.transports.slack.inbound.principal import slack_scope
-from gateway.transports.slack.inbound.security import SlackInboundDecision
+from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
+from gateway.transports.slack.processing.events import SlackInboundMessage
+from gateway.transports.slack.processing.principal import slack_scope
+from gateway.transports.slack.processing.security import SlackInboundDecision
 from gateway.transports.slack.settings import SlackGatewaySettings
 
 _ORG = "org_dispatcher_concurrency"
@@ -140,21 +140,21 @@ def allow_all_security():
     decision = SlackInboundDecision(allowed=True)
     with (
         patch(
-            "gateway.transports.slack.inbound.dispatcher.enforce_inbound_slack_message_security",
+            "gateway.transports.slack.processing.dispatcher.enforce_inbound_slack_message_security",
             return_value=decision,
         ),
-        patch("gateway.transports.slack.inbound.dispatcher.persist_policy_if_needed"),
+        patch("gateway.transports.slack.processing.dispatcher.persist_policy_if_needed"),
         patch(
-            "gateway.transports.slack.inbound.dispatcher.session_needs_thread_seed",
+            "gateway.transports.slack.processing.dispatcher.session_needs_thread_seed",
             return_value=False,
         ),
         patch(
-            "gateway.transports.slack.inbound.dispatcher.consume_credits",
+            "gateway.transports.slack.processing.dispatcher.consume_credits",
             return_value=CreditsOutcome.UNCONFIGURED,
         ),
-        patch("gateway.transports.slack.inbound.dispatcher.mark_turn_working"),
-        patch("gateway.transports.slack.inbound.dispatcher.mark_turn_done"),
-        patch("gateway.transports.slack.inbound.dispatcher.mark_turn_failed"),
+        patch("gateway.transports.slack.processing.dispatcher.mark_turn_working"),
+        patch("gateway.transports.slack.processing.dispatcher.mark_turn_done"),
+        patch("gateway.transports.slack.processing.dispatcher.mark_turn_failed"),
     ):
         yield
 

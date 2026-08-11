@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from gateway.transports.slack.inbound.attachments import (
+from gateway.transports.slack.processing.attachments import (
     build_files_context,
     extract_text,
     is_text_file,
 )
-from gateway.transports.slack.inbound.events import SlackInboundFile
+from gateway.transports.slack.processing.events import SlackInboundFile
 
 
 def _file(name: str = "checkout.log", mimetype: str = "text/plain") -> SlackInboundFile:

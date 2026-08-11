@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-from gateway.transports.slack.connection.heartbeat import ConnectionHeartbeat
+from gateway.transports.slack.transport.socket_mode.heartbeat import ConnectionHeartbeat
 
 
 def test_touch_creates_file_and_missing_parents(tmp_path: Path) -> None:

@@ -2,7 +2,7 @@
 
 Framework-agnostic on purpose: it takes headers and raw bytes and returns a
 typed outcome, so admission is testable without a server. The Slack transport
-serves these routes on its own port (:mod:`.http_server`) rather than sharing
+serves these routes on its own port (:mod:`.server`) rather than sharing
 ``gateway.web`` — that app is the health/alert surface and must not import a
 chat transport (package DAG, pinned by ``test_package_borders``).
 
@@ -20,8 +20,8 @@ from enum import StrEnum
 from typing import Any, Protocol
 from urllib.parse import parse_qs
 
-from gateway.transports.slack.connection.signature import verify_slack_signature
-from gateway.transports.slack.inbound.events import SlackInboundMessage, parse_events_api_payload
+from gateway.transports.slack.processing.events import SlackInboundMessage, parse_events_api_payload
+from gateway.transports.slack.transport.events_api.signature import verify_slack_signature
 
 SIGNATURE_HEADER = "x-slack-signature"
 TIMESTAMP_HEADER = "x-slack-request-timestamp"
@@ -70,8 +70,8 @@ class SlackEventDeduplicator(Protocol):
     def claim(self, event_id: str) -> bool:
         """Return True the first time ``event_id`` is seen, False after."""
 
-    def release(self, event_id: str) -> None:
-        """Undo a claim whose turn never started, so the retry can run it."""
+    def release(self, event_id: str) -> bool:
+        """Undo a claim whose turn never started; False when it could not be undone."""
 
 
 class InMemorySlackEventDeduplicator:
@@ -86,8 +86,9 @@ class InMemorySlackEventDeduplicator:
         self._seen.add(event_id)
         return True
 
-    def release(self, event_id: str) -> None:
+    def release(self, event_id: str) -> bool:
         self._seen.discard(event_id)
+        return True
 
 
 def _header(headers: Mapping[str, str], name: str) -> str:

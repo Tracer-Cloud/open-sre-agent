@@ -14,26 +14,26 @@ from collections.abc import Callable, Mapping
 
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
-from gateway.transports.slack.connection.http_receiver import (
-    InMemorySlackEventDeduplicator,
-    SlackEventDeduplicator,
-)
-from gateway.transports.slack.connection.http_server import (
-    SlackHttpServerHandle,
-    build_slack_http_app,
-    serve_slack_http_in_thread,
-)
-from gateway.transports.slack.connection.turn_stack import build_slack_turn_stack
-from gateway.transports.slack.connection.worker import (
-    SlackGatewayBackground,
-    start_slack_gateway_background,
-)
-from gateway.transports.slack.inbound.events import SlackInboundMessage
+from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.settings import (
     SlackGatewaySettings,
     SlackInboundTransport,
     load_slack_gateway_settings,
 )
+from gateway.transports.slack.transport.events_api.receiver import (
+    InMemorySlackEventDeduplicator,
+    SlackEventDeduplicator,
+)
+from gateway.transports.slack.transport.events_api.server import (
+    SlackHttpServerHandle,
+    build_slack_http_app,
+    serve_slack_http_in_thread,
+)
+from gateway.transports.slack.transport.socket_mode.worker import (
+    SlackGatewayBackground,
+    start_slack_gateway_background,
+)
+from gateway.transports.slack.turn_stack import build_slack_turn_stack
 
 SlackWorker = SlackGatewayBackground | SlackHttpServerHandle
 
@@ -61,7 +61,7 @@ def _build_deduplicator(logger: logging.Logger) -> SlackEventDeduplicator:
     """
     dsn = os.getenv("DATABASE_URL", "").strip()
     if dsn:
-        from gateway.transports.slack.connection.event_dedup_postgres import (
+        from gateway.transports.slack.persistence.event_dedup import (
             PostgresSlackEventDeduplicator,
         )
 

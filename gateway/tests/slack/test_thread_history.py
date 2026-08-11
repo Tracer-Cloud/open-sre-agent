@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import gateway.transports.slack.inbound.thread_history as thread_history
+import gateway.transports.slack.processing.thread_history as thread_history
 from core.agent_harness.session import SessionCore
 
 

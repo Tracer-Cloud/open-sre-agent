@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from urllib.parse import urlencode
 
-from gateway.transports.slack.connection.http_receiver import (
+from gateway.transports.slack.transport.events_api.receiver import (
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
     InMemorySlackEventDeduplicator,
@@ -13,7 +13,7 @@ from gateway.transports.slack.connection.http_receiver import (
     admit_slack_http_request,
     admit_slack_interactivity_request,
 )
-from gateway.transports.slack.connection.signature import expected_signature
+from gateway.transports.slack.transport.events_api.signature import expected_signature
 
 _SECRET = "8f742231b10e8888abcd99yyyzzz85a5"
 _NOW = 1_700_000_000.0

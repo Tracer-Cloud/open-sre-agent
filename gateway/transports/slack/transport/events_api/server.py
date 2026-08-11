@@ -27,16 +27,16 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from gateway.core.runtime.approvals import ApprovalBroker
 from gateway.core.runtime.errors import GatewayTransportFailedError
-from gateway.transports.slack.connection.http_receiver import (
+from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
+from gateway.transports.slack.delivery.feedback import record_feedback_payload
+from gateway.transports.slack.processing.events import SlackInboundMessage
+from gateway.transports.slack.settings import SlackGatewaySettings
+from gateway.transports.slack.transport.events_api.receiver import (
     SlackEventDeduplicator,
     SlackHttpStatus,
     admit_slack_http_request,
     admit_slack_interactivity_request,
 )
-from gateway.transports.slack.inbound.events import SlackInboundMessage
-from gateway.transports.slack.outbound.approvals import handle_block_actions_payload
-from gateway.transports.slack.outbound.feedback import record_feedback_payload
-from gateway.transports.slack.settings import SlackGatewaySettings
 
 #: Starts a turn for one inbound message without blocking the request.
 SubmitTurn = Callable[[SlackInboundMessage], None]
@@ -116,8 +116,20 @@ def build_slack_http_app(
                 # recorded it, and a retry refused as a duplicate would drop the
                 # event entirely. Then 503 so Slack retries against a healthy
                 # replica rather than 500 on every delivery.
-                deduplicator.release(outcome.event_id)
+                released = deduplicator.release(outcome.event_id)
                 logger.warning("slack http accepted an event with no turn executor")
+                if not released:
+                    # The claim survived, so Slack's retry may be refused as a
+                    # duplicate and the event lost. 500 rather than 503: this is
+                    # not a clean "try again", and it must page as a server fault.
+                    logger.error(
+                        "slack http could not release event %s; retry may be dropped",
+                        outcome.event_id,
+                    )
+                    return JSONResponse(
+                        {"error": "internal error"},
+                        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    )
                 return JSONResponse(
                     {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
                 )

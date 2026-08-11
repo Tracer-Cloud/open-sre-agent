@@ -15,18 +15,18 @@ from urllib.parse import urlencode
 from fastapi.testclient import TestClient
 
 from gateway.core.runtime.approvals import ApprovalBroker
-from gateway.transports.slack.connection.http_receiver import (
+from gateway.transports.slack.settings import SlackGatewaySettings, SlackInboundTransport
+from gateway.transports.slack.transport.events_api.receiver import (
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
     InMemorySlackEventDeduplicator,
 )
-from gateway.transports.slack.connection.http_server import (
+from gateway.transports.slack.transport.events_api.server import (
     EVENTS_PATH,
     INTERACTIVITY_PATH,
     build_slack_http_app,
 )
-from gateway.transports.slack.connection.signature import expected_signature
-from gateway.transports.slack.settings import SlackGatewaySettings, SlackInboundTransport
+from gateway.transports.slack.transport.events_api.signature import expected_signature
 
 _SECRET = "8f742231b10e8888abcd99yyyzzz85a5"
 _TIMESTAMP = str(int(__import__("time").time()))

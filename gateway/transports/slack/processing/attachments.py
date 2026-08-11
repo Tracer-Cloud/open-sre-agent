@@ -21,7 +21,7 @@ from gateway.core.attachments.inline import (
     join_attachment_sections,
     truncate_attachment_text,
 )
-from gateway.transports.slack.inbound.events import SlackInboundFile
+from gateway.transports.slack.processing.events import SlackInboundFile
 
 logger = logging.getLogger(__name__)
 

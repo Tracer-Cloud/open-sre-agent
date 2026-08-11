@@ -30,8 +30,8 @@ from gateway.transports.slack.client import (
     Blocks,
     SlackMessagingClient,
 )
-from gateway.transports.slack.outbound.feedback import feedback_block
-from gateway.transports.slack.outbound.turn_stream import TurnStream
+from gateway.transports.slack.delivery.feedback import feedback_block
+from gateway.transports.slack.delivery.turn_stream import TurnStream
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
 from platform.common.truncation import truncate
 

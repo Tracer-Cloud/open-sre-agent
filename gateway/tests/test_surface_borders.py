@@ -24,7 +24,7 @@ from core.agent_harness.session.persistence import paths as session_paths
 from gateway.core.storage.db import bindings_file_path, gateway_dir
 from gateway.core.storage.session.binding_store import open_file_binding_store
 from gateway.core.storage.session.file_bindings import FileBindingStore
-from gateway.transports.slack.inbound.principal import slack_scope
+from gateway.transports.slack.processing.principal import slack_scope
 
 ACME = Principal.org("org_acme")
 GLOBEX = Principal.org("org_globex")

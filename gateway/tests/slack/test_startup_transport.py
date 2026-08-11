@@ -92,7 +92,7 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
     from concurrent.futures import ThreadPoolExecutor
 
     from gateway.core.runtime.errors import GatewayTransportFailedError
-    from gateway.transports.slack.connection import http_server
+    from gateway.transports.slack.transport.events_api import server as http_server
 
     workers = ThreadPoolExecutor(max_workers=1)
 

@@ -14,15 +14,15 @@ from slack_sdk.socket_mode.response import SocketModeResponse
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage.session.binding_store import BindingStore
-from gateway.transports.slack.connection.heartbeat import (
+from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
+from gateway.transports.slack.delivery.feedback import record_feedback_payload
+from gateway.transports.slack.processing.events import parse_events_api_payload
+from gateway.transports.slack.settings import SlackGatewaySettings
+from gateway.transports.slack.transport.socket_mode.heartbeat import (
     DEFAULT_HEARTBEAT_PATH,
     ConnectionHeartbeat,
 )
-from gateway.transports.slack.connection.turn_stack import build_slack_turn_stack
-from gateway.transports.slack.inbound.events import parse_events_api_payload
-from gateway.transports.slack.outbound.approvals import handle_block_actions_payload
-from gateway.transports.slack.outbound.feedback import record_feedback_payload
-from gateway.transports.slack.settings import SlackGatewaySettings
+from gateway.transports.slack.turn_stack import build_slack_turn_stack
 
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"

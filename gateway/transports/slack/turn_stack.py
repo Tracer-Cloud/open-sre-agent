@@ -19,8 +19,8 @@ from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
 from gateway.transports.slack.client import SlackWebApiClient
-from gateway.transports.slack.inbound.dispatcher import SlackTurnDispatcher
-from gateway.transports.slack.outbound.channel_intro import ChannelIntroGreeter
+from gateway.transports.slack.delivery.channel_intro import ChannelIntroGreeter
+from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.settings import SlackGatewaySettings
 
 _PLATFORM_SLACK = "slack"

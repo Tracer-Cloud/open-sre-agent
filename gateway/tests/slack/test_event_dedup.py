@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from gateway.transports.slack.connection.event_dedup_postgres import (
+from gateway.transports.slack.persistence.event_dedup import (
     PostgresSlackEventDeduplicator,
 )
 

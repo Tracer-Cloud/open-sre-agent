@@ -13,7 +13,7 @@ from gateway.core.runtime.approvals import (
     ApprovalBroker,
     approval_tool_hooks,
 )
-from gateway.transports.slack.outbound.approvals import (
+from gateway.transports.slack.delivery.approvals import (
     ThreadApprovalPrompter,
     handle_block_actions_payload,
 )
