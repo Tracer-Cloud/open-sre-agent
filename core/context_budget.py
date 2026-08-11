@@ -66,44 +66,13 @@ class _ContentEstimate:
     tokens: int
 
 
-class _ContentEstimateCache:
-    """Size-bounded identity cache for serialized-content token estimates."""
+class _ContentEstimateCache(OrderedDict[int, _ContentEstimate]):
+    """LRU entries plus their total retained size."""
 
-    def __init__(self, max_retained_bytes: int) -> None:
-        self.max_retained_bytes = max_retained_bytes
-        self.entries: OrderedDict[int, _ContentEstimate] = OrderedDict()
-        self.retained_bytes = 0
-
-    def get(self, content: Any, retained_bytes: int) -> _ContentEstimate | None:
-        key = id(content)
-        cached = self.entries.get(key)
-        if (
-            cached is None
-            or cached.content is not content
-            or cached.retained_bytes != retained_bytes
-        ):
-            return None
-        self.entries.move_to_end(key)
-        return cached
-
-    def put(self, content: Any, retained_bytes: int, tokens: int) -> None:
-        existing = self.entries.pop(id(content), None)
-        if existing is not None:
-            self.retained_bytes -= existing.retained_bytes
-        if retained_bytes > self.max_retained_bytes:
-            return
-        while self.entries and self.retained_bytes + retained_bytes > self.max_retained_bytes:
-            _, evicted = self.entries.popitem(last=False)
-            self.retained_bytes -= evicted.retained_bytes
-        self.entries[id(content)] = _ContentEstimate(content, retained_bytes, tokens)
-        self.retained_bytes += retained_bytes
-
-    def clear(self) -> None:
-        self.entries.clear()
-        self.retained_bytes = 0
+    retained_bytes = 0
 
 
-_CONTENT_CACHE = _ContentEstimateCache(_CONTENT_CACHE_MAX_BYTES)
+_CONTENT_CACHE = _ContentEstimateCache()
 
 
 def strip_internal_message_markers(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -250,13 +219,7 @@ def context_budget_ceiling_for_model(model: str | None) -> int:
 
 
 def _content_retained_bytes(content: Any) -> int:
-    """Estimate bytes strongly retained through ``content``.
-
-    Provider content is JSON-like but can contain shared objects. Walking by
-    identity counts each reachable object once and avoids looping on malformed
-    cyclic input. ``sys.getsizeof`` includes container storage as well as
-    scalar payloads, so nested structured results cannot bypass the cache cap.
-    """
+    """Estimate bytes strongly retained through the nested content graph."""
     retained_bytes = 0
     seen: set[int] = set()
     pending = [content]
@@ -278,6 +241,7 @@ def _content_retained_bytes(content: Any) -> int:
 def _clear_content_cache() -> None:
     """Drop every cached estimate and reset the tracked size (tests only)."""
     _CONTENT_CACHE.clear()
+    _CONTENT_CACHE.retained_bytes = 0
 
 
 def _cache_content_estimate(
@@ -295,7 +259,18 @@ def _cache_content_estimate(
     """
     if retained_bytes is None:
         retained_bytes = _content_retained_bytes(content)
-    _CONTENT_CACHE.put(content, retained_bytes, tokens)
+    existing = _CONTENT_CACHE.pop(id(content), None)
+    if existing is not None:
+        _CONTENT_CACHE.retained_bytes -= existing.retained_bytes
+    if retained_bytes > _CONTENT_CACHE_MAX_BYTES:
+        return tokens
+    while (
+        _CONTENT_CACHE and _CONTENT_CACHE.retained_bytes + retained_bytes > _CONTENT_CACHE_MAX_BYTES
+    ):
+        _, evicted = _CONTENT_CACHE.popitem(last=False)
+        _CONTENT_CACHE.retained_bytes -= evicted.retained_bytes
+    _CONTENT_CACHE[id(content)] = _ContentEstimate(content, retained_bytes, tokens)
+    _CONTENT_CACHE.retained_bytes += retained_bytes
     return tokens
 
 
@@ -324,8 +299,10 @@ def _message_token_estimate(message: dict[str, Any]) -> int:
     """
     content = message.get("content", "")
     retained_bytes = _content_retained_bytes(content)
-    cached = _CONTENT_CACHE.get(content, retained_bytes)
-    if cached is not None:
+    key = id(content)
+    cached = _CONTENT_CACHE.get(key)
+    if cached is not None and cached.content is content and cached.retained_bytes == retained_bytes:
+        _CONTENT_CACHE.move_to_end(key)
         return cached.tokens
     return _cache_content_estimate(
         content,

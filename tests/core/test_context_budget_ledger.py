@@ -200,7 +200,7 @@ def test_content_cache_rejects_stale_entry_at_a_reused_id() -> None:
 
     # Seed a stale entry at this id for a *different* object with a matching
     # size but a deliberately wrong token count.
-    budget._CONTENT_CACHE.entries[id(real_content)] = budget._ContentEstimate(
+    budget._CONTENT_CACHE[id(real_content)] = budget._ContentEstimate(
         content=object(),
         retained_bytes=budget._content_retained_bytes(real_content),
         tokens=real_tokens + 999_999,
@@ -244,10 +244,10 @@ def test_content_cache_evicts_by_size_not_just_entry_count() -> None:
         kept.append(content)
 
     assert budget._CONTENT_CACHE.retained_bytes <= budget._CONTENT_CACHE_MAX_BYTES
-    assert len(budget._CONTENT_CACHE.entries) < len(kept)
+    assert len(budget._CONTENT_CACHE) < len(kept)
     # The earliest (least-recently-used) entries are evicted first.
-    assert id(kept[0]) not in budget._CONTENT_CACHE.entries
-    assert id(kept[-1]) in budget._CONTENT_CACHE.entries
+    assert id(kept[0]) not in budget._CONTENT_CACHE
+    assert id(kept[-1]) in budget._CONTENT_CACHE
 
 
 def test_content_cache_skips_a_single_entry_larger_than_the_cap() -> None:
@@ -262,7 +262,7 @@ def test_content_cache_skips_a_single_entry_larger_than_the_cap() -> None:
     tokens = budget._message_token_estimate({"content": huge_content})
 
     assert tokens == budget._compute_message_token_estimate({"content": huge_content})
-    assert id(huge_content) not in budget._CONTENT_CACHE.entries
+    assert id(huge_content) not in budget._CONTENT_CACHE
     assert budget._CONTENT_CACHE.retained_bytes == 0
 
 
@@ -278,10 +278,10 @@ def test_content_cache_counts_nested_bedrock_json_toward_the_cap() -> None:
         }
     ]
 
-    with patch.object(budget._CONTENT_CACHE, "max_retained_bytes", 1_000):
+    with patch.object(budget, "_CONTENT_CACHE_MAX_BYTES", 1_000):
         budget._message_token_estimate({"content": huge_content})
 
-    assert id(huge_content) not in budget._CONTENT_CACHE.entries
+    assert id(huge_content) not in budget._CONTENT_CACHE
     assert budget._CONTENT_CACHE.retained_bytes == 0
 
 
