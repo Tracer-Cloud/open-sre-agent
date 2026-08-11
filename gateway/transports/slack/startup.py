@@ -9,11 +9,13 @@ and injected by the composition root, so this module holds no dispatch logic.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Mapping
 
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.transports.slack.connection.http_receiver import (
     InMemorySlackEventDeduplicator,
+    SlackEventDeduplicator,
 )
 from gateway.transports.slack.connection.http_server import (
     SlackHttpServerHandle,
@@ -41,6 +43,28 @@ def _start_socket_mode(
     return start_slack_gateway_background(settings=settings, logger=logger, handler=handler)
 
 
+def _build_deduplicator(logger: logging.Logger) -> SlackEventDeduplicator:
+    """Postgres when ``DATABASE_URL`` is set, else process-local.
+
+    Slack delivers at least once, so a retry landing on another replica is
+    admitted again unless the handled set is shared. The in-memory fallback is
+    correct for exactly one replica — local development and single-instance
+    deploys — and is warned about so it is never a silent choice.
+    """
+    dsn = os.getenv("DATABASE_URL", "").strip()
+    if dsn:
+        from gateway.transports.slack.connection.event_dedup_postgres import (
+            PostgresSlackEventDeduplicator,
+        )
+
+        return PostgresSlackEventDeduplicator(dsn)
+    logger.warning(
+        "[slack-gateway] DATABASE_URL unset: event dedup is process-local — run a "
+        "single replica, or a Slack retry will run the turn twice"
+    )
+    return InMemorySlackEventDeduplicator()
+
+
 def _start_events_api_http(
     *, settings: SlackGatewaySettings, logger: logging.Logger, handler: GatewayAgentCallback
 ) -> SlackWorker:
@@ -51,17 +75,10 @@ def _start_events_api_http(
         # on the shared executor rather than inside the request.
         stack.executor.submit(stack.dispatcher.dispatch, message)
 
-    # Single-process dedup: correct only while exactly one replica runs. A
-    # Slack retry reaching a second replica is admitted again and runs the turn
-    # twice, so this must be a shared store before scaling out.
-    logger.warning(
-        "[slack-gateway] events api dedup is process-local — run a single "
-        "replica until a shared deduplicator is configured"
-    )
     app = build_slack_http_app(
         settings=settings,
         approvals=stack.approvals,
-        deduplicator=InMemorySlackEventDeduplicator(),
+        deduplicator=_build_deduplicator(logger),
         submit_turn=_submit_turn,
     )
     handle = serve_slack_http_in_thread(app=app, port=settings.http_port, workers=stack.executor)
