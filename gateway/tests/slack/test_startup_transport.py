@@ -117,6 +117,7 @@ def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
                 app=object(),  # never reached: the server stub does not bind
                 port=1,
                 workers=workers,
+                gate=events_server.ListenerGate(),
                 startup_timeout=0.2,
             )
         # The listener must be told to exit, or a bind completing after the
@@ -152,6 +153,7 @@ def test_local_dedup_is_allowed_when_explicitly_waived(monkeypatch: pytest.Monke
     # Act.
     dedup = startup_module._build_deduplicator(logging.getLogger("test"))
 
-    # Assert.
+    # Assert — a claim only refuses the retry once the turn was confirmed.
     assert dedup.claim("Ev1") is True
+    dedup.confirm("Ev1")
     assert dedup.claim("Ev1") is False
