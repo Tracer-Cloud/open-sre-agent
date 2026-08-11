@@ -108,7 +108,16 @@ def build_slack_http_app(
         if outcome.status is SlackHttpStatus.CHALLENGE:
             return PlainTextResponse(outcome.challenge)
         if outcome.status is SlackHttpStatus.ACCEPTED and outcome.message is not None:
-            submit_turn(outcome.message)
+            try:
+                submit_turn(outcome.message)
+            except RuntimeError:
+                # The turn executor is gone: the listener outlived a failed
+                # start or a stop. Answer 503 so Slack retries later against a
+                # healthy replica, rather than 500 on every delivery.
+                logger.warning("slack http accepted an event with no turn executor")
+                return JSONResponse(
+                    {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
+                )
         return JSONResponse({"ok": True})
 
     async def _interactivity(request: Request) -> Response:
@@ -166,6 +175,15 @@ def serve_slack_http_in_thread(
     # already recorded Slack as unavailable.
     server.should_exit = True
     thread.join(timeout=_FAILED_START_JOIN_SECONDS)
+    if thread.is_alive():
+        # Bounded wait, not an unbounded one: a listener that will not unwind
+        # must not hold up the rest of the gateway. It is a daemon thread, so
+        # it cannot outlive the process, and any delivery it still answers gets
+        # a 503 from the executor guard above rather than a 500.
+        logger.warning(
+            "slack http listener did not stop within %ss after a failed start",
+            _FAILED_START_JOIN_SECONDS,
+        )
     workers.shutdown(wait=False, cancel_futures=True)
     # GatewayTransportFailedError, not RuntimeError: start_transports catches
     # this and records Slack unavailable instead of aborting the gateway.

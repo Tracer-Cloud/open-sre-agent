@@ -127,3 +127,42 @@ def test_url_verification_returns_the_challenge_body() -> None:
     # Assert.
     assert response.status_code == HTTPStatus.OK
     assert response.text == "c-123"
+
+
+def test_event_gets_503_when_the_turn_executor_is_gone() -> None:
+    """A listener outliving a failed start must not 500 on every delivery.
+
+    Slack retries a 5xx either way, but 503 is the honest answer and keeps the
+    replica's logs readable instead of a stack trace per event.
+    """
+
+    # Arrange — submit_turn behaves as a shut-down ThreadPoolExecutor does.
+    def _dead_executor(_message: Any) -> None:
+        raise RuntimeError("cannot schedule new futures after shutdown")
+
+    app = build_slack_http_app(
+        settings=_settings(),
+        approvals=ApprovalBroker(),
+        deduplicator=InMemorySlackEventDeduplicator(),
+        submit_turn=_dead_executor,
+    )
+    payload = {
+        "type": "event_callback",
+        "event_id": "Ev-dead",
+        "team_id": "T1",
+        "event": {
+            "type": "app_mention",
+            "user": "U1",
+            "text": "<@UBOT> status?",
+            "channel": "C1",
+            "channel_type": "channel",
+            "ts": "1700000000.000100",
+        },
+    }
+    body = json.dumps(payload).encode()
+
+    # Act.
+    response = TestClient(app).post(EVENTS_PATH, content=body, headers=_headers(body))
+
+    # Assert.
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
