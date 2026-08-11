@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness.ports import OutputSink
+from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.ui.streaming import (
     StreamPaintResult,
@@ -47,8 +48,15 @@ class ShellOutputSink:
         replies, skill bodies. A ``sed 's/\\]\\]>//'`` in a shell command
         reads to Rich as an unbalanced markup tag and raised ``MarkupError``,
         which took the whole turn down. Styled output goes through the
-        ``render_*`` methods instead.
+        ``render_*`` methods instead. Session-goal progress tags are scrubbed
+        so a non-stream paint path cannot leak ``session_goal:done=`` /
+        ``achieved`` into the TTY.
         """
+        if message and "session_goal:" in message:
+            visible = strip_session_goal_progress_tags(message)
+            if not visible.strip():
+                return
+            message = visible
         self._console.print(message, markup=False)
 
     def render_response_header(self, label: str) -> None:

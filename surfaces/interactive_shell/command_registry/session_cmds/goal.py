@@ -13,6 +13,7 @@ from dataclasses import replace
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 
+from core.agent_harness.session import SessionManager
 from core.agent_harness.session_goal.goal import (
     MAX_GOAL_CONDITION_CHARS,
     SessionGoal,
@@ -34,6 +35,16 @@ _GOAL_SUBCOMMANDS = frozenset(
 )
 _USAGE = "/goal [show|set|pause|resume|edit|clear]  or  /goal <condition>"
 _HELP_FOOTER = "/goal · pause · resume · edit · clear"
+
+
+def _persist_goal_state(session: Session) -> None:
+    """Flush so gateway ``resolve`` (fresh SessionCore per turn) sees mutations.
+
+    Interactive shell keeps one in-memory session, but chat transports rebuild
+    from the transcript each inbound message — pause/resume/edit/clear/set must
+    land as ``session_goal_state`` or the next turn restores the prior snapshot.
+    """
+    SessionManager.for_session(session).flush(session)
 
 
 def _show(session: Session, console: Console) -> bool:
@@ -74,6 +85,7 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
     goal = attach_session_goal(session, goal)
     # Setting starts work immediately: queue the condition on the REPL loop.
     session.terminal.set_auto_command(condition)
+    _persist_goal_state(session)
     console.print(format_session_goal_progress(goal, session=session), markup=False)
     console.print(
         f"[{DIM}]→ starting now (condition queued as the next turn). [/][{DIM}]{_HELP_FOOTER}[/]"
@@ -97,6 +109,7 @@ def _pause(session: Session, console: Console) -> bool:
     # Drop any queued autosubmit so pause actually stops the next turn.
     session.terminal.pending_prompt_default = None
     session.terminal.pending_prompt_autosubmit = False
+    _persist_goal_state(session)
     console.print(format_session_goal_progress(paused, session=session), markup=False)
     console.print(f"[{DIM}]paused. {_HELP_FOOTER.replace('pause · ', '')}[/]")
     return True
@@ -118,6 +131,7 @@ def _resume(session: Session, console: Console) -> bool:
     )
     resumed = attach_session_goal(session, resumed)
     session.terminal.set_auto_command(resumed.condition)
+    _persist_goal_state(session)
     console.print(format_session_goal_progress(resumed, session=session), markup=False)
     console.print(
         f"[{DIM}]→ resuming (condition queued as the next turn). [/][{DIM}]{_HELP_FOOTER}[/]"
@@ -141,6 +155,7 @@ def _edit(session: Session, console: Console, args: list[str]) -> bool:
     edited = attach_session_goal(session, edited)
     if session_goal_is_active(session):
         session.terminal.set_auto_command(condition)
+    _persist_goal_state(session)
     console.print(format_session_goal_progress(edited, session=session), markup=False)
     if session_goal_is_active(session):
         console.print(
@@ -156,6 +171,7 @@ def _clear(session: Session, console: Console) -> bool:
         console.print(f"[{DIM}]no goal to clear.[/]")
         return True
     clear_session_goal(session)
+    _persist_goal_state(session)
     console.print(f"[{HIGHLIGHT}]goal cleared.[/]")
     return True
 

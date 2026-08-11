@@ -22,7 +22,7 @@ from rich.console import Console
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.session import SessionCore
+from core.agent_harness.session import SessionCore, SessionManager
 from core.agent_harness.session_goal.goal import SessionGoal
 from core.agent_harness.session_goal.progress import (
     format_session_goal_progress,
@@ -180,6 +180,9 @@ class GatewayTurnHandler:
                 # even when the turn produced no text.
                 if not turn_result.answered and not cancelled:
                     sink.finalize(outbound_text or EMPTY_RESPONSE_MESSAGE)
+                # Resolve rebuilds SessionCore from disk next inbound message —
+                # persist session_goal (attach / progress / /goal pause) now.
+                SessionManager.for_session(session).flush(session)
                 if surface:
                     capture_gateway_turn_completed(
                         surface=surface,

@@ -319,6 +319,18 @@ class SessionManager:
                 wait_for_completion=wait_for_memory_extraction,
             )
 
+    def flush(self, session: SessionCore) -> None:
+        """Best-effort persist buffered session state (including session goals).
+
+        Gateway ``resolve`` rebuilds a fresh :class:`SessionCore` from disk each
+        inbound turn, so mutations such as ``/goal pause`` must flush or the
+        next message restores the pre-pause snapshot and continuation resumes.
+        Safe mid-session even after a trailing ``leaf``: stores append a new
+        ``session_goal_state`` when it changed and do not write a second leaf.
+        Failures are logged, never raised.
+        """
+        self._flush(session)
+
     @staticmethod
     def _flush(session: SessionCore) -> None:
         """Best-effort persist through the session's own backend.

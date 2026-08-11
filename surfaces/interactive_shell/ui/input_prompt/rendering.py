@@ -18,9 +18,11 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
 )
 
 _PROMPT_RULE_CHAR = "─"
-_DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
+DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"
+# Tests / older imports still use the private alias.
+_DEFAULT_PLACEHOLDER_TEXT = DEFAULT_PLACEHOLDER_TEXT
 _DEFAULT_PLACEHOLDER_ANSI = ANSI(
-    f"{ui_theme.ANSI_DIM}{_DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}"
+    f"{ui_theme.ANSI_DIM}{DEFAULT_PLACEHOLDER_TEXT}{ui_theme.ANSI_RESET}"
 )
 
 

@@ -110,11 +110,15 @@ MAX_GOAL_CONDITION_CHARS = 400
 _DEFAULT_MAX_OUTER_TURNS = 5
 
 _DONE_TAG = re.compile(r"session_goal:done=([0-9,\s]+)")
-# Whole-token progress tags removed before the user sees the reply.
-_PROGRESS_TAG_LINE = re.compile(
-    r"(?:^|\s)session_goal:(?:achieved|done=[0-9,\s]+)(?=\s|$)",
-    re.MULTILINE,
+# Progress tokens removed before the user sees the reply. Match the bare token
+# (not only whitespace-bounded forms) so ``done=1,session_goal:achieved`` and
+# leading/trailing comma-joined tags never leak through a display path.
+_PROGRESS_TAG = re.compile(
+    r"session_goal:(?:achieved|done=[0-9]+(?:\s*,\s*[0-9]+)*)",
 )
+# Accidental paste of the interactive-shell prompt line into user text /
+# goal conditions (``[1] ❯ question`` → ``question``).
+_SHELL_PROMPT_CHROME = re.compile(r"^(?:\[\d+\]\s*)?❯\s+")
 
 
 @dataclass(slots=True)
@@ -237,7 +241,7 @@ def session_goal_from_handoffs(
         if not explicit_cap:
             max_turns = max(max_turns, step_count)
 
-    goal_condition = condition.strip() or body
+    goal_condition = strip_shell_prompt_chrome(condition) or body
     goal_condition = truncate_message(goal_condition, MAX_GOAL_CONDITION_CHARS)
     return SessionGoal(
         condition=goal_condition,
@@ -344,8 +348,13 @@ def attach_session_goal(session: Any, goal: SessionGoal) -> SessionGoal:
     """Store ``goal`` on ``session`` and return it.
 
     Fresh active goals get a start stamp (duration / token delta) unless the
-    caller already set ``started_at`` (e.g. restore from payload).
+    caller already set ``started_at`` (e.g. restore from payload). Leading
+    shell prompt chrome in ``condition`` is stripped so a pasted ``[n] ❯``
+    line never becomes the durable goal text.
     """
+    cleaned = strip_shell_prompt_chrome(goal.condition)
+    if cleaned != goal.condition:
+        goal = replace(goal, condition=cleaned)
     if goal.started_at is None and goal.status == SessionGoalStatus.ACTIVE:
         goal = mark_session_goal_started(goal, session=session)
     session.session_goal = goal
@@ -445,10 +454,27 @@ def strip_session_goal_progress_tags(text: str) -> str:
     """Remove harness progress tags from user-visible assistant text."""
     if not text:
         return text
-    cleaned = _PROGRESS_TAG_LINE.sub(" ", text)
+    cleaned = _PROGRESS_TAG.sub("", text)
+    cleaned = re.sub(r"[ \t]*,[ \t]*", ", ", cleaned)
+    cleaned = re.sub(r"^[,\s]+", "", cleaned)
+    cleaned = re.sub(r"[,\s]+$", "", cleaned)
     cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
+
+
+def strip_shell_prompt_chrome(text: str) -> str:
+    """Strip leading ``[n] ❯`` prompt chrome pasted into user/goal text."""
+    if not text:
+        return text
+    cleaned = text.strip()
+    while True:
+        nxt = _SHELL_PROMPT_CHROME.sub("", cleaned)
+        if nxt == cleaned:
+            break
+        cleaned = nxt.strip()
+    return cleaned
 
 
 def derive_session_goal_reason(goal: SessionGoal) -> str:
@@ -506,4 +532,5 @@ __all__ = [
     "session_goal_is_paused",
     "session_goal_token_delta",
     "strip_session_goal_progress_tags",
+    "strip_shell_prompt_chrome",
 ]

@@ -30,10 +30,7 @@ from core.agent_harness.session_goal.goal import (
 )
 
 # Standalone progress tag — same token shape as strip_session_goal_progress_tags.
-_ACHIEVED_CLAIM = re.compile(
-    r"(?:^|\s)session_goal:achieved(?=\s|$)",
-    re.MULTILINE,
-)
+_ACHIEVED_CLAIM = re.compile(r"session_goal:achieved")
 
 # Pre-fix host reasons embedded the tag grammar; neutralize before scanning so
 # old painted status text cannot look like a claim.

@@ -36,6 +36,7 @@ from core.agent_harness.prompts import (
     build_action_user_message,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
 from core.agent_harness.turns.assistant_handoff import (
     AssistantHandoff,
     assistant_handoffs_from_tool_inputs,
@@ -909,17 +910,25 @@ def _show_response(
     """Show the turn's answer, or leave a blank line after silent tool work.
 
     ``final_text`` arrives empty unless the closing message reads like a real
-    reply; only then is it streamed as the assistant speaking.
+    reply; only then is it streamed as the assistant speaking. Progress tags
+    are scrubbed for display only — ``response_text`` keeps them for evaluate.
     """
     if handled and final_text:
-        output.stream(label="OpenSRE", chunks=iter([final_text]))
+        visible = strip_session_goal_progress_tags(final_text)
+        if visible.strip():
+            output.stream(label="OpenSRE", chunks=iter([visible]))
         return
     if display_chunks:
+        visible = strip_session_goal_progress_tags("\n".join(display_chunks))
+        if not visible.strip():
+            if handled:
+                output.print()
+            return
         output.print()
         output.render_response_header("assistant")
         # Literal text: the sink decides how to render it safely. The harness
         # must not reach for terminal-markup helpers.
-        output.print("\n".join(display_chunks))
+        output.print(visible)
         return
     if handled:
         output.print()

@@ -37,6 +37,7 @@ from core.agent_harness.session_goal.goal import (
     session_goal_is_paused,
     session_goal_token_delta,
     strip_session_goal_progress_tags,
+    strip_shell_prompt_chrome,
 )
 from core.agent_harness.session_goal.progress import (
     SESSION_GOAL_PAINT_MARK,
@@ -73,4 +74,5 @@ __all__ = [
     "session_goal_is_paused",
     "session_goal_token_delta",
     "strip_session_goal_progress_tags",
+    "strip_shell_prompt_chrome",
 ]

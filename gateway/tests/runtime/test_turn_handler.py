@@ -190,6 +190,67 @@ def test_turn_handler_continues_outer_loop_for_active_session_goal(
     assert any("◎ /goal" in text and "turn " in text for text in status_texts)
 
 
+def test_turn_handler_flushes_session_goal_for_next_resolve(
+    monkeypatch: Any,
+) -> None:
+    """End-of-turn flush so the next inbound ``resolve`` sees goal mutations.
+
+    Gateway rebuilds a fresh SessionCore from the transcript each message.
+    Without flush, an in-memory pause/attach from this turn is lost and the
+    outer loop can resume against the pre-pause snapshot.
+    """
+    from core.agent_harness.session import SessionCore, SessionManager
+    from core.agent_harness.session_goal.goal import (
+        SessionGoal,
+        SessionGoalStatus,
+        attach_session_goal,
+        session_goal_is_paused,
+    )
+    from core.agent_harness.session_goal.persist import SESSION_GOAL_STATE_CUSTOM_TYPE
+
+    _patch_headless_agent(monkeypatch, _empty_turn_result())
+    store = InMemorySessionStore()
+    session = SessionCore(store=store)
+    store.open_session(session)
+    store.append_turn(session, "chat", "seed")
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="ship the fix",
+            max_outer_turns=4,
+            status=SessionGoalStatus.PAUSED,
+            host_owned=True,
+        ),
+    )
+    handler = GatewayTurnHandler(console=Console(force_terminal=False))
+    handler("side question", session, MagicMock(), logging.getLogger("test"))
+
+    goal_records = [
+        rec
+        for rec in store.read(session.session_id)
+        if rec.get("type") == "custom_message"
+        and rec.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert goal_records
+    payload = goal_records[-1]["content"]
+    assert isinstance(payload, dict)
+    goal_payload = payload.get("session_goal")
+    assert isinstance(goal_payload, dict)
+    assert goal_payload.get("status") == "paused"
+
+    restored = SessionCore(store=InMemorySessionStore())
+    SessionManager(store=InMemorySessionStore()).restore_context(
+        restored,
+        {
+            "cli_agent_messages": [],
+            "accumulated_context": {},
+            "session_goal_state": payload,
+            "history": [],
+        },
+    )
+    assert session_goal_is_paused(restored)
+
+
 def test_turn_handler_finalizes_fallback_on_empty_response(monkeypatch: Any) -> None:
     """An empty, non-answered turn still finalizes so the placeholder status can't hang."""
     _patch_headless_agent(monkeypatch, _empty_turn_result())

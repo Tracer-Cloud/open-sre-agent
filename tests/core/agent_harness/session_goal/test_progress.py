@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session_goal.evaluate import default_evaluate_session_goal
 from core.agent_harness.session_goal.goal import (
@@ -273,3 +275,46 @@ def test_strip_session_goal_progress_tags_hides_harness_tokens() -> None:
     assert "session_goal:" not in cleaned
     assert "Finished step two." in cleaned
     assert "More prose." in cleaned
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "session_goal:done=1, session_goal:achieved\n\nStraight answer",
+        "session_goal:done=1,session_goal:achieved\n\nStraight answer",
+        "session_goal:done=1, session_goal:achieved",
+    ],
+)
+def test_strip_session_goal_progress_tags_handles_comma_joined_tokens(raw: str) -> None:
+    from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
+
+    cleaned = strip_session_goal_progress_tags(raw)
+    assert "session_goal:" not in cleaned
+    if "Straight" in raw:
+        assert "Straight answer" in cleaned
+    else:
+        assert cleaned == ""
+
+
+def test_strip_shell_prompt_chrome_removes_repeated_prompt_prefix() -> None:
+    from core.agent_harness.session_goal.goal import strip_shell_prompt_chrome
+
+    assert (
+        strip_shell_prompt_chrome(
+            "[1] ❯ [1] ❯ what windows users number did open opensre during last 7 days?"
+        )
+        == "what windows users number did open opensre during last 7 days?"
+    )
+    assert strip_shell_prompt_chrome("bare question") == "bare question"
+
+
+def test_attach_session_goal_strips_prompt_chrome_from_condition() -> None:
+    session = SessionCore()
+    attached = attach_session_goal(
+        session,
+        SessionGoal(
+            condition="[1] ❯ what windows users number did open opensre during last 7 days?",
+            max_outer_turns=3,
+        ),
+    )
+    assert attached.condition == ("what windows users number did open opensre during last 7 days?")

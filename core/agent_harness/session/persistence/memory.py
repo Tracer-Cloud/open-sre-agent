@@ -219,12 +219,15 @@ class InMemorySessionStore:
         records = self._files.get(session.session_id)
         if not records:
             return
-        if records[-1].get("type") == "leaf":
-            return
-        if not any(rec.get("type") != "session" for rec in records):
+        trailing_leaf = records[-1].get("type") == "leaf"
+        if not trailing_leaf and not any(rec.get("type") != "session" for rec in records):
             del self._files[session.session_id]
             return
-        if session.accumulated_context:
+        # A trailing ``leaf`` means a prior flush already closed the tip. Still
+        # allow live state (session goals) to append past that marker so
+        # mid-session ``/goal pause`` survives the next gateway ``resolve``;
+        # never write a second leaf (flush stays idempotent for end-of-session).
+        if session.accumulated_context and not trailing_leaf:
             self._append(
                 session.session_id,
                 "custom_message",
@@ -254,6 +257,8 @@ class InMemorySessionStore:
                     },
                 )
                 records = self._files.get(session.session_id, records)
+        if trailing_leaf:
+            return
         if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
             for role, content in session.agent.messages:
                 self._append(

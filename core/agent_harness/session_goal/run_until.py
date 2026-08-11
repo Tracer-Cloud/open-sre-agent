@@ -116,6 +116,17 @@ def _announce_working(
     return working
 
 
+def _clear_host_autosubmit(session: Any) -> None:
+    """Drop any queued shell autosubmit when the session goal stops continuing."""
+    terminal = getattr(session, "terminal", None)
+    if terminal is None:
+        return
+    if hasattr(terminal, "pending_prompt_default"):
+        terminal.pending_prompt_default = None
+    if hasattr(terminal, "pending_prompt_autosubmit"):
+        terminal.pending_prompt_autosubmit = False
+
+
 def _finish_outer_turn(
     session: Any,
     active: SessionGoal,
@@ -130,6 +141,7 @@ def _finish_outer_turn(
     if last.cancelled:
         active = active.with_status(SessionGoalStatus.CANCELLED)
         active = _paint(session, active, on_progress)
+        _clear_host_autosubmit(session)
         return active, _scrub_progress_tags(last), True
 
     if getattr(session, "pending_user_choice", None) is not None:
@@ -150,11 +162,13 @@ def _finish_outer_turn(
 
     if next_status != SessionGoalStatus.ACTIVE:
         active = _paint(session, active, on_progress, rederive=False)
+        _clear_host_autosubmit(session)
         return active, last, True
 
     if active.turns_used >= active.max_outer_turns:
         active = active.with_status(SessionGoalStatus.BUDGET_EXHAUSTED)
         active = _paint(session, active, on_progress)
+        _clear_host_autosubmit(session)
         return active, last, True
 
     # Still active under budget: one paint with the evaluate reason.
@@ -242,11 +256,13 @@ def run_until_session_goal(
         if cancel_requested is not None and cancel_requested():
             active = active.with_status(SessionGoalStatus.CANCELLED)
             active = _paint(session, active, on_progress)
+            _clear_host_autosubmit(session)
             break
 
         if active.turns_used >= active.max_outer_turns:
             active = active.with_status(SessionGoalStatus.BUDGET_EXHAUSTED)
             active = _paint(session, active, on_progress)
+            _clear_host_autosubmit(session)
             break
 
         _announce_working(session, active, on_progress)

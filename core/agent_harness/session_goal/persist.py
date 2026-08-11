@@ -130,6 +130,19 @@ def session_goal_state_is_empty(snapshot: dict[str, Any]) -> bool:
     return not any(snapshot.values())
 
 
+def _last_session_goal_state_content(
+    prior_records: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    for record in reversed(prior_records):
+        if record.get("type") != "custom_message":
+            continue
+        if record.get("custom_type") != SESSION_GOAL_STATE_CUSTOM_TYPE:
+            continue
+        content = record.get("content")
+        return content if isinstance(content, dict) else None
+    return None
+
+
 def should_persist_session_goal_state(
     snapshot: dict[str, Any],
     *,
@@ -137,17 +150,18 @@ def should_persist_session_goal_state(
 ) -> bool:
     """Whether flush should append ``snapshot`` as a ``session_goal_state`` record.
 
-    Non-empty state always persists. An empty snapshot is skipped only when the
+    Skip when the tip already carries an identical snapshot (keeps mid-session
+    flush after a trailing ``leaf`` idempotent). Non-empty state always
+    persists when it differs. An empty snapshot is skipped only when the
     transcript has never stored goal/CTA state — otherwise it is a tombstone so
     resume does not revive a cleared goal.
     """
+    last = _last_session_goal_state_content(prior_records)
+    if last == snapshot:
+        return False
     if not session_goal_state_is_empty(snapshot):
         return True
-    return any(
-        record.get("type") == "custom_message"
-        and record.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
-        for record in prior_records
-    )
+    return last is not None
 
 
 def apply_session_goal_state(session: Any, payload: Any) -> None:

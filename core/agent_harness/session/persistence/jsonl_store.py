@@ -342,17 +342,19 @@ class JsonlSessionStore:
             records = self._read_records(path)
             if not records:
                 return
-            if records[-1].get("type") == "leaf":
-                return
-            if not self._has_turns(records):
+            trailing_leaf = records[-1].get("type") == "leaf"
+            if not trailing_leaf and not self._has_turns(records):
                 path.unlink(missing_ok=True)
                 return
+            # Trailing ``leaf``: still append changed session-goal state so
+            # mid-session ``/goal pause`` survives the next ``resolve``. Do not
+            # write another leaf (end-of-session flush stays idempotent).
             # ``records`` is not re-read after the appends below. The counts in
             # the leaf entry only match ``custom_message``/``turn_stub`` records,
             # and the guard below only looks for ``message`` records — neither
             # append can produce either, so a re-parse would return the same
             # answers for the cost of a full pass over the whole transcript.
-            if session.accumulated_context:
+            if session.accumulated_context and not trailing_leaf:
                 self.append_custom_message(
                     session.session_id,
                     custom_type="accumulated_context",
@@ -374,6 +376,8 @@ class JsonlSessionStore:
                         content=goal_state,
                         display=False,
                     )
+            if trailing_leaf:
+                return
             if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
                 for role, content in session.agent.messages:
                     self.append_message(

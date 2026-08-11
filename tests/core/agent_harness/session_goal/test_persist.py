@@ -116,6 +116,44 @@ def test_flush_persists_session_goal_state_and_restore_context_applies_it() -> N
     assert restored.offered_upgrade_ctas == {"cta:posthog_mcp"}
 
 
+def test_flush_after_leaf_persists_paused_session_goal() -> None:
+    """End-of-turn flush writes a leaf; a later ``/goal pause`` must still land.
+
+    Gateway rebuilds from the last ``session_goal_state`` on the tip branch. If
+    flush no-ops on a trailing leaf, pause stays in memory only and the next
+    inbound turn resumes the pre-pause ACTIVE snapshot.
+    """
+    from core.agent_harness.session_goal.goal import SessionGoalReason, SessionGoalStatus
+
+    storage = InMemorySessionStore()
+    session = SessionCore(store=storage)
+    storage.open_session(session)
+    storage.append_turn(session, "chat", "start")
+    attach_session_goal(
+        session,
+        SessionGoal(condition="ship the fix", max_outer_turns=4, host_owned=True),
+    )
+    storage.flush(session)
+    assert storage.read(session.session_id)[-1].get("type") == "leaf"
+
+    paused = session.session_goal
+    assert paused is not None
+    attach_session_goal(
+        session,
+        paused.with_status(SessionGoalStatus.PAUSED).with_reason(SessionGoalReason.PAUSED_BY_USER),
+    )
+    storage.flush(session)
+
+    goal_records = [
+        rec
+        for rec in storage.read(session.session_id)
+        if rec.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert len(goal_records) >= 2
+    assert goal_records[-1]["content"]["session_goal"]["status"] == "paused"
+    assert sum(1 for rec in storage.read(session.session_id) if rec.get("type") == "leaf") == 1
+
+
 def test_clearing_a_goal_writes_a_tombstone_so_resume_does_not_revive_it() -> None:
     """An empty flush after a prior goal must clear resume, not suppress the write.
 
@@ -140,9 +178,8 @@ def test_clearing_a_goal_writes_a_tombstone_so_resume_does_not_revive_it() -> No
     clear_session_goal(session)
     session.offered_upgrade_ctas.clear()
     session.pending_integration_setup_offer = None
-    # Continue past the first flush's leaf so a second flush can run (same as
-    # resume → more turns → close).
-    storage.append_turn(session, "chat", "after clear")
+    # Mid-session flush must write a tombstone even when the tip is already a
+    # trailing leaf (gateway ``/goal clear`` / pause after end-of-turn flush).
     storage.flush(session)
 
     goal_records = [

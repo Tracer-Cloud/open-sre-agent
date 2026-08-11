@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from core.agent_harness.session_goal.goal import strip_shell_prompt_chrome
 from surfaces.interactive_shell.runtime.core.turn_detection import (
     looks_like_cancel_request,
     looks_like_confirmation_answer,
@@ -14,6 +15,9 @@ from surfaces.interactive_shell.runtime.input.events import (
     InputClosed,
     InputEvent,
     InputSubmitted,
+)
+from surfaces.interactive_shell.ui.input_prompt.rendering import (
+    DEFAULT_PLACEHOLDER_TEXT,
 )
 
 QUEUE_DURING_CONFIRMATION_WARNING = (
@@ -74,8 +78,14 @@ def decide_input_action(
             if snapshot.exit_requested or not text:
                 return IgnoreInput()
 
-            stripped = text.strip()
+            # Drop pasted ``[n] ❯`` prompt chrome so it never becomes the user
+            # turn, SessionGoal condition, or a doubled ``[n] ❯ [n] ❯`` echo.
+            stripped = strip_shell_prompt_chrome(text)
             if not stripped:
+                return IgnoreInput()
+            # Placeholder text stuck in the buffer (not dim placeholder styling)
+            # must not submit as a real turn.
+            if stripped == DEFAULT_PLACEHOLDER_TEXT:
                 return IgnoreInput()
 
             if snapshot.dispatch_running and looks_like_cancel_request(stripped):

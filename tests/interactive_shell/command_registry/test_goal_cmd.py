@@ -161,3 +161,56 @@ def test_goal_show_includes_paused() -> None:
     assert _cmd_goal(session, console, ["show"])
     assert "◎ /goal paused" in buf.getvalue()
     assert "paused work" in buf.getvalue()
+
+
+def test_goal_pause_flushes_so_resolve_keeps_paused() -> None:
+    """Gateway rebuilds SessionCore from disk each turn — pause must persist.
+
+    Without a flush, the next inbound message restores the pre-pause ACTIVE
+    snapshot and ``run_until_session_goal`` continues despite ``/goal pause``.
+    """
+    from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
+    from core.agent_harness.session_goal.goal import (
+        session_goal_is_active,
+        session_goal_is_paused,
+    )
+    from core.agent_harness.session_goal.persist import SESSION_GOAL_STATE_CUSTOM_TYPE
+
+    store = InMemorySessionStore()
+    session = Session()
+    session.store = store
+    store.open_session(session)
+    store.append_turn(session, "chat", "seed")
+    console, _buf = _console()
+
+    assert _cmd_goal(session, console, ["set", "--max-turns", "4", "ship the fix"])
+    assert session_goal_is_active(session)
+    assert _cmd_goal(session, console, ["pause"])
+    assert session_goal_is_paused(session)
+
+    goal_records = [
+        rec
+        for rec in store.read(session.session_id)
+        if rec.get("type") == "custom_message"
+        and rec.get("custom_type") == SESSION_GOAL_STATE_CUSTOM_TYPE
+    ]
+    assert goal_records
+    payload = goal_records[-1]["content"]
+    assert isinstance(payload, dict)
+    goal_payload = payload.get("session_goal")
+    assert isinstance(goal_payload, dict)
+    assert goal_payload.get("status") == "paused"
+    assert goal_payload.get("condition") == "ship the fix"
+
+    restored = SessionCore(store=InMemorySessionStore())
+    SessionManager(store=InMemorySessionStore()).restore_context(
+        restored,
+        {
+            "cli_agent_messages": [],
+            "accumulated_context": {},
+            "session_goal_state": payload,
+            "history": [],
+        },
+    )
+    assert session_goal_is_paused(restored)
+    assert not session_goal_is_active(restored)
