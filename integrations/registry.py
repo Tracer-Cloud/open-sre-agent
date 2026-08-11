@@ -449,7 +449,25 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
 #: can add itself without the module literal having to know about it.
 _EXTERNAL_SPECS: list[IntegrationSpec] = []
 
-#: Every spec, built-in first so a plugin cannot shadow a shipped integration.
+
+def _builtin_claimed_keys() -> frozenset[str]:
+    """Return every key the built-in specs answer to.
+
+    A spec owns its service name, its aliases and its family members: all three
+    end up as keys in the derived lookups, so all three have to be off limits to
+    a plugin.
+    """
+    claimed: set[str] = set()
+    for spec in _BUILTIN_SPECS:
+        claimed.add(spec.service)
+        claimed.update(spec.aliases)
+        claimed.update(spec.family_members)
+    return frozenset(claimed)
+
+
+_BUILTIN_CLAIMED_KEYS = _builtin_claimed_keys()
+
+#: Every spec, built-in first.
 #:
 #: This and the tables below are filled by :func:`_rebuild_registry` and then
 #: updated **in place** on every later registration. That matters: readers use
@@ -481,13 +499,21 @@ def _rebuild_registry() -> None:
     """
     INTEGRATION_SPECS[:] = (*_BUILTIN_SPECS, *_EXTERNAL_SPECS)
 
-    INTEGRATION_SPECS_BY_SERVICE.clear()
-    INTEGRATION_SPECS_BY_SERVICE.update({spec.service: spec for spec in INTEGRATION_SPECS})
+    # Built-ins are written last so that they win any key collision. Registration
+    # rejects a colliding spec outright, so this only matters if that check is
+    # ever bypassed - but the failure it prevents is a plugin silently taking
+    # over a shipped integration's setup, verification and classification.
+    by_precedence = (*_EXTERNAL_SPECS, *_BUILTIN_SPECS)
 
-    service_keys: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
-    for spec in INTEGRATION_SPECS:
+    INTEGRATION_SPECS_BY_SERVICE.clear()
+    INTEGRATION_SPECS_BY_SERVICE.update({spec.service: spec for spec in by_precedence})
+
+    service_keys: dict[str, str] = {spec.service: spec.service for spec in by_precedence}
+    for spec in by_precedence:
         for alias in spec.aliases:
             service_keys[alias] = spec.service
+    for spec in _BUILTIN_SPECS:
+        service_keys[spec.service] = spec.service
     SERVICE_KEY_MAP.clear()
     SERVICE_KEY_MAP.update(service_keys)
 
@@ -496,10 +522,12 @@ def _rebuild_registry() -> None:
         spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
     )
 
-    families: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
-    for spec in INTEGRATION_SPECS:
+    families: dict[str, str] = {spec.service: spec.service for spec in by_precedence}
+    for spec in by_precedence:
         for member in spec.family_members:
             families[member] = spec.service
+    for spec in _BUILTIN_SPECS:
+        families[spec.service] = spec.service
     SERVICE_FAMILY_MAP.clear()
     SERVICE_FAMILY_MAP.update(families)
 
@@ -538,7 +566,23 @@ def register_integration_spec(spec: IntegrationSpec) -> None:
     of the tree, mirroring ``register_external_tool_package`` for tools.
     Registering the same service twice replaces the earlier entry, so a reload
     does not accumulate duplicates.
+
+    Raises ``ValueError`` when the spec claims a service name, alias or family
+    member that a built-in integration already answers to. Those keys index the
+    derived lookups, so accepting one would quietly point setup, verification,
+    classification or family bucketing at the plugin instead of the shipped
+    integration. Refusing at registration makes it a plugin bug with a clear
+    message rather than a misrouted investigation later.
     """
+    claimed = {spec.service, *spec.aliases, *spec.family_members}
+    conflicts = sorted(claimed & _BUILTIN_CLAIMED_KEYS)
+    if conflicts:
+        raise ValueError(
+            f"Integration {spec.service!r} cannot claim {conflicts}: already used by a "
+            "built-in integration as a service name, alias or family member. Pick keys "
+            "unique to this integration."
+        )
+
     _EXTERNAL_SPECS[:] = [entry for entry in _EXTERNAL_SPECS if entry.service != spec.service]
     _EXTERNAL_SPECS.append(spec)
     _rebuild_registry()

@@ -185,3 +185,43 @@ def test_help_text_lists_a_registered_integration(
     import integrations.cli as cli
 
     assert SERVICE in ", ".join(cli.setup_services())
+
+
+@pytest.mark.parametrize(
+    ("label", "spec"),
+    [
+        ("service name", IntegrationSpec(service="github", setup_order=999)),
+        ("alias", IntegrationSpec(service="acme_alias", aliases=("github_mcp",))),
+        (
+            "family member",
+            IntegrationSpec(service="acme_family", family_members=("grafana_local",)),
+        ),
+        ("alias over a service", IntegrationSpec(service="acme_over", aliases=("datadog",))),
+    ],
+)
+def test_a_spec_cannot_claim_a_built_in_key(label: str, spec: IntegrationSpec) -> None:
+    """Service names, aliases and family members all index the derived lookups.
+
+    Letting a plugin claim any of them would point setup, verification,
+    classification or family bucketing at the plugin instead of the built-in.
+    """
+    with pytest.raises(ValueError, match="built-in integration"):
+        register_integration_spec(spec)
+
+
+def test_a_rejected_spec_leaves_the_registry_untouched() -> None:
+    before = dict(registry.INTEGRATION_SPECS_BY_SERVICE)
+
+    with pytest.raises(ValueError):
+        register_integration_spec(IntegrationSpec(service="github", setup_order=999))
+
+    assert before == registry.INTEGRATION_SPECS_BY_SERVICE
+    assert registry.INTEGRATION_SPECS_BY_SERVICE["github"].setup_order != 999
+    assert "github" not in {spec.service for spec in registry._EXTERNAL_SPECS}
+
+
+def test_built_in_lookups_still_resolve_after_a_registration(registered_integration: str) -> None:
+    from integrations.registry import family_key, service_key
+
+    assert service_key("github_mcp") == "github"
+    assert family_key("grafana_local") == "grafana"
