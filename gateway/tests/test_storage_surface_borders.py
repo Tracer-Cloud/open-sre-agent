@@ -63,7 +63,7 @@ def _imported_modules(path: Path) -> set[str]:
 def test_telegram_package_never_imports_slack_or_discord_principal() -> None:
     """Telegram uses its own principal module — never Slack/Discord peers."""
     banned = (
-        "gateway.transports.slack.principal",
+        "gateway.transports.slack.inbound.principal",
         "gateway.transports.slack.installs",
         "gateway.transports.discord.principal",
         "gateway.core.storage.principal_resolve",
@@ -81,7 +81,7 @@ def test_telegram_package_never_imports_slack_or_discord_principal() -> None:
 def test_surfaces_never_import_slack_principal_resolve() -> None:
     """CLI / interactive shell stay unbound; no Slack resolve on those surfaces."""
     banned_prefixes = (
-        "gateway.transports.slack.principal",
+        "gateway.transports.slack.inbound.principal",
         "gateway.core.storage.principal_resolve",
     )
     offenders: list[str] = []
@@ -117,7 +117,9 @@ def test_config_principal_has_no_slack_named_factories() -> None:
 
     assert not hasattr(principal_mod.Actor, "slack")
     assert not hasattr(principal_mod.StorageScope, "for_slack_member")
-    assert hasattr(importlib.import_module("gateway.transports.slack.principal"), "slack_scope")
+    assert hasattr(
+        importlib.import_module("gateway.transports.slack.inbound.principal"), "slack_scope"
+    )
 
 
 # ── Slack org users: isolation ──────────────────────────────────────────────

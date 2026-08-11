@@ -13,12 +13,12 @@ import pytest
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Principal, StorageScope
 from gateway.core.billing.credits_client import CreditsOutcome
-from gateway.transports.slack.dispatcher import _SlackTurnDispatcher
-from gateway.transports.slack.events import SlackInboundMessage
-from gateway.transports.slack.principal import slack_scope
+from gateway.transports.slack.inbound.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.inbound.events import SlackInboundMessage
+from gateway.transports.slack.inbound.principal import slack_scope
 from gateway.transports.slack.settings import SlackGatewaySettings
 
-_SECURITY = "gateway.transports.slack.security"
+_SECURITY = "gateway.transports.slack.inbound.security"
 
 
 @pytest.fixture(autouse=True)
@@ -238,7 +238,7 @@ def test_out_of_credits_blocks_turn_with_short_reply(monkeypatch: pytest.MonkeyP
         reasons.append(kwargs["reason"])
         return CreditsOutcome.DENIED
 
-    monkeypatch.setattr("gateway.transports.slack.dispatcher.consume_credits", deny)
+    monkeypatch.setattr("gateway.transports.slack.inbound.dispatcher.consume_credits", deny)
 
     _dispatcher(
         settings=_settings(["U1"]),
@@ -265,7 +265,7 @@ def test_non_denied_credit_outcomes_run_the_turn(
     resolver = _FakeSessionResolver()
     turns: list[str] = []
     monkeypatch.setattr(
-        "gateway.transports.slack.dispatcher.consume_credits", lambda *_args, **_kw: outcome
+        "gateway.transports.slack.inbound.dispatcher.consume_credits", lambda *_args, **_kw: outcome
     )
 
     def handler(text: str, _session: Any, sink: Any, _logger: logging.Logger) -> None:
@@ -317,7 +317,7 @@ def test_errored_turn_replaces_placeholder_with_error() -> None:
 
 def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
     # Arrange / Act
-    from gateway.transports.slack.dispatcher import _agent_text_with_slack_context
+    from gateway.transports.slack.inbound.dispatcher import _agent_text_with_slack_context
 
     text = _agent_text_with_slack_context(_inbound())
 
@@ -330,7 +330,7 @@ def test_agent_context_omits_thread_ts_to_avoid_thread_reads() -> None:
 
 def test_agent_context_attributes_the_speaker() -> None:
     """The turn prefix names who is speaking (multi-user thread attribution)."""
-    from gateway.transports.slack.dispatcher import _agent_text_with_slack_context
+    from gateway.transports.slack.inbound.dispatcher import _agent_text_with_slack_context
 
     text = _agent_text_with_slack_context(_inbound())
 

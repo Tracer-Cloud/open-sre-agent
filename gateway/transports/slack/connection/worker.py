@@ -17,13 +17,16 @@ from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
-from gateway.transports.slack.approvals import handle_block_actions_payload
-from gateway.transports.slack.channel_intro import ChannelIntroGreeter
 from gateway.transports.slack.client import SlackWebApiClient
-from gateway.transports.slack.dispatcher import _SlackTurnDispatcher
-from gateway.transports.slack.events import parse_events_api_payload
-from gateway.transports.slack.feedback import record_feedback_payload
-from gateway.transports.slack.heartbeat import DEFAULT_HEARTBEAT_PATH, ConnectionHeartbeat
+from gateway.transports.slack.connection.heartbeat import (
+    DEFAULT_HEARTBEAT_PATH,
+    ConnectionHeartbeat,
+)
+from gateway.transports.slack.inbound.dispatcher import _SlackTurnDispatcher
+from gateway.transports.slack.inbound.events import parse_events_api_payload
+from gateway.transports.slack.outbound.approvals import handle_block_actions_payload
+from gateway.transports.slack.outbound.channel_intro import ChannelIntroGreeter
+from gateway.transports.slack.outbound.feedback import record_feedback_payload
 from gateway.transports.slack.settings import SlackGatewaySettings
 
 _PLATFORM_SLACK = "slack"

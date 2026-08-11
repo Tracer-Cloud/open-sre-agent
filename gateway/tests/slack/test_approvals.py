@@ -13,7 +13,10 @@ from gateway.core.runtime.approvals import (
     ApprovalBroker,
     approval_tool_hooks,
 )
-from gateway.transports.slack.approvals import ThreadApprovalPrompter, handle_block_actions_payload
+from gateway.transports.slack.outbound.approvals import (
+    ThreadApprovalPrompter,
+    handle_block_actions_payload,
+)
 
 
 class _FakeMessagingClient:

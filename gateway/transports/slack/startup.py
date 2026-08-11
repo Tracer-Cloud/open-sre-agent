@@ -11,11 +11,11 @@ from __future__ import annotations
 import logging
 
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
-from gateway.transports.slack.settings import SlackGatewaySettings, load_slack_gateway_settings
-from gateway.transports.slack.socket_mode_worker import (
+from gateway.transports.slack.connection.worker import (
     SlackGatewayBackground,
     start_slack_gateway_background,
 )
+from gateway.transports.slack.settings import SlackGatewaySettings, load_slack_gateway_settings
 
 
 def start_slack_worker(

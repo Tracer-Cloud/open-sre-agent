@@ -26,26 +26,26 @@ from gateway.core.runtime.conversation_locks import ConversationLockRegistry
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
-from gateway.transports.slack.approvals import ThreadApprovalPrompter
 from gateway.transports.slack.client import (
     SlackMessagingClient,
     mark_turn_done,
     mark_turn_failed,
     mark_turn_working,
 )
-from gateway.transports.slack.events import SlackInboundFile, SlackInboundMessage
-from gateway.transports.slack.output_sink import SlackOutputSink
-from gateway.transports.slack.principal import PrincipalResolutionError, resolve_slack_scope
-from gateway.transports.slack.security import (
+from gateway.transports.slack.inbound.events import SlackInboundFile, SlackInboundMessage
+from gateway.transports.slack.inbound.principal import PrincipalResolutionError, resolve_slack_scope
+from gateway.transports.slack.inbound.security import (
     SlackInboundDecision,
     enforce_inbound_slack_message_security,
     persist_policy_if_needed,
 )
-from gateway.transports.slack.settings import SlackGatewaySettings
-from gateway.transports.slack.thread_history import (
+from gateway.transports.slack.inbound.thread_history import (
     seed_session_from_slack_thread,
     session_needs_thread_seed,
 )
+from gateway.transports.slack.outbound.approvals import ThreadApprovalPrompter
+from gateway.transports.slack.outbound.output_sink import SlackOutputSink
+from gateway.transports.slack.settings import SlackGatewaySettings
 from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
 
 _ROTATE_SESSION = "__ROTATE_SESSION__"
@@ -398,7 +398,7 @@ def _slack_files_context(files: tuple[SlackInboundFile, ...], logger: logging.Lo
     Returns an empty string when the bot token is unavailable (metering-style
     fail-safe — a missing token drops attachments rather than failing the turn).
     """
-    from gateway.transports.slack.attachments import build_files_context
+    from gateway.transports.slack.inbound.attachments import build_files_context
     from integrations.slack.web_client import resolve_bot_token
 
     target, detail = resolve_bot_token()

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from gateway.transports.slack.output_sink import (
+from gateway.transports.slack.client import (
     SLACK_MAX_MARKDOWN_BLOCK_CHARS,
     SLACK_MAX_MESSAGE_CHARS,
+)
+from gateway.transports.slack.outbound.output_sink import (
     SlackOutputSink,
 )
 

@@ -8,7 +8,7 @@ authorized member clicks or the request expires.
 This module holds the parts that do not depend on a chat transport: the broker
 that connects a click to the waiting tool call, the button identifiers, and the
 harness hooks. Each transport supplies its own :class:`ApprovalPrompter` — Block
-Kit in ``gateway.transports.slack.approvals``, message components in
+Kit in ``gateway.transports.slack.outbound.approvals``, message components in
 ``gateway.transports.discord.approvals``, inline keyboard in
 ``gateway.transports.telegram.approvals``.
 """

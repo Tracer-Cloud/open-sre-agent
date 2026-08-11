@@ -9,6 +9,12 @@ from typing import Any, Protocol
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web import WebClient
 
+# Slack rejects chat.postMessage text above this length with msg_too_long.
+SLACK_MAX_MESSAGE_CHARS = 40_000
+# Block Kit markdown blocks cap at 12k chars; longer answers fall back to
+# mrkdwn text, which Slack accepts up to SLACK_MAX_MESSAGE_CHARS.
+SLACK_MAX_MARKDOWN_BLOCK_CHARS = 12_000
+
 logger = logging.getLogger(__name__)
 
 _WORKING_REACTION = "eyes"
