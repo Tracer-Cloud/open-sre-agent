@@ -25,6 +25,7 @@ from gateway.transports.slack.transport.events_api.receiver import (
     SlackEventDeduplicator,
 )
 from gateway.transports.slack.transport.events_api.server import (
+    ListenerGate,
     SlackHttpServerHandle,
     build_slack_http_app,
     serve_slack_http_in_thread,
@@ -91,13 +92,17 @@ def _start_events_api_http(
         # on the shared executor rather than inside the request.
         stack.executor.submit(stack.dispatcher.dispatch, message)
 
+    gate = ListenerGate()
     app = build_slack_http_app(
         settings=settings,
         approvals=stack.approvals,
         deduplicator=_build_deduplicator(logger),
         submit_turn=_submit_turn,
+        gate=gate,
     )
-    handle = serve_slack_http_in_thread(app=app, port=settings.http_port, workers=stack.executor)
+    handle = serve_slack_http_in_thread(
+        app=app, port=settings.http_port, workers=stack.executor, gate=gate
+    )
     logger.info("[slack-gateway] events api listening on %s", handle.bound_address)
     return handle
 

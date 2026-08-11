@@ -6,9 +6,11 @@ the load balancer sends it, so the "already handled" set has to outlive the
 process — a per-process set admits the retry again and runs the turn twice,
 posting a second reply and repeating every tool action the turn performed.
 
-Exactly-once falls out of a primary-key conflict: the first insert of an
-``event_id`` wins, every retry conflicts and is refused. No lock, no read
-before write, and correct regardless of which replica sees which delivery.
+Claims are provisional until the turn is queued. A primary-key insert wins the
+race; ``confirm`` marks it final after ``submit_turn`` succeeds. If the
+executor rejects the work and ``release`` cannot delete the row, a later
+``claim`` may reclaim an *uncommitted* row so Slack's retry is not answered
+200-as-duplicate and permanently dropped. Committed rows are never reclaimed.
 
 Selected when ``DATABASE_URL`` is set; requires the ``postgresql`` extra.
 """
@@ -36,10 +38,18 @@ RETENTION_MINUTES = 60
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS slack_handled_events (
     event_id TEXT PRIMARY KEY,
-    handled_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    handled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    committed BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS slack_handled_events_handled_at_idx
     ON slack_handled_events (handled_at);
+"""
+
+# Older deploys created the table without ``committed``. Default TRUE so
+# pre-existing rows stay refused (they already ran or were treated as handled).
+_MIGRATE_COMMITTED = """
+ALTER TABLE slack_handled_events
+    ADD COLUMN IF NOT EXISTS committed BOOLEAN NOT NULL DEFAULT TRUE;
 """
 
 
@@ -52,6 +62,7 @@ class PostgresSlackEventDeduplicator:
         self._pool_lock = threading.Lock()
         with self._connection() as conn, conn.cursor() as cursor:
             cursor.execute(_SCHEMA)
+            cursor.execute(_MIGRATE_COMMITTED)
 
     def _get_pool(self) -> Any:
         with self._pool_lock:
@@ -76,33 +87,63 @@ class PostgresSlackEventDeduplicator:
             pool.putconn(conn)
 
     def release(self, event_id: str) -> bool:
-        """Drop a claim whose turn never started so the retry can run it.
+        """Drop a provisional claim whose turn never started.
 
         Without this, a delivery admitted but not dispatched (executor gone) is
-        refused on retry and the user's message is silently lost.
+        refused on retry and the user's message is silently lost. Returns False
+        when the store could not delete the row — callers should not pretend the
+        retry path is clean (see route: 500 vs 503). Uncommitted rows may still
+        be reclaimed by a later ``claim``.
         """
         try:
             with self._connection() as conn, conn.cursor() as cursor:
-                cursor.execute("DELETE FROM slack_handled_events WHERE event_id = %s", (event_id,))
+                cursor.execute(
+                    """
+                    DELETE FROM slack_handled_events
+                    WHERE event_id = %s AND committed IS FALSE
+                    """,
+                    (event_id,),
+                )
             return True
         except Exception:
-            # The claim stands. If the store is still unreachable when the retry
-            # arrives, ``claim`` fails open and the turn runs; if it recovers
-            # first, the retry is refused and this event is lost — hence ERROR.
             logger.error(
-                "[slack-gateway] could not release event claim %s; a retry may be "
-                "refused as a duplicate",
+                "[slack-gateway] could not release event claim %s; a retry may "
+                "reclaim the provisional row or be refused if already committed",
+                event_id,
+                exc_info=True,
+            )
+            return False
+
+    def confirm(self, event_id: str) -> bool:
+        """Mark a provisional claim final after the turn has been queued."""
+        try:
+            with self._connection() as conn, conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE slack_handled_events
+                    SET committed = TRUE, handled_at = now()
+                    WHERE event_id = %s
+                    """,
+                    (event_id,),
+                )
+            return True
+        except Exception:
+            logger.error(
+                "[slack-gateway] could not confirm event claim %s; a retry may "
+                "reclaim and start a second turn",
                 event_id,
                 exc_info=True,
             )
             return False
 
     def claim(self, event_id: str) -> bool:
-        """Return True only for the first delivery of ``event_id``.
+        """Return True when this delivery may run the turn.
 
-        A database failure returns True — the turn runs. Dropping a real user
-        message to avoid a possible duplicate is the worse of the two, and the
-        failure is logged rather than silently swallowed.
+        First insert wins. An *uncommitted* row (queued turn never confirmed —
+        typically release failed after a dead executor) may be reclaimed so a
+        Slack retry is not answered as an ignored duplicate. Committed rows
+        always refuse. A database failure returns True — dropping a real user
+        message to avoid a possible duplicate is worse.
         """
         try:
             with self._connection() as conn, conn.cursor() as cursor:
@@ -115,13 +156,16 @@ class PostgresSlackEventDeduplicator:
                 )
                 cursor.execute(
                     """
-                    INSERT INTO slack_handled_events (event_id)
-                    VALUES (%s)
-                    ON CONFLICT (event_id) DO NOTHING
+                    INSERT INTO slack_handled_events (event_id, committed)
+                    VALUES (%s, FALSE)
+                    ON CONFLICT (event_id) DO UPDATE
+                    SET handled_at = now()
+                    WHERE slack_handled_events.committed IS FALSE
+                    RETURNING event_id
                     """,
                     (event_id,),
                 )
-                return bool(cursor.rowcount)
+                return cursor.fetchone() is not None
         except Exception:
             logger.warning(
                 "[slack-gateway] event dedup unavailable; admitting delivery", exc_info=True

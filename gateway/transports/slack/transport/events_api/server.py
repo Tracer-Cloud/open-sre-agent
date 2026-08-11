@@ -41,6 +41,20 @@ from gateway.transports.slack.transport.events_api.receiver import (
 #: Starts a turn for one inbound message without blocking the request.
 SubmitTurn = Callable[[SlackInboundMessage], None]
 
+
+@dataclass
+class ListenerGate:
+    """Whether this listener may still act on deliveries.
+
+    Closed when the transport failed to start or has stopped. Checked by
+    every route: a uvicorn thread can outlive either event, and an
+    interactivity click is handled inline, so nothing else would stop a
+    residual listener resolving approvals for a dead transport.
+    """
+
+    accepting: bool = True
+
+
 EVENTS_PATH = "/slack/events"
 # Slack posts button clicks to a separate request URL. Without this route
 # approvals and feedback silently stop working while turns still run.
@@ -60,6 +74,7 @@ class SlackHttpServerHandle:
     server: uvicorn.Server
     thread: threading.Thread
     workers: ThreadPoolExecutor
+    gate: ListenerGate
     bound_host: str
     bound_port: int
 
@@ -73,6 +88,7 @@ class SlackHttpServerHandle:
         Signature matches ``gateway.channels.chat.TransportWorker`` so the
         composition root can hold either inbound transport in one handle.
         """
+        self.gate.accepting = False  # refuse first; the thread may outlive the join
         self.server.should_exit = True
         self.thread.join(timeout=timeout)
         self.workers.shutdown(wait=False, cancel_futures=True)
@@ -85,6 +101,7 @@ def build_slack_http_app(
     approvals: ApprovalBroker,
     deduplicator: SlackEventDeduplicator,
     submit_turn: SubmitTurn,
+    gate: ListenerGate,
 ) -> FastAPI:
     """Return the Slack listener app.
 
@@ -94,6 +111,10 @@ def build_slack_http_app(
     app = FastAPI()
 
     async def _admit(request: Request) -> Response:
+        if not gate.accepting:
+            return JSONResponse(
+                {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
+            )
         body = await request.body()  # raw bytes: the signature covers them exactly
         outcome = admit_slack_http_request(
             headers=dict(request.headers),
@@ -110,6 +131,8 @@ def build_slack_http_app(
         if outcome.status is SlackHttpStatus.ACCEPTED and outcome.message is not None:
             try:
                 submit_turn(outcome.message)
+                # Dispatched: the claim is no longer provisional.
+                deduplicator.confirm(outcome.event_id)
             except RuntimeError:
                 # The turn executor is gone: the listener outlived a failed
                 # start or a stop. Release the claim first — admission already
@@ -136,6 +159,10 @@ def build_slack_http_app(
         return JSONResponse({"ok": True})
 
     async def _interactivity(request: Request) -> Response:
+        if not gate.accepting:
+            return JSONResponse(
+                {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
+            )
         body = await request.body()
         outcome = admit_slack_interactivity_request(
             headers=dict(request.headers),
@@ -169,6 +196,7 @@ def serve_slack_http_in_thread(
     host: str = "0.0.0.0",
     port: int,
     workers: ThreadPoolExecutor,
+    gate: ListenerGate,
     startup_timeout: float = 10.0,
 ) -> SlackHttpServerHandle:
     """Start uvicorn on ``app`` and wait until it is bound."""
@@ -180,7 +208,9 @@ def serve_slack_http_in_thread(
     while time.monotonic() < deadline:
         if server.started and server.servers:
             bound = server.servers[0].sockets[0].getsockname()
-            return SlackHttpServerHandle(server, thread, workers, str(bound[0]), int(bound[1]))
+            return SlackHttpServerHandle(
+                server, thread, workers, gate, str(bound[0]), int(bound[1])
+            )
         if not thread.is_alive():
             break
         time.sleep(0.05)
@@ -188,6 +218,7 @@ def serve_slack_http_in_thread(
     # the deadline would otherwise keep serving Slack with no worker to run the
     # turn — every request 500s and Slack retries it, while the gateway has
     # already recorded Slack as unavailable.
+    gate.accepting = False  # a thread that outlives the join must act on nothing
     server.should_exit = True
     thread.join(timeout=_FAILED_START_JOIN_SECONDS)
     if thread.is_alive():
@@ -207,6 +238,7 @@ def serve_slack_http_in_thread(
 
 __all__ = [
     "EVENTS_PATH",
+    "ListenerGate",
     "INTERACTIVITY_PATH",
     "SlackHttpServerHandle",
     "build_slack_http_app",

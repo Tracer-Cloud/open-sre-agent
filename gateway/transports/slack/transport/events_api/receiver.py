@@ -73,6 +73,9 @@ class SlackEventDeduplicator(Protocol):
     def release(self, event_id: str) -> bool:
         """Undo a claim whose turn never started; False when it could not be undone."""
 
+    def confirm(self, event_id: str) -> None:
+        """Mark a claim whose turn started, so it is never re-claimed."""
+
 
 class InMemorySlackEventDeduplicator:
     """Single-process dedup. Correct only while exactly one replica runs."""
@@ -89,6 +92,9 @@ class InMemorySlackEventDeduplicator:
     def release(self, event_id: str) -> bool:
         self._seen.discard(event_id)
         return True
+
+    def confirm(self, event_id: str) -> None:
+        """No-op: an in-process claim is never provisional."""
 
 
 def _header(headers: Mapping[str, str], name: str) -> str:
