@@ -26,6 +26,10 @@ from platform.scheduler.loop_constants import (
     LOOP_TELEGRAM_CHAT_ID_PARAM,
     LOOP_TIME_PARAM,
 )
+from platform.scheduler.operation_log import (
+    record_scheduler_loop_operation,
+    record_scheduler_task_operation,
+)
 from platform.scheduler.runner import compute_next_run
 from platform.scheduler.store import add_task, list_tasks, remove_task, update_task
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind
@@ -334,10 +338,21 @@ def create_manual_loop(
         params=params,
     )
     task.next_run = compute_next_run(task)
-    return ManualLoop(
-        task=add_task(task, store_path),
+    stored_task = add_task(task, store_path)
+    deduplicated = stored_task.id != task.id
+    record_scheduler_task_operation(
+        "scheduled_loop_reused" if deduplicated else "scheduled_loop_created",
+        stored_task,
         channels=channel_providers,
-        next_run=task.next_run,
+        extra={
+            "requested_task_id": task.id,
+            "deduplicated": deduplicated,
+        },
+    )
+    return ManualLoop(
+        task=stored_task,
+        channels=channel_providers,
+        next_run=stored_task.next_run or task.next_run,
     )
 
 
@@ -433,7 +448,14 @@ def set_loop_enabled(
 
     if not updated:
         return None, f"loop {loop.id!r} has no persisted tasks"
-    return LoopMutation(summary=loop, task_ids=tuple(updated)), ""
+    refreshed_loop, _ = resolve_loop_summary(loop.id, store_path=store_path, now=now)
+    mutation = LoopMutation(summary=refreshed_loop or loop, task_ids=tuple(updated))
+    record_scheduler_loop_operation(
+        "scheduled_loop_started" if enabled else "scheduled_loop_stopped",
+        mutation.summary,
+        task_ids=mutation.task_ids,
+    )
+    return mutation, ""
 
 
 def delete_loop(
@@ -452,7 +474,13 @@ def delete_loop(
         if not remove_task(task_id, store_path):
             return None, f"loop task {task_id!r} could not be removed"
         removed.append(task_id)
-    return LoopMutation(summary=loop, task_ids=tuple(removed)), ""
+    mutation = LoopMutation(summary=loop, task_ids=tuple(removed))
+    record_scheduler_loop_operation(
+        "scheduled_loop_deleted",
+        loop,
+        task_ids=mutation.task_ids,
+    )
+    return mutation, ""
 
 
 def seed_starter_loops(store_path: Path | None = None) -> list[ScheduledTask]:
@@ -486,7 +514,9 @@ def seed_starter_loops(store_path: Path | None = None) -> list[ScheduledTask]:
                 LOOP_CHANNELS_PARAM: Provider.INTERACTIVE_SHELL.value,
             },
         )
-        added.append(add_task(task, store_path))
+        stored_task = add_task(task, store_path)
+        record_scheduler_task_operation("scheduled_loop_seeded", stored_task)
+        added.append(stored_task)
     return added
 
 

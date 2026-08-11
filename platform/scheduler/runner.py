@@ -16,8 +16,13 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from platform.scheduler.executor import execute_task
+from platform.scheduler.operation_log import (
+    record_scheduler_execution_operation,
+    record_scheduler_service_operation,
+    record_scheduler_task_operation,
+)
 from platform.scheduler.store import get_task, list_tasks, update_task
-from platform.scheduler.types import ScheduledTask
+from platform.scheduler.types import ScheduledTask, TaskStatus
 
 logger = logging.getLogger(__name__)
 TaskFilter = Callable[[ScheduledTask], bool]
@@ -97,9 +102,20 @@ def _scheduled_job(task_id: str) -> None:
     task = get_task(task_id)
     if task is None:
         logger.warning("Task %s not found in store, skipping", task_id)
+        record_scheduler_service_operation(
+            "scheduler_job_skipped",
+            extra={"task_id": task_id, "fire_time": fire_time, "reason": "missing_task"},
+        )
         return
     if not task.enabled:
         logger.info("Task %s is disabled, skipping", task_id)
+        record_scheduler_execution_operation(
+            "scheduled_task_execution_skipped",
+            task,
+            fire_time=fire_time,
+            status=TaskStatus.SKIPPED,
+            extra={"reason": "disabled"},
+        )
         return
 
     result = execute_task(task, fire_time)
@@ -149,6 +165,11 @@ def _register_jobs(
             misfire_grace_time=60,
         )
         enabled_count += 1
+        record_scheduler_task_operation(
+            "scheduler_job_registered",
+            task,
+            extra={"next_run": next_run},
+        )
         logger.info(
             "Registered task %s (%s) with cron=%s tz=%s",
             task.id,
@@ -187,9 +208,15 @@ def resync_scheduler_jobs(
     for job_id in existing_ids - desired_ids:
         try:
             scheduler.remove_job(job_id)
+            record_scheduler_service_operation(
+                "scheduler_job_removed",
+                task_count=enabled_count,
+                extra={"task_id": job_id, "reason": "not_desired"},
+            )
         except Exception as exc:  # noqa: BLE001
             logger.debug("Failed to remove stale scheduler job %s: %s", job_id, exc)
     logger.info("Scheduler resynced with %d enabled task(s)", enabled_count)
+    record_scheduler_service_operation("scheduler_resynced", task_count=enabled_count)
     return enabled_count
 
 
@@ -214,6 +241,11 @@ def refresh_background_scheduler(
         scheduler.shutdown(wait=False)
     except Exception as exc:  # noqa: BLE001
         logger.debug("Scheduler shutdown after empty resync failed: %s", exc)
+    record_scheduler_service_operation(
+        "scheduler_stopped",
+        task_count=0,
+        extra={"reason": "no_enabled_tasks"},
+    )
     return None, 0
 
 
@@ -232,9 +264,11 @@ def start_background_scheduler(
     scheduler = BackgroundScheduler()
     enabled_count = _register_jobs(scheduler, task_filter=task_filter)
     if enabled_count == 0:
+        record_scheduler_service_operation("scheduler_idle", task_count=0)
         return None, 0
     scheduler.start()
     logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
+    record_scheduler_service_operation("scheduler_started", task_count=enabled_count)
     return scheduler, enabled_count
 
 
@@ -250,6 +284,7 @@ def start_scheduler() -> None:
     enabled_count = _register_jobs(scheduler)
     if enabled_count == 0:
         logger.warning("No enabled tasks found. Scheduler has nothing to run.")
+        record_scheduler_service_operation("scheduler_idle", task_count=0)
         raise SystemExit("No enabled tasks found. Add tasks with `opensre cron add` first.")
 
     stop_event = threading.Event()
@@ -264,10 +299,17 @@ def start_scheduler() -> None:
         signal.signal(sigterm, _shutdown_handler)
 
     logger.info("Scheduler started with %d task(s). Waiting for triggers...", enabled_count)
+    record_scheduler_service_operation(
+        "scheduler_started",
+        task_count=enabled_count,
+        extra={"blocking": True},
+    )
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
         logger.info("Scheduler stopped.")
+    finally:
+        record_scheduler_service_operation("scheduler_stopped", task_count=enabled_count)
 
 
 def run_task_now(task_id: str) -> bool:

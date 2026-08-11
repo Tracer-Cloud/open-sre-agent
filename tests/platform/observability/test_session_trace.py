@@ -344,6 +344,8 @@ def test_mark_span_outcome_sets_status_and_extra_attrs() -> None:
 
 
 def test_semantic_helpers_match_span_kinds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform.observability.trace.spans import loop_iteration_span, loop_span
+
     session_id = "sess-helpers"
     path = _activate_jsonl_sink(tmp_path, session_id, monkeypatch)
     with traced_session(session_id, component="gateway_turn") as attrs:
@@ -357,6 +359,10 @@ def test_semantic_helpers_match_span_kinds(tmp_path: Path, monkeypatch: pytest.M
             mark_span_outcome(tool_attrs, "ok", source="agent")
         with llm_span("model-x", iteration=1):
             pass
+        with loop_span("react_loop") as loop_attrs:
+            mark_span_outcome(loop_attrs, "completed")
+        with loop_iteration_span("react_iteration", iteration=2):
+            pass
     spans = _trace_spans(path)
     kinds = {(rec["span_kind"], rec["name"]) for rec in spans}
     assert ("component", "gateway_turn") in kinds
@@ -365,6 +371,8 @@ def test_semantic_helpers_match_span_kinds(tmp_path: Path, monkeypatch: pytest.M
     assert ("stage", "intake") in kinds
     assert ("tool", "echo") in kinds
     assert ("llm", "model-x") in kinds
+    assert ("loop", "react_loop") in kinds
+    assert ("loop_iteration", "react_iteration") in kinds
 
     tool = next(r for r in spans if r["span_kind"] == "tool")
     assert tool["attributes"]["tool_call_id"] == "c1"
@@ -373,6 +381,9 @@ def test_semantic_helpers_match_span_kinds(tmp_path: Path, monkeypatch: pytest.M
 
     llm = next(r for r in spans if r["span_kind"] == "llm")
     assert llm["attributes"]["iteration"] == 1
+
+    loop_iteration = next(r for r in spans if r["span_kind"] == "loop_iteration")
+    assert loop_iteration["attributes"]["iteration"] == 2
 
     gateway = next(r for r in spans if r["name"] == "gateway_turn")
     assert gateway["attributes"]["outcome"] == "ok"

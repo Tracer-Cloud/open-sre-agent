@@ -19,6 +19,7 @@ from platform.scheduler.loop_constants import (
     LOOP_SLACK_CHAT_ID_PARAM,
     LOOP_TELEGRAM_CHAT_ID_PARAM,
 )
+from platform.scheduler.operation_log import record_scheduler_execution_operation
 from platform.scheduler.tasks import build_message
 from platform.scheduler.types import Provider, ScheduledTask, TaskKind, TaskStatus
 
@@ -50,9 +51,22 @@ def execute_task(
             task.id,
             fire_time,
         )
+        record_scheduler_execution_operation(
+            "scheduled_task_execution_skipped",
+            task,
+            fire_time=fire_time,
+            status=TaskStatus.SKIPPED,
+            extra={"reason": "already_claimed"},
+        )
         return False
 
     logger.info("Executing task %s (kind=%s, fire_time=%s)", task.id, task.kind, fire_time)
+    record_scheduler_execution_operation(
+        "scheduled_task_execution_started",
+        task,
+        fire_time=fire_time,
+        status=TaskStatus.RUNNING,
+    )
     _emit_analytics_started(task)
 
     # Build the message
@@ -60,10 +74,15 @@ def execute_task(
         message = build_message(task)
     except RuntimeError as exc:
         # Pipeline failures — record without leaking details to chat
-        _record_failure(task, fire_time, str(exc))
+        _record_failure(task, fire_time, str(exc), stage="message_build")
         return False
     except Exception as exc:
-        _record_failure(task, fire_time, f"Message build error: {type(exc).__name__}")
+        _record_failure(
+            task,
+            fire_time,
+            f"Message build error: {type(exc).__name__}",
+            stage="message_build",
+        )
         return False
 
     # Quiet ticks (e.g. uptime watch with no transitions) skip delivery.
@@ -77,6 +96,14 @@ def execute_task(
         )
         _emit_analytics(task, TaskStatus.SUCCESS)
         logger.info("Task %s produced no message; delivery skipped", task.id)
+        record_scheduler_execution_operation(
+            "scheduled_task_execution_completed",
+            task,
+            fire_time=fire_time,
+            status=TaskStatus.SUCCESS,
+            message_chars=0,
+            extra={"delivery_skipped": True},
+        )
         return True
 
     # Deliver to the configured provider, or fan out when delivery_targets are present.
@@ -93,6 +120,19 @@ def execute_task(
         )
         _emit_analytics(task, TaskStatus.SUCCESS, error=error)
         _record_work_item_reminder_delivery(task)
+        record_scheduler_execution_operation(
+            "scheduled_task_execution_completed",
+            task,
+            fire_time=fire_time,
+            status=TaskStatus.SUCCESS,
+            message_chars=len(message),
+            message_id=message_id,
+            error=error,
+            extra={
+                "delivery_skipped": False,
+                "partial_failure": bool(error),
+            },
+        )
         if error:
             logger.warning(
                 "Task %s delivered with partial channel failures (message_id=%s): %s",
@@ -104,7 +144,7 @@ def execute_task(
             logger.info("Task %s delivered successfully (message_id=%s)", task.id, message_id)
         return True
     else:
-        _record_failure(task, fire_time, error)
+        _record_failure(task, fire_time, error, stage="delivery", message_chars=len(message))
         return False
 
 
@@ -476,7 +516,14 @@ def _deliver_interactive_shell(task: ScheduledTask, message: str) -> tuple[bool,
         return False, f"Interactive-shell delivery error: {type(exc).__name__}", ""
 
 
-def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
+def _record_failure(
+    task: ScheduledTask,
+    fire_time: str,
+    error: str,
+    *,
+    stage: str,
+    message_chars: int | None = None,
+) -> None:
     """Record a failed execution in the claim store and emit analytics."""
     complete_run(
         task.id,
@@ -486,6 +533,15 @@ def _record_failure(task: ScheduledTask, fire_time: str, error: str) -> None:
         provider=_run_provider_label(task),
     )
     _emit_analytics(task, TaskStatus.FAILED, error=error)
+    record_scheduler_execution_operation(
+        "scheduled_task_execution_failed",
+        task,
+        fire_time=fire_time,
+        status=TaskStatus.FAILED,
+        message_chars=message_chars,
+        error=error,
+        extra={"stage": stage},
+    )
     logger.warning("Task %s failed: %s", task.id, error)
 
 

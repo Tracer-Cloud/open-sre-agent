@@ -115,9 +115,19 @@ def cron_add(
         window_hours=window_hours,
     )
 
+    from platform.scheduler.operation_log import record_scheduler_task_operation
     from platform.scheduler.store import add_task
 
     added = add_task(task)
+    record_scheduler_task_operation(
+        "scheduled_task_created",
+        added,
+        extra={
+            "command": "cron_add",
+            "requested_task_id": task.id,
+            "deduplicated": added.id != task.id,
+        },
+    )
     _console.print(f"[green]Task {added.id} created.[/green]")
     if added.name:
         _console.print(f"  Name: {added.name}")
@@ -168,9 +178,17 @@ def cron_list() -> None:
 @click.argument("task_id")
 def cron_remove(task_id: str) -> None:
     """Remove a scheduled delivery task by ID."""
-    from platform.scheduler.store import remove_task
+    from platform.scheduler.operation_log import record_scheduler_task_operation
+    from platform.scheduler.store import get_task, remove_task
 
+    task = get_task(task_id)
     if remove_task(task_id):
+        if task is not None:
+            record_scheduler_task_operation(
+                "scheduled_task_deleted",
+                task,
+                extra={"command": "cron_remove"},
+            )
         _console.print(f"[green]Task {task_id} removed.[/green]")
     else:
         _console.print(f"[red]Error: task {task_id} not found.[/red]")
@@ -182,6 +200,7 @@ def cron_remove(task_id: str) -> None:
 def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
     from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
+    from platform.scheduler.operation_log import record_scheduler_task_operation
     from platform.scheduler.runner import run_task_now
     from platform.scheduler.store import get_task
 
@@ -193,6 +212,11 @@ def cron_run(task_id: str) -> None:
         raise SystemExit(1)
 
     _console.print(f"Running task {task_id} ({task.kind.value})...")
+    record_scheduler_task_operation(
+        "scheduled_task_run_requested",
+        task,
+        extra={"command": "cron_run"},
+    )
     success = run_task_now(task_id)
     if success:
         _console.print("[green]Done.[/green]")

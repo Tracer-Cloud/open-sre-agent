@@ -56,7 +56,7 @@ def test_react_loop_stops_before_llm_when_cancel_requested() -> None:
     assert result.cancelled is True
     assert result.terminated_by_tool is False
     assert result.hit_iteration_cap is False
-    assert result.llm_iterations_used == 1
+    assert result.llm_iterations_used == 0
     assert result.final_text == ""
 
 
