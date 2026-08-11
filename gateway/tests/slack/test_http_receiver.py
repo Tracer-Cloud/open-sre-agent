@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import urlencode
 
 from gateway.transports.slack.connection.http_receiver import (
     SIGNATURE_HEADER,
@@ -10,6 +11,7 @@ from gateway.transports.slack.connection.http_receiver import (
     InMemorySlackEventDeduplicator,
     SlackHttpStatus,
     admit_slack_http_request,
+    admit_slack_interactivity_request,
 )
 from gateway.transports.slack.connection.signature import expected_signature
 
@@ -108,3 +110,45 @@ def test_non_chat_events_are_ignored_not_rejected() -> None:
 
     # Act / Assert.
     assert _admit(payload).status is SlackHttpStatus.IGNORED
+
+
+def _interactivity_body(payload: dict[str, object]) -> bytes:
+    return urlencode({"payload": json.dumps(payload)}).encode()
+
+
+def _admit_click(payload: dict[str, object], *, sign: bool = True):
+    body = _interactivity_body(payload)
+    signature = (
+        expected_signature(signing_secret=_SECRET, timestamp=_TIMESTAMP, body=body)
+        if sign
+        else "v0=deadbeef"
+    )
+    return admit_slack_interactivity_request(
+        headers={SIGNATURE_HEADER: signature, TIMESTAMP_HEADER: _TIMESTAMP},
+        body=body,
+        signing_secret=_SECRET,
+        now=_NOW,
+    )
+
+
+_CLICK = {"type": "block_actions", "user": {"id": "U1"}, "actions": [{"action_id": "approve"}]}
+
+
+def test_form_encoded_button_click_is_admitted_with_its_payload() -> None:
+    """Slack posts interactivity as form-encoded ``payload=<json>``, not JSON.
+
+    Routing clicks through the events path rejected every one of them, so
+    approvals timed out and feedback was never recorded.
+    """
+    # Arrange / Act.
+    outcome = _admit_click(_CLICK)
+
+    # Assert.
+    assert outcome.status is SlackHttpStatus.ACCEPTED
+    assert outcome.payload is not None
+    assert outcome.payload["type"] == "block_actions"
+
+
+def test_unsigned_button_click_is_rejected() -> None:
+    # Arrange / Act / Assert.
+    assert _admit_click(_CLICK, sign=False).status is SlackHttpStatus.REJECTED

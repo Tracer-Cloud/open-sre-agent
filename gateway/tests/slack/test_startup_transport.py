@@ -79,3 +79,44 @@ def test_every_transport_has_a_starter() -> None:
     """A new enum member without a row would raise KeyError at boot."""
     # Arrange / Act / Assert.
     assert set(startup_module._TRANSPORT_STARTERS) == set(SlackInboundTransport)
+
+
+def test_listener_bind_failure_is_a_transport_failure_not_a_crash() -> None:
+    """A busy port must disable Slack, not abort the whole gateway.
+
+    ``start_transports`` catches GatewayConfigurationError and
+    GatewayTransportFailedError and keeps serving the other transports; any
+    other exception escapes and takes the process down with it.
+    """
+    # Arrange — a listener thread that dies before ever binding.
+    from concurrent.futures import ThreadPoolExecutor
+
+    from gateway.core.runtime.errors import GatewayTransportFailedError
+    from gateway.transports.slack.connection import http_server
+
+    workers = ThreadPoolExecutor(max_workers=1)
+
+    class _DeadServer:
+        started = False
+        servers: list[object] = []
+        should_exit = False
+
+        def run(self) -> None:  # never binds
+            return None
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(http_server.uvicorn, "Server", lambda _config: _DeadServer())
+    monkeypatch.setattr(http_server.uvicorn, "Config", lambda *_a, **_k: object())
+
+    # Act / Assert.
+    try:
+        with pytest.raises(GatewayTransportFailedError):
+            http_server.serve_slack_http_in_thread(
+                app=object(),  # never reached: the server stub does not bind
+                port=1,
+                workers=workers,
+                startup_timeout=0.2,
+            )
+    finally:
+        monkeypatch.undo()
+        workers.shutdown(wait=False)

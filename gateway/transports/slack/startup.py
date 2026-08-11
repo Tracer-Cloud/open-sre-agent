@@ -51,10 +51,16 @@ def _start_events_api_http(
         # on the shared executor rather than inside the request.
         stack.executor.submit(stack.dispatcher.dispatch, message)
 
+    # Single-process dedup: correct only while exactly one replica runs. A
+    # Slack retry reaching a second replica is admitted again and runs the turn
+    # twice, so this must be a shared store before scaling out.
+    logger.warning(
+        "[slack-gateway] events api dedup is process-local — run a single "
+        "replica until a shared deduplicator is configured"
+    )
     app = build_slack_http_app(
-        signing_secret=settings.signing_secret,
-        # Single-process dedup: correct only while one replica runs. Replace
-        # with the shared store before scaling out, or retries duplicate turns.
+        settings=settings,
+        approvals=stack.approvals,
         deduplicator=InMemorySlackEventDeduplicator(),
         submit_turn=_submit_turn,
     )

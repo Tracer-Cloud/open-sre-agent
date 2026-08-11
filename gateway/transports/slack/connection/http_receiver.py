@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
+from urllib.parse import parse_qs
 
 from gateway.transports.slack.connection.signature import verify_slack_signature
 from gateway.transports.slack.inbound.events import SlackInboundMessage, parse_events_api_payload
@@ -96,6 +97,59 @@ def _decoded_payload(body: bytes) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+@dataclass(frozen=True)
+class SlackInteractivityOutcome:
+    """Result of admitting one interactive (button click) delivery."""
+
+    status: SlackHttpStatus
+    payload: Mapping[str, Any] | None = None
+    reason: str = ""
+
+
+def admit_slack_interactivity_request(
+    *,
+    headers: Mapping[str, str],
+    body: bytes,
+    signing_secret: str,
+    now: float | None = None,
+) -> SlackInteractivityOutcome:
+    """Verify one interactive delivery and return its decoded payload.
+
+    Slack posts button clicks form-encoded as ``payload=<json>``, not as a JSON
+    document, and they carry no ``event_id`` — so they share the signature check
+    with events but nothing else. Clicks are not de-duplicated: resolving an
+    approval twice is idempotent at the broker, while dropping one strands a
+    turn waiting on a decision that already happened.
+    """
+    if not verify_slack_signature(
+        signing_secret=signing_secret,
+        timestamp=_header(headers, TIMESTAMP_HEADER),
+        signature=_header(headers, SIGNATURE_HEADER),
+        body=body,
+        now=now,
+    ):
+        return SlackInteractivityOutcome(
+            SlackHttpStatus.REJECTED, reason="signature verification failed"
+        )
+
+    encoded = parse_qs(body.decode("utf-8", errors="replace")).get("payload")
+    if not encoded:
+        return SlackInteractivityOutcome(
+            SlackHttpStatus.IGNORED, reason="no payload field in form body"
+        )
+    try:
+        payload = json.loads(encoded[0])
+    except ValueError:
+        return SlackInteractivityOutcome(
+            SlackHttpStatus.REJECTED, reason="payload field is not JSON"
+        )
+    if not isinstance(payload, dict):
+        return SlackInteractivityOutcome(
+            SlackHttpStatus.REJECTED, reason="payload is not an object"
+        )
+    return SlackInteractivityOutcome(SlackHttpStatus.ACCEPTED, payload=payload)
+
+
 def admit_slack_http_request(
     *,
     headers: Mapping[str, str],
@@ -151,6 +205,8 @@ __all__ = [
     "InMemorySlackEventDeduplicator",
     "SlackEventDeduplicator",
     "SlackHttpOutcome",
+    "SlackInteractivityOutcome",
     "SlackHttpStatus",
     "admit_slack_http_request",
+    "admit_slack_interactivity_request",
 ]

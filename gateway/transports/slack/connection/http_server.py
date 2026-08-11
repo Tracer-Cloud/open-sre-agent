@@ -19,17 +19,24 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from http import HTTPStatus
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.runtime.errors import GatewayTransportFailedError
 from gateway.transports.slack.connection.http_receiver import (
     SlackEventDeduplicator,
     SlackHttpStatus,
     admit_slack_http_request,
+    admit_slack_interactivity_request,
 )
 from gateway.transports.slack.inbound.events import SlackInboundMessage
+from gateway.transports.slack.outbound.approvals import handle_block_actions_payload
+from gateway.transports.slack.outbound.feedback import record_feedback_payload
+from gateway.transports.slack.settings import SlackGatewaySettings
 
 #: Starts a turn for one inbound message without blocking the request.
 SubmitTurn = Callable[[SlackInboundMessage], None]
@@ -70,7 +77,8 @@ class SlackHttpServerHandle:
 
 def build_slack_http_app(
     *,
-    signing_secret: str,
+    settings: SlackGatewaySettings,
+    approvals: ApprovalBroker,
     deduplicator: SlackEventDeduplicator,
     submit_turn: SubmitTurn,
 ) -> FastAPI:
@@ -86,21 +94,44 @@ def build_slack_http_app(
         outcome = admit_slack_http_request(
             headers=dict(request.headers),
             body=body,
-            signing_secret=signing_secret,
+            signing_secret=settings.signing_secret,
             deduplicator=deduplicator,
         )
         if outcome.status is SlackHttpStatus.REJECTED:
             # Detail stays server-side (CWE-209): the caller is unauthenticated.
             logger.warning("slack http rejected: %s", outcome.reason)
-            return JSONResponse({"error": "unauthorized"}, status_code=401)
+            return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
         if outcome.status is SlackHttpStatus.CHALLENGE:
             return PlainTextResponse(outcome.challenge)
         if outcome.status is SlackHttpStatus.ACCEPTED and outcome.message is not None:
             submit_turn(outcome.message)
         return JSONResponse({"ok": True})
 
+    async def _interactivity(request: Request) -> Response:
+        body = await request.body()
+        outcome = admit_slack_interactivity_request(
+            headers=dict(request.headers),
+            body=body,
+            signing_secret=settings.signing_secret,
+        )
+        if outcome.status is SlackHttpStatus.REJECTED:
+            logger.warning("slack interactivity rejected: %s", outcome.reason)
+            return JSONResponse({"error": "unauthorized"}, status_code=HTTPStatus.UNAUTHORIZED)
+        if outcome.payload is not None:
+            # Resolved on the request thread, never the turn executor: workers
+            # may all be blocked *waiting* on these very buttons, so a click
+            # must never need a free worker to be recorded.
+            record_feedback_payload(outcome.payload)
+            handle_block_actions_payload(
+                outcome.payload,
+                broker=approvals,
+                allowed_user_ids=settings.allowed_user_ids,
+                allow_open_workspace=settings.allow_open_workspace,
+            )
+        return JSONResponse({"ok": True})
+
     app.add_api_route(EVENTS_PATH, _admit, methods=["POST"])
-    app.add_api_route(INTERACTIVITY_PATH, _admit, methods=["POST"])
+    app.add_api_route(INTERACTIVITY_PATH, _interactivity, methods=["POST"])
     return app
 
 
@@ -125,7 +156,10 @@ def serve_slack_http_in_thread(
         if not thread.is_alive():
             break
         time.sleep(0.05)
-    raise RuntimeError(f"Slack HTTP listener on {host}:{port} failed to start")
+    workers.shutdown(wait=False, cancel_futures=True)
+    # GatewayTransportFailedError, not RuntimeError: start_transports catches
+    # this and records Slack unavailable instead of aborting the gateway.
+    raise GatewayTransportFailedError(f"Slack HTTP listener on {host}:{port} failed to start")
 
 
 __all__ = [
