@@ -24,7 +24,7 @@ class IntegrationSpec:
     verify_order: int | None = None
 
 
-INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
+_BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
     IntegrationSpec(
         service="grafana",
         family_members=("grafana_local",),
@@ -444,47 +444,99 @@ INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = (
     ),
 )
 
-INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}
+#: Specs contributed by out-of-tree packages through
+#: :func:`register_integration_spec`. Kept apart from the built-ins so a plugin
+#: can add itself without the module literal having to know about it.
+_EXTERNAL_SPECS: list[IntegrationSpec] = []
 
-SERVICE_KEY_MAP: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
-for _spec in INTEGRATION_SPECS:
-    for _alias in _spec.aliases:
-        SERVICE_KEY_MAP[_alias] = _spec.service
+#: Every spec, built-in first so a plugin cannot shadow a shipped integration.
+INTEGRATION_SPECS: tuple[IntegrationSpec, ...] = ()
 
-SKIP_CLASSIFIED_SERVICES: frozenset[str] = frozenset(
-    spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
-)
+INTEGRATION_SPECS_BY_SERVICE: dict[str, IntegrationSpec] = {}
+SERVICE_KEY_MAP: dict[str, str] = {}
+SKIP_CLASSIFIED_SERVICES: frozenset[str] = frozenset()
+SERVICE_FAMILY_MAP: dict[str, str] = {}
+DIRECT_CLASSIFIED_EFFECTIVE_SERVICES: tuple[str, ...] = ()
+SUPPORTED_VERIFY_SERVICES: tuple[str, ...] = ()
+SUPPORTED_SETUP_SERVICES: tuple[str, ...] = ()
+CORE_VERIFY_SERVICES: frozenset[str] = frozenset()
 
-SERVICE_FAMILY_MAP: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
-for _spec in INTEGRATION_SPECS:
-    for _member in _spec.family_members:
-        SERVICE_FAMILY_MAP[_member] = _spec.service
 
-DIRECT_CLASSIFIED_EFFECTIVE_SERVICES = tuple(
-    spec.service for spec in INTEGRATION_SPECS if spec.direct_effective
-)
+def _rebuild_registry() -> None:
+    """Recompute every lookup derived from the spec list.
 
-SUPPORTED_VERIFY_SERVICES = tuple(
-    spec.service
-    for spec in sorted(
-        (candidate for candidate in INTEGRATION_SPECS if candidate.has_verifier),
-        key=lambda candidate: (
-            candidate.verify_order if candidate.verify_order is not None else 10_000
-        ),
+    The derived tables used to be computed once at import. A plugin registers
+    after import, so they are rebuilt on each registration instead. The module
+    names stay the same, which keeps every existing reader working unchanged.
+    """
+    global INTEGRATION_SPECS, INTEGRATION_SPECS_BY_SERVICE, SERVICE_KEY_MAP
+    global SKIP_CLASSIFIED_SERVICES, SERVICE_FAMILY_MAP
+    global DIRECT_CLASSIFIED_EFFECTIVE_SERVICES, SUPPORTED_VERIFY_SERVICES
+    global SUPPORTED_SETUP_SERVICES, CORE_VERIFY_SERVICES
+
+    INTEGRATION_SPECS = (*_BUILTIN_SPECS, *_EXTERNAL_SPECS)
+
+    INTEGRATION_SPECS_BY_SERVICE = {spec.service: spec for spec in INTEGRATION_SPECS}
+
+    service_keys: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
+    for spec in INTEGRATION_SPECS:
+        for alias in spec.aliases:
+            service_keys[alias] = spec.service
+    SERVICE_KEY_MAP = service_keys
+
+    SKIP_CLASSIFIED_SERVICES = frozenset(
+        spec.service for spec in INTEGRATION_SPECS if spec.skip_classification
     )
-)
 
-SUPPORTED_SETUP_SERVICES = tuple(
-    spec.service
-    for spec in sorted(
-        (candidate for candidate in INTEGRATION_SPECS if candidate.setup_order is not None),
-        key=lambda candidate: (
-            candidate.setup_order if candidate.setup_order is not None else 10_000
-        ),
+    families: dict[str, str] = {spec.service: spec.service for spec in INTEGRATION_SPECS}
+    for spec in INTEGRATION_SPECS:
+        for member in spec.family_members:
+            families[member] = spec.service
+    SERVICE_FAMILY_MAP = families
+
+    DIRECT_CLASSIFIED_EFFECTIVE_SERVICES = tuple(
+        spec.service for spec in INTEGRATION_SPECS if spec.direct_effective
     )
-)
 
-CORE_VERIFY_SERVICES = frozenset(spec.service for spec in INTEGRATION_SPECS if spec.core_verify)
+    SUPPORTED_VERIFY_SERVICES = tuple(
+        spec.service
+        for spec in sorted(
+            (candidate for candidate in INTEGRATION_SPECS if candidate.has_verifier),
+            key=lambda candidate: (
+                candidate.verify_order if candidate.verify_order is not None else 10_000
+            ),
+        )
+    )
+
+    SUPPORTED_SETUP_SERVICES = tuple(
+        spec.service
+        for spec in sorted(
+            (candidate for candidate in INTEGRATION_SPECS if candidate.setup_order is not None),
+            key=lambda candidate: (
+                candidate.setup_order if candidate.setup_order is not None else 10_000
+            ),
+        )
+    )
+
+    CORE_VERIFY_SERVICES = frozenset(spec.service for spec in INTEGRATION_SPECS if spec.core_verify)
+
+
+def register_integration_spec(spec: IntegrationSpec) -> None:
+    """Register an integration shipped outside this repository.
+
+    The extension point for packages that add an integration without being part
+    of the tree, mirroring ``register_external_tool_package`` for tools.
+    Registering the same service twice replaces the earlier entry, so a reload
+    does not accumulate duplicates.
+    """
+    global _EXTERNAL_SPECS
+
+    _EXTERNAL_SPECS = [entry for entry in _EXTERNAL_SPECS if entry.service != spec.service]
+    _EXTERNAL_SPECS.append(spec)
+    _rebuild_registry()
+
+
+_rebuild_registry()
 
 
 def family_key(service_key: str) -> str:

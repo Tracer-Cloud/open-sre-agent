@@ -465,6 +465,28 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "railway": _classify_railway,
 }
 
+#: Classifiers contributed by out-of-tree integration packages.
+_EXTERNAL_CLASSIFIERS: dict[str, _ClassifyFn] = {}
+
+#: Environment loaders contributed by out-of-tree integration packages. Each
+#: returns an active record, or None when its variables are not set.
+_EXTERNAL_ENV_LOADERS: dict[str, Any] = {}
+
+
+def register_classifier(service: str, classify: _ClassifyFn) -> None:
+    """Register the classifier for an integration shipped outside this repo."""
+    _EXTERNAL_CLASSIFIERS[service] = classify
+
+
+def register_env_loader(service: str, loader: Any) -> None:
+    """Register an environment loader for an out-of-tree integration.
+
+    The loader is called with no arguments during ``load_env_integrations`` and
+    returns a record in the same shape ``_active_env_record`` produces, or None
+    when the integration is not configured in the environment.
+    """
+    _EXTERNAL_ENV_LOADERS[service] = loader
+
 
 def _classify_service_instance(
     key: str, credentials: dict[str, Any], *, record_id: str
@@ -476,7 +498,7 @@ def _classify_service_instance(
     ``key`` itself, but Grafana splits into ``grafana`` or ``grafana_local``
     based on its ``is_local`` property.
     """
-    handler = _CLASSIFIERS.get(key)
+    handler = _CLASSIFIERS.get(key) or _EXTERNAL_CLASSIFIERS.get(key)
     if handler is not None:
         return handler(credentials, record_id)
     # Fallback for unknown services: pass through credentials + record id.
@@ -1822,6 +1844,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     temporal_config.model_dump(),
                 )
             )
+
+    for service, loader in _EXTERNAL_ENV_LOADERS.items():
+        try:
+            record = loader()
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration=service)
+        else:
+            if record:
+                integrations.append(record)
 
     return integrations
 

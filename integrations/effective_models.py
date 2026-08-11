@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ConfigDict
+
 from config.strict_config import StrictConfigModel
 
 
@@ -16,7 +18,15 @@ class EffectiveIntegrationEntry(StrictConfigModel):
 
 
 class EffectiveIntegrations(StrictConfigModel):
-    """Strict container for normalized effective integrations."""
+    """Container for normalized effective integrations.
+
+    Fields are declared per integration so a typo in a shipped name is still
+    caught. Extras are allowed on top of them, because an integration that lives
+    outside this repository has no field here to fill and would otherwise be
+    dropped at validation with nothing but a log line to show for it.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     grafana: EffectiveIntegrationEntry | None = None
     datadog: EffectiveIntegrationEntry | None = None

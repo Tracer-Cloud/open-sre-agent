@@ -37,6 +37,11 @@ class StrictConfigModel(BaseModel):
     def _reject_unknown_fields(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
+        # A subclass that opts into extras is asking for open-ended keys on
+        # purpose (an out-of-tree integration has no declared field to fill).
+        # Typo protection still applies to every model that stays closed.
+        if cls.model_config.get("extra") == "allow":
+            return data
 
         field_aliases = {
             name: field.alias
