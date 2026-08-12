@@ -93,8 +93,15 @@ _SANDBOX_PREAMBLE = textwrap.dedent(f"""\
     _original_os_open = _os_module.open
 
     def _restricted_os_open(path, flags, *args, **kwargs):
+        # O_TRUNC belongs here even though it is not an access mode: on POSIX
+        # ``os.open(p, O_RDONLY | O_TRUNC)`` empties the file, so a mask of
+        # access modes alone let generated code destroy any file it could name.
         _write_flags = (
-            _os_module.O_WRONLY | _os_module.O_RDWR | _os_module.O_APPEND | _os_module.O_CREAT
+            _os_module.O_WRONLY
+            | _os_module.O_RDWR
+            | _os_module.O_APPEND
+            | _os_module.O_CREAT
+            | _os_module.O_TRUNC
         )
         if flags & _write_flags and not _write_allowed(path):
             raise PermissionError(

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
+
+import pytest
 
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 from platform.sandbox.runner import (
@@ -218,6 +221,30 @@ class TestSandboxWriteGuardCoversEveryOpenPath:
             "os.write(fd, b'escaped')\n"
             "os.close(fd)\n"
         )
+
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Windows rejects O_RDONLY|O_TRUNC outright; the truncation risk is POSIX-only",
+    )
+    def test_os_open_truncate_without_write_flag_blocked(self) -> None:
+        """``O_TRUNC`` empties a file even with ``O_RDONLY``.
+
+        It is not an access mode, so a mask built only from O_WRONLY/O_RDWR/
+        O_APPEND/O_CREAT let generated code destroy any file it could name
+        while never asking for write access.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as handle:
+            handle.write("important data")
+            path = handle.name
+        try:
+            result = run_python_sandbox(
+                f"import os\nfd = os.open({path!r}, os.O_RDONLY | os.O_TRUNC)\nos.close(fd)\n"
+            )
+            assert not result.success
+            assert "PermissionError" in result.stderr or "PermissionError" in result.stdout
+            assert os.path.getsize(path) > 0
+        finally:
+            os.unlink(path)
 
     def test_pathlib_write_inside_opensre_tmp_still_allowed(self) -> None:
         # The guard must not break the directory the tool is meant to use.
