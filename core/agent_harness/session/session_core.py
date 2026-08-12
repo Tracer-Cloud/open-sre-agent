@@ -170,6 +170,12 @@ class SessionCore:
     resumed session log holds tool intents that never committed (the process
     died mid-execution). Consumed once by ``TurnSnapshot.from_session``."""
 
+    gather_unreachable_tools: dict[str, str] = field(default_factory=dict)
+    """Tool name → connectivity failure summary carried across SessionGoal gathers."""
+
+    gather_unreachable_sources: dict[str, str] = field(default_factory=dict)
+    """Source id → connectivity failure summary carried across SessionGoal gathers."""
+
     # Infra keys pulled from a completed investigation state and carried into the
     # next investigation. A class-level tuple so callers have a single source for
     # "what counts as accumulated context".
@@ -403,6 +409,8 @@ class SessionCore:
         self.offered_upgrade_ctas.clear()
         self.pending_user_choice = None
         self.pending_recovery_note = None
+        self.gather_unreachable_tools.clear()
+        self.gather_unreachable_sources.clear()
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
             self.session_id = str(uuid.uuid4())

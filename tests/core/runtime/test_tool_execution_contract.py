@@ -157,6 +157,29 @@ def test_after_hook_can_patch_result_and_terminate() -> None:
     assert result.terminate is True
 
 
+def test_after_hook_runs_when_tool_raises() -> None:
+    """Raised exceptions become error results and still notify after_tool_call."""
+    seen: list[str] = []
+
+    def execute(_args: dict[str, Any], _ctx: AgentToolContext) -> dict[str, Any]:
+        raise ConnectionError("Connection to 172.29.15.185 timed out. (connect timeout=10)")
+
+    def after(request: ToolExecutionRequest, result: ToolExecutionResult) -> None:
+        seen.append(request.source)
+        assert result.is_error
+        assert "timed out" in str(result.content)
+
+    result = execute_tool_calls(
+        [_call()],
+        [_tool(execute=execute, source="grafana")],
+        {},
+        hooks=ToolExecutionHooks(after_tool_call=after),
+    )[0]
+
+    assert result.is_error
+    assert seen == ["grafana"]
+
+
 def test_partial_tool_update_events_are_forwarded() -> None:
     updates: list[tuple[str, Any]] = []
 

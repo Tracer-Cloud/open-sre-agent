@@ -74,6 +74,13 @@ class SessionConfig:
     persistent_tasks: bool = True
     open_store: bool = True
     session_manager: SessionManager | None = None
+    # When True (default), :meth:`AgentSession.startup` runs
+    # ``configure_process(EMBEDDED_PROFILE)`` so integration/tool adapters are
+    # registered. Without that, headless ``chat`` / ``chat_until_goal`` resolve
+    # zero integrations and claim every vendor is disconnected (parity S1/S4).
+    # Tests that need a bare port table set this False and call
+    # ``reset_harness_ports`` themselves.
+    boot_process: bool = True
 
 
 # Scheduled/one-shot runs: a fresh warm session that leaves no persisted task
@@ -205,9 +212,10 @@ class AgentSession:
     ) -> AgentSession:
         """Return a session that is ready to :meth:`chat`.
 
-        The single headless bootstrap: create the session, run ``prepare_session``,
-        resolve the sink and prompt context, and attach the default agent. Build
-        it once and dispatch as many turns as the caller needs::
+        The single headless bootstrap: run embedded process boot (adapters),
+        create the session, run ``prepare_session``, resolve the sink and prompt
+        context, and attach the default agent. Build it once and dispatch as
+        many turns as the caller needs::
 
             session = AgentSession.start()
             for prompt in prompts:
@@ -268,7 +276,18 @@ class AgentSession:
         return self._agent
 
     def startup(self) -> SessionStartupResult:
-        """Run env resolution, session bootstrap/resume, and context loading."""
+        """Run process boot (optional), env, session bootstrap/resume, and context.
+
+        Default :attr:`SessionConfig.boot_process` installs the embedded
+        harness adapters so gather/tools see the same local integrations as
+        the interactive shell. Surfaces that already called
+        ``configure_process`` (CLI / gateway / web) are fine — the step is
+        idempotent per profile.
+        """
+        if self._config.boot_process:
+            from bootstrap.process import EMBEDDED_PROFILE, configure_process
+
+            configure_process(EMBEDDED_PROFILE)
         self.resolve_env_variables()
         session = self.load_or_create_session()
         prompts = self.load_context()

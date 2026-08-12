@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.agent_harness.harness import AgentSession
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.investigation_api import (
     InvestigationResult,
     install_investigation_payload_runner,
@@ -29,6 +29,60 @@ def _stub_turn_result() -> TurnResult:
         assistant_response_text="ok",
         llm_run=object(),
     )
+
+
+def test_startup_boots_embedded_process_by_default(monkeypatch: Any) -> None:
+    """Parity S1/S4: headless must not resolve zero integrations by forgetting adapters."""
+    from bootstrap.process import ProcessName
+
+    seen: list[ProcessName] = []
+
+    def _capture(profile: Any, logger: Any = None) -> None:
+        seen.append(profile.name)
+
+    monkeypatch.setattr("bootstrap.process.configure_process", _capture)
+    AgentSession(SessionConfig(open_store=False, persistent_tasks=False)).startup()
+    assert ProcessName.EMBEDDED in seen
+
+
+def test_startup_can_skip_process_boot(monkeypatch: Any) -> None:
+    seen: list[Any] = []
+
+    def _capture(profile: Any, logger: Any = None) -> None:
+        seen.append(profile)
+
+    monkeypatch.setattr("bootstrap.process.configure_process", _capture)
+    AgentSession(
+        SessionConfig(open_store=False, persistent_tasks=False, boot_process=False)
+    ).startup()
+    assert seen == []
+
+
+def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
+    """Without adapters, resolve is empty; AgentSession.start must install them."""
+    from bootstrap.process import reset_process_runtime_for_tests
+    from platform.harness_ports import (
+        configured_integration_services,
+        get_investigation_tools,
+        reset_harness_ports,
+        resolve_integrations,
+    )
+
+    reset_harness_ports()
+    reset_process_runtime_for_tests()
+    assert configured_integration_services() == ()
+    assert resolve_integrations() == {}
+    assert list(get_investigation_tools({"grafana": {"connection_verified": True}})) == []
+
+    AgentSession.start(
+        SessionConfig(open_store=False, persistent_tasks=False, warm_integrations=True)
+    )
+
+    # Tool registry is populated even when the local store is empty (CI).
+    grafana_tools = list(
+        get_investigation_tools({"grafana": {"endpoint": "http://g", "connection_verified": True}})
+    )
+    assert any(t.name.startswith("query_grafana") for t in grafana_tools)
 
 
 def test_chat_is_the_public_verb(monkeypatch: Any) -> None:

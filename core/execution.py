@@ -224,6 +224,7 @@ def _execute_one_tool_call(
             _unavailable_tool_message(tc.name, tool_map), metadata={"tool_name": tc.name}
         )
 
+    request: ToolExecutionRequest | None = None
     try:
         validation_error = tool.validate_public_input(tc.input)
         if validation_error:
@@ -283,7 +284,15 @@ def _execute_one_tool_call(
     except Exception as exc:
         mark_span_outcome(span_attrs, "exception", error=True)
         logger.warning("[tool:%s] failed: %s", tc.name, exc)
-        return _error_result(str(exc), metadata={"tool_name": tc.name})
+        result = _error_result(str(exc), metadata={"tool_name": tc.name})
+        # Raised transport failures must still reach after_tool_call so gather
+        # circuit breakers can mark the source (Grafana used to swallow these
+        # as empty lists; once re-raised, skipping the hook would hide them).
+        if request is not None:
+            patch = _run_after_hook(hooks, request, result)
+            if patch is not None:
+                result = _apply_patch(result, patch)
+        return result
 
 
 def _invoke_runtime_tool(

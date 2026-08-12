@@ -34,6 +34,9 @@ _CORE_FIELDS = (
     "session_goal",
     "pending_integration_setup_offer",
     "offered_upgrade_ctas",
+    # SessionGoal gather carry: tools/sources that failed at transport level.
+    "gather_unreachable_tools",
+    "gather_unreachable_sources",
     "integrations",
     "available_capabilities",
     "accumulated_context",

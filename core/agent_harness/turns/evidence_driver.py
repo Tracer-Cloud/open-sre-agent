@@ -29,9 +29,14 @@ from core.agent_harness.prompts.memory.conversation import (
     format_recent_conversation,
 )
 from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+from core.agent_harness.turns.gather_discovery_budget import with_gather_discovery_budget
 from core.agent_harness.turns.gather_observation import (
     GatheredEvidence,
     tool_results_from_executed,
+)
+from core.agent_harness.turns.gather_unreachable import (
+    load_gather_unreachable,
+    store_gather_unreachable,
 )
 from core.agent_harness.turns.goal_review import build_gather_goal_reviewer
 from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
@@ -49,9 +54,10 @@ log = logging.getLogger(__name__)
 # responsive. The budget must still fit an MCP-bridged source's full path —
 # list tools -> fetch a schema -> call the real tool -> conclude — plus one
 # goal-review nudge; 4 was observed live to cap out on discovery alone, so the
-# PostHog count query never ran. The full multi-stage ReAct budget belongs to
-# investigations. Headless metric reports (PostHog / digests) may raise this
-# via ``max_iterations``.
+# PostHog count query never ran. Pair with :func:`with_gather_discovery_budget`
+# so successful schema thrash cannot burn the iteration cap. The full
+# multi-stage ReAct budget belongs to investigations. Headless metric reports
+# (PostHog / digests) may raise this via ``max_iterations``.
 _MAX_GATHER_ITERATIONS = 6
 MAX_REPORT_GATHER_ITERATIONS = 12
 
@@ -229,6 +235,7 @@ def _build_evidence_agent(
     message: str,
     max_iterations: int = _MAX_GATHER_ITERATIONS,
     tool_resources: dict[str, Any] | None = None,
+    tool_hooks: Any | None = None,
 ) -> Agent[Any]:
     """Build the Agent for one evidence-gather turn.
 
@@ -240,13 +247,18 @@ def _build_evidence_agent(
     report of findings as reached — so the gather flavor reviews against
     "did the data actually get fetched" instead.
     """
+    if tool_hooks is None:
+        seed_tools, seed_sources = load_gather_unreachable(session)
+        tool_hooks = with_gather_discovery_budget(
+            SourceCircuitBreaker(seed_tools=seed_tools, seed_sources=seed_sources).hooks()
+        )
     config = AgentConfig(
         llm=llm,
         system=build_gather_system_prompt(session),
         tools=tuple(gather_tools),
         resolved_integrations=resolved,
         max_iterations=max_iterations,
-        tool_hooks=SourceCircuitBreaker().hooks(),
+        tool_hooks=tool_hooks,
         on_runtime_event=runtime_event_callback_from_observer(on_progress),
         goal=build_gather_goal_reviewer(llm, message),
         tool_resources=dict(tool_resources or {}),
@@ -305,6 +317,9 @@ def gather_tool_evidence(
             iteration_cap,
         )
         tool_resources = cancel_tool_resources(is_cancelled)
+        seed_tools, seed_sources = load_gather_unreachable(session)
+        breaker = SourceCircuitBreaker(seed_tools=seed_tools, seed_sources=seed_sources)
+        gather_hooks = with_gather_discovery_budget(breaker.hooks())
         if agent_factory is None:
             agent = _build_evidence_agent(
                 llm=llm,
@@ -315,6 +330,7 @@ def gather_tool_evidence(
                 message=message,
                 max_iterations=iteration_cap,
                 tool_resources=tool_resources,
+                tool_hooks=gather_hooks,
             )
         else:
             # Test/custom factories keep the historical signature; cancel probe
@@ -336,6 +352,8 @@ def gather_tool_evidence(
             llm=llm,
             session=session,
         )
+        tools_snap, sources_snap = breaker.snapshot()
+        store_gather_unreachable(session, tools=tools_snap, sources=sources_snap)
         persist_turn_system_prompt(
             session,
             phase="gather_agent",
