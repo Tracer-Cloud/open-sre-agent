@@ -74,17 +74,14 @@ class SessionConfig:
     persistent_tasks: bool = True
     open_store: bool = True
     session_manager: SessionManager | None = None
-    # When True (default), :meth:`AgentSession.startup` runs
-    # ``configure_process(EMBEDDED_PROFILE)`` so integration/tool adapters are
-    # registered. Without that, headless ``chat`` / ``chat_until_goal`` resolve
-    # zero integrations and claim every vendor is disconnected (parity S1/S4).
-    # Tests that need a bare port table set this False and call
-    # ``reset_harness_ports`` themselves.
-    # Optional process boot run once at startup. A callable, not a flag:
-    # ``core`` may not import ``bootstrap`` (package layering), so the caller
-    # supplies the step. Embedded hosts that want the local adapters pass
-    # ``lambda: configure_process(EMBEDDED_PROFILE)``; CLI, gateway and web
-    # already boot their own profile and leave this unset.
+    # Optional process boot run once at :meth:`AgentSession.startup`. A
+    # callable, not a flag: ``core`` may not import ``bootstrap`` at module
+    # load, so the host can supply the step. :meth:`AgentSession.start`
+    # (the embedded/headless entry) defaults this to
+    # ``configure_process(EMBEDDED_PROFILE)`` when unset so gather/tools see
+    # the same local integrations as the interactive shell (parity S1/S4).
+    # CLI, gateway and web already boot their own profile and call
+    # :meth:`startup` with this left unset.
     boot_process: Callable[[], None] | None = None
 
 
@@ -226,6 +223,12 @@ class AgentSession:
             for prompt in prompts:
                 result = session.chat(prompt)
 
+        When ``config.boot_process`` is unset, this entry point installs
+        ``EMBEDDED_PROFILE`` so local integrations resolve the same way as the
+        interactive shell. Pass an explicit ``boot_process`` (including a
+        no-op) to override. Surfaces that already booted another profile and
+        only need ``startup()`` leave ``boot_process`` unset on that path.
+
         ``prepare_session`` runs after session create (e.g. pin a project scope)
         and before the agent is built. ``message`` is the first turn's text when
         it is already known, for ports that size themselves to it. Remaining
@@ -234,9 +237,19 @@ class AgentSession:
         Surfaces that need their own ports (a live gateway sink, a REPL console)
         build the agent themselves and call :meth:`attach_agent`.
         """
+        from dataclasses import replace
+
         from core.agent_harness.turns.headless_adapters import BufferOutputSink
 
-        agent_session = cls(config)
+        cfg = config or SessionConfig()
+        if cfg.boot_process is None:
+            from bootstrap.process import EMBEDDED_PROFILE, configure_process
+
+            cfg = replace(
+                cfg,
+                boot_process=lambda: configure_process(EMBEDDED_PROFILE),
+            )
+        agent_session = cls(cfg)
         startup = agent_session.startup()
         if prepare_session is not None:
             prepare_session(startup.session)

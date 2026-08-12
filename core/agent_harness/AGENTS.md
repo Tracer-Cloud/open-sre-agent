@@ -305,15 +305,16 @@ a headless agent on every message for the same logical session.
 **Host API shape**
 
 ```python
-from bootstrap.process import EMBEDDED_PROFILE, configure_process
 from core.agent_harness import AgentSession
 
-configure_process(EMBEDDED_PROFILE)   # adapters / investigation runner
-session = AgentSession.start()        # construct once (session + default agent)
+session = AgentSession.start()        # boots EMBEDDED_PROFILE + default agent
 result = session.chat("…")            # turn 1
 result = session.chat("…")            # turn 2 — same attached agent
 report = session.investigate({…})     # Path-2 verb (separate stage machine)
 ```
+
+Surfaces that already ran another process profile call ``startup()`` (or pass
+an explicit ``boot_process``) instead of relying on the ``start()`` default.
 
 **One agent per logical session (or scheduled loop)**
 

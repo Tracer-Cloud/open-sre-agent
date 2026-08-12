@@ -71,12 +71,38 @@ def test_startup_boots_nothing_when_the_host_supplies_no_step() -> None:
     assert _boot  # the step exists but was never wired in
 
 
+def test_start_defaults_to_embedded_boot_so_integrations_resolve() -> None:
+    """Bare ``AgentSession.start()`` must boot adapters (parity S1/S4).
+
+    Callers should not have to remember ``boot_process=…`` for the documented
+    headless entry — without it, chat claims every vendor is disconnected.
+    """
+    from bootstrap.process import reset_process_runtime_for_tests
+    from platform.harness_ports import (
+        get_investigation_tools,
+        reset_harness_ports,
+        resolve_integrations,
+    )
+
+    reset_harness_ports()
+    reset_process_runtime_for_tests()
+    assert resolve_integrations() == {}
+
+    AgentSession.start(
+        SessionConfig(open_store=False, persistent_tasks=False, warm_integrations=True)
+    )
+
+    grafana_tools = list(
+        get_investigation_tools({"grafana": {"endpoint": "http://g", "connection_verified": True}})
+    )
+    assert any(t.name.startswith("query_grafana") for t in grafana_tools)
+
+
 def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
     """Without adapters, resolve is empty; the host's boot step must install them.
 
-    ``core`` may not import ``bootstrap``, so an embedded caller passes the
-    boot step in. This is what such a caller must do to get working
-    integrations.
+    ``core`` may not import ``bootstrap``, so an embedded caller may still pass
+    an explicit boot step. :meth:`AgentSession.start` also defaults one.
     """
     from bootstrap.process import (
         EMBEDDED_PROFILE,

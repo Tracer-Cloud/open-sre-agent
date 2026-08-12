@@ -41,6 +41,20 @@ DEFAULT_MAX_DISCOVERY_CALLS = 4
 _DISCOVERY_PREFIXES = frozenset({"search", "info", "schema"})
 # Meta ``call <tool>`` targets that only explore schemas / skills — not metrics.
 _DISCOVERY_CALL_TARGETS = frozenset({"read-data-schema", "skill-get"})
+
+# Structured ``tool_name=…`` values that explore rather than fetch. Exact names
+# because a bridge's fetch tools are open-ended (``issue_get``,
+# ``search_tweets``, ``conversations_get``) and must not be caught by a prefix.
+_DISCOVERY_TARGETS = _DISCOVERY_CALL_TARGETS | frozenset(
+    {
+        "docs-search",
+        "event-definitions",
+        "property-definitions",
+        "property-values",
+        "list-tools",
+        "schema",
+    }
+)
 # Scalar keys worth including in a fingerprint without dumping the whole blob.
 _FINGERPRINT_ARG_KEYS = ("entity", "kind", "event", "name", "type", "query")
 
@@ -90,6 +104,21 @@ def bridge_tool_target(arguments: dict[str, Any]) -> str:
     return str(raw or "").strip().lower()
 
 
+def is_mcp_discovery_target(target: str) -> bool:
+    """True for MCP targets that explore the schema rather than fetch evidence.
+
+    A closed set on purpose: mistaking a fetch for discovery can reject a
+    gather that already has its answer, while mistaking discovery for a fetch
+    only spends iterations.
+    """
+    name = target.strip().lower()
+    if not name:
+        return False
+    # Exact names. Prefix matching would read ``search_tweets`` as the probe
+    # verb ``search`` and bill a data fetch to the discovery budget.
+    return name in _DISCOVERY_TARGETS
+
+
 def is_mcp_metric_target(target: str) -> bool:
     """True for MCP tools that fetch metric / query results (not schema)."""
     name = target.strip().lower()
@@ -117,11 +146,14 @@ def is_gather_discovery_call(tool_name: str, arguments: dict[str, Any]) -> bool:
         return True
     if not is_mcp_exec_bridge(name):
         return False
-    # Structured PostHog-style selection: tool_name=execute-sql / query-* vs
-    # entity taxonomy / read-data-schema / event-definitions / …
+    # Structured selection (``tool_name=…``). Discovery is the closed set; a
+    # target outside it fetches evidence. Defaulting the other way made every
+    # non-PostHog fetch — Sentry ``issue_get``, X ``search_tweets``, OpenClaw
+    # ``conversations_get`` — spend the discovery budget, so a gather that had
+    # already answered the question could be rejected for overspending.
     target = bridge_tool_target(arguments)
     if target:
-        return not is_mcp_metric_target(target)
+        return is_mcp_discovery_target(target)
     command = _exec_command(arguments)
     if not command:
         # Bridge call with neither tool_name nor command — treat as discovery
@@ -235,6 +267,7 @@ def with_gather_discovery_budget(
 
 __all__ = [
     "DEFAULT_MAX_DISCOVERY_CALLS",
+    "is_mcp_discovery_target",
     "bridge_tool_target",
     "discovery_fingerprint",
     "is_gather_discovery_call",

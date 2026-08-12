@@ -257,3 +257,28 @@ def test_non_posthog_mcp_bridge_discovery_is_capped() -> None:
     )
     decision = hooks.before_tool_call(overflow)
     assert decision is not None and decision.blocked
+
+
+def test_data_fetching_targets_are_not_discovery() -> None:
+    """A bridge target that fetches evidence must not spend the discovery budget.
+
+    Only ``execute-sql`` and ``query-*`` were treated as real queries, so every
+    other vendor's fetch — Sentry ``issue_get``, X ``search_tweets``, OpenClaw
+    ``conversations_get`` — counted as discovery. That exhausts the allowance
+    and lets the goal reviewer reject a gather that already fetched what was
+    asked for.
+    """
+    # Arrange / Act / Assert.
+    for target in ("issue_get", "search_tweets", "conversations_get", "get_organization_events"):
+        assert not is_gather_discovery_call(
+            "call_posthog_tool", {"tool_name": target, "arguments": {}}
+        ), f"{target} is a data fetch, not discovery"
+
+
+def test_known_discovery_targets_still_count() -> None:
+    """The budget must still catch the schema loop it exists for."""
+    # Arrange / Act / Assert.
+    for target in ("read-data-schema", "skill-get"):
+        assert is_gather_discovery_call(
+            "call_posthog_tool", {"tool_name": target, "arguments": {}}
+        ), f"{target} is discovery"
