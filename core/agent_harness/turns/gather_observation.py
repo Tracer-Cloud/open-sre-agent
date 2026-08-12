@@ -20,6 +20,8 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from core.tool_framework.utils.tool_availability import is_tool_unavailable_envelope
+
 
 @dataclass(frozen=True, slots=True)
 class GatheredEvidence:
@@ -36,6 +38,21 @@ class GatheredEvidence:
     #: The gather loop stopped at its iteration cap instead of concluding, so
     #: these results are whatever it had reached, not a finished answer.
     truncated: bool = False
+
+
+def count_gather_tool_successes(evidence: GatheredEvidence | None) -> int:
+    """How many gather tools returned a usable payload (not ``tool_unavailable``).
+
+    SessionGoal evidence must count gather work: metric_read turns typically
+    run only ``assistant_handoff`` in the action phase (which does not
+    increment ``executed_success_count``), then live PostHog/Grafana/etc. in
+    gather. Ignoring gather successes forced a redundant session-goal turn.
+    """
+    if evidence is None:
+        return 0
+    return sum(
+        1 for _name, payload in evidence.tool_results if not is_tool_unavailable_envelope(payload)
+    )
 
 
 def iter_tool_result_blocks(observation: str) -> Iterator[tuple[str, str]]:
@@ -86,6 +103,7 @@ def tool_results_from_executed(
 __all__ = [
     "GatheredEvidence",
     "coerce_gathered_evidence",
+    "count_gather_tool_successes",
     "iter_tool_result_blocks",
     "tool_results_from_executed",
 ]

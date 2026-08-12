@@ -57,6 +57,10 @@ class TurnResult:
     # Kept untyped here so ``agent/`` stays decoupled from the shell's telemetry
     # types; consumers read ``.response_text`` off it.
     llm_run: Any | None = None
+    #: Successful gather-phase tools (excludes ``tool_unavailable``). Metric
+    #: handoffs often have zero action-tool successes; SessionGoal evidence
+    #: must still see live PostHog/Grafana work from gather.
+    gather_success_count: int = 0
 
     @property
     def answered(self) -> bool:

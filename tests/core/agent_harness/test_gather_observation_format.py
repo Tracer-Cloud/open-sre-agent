@@ -6,6 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from core.agent_harness.turns import evidence_driver
+from core.agent_harness.turns.gather_observation import (
+    GatheredEvidence,
+    count_gather_tool_successes,
+)
+from core.tool_framework.utils.tool_availability import tool_unavailable
 
 
 def _tc(name: str, **inp: object) -> SimpleNamespace:
@@ -68,3 +73,16 @@ def test_format_observation_keeps_sql_at_default_12k_budget() -> None:
     assert "execute-sql" in text
     assert "windows|17|69" in text
     assert len(text) <= evidence_driver._MAX_OBSERVATION_CHARS + 80
+
+
+def test_count_gather_tool_successes_skips_unavailable() -> None:
+    assert count_gather_tool_successes(None) == 0
+    evidence = GatheredEvidence(
+        observation="x",
+        tool_results=(
+            ("list_posthog_tools", {"tools": []}),
+            ("call_posthog_tool", tool_unavailable("posthog", "auth failed")),
+            ("call_posthog_tool", "windows|272"),
+        ),
+    )
+    assert count_gather_tool_successes(evidence) == 2
