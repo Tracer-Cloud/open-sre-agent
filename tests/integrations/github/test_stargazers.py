@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
+from http import HTTPStatus
 
 from integrations.github.tools.stargazers import (
     _normalize_days,
@@ -57,13 +58,13 @@ def test_parse_github_timestamp_invalid() -> None:
 
 # ── fixture helpers ───────────────────────────────────────────────────────────
 
-def _make_star_item(days_ago: int) -> dict:
+def _make_star_item(days_ago: int) -> dict[str, str]:
     # Build a starred_at timestamp N days before now
     ts = datetime.now(UTC) - timedelta(days=days_ago)
     return {"starred_at": ts.strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
-def _repo_payload(stars: int = 5) -> dict:
+def _repo_payload(stars: int = 5) -> dict[str, int | str]:
     return {"stargazers_count": stars, "full_name": "opensre/opensre"}
 
 
@@ -108,7 +109,6 @@ def test_missing_starred_at_returns_unavailable() -> None:
         result = get_github_star_history(owner="opensre", repo="opensre", days=7)
 
     assert result["available"] is False
-    assert result["available"] is False
     assert "timestamps" in result.get("error", "").lower()
 
 
@@ -116,7 +116,7 @@ def test_repo_fetch_error_returns_unavailable() -> None:
     from integrations.github.client import GitHubApiError
 
     def fake_request(method, path, params=None, accept=None):
-        raise GitHubApiError("Not found", status_code=404)
+        raise GitHubApiError("Not found", status_code=HTTPStatus.NOT_FOUND)
 
     with patch(
         "integrations.github.tools.stargazers.GitHubRestClient.request",
@@ -138,7 +138,7 @@ def test_stargazers_fetch_error_returns_unavailable() -> None:
         call_count += 1
         if call_count == 1:
             return _repo_payload(stars=3)
-        raise GitHubApiError("Forbidden", status_code=403)
+        raise GitHubApiError("Forbidden", status_code=HTTPStatus.FORBIDDEN)
 
     with patch(
         "integrations.github.tools.stargazers.GitHubRestClient.request",
