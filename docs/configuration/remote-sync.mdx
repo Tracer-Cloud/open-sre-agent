@@ -123,6 +123,23 @@ the same keys. Organization history already persists through the mounted
 context root (`OPENSRE_CONTEXT_ROOT`); it does not need this.
 </Warning>
 
+## Laptop vs Organization Storage
+
+On a laptop or unbound machine, OpenSRE stores data in `~/.opensre/`:
+- `~/.opensre/sessions/` — conversation history
+- `~/.opensre/memory/` — learned information
+- `~/.opensre/config.yml` — user configuration
+- `~/.opensre/integrations.json` — integration credentials
+
+In organization-scoped deployments (like Slack team installations), the storage layout is different:
+- The organization's shared context is mounted at `OPENSRE_CONTEXT_ROOT` (e.g., `/workspace/memories`)
+- This volume is chrooted to a specific organization, so OpenSRE doesn't add its own org segment
+- Organization-wide data (like `integrations.json`) lives at the root of this mount
+- Personal data (sessions, memory) is stored per-user under `users/<slack_user_id>/`
+- Without the mount, organization data nests under `~/.opensre/orgs/<organization_id>/` for multi-org testing
+
+Because organization-scoped storage is already persistent and shared via the mounted volume, enabling remote sync would create redundant copies. The remote sync feature is designed for personal machines where data needs to be carried between devices, not for organization-scoped deployments where the infrastructure already provides persistence.
+
 Check what would move before moving it:
 
 ```bash
