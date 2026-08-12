@@ -28,14 +28,14 @@ Add to your `.env`:
 ```bash
 NEW_RELIC_API_KEY=NRAK-your-user-key
 NEW_RELIC_ACCOUNT_ID=your-account-id
-NEW_RELIC_API_URL=https://api.newrelic.com   # optional — default US endpoint; use https://api.eu.newrelic.com for EU accounts
+NEW_RELIC_API_URL=https://api.newrelic.com   # optional — default US endpoint; use https://api.eu.newrelic.com (EU) or https://api.jp.newrelic.com (JP) otherwise
 ```
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `NEW_RELIC_API_KEY` | — | **Required.** New Relic User key (`NRAK-...`) |
 | `NEW_RELIC_ACCOUNT_ID` | — | **Required.** New Relic account ID |
-| `NEW_RELIC_API_URL` | `https://api.newrelic.com` | Override for EU accounts (`https://api.eu.newrelic.com`) |
+| `NEW_RELIC_API_URL` | `https://api.newrelic.com` | Override for EU (`https://api.eu.newrelic.com`) or JP (`https://api.jp.newrelic.com`) accounts |
 
 Both `NEW_RELIC_API_KEY` and `NEW_RELIC_ACCOUNT_ID` must be set — either one alone leaves the integration unconfigured.
 
@@ -102,6 +102,7 @@ New Relic alert data becomes available only after at least one configured alert 
 | **Alerts tool returns no incidents** | No alert condition has fired yet on this account — see above |
 | **Metrics query fails or times out** | NRQL queries via the API have a 5-second timeout; narrow the time window or simplify the query |
 | **EU account unreachable** | Set `NEW_RELIC_API_URL=https://api.eu.newrelic.com` |
+| **JP account unreachable** | Set `NEW_RELIC_API_URL=https://api.jp.newrelic.com` |
 | **Multiple New Relic accounts** | Use `NEW_RELIC_INSTANCES` — see [Multi-instance integrations](/multi-instance-integrations) |
 
 ## Security best practices

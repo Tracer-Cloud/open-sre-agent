@@ -388,7 +388,9 @@ def _add_new_relic_alerts(
     catalog[eid] = {
         "label": label,
         "summary": f"{len(new_relic_alerts)} incidents",
-        "snippet": as_snippet(", ".join(i.get("condition_name", "") for i in new_relic_alerts[:3])),
+        "snippet": as_snippet(
+            ", ".join(i.get("condition_name") or "" for i in new_relic_alerts[:3])
+        ),
     }
     source_to_id["new_relic_alerts"] = eid
 

@@ -118,6 +118,35 @@ def test_extract_limit_reads_the_effective_clause() -> None:
     assert extract_limit("SELECT 1 FROM Foo") is None
 
 
+def test_validate_nrql_accepts_an_identifier_merely_containing_a_forbidden_word() -> None:
+    """An event type like 'MutationAuditEvent' is not a smuggled GraphQL mutation."""
+    is_valid, error = validate_nrql("SELECT count(*) FROM MutationAuditEvent SINCE 1 hour ago")
+    assert is_valid is True, error
+
+
+def test_apply_default_window_and_limit_ignores_since_inside_a_string_literal() -> None:
+    """A filter value containing 'SINCE' must not be mistaken for a real clause."""
+    nrql = "SELECT count(*) FROM Transaction WHERE message LIKE '%SINCE yesterday%'"
+    result = apply_default_window_and_limit(nrql, since_minutes=60, limit=100)
+    assert result.count("SINCE") == 2
+    assert "SINCE 60 minutes ago" in result
+    assert "LIMIT 100" in result
+
+
+def test_apply_default_window_and_limit_ignores_limit_inside_a_string_literal() -> None:
+    """A filter value containing 'LIMIT 5' must not be read as the real limit."""
+    nrql = "SELECT count(*) FROM Transaction WHERE message LIKE '%LIMIT 5%'"
+    result = apply_default_window_and_limit(nrql, since_minutes=60, limit=100)
+    assert "LIMIT 100" in result
+    assert result.count("LIMIT") == 2
+
+
+def test_extract_limit_ignores_a_limit_like_string_literal() -> None:
+    nrql = "SELECT count(*) FROM Transaction WHERE message LIKE '%LIMIT 5%' LIMIT 42"
+    assert extract_limit(nrql) == 42
+    assert extract_limit("SELECT count(*) FROM Transaction WHERE message LIKE '%LIMIT 5%'") is None
+
+
 def test_nrql_query_from_alerts_tool_round_trips_into_metrics_tool() -> None:
     """FR-7: the nrqlQuery an alert incident carries is valid metrics-tool input."""
     rows = _load_fixture_rows()

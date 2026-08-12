@@ -17,11 +17,15 @@ NEW_RELIC_ACCOUNT_ID_ENV: Final[str] = "NEW_RELIC_ACCOUNT_ID"
 NEW_RELIC_BASE_URL_ENV: Final[str] = "NEW_RELIC_API_URL"
 NEW_RELIC_INSTANCES_ENV: Final[str] = "NEW_RELIC_INSTANCES"
 
-#: New Relic's own documented NerdGraph REST hosts (US, EU). ``base_url`` is
-#: rejected outside this set — the API key is sent as a header on every
+#: New Relic's own documented NerdGraph REST hosts (US, EU, JP). ``base_url``
+#: is rejected outside this set — the API key is sent as a header on every
 #: request, so an arbitrary host would exfiltrate it (see ``config.py``).
 NEW_RELIC_ALLOWED_BASE_URLS: Final[frozenset[str]] = frozenset(
-    {"https://api.newrelic.com", "https://api.eu.newrelic.com"}
+    {
+        "https://api.newrelic.com",
+        "https://api.eu.newrelic.com",
+        "https://api.jp.newrelic.com",
+    }
 )
 
 #: NerdGraph's own NRQL-via-API timeout — not our choice, the vendor's limit.

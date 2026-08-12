@@ -3,7 +3,7 @@
 Pins the security fix from PR review: ``NewRelicClient`` sends the ``API-Key``
 header to whatever ``base_url`` points at, so an unrestricted host would
 exfiltrate the credential during a probe or query. ``base_url`` must resolve
-to one of New Relic's documented US/EU hosts.
+to one of New Relic's documented US/EU/JP hosts.
 """
 
 from __future__ import annotations
@@ -29,6 +29,15 @@ def test_config_accepts_the_documented_eu_host() -> None:
         base_url="https://api.eu.newrelic.com",
     )
     assert config.base_url == "https://api.eu.newrelic.com"
+
+
+def test_config_accepts_the_documented_jp_host() -> None:
+    config = NewRelicIntegrationConfig(
+        api_key=_FAKE_API_KEY,
+        account_id=_FAKE_ACCOUNT_ID,
+        base_url="https://api.jp.newrelic.com",
+    )
+    assert config.base_url == "https://api.jp.newrelic.com"
 
 
 @pytest.mark.parametrize(

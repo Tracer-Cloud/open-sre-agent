@@ -2,7 +2,7 @@
 
 Both ``api_key`` and ``account_id`` are required (FR-2) — NerdGraph queries
 always target a specific account, so a key without an account id (or vice
-versa) configures nothing usable. ``base_url`` moves only for EU tenants.
+versa) configures nothing usable. ``base_url`` moves only for EU/JP tenants.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ NEW_RELIC_SETUP = IntegrationSetupSpec(
         SetupField(
             name=BASE_URL_FIELD,
             label="New Relic API URL",
-            prompt="API URL (US default, or the EU endpoint)",
+            prompt="API URL (US default, or the EU/JP endpoint)",
             env_var=NEW_RELIC_BASE_URL_ENV,
             default=DEFAULT_NEW_RELIC_BASE_URL,
         ),
