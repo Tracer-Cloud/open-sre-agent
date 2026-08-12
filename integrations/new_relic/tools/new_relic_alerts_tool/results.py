@@ -81,6 +81,7 @@ def parse_incident_rows(
     open_rows: dict[str, dict[str, Any]] = {}
     close_rows: dict[str, dict[str, Any]] = {}
     order: list[str] = []
+    seen: set[str] = set()
 
     for row in rows:
         if not isinstance(row, dict):
@@ -88,7 +89,8 @@ def parse_incident_rows(
         incident_id = _incident_id(row)
         if incident_id is None:
             continue
-        if incident_id not in order:
+        if incident_id not in seen:
+            seen.add(incident_id)
             order.append(incident_id)
         if _event_kind(row) == _EVENT_CLOSE:
             close_rows[incident_id] = row
