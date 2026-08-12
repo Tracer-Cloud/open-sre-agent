@@ -9,17 +9,19 @@ interactive terminal and be invoked headlessly via
 
 ## Host API (teach this)
 
-Prefer `AgentSession.start()` → `.chat` / `.investigate` — not free-function
-turn dumps. Construct one agent per logical session (or scheduled loop), then
-many turns — do not rebuild every message. Process boot
-(`configure_process`) and headless construction (`build_default_headless_agent`)
-are separate layers.
+Prefer `AgentSession.start()` / `start_embedded_session()` → `.chat` /
+`.investigate` — not free-function turn dumps. Construct one agent per logical
+session (or scheduled loop), then many turns — do not rebuild every message.
+Process boot (`configure_process`) and headless construction
+(`build_default_headless_agent`) are separate layers. `core` must not import
+`bootstrap`; embedded hosts use `bootstrap.embedded.start_embedded_session`.
 
 | Path | Call |
 |------|------|
 | Process boot (once) | `configure_process(PROFILE)` — adapters only; not agent construction |
-| Happy path | `AgentSession.start()` → repeated `.chat` / `.investigate` |
-| Multi-step / keep-going | `AgentSession.start()` → `.chat_until_goal(...)` (`SessionGoal` loop) |
+| Happy path (already booted) | `AgentSession.start()` → repeated `.chat` / `.investigate` |
+| Embedded / script | `start_embedded_session()` → repeated `.chat` / `.investigate` |
+| Multi-step / keep-going | `start` / `start_embedded_session` → `.chat_until_goal(...)` (`SessionGoal` loop) |
 | Custom host | **`build_default_headless_agent(...)`** (only factory) → `attach_agent` once → many `.chat` |
 | Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `run_until_session_goal` (same SessionGoal policy as shell) |
 | Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
@@ -305,23 +307,24 @@ a headless agent on every message for the same logical session.
 **Host API shape**
 
 ```python
-from core.agent_harness import AgentSession
+from bootstrap.embedded import start_embedded_session
 
-session = AgentSession.start()        # boots EMBEDDED_PROFILE + default agent
+session = start_embedded_session()    # EMBEDDED_PROFILE + default agent
 result = session.chat("…")            # turn 1
 result = session.chat("…")            # turn 2 — same attached agent
 report = session.investigate({…})     # Path-2 verb (separate stage machine)
 ```
 
-Surfaces that already ran another process profile call ``startup()`` (or pass
-an explicit ``boot_process``) instead of relying on the ``start()`` default.
+``AgentSession.start`` must not import ``bootstrap`` (layer contract). Surfaces
+that already ran another process profile call ``startup()`` (or pass an
+explicit ``boot_process``).
 
 **One agent per logical session (or scheduled loop)**
 
 | Lifetime | Construct | Then |
 |----------|-----------|------|
 | Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds outer sink via `LiveOutputSink.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
-| Embedder / script | `AgentSession.start()` or `attach_agent(HeadlessAgent…)` once | repeated `chat` / `dispatch` |
+| Embedder / script | `start_embedded_session()` or `attach_agent(HeadlessAgent…)` once | repeated `chat` / `dispatch` |
 | Scheduled loop | Prefer one agent for the loop’s lifetime when multi-turn; `run_headless_turn` is OK for true one-shot digests | do not treat one-shot as the multi-turn pattern |
 | Interactive shell | TTY `ChatDispatcher` bound for the REPL lifetime (not `HeadlessAgent`) | `AgentSession.chat` per submission |
 

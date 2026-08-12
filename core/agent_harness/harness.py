@@ -9,10 +9,12 @@ sits one layer above and adds env resolution and prompt context.
 
 Construct **one** agent per logical session, then many turns::
 
-    session = AgentSession.start()       # or attach_agent(custom_headless)
-    result = session.chat("…")           # turn 1
-    follow = session.chat("…")           # turn 2 — same attached agent
-    report = session.investigate({…})    # Path-2 (no attached chat agent required)
+    session = AgentSession.start(config)  # or attach_agent(custom_headless)
+    result = session.chat("…")            # turn 1
+    follow = session.chat("…")            # turn 2 — same attached agent
+    report = session.investigate({…})     # Path-2 (no attached chat agent required)
+
+Embedded scripts that need local adapters: ``bootstrap.embedded.start_embedded_session``.
 
 Custom ports (live gateway sink, REPL)::
 
@@ -75,13 +77,11 @@ class SessionConfig:
     open_store: bool = True
     session_manager: SessionManager | None = None
     # Optional process boot run once at :meth:`AgentSession.startup`. A
-    # callable, not a flag: ``core`` may not import ``bootstrap`` at module
-    # load, so the host can supply the step. :meth:`AgentSession.start`
-    # (the embedded/headless entry) defaults this to
-    # ``configure_process(EMBEDDED_PROFILE)`` when unset so gather/tools see
-    # the same local integrations as the interactive shell (parity S1/S4).
-    # CLI, gateway and web already boot their own profile and call
-    # :meth:`startup` with this left unset.
+    # callable, not a flag: ``core`` may not import ``bootstrap`` (package
+    # layers), so the host supplies the step. Embedded scripts use
+    # :func:`bootstrap.embedded.start_embedded_session`, which fills this
+    # with ``configure_process(EMBEDDED_PROFILE)``. CLI, gateway and web
+    # already boot their own profile and leave this unset.
     boot_process: Callable[[], None] | None = None
 
 
@@ -214,20 +214,20 @@ class AgentSession:
     ) -> AgentSession:
         """Return a session that is ready to :meth:`chat`.
 
-        The single headless bootstrap: run embedded process boot (adapters),
-        create the session, run ``prepare_session``, resolve the sink and prompt
+        Create the session, run ``prepare_session``, resolve the sink and prompt
         context, and attach the default agent. Build it once and dispatch as
         many turns as the caller needs::
 
-            session = AgentSession.start()
+            session = AgentSession.start(config)
             for prompt in prompts:
                 result = session.chat(prompt)
 
-        When ``config.boot_process`` is unset, this entry point installs
-        ``EMBEDDED_PROFILE`` so local integrations resolve the same way as the
-        interactive shell. Pass an explicit ``boot_process`` (including a
-        no-op) to override. Surfaces that already booted another profile and
-        only need ``startup()`` leave ``boot_process`` unset on that path.
+        Does **not** import ``bootstrap`` — package layers forbid it. Embedded
+        hosts that need local adapters use
+        :func:`bootstrap.embedded.start_embedded_session` (or pass
+        ``SessionConfig(boot_process=…)`` after calling
+        ``configure_process``). Surfaces that already booted another profile
+        leave ``boot_process`` unset.
 
         ``prepare_session`` runs after session create (e.g. pin a project scope)
         and before the agent is built. ``message`` is the first turn's text when
@@ -237,19 +237,9 @@ class AgentSession:
         Surfaces that need their own ports (a live gateway sink, a REPL console)
         build the agent themselves and call :meth:`attach_agent`.
         """
-        from dataclasses import replace
-
         from core.agent_harness.turns.headless_adapters import BufferOutputSink
 
-        cfg = config or SessionConfig()
-        if cfg.boot_process is None:
-            from bootstrap.process import EMBEDDED_PROFILE, configure_process
-
-            cfg = replace(
-                cfg,
-                boot_process=lambda: configure_process(EMBEDDED_PROFILE),
-            )
-        agent_session = cls(cfg)
+        agent_session = cls(config)
         startup = agent_session.startup()
         if prepare_session is not None:
             prepare_session(startup.session)

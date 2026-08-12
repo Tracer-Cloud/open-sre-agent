@@ -85,4 +85,5 @@ def test_count_gather_tool_successes_skips_unavailable() -> None:
             ("call_posthog_tool", "windows|272"),
         ),
     )
-    assert count_gather_tool_successes(evidence) == 2
+    # list_* roster probes do not count; unavailable does not count.
+    assert count_gather_tool_successes(evidence) == 1

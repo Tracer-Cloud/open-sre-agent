@@ -47,12 +47,22 @@ def count_gather_tool_successes(evidence: GatheredEvidence | None) -> int:
     run only ``assistant_handoff`` in the action phase (which does not
     increment ``executed_success_count``), then live PostHog/Grafana/etc. in
     gather. Ignoring gather successes forced a redundant session-goal turn.
+
+    Roster probes (``list_*_tools``) do not count — listing alone previously
+    looked like evidence after every MCP call failed, which could false-close
+    a host-owned goal on a "query failed" draft.
     """
     if evidence is None:
         return 0
-    return sum(
-        1 for _name, payload in evidence.tool_results if not is_tool_unavailable_envelope(payload)
-    )
+    n = 0
+    for name, payload in evidence.tool_results:
+        if is_tool_unavailable_envelope(payload):
+            continue
+        stripped = str(name or "").strip()
+        if stripped.startswith("list_") and stripped.endswith("_tools"):
+            continue
+        n += 1
+    return n
 
 
 def iter_tool_result_blocks(observation: str) -> Iterator[tuple[str, str]]:

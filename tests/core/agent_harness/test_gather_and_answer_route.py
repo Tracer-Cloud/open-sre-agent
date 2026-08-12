@@ -95,5 +95,6 @@ def test_gather_and_answer_records_gather_success_count_on_turn_result() -> None
     )
 
     assert gather_calls == ["How many Windows users?"]
-    assert result.gather_success_count == 2
+    # list_* does not count toward SessionGoal gather evidence — only the query.
+    assert result.gather_success_count == 1
     assert result.action_result.executed_success_count == 0
