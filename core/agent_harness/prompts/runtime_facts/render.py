@@ -131,18 +131,11 @@ def _tools_line(runtime: Mapping[str, Any]) -> str | None:
 
 
 def _host_os_line(runtime: Mapping[str, Any]) -> str | None:
-    """Host OS — always stated when the keys were probed."""
-    if "os_family" not in runtime and "os_release" not in runtime:
+    """Host OS — always stated when the key was probed."""
+    if "os_family" not in runtime:
         return None
     family = _clean_str(runtime, "os_family")
-    release = _clean_str(runtime, "os_release")
-    if family and release:
-        return f"host operating system is {family} (release {release})"
-    if family:
-        return f"host operating system is {family}"
-    if release:
-        return f"host OS release is {release}"
-    return None
+    return f"host operating system is {family}" if family else None
 
 
 def _cloud_line(runtime: Mapping[str, Any]) -> str | None:

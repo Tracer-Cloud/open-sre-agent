@@ -134,12 +134,11 @@ def test_environment_block_renders_host_os_for_environment_questions() -> None:
         {
             "opensre_version": "0.1",
             "os_family": "macOS",
-            "os_release": "25.5.0",
             "cloud_provider": "",
             "cloud_region": "",
         }
     )
-    assert "host operating system is macOS (release 25.5.0)" in block
+    assert "host operating system is macOS;" in block  # no version appended
     assert "what environment this process is running in" in block
     assert "never invent AWS" in block
     assert "`uname`" in block

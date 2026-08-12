@@ -18,7 +18,6 @@ STATIC_FACT_KEYS: tuple[str, ...] = (
     "opensre_build",
     "runtime_env",
     "os_family",
-    "os_release",
     "tz_name",
     "python_version",
     "pid",

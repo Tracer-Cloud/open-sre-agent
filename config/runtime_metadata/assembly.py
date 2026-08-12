@@ -45,7 +45,7 @@ def build_runtime_metadata() -> dict[str, Any]:
     - ``opensre_build`` — ``""`` in released wheels; ``dev, v0.1.YYYY.M.D @ SHA``
       in a git checkout so the LLM can quote the exact build in local dev.
     - ``runtime_env`` — ``OPENSRE_ENV`` env var, else the app environment name.
-    - ``os_family`` / ``os_release`` — host OS via :mod:`platform` (macOS/Linux/…).
+    - ``os_family`` — host OS name (macOS/Linux/Windows).
     - ``tz_name`` — local timezone name (rarely changes mid-session).
     - ``python_version`` — interpreter version from :data:`sys.version_info`.
     - ``pid`` / ``ppid`` — this process and its parent from :mod:`os`.
