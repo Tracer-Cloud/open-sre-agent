@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 ## Graft — repo context graph
 
 Graft is an external CLI, not a dependency of this repo: the MCP server entry
