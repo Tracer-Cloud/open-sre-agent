@@ -31,36 +31,58 @@ def _stub_turn_result() -> TurnResult:
     )
 
 
-def test_startup_boots_embedded_process_by_default(monkeypatch: Any) -> None:
-    """Parity S1/S4: headless must not resolve zero integrations by forgetting adapters."""
-    from bootstrap.process import ProcessName
+def test_startup_runs_the_boot_step_the_host_supplied() -> None:
+    """Parity S1/S4: an embedded host must not resolve zero integrations.
 
-    seen: list[ProcessName] = []
+    ``core`` may not import ``bootstrap``, so the host passes the boot step in
+    rather than the harness reaching up a tier for it.
+    """
+    # Arrange — what an embedded caller supplies.
+    from bootstrap.process import EMBEDDED_PROFILE, configure_process
 
-    def _capture(profile: Any, logger: Any = None) -> None:
-        seen.append(profile.name)
-
-    monkeypatch.setattr("bootstrap.process.configure_process", _capture)
-    AgentSession(SessionConfig(open_store=False, persistent_tasks=False)).startup()
-    assert ProcessName.EMBEDDED in seen
-
-
-def test_startup_can_skip_process_boot(monkeypatch: Any) -> None:
     seen: list[Any] = []
 
-    def _capture(profile: Any, logger: Any = None) -> None:
-        seen.append(profile)
+    def _boot() -> None:
+        seen.append(EMBEDDED_PROFILE.name)
+        configure_process(EMBEDDED_PROFILE)
 
-    monkeypatch.setattr("bootstrap.process.configure_process", _capture)
+    # Act.
     AgentSession(
-        SessionConfig(open_store=False, persistent_tasks=False, boot_process=False)
+        SessionConfig(open_store=False, persistent_tasks=False, boot_process=_boot)
     ).startup()
+
+    # Assert.
+    assert seen == [EMBEDDED_PROFILE.name]
+
+
+def test_startup_boots_nothing_when_the_host_supplies_no_step() -> None:
+    """CLI, gateway and web boot their own profile; the harness must not add one."""
+    # Arrange.
+    seen: list[Any] = []
+
+    def _boot() -> None:
+        seen.append("booted")
+
+    # Act — the default leaves boot_process unset.
+    AgentSession(SessionConfig(open_store=False, persistent_tasks=False)).startup()
+
+    # Assert.
     assert seen == []
+    assert _boot  # the step exists but was never wired in
 
 
 def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
-    """Without adapters, resolve is empty; AgentSession.start must install them."""
-    from bootstrap.process import reset_process_runtime_for_tests
+    """Without adapters, resolve is empty; the host's boot step must install them.
+
+    ``core`` may not import ``bootstrap``, so an embedded caller passes the
+    boot step in. This is what such a caller must do to get working
+    integrations.
+    """
+    from bootstrap.process import (
+        EMBEDDED_PROFILE,
+        configure_process,
+        reset_process_runtime_for_tests,
+    )
     from platform.harness_ports import (
         configured_integration_services,
         get_investigation_tools,
@@ -75,7 +97,12 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
     assert list(get_investigation_tools({"grafana": {"connection_verified": True}})) == []
 
     AgentSession.start(
-        SessionConfig(open_store=False, persistent_tasks=False, warm_integrations=True)
+        SessionConfig(
+            open_store=False,
+            persistent_tasks=False,
+            warm_integrations=True,
+            boot_process=lambda: configure_process(EMBEDDED_PROFILE),
+        )
     )
 
     # Tool registry is populated even when the local store is empty (CI).

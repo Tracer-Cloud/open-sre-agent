@@ -80,7 +80,12 @@ class SessionConfig:
     # zero integrations and claim every vendor is disconnected (parity S1/S4).
     # Tests that need a bare port table set this False and call
     # ``reset_harness_ports`` themselves.
-    boot_process: bool = True
+    # Optional process boot run once at startup. A callable, not a flag:
+    # ``core`` may not import ``bootstrap`` (package layering), so the caller
+    # supplies the step. Embedded hosts that want the local adapters pass
+    # ``lambda: configure_process(EMBEDDED_PROFILE)``; CLI, gateway and web
+    # already boot their own profile and leave this unset.
+    boot_process: Callable[[], None] | None = None
 
 
 # Scheduled/one-shot runs: a fresh warm session that leaves no persisted task
@@ -278,16 +283,15 @@ class AgentSession:
     def startup(self) -> SessionStartupResult:
         """Run process boot (optional), env, session bootstrap/resume, and context.
 
-        Default :attr:`SessionConfig.boot_process` installs the embedded
-        harness adapters so gather/tools see the same local integrations as
-        the interactive shell. Surfaces that already called
-        ``configure_process`` (CLI / gateway / web) are fine — the step is
-        idempotent per profile.
+        :attr:`SessionConfig.boot_process`, when supplied, runs first — an
+        embedded host passes ``lambda: configure_process(EMBEDDED_PROFILE)`` so
+        gather and tools see the same local integrations as the interactive
+        shell. CLI, gateway and web already boot their own profile, so they
+        leave it unset. ``configure_process`` is idempotent per profile, so a
+        host that boots twice is harmless.
         """
-        if self._config.boot_process:
-            from bootstrap.process import EMBEDDED_PROFILE, configure_process
-
-            configure_process(EMBEDDED_PROFILE)
+        if self._config.boot_process is not None:
+            self._config.boot_process()
         self.resolve_env_variables()
         session = self.load_or_create_session()
         prompts = self.load_context()
