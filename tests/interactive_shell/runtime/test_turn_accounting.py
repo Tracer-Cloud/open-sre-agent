@@ -69,6 +69,22 @@ def test_finalize_prefers_conversational_run_over_pending() -> None:
     assert session.terminal.pop_pending_turn_llm() is None
 
 
+def test_finalize_does_not_duplicate_early_cli_agent_history() -> None:
+    """memory_remember + handoff: ActionRenderObserver records once; finalize must not again."""
+    session = Session()
+    prompt = "Use the MySQL tool to query active connections."
+    session.record("cli_agent", prompt)
+    conversational = LlmRunInfo(model="fresh")
+    recorder = _FakeRecorder()
+    accounting = ShellTurnAccounting(session=session, text=prompt, recorder=recorder)  # type: ignore[arg-type]
+
+    accounting.finalize(_result(llm_run=conversational))
+
+    cli_rows = [row for row in session.history if row.get("type") == "cli_agent"]
+    assert len(cli_rows) == 1
+    assert cli_rows[0]["text"] == prompt
+
+
 def test_finalize_sets_structured_error_from_pending_turn_error() -> None:
     session = Session()
     session.terminal.set_pending_turn_error("config", "ANTHROPIC_API_KEY not set")

@@ -108,3 +108,21 @@ def test_session_goal_content_tag_attaches_when_schema_omitted() -> None:
 def test_session_goal_achieved_content_tag_is_not_attach() -> None:
     handoff = AssistantHandoff.from_tool_input({"content": "Done.\nsession_goal:achieved"})
     assert handoff.session_goal is not True
+
+
+def test_database_query_handoff_ignores_session_goal_attach() -> None:
+    """Oracle 332: DB query/connect guidance is one-shot — no host goal loop."""
+    handoff = AssistantHandoff.from_tool_input(
+        {
+            "content": "database_query:mysql_active_connections",
+            "session_goal": True,
+        }
+    )
+    assert handoff.session_goal is True  # decode keeps the flag
+    assert (
+        session_goal_from_assistant_handoffs(
+            (handoff,),
+            condition="Use the MySQL tool to query active connections.",
+        )
+        is None
+    )

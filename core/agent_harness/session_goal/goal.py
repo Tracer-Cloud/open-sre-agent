@@ -29,7 +29,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix
+from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, handoff_has_tag
 from platform.common.evidence_compaction import truncate_message
 
 if TYPE_CHECKING:
@@ -275,11 +275,18 @@ def session_goal_from_assistant_handoffs(
     *,
     condition: str = "",
 ) -> SessionGoal | None:
-    """Build a :class:`SessionGoal` from typed :class:`AssistantHandoff` fields."""
+    """Build a :class:`SessionGoal` from typed :class:`AssistantHandoff` fields.
+
+    ``database_query:*`` handoffs never attach a host loop — missing DB
+    connectivity is explained in one reply (connect/setup guidance). A planner
+    that still sets ``session_goal=true`` on those handoffs is ignored here.
+    """
     # Reuse the tag body parser by projecting fields to clean content tags —
     # ontology fields are already validated at decode time.
     projected: list[str] = []
     for handoff in handoffs:
+        if handoff_has_tag(handoff.content, "database_query"):
+            continue
         if handoff.session_goal:
             projected.append("session_goal:continue")
             if handoff.session_goal_max_turns is not None:
@@ -312,7 +319,10 @@ def attach_session_goal_from_handoffs(
     if handoffs:
         detected = session_goal_from_assistant_handoffs(handoffs, condition=condition)
     if detected is None:
-        detected = session_goal_from_handoffs(handoff_contents, condition=condition)
+        # Legacy content tags: ignore session_goal attach when this turn handed
+        # off a named database query (same rule as typed handoffs above).
+        if not any(handoff_has_tag(content, "database_query") for content in handoff_contents):
+            detected = session_goal_from_handoffs(handoff_contents, condition=condition)
     if detected is None:
         return None
     return attach_session_goal(session, detected)
