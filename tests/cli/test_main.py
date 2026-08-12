@@ -223,7 +223,7 @@ def test_main_captures_analytics_once_for_accepted_command(monkeypatch, capsys) 
     assert captured == ["install", "cli"]
 
 
-def test_main_fast_version_command_skips_runtime_bootstrap(monkeypatch, capsys) -> None:
+def test_main_fast_version_command_skips_first_run_setup(monkeypatch, capsys) -> None:
     captured: list[dict[str, object] | None] = []
     monkeypatch.setattr(
         "surfaces.cli.app.capture_first_run_if_needed",
