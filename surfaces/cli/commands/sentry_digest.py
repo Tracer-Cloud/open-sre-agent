@@ -13,7 +13,7 @@ from rich.table import Table
 
 from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
 from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
-from surfaces.cli.commands.cron import _validate_cron_and_timezone
+from surfaces.cli.commands.scheduling import add_task_and_echo, validate_cron_and_timezone
 
 _console = Console()
 _PROVIDER_CHOICES = [p.value for p in SUPPORTED_DELIVERY_PROVIDERS]
@@ -133,12 +133,11 @@ def sentry_uptime_watch_add(
         require_digest_delivery_provider,
         require_sentry_integration,
     )
-    from platform.scheduler.store import add_task
     from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_sentry_integration()
     require_digest_delivery_provider(provider)
-    _validate_cron_and_timezone(cron_expr, timezone)
+    validate_cron_and_timezone(cron_expr, timezone)
 
     params: dict[str, str] = {}
     if project_slug.strip():
@@ -155,10 +154,7 @@ def sentry_uptime_watch_add(
         window_hours=0,
         params=params,
     )
-    added = add_task(task)
-    _console.print(f"[green]Sentry uptime watch task {added.id} created.[/green]")
-    _console.print(f"  Cron: {added.cron}  TZ: {added.timezone}")
-    _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
+    added = add_task_and_echo(task, label="Sentry uptime watch")
     if params:
         _console.print(f"  Project: {params['project_slug']}")
 
@@ -341,12 +337,11 @@ def sentry_digest_schedule_add(
         require_digest_delivery_provider,
         require_sentry_integration,
     )
-    from platform.scheduler.store import add_task
     from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_sentry_integration()
     require_digest_delivery_provider(provider)
-    _validate_cron_and_timezone(cron_expr, timezone)
+    validate_cron_and_timezone(cron_expr, timezone)
 
     params: dict[str, str] = {}
     if project_slug.strip():
@@ -361,10 +356,7 @@ def sentry_digest_schedule_add(
         window_hours=24,
         params=params,
     )
-    added = add_task(task)
-    _console.print(f"[green]Sentry digest task {added.id} created.[/green]")
-    _console.print(f"  Cron: {added.cron}  TZ: {added.timezone}")
-    _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
+    add_task_and_echo(task, label="Sentry digest")
     if params:
         _console.print(f"  Project: {params['project_slug']}")
 

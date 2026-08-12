@@ -13,6 +13,7 @@ from rich.table import Table
 
 from platform.scheduler.credentials import requires_explicit_chat_id
 from platform.scheduler.types import Provider, TaskKind
+from surfaces.cli.commands.scheduling import validate_cron_and_timezone
 
 _console = Console()
 
@@ -102,7 +103,7 @@ def cron_add(
     from platform.scheduler.types import ScheduledTask
 
     # Validate cron expression by constructing the APScheduler trigger
-    _validate_cron_and_timezone(cron_expr, timezone)
+    validate_cron_and_timezone(cron_expr, timezone)
     _validate_chat_id_for_provider(provider, chat_id)
 
     task = ScheduledTask(
@@ -287,27 +288,6 @@ def cron_start() -> None:
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")
     start_scheduler()
-
-
-def _validate_cron_and_timezone(cron_expr: str, timezone: str) -> None:
-    """Validate cron expression and timezone by constructing an APScheduler trigger.
-
-    Fails fast with a clear error message instead of creating inert tasks.
-    """
-    parts = cron_expr.split()
-    if len(parts) != 5:
-        _console.print("[red]Error: cron expression must have exactly 5 fields.[/red]")
-        _console.print("  Format: minute hour day month day_of_week")
-        _console.print("  Example: 0 9 * * 1-5  (weekdays at 09:00)")
-        raise SystemExit(1)
-
-    try:
-        from apscheduler.triggers.cron import CronTrigger
-
-        CronTrigger.from_crontab(cron_expr, timezone=timezone)
-    except (ValueError, TypeError, KeyError) as exc:
-        _console.print(f"[red]Error: invalid cron expression or timezone: {exc}[/red]")
-        raise SystemExit(1) from exc
 
 
 def _validate_chat_id_for_provider(provider: str, chat_id: str) -> None:
