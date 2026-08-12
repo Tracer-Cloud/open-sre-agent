@@ -540,6 +540,17 @@ def test_database_query_handoff_guidance_block_matches_prefix() -> None:
     assert build_handoff_guidance_block(("database_query:mariadb_dashboard",)) == block
 
 
+def test_action_prompt_routes_mysql_query_to_database_query_handoff_not_setup() -> None:
+    """Oracle 332: query/read MySQL must not become /integrations setup|verify."""
+    prompt = build_action_system_prompt(_ctx())
+    assert "database_query:<topic>" in prompt
+    assert "database_query:mysql_active_connections" in prompt
+    assert "Do NOT set session_goal=true on database_query handoffs" in prompt
+    assert "Do NOT treat a request to *query/read*" in prompt
+    # Setup still documented for explicit configure requests.
+    assert 'args=["setup", "<service>"]' in prompt
+
+
 def test_incident_description_handoff_guidance_keeps_user_symptoms() -> None:
     """Oracle 325: bare incident handoffs must not drop service/error specifics."""
     block = build_handoff_guidance_block(("incident_description:checkout_502_rate",))

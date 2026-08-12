@@ -16,6 +16,7 @@ from core.agent_harness.session_goal.continuation import continuation_nudge
 from core.agent_harness.session_goal.evaluate import (
     default_evaluate_session_goal,
     session_goal_reply_text,
+    turn_has_session_goal_evidence,
 )
 from core.agent_harness.session_goal.goal import (
     SessionGoal,
@@ -148,6 +149,13 @@ def _finish_outer_turn(
     stored = getattr(session, "session_goal", None)
     if isinstance(stored, SessionGoal):
         active = stored
+    # After the reload, never before it: ``evaluate_fn`` re-attaches the goal
+    # and taking the session copy would discard the finding. A continuation is
+    # a fresh chat call and history carries prose only, so this is the only way
+    # a later turn learns what earlier ones established.
+    if turn_has_session_goal_evidence(last):
+        active = active.with_finding(session_goal_reply_text(last))
+        attach_session_goal(session, active)
     # Evaluate return is authoritative — optional reviewers may keep ACTIVE after
     # structured evaluate briefly attached ACHIEVED on the session.
     if active.status != next_status:

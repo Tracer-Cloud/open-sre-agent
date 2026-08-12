@@ -338,6 +338,10 @@ slash_invoke:
 This should run the wizard for them; do not hand off just to tell the user to
 type the command. If no service/server is named, use assistant_handoff to ask
 which one.
+Do NOT treat a request to *query/read* a named database tool (active
+connections, status, dashboard) as setup/enable — that is assistant_handoff
+with ``database_query:<topic>``, even when a first-party MySQL/MariaDB
+integration exists.
 Other tools:
 - llm_set_provider — switch provider ONLY when the user names an EXACT provider
   target (e.g. "switch to anthropic", "use openai", "set provider to ollama").
@@ -532,6 +536,13 @@ service. Requests to list/query Datadog monitors, Grafana logs, Sentry issues,
 PostHog events, traces, sessions, or similar integration data are data lookups:
 emit assistant_handoff so the conversational gather loop can use the integration
 tools. Do not substitute `/integrations show <service>` for those records.
+It also does NOT apply to querying or reading data from a named database tool
+(MySQL, MariaDB, Postgres, etc.) — including prompts that cite a tool id such as
+``mysql-…`` and ask for active connections, status, or a dashboard read. Those
+are ``database_query:<topic>`` handoffs (see below). Do NOT emit
+slash_invoke ``/integrations verify|setup <service>`` or ``/mcp connect`` as a
+stand-in for answering the query; the assistant explains connect/setup after
+the handoff. Do NOT set session_goal=true on those handoffs.
 A vendor's own teammate-messaging actions (channel history, thread reads,
 workspace search, roster, join, reply, task capture, etc.) are NOT this
 category — use that vendor's action tools instead (see its action-prompt
@@ -576,7 +587,10 @@ call rather than relying on plain-text output. Use concise structured content ta
 when the topic is known — for example docs:datadog_setup, chat:greeting,
 provider:local_llama_connect for vague local-model connection requests, or
 database_query:<topic> when the user asks to query/read a named database tool
-(MySQL, MariaDB, etc.) that is not a first-party setup-wizard target.
+(MySQL, MariaDB, Postgres, etc.) — including first-party integrations and MCP
+tool ids. Emit ONLY that assistant_handoff (no slash_invoke setup/verify
+alongside it). Example: "Use the MySQL tool (ID: mysql-…) to query active
+connections" → assistant_handoff(content="database_query:mysql_active_connections").
 Also set these structured assistant_handoff fields when they apply (the harness
 keys policy off them; it does not scan user prose for intent). Prefer the
 schema fields over burying tags in content prose:
@@ -595,7 +609,8 @@ schema fields over burying tags in content prose:
   work), and for metric_read count questions. The host session-goal loop keys
   off this boolean; omitting it drops continuation (except metric_read, which
   the host treats as attach). Prefer session_goal_items=["…", …] for checklist
-  criteria.
+  criteria. Do NOT set session_goal=true on database_query handoffs — missing
+  DB connectivity is explained in one reply, not a multi-turn goal loop.
 - session_goal_max_turns=<n> — optional session-goal turn cap for that goal.
 - session_goal_items=["…", …] — checklist success criteria (one string per
   item, in order). The host tracks completion via session_goal:done=<index>
