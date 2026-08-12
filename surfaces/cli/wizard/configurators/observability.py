@@ -7,6 +7,7 @@ from integrations.coralogix.setup import CORALOGIX_SETUP
 from integrations.datadog.setup import DATADOG_SETUP
 from integrations.grafana.setup import GRAFANA_SETUP
 from integrations.honeycomb.setup import HONEYCOMB_SETUP
+from integrations.new_relic.setup import NEW_RELIC_SETUP
 from integrations.opensearch.setup import OPENSEARCH_SETUP
 from integrations.store import remove_integration, upsert_integration
 from integrations.tempo.setup import TEMPO_SETUP
@@ -100,6 +101,10 @@ def _configure_honeycomb() -> tuple[str, str]:
 
 def _configure_coralogix() -> tuple[str, str]:
     return configure_from_spec(CORALOGIX_SETUP, title="Coralogix")
+
+
+def _configure_new_relic() -> tuple[str, str]:
+    return configure_from_spec(NEW_RELIC_SETUP, title="New Relic")
 
 
 _TEMPO_INTRO = (

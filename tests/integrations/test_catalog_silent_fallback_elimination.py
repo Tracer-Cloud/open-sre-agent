@@ -98,6 +98,7 @@ _CLASSIFY_PATCH_TARGETS: list[tuple[str, str, str]] = [
     ("datadog", "integrations.datadog", "DatadogIntegrationConfig"),
     ("honeycomb", "integrations.honeycomb", "HoneycombIntegrationConfig"),
     ("coralogix", "integrations.coralogix", "CoralogixIntegrationConfig"),
+    ("new_relic", "integrations.new_relic", "NewRelicIntegrationConfig"),
     ("github", "integrations.github.mcp", "build_github_mcp_config"),
     ("sentry", "integrations.sentry", "build_sentry_config"),
     ("gitlab", "integrations.gitlab", "build_gitlab_config"),
@@ -326,6 +327,15 @@ _ENV_LOADER_CASES: list[tuple[str, dict[str, str], str]] = [
         "coralogix",
         {"CORALOGIX_API_KEY": "k"},
         "CoralogixIntegrationConfig",
+    ),
+    (
+        "new_relic",
+        {
+            "NEW_RELIC_API_KEY": "NRAK-test-fake-0000000000000000000",
+            "NEW_RELIC_ACCOUNT_ID": "9876543",
+            "NEW_RELIC_API_URL": "https://api.eu.newrelic.com",
+        },
+        "NewRelicIntegrationConfig",
     ),
     (
         "aws",

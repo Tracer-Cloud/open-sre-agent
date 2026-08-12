@@ -43,6 +43,7 @@ import integrations.mariadb.setup as mariadb_setup
 import integrations.mongodb.setup as mongodb_setup
 import integrations.mongodb_atlas.setup as mongodb_atlas_setup
 import integrations.mysql.setup as mysql_setup
+import integrations.new_relic.setup as new_relic_setup
 import integrations.openclaw.setup as openclaw_setup
 import integrations.opensearch.setup as opensearch_setup
 import integrations.pagerduty.setup as pagerduty_setup
@@ -103,6 +104,11 @@ _ANSWERS: dict[str, dict[str, str]] = {
     },
     "vercel": {"api_token": "vercel-api-token", "team_id": "team_abc123"},
     "incident_io": {"api_key": "iio-api-key", "base_url": "https://api.eu.incident.io"},
+    "new_relic": {
+        "api_key": "NRAK-test-fake-0000000000000000000",
+        "account_id": "9876543",
+        "base_url": "https://api.eu.newrelic.com",
+    },
     "tracer": {"base_url": "https://tracer.example.com", "jwt_token": "tracer-jwt-token"},
     "mongodb_atlas": {
         "api_public_key": "atlas-public-key",
@@ -293,6 +299,7 @@ _CASES = [
     pytest.param(azure_sql_setup, "AZURE_SQL_SETUP", cli._setup_azure_sql, id="azure_sql"),
     pytest.param(grafana_setup, "GRAFANA_SETUP", cli._setup_grafana, id="grafana"),
     pytest.param(rds_setup, "RDS_SETUP", cli._setup_rds, id="rds"),
+    pytest.param(new_relic_setup, "NEW_RELIC_SETUP", cli._setup_new_relic, id="new_relic"),
     # alertmanager, opensearch, and slack drive a mode picker rather than flat
     # linear prompts, so they get dedicated tests below instead of _CASES.
 ]

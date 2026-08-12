@@ -22,6 +22,9 @@ def _clear_env(monkeypatch) -> None:
         "HONEYCOMB_API_KEY",
         "CORALOGIX_INSTANCES",
         "CORALOGIX_API_KEY",
+        "NEW_RELIC_INSTANCES",
+        "NEW_RELIC_API_KEY",
+        "NEW_RELIC_ACCOUNT_ID",
         "AWS_INSTANCES",
         "AWS_ROLE_ARN",
         "AWS_EXTERNAL_ID",
@@ -171,6 +174,16 @@ def test_empty_json_array_falls_through_to_legacy(
             "AWS_INSTANCES",
             "aws",
             {"name": "prod", "role_arn": "arn:aws:iam::1:role/r", "external_id": "e"},
+        ),
+        (
+            "NEW_RELIC_INSTANCES",
+            "new_relic",
+            {
+                "name": "prod",
+                "api_key": "NRAK-test-fake-0000000000000000000",
+                "account_id": "9876543",
+                "base_url": "https://api.eu.newrelic.com",
+            },
         ),
     ],
 )

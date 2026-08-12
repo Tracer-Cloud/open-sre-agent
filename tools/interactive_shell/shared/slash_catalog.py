@@ -375,7 +375,8 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to list running or recent tasks",
     ),
     "/template": _mcp(
-        "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, splunk).",
+        "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, "
+        "splunk, new_relic).",
         "User asks for an alert template or example payload format",
     ),
     "/tools": _mcp(

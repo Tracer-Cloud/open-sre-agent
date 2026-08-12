@@ -43,7 +43,7 @@ _SERVICE_DISPLAY_NAMES: dict[str, str] = {
     "kubernetes": "Kubernetes",
     "betterstack": "Better Stack",
     "snowflake": "Snowflake",
-    "newrelic": "New Relic",
+    "new_relic": "New Relic",
     "opsgenie": "OpsGenie",
     "linear": "Linear",
     "supabase": "Supabase",

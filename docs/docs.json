@@ -138,6 +138,7 @@
               "hermes",
               "honeycomb",
               "incident_io",
+              "new_relic",
               "openobserve",
               "opsgenie",
               "pagerduty",

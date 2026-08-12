@@ -6,6 +6,11 @@ import os
 from typing import Any
 
 from config.constants.helm import OSRE_HELM_INTEGRATION_ENV
+from config.constants.new_relic import (
+    NEW_RELIC_ACCOUNT_ID_ENV,
+    NEW_RELIC_API_KEY_ENV,
+    NEW_RELIC_INSTANCES_ENV,
+)
 from integrations import _catalog_impl
 from integrations.store import load_integrations
 
@@ -88,6 +93,11 @@ def load_env_integration_services() -> list[str]:
     )
     add("honeycomb", _any_env("HONEYCOMB_API_KEY", "HONEYCOMB_INSTANCES"))
     add("coralogix", _any_env("CORALOGIX_API_KEY", "CORALOGIX_INSTANCES"))
+    add(
+        "new_relic",
+        _all_env(NEW_RELIC_API_KEY_ENV, NEW_RELIC_ACCOUNT_ID_ENV)
+        or _env_is_set(NEW_RELIC_INSTANCES_ENV),
+    )
     add(
         "aws",
         _any_env("AWS_INSTANCES", "AWS_ROLE_ARN")

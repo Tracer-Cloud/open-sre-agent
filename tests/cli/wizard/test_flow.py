@@ -503,6 +503,84 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     assert synced_env_secrets == [("CORALOGIX_API_KEY", "cx_test")]
 
 
+def test_run_wizard_configures_new_relic(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "new_relic"])
+    password_responses = iter(["llm-secret", "NRAK-test-key"])
+    text_responses = iter(["1234567", "https://api.newrelic.com"])
+    saved_integrations: list[tuple[str, dict]] = []
+    synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(text_responses)
+        return m
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(
+        _observability_configurator,
+        "NEW_RELIC_SETUP",
+        dataclasses.replace(
+            _observability_configurator.NEW_RELIC_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "New Relic ok"},
+        ),
+    )
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
+
+    def _sync_env_values(values: dict[str, str], **_kwargs):
+        synced_env_values.append(values)
+        return tmp_path / ".env"
+
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
+        "upsert_integration",
+        lambda service, payload: saved_integrations.append((service, payload)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert saved_integrations == [
+        (
+            "new_relic",
+            {
+                "credentials": {
+                    "api_key": "NRAK-test-key",
+                    "account_id": "1234567",
+                    "base_url": "https://api.newrelic.com",
+                }
+            },
+        )
+    ]
+    assert synced_env_values == [
+        {
+            "NEW_RELIC_ACCOUNT_ID": "1234567",
+            "NEW_RELIC_API_URL": "https://api.newrelic.com",
+        }
+    ]
+    assert synced_env_secrets == [("NEW_RELIC_API_KEY", "NRAK-test-key")]
+
+
 def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
     select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "dagster"])
     password_responses = iter(["llm-secret", "dag_test_token"])

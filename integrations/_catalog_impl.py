@@ -145,6 +145,12 @@ from config.constants.mysql import (
     MYSQL_SSL_MODE_ENV,
     MYSQL_USERNAME_ENV,
 )
+from config.constants.new_relic import (
+    NEW_RELIC_ACCOUNT_ID_ENV,
+    NEW_RELIC_API_KEY_ENV,
+    NEW_RELIC_BASE_URL_ENV,
+    NEW_RELIC_INSTANCES_ENV,
+)
 from config.constants.openclaw import (
     OPENCLAW_MCP_ARGS_ENV,
     OPENCLAW_MCP_AUTH_TOKEN_ENV,
@@ -302,6 +308,8 @@ from integrations.mongodb_atlas import build_mongodb_atlas_config
 from integrations.mongodb_atlas import classify as _classify_mongodb_atlas
 from integrations.mysql import build_mysql_config
 from integrations.mysql import classify as _classify_mysql
+from integrations.new_relic import classify as _classify_new_relic
+from integrations.new_relic.config import NewRelicIntegrationConfig
 from integrations.openclaw import build_openclaw_config
 from integrations.openclaw import classify as _classify_openclaw
 from integrations.openobserve import classify as _classify_openobserve
@@ -532,6 +540,7 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "smtp": _classify_smtp,
     "prefect": _classify_prefect,
     "railway": _classify_railway,
+    "new_relic": _classify_new_relic,
 }
 
 #: Classifiers contributed by out-of-tree integration packages.
@@ -896,6 +905,35 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "honeycomb",
                     honeycomb_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    new_relic_multi = _parse_instances_env(NEW_RELIC_INSTANCES_ENV, "new_relic")
+    if new_relic_multi is not None:
+        integrations.append(new_relic_multi)
+        new_relic_api_key = ""
+        new_relic_account_id = ""
+        new_relic_base_url = ""
+    else:
+        new_relic_api_key = resolve_env_credential(NEW_RELIC_API_KEY_ENV)
+        new_relic_account_id = os.getenv(NEW_RELIC_ACCOUNT_ID_ENV, "").strip()
+        new_relic_base_url = os.getenv(NEW_RELIC_BASE_URL_ENV, "").strip()
+    if new_relic_api_key and new_relic_account_id:
+        try:
+            new_relic_config = NewRelicIntegrationConfig.model_validate(
+                {
+                    "api_key": new_relic_api_key,
+                    "account_id": new_relic_account_id,
+                    "base_url": new_relic_base_url,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="new_relic")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "new_relic",
+                    new_relic_config.model_dump(exclude={"integration_id"}),
                 )
             )
 
