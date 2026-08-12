@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from core.agent_harness.turns.gather_discovery_budget import (
     DEFAULT_MAX_DISCOVERY_CALLS,
+    is_gather_discovery_call,
     is_mcp_exec_bridge,
     is_mcp_list_tools,
     with_gather_discovery_budget,
@@ -153,6 +154,81 @@ def test_real_query_call_still_allowed_after_discovery_budget() -> None:
         },
     )
     assert hooks.before_tool_call(query) is None
+
+
+def test_posthog_tool_name_schema_probe_is_discovery() -> None:
+    """Live PostHog uses tool_name=…, not exec command strings."""
+    assert is_gather_discovery_call(
+        "call_posthog_tool",
+        {"tool_name": "read-data-schema", "arguments": {"entity": "events"}},
+    )
+    assert is_gather_discovery_call(
+        "call_posthog_tool",
+        {"tool_name": "event-definitions", "arguments": {}},
+    )
+    assert not is_gather_discovery_call(
+        "call_posthog_tool",
+        {
+            "tool_name": "execute-sql",
+            "arguments": {"query": "SELECT 1"},
+        },
+    )
+    assert not is_gather_discovery_call(
+        "call_posthog_tool",
+        {"tool_name": "query-trends", "arguments": {"dateRange": {"date_from": "-7d"}}},
+    )
+
+
+def test_posthog_tool_name_discovery_burst_is_capped() -> None:
+    hooks = with_gather_discovery_budget(max_discovery_calls=2)
+    assert hooks.before_tool_call is not None
+    assert hooks.after_tool_call is not None
+    for entity in ("events", "persons"):
+        req = _request(
+            "call_posthog_tool",
+            {"tool_name": "read-data-schema", "arguments": {"entity": entity}},
+        )
+        assert hooks.before_tool_call(req) is None
+        hooks.after_tool_call(req, _ok())
+    overflow = _request(
+        "call_posthog_tool",
+        {"tool_name": "event-definitions", "arguments": {}},
+    )
+    decision = hooks.before_tool_call(overflow)
+    assert decision is not None and decision.blocked
+    # Metric query still allowed after discovery budget.
+    query = _request(
+        "call_posthog_tool",
+        {
+            "tool_name": "execute-sql",
+            "arguments": {"query": "SELECT uniqExact(distinct_id) FROM events"},
+        },
+    )
+    assert hooks.before_tool_call(query) is None
+
+
+def test_failed_discovery_still_counts_toward_budget() -> None:
+    hooks = with_gather_discovery_budget(max_discovery_calls=1)
+    assert hooks.before_tool_call is not None
+    assert hooks.after_tool_call is not None
+    req = _request(
+        "call_posthog_tool",
+        {"tool_name": "read-data-schema", "arguments": {"entity": "events"}},
+    )
+    assert hooks.before_tool_call(req) is None
+    hooks.after_tool_call(
+        req,
+        ToolExecutionResult(
+            content="Entity events does not exist in the taxonomy.",
+            is_error=True,
+        ),
+    )
+    overflow = _request(
+        "call_posthog_tool",
+        {"tool_name": "event-definitions", "arguments": {}},
+    )
+    decision = hooks.before_tool_call(overflow)
+    assert decision is not None and decision.blocked
 
 
 def test_mcp_bridge_naming_matches_any_vendor_not_just_posthog() -> None:

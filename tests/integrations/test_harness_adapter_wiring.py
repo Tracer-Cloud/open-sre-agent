@@ -36,6 +36,8 @@ def test_gather_prompt_fragments_cover_every_registered_vendor() -> None:
     assert "github" in fragments.lower()
     assert "sentry" in fragments.lower()
     assert "slack" in fragments.lower()
+    assert "posthog" in fragments.lower()
+    assert "execute-sql" in fragments.lower()
 
 
 def test_action_prompt_fragments_cover_every_registered_vendor() -> None:

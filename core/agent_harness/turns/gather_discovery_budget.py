@@ -2,20 +2,25 @@
 
 MCP bridges typically expose ``list_*_tools`` plus a ``call_*_tool`` exec
 surface where the model explores with ``search`` / ``info`` / ``schema`` and
-meta ``call read-data-schema`` before any real metric query. Those discovery
-calls succeed, so :class:`SourceCircuitBreaker` never trips — live SessionGoal
-metric asks burned 10–15 discovery lines and still returned no count
+meta ``call read-data-schema`` before any real metric query. PostHog's bridge
+also takes a structured ``tool_name`` + ``arguments`` shape (not only an
+``exec`` command string). Those discovery calls often succeed or fail with
+taxonomy errors, so :class:`SourceCircuitBreaker` never trips — live
+SessionGoal metric asks burned discovery lines and still returned no count
 (parity S1).
 
 This hook:
 
 * Matches bridge tools by naming shape (``list_*_tools`` / ``call_*_tool``),
   not a vendor allow-list.
-* Dedupes exact discovery fingerprints for the gather turn (command text;
-  ``context`` prose is ignored).
-* Caps how many discovery-style calls may run; further discovery is blocked
-  with a reason that steers toward one real query or stop.
-* Still allows non-discovery ``call <query-tool> …`` after the budget is spent.
+* Treats structured ``tool_name`` targets as discovery unless they are a
+  known metric tool (``execute-sql`` / ``query-*``).
+* Dedupes exact discovery fingerprints for the gather turn (command text /
+  tool target; ``context`` prose is ignored).
+* Caps how many discovery-style calls may run (including failed ones);
+  further discovery is blocked with a reason that steers toward one real
+  query or stop.
+* Still allows metric ``call_*_tool`` calls after the budget is spent.
 
 Fingerprints use hashable tuples of known fields — never ``json.dumps``.
 """
@@ -36,6 +41,8 @@ DEFAULT_MAX_DISCOVERY_CALLS = 4
 _DISCOVERY_PREFIXES = frozenset({"search", "info", "schema"})
 # Meta ``call <tool>`` targets that only explore schemas / skills — not metrics.
 _DISCOVERY_CALL_TARGETS = frozenset({"read-data-schema", "skill-get"})
+# Scalar keys worth including in a fingerprint without dumping the whole blob.
+_FINGERPRINT_ARG_KEYS = ("entity", "kind", "event", "name", "type", "query")
 
 DiscoveryFingerprint = tuple[str, str, str]
 
@@ -74,6 +81,35 @@ def _call_target(command: str) -> str:
     return parts[1].split("{", 1)[0].strip().lower()
 
 
+def bridge_tool_target(arguments: dict[str, Any]) -> str:
+    """MCP tool selected via structured ``tool_name`` (PostHog MCP shape)."""
+    raw = arguments.get("tool_name")
+    if raw is None:
+        nested = _nested_exec_arguments(arguments)
+        raw = nested.get("tool_name")
+    return str(raw or "").strip().lower()
+
+
+def is_mcp_metric_target(target: str) -> bool:
+    """True for MCP tools that fetch metric / query results (not schema)."""
+    name = target.strip().lower()
+    if not name:
+        return False
+    if name == "execute-sql":
+        return True
+    return name.startswith("query-")
+
+
+def _fingerprint_arg_hint(arguments: dict[str, Any]) -> str:
+    nested = _nested_exec_arguments(arguments)
+    for key in _FINGERPRINT_ARG_KEYS:
+        if key in nested and nested[key] is not None:
+            return f"{key}={nested[key]}"
+        if key in arguments and arguments[key] is not None:
+            return f"{key}={arguments[key]}"
+    return ""
+
+
 def is_gather_discovery_call(tool_name: str, arguments: dict[str, Any]) -> bool:
     """Whether this tool call is schema/skill discovery rather than a metric query."""
     name = tool_name.strip()
@@ -81,14 +117,27 @@ def is_gather_discovery_call(tool_name: str, arguments: dict[str, Any]) -> bool:
         return True
     if not is_mcp_exec_bridge(name):
         return False
+    # Structured PostHog-style selection: tool_name=execute-sql / query-* vs
+    # entity taxonomy / read-data-schema / event-definitions / …
+    target = bridge_tool_target(arguments)
+    if target:
+        return not is_mcp_metric_target(target)
     command = _exec_command(arguments)
     if not command:
-        return False
+        # Bridge call with neither tool_name nor command — treat as discovery
+        # so an empty probe still burns budget instead of looping forever.
+        return True
     verb = command.split(None, 1)[0].lower()
     if verb in _DISCOVERY_PREFIXES:
         return True
     if verb == "call":
-        return _call_target(command) in _DISCOVERY_CALL_TARGETS
+        call_target = _call_target(command)
+        if is_mcp_metric_target(call_target):
+            return False
+        if call_target in _DISCOVERY_CALL_TARGETS:
+            return True
+        # Unknown ``call <tool>`` — still discovery (schema / skill probes).
+        return bool(call_target)
     return False
 
 
@@ -99,6 +148,9 @@ def discovery_fingerprint(tool_name: str, arguments: dict[str, Any]) -> Discover
         filt = str(arguments.get("name_filter") or "")
         schema = "1" if arguments.get("include_schema") else "0"
         return (name, filt, schema)
+    target = bridge_tool_target(arguments)
+    if target:
+        return (name, target, _fingerprint_arg_hint(arguments))
     command = _exec_command(arguments)
     # Drop trailing JSON payload noise for call-target identity when present.
     verb_and_target = command.split("{", 1)[0].strip().lower()
@@ -159,9 +211,12 @@ def with_gather_discovery_budget(
         result: ToolExecutionResult,
     ) -> Any:
         nonlocal discovery_count
+        # Count failed discovery too: taxonomy/schema errors still burn the
+        # explore budget and must not be retriable forever under the same key.
+        _ = result
         tool_name = request.tool_call.name
         arguments = dict(request.arguments or {})
-        if is_gather_discovery_call(tool_name, arguments) and not result.is_error:
+        if is_gather_discovery_call(tool_name, arguments):
             key = discovery_fingerprint(tool_name, arguments)
             if key not in seen:
                 seen.add(key)
@@ -180,9 +235,11 @@ def with_gather_discovery_budget(
 
 __all__ = [
     "DEFAULT_MAX_DISCOVERY_CALLS",
+    "bridge_tool_target",
     "discovery_fingerprint",
     "is_gather_discovery_call",
     "is_mcp_exec_bridge",
     "is_mcp_list_tools",
+    "is_mcp_metric_target",
     "with_gather_discovery_budget",
 ]

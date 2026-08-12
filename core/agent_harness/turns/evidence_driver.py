@@ -38,7 +38,10 @@ from core.agent_harness.turns.gather_unreachable import (
     load_gather_unreachable,
     store_gather_unreachable,
 )
-from core.agent_harness.turns.goal_review import build_gather_goal_reviewer
+from core.agent_harness.turns.goal_review import (
+    build_gather_goal_reviewer,
+    tap_executed_tool_calls,
+)
 from core.agent_harness.turns.source_circuit_breaker import SourceCircuitBreaker
 from core.domain.alerts.alert_source import secondary_tool_sources
 from core.events import runtime_event_callback_from_observer
@@ -246,12 +249,21 @@ def _build_evidence_agent(
     reviewer would accept those conclusions — its prompt treats an honest
     report of findings as reached — so the gather flavor reviews against
     "did the data actually get fetched" instead.
+
+    Discovery-only stops are rejected deterministically via the args-aware
+    tool tap (``call_*_tool`` is used for both schema probes and metric
+    queries, so names alone are not enough).
     """
     if tool_hooks is None:
         seed_tools, seed_sources = load_gather_unreachable(session)
         tool_hooks = with_gather_discovery_budget(
             SourceCircuitBreaker(seed_tools=seed_tools, seed_sources=seed_sources).hooks()
         )
+    executed_tool_calls: list[tuple[str, dict[str, Any]]] = []
+    on_runtime_event = tap_executed_tool_calls(
+        runtime_event_callback_from_observer(on_progress),
+        executed_tool_calls,
+    )
     config = AgentConfig(
         llm=llm,
         system=build_gather_system_prompt(session),
@@ -259,8 +271,8 @@ def _build_evidence_agent(
         resolved_integrations=resolved,
         max_iterations=max_iterations,
         tool_hooks=tool_hooks,
-        on_runtime_event=runtime_event_callback_from_observer(on_progress),
-        goal=build_gather_goal_reviewer(llm, message),
+        on_runtime_event=on_runtime_event,
+        goal=build_gather_goal_reviewer(llm, message, executed_tool_calls),
         tool_resources=dict(tool_resources or {}),
     )
     return build_agent(config)
