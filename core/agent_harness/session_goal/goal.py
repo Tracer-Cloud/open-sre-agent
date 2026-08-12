@@ -318,11 +318,10 @@ def attach_session_goal_from_handoffs(
     detected = None
     if handoffs:
         detected = session_goal_from_assistant_handoffs(handoffs, condition=condition)
-    if detected is None:
-        # Legacy content tags: ignore session_goal attach when this turn handed
-        # off a named database query (same rule as typed handoffs above).
-        if not any(handoff_has_tag(content, "database_query") for content in handoff_contents):
-            detected = session_goal_from_handoffs(handoff_contents, condition=condition)
+    if detected is None and not any(
+        handoff_has_tag(content, "database_query") for content in handoff_contents
+    ):
+        detected = session_goal_from_handoffs(handoff_contents, condition=condition)
     if detected is None:
         return None
     return attach_session_goal(session, detected)

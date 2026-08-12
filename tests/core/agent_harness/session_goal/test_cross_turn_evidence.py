@@ -48,9 +48,7 @@ def test_continuation_turn_is_told_what_earlier_turns_gathered() -> None:
     def _chat(message: str) -> TurnResult:
         prompts.append(message)
         if len(prompts) == 1:
-            return _turn(
-                "Antarctica is -32C and Hawaii is 24C.", executed=2, success=2
-            )
+            return _turn("Antarctica is -32C and Hawaii is 24C.", executed=2, success=2)
         return _turn("Checked the Slack integration.", executed=1, success=1)
 
     # Act — two turns of one goal.
