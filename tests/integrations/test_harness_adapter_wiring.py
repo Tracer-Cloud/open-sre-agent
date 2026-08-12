@@ -70,7 +70,11 @@ def test_gateway_persona_fragment_is_registered() -> None:
     assert "never call it the 'interactive shell'" in persona
 
 
-def test_integration_setup_command_uses_slash_form() -> None:
+def test_setupable_integration_services_come_from_cli_handlers() -> None:
+    services = harness_ports.setupable_integration_services()
+    assert "posthog_mcp" in services or "grafana" in services
+    assert "mixpanel" not in services
+
     assert harness_ports.integration_setup_command("posthog_mcp") == (
         "/integrations setup posthog_mcp"
     )

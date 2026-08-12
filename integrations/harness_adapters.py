@@ -26,6 +26,11 @@ def register_harness_adapters() -> None:
         fetch_webapp_vault=lambda: webapp_vault.fetch_webapp_org_integrations(),
     )
 
+    from integrations.cli import setup_services
+    from platform.harness_ports import set_setupable_integration_services
+
+    set_setupable_integration_services(lambda: tuple(setup_services()))
+
     _register_vcs_repo_scope_providers()
     _register_cli_llm_adapters()
     _register_alert_source_detectors()
