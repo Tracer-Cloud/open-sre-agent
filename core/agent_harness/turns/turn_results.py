@@ -9,12 +9,18 @@ session, or analytics coupling. The interactive shell's accounting layer
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 
 # Distinguishes the two zero-count outcomes that need different analytics:
 # a normal tool-calling run that completed without planning actions ("completed"),
 # versus a run that never produced actions because it failed/overflowed ("not_run").
 ToolCallingAccountingStatus = Literal["completed", "not_run"]
+
+# Host soft-timeout / ``/stop`` — orchestrator skips gather/answer on this intent.
+FINAL_INTENT_CANCELLED = "cli_agent_cancelled"
 
 
 @dataclass(frozen=True)
@@ -28,8 +34,16 @@ class ToolCallingTurnResult:
     handled: bool
     response_text: str = ""
     handoff_contents: tuple[str, ...] = ()
+    #: Typed handoffs (schema decode). Prefer over parsing ``handoff_contents``.
+    assistant_handoffs: tuple[AssistantHandoff, ...] = ()
+    # False when every handoff this turn declared ``requires_gather=false``:
+    # the action work already produced what the reply needs, so the assistant
+    # answers from it without a live evidence-gather sweep.
+    handoff_requires_gather: bool = True
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False
+    #: Host soft-timeout / stop asked the action phase to halt (shell/gateway).
+    cancelled: bool = False
 
 
 @dataclass(frozen=True)
@@ -50,12 +64,18 @@ class TurnResult:
         return self.llm_run is not None
 
     @property
+    def cancelled(self) -> bool:
+        """True when the host cancelled mid-turn (timeout / stop)."""
+        return self.final_intent == FINAL_INTENT_CANCELLED or self.action_result.cancelled
+
+    @property
     def primary_response_text(self) -> str:
         """Assistant text, falling back to the action-phase response when empty."""
         return (self.assistant_response_text or self.action_result.response_text).strip()
 
 
 __all__ = [
+    "FINAL_INTENT_CANCELLED",
     "ToolCallingAccountingStatus",
     "ToolCallingTurnResult",
     "TurnResult",

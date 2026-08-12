@@ -37,6 +37,13 @@ def cron_command() -> None:
 
 @cron_command.command(name="add")
 @click.option(
+    "--name",
+    type=str,
+    default="",
+    show_default=False,
+    help="Human-readable loop name for list output.",
+)
+@click.option(
     "--kind",
     type=click.Choice(_KIND_CHOICES, case_sensitive=False),
     required=True,
@@ -83,6 +90,7 @@ def cron_command() -> None:
     help="Lookback window in hours for the report (must be >= 1).",
 )
 def cron_add(
+    name: str,
     kind: str,
     cron_expr: str,
     timezone: str,
@@ -98,6 +106,7 @@ def cron_add(
     _validate_chat_id_for_provider(provider, chat_id)
 
     task = ScheduledTask(
+        name=name.strip(),
         kind=TaskKind(kind),
         cron=cron_expr,
         timezone=timezone,
@@ -106,10 +115,22 @@ def cron_add(
         window_hours=window_hours,
     )
 
+    from platform.scheduler.operation_log import record_scheduler_task_operation
     from platform.scheduler.store import add_task
 
     added = add_task(task)
+    record_scheduler_task_operation(
+        "scheduled_task_created",
+        added,
+        extra={
+            "command": "cron_add",
+            "requested_task_id": task.id,
+            "deduplicated": added.id != task.id,
+        },
+    )
     _console.print(f"[green]Task {added.id} created.[/green]")
+    if added.name:
+        _console.print(f"  Name: {added.name}")
     _console.print(f"  Kind: {added.kind.value}  Cron: {added.cron}  TZ: {added.timezone}")
     _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
 
@@ -117,31 +138,37 @@ def cron_add(
 @cron_command.command(name="list")
 def cron_list() -> None:
     """List all scheduled delivery tasks."""
-    from platform.scheduler.store import list_tasks
+    from platform.scheduler.loops import list_loop_summaries
 
-    tasks = list_tasks()
-    if not tasks:
+    loops = list_loop_summaries()
+    if not loops:
         _console.print("[dim]No scheduled tasks configured.[/dim]")
         return
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("ID", style="cyan")
+    table.add_column("Name")
     table.add_column("Kind")
     table.add_column("Cron")
     table.add_column("TZ")
     table.add_column("Provider")
+    table.add_column("Channels")
     table.add_column("Enabled")
+    table.add_column("Next Run")
     table.add_column("Last Run")
 
-    for task in tasks:
+    for loop in loops:
         table.add_row(
-            task.display_id(),
-            task.kind.value,
-            task.cron,
-            task.timezone,
-            task.provider.value,
-            "✓" if task.enabled else "✗",
-            task.last_run or "—",
+            loop.id[:12],
+            loop.name,
+            loop.kind.value,
+            loop.cron,
+            loop.timezone,
+            loop.provider.value,
+            ", ".join(loop.channels),
+            "✓" if loop.enabled else "✗",
+            loop.next_run or "—",
+            loop.last_run or "—",
         )
 
     _console.print(table)
@@ -151,9 +178,17 @@ def cron_list() -> None:
 @click.argument("task_id")
 def cron_remove(task_id: str) -> None:
     """Remove a scheduled delivery task by ID."""
-    from platform.scheduler.store import remove_task
+    from platform.scheduler.operation_log import record_scheduler_task_operation
+    from platform.scheduler.store import get_task, remove_task
 
+    task = get_task(task_id)
     if remove_task(task_id):
+        if task is not None:
+            record_scheduler_task_operation(
+                "scheduled_task_deleted",
+                task,
+                extra={"command": "cron_remove"},
+            )
         _console.print(f"[green]Task {task_id} removed.[/green]")
     else:
         _console.print(f"[red]Error: task {task_id} not found.[/red]")
@@ -164,11 +199,12 @@ def cron_remove(task_id: str) -> None:
 @click.argument("task_id")
 def cron_run(task_id: str) -> None:
     """Run a scheduled task immediately (ad-hoc one-shot for debugging)."""
+    from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
+    from platform.scheduler.operation_log import record_scheduler_task_operation
     from platform.scheduler.runner import run_task_now
     from platform.scheduler.store import get_task
-    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    install_runtime()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
 
     task = get_task(task_id)
     if task is None:
@@ -176,6 +212,11 @@ def cron_run(task_id: str) -> None:
         raise SystemExit(1)
 
     _console.print(f"Running task {task_id} ({task.kind.value})...")
+    record_scheduler_task_operation(
+        "scheduled_task_run_requested",
+        task,
+        extra={"command": "cron_run"},
+    )
     success = run_task_now(task_id)
     if success:
         _console.print("[green]Done.[/green]")
@@ -237,10 +278,11 @@ def cron_logs(task_id: str, limit: int) -> None:
 @cron_command.command(name="start")
 def cron_start() -> None:
     """Start the scheduler daemon (blocks until interrupted)."""
+    from bootstrap.process import SCHEDULER_WORKER_PROFILE, configure_process
     from platform.scheduler.runner import start_scheduler
-    from surfaces.shared.runtime_bootstrap import install_runtime
 
-    install_runtime()
+    # Dedicated scheduler process — not SCHEDULED_COMMAND (one-shot CLI helpers).
+    configure_process(SCHEDULER_WORKER_PROFILE)
 
     _console.print("[bold]Starting scheduler daemon...[/bold]")
     _console.print("Press Ctrl+C to stop.")

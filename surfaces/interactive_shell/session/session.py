@@ -91,7 +91,7 @@ class Session(SessionCore):
         timestamps and future uses have complete data.
         """
         self.history.append({"type": "incoming_alert", "text": alert.text, "ok": True})
-        self.storage.append_turn(self, "incoming_alert", alert.text)
+        self.store.append_turn(self, "incoming_alert", alert.text)
         self.alerts.add(alert)
 
     def clear(self, *, rotate_identity: bool = True) -> None:
@@ -100,10 +100,10 @@ class Session(SessionCore):
         super().clear(rotate_identity=rotate_identity)
         self.alerts.clear()
         self.terminal.metrics.reset()
+        self.terminal.submitted_turn_count = 0
         self.terminal.pending_prompt_default = None
         self.terminal.pending_prompt_autosubmit = False
         self.terminal.exclusive_stdin_active = False
-        self.terminal.agent_turn_executed_slashes.clear()
         self.terminal.background_mode_enabled = False
         self.terminal.background_investigations.clear()
         # Preserve notification channel prefs across /new like trust_mode.

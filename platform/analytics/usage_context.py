@@ -3,7 +3,7 @@
 This is the CLI/gateway half of org-level product analytics:
 
 - ``organization_id`` + PostHog ``$groups.organization`` when the silo org is known
-- ``surface``: ``cli`` | ``slack`` | ``telegram`` | ``discord`` (usage channel, not inventory)
+- ``surface``: ``cli`` | ``slack`` | ``telegram`` | ``discord`` | ``buzz`` (usage channel, not inventory)
 - ``session_id``: OpenSRE agent session (not PostHog web ``$session_id``)
 - ``user_id``: transport/platform user when known (best-effort)
 
@@ -31,8 +31,9 @@ SURFACE_CLI: Final[str] = "cli"
 SURFACE_SLACK: Final[str] = "slack"
 SURFACE_TELEGRAM: Final[str] = "telegram"
 SURFACE_DISCORD: Final[str] = "discord"
+SURFACE_BUZZ: Final[str] = "buzz"
 CANONICAL_SURFACES: Final[frozenset[str]] = frozenset(
-    {SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM, SURFACE_DISCORD}
+    {SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM, SURFACE_DISCORD, SURFACE_BUZZ}
 )
 ORGANIZATION_GROUP_TYPE: Final[str] = "organization"
 

@@ -5,6 +5,13 @@ from __future__ import annotations
 import logging
 import threading
 
+from config.constants.grafana import (
+    GRAFANA_CA_BUNDLE_ENV,
+    GRAFANA_INSTANCE_URL_ENV,
+    GRAFANA_READ_TOKEN_ENV,
+    GRAFANA_VERIFY_SSL_ENV,
+)
+from config.grafana_cloud import DEFAULT_INSTANCE_URL, get_datasource_uids
 from integrations.grafana.base import GrafanaClientBase
 from integrations.grafana.config import GrafanaAccountConfig
 from integrations.grafana.loki import LokiMixin
@@ -34,11 +41,11 @@ def get_grafana_client() -> GrafanaClient:
     from config.llm_credentials import resolve_env_credential
 
     return get_grafana_client_from_credentials(
-        endpoint=os.getenv("GRAFANA_INSTANCE_URL", "https://tracerbio.grafana.net"),
-        api_key=resolve_env_credential("GRAFANA_READ_TOKEN"),
+        endpoint=os.getenv(GRAFANA_INSTANCE_URL_ENV, DEFAULT_INSTANCE_URL),
+        api_key=resolve_env_credential(GRAFANA_READ_TOKEN_ENV),
         account_id="env_default",
-        verify_ssl=os.getenv("GRAFANA_VERIFY_SSL", "true").strip().lower() != "false",
-        ca_bundle=os.getenv("GRAFANA_CA_BUNDLE", "").strip(),
+        verify_ssl=os.getenv(GRAFANA_VERIFY_SSL_ENV, "true").strip().lower() != "false",
+        ca_bundle=os.getenv(GRAFANA_CA_BUNDLE_ENV, "").strip(),
     )
 
 
@@ -85,7 +92,12 @@ def _build_and_cache_client(
     verify_ssl: bool,
     ca_bundle: str,
 ) -> GrafanaClient:
-    """Discover datasources once and cache the resulting client."""
+    """Discover datasources once and cache the resulting client.
+
+    Prefer live discovery; when a UID is missing, fall back to
+    ``GRAFANA_*_DATASOURCE_UID`` / Grafana Cloud defaults so env-configured
+    installs still work when auto-discovery is incomplete.
+    """
     config = GrafanaAccountConfig(
         account_id=account_id,
         instance_url=endpoint.rstrip("/"),
@@ -97,8 +109,13 @@ def _build_and_cache_client(
     )
     client = GrafanaClient(config=config)
 
-    discovered = client.discover_datasource_uids()
-    if discovered:
+    discovered = client.discover_datasource_uids() or {}
+    fallback_loki, fallback_tempo, fallback_mimir = get_datasource_uids()
+    loki_uid = discovered.get("loki_uid") or fallback_loki
+    tempo_uid = discovered.get("tempo_uid") or fallback_tempo
+    mimir_uid = discovered.get("mimir_uid") or fallback_mimir
+
+    if loki_uid or tempo_uid or mimir_uid:
         config = GrafanaAccountConfig(
             account_id=account_id,
             instance_url=endpoint.rstrip("/"),
@@ -107,21 +124,23 @@ def _build_and_cache_client(
             password=password,
             verify_ssl=verify_ssl,
             ca_bundle=ca_bundle,
-            loki_datasource_uid=discovered.get("loki_uid", ""),
-            tempo_datasource_uid=discovered.get("tempo_uid", ""),
-            mimir_datasource_uid=discovered.get("mimir_uid", ""),
+            loki_datasource_uid=loki_uid,
+            tempo_datasource_uid=tempo_uid,
+            mimir_datasource_uid=mimir_uid,
         )
         client = GrafanaClient(config=config)
         logger.info(
-            "[grafana] Client ready for account_id=%s with datasource discovery status: loki=%s tempo=%s mimir=%s",
+            "[grafana] Client ready for account_id=%s with datasource UIDs: "
+            "loki=%s tempo=%s mimir=%s (discovered=%s)",
             account_id,
             config.loki_datasource_uid,
             config.tempo_datasource_uid,
             config.mimir_datasource_uid,
+            bool(discovered),
         )
     else:
         logger.warning(
-            "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
+            "[grafana] Could not resolve datasource UIDs for account_id=%s — queries will fail",
             account_id,
         )
 

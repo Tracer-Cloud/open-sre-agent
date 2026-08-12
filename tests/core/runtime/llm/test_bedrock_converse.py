@@ -15,7 +15,6 @@ from core.llm.transports.sdk.bedrock_converse import (
     new_tool_use_id,
     normalize_tool_input_schema,
     parse_converse_output,
-    sanitize_converse_schema,
     to_converse_messages,
 )
 from core.llm.types import ToolCall
@@ -29,115 +28,6 @@ def _reset_tool_registry() -> Generator[None]:
     clear_tool_registry_cache()
     yield
     clear_tool_registry_cache()
-
-
-def test_sanitize_injects_object_type_when_properties_present() -> None:
-    schema = {"properties": {"query": {"type": "string"}}}
-    cleaned = sanitize_converse_schema(schema)
-    assert cleaned["type"] == "object"
-    assert cleaned["properties"]["query"]["type"] == "string"
-
-
-def test_sanitize_injects_array_items_type_string() -> None:
-    cleaned = sanitize_converse_schema({"type": "array"})
-    assert cleaned == {"type": "array", "items": {"type": "string"}}
-
-
-def test_sanitize_nested_array_property() -> None:
-    schema = {
-        "type": "object",
-        "properties": {"tags": {"type": "array"}},
-    }
-    cleaned = sanitize_converse_schema(schema)
-    assert cleaned["properties"]["tags"]["items"] == {"type": "string"}
-
-
-def test_sanitize_resolves_anyof_optional_string() -> None:
-    cleaned = sanitize_converse_schema({"anyOf": [{"type": "string"}, {"type": "null"}]})
-    assert cleaned["type"] == "string"
-
-
-def test_sanitize_resolves_anyof_implicit_object() -> None:
-    cleaned = sanitize_converse_schema(
-        {
-            "anyOf": [
-                {"properties": {"name": {"type": "string"}}},
-                {"type": "null"},
-            ]
-        }
-    )
-    assert cleaned["type"] == "object"
-    assert cleaned["properties"]["name"]["type"] == "string"
-
-
-def test_sanitize_collapses_type_union_list() -> None:
-    cleaned = sanitize_converse_schema(
-        {
-            "type": "object",
-            "properties": {
-                "credentials": {"type": ["object", "null"], "default": None},
-            },
-        }
-    )
-    assert cleaned["properties"]["credentials"]["type"] == "object"
-
-
-def test_sanitize_merges_allof_constraints() -> None:
-    cleaned = sanitize_converse_schema(
-        {
-            "allOf": [
-                {"type": "object", "properties": {"name": {"type": "string"}}},
-                {"properties": {"age": {"type": "integer"}}},
-            ]
-        }
-    )
-    assert cleaned["type"] == "object"
-    assert cleaned["properties"]["name"]["type"] == "string"
-    assert cleaned["properties"]["age"]["type"] == "integer"
-
-
-def test_sanitize_strips_nullable_keeps_type() -> None:
-    cleaned = sanitize_converse_schema({"type": "string", "nullable": True})
-    assert cleaned == {"type": "string"}
-
-
-def test_sanitize_strips_additional_properties_false() -> None:
-    cleaned = sanitize_converse_schema(
-        {"type": "object", "properties": {"x": {"type": "string"}}, "additionalProperties": False}
-    )
-    assert "additionalProperties" not in cleaned
-    assert cleaned["type"] == "object"
-
-
-def test_sanitize_strips_additional_properties_schema() -> None:
-    cleaned = sanitize_converse_schema(
-        {"type": "object", "properties": {}, "additionalProperties": {"type": "string"}}
-    )
-    assert "additionalProperties" not in cleaned
-
-
-def test_sanitize_strips_invalid_additional_properties_string() -> None:
-    cleaned = sanitize_converse_schema(
-        {"type": "object", "properties": {}, "additionalProperties": "string"}
-    )
-    assert "additionalProperties" not in cleaned
-
-
-def test_sanitize_strips_unsupported_keys() -> None:
-    schema = {
-        "title": "Root",
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "$defs": {"X": {"type": "string"}},
-        "oneOf": [{"type": "string"}, {"type": "integer"}],
-        "type": "object",
-        "properties": {"name": {"type": "string", "title": "Name"}},
-    }
-    cleaned = sanitize_converse_schema(schema)
-    assert "title" not in cleaned
-    assert "$schema" not in cleaned
-    assert "$defs" not in cleaned
-    assert "oneOf" not in cleaned
-    assert "title" not in cleaned["properties"]["name"]
 
 
 def test_normalize_empty_schema_is_object_with_properties() -> None:

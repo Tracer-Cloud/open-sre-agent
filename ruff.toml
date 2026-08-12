@@ -12,7 +12,6 @@ exclude = [
     "**/requests*",
     "**/urllib3*",
     "**/bin",
-    "**/cdk.out/**",
     "pytest.ini",
 ]
 

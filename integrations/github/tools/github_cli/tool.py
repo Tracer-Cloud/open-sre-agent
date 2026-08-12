@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.github.tools.github_cli.credentials import (
     GITHUB_CLI_INJECTED_PARAMS,
@@ -95,7 +96,7 @@ def _normalize_args(args: list[str] | None) -> list[str]:
         "Inventing repo lists without calling github_cli",
     ],
     surfaces=("action",),
-    side_effect_level="mutating",
+    side_effect_level=SideEffectLevel.MUTATING,
     requires_approval=False,
     input_schema=_ARGS_SCHEMA,
     is_available=_github_cli_available,

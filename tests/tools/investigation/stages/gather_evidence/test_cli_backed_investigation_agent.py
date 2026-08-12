@@ -70,7 +70,7 @@ class TestShouldAcceptConclusion:
             evidence={},
         )
         # At MAX_INVESTIGATION_LOOPS - 2 the agent must accept to leave room
-        # for a final text pass before the outer loop cap triggers.
+        # for a final text pass before the session-goal loop cap triggers.
         cutoff = MAX_INVESTIGATION_LOOPS - 2
         accept, nudge = agent._should_accept_conclusion(evidence_count=0, iteration=cutoff)
         assert accept is True

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from enum import StrEnum
 
 from config.config import (
     ANTHROPIC_REASONING_MODEL,
@@ -30,14 +30,41 @@ from config.constants.llm import (
     CUSTOM_OPENAI_API_KEY_ENV,
     CUSTOM_OPENAI_BASE_URL_ENV,
 )
-from config.llm_auth.provider_catalog import require_provider_spec
+from config.llm_auth.provider_catalog import CredentialKind, require_provider_spec
 from config.local_env import PROJECT_ROOT as PROJECT_ROOT
 from config.local_env import get_project_env_path
 from integrations.llm_cli.base import LLMCLIAdapter
 
 PROJECT_ENV_PATH = get_project_env_path()
 
-CredentialKind = Literal["api_key", "host", "cli", "none"]
+
+class WizardCredentialKind(StrEnum):
+    """How onboarding *prompts* for a provider's credential.
+
+    Deliberately kept separate from
+    :class:`config.llm_auth.provider_catalog.CredentialKind`, the runtime's
+    vocabulary. The two overlap on ``api_key``/``cli`` but the wizard's ``host``
+    and ``none`` translate to the catalog's ``local`` and ``ambient`` — see
+    ``WIZARD_TO_CATALOG_KIND`` below. Do NOT merge these enums: collapsing
+    ``host``→``local`` or ``none``→``ambient`` would silently mislabel Ollama
+    (a local host) as ambient env credentials.
+    """
+
+    API_KEY = "api_key"
+    #: A locally hosted runtime prompted for a host URL, not a secret (Ollama).
+    HOST = "host"
+    CLI = "cli"
+    #: No onboarding prompt; the runtime reads ambient credentials itself.
+    NONE = "none"
+
+
+#: Translation from the wizard's prompt vocabulary to the runtime catalog kinds.
+WIZARD_TO_CATALOG_KIND: dict[WizardCredentialKind, CredentialKind] = {
+    WizardCredentialKind.API_KEY: CredentialKind.API_KEY,
+    WizardCredentialKind.CLI: CredentialKind.CLI,
+    WizardCredentialKind.NONE: CredentialKind.AMBIENT,
+    WizardCredentialKind.HOST: CredentialKind.LOCAL,
+}
 
 
 @dataclass(frozen=True)
@@ -82,7 +109,7 @@ class ProviderOption:
     #: default Ollama host URL). Empty string means no default.
     credential_default: str = ""
     #: ``cli`` providers use ``adapter_factory`` and vendor auth (no API key in .env).
-    credential_kind: CredentialKind = "api_key"
+    credential_kind: WizardCredentialKind = WizardCredentialKind.API_KEY
     adapter_factory: Callable[[], LLMCLIAdapter] | None = None
     #: Whether the CLI should accept model IDs outside the curated quick-pick list.
     #: Use this for providers whose model catalogs are large, account-gated, or
@@ -91,8 +118,7 @@ class ProviderOption:
 
     def __post_init__(self) -> None:
         spec = require_provider_spec(self.value)
-        kind_map = {"api_key": "api_key", "cli": "cli", "none": "ambient", "host": "local"}
-        catalog_kind = kind_map[self.credential_kind]
+        catalog_kind = WIZARD_TO_CATALOG_KIND[self.credential_kind]
         mismatches = {
             "api_key_env": (self.api_key_env, spec.api_key_env),
             "model_env": (self.model_env, spec.model_env),
@@ -560,7 +586,7 @@ SUPPORTED_PROVIDERS = (
         model_env="CLAUDE_CODE_MODEL",
         default_model="",
         models=CLAUDE_CODE_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_claude_code_adapter_factory,
         allow_custom_models=True,
@@ -586,7 +612,7 @@ SUPPORTED_PROVIDERS = (
         model_env="CODEX_MODEL",
         default_model="",
         models=CODEX_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_codex_adapter_factory,
         allow_custom_models=True,
@@ -638,7 +664,7 @@ SUPPORTED_PROVIDERS = (
         model_env="GEMINI_CLI_MODEL",
         default_model="",
         models=GEMINI_CLI_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_gemini_cli_adapter_factory,
         allow_custom_models=True,
@@ -651,7 +677,7 @@ SUPPORTED_PROVIDERS = (
         model_env="ANTIGRAVITY_CLI_MODEL",
         default_model="",
         models=ANTIGRAVITY_CLI_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_antigravity_cli_adapter_factory,
         allow_custom_models=True,
@@ -698,9 +724,9 @@ SUPPORTED_PROVIDERS = (
         classification_model_env="BEDROCK_CLASSIFICATION_MODEL",
         credential_label="AWS region (uses IAM credentials)",
         credential_secret=False,
-        # credential_kind="none" causes flow.py to skip the credential prompt
+        # credential_kind=WizardCredentialKind.NONE causes flow.py to skip the credential prompt
         # entirely.  Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config.
-        credential_kind="none",
+        credential_kind=WizardCredentialKind.NONE,
         allow_custom_models=True,
     ),
     ProviderOption(
@@ -718,10 +744,10 @@ SUPPORTED_PROVIDERS = (
         classification_model_env="VERTEX_AI_CLASSIFICATION_MODEL",
         credential_label="GCP project + region (uses Application Default Credentials)",
         credential_secret=False,
-        # credential_kind="none" causes flow.py to skip the credential prompt
+        # credential_kind=WizardCredentialKind.NONE causes flow.py to skip the credential prompt
         # entirely. Project/region are picked up from VERTEX_AI_PROJECT /
         # VERTEX_AI_LOCATION, set outside the wizard (same as Bedrock's region).
-        credential_kind="none",
+        credential_kind=WizardCredentialKind.NONE,
         allow_custom_models=True,
     ),
     ProviderOption(
@@ -791,7 +817,7 @@ SUPPORTED_PROVIDERS = (
         model_env="GROK_CLI_MODEL",
         default_model="",
         models=GROK_CLI_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_grok_cli_adapter_factory,
         allow_custom_models=True,
@@ -804,7 +830,7 @@ SUPPORTED_PROVIDERS = (
         model_env="CURSOR_MODEL",
         default_model="auto",
         models=CURSOR_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_cursor_adapter_factory,
         allow_custom_models=True,
@@ -817,7 +843,7 @@ SUPPORTED_PROVIDERS = (
         model_env="OPENCODE_MODEL",
         default_model="",
         models=OPENCODE_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_opencode_adapter_factory,
         allow_custom_models=True,
@@ -830,7 +856,7 @@ SUPPORTED_PROVIDERS = (
         model_env="KIMI_MODEL",
         default_model="",
         models=KIMI_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_kimi_adapter_factory,
         allow_custom_models=True,
@@ -843,7 +869,7 @@ SUPPORTED_PROVIDERS = (
         model_env="COPILOT_MODEL",
         default_model="",
         models=COPILOT_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_copilot_adapter_factory,
         allow_custom_models=True,
@@ -856,7 +882,7 @@ SUPPORTED_PROVIDERS = (
         model_env="PI_MODEL",
         default_model="",
         models=PI_MODELS,
-        credential_kind="cli",
+        credential_kind=WizardCredentialKind.CLI,
         credential_secret=False,
         adapter_factory=_pi_adapter_factory,
         allow_custom_models=True,
@@ -872,7 +898,7 @@ SUPPORTED_PROVIDERS = (
         credential_label="host URL",
         credential_secret=False,
         credential_default=DEFAULT_OLLAMA_HOST,
-        credential_kind="host",
+        credential_kind=WizardCredentialKind.HOST,
         allow_custom_models=True,
     ),
 )

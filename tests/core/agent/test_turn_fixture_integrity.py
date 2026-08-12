@@ -258,12 +258,26 @@ def test_parse_selection_spec_variants() -> None:
     assert parse_selection_spec("complex:0.25") == SelectionSpec(mode="complex", fraction=0.25)
     # A bare mode defaults to the 5% fast slice.
     assert parse_selection_spec("complex") == SelectionSpec(mode="complex", fraction=0.05)
+    assert parse_selection_spec("346,347") == SelectionSpec(mode="id", ids=("346", "347"))
+    assert parse_selection_spec("id:346-metric-read-windows-users") == SelectionSpec(
+        mode="id",
+        ids=("346-metric-read-windows-users",),
+    )
 
 
 def test_parse_selection_spec_rejects_bad_input() -> None:
     for bad in ("bogus:5", "complex:0", "sample:-1", "sample:101%", "sample:0%"):
         with pytest.raises(ValueError):
             parse_selection_spec(bad)
+
+
+def test_select_cases_by_numeric_prefix_ids() -> None:
+    cases = load_all_scenarios()
+    selected = select_cases(cases, spec="346,347")
+    assert [case.scenario.id for case in selected] == [
+        "346-metric-read-windows-users",
+        "347-session-goal-five-step-checklist",
+    ]
 
 
 def test_select_cases_none_returns_all() -> None:

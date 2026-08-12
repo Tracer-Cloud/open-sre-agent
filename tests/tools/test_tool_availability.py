@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from core.tool_framework.utils.tool_availability import tool_unavailable
+from core.tool_framework.utils.tool_availability import (
+    envelope_source_id,
+    is_tool_unavailable_envelope,
+    tool_unavailable,
+)
 
 
 def test_tool_unavailable_base_shape() -> None:
@@ -13,6 +17,23 @@ def test_tool_unavailable_base_shape() -> None:
         "available": False,
         "error": "helm integration is not configured.",
     }
+    assert is_tool_unavailable_envelope(payload) is True
+    assert envelope_source_id(payload) == "helm"
+
+
+def test_is_tool_unavailable_envelope_rejects_lookalikes() -> None:
+    """Ordinary values / nested flags must not count as config failure."""
+    assert is_tool_unavailable_envelope(None) is False
+    assert is_tool_unavailable_envelope("unauthorized") is False
+    assert is_tool_unavailable_envelope({"available": False}) is False  # no error
+    assert is_tool_unavailable_envelope({"available": False, "error": ""}) is False
+    assert is_tool_unavailable_envelope({"available": False, "error": 401}) is False
+    assert is_tool_unavailable_envelope({"available": True, "error": "x"}) is False
+    # Nested feature-flag shape — not top-level typed envelope.
+    assert (
+        is_tool_unavailable_envelope({"flags": {"unauthorized_banner": {"available": False}}})
+        is False
+    )
 
 
 def test_tool_unavailable_merges_extra_fields() -> None:

@@ -1,7 +1,7 @@
 """Agent-harness ports — integrations, tools, and repository scope without tier violations.
 
 Adapters register at startup via :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`
-(shell/tests) or the gateway boot path in :mod:`gateway.runtime.manager` (duplicate wiring).
+(shell/tests) or the gateway boot path in :mod:`gateway.core.runtime.manager` (duplicate wiring).
 """
 
 from __future__ import annotations
@@ -21,6 +21,8 @@ from core.tool_framework.registered_tool import RegisteredTool
 
 if TYPE_CHECKING:
     from core.agent_harness.ports import ToolRegistry
+
+from core.agent_harness.ports import SubprocessPresenterFactory
 
 logger = logging.getLogger(__name__)
 
@@ -638,8 +640,71 @@ def strip_message_context_prefix(text: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Preferred evidence sources (by ask kind)
+# ---------------------------------------------------------------------------
+#
+# Core classifies ask kinds (``metric_read``, …) but must not name vendor
+# integration ids. Each analytics/vendor package *opts in* at boot by appending
+# its service id. Nothing is preferred until a vendor registers — omitting a
+# vendor's registration means metric asks will not CTA that vendor.
+
+_preferred_evidence_sources: dict[str, tuple[str, ...]] = {}
+
+
+def register_preferred_evidence_source(kind: str, *service_ids: str) -> None:
+    """Opt service id(s) into satisfying asks of ``kind`` (append, dedupe).
+
+    Vendors call this from their own modules. The composition root must not
+    invent a default vendor list in core — only wire who opts in.
+    """
+    if not service_ids:
+        return
+    current = _preferred_evidence_sources.get(kind, ())
+    merged = list(current)
+    for service_id in service_ids:
+        if service_id and service_id not in merged:
+            merged.append(service_id)
+    _preferred_evidence_sources[kind] = tuple(merged)
+
+
+def preferred_evidence_sources_for(kind: str) -> tuple[str, ...]:
+    """Return preferred integration ids for ``kind``, or ``()`` when none opted in."""
+    return _preferred_evidence_sources.get(kind, ())
+
+
+def clear_preferred_evidence_sources() -> None:
+    _preferred_evidence_sources.clear()
+
+
+# ---------------------------------------------------------------------------
 # Test reset
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Integration setup command (surface syntax)
+# ---------------------------------------------------------------------------
+#
+# Core builds the upgrade CTA but must not know slash syntax. The surface
+# registers how it spells "connect this integration" at boot.
+
+
+def _default_integration_setup_command(service_id: str) -> str:
+    return f"integrations setup {service_id}"
+
+
+_integration_setup_command: Callable[[str], str] = _default_integration_setup_command
+
+
+def set_integration_setup_command(render: Callable[[str], str]) -> None:
+    """Register how this surface spells the connect command for a service."""
+    global _integration_setup_command
+    _integration_setup_command = render
+
+
+def integration_setup_command(service_id: str) -> str:
+    """Return the surface command that connects ``service_id``."""
+    return _integration_setup_command(service_id)
 
 
 def reset_harness_ports() -> None:
@@ -676,6 +741,9 @@ def reset_harness_ports() -> None:
     clear_assistant_prompt_fragments()
     clear_gateway_persona_fragments()
     clear_message_context_prefix_strippers()
+    clear_preferred_evidence_sources()
+    set_subprocess_presenter_factory(None)
+    set_integration_setup_command(_default_integration_setup_command)
 
     # Core leaf registries (populated by integrations/harness_adapters).
     from core.domain.alerts.alert_source import (
@@ -695,3 +763,24 @@ def reset_harness_ports() -> None:
     clear_alert_detail_fields()
     clear_taxonomy_profiles()
     clear_anchor_parsers()
+
+
+# --- Subprocess presenter -------------------------------------------------
+#
+# Streaming shell/CLI output needs a presenter that lives in ``tools`` (its
+# process helpers) and is therefore invisible to ``core.agent_harness``.
+# Registering it here lets the default agent execute shell tools instead of
+# refusing them, without core importing tools or gateway.
+
+_subprocess_presenter_factory: SubprocessPresenterFactory | None = None
+
+
+def set_subprocess_presenter_factory(factory: SubprocessPresenterFactory | None) -> None:
+    """Register (or clear) the presenter the default agent gives shell tools."""
+    global _subprocess_presenter_factory
+    _subprocess_presenter_factory = factory
+
+
+def get_subprocess_presenter_factory() -> SubprocessPresenterFactory | None:
+    """Return the registered presenter factory, or ``None`` before boot."""
+    return _subprocess_presenter_factory

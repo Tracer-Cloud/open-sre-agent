@@ -1,10 +1,10 @@
 """Compose one interactive-shell turn from its action/gather/answer adapters.
 
 Adapter-only: binds the shell's action-turn (``action_turn``), gather pass
-(``integration_tool_gathering``), and answer (``answer_turn``) adapters to the
-surface-agnostic ``run_turn`` engine. Each adapter owns its own binding; this
-file only composes them and attaches turn accounting. The injection contracts
-live in ``turn_seams``.
+(``integration_tool_gathering``), and answer (``answer_turn``) adapters, then
+calls the public host API (:meth:`AgentSession.chat`). Each adapter owns its
+own binding; this file only composes them and attaches turn accounting.
+The injection contracts live in ``turn_seams``.
 """
 
 from __future__ import annotations
@@ -14,8 +14,16 @@ from dataclasses import dataclass
 
 from rich.console import Console
 
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.ports import AnswerRequest, OutputSink
-from core.agent_harness.turns.orchestrator import run_turn
+from core.agent_harness.session_goal.goal import (
+    SessionGoal,
+)
+from core.agent_harness.session_goal.progress import format_session_goal_progress
+from core.agent_harness.session_goal.run_until import run_until_session_goal
+from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
+from core.agent_harness.turns.gather_observation import GatheredEvidence
+from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
@@ -87,7 +95,9 @@ class _ShellTurnBindings:
             request=request,
         )
 
-    def gather_evidence(self, text: str, *, turn_plan: TurnPlan | None = None) -> str | None:
+    def gather_evidence(
+        self, text: str, *, turn_plan: TurnPlan | None = None
+    ) -> str | GatheredEvidence | None:
         resolved = turn_plan.resolved_integrations if turn_plan is not None else None
         return self.gather(
             text,
@@ -95,6 +105,17 @@ class _ShellTurnBindings:
             self.console,
             resolved_integrations=resolved,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _ShellChatDispatcher:
+    """TTY adapter: satisfies :class:`ChatDispatcher` for :meth:`AgentSession.chat`."""
+
+    session: Session
+    bindings: ChatTurnBindings
+
+    def dispatch(self, message: str) -> TurnResult:
+        return dispatch_chat_turn(message, self.session, self.bindings)
 
 
 def execute_shell_turn(
@@ -113,7 +134,7 @@ def execute_shell_turn(
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
-    """Execute one submitted interactive-shell turn.
+    """Execute one submitted interactive-shell turn via :meth:`AgentSession.chat`.
 
     The action driver, gather pass, and conversational assistant default to the
     shell adapters but are overridable via ``execute_actions`` / ``gather_evidence``
@@ -146,16 +167,42 @@ def execute_shell_turn(
         request_exit=request_exit,
         tool_hooks=tool_hooks,
     )
-    return run_turn(
-        text,
+
+    def _chat(message: str) -> TurnResult:
+        # Fresh accounting per outer iteration (nudge text changes each turn).
+        chat_bindings = ChatTurnBindings(
+            execute_actions=bindings.execute_actions,
+            answer=bindings.answer_question,
+            gather=bindings.gather_evidence,
+            accounting=ShellTurnAccounting(session=session, text=message, recorder=recorder),
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            surface="interactive_shell",
+            output=resolved_output,
+        )
+        # Shell already owns env/session boot; do not reload env per turn.
+        agent_session = AgentSession(SessionConfig(load_env=False))
+        return agent_session.chat(
+            message,
+            agent=_ShellChatDispatcher(session=session, bindings=chat_bindings),
+        )
+
+    def _on_progress(goal: SessionGoal) -> None:
+        rendered = format_session_goal_progress(goal, session=session)
+        if rendered:
+            # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
+            console.print(rendered, markup=False)
+
+    # Always one action-agent turn first. Session-goal loop continues only when that
+    # turn (or a prior turn) attached a SessionGoal via structured handoff /
+    # explicit host attach — never via user-text keyword detection.
+    return run_until_session_goal(
+        _chat,
         session,
-        execute_actions=bindings.execute_actions,
-        answer=bindings.answer_question,
-        gather=bindings.gather_evidence,
-        accounting=ShellTurnAccounting(session=session, text=text, recorder=recorder),
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-    )
+        text,
+        cancel_requested=lambda: host_cancel_requested(resolved_output),
+        on_progress=_on_progress,
+    ).last_result
 
 
 __all__ = ["execute_shell_turn"]

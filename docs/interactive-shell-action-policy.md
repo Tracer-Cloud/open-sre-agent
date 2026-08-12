@@ -19,7 +19,7 @@ recurring source of precedence drift.
 1. There is no regex/keyword intent inference. Non-command turns are
    selected entirely by the shell action agent via native tool-calling.
 2. Tool selection is driven by the action-agent system prompt
-   (`core/agent_harness/prompts/action_agent_prompt.py`) and the per-tool descriptions
+   (`core/agent_harness/prompts/action/assemble.py`) and the per-tool descriptions
    in the tool catalog (`tools/interactive_shell/*`). Keep both precise — they
    are the only selection signal.
 3. The action path does not post-hoc rewrite the model's tool calls. Tool calls
@@ -75,7 +75,7 @@ answered without adding keyword/regex rules. Two complementary mechanisms:
    `core/agent_harness/prompts/assistant.py`) lists the configured set as
    facts, letting the model answer directly when state is already known.
 2. LLM-driven discovery. The action-agent system prompt
-   (`core/agent_harness/prompts/action_agent_prompt.py`) lets the model, at its own
+   (`core/agent_harness/prompts/action/assemble.py`) lets the model, at its own
    discretion, emit a read-only discovery action (for example
    `slash_invoke("/integrations", ["list"])` or `["verify"]`) to discover the
    answer instead of deflecting. There is no keyword mapping for this — the LLM

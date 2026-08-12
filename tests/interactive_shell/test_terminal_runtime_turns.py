@@ -36,9 +36,12 @@ def test_turn_needs_exclusive_stdin_for_bare_integration_menu(
     assert loop_input_policy.turn_needs_exclusive_stdin("/mcp", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/memory", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/model", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/loops", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/theme", session) is True
 
     assert loop_input_policy.turn_needs_exclusive_stdin("/integrations list", session) is False
+    assert loop_input_policy.turn_needs_exclusive_stdin("/loops active", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/loops messages", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/theme blue", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/verify", session) is True
     assert loop_input_policy.turn_needs_exclusive_stdin("/verify datadog", session) is False
@@ -117,6 +120,37 @@ def test_turn_needs_exclusive_stdin_for_integration_remove(
     assert (
         loop_input_policy.turn_needs_exclusive_stdin("integrations remove github", session) is False
     )
+
+
+def test_turn_needs_exclusive_stdin_for_background_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``/background`` status/list/show print Rich tables; exclusive stdin keeps
+    the next ``prompt_async()`` from racing the table render and leaking CPR
+    bytes into the prompt buffer. Mutating forms like ``on`` stay ungated."""
+    monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
+    session = Session()
+
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background status", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background list", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background show", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background show abc12", session) is True
+
+    assert loop_input_policy.turn_needs_exclusive_stdin("/background on", session) is False
+    # Bare command words are not recognized under literal-/slash gating.
+    assert loop_input_policy.turn_needs_exclusive_stdin("background", session) is False
+
+
+def test_turn_needs_exclusive_stdin_for_health(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``/health`` prints the Integration Checks Rich table."""
+    monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
+    session = Session()
+
+    assert loop_input_policy.turn_needs_exclusive_stdin("/health", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("health", session) is False
 
 
 def test_turn_needs_exclusive_stdin_for_onboard(

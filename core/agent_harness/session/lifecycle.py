@@ -12,7 +12,7 @@ re-implementing bootstrap + persistence wiring:
   core bootstrap, restore its saved conversation context, and reopen storage.
 - **rotate** — close the outgoing session and create a fresh replacement (new
   handle; used by the gateway).
-- **open_storage** — open the JSONL stream for an already-bootstrapped handle
+- **open_store** — open the JSONL stream for an already-bootstrapped handle
   (interactive REPL entry after ``SessionBootstrapSpec``).
 - **rotate_in_place** / **rebind_for_resume** — flush + reset the *live* handle
   the REPL already holds (``/new`` / ``/resume``), preserving loop-owned UI
@@ -35,7 +35,7 @@ import logging
 from datetime import datetime
 from typing import Any, TypeVar
 
-from core.agent_harness.session.persistence.ports import SessionRepo, SessionStorage
+from core.agent_harness.session.persistence.ports import SessionRepo, SessionStore
 
 # Import from submodules (not the package __init__) so the session package can
 # re-export SessionManager without a circular import.
@@ -61,29 +61,29 @@ class SessionManager:
     def __init__(
         self,
         *,
-        storage: SessionStorage | None = None,
+        store: SessionStore | None = None,
         repo: SessionRepo | None = None,
     ) -> None:
-        if storage is None or repo is None:
+        if store is None or repo is None:
             from core.agent_harness.session import (
                 DEFAULT_SESSION_REPO,
-                DEFAULT_SESSION_STORAGE,
+                DEFAULT_SESSION_STORE,
             )
 
-            storage = storage or DEFAULT_SESSION_STORAGE
+            store = store or DEFAULT_SESSION_STORE
             repo = repo or DEFAULT_SESSION_REPO
-        self._storage = storage
+        self._store = store
         self._repo = repo
 
     @classmethod
     def for_session(cls, session: SessionCore) -> SessionManager:
-        """Build a manager bound to a live session's own storage backend.
+        """Build a manager bound to a live session's own store.
 
         The single named construction point for the in-place lifecycle calls
-        (``/new`` / ``/resume``) so they all bind to ``session.storage``
+        (``/new`` / ``/resume``) so they all bind to ``session.store``
         consistently instead of re-passing it at each call site.
         """
-        return cls(storage=session.storage)
+        return cls(store=session.store)
 
     # ─── Core bootstrap ──────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ class SessionManager:
         hydrate_integrations: bool = True,
         warm_integrations: bool = False,
         persistent_tasks: bool = True,
-        open_storage: bool = True,
+        open_store: bool = True,
     ) -> SessionCore:
         """Build a fresh session, bootstrap it, and open its storage stream."""
         session = SessionCore(session_id=session_id) if session_id else SessionCore()
@@ -129,26 +129,26 @@ class SessionManager:
         # session.record()/append go through the same storage the manager opens
         # and flushes. Otherwise an injected backend is bypassed by the default
         # JSONL field on SessionCore.
-        session.storage = self._storage
+        session.store = self._store
         self.bootstrap(
             session,
             hydrate_integrations=hydrate_integrations,
             warm_integrations=warm_integrations,
             persistent_tasks=persistent_tasks,
         )
-        if open_storage:
-            self.open_storage(session)
+        if open_store:
+            self.open_store(session)
         return session
 
-    def open_storage(self, session: _S) -> _S:
+    def open_store(self, session: _S) -> _S:
         """Open the JSONL stream for an already-bootstrapped session handle.
 
         The interactive shell bootstraps via ``SessionBootstrapSpec`` first, then
         calls this once it knows the run is an interactive REPL (not a one-shot
         ``initial_input`` path).
         """
-        session.storage = self._storage
-        self._storage.open_session(session)
+        session.store = self._store
+        self._store.open_session(session)
         return session
 
     def resolve(
@@ -165,11 +165,11 @@ class SessionManager:
             hydrate_integrations=hydrate_integrations,
             warm_integrations=warm_integrations,
             persistent_tasks=persistent_tasks,
-            open_storage=False,
+            open_store=False,
         )
         data = self._repo.load_session(session_id)
         self.restore_context(session, data)
-        self._storage.reopen_session(session.session_id)
+        self._store.reopen_session(session.session_id)
         return session
 
     def rotate(
@@ -185,7 +185,7 @@ class SessionManager:
             outgoing = SessionCore(session_id=old_session_id)
             # Reconstructed handle: align its backend with the manager's so the
             # close flush lands on the same storage the manager owns.
-            outgoing.storage = self._storage
+            outgoing.store = self._store
             # Restore the persisted transcript so session-end memory extraction
             # sees the outgoing conversation (not an empty reconstructed handle).
             self.restore_context(outgoing, self._repo.load_session(old_session_id))
@@ -210,11 +210,11 @@ class SessionManager:
         ``prompt_refresh_fn`` is preserved for the continuing REPL. Schedules
         memory extraction from the outgoing transcript before clearing it.
         """
-        session.storage = self._storage
+        session.store = self._store
         self._flush(session)
         self._schedule_memory_extraction(session)
         session.clear()
-        self._storage.open_session(session)
+        self._store.open_session(session)
         return session
 
     def rebind_for_resume(
@@ -232,7 +232,7 @@ class SessionManager:
         without rotating identity. Either way the live handle is reused, so
         loop-owned ``prompt_refresh_fn`` is preserved (flush, not close).
         """
-        session.storage = self._storage
+        session.store = self._store
         if session.session_id != session_id:
             self._flush(session)
             self._schedule_memory_extraction(session)
@@ -241,7 +241,7 @@ class SessionManager:
             if isinstance(started_at, str) and started_at:
                 with contextlib.suppress(Exception):
                     session.started_at = datetime.fromisoformat(started_at).timestamp()
-            self._storage.reopen_session(session_id)
+            self._store.reopen_session(session_id)
         else:
             session.clear(rotate_identity=False)
             session.session_id = session_id
@@ -269,6 +269,13 @@ class SessionManager:
         context = data.get("accumulated_context")
         if isinstance(context, dict):
             session.accumulated_context = dict(context)
+        goal_state = data.get("session_goal_state")
+        if isinstance(goal_state, dict):
+            from core.agent_harness.session_goal.persist import (
+                apply_session_goal_state,
+            )
+
+            apply_session_goal_state(session, goal_state)
         history = data.get("history")
         if isinstance(history, list):
             session.history = [dict(item) for item in history if isinstance(item, dict)]
@@ -312,16 +319,28 @@ class SessionManager:
                 wait_for_completion=wait_for_memory_extraction,
             )
 
+    def flush(self, session: SessionCore) -> None:
+        """Best-effort persist buffered session state (including session goals).
+
+        Gateway ``resolve`` rebuilds a fresh :class:`SessionCore` from disk each
+        inbound turn, so mutations such as ``/goal pause`` must flush or the
+        next message restores the pre-pause snapshot and continuation resumes.
+        Safe mid-session even after a trailing ``leaf``: stores append a new
+        ``session_goal_state`` when it changed and do not write a second leaf.
+        Failures are logged, never raised.
+        """
+        self._flush(session)
+
     @staticmethod
     def _flush(session: SessionCore) -> None:
         """Best-effort persist through the session's own backend.
 
-        Flushes through ``session.storage`` — the backend it recorded turns
+        Flushes through ``session.store`` — the backend it recorded turns
         through — so the end-of-session marker lands with the data. A failed
         flush is logged, never raised, so teardown/rotation cannot crash.
         """
         try:
-            session.storage.flush(session)
+            session.store.flush(session)
         except OSError:
             logger.debug("[session] flush failed", exc_info=True)
 

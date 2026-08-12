@@ -20,7 +20,6 @@ Keep tests under domain directories — not loose files at the `tests/` root.
 | `tests/<domain>/` | Unit and integration tests for product modules (`cli/`, `tools/`, `integrations/`, `core/`, `platform/`, …). |
 | `tests/synthetic/` | Synthetic RCA simulations with scored fixtures and deterministic scenario assets. |
 | `tests/e2e/` | Real end-to-end scenarios against live services and infrastructure. See [e2e/AGENTS.md](e2e/AGENTS.md) for scenario design principles. |
-| `tests/deployment/` | Deployment validation and infrastructure deployment tests. |
 | `tests/github_ci/` | Repo hygiene guards (naming, import boundaries, architecture references). |
 | `tests/conftest.py` | Shared pytest fixtures for the whole tree. |
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Final
 
-from config.config import (
+from config.constants.llm import CUSTOM_OPENAI_API_KEY_ENV
+from config.llm_models import (
     CUSTOM_OPENAI_LLM_CONFIG,
     DEEPSEEK_BASE_URL,
     DEEPSEEK_LLM_CONFIG,
@@ -22,7 +23,6 @@ from config.config import (
     OPENROUTER_LLM_CONFIG,
     LLMModelConfig,
 )
-from config.constants.llm import CUSTOM_OPENAI_API_KEY_ENV
 from core.llm.types import ModelType
 
 
@@ -96,8 +96,6 @@ OPENAI_COMPATIBLE_PROVIDERS: Final[dict[str, OpenAICompatProvider]] = {
         "ollama",
         api_key_default="ollama",
     ),
-    # User-supplied base URL (LiteLLM proxy, vLLM, LocalAI, internal gateway).
-    # settings_prefix is the underscore form because the slug is hyphenated.
     "custom-openai": OpenAICompatProvider(
         CUSTOM_OPENAI_LLM_CONFIG,
         None,
@@ -113,12 +111,7 @@ def is_openai_compat_provider(provider: str) -> bool:
 
 
 def select_compat_model(settings: Any, provider: str, model_type: ModelType) -> str:
-    """Select the configured model for *provider* and *model_type*.
-
-    Uses the provider's ``settings_prefix`` (not the raw slug) so hyphenated
-    slugs like ``custom-openai`` resolve to the ``custom_openai_*_model``
-    attributes instead of an invalid ``custom-openai_*_model`` lookup.
-    """
+    """Select the configured model for *provider* and *model_type*."""
     if provider == "ollama":
         return str(settings.ollama_model)
     prefix = OPENAI_COMPATIBLE_PROVIDERS[provider].settings_prefix
@@ -137,8 +130,6 @@ def resolve_openai_compat_provider(
     if provider == "ollama":
         base_url = f"{settings.ollama_host.rstrip('/')}/v1"
     elif provider == "custom-openai":
-        # User-supplied, already normalized (no trailing slash); used verbatim so
-        # the OpenAI client appends /chat/completions without doubling /v1.
         base_url = settings.custom_openai_base_url
     if not base_url:
         raise RuntimeError(f"OpenAI-compatible provider '{provider}' is missing a base URL.")

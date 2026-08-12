@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from core.agent_harness.ports import SessionStore
+from core.agent_harness.ports import SessionState
 from core.state import MAX_CONVERSATION_MESSAGES
 from core.state.transcript_window import compact_messages_to_window
 
 
-def record_conversation_turn(session: SessionStore, user_text: str, assistant_text: str) -> None:
+def record_conversation_turn(session: SessionState, user_text: str, assistant_text: str) -> None:
     """Append one user/assistant exchange and compact to the message window.
 
     The single write path for ``session.cli_agent_messages`` in the turn
@@ -24,7 +24,7 @@ def record_conversation_turn(session: SessionStore, user_text: str, assistant_te
     _schedule_turn_memory_extraction(session)
 
 
-def _schedule_turn_memory_extraction(session: SessionStore) -> None:
+def _schedule_turn_memory_extraction(session: SessionState) -> None:
     try:
         from core.agent_harness.session.memory_extraction import schedule_memory_extraction
 

@@ -76,26 +76,22 @@ the full unit suite.
 Map changed paths to targets using the `PathRule` entries in
 [`.github/ci/test_scope_rules.py`](.github/ci/test_scope_rules.py):
 
-- Rules with `always_escalate=True` map to `make test-cov`
+- Rules with `always_escalate=True` identify high-blast-radius changes. Run the
+  focused package and contract tests affected by the change.
 - All other rules list a `test_targets` tuple — run those with
   `uv run python -m pytest <targets>`
 - Changed files under `tests/` with no app rule run as-is
 
 Use a focused `-k` filter when you only need a subset of a package.
 
-## 3) Escalation rules (must run full unit CI suite)
+## 3) Full suite runs in CI
 
-Run `make test-cov` (instead of only targeted tests) when any of these are true:
+The focused suite from section 2 is the required local test gate. Do not run
+`make test-cov` as part of the normal local pre-push workflow; pull-request CI
+runs the repository test suite in parallel shards.
 
-- Shared/core code changed (`core/state/`, `core/domain/types/`, `tools/investigation/`, `tools/investigation/stages/`)
-- 3+ app areas changed in one diff
-- New files with unclear blast radius
-- Cross-cutting refactor
-- You are unsure test scope is sufficient
-
-```bash
-make test-cov
-```
+List the focused tests you ran in the PR description. CI is the authoritative
+repository-wide test result.
 
 ## 4) Conditional checks
 
@@ -110,9 +106,6 @@ If integration config, integration wiring, or related tools changed, also run th
 ```bash
 make verify-integrations
 ```
-
-If Fargate CDK code, its deployment commands, or infrastructure tests changed,
-also run:
 
 ## 5) Optional extra confidence
 

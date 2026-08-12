@@ -133,6 +133,7 @@ def load_env_integration_services() -> list[str]:
         _all_env("ROCKETCHAT_SERVER_URL", "ROCKETCHAT_AUTH_TOKEN", "ROCKETCHAT_USER_ID")
         or _env_is_set("ROCKETCHAT_WEBHOOK_URL"),
     )
+    add("buzz", _env_is_set("BUZZ_PRIVATE_KEY"))
     add("slack", _any_env("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"))
     add("smtp", _env_is_set("SMTP_HOST"))
     add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))
@@ -160,6 +161,8 @@ def load_env_integration_services() -> list[str]:
     add("x_mcp", _any_env("X_MCP_COMMAND", "X_MCP_URL", "X_MCP_AUTH_TOKEN"))
     add("mariadb", _all_env("MARIADB_HOST", "MARIADB_DATABASE"))
     add("opensearch", _env_is_set("OPENSEARCH_URL"))
+
+    services.extend(_catalog_impl.external_env_presence_services())
 
     return list(dict.fromkeys(services))
 
@@ -287,6 +290,13 @@ def configured_integration_health() -> list[tuple[str, str]]:
     return health
 
 
+# Re-exported so an out-of-tree integration registers through this facade
+# instead of reaching into the private implementation module.
+register_classifier = _catalog_impl.register_classifier
+register_env_loader = _catalog_impl.register_env_loader
+register_env_presence = _catalog_impl.register_env_presence
+
+
 __all__ = [
     "classify_integrations",
     "configured_integration_health",
@@ -296,5 +306,8 @@ __all__ = [
     "load_integrations",
     "merge_integrations_by_service",
     "merge_local_integrations",
+    "register_classifier",
+    "register_env_loader",
+    "register_env_presence",
     "resolve_effective_integrations",
 ]

@@ -26,7 +26,7 @@ from core.tool_framework.schema import (
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -55,7 +55,7 @@ class RegisteredTool:
     source_id: str | None = None
     evidence_type: EvidenceType | None = None
     side_effect_level: SideEffectLevel | None = None
-    surfaces: tuple[ToolSurface, ...] = _DEFAULT_SURFACES
+    surfaces: tuple[ToolSurface | str, ...] = _DEFAULT_SURFACES
     use_cases: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)
     anti_examples: list[str] = field(default_factory=list)

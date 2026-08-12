@@ -9,8 +9,8 @@ import time
 
 from botocore.exceptions import ClientError
 
-from platform.deployment_ec2.client import DEFAULT_REGION
 from platform.deployment_ec2.config import (
+    DEFAULT_REGION,
     GATEWAY_AMI_DESTROY_PURGE_ENV,
     GATEWAY_AMI_ID_ENV,
     INSTANCE_TYPE,

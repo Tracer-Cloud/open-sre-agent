@@ -63,11 +63,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=None,
         help=(
             "Choose which live turn scenarios run. Use 'all' to run the FULL "
-            "suite (the default is a small representative downsample). Otherwise "
-            "'<mode>:<n>' where mode is 'complex' (most complex) or 'sample' "
-            "(random), and n is a count, a fraction, or a percentage (e.g. "
-            "'complex:5', 'sample:0.1', 'sample:10%'). Also settable via the "
-            "TURN_SELECT env var."
+            "suite (the default is a small representative downsample). "
+            "Otherwise: '<mode>:<n>' where mode is 'complex' or 'sample' "
+            "(e.g. 'complex:5', 'sample:10%'), or a comma-separated scenario "
+            "id / numeric-prefix list (e.g. '346,347' or "
+            "'346-metric-read-windows-users'). Also settable via TURN_SELECT."
         ),
     )
     group.addoption(

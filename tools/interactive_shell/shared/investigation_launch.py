@@ -27,7 +27,7 @@ from tools.interactive_shell.shared.execution_policy import (
 class ForegroundInvestigationStatus(StrEnum):
     """Terminal outcome of one foreground REPL/UI investigation run.
 
-    Distinct from ``gateway.storage.investigations.store.InvestigationStatus``,
+    Distinct from ``gateway.core.storage.investigations.store.InvestigationStatus``,
     which tracks a different state machine (the async gateway job lifecycle,
     including in-flight ``QUEUED``/``RUNNING`` states this one never has).
     Do not merge the two. Canonical definition lives here (``tools/``, tier 2)

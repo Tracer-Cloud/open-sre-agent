@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from enum import StrEnum
 
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
@@ -21,19 +21,21 @@ from config.llm_auth.records import (
 )
 from config.secrets.store import SecretSaveResult
 
-CredentialSource = Literal[
-    "env",
-    "keyring",
-    # The owner-only local file used when no OS keychain could store the secret.
-    # Distinct from "local", which means a locally hosted model runtime (Ollama).
-    "fallback",
-    "metadata",
-    "cli",
-    "ambient",
-    "local",
-    "none",
-    "unknown",
-]
+
+class CredentialSource(StrEnum):
+    """Where a provider's credential resolves from, for prompt-safe status."""
+
+    ENV = "env"
+    KEYRING = "keyring"
+    #: The owner-only local file used when no OS keychain could store the secret.
+    #: Distinct from ``LOCAL``, which means a locally hosted model runtime (Ollama).
+    FALLBACK = "fallback"
+    METADATA = "metadata"
+    CLI = "cli"
+    AMBIENT = "ambient"
+    LOCAL = "local"
+    NONE = "none"
+    UNKNOWN = "unknown"
 
 
 class MissingLLMCredentialError(RuntimeError):
@@ -71,7 +73,11 @@ class CredentialResolution:
 
     @property
     def ok(self) -> bool:
-        return bool(self.api_key) or self.source in {"cli", "ambient", "local"}
+        return bool(self.api_key) or self.source in {
+            CredentialSource.CLI,
+            CredentialSource.AMBIENT,
+            CredentialSource.LOCAL,
+        }
 
     def __repr__(self) -> str:
         redacted = "<set>" if self.api_key else "<empty>"
@@ -91,18 +97,10 @@ def _bool_record_value(record: dict[str, str], key: str, default: bool) -> bool:
 
 def _normalize_source(raw: str | None, *, fallback: CredentialSource) -> CredentialSource:
     value = (raw or "").strip().lower()
-    allowed = {
-        "env",
-        "keyring",
-        "fallback",
-        "metadata",
-        "cli",
-        "ambient",
-        "local",
-        "none",
-        "unknown",
-    }
-    return value if value in allowed else fallback  # type: ignore[return-value]
+    try:
+        return CredentialSource(value)
+    except ValueError:
+        return fallback
 
 
 def _env_value(env_var: str) -> str:
@@ -173,16 +171,16 @@ _AMBIENT_PROBES: dict[str, Callable[[ProviderSpec], _AmbientProbeResult]] = {
 def _source_status(provider: str, source: CredentialSource, detail: str) -> CredentialStatus:
     return CredentialStatus(
         provider=provider,
-        configured=source not in {"none", "unknown"},
+        configured=source not in {CredentialSource.NONE, CredentialSource.UNKNOWN},
         source=source,
-        verified=source not in {"metadata", "unknown"},
+        verified=source not in {CredentialSource.METADATA, CredentialSource.UNKNOWN},
         stale=False,
         detail=detail,
     )
 
 
 def _record_status(spec: ProviderSpec, record: dict[str, str]) -> CredentialStatus:
-    source = _normalize_source(record.get("source"), fallback="metadata")
+    source = _normalize_source(record.get("source"), fallback=CredentialSource.METADATA)
     stale = _bool_record_value(record, "stale", False)
     verified = _bool_record_value(record, "verified", not stale)
     detail = record.get("detail") or (
@@ -192,7 +190,9 @@ def _record_status(spec: ProviderSpec, record: dict[str, str]) -> CredentialStat
     return CredentialStatus(
         provider=spec.value,
         configured=True,
-        source="metadata" if source in {"keyring", "fallback"} else source,
+        source=CredentialSource.METADATA
+        if source in {CredentialSource.KEYRING, CredentialSource.FALLBACK}
+        else source,
         verified=verified and not stale,
         stale=stale,
         detail=detail,
@@ -210,7 +210,7 @@ def status(provider: str) -> CredentialStatus:
         return CredentialStatus(
             provider=provider.strip().lower(),
             configured=False,
-            source="unknown",
+            source=CredentialSource.UNKNOWN,
             verified=False,
             stale=False,
             detail=f"Unsupported LLM provider: {provider}",
@@ -220,7 +220,7 @@ def status(provider: str) -> CredentialStatus:
         if spec.api_key_env and _env_value(spec.api_key_env):
             return _source_status(
                 spec.value,
-                "env",
+                CredentialSource.ENV,
                 f"{spec.api_key_env} is set in the environment.",
             )
         record = resolve_provider_auth_record(spec.value)
@@ -229,7 +229,7 @@ def status(provider: str) -> CredentialStatus:
         return CredentialStatus(
             provider=spec.value,
             configured=False,
-            source="none",
+            source=CredentialSource.NONE,
             verified=False,
             stale=False,
             detail=f"{spec.api_key_env} is not configured.",
@@ -237,14 +237,17 @@ def status(provider: str) -> CredentialStatus:
 
     if spec.credential_kind == "cli":
         record = resolve_provider_auth_record(spec.value)
-        record_source = _normalize_source(record.get("source"), fallback="metadata")
+        record_source = _normalize_source(record.get("source"), fallback=CredentialSource.METADATA)
         stale = _bool_record_value(record, "stale", False)
         verified = _bool_record_value(record, "verified", False)
         if record and verified and not stale:
             return CredentialStatus(
                 provider=spec.value,
                 configured=True,
-                source="cli" if record_source in {"metadata", "unknown", "none"} else record_source,
+                source=CredentialSource.CLI
+                if record_source
+                in {CredentialSource.METADATA, CredentialSource.UNKNOWN, CredentialSource.NONE}
+                else record_source,
                 verified=True,
                 stale=False,
                 detail=record.get("detail") or f"{spec.label} auth metadata is present.",
@@ -257,7 +260,7 @@ def status(provider: str) -> CredentialStatus:
                 return CredentialStatus(
                     spec.value,
                     False,
-                    "none",
+                    CredentialSource.NONE,
                     False,
                     False,
                     "No CLI adapter registered.",
@@ -267,13 +270,13 @@ def status(provider: str) -> CredentialStatus:
             return CredentialStatus(
                 spec.value,
                 False,
-                "unknown",
+                CredentialSource.UNKNOWN,
                 False,
                 False,
                 f"CLI auth status could not be checked: {exc}",
             )
         configured = probe.installed and probe.logged_in is True
-        source: CredentialSource = "cli" if configured else "none"
+        source: CredentialSource = CredentialSource.CLI if configured else CredentialSource.NONE
         return CredentialStatus(
             provider=spec.value,
             configured=configured,
@@ -289,7 +292,7 @@ def status(provider: str) -> CredentialStatus:
             return CredentialStatus(
                 spec.value,
                 False,
-                "unknown",
+                CredentialSource.UNKNOWN,
                 False,
                 False,
                 "No ambient credential probe registered.",
@@ -300,7 +303,7 @@ def status(provider: str) -> CredentialStatus:
             return CredentialStatus(
                 spec.value,
                 False,
-                "unknown",
+                CredentialSource.UNKNOWN,
                 False,
                 False,
                 f"{spec.label} ambient credential check failed unexpectedly: {exc}",
@@ -308,7 +311,7 @@ def status(provider: str) -> CredentialStatus:
         return CredentialStatus(
             provider=spec.value,
             configured=result.ok,
-            source="ambient" if result.ok else "none",
+            source=CredentialSource.AMBIENT if result.ok else CredentialSource.NONE,
             verified=result.ok,
             stale=False,
             detail=result.detail,
@@ -319,13 +322,15 @@ def status(provider: str) -> CredentialStatus:
         return CredentialStatus(
             provider=spec.value,
             configured=True,
-            source="local",
+            source=CredentialSource.LOCAL,
             verified=True,
             stale=False,
             detail=f"Ollama host: {host}.",
         )
 
-    return CredentialStatus(spec.value, False, "unknown", False, False, "Unknown auth kind.")
+    return CredentialStatus(
+        spec.value, False, CredentialSource.UNKNOWN, False, False, "Unknown auth kind."
+    )
 
 
 def _mark_stale(spec: ProviderSpec, detail: str) -> None:
@@ -353,7 +358,7 @@ def resolve_for_request(provider: str) -> CredentialResolution:
             return CredentialResolution(
                 provider=spec.value,
                 api_key=env_value,
-                source="env",
+                source=CredentialSource.ENV,
                 detail=f"{spec.api_key_env} resolved from environment.",
             )
 
@@ -361,7 +366,9 @@ def resolve_for_request(provider: str) -> CredentialResolution:
 
         found = lookup(spec.api_key_env)
         if found.value and found.tier in {"keyring", "fallback"}:
-            source: CredentialSource = "keyring" if found.tier == "keyring" else "fallback"
+            source: CredentialSource = (
+                CredentialSource.KEYRING if found.tier == "keyring" else CredentialSource.FALLBACK
+            )
             detail = (
                 f"{spec.api_key_env} resolved from secure local storage."
                 if found.tier == "keyring"
@@ -391,7 +398,7 @@ def resolve_for_request(provider: str) -> CredentialResolution:
             return CredentialResolution(
                 provider=spec.value,
                 api_key="",
-                source="unknown",
+                source=CredentialSource.UNKNOWN,
                 detail=(
                     f"Could not reach the system keychain to check {spec.api_key_env}: "
                     f"{found.keyring_error} Retry once the keychain is reachable."
@@ -403,30 +410,32 @@ def resolve_for_request(provider: str) -> CredentialResolution:
             f"or run `opensre auth login {spec.value}`."
         )
         _mark_stale(spec, detail)
-        return CredentialResolution(spec.value, "", "none", detail)
+        return CredentialResolution(spec.value, "", CredentialSource.NONE, detail)
 
     if spec.credential_kind == "cli":
         return CredentialResolution(
             provider=spec.value,
             api_key="",
-            source="cli",
+            source=CredentialSource.CLI,
             detail=f"{spec.label} uses vendor CLI authentication.",
         )
     if spec.credential_kind == "ambient":
         return CredentialResolution(
             provider=spec.value,
             api_key="",
-            source="ambient",
+            source=CredentialSource.AMBIENT,
             detail=f"{spec.label} uses ambient credentials.",
         )
     if spec.credential_kind == "local":
         return CredentialResolution(
             provider=spec.value,
             api_key="",
-            source="local",
+            source=CredentialSource.LOCAL,
             detail=f"{spec.label} uses local runtime configuration.",
         )
-    return CredentialResolution(spec.value, "", "unknown", "Unsupported provider auth kind.")
+    return CredentialResolution(
+        spec.value, "", CredentialSource.UNKNOWN, "Unsupported provider auth kind."
+    )
 
 
 def require_for_request(provider: str) -> CredentialResolution:
@@ -460,7 +469,9 @@ def save_api_key(provider: str, value: str, *, detail: str | None = None) -> Sec
     from config.secrets.store import save_secret
 
     result = save_secret(spec.api_key_env, value)
-    source: CredentialSource = "fallback" if result.used_fallback else "keyring"
+    source: CredentialSource = (
+        CredentialSource.FALLBACK if result.used_fallback else CredentialSource.KEYRING
+    )
     save_provider_auth_record(
         provider=spec.value,
         auth_name=spec.value,
@@ -505,12 +516,12 @@ def source_for_api_key_env(env_var: str) -> CredentialSource:
     """Prompt-safe source lookup for legacy env-var-based callers."""
     normalized = env_var.strip()
     if _env_value(normalized):
-        return "env"
+        return CredentialSource.ENV
     for provider, provider_env in API_KEY_PROVIDER_ENVS.items():
         if provider_env == normalized:
             provider_status = status(provider)
-            return provider_status.source if provider_status.configured else "none"
-    return "none"
+            return provider_status.source if provider_status.configured else CredentialSource.NONE
+    return CredentialSource.NONE
 
 
 def has_api_key_env_status(env_var: str) -> bool:

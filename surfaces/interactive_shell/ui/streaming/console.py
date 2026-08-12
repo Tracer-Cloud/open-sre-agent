@@ -6,8 +6,10 @@ import sys
 import threading
 from typing import IO, Any, Protocol
 
-from rich.console import Console, ThemeContext
+from rich.console import Console, RenderableType, ThemeContext
 from rich.file_proxy import FileProxy
+from rich.status import Status
+from rich.style import StyleType
 from rich.theme import Theme
 
 
@@ -16,7 +18,7 @@ class _PromptSpinner(Protocol):
     streaming: bool
 
     def stop(self) -> None:
-        raise NotImplementedError
+        """Stop the prompt spinner."""
 
 
 class StreamingConsole(Console):
@@ -24,6 +26,8 @@ class StreamingConsole(Console):
 
     #: Set before ``Console.__init__`` runs, which reaches the ``file`` property.
     _output: Console | None = None
+    #: Backing store for ``record`` while ``Console.__init__`` assigns it.
+    _record_flag: bool = False
 
     def __init__(
         self,
@@ -83,6 +87,55 @@ class StreamingConsole(Console):
         if self._output is not None:
             return self._output.use_theme(theme, inherit=inherit)
         return super().use_theme(theme, inherit=inherit)
+
+    def status(
+        self,
+        status: RenderableType,
+        *,
+        spinner: str = "dots",
+        spinner_style: StyleType = "status.spinner",
+        speed: float = 1.0,
+        refresh_per_second: float = 12.5,
+    ) -> Status:
+        """Render the spinner on the console this turn renders through.
+
+        Defaults are copied from ``rich.console.Console.status`` — if Rich
+        changes them, this pins the old values silently.
+        """
+        kwargs: dict[str, Any] = {
+            "spinner": spinner,
+            "spinner_style": spinner_style,
+            "speed": speed,
+            "refresh_per_second": refresh_per_second,
+        }
+        if self._output is not None:
+            return self._output.status(status, **kwargs)
+        return super().status(status, **kwargs)
+
+    @property
+    def record(self) -> bool:
+        """Recording state of the console this turn renders through.
+
+        ``print`` delegates to ``_output``, so segments only ever reach that
+        console's record buffer. Toggling ``record`` here must therefore toggle
+        it on the delegate, or ``capture_console_segment`` records nothing.
+        """
+        if self._output is not None:
+            return self._output.record
+        return self._record_flag
+
+    @record.setter
+    def record(self, value: bool) -> None:
+        if self._output is not None:
+            self._output.record = value
+            return
+        self._record_flag = value
+
+    def export_text(self, *, clear: bool = True, styles: bool = False) -> str:
+        """Export recorded text from the console this turn renders through."""
+        if self._output is not None:
+            return self._output.export_text(clear=clear, styles=styles)
+        return super().export_text(clear=clear, styles=styles)
 
     @property
     def file(self) -> IO[str]:

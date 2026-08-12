@@ -22,13 +22,13 @@ from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from config.principal import Actor, Principal
 from config.scope_context import current_scope
-from gateway.billing.credits_client import CreditsOutcome
-from gateway.slack.dispatcher import _SlackTurnDispatcher
-from gateway.slack.events import SlackInboundMessage
-from gateway.slack.principal import slack_scope
-from gateway.slack.settings import SlackGatewaySettings
+from gateway.core.billing.credits_client import CreditsOutcome
+from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
+from gateway.transports.slack.processing.events import SlackInboundMessage
+from gateway.transports.slack.processing.principal import slack_scope
+from gateway.transports.slack.settings import SlackGatewaySettings
 
-_SECURITY = "gateway.slack.security"
+_SECURITY = "gateway.transports.slack.processing.security"
 TEST_ORG = "org_border_acme"
 
 
@@ -124,8 +124,8 @@ def _dispatcher(
     resolver: _RecordingResolver,
     handler: Any,
     messaging: _Messaging | None = None,
-) -> _SlackTurnDispatcher:
-    return _SlackTurnDispatcher(
+) -> SlackTurnDispatcher:
+    return SlackTurnDispatcher(
         settings=SlackGatewaySettings(
             bot_token="xoxb-test",
             app_token="xapp-test",
@@ -214,7 +214,7 @@ def test_consume_credits_uses_org_principal_not_slack_user(
         billed.append(organization_id)
         return CreditsOutcome.UNCONFIGURED
 
-    monkeypatch.setattr("gateway.slack.dispatcher.consume_credits", _consume)
+    monkeypatch.setattr("gateway.transports.slack.processing.dispatcher.consume_credits", _consume)
     _dispatcher(resolver=_RecordingResolver(), handler=lambda *_a: None).dispatch(
         _inbound(user_id="U_ALICE")
     )

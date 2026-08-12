@@ -22,7 +22,7 @@ from platform.harness_ports import (
 )
 
 if TYPE_CHECKING:
-    from core.agent_harness.ports import SessionStore
+    from core.agent_harness.ports import SessionState
 
 __all__ = [
     "IntegrationResolutionResult",
@@ -81,7 +81,7 @@ def _has_usable_cache(cache: dict[str, Any] | None) -> bool:
     return has_resolved_integrations(cache) or not has_only_underscore_prefixed_keys(cache)
 
 
-def resolve_and_cache_integrations(session: SessionStore) -> dict[str, Any]:
+def resolve_and_cache_integrations(session: SessionState) -> dict[str, Any]:
     """Resolve a session's integration configs, using and updating its cache."""
     cached = session.resolved_integrations_cache
     if _has_usable_cache(cached):

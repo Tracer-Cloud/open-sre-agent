@@ -21,7 +21,7 @@ class _FakeStorage:
 class _FakeSession:
     def __init__(self, messages: list[tuple[str, str]]) -> None:
         self.agent = SimpleNamespace(messages=list(messages))
-        self.storage = _FakeStorage()
+        self.store = _FakeStorage()
         self.session_id = "session-under-test"
 
 

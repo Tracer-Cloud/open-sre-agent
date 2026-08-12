@@ -1,16 +1,22 @@
 """Standalone messaging gateway for inbound chat platforms.
 
-Entry points (start here):
+Subpackages:
 
-* Package main — :mod:`gateway.main` / ``gateway/main.py``
-  (``python -m gateway.main`` or ``opensre gateway start``).
-* Composition root (implementation) — :mod:`gateway.runtime.manager`.
-* Daemon helpers (pidfile / status) — :mod:`gateway.runtime.daemon`.
-* HTTP app (``MODE=web``) — :mod:`gateway.http.webapp` (``app``).
-* Telegram transport — :mod:`gateway.telegram.wiring` (``start_telegram_worker``).
-* Slack transport — :mod:`gateway.slack.wiring` (``start_slack_worker``).
+* ``core/`` — process + leaf infrastructure (``runtime``, ``storage``,
+  ``billing``, ``attachments``, ``session``, ``config``)
+* ``transports/`` — chat peers (``slack``, ``discord``, ``telegram``)
+* ``web/`` — web surface (FastAPI health / alerts / investigations; not a chat transport)
 
-See ``gateway/README.md`` § Entry points.
+Entry points:
+
+* Production — ``opensre gateway start`` (CLI wires slash ports into ``GatewayManager``)
+* Package main — :mod:`gateway.main` (fails closed; not a production entry)
+* Composition root — :mod:`gateway.core.runtime.manager`
+* Daemon helpers — :mod:`gateway.core.runtime.daemon`
+* HTTP app (``MODE=web``) — :mod:`gateway.web.webapp` (``app``)
+* Telegram — :mod:`gateway.transports.telegram.startup`
+* Slack — :mod:`gateway.transports.slack.startup`
+* Discord — :mod:`gateway.transports.discord.startup`
 """
 
 from __future__ import annotations

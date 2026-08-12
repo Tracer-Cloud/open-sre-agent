@@ -14,7 +14,7 @@ from rich.text import Text
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import BOLD_BRAND, DIM, ERROR
 from tools.system.fleet_monitoring.registry import AgentRegistry
-from tools.system.fleet_monitoring.tail import AttachSession, AttachUnsupported, attach
+from tools.system.fleet_monitoring.tail import AttachSession, AttachUnsupportedError, attach
 
 _TRACE_REFRESH_PER_SECOND = 10
 # Match the throttle period to ``Live``'s refresh rate: under a 1k-line/sec
@@ -127,7 +127,7 @@ def _render_live_tail(console: Console, label: str, sess: AttachSession) -> None
 def _cmd_agents_trace(session: Session, console: Console, args: list[str]) -> bool:
     """Live-tail an agent's stdout by pid; see :func:`_render_live_tail`.
 
-    Validates eagerly (``attach()`` raises :class:`AttachUnsupported`
+    Validates eagerly (``attach()`` raises :class:`AttachUnsupportedError`
     synchronously on bad pid / unsupported fd type / missing file) so
     we never enter the ``Live`` block on a target we cannot tail.
     """
@@ -147,7 +147,7 @@ def _cmd_agents_trace(session: Session, console: Console, args: list[str]) -> bo
 
     try:
         sess = attach(pid)
-    except AttachUnsupported as exc:
+    except AttachUnsupportedError as exc:
         console.print(f"[{ERROR}]cannot trace {escape(label)}:[/] {escape(exc.reason)}")
         session.mark_latest(ok=False, kind="slash")
         return True

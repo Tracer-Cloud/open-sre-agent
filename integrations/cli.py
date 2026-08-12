@@ -582,6 +582,12 @@ def _setup_rocketchat() -> None:
     _run_spec_setup(ROCKETCHAT_SETUP)
 
 
+def _setup_buzz() -> None:
+    from integrations.buzz.setup import BUZZ_SETUP
+
+    _run_spec_setup(BUZZ_SETUP)
+
+
 def _setup_smtp() -> None:
     from integrations.smtp.setup import SMTP_SETUP
 
@@ -723,6 +729,7 @@ _HANDLERS: dict[str, Any] = {
     "discord": _setup_discord,
     "telegram": _setup_telegram,
     "rocketchat": _setup_rocketchat,
+    "buzz": _setup_buzz,
     "smtp": _setup_smtp,
     "whatsapp": _setup_whatsapp,
     "twilio": _setup_twilio,
@@ -768,19 +775,25 @@ def _setup_azure_sql() -> None:
 
 _HANDLERS["azure_sql"] = _setup_azure_sql
 
-_SETUP_SERVICES = tuple(service for service in SUPPORTED_SETUP_SERVICES if service in _HANDLERS)
 
+def setup_services() -> tuple[str, ...]:
+    """Return the services that both declare a setup order and have a handler.
 
-SUPPORTED = ", ".join(_SETUP_SERVICES)
-SUPPORTED_VERIFY = ", ".join(SUPPORTED_VERIFY_SERVICES)
+    Computed per call rather than once at import: a plugin registers its spec
+    and adds its ``_HANDLERS`` entry after this module has been imported, and a
+    snapshot taken here would reject it as unsupported for the rest of the
+    process.
+    """
+    return tuple(service for service in SUPPORTED_SETUP_SERVICES if service in _HANDLERS)
 
 
 def cmd_setup(service: str | None) -> str:
+    available = setup_services()
     if not service:
         try:
             service = _select(
                 "Which service would you like to set up?",
-                choices=list(_SETUP_SERVICES),
+                choices=list(available),
                 instruction="(use arrow keys)",
             )
         except (EOFError, KeyboardInterrupt):
@@ -788,8 +801,8 @@ def cmd_setup(service: str | None) -> str:
             sys.exit(1)
     if service:
         service = resolve_management_service(service)
-    if not service or service not in _SETUP_SERVICES:
-        _die(f"Usage: setup <service>. Supported: {SUPPORTED}")
+    if not service or service not in available:
+        _die(f"Usage: setup <service>. Supported: {', '.join(available)}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
     print(f"\n  ✓ Saved → {STORE_PATH}\n")
@@ -873,7 +886,7 @@ def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
     if service:
         service = resolve_management_service(service)
     if service and service not in SUPPORTED_VERIFY_SERVICES:
-        _die(f"Usage: verify [service]. Supported: {SUPPORTED_VERIFY}")
+        _die(f"Usage: verify [service]. Supported: {', '.join(SUPPORTED_VERIFY_SERVICES)}")
 
     results = verify_integrations(service=service, send_slack_test=send_slack_test)
 

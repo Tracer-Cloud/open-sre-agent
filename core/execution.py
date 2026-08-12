@@ -79,6 +79,7 @@ class BeforeToolCallResult:
 BeforeToolCallHook = Callable[[ToolExecutionRequest], BeforeToolCallResult | None]
 AfterToolCallHook = Callable[[ToolExecutionRequest, ToolExecutionResult], ToolExecutionPatch | None]
 ToolUpdateHook = Callable[[ToolExecutionRequest, Any], None]
+BeforeToolBatchHook = Callable[[Sequence[ToolCall]], None]
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,8 @@ class ToolExecutionHooks:
     before_tool_call: BeforeToolCallHook | None = None
     after_tool_call: AfterToolCallHook | None = None
     on_tool_update: ToolUpdateHook | None = None
+    # Fired once per provider tool-call list before any call runs (batch replay guards).
+    before_tool_batch: BeforeToolBatchHook | None = None
 
 
 def execute_tool_calls(
@@ -106,6 +109,8 @@ def execute_tool_calls(
     """
 
     hooks = hooks or ToolExecutionHooks()
+    if hooks.before_tool_batch is not None:
+        hooks.before_tool_batch(tool_calls)
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
     runtime_resources = dict(tool_resources or {})

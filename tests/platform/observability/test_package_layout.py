@@ -20,10 +20,12 @@ def test_trace_subpackage_exports_span_helpers() -> None:
         "stage_span",
         "tool_span",
         "llm_span",
+        "loop_span",
+        "loop_iteration_span",
         "emit_route",
         "traced_session",
         "mark_span_outcome",
-        "NoopSessionTraceSink",
+        "NoopSessionTraceStore",
         "is_session_trace_active",
     ):
         assert hasattr(spans, name), name

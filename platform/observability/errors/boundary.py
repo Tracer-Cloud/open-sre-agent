@@ -55,26 +55,6 @@ def report_exception(
 
 
 @contextmanager
-def report_and_swallow(
-    *,
-    logger: logging.Logger,
-    message: str,
-    tags: dict[str, str] | None = None,
-    extras: dict[str, Any] | None = None,
-    swallow: type[BaseException] | tuple[type[BaseException], ...] = Exception,
-) -> Iterator[None]:
-    """Context manager that logs + reports a matching exception, then swallows it.
-
-    Replaces bare ``try/except Exception: pass`` patterns where the caller does
-    not need the value but does want the failure visible in Sentry.
-    """
-    try:
-        yield
-    except swallow as exc:
-        report_exception(exc, logger=logger, message=message, tags=tags, extras=extras)
-
-
-@contextmanager
 def report_and_reraise(
     *,
     logger: logging.Logger,
@@ -88,7 +68,3 @@ def report_and_reraise(
     except Exception as exc:
         report_exception(exc, logger=logger, message=message, tags=tags, extras=extras)
         raise
-
-
-class OpenSRESilentFallback(Warning):
-    """Warning class for debug-only fallback paths that should still reach Sentry."""

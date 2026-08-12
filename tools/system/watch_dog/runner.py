@@ -13,6 +13,10 @@ from typing import Protocol
 
 import click
 
+from integrations.buzz.alarms import BuzzAlarmDispatcher
+from integrations.buzz.credentials import (
+    load_credentials_from_env as load_buzz_credentials_from_env,
+)
 from integrations.rocketchat.alarms import RocketChatAlarmDispatcher
 from integrations.rocketchat.credentials import (
     load_credentials_from_env as load_rocketchat_credentials_from_env,
@@ -98,6 +102,9 @@ def _build_dispatcher(config: WatchdogConfig) -> Dispatcher:
     if config.provider == Provider.ROCKETCHAT:
         rc_creds = load_rocketchat_credentials_from_env(channel_override=config.chat_id)
         return RocketChatAlarmDispatcher(rc_creds, cooldown_seconds=config.cooldown)
+    if config.provider == Provider.BUZZ:
+        buzz_creds = load_buzz_credentials_from_env(channel_override=config.chat_id)
+        return BuzzAlarmDispatcher(buzz_creds, cooldown_seconds=config.cooldown)
     creds = load_credentials_from_env(chat_id_override=config.chat_id)
     return AlarmDispatcher(creds, cooldown_seconds=config.cooldown, parse_mode="HTML")
 

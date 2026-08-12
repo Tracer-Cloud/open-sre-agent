@@ -464,5 +464,6 @@ def make_pagerduty_client(
         if base_url:
             config_kwargs["base_url"] = base_url
         return PagerDutyClient(PagerDutyConfig(**config_kwargs))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to create PagerDuty client: %s", exc, exc_info=True)
         return None

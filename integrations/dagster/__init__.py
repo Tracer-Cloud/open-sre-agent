@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DAGSTER_TIMEOUT_S = 10
+DEFAULT_DAGSTER_TIMEOUT_SECONDS = 10
 DEFAULT_DAGSTER_MAX_RESULTS = 25
 DEFAULT_DAGSTER_RUN_LOG_PAGE_SIZE = 250
 # Sliding window of the most recent non-failure events kept from a run log;
@@ -68,7 +68,7 @@ def validate_dagster_config(config: DagsterConfig) -> DagsterValidationResult:
     with DagsterClient(
         endpoint=config.endpoint,
         api_token=config.api_token,
-        timeout_s=DEFAULT_DAGSTER_TIMEOUT_S,
+        timeout_s=DEFAULT_DAGSTER_TIMEOUT_SECONDS,
     ) as client:
         probe = client.ping()
     if "error" in probe:
@@ -106,7 +106,7 @@ def _client(config: DagsterConfig) -> DagsterClient:
     return DagsterClient(
         endpoint=config.endpoint,
         api_token=config.api_token,
-        timeout_s=DEFAULT_DAGSTER_TIMEOUT_S,
+        timeout_s=DEFAULT_DAGSTER_TIMEOUT_SECONDS,
     )
 
 

@@ -10,23 +10,23 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.runtime.live_sink import LiveOutputSink
-from gateway.runtime.session_agents import SessionAgentPool
-from gateway.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.runtime.live_sink import LiveOutputSink
+from gateway.core.runtime.session_agents import SessionAgentPool
+from gateway.core.runtime.turn_handler import GatewayTurnHandler
 
 
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "gateway.core.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -78,11 +78,11 @@ def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> 
         return agent
 
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         _fake_build,
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     logger = logging.getLogger("test.pool")
     first = pool.agent_for(session=session, sink=MagicMock(), logger=logger)
     second = pool.agent_for(session=session, sink=MagicMock(), logger=logger)
@@ -98,12 +98,12 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
             self.bind_session = MagicMock()
 
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         lambda **kwargs: _FakeAgent(**kwargs),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
-    a = SessionCore(storage=InMemorySessionStorage())
-    b = SessionCore(storage=InMemorySessionStorage())
+    a = SessionCore(store=InMemorySessionStore())
+    b = SessionCore(store=InMemorySessionStore())
     logger = logging.getLogger("test.pool")
     agent_a = pool.agent_for(session=a, sink=MagicMock(), logger=logger)
     agent_b = pool.agent_for(session=b, sink=MagicMock(), logger=logger)
@@ -125,13 +125,13 @@ def test_pool_rebinds_current_session_on_cache_hit(monkeypatch: pytest.MonkeyPat
             self.session = session
 
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         lambda **kwargs: _FakeAgent(**kwargs),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
-    first = SessionCore(storage=InMemorySessionStorage())
+    first = SessionCore(store=InMemorySessionStore())
     # Same logical id, different object — what SessionManager.resolve returns.
-    second = SessionCore(storage=InMemorySessionStorage(), session_id=first.session_id)
+    second = SessionCore(store=InMemorySessionStore(), session_id=first.session_id)
     logger = logging.getLogger("test.pool.rebind")
     agent_a = pool.agent_for(session=first, sink=MagicMock(), logger=logger)
     agent_b = pool.agent_for(session=second, sink=MagicMock(), logger=logger)
@@ -145,11 +145,11 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     agent.dispatch.return_value = _empty_result()
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         factory,
     )
 
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     logger = logging.getLogger("test.reuse")
     handler("one", session, MagicMock(), logger)
@@ -169,7 +169,7 @@ def _fake_agent_pool(monkeypatch: pytest.MonkeyPatch) -> SessionAgentPool:
             self.bind_session = MagicMock()
 
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         lambda **kwargs: _FakeAgent(**kwargs),
     )
     return SessionAgentPool(console=Console(force_terminal=False))
@@ -188,7 +188,7 @@ def test_same_session_turns_do_not_interleave(monkeypatch: pytest.MonkeyPatch) -
 
     pool = _fake_agent_pool(monkeypatch)
     logger = logging.getLogger("test.pool")
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     overlapped = threading.Event()
     first_inside = threading.Event()
     order: list[str] = []
@@ -232,7 +232,7 @@ def test_different_sessions_still_run_concurrently(monkeypatch: pytest.MonkeyPat
     reached = []
 
     def _hold() -> None:
-        session = SessionCore(storage=InMemorySessionStorage())
+        session = SessionCore(store=InMemorySessionStore())
         with pool.session_agent(session=session, sink=MagicMock(), logger=logger):
             # Times out if the pool serializes across unrelated sessions.
             both_inside.wait()

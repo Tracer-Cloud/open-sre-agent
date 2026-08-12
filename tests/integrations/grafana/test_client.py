@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from integrations.grafana.client import get_grafana_client
 
 
@@ -41,3 +43,49 @@ def test_get_grafana_client_defaults_verify_ssl_true_when_unset(monkeypatch) -> 
         verify_ssl=True,
         ca_bundle="",
     )
+
+
+def test_client_falls_back_to_env_datasource_uids_when_discovery_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Env UID overrides must apply when live discovery returns nothing."""
+    from integrations.grafana import client as grafana_client
+
+    grafana_client._grafana_client_cache.clear()
+    monkeypatch.setenv("GRAFANA_LOKI_DATASOURCE_UID", "env-loki")
+    monkeypatch.setenv("GRAFANA_TEMPO_DATASOURCE_UID", "env-tempo")
+    monkeypatch.setenv("GRAFANA_MIMIR_DATASOURCE_UID", "env-mimir")
+    monkeypatch.setattr(grafana_client.GrafanaClient, "discover_datasource_uids", lambda _self: {})
+
+    client = grafana_client.get_grafana_client_from_credentials(
+        endpoint="http://grafana.example.com", api_key="token", account_id="fallback_test"
+    )
+
+    assert client.loki_datasource_uid == "env-loki"
+    assert client.tempo_datasource_uid == "env-tempo"
+    assert client.mimir_datasource_uid == "env-mimir"
+    grafana_client._grafana_client_cache.clear()
+
+
+def test_client_prefers_discovered_uids_over_env_fallbacks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from integrations.grafana import client as grafana_client
+
+    grafana_client._grafana_client_cache.clear()
+    monkeypatch.setenv("GRAFANA_LOKI_DATASOURCE_UID", "env-loki")
+    monkeypatch.setattr(
+        grafana_client.GrafanaClient,
+        "discover_datasource_uids",
+        lambda _self: {"loki_uid": "discovered-loki", "tempo_uid": "discovered-tempo"},
+    )
+
+    client = grafana_client.get_grafana_client_from_credentials(
+        endpoint="http://grafana.example.com", api_key="token", account_id="prefer_discovered"
+    )
+
+    assert client.loki_datasource_uid == "discovered-loki"
+    assert client.tempo_datasource_uid == "discovered-tempo"
+    # Mimir missing from discovery → env/cloud default fallback
+    assert client.mimir_datasource_uid
+    grafana_client._grafana_client_cache.clear()

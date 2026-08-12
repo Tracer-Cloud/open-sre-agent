@@ -32,7 +32,7 @@ def test_gateway_start_foreground_runs_manager(runner: CliRunner) -> None:
 
 def test_gateway_entry_wires_slash_ports() -> None:
     """Production entry must inject headless slash ports into GatewayManager."""
-    import gateway.runtime.manager as manager_module
+    import gateway.core.runtime.manager as manager_module
 
     mock_manager = MagicMock()
     with patch.object(manager_module, "GatewayManager", return_value=mock_manager) as ctor:
@@ -45,6 +45,8 @@ def test_gateway_entry_wires_slash_ports() -> None:
 
 
 def test_gateway_start_spawns_daemon(runner: CliRunner) -> None:
+    from surfaces.shared.gateway_entrypoint import gateway_entry_argv
+
     with patch(
         "surfaces.cli.commands.gateway.start_gateway_daemon",
         return_value=(True, "Telegram gateway started (pid 4242)."),
@@ -52,7 +54,7 @@ def test_gateway_start_spawns_daemon(runner: CliRunner) -> None:
         result = runner.invoke(cli, ["gateway", "start"])
 
     assert result.exit_code == 0
-    mock_start.assert_called_once()
+    mock_start.assert_called_once_with(argv=gateway_entry_argv())
     assert "pid 4242" in result.output
     assert "Logs:" in result.output
 

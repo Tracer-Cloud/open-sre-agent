@@ -8,6 +8,7 @@ from typing import Any
 
 from core.agent_harness.ports import (
     ConfirmFn,
+    SubprocessPresenterFactory,
     ToolEventObserver,
 )
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
@@ -18,10 +19,7 @@ from core.agent_harness.tools.tool_context import (
 
 ActionObserverFactory = Callable[[str], ToolEventObserver]
 # Return value is tools.interactive_shell.subprocess.SubprocessPresenter (surface-injected).
-SubprocessPresenterFactory = Callable[
-    [Any, Any, ConfirmFn | None, bool | None, bool],
-    Any,
-]
+
 
 InvestigationPortsFactory = Callable[[], Any]
 LlmProviderPortsFactory = Callable[[], Any]

@@ -1,18 +1,27 @@
 ---
 title: "Scheduled Deliveries (Cron)"
-description: "Cron-driven recurring reports to Telegram, Slack, Discord, and Rocket.Chat"
+description: "Cron-driven recurring reports to Telegram, Slack, Discord, Rocket.Chat, and the interactive shell"
 ---
 
 # Scheduled Deliveries
 
 OpenSRE can deliver recurring reports to messaging providers on a cron schedule. This enables daily reliability digests, weekly alert audits, synthetic test summaries, and custom investigations — all delivered automatically without manual CLI invocations.
 
+For human task reminders and proactive work check-ins, use `opensre work add
+--remind-at ...` or `opensre work schedule-checkin ...`. Those commands create
+the right scheduler entries, support repeated `--target provider:chat_id` fan-out
+delivery, and keep task metadata in the work-item store.
+
+## Suggested loops on first launch
+
+When you open the interactive shell (`opensre`) and no scheduled tasks exist yet, a picker offers three starter loops: a CI/CD check (weekdays 8:00 AM), a task-management sweep of your open issues and PRs (weekdays 9:00 AM), and a daily brief (weekdays 9:00 AM). Picking one runs the loop once so you can see the output, then offers to schedule it — confirm with a plain "yes". Press Escape to skip; the picker returns on the next launch until you configure a task.
+
 ## Quick Start
 
 ```bash
 # Add a daily summary to Telegram at 09:00 IST on weekdays
 opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
-  --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
+  --name "Morning report" --tz Asia/Kolkata --provider telegram --chat-id <chat_id>
 
 # Same kind to Slack via incoming webhook (omit --chat-id; webhook is channel-bound)
 opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
@@ -25,6 +34,10 @@ opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
 # GitHub PR sweep standup digest → Slack
 opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack --chat-id C0123ABCD
+
+# Local interactive-shell inbox delivery, useful for debugging
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --name "Local morning report" --provider interactive_shell
 
 # List configured tasks
 opensre cron list
@@ -44,16 +57,17 @@ Create a new scheduled delivery task.
 
 | Option | Required | Description |
 |--------|----------|-------------|
+| `--name` | No | Human-readable loop name shown by `opensre cron list` and `/loops` |
 | `--kind` | Yes | Task kind: `daily_summary`, `weekly_audit`, `incident_window_replay`, `synthetic_run`, `custom_investigation`, `github_pr_sweep` |
 | `--cron` | Yes | Cron expression (5 fields: minute hour day month day_of_week) |
 | `--tz` | No | IANA timezone (default: `UTC`). Examples: `Europe/London`, `US/Eastern`, `Asia/Kolkata` |
-| `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord`, `rocketchat` |
-| `--chat-id` | Cond. | Required for telegram/discord/rocketchat. Optional for slack when an incoming webhook is configured (webhook destination is used). |
+| `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord`, `rocketchat`, `interactive_shell` |
+| `--chat-id` | Cond. | Required for telegram/discord/rocketchat. Optional for slack when an incoming webhook is configured, and not needed for `interactive_shell`. |
 | `--window` | No | Lookback window in hours (default: `24`) |
 
 ### `opensre cron list`
 
-Display all configured scheduled tasks in a table.
+Display all configured scheduled tasks in a table, including the loop name, enabled state, next cron fire time, and last run.
 
 ### `opensre cron remove <task_id>`
 
@@ -138,14 +152,41 @@ not `opensre cron add`. See [Sentry](/sentry#morning-digest-scheduled).
 
 - **Task definitions** are stored in `~/.opensre/scheduler_tasks.json` (JSON + filelock)
 - **Execution history** is stored in `~/.opensre/scheduler.db` (SQLite with WAL mode)
+- **Interactive-shell loop messages** are stored in `~/.opensre/scheduler_loop_messages.jsonl`
+- **Operational breadcrumbs** are appended to `~/.opensre/operations_log.jsonl`
+  with loop lifecycle and run status metadata, not prompt or message bodies
 - Both survive process restarts — `opensre cron list` and `opensre cron logs` read from disk
+
+Set `OPENSRE_OPERATIONS_LOG_PATH` to write the operations log somewhere else, or
+`OPENSRE_OPERATIONS_LOG_DISABLED=1` to turn it off. Set
+`OPENSRE_OPERATIONS_LOG_MAX_BYTES` to change the rotation threshold.
 
 ## REPL
 
-The `/cron` slash command in the interactive shell forwards to the CLI:
+Prefer `/loops` for user-facing recurring prompt loops:
+
+```text
+/loops add --name "Morning ops" --time 08:30 --prompt "Check open incidents and summarize production risk" --run-now
+/loops next <loop_id>
+/loops stop <loop_id>
+/loops delete <loop_id>
+/loops messages
+```
+
+You can also ask naturally:
+
+```text
+Set up a manual loop called Morning ops at 08:30 UTC to check open incidents and summarize production risk, and run it once now.
+```
+
+By default, `/loops add` sends to every configured default handle it can reach: Telegram when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_DEFAULT_CHAT_ID` are configured, Slack when `SLACK_WEBHOOK_URL` is configured, and the local interactive-shell inbox.
+
+The lower-level `/cron` slash command forwards to the CLI:
 
 ```
 /cron list
 /cron add --kind daily_summary --cron "0 9 * * *" --provider telegram --chat-id <id>
 /cron run <task_id>
 ```
+
+Run `/loops` to see named loops with active/draft state, execution time, channels, last run, and next fire time. Use `/loops stop <loop_id>` to pause a loop without losing it, `/loops start <loop_id>` to re-enable it, and `/loops delete <loop_id>` to remove it. Onboarding seeds a few draft starter loops, such as a weekday morning report, so you have concrete examples before creating an active delivery.

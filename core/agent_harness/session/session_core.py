@@ -25,9 +25,15 @@ else:
 from config.llm_reasoning_effort import ReasoningEffortChoice
 from core.agent_harness.accounting.token_usage import TokenUsage
 from core.agent_harness.session.integration_resolution import IntegrationState
-from core.agent_harness.session.pending_offer import PendingScheduleOffer
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
-from core.agent_harness.session.persistence.ports import SessionStorage
+from core.agent_harness.session.pending_choice import PendingUserChoice
+from core.agent_harness.session.pending_offer import (
+    PendingIntegrationSetupOffer,
+    PendingInvestigationOffer,
+    PendingScheduleOffer,
+)
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
+from core.agent_harness.session.persistence.ports import SessionStore
+from core.agent_harness.session_goal.goal import SessionGoal
 from core.state import MutableAgentState
 from platform.common.task_registry import TaskRegistry
 
@@ -64,7 +70,7 @@ class SessionCore:
     started_at: float = field(default_factory=time.time)
     """Unix timestamp of when this session (or post-reset sub-session) began."""
 
-    storage: SessionStorage = field(default_factory=JsonlSessionStorage, repr=False, compare=False)
+    store: SessionStore = field(default_factory=JsonlSessionStore, repr=False, compare=False)
     """Persistence backend for this session's turns and RCA records.
 
     Defaults to the JSONL backend; tests can inject an in-memory backend. All
@@ -143,6 +149,27 @@ class SessionCore:
     pending_schedule_offer: PendingScheduleOffer | None = None
     """Structured schedule awaiting bare yes — set by propose_scheduled_delivery."""
 
+    pending_investigation_offer: PendingInvestigationOffer | None = None
+    """Structured investigation awaiting bare yes — armed after Want-me-to closer."""
+
+    session_goal: SessionGoal | None = None
+    """Outer cross-turn goal (multi-step / keep-going). Distinct from ReAct Goal."""
+
+    offered_upgrade_ctas: set[str] = field(default_factory=set)
+    """Session-scoped UpgradeCTA dedupe keys (``cta:service_id``)."""
+
+    pending_integration_setup_offer: PendingIntegrationSetupOffer | None = None
+    """Structured integrations-setup awaiting bare yes — armed after L0 UpgradeCTA."""
+
+    pending_user_choice: PendingUserChoice | None = None
+    """Structured multiple-choice question queued for the ``/choose`` selection
+    menu — set by the ``ask_user_choice`` action tool, consumed once by the
+    ``/choose`` handler."""
+    pending_recovery_note: str | None = None
+    """WAL recovery note for the next action turn — set on ``/resume`` when the
+    resumed session log holds tool intents that never committed (the process
+    died mid-execution). Consumed once by ``TurnSnapshot.from_session``."""
+
     # Infra keys pulled from a completed investigation state and carried into the
     # next investigation. A class-level tuple so callers have a single source for
     # "what counts as accumulated context".
@@ -200,7 +227,7 @@ class SessionCore:
         self.history.append(entry)
         self._shed_stale_response_text()
 
-        self.storage.append_turn(self, kind, text)
+        self.store.append_turn(self, kind, text)
 
     def _shed_stale_response_text(self) -> None:
         """Drop the response body from the entry just aged out of the window.
@@ -341,7 +368,7 @@ class SessionCore:
         """
         self.last_state = state
         self.accumulate_from_state(state)
-        self.storage.append_investigation_result(self.session_id, state, trigger=trigger)
+        self.store.append_investigation_result(self.session_id, state, trigger=trigger)
 
     def clear(self, *, rotate_identity: bool = True) -> None:
         """Reset core session state to fresh (used by /new and /resume).
@@ -370,6 +397,12 @@ class SessionCore:
         )
         self.last_synthetic_observation_path = None
         self.pending_schedule_offer = None
+        self.pending_investigation_offer = None
+        self.pending_integration_setup_offer = None
+        self.session_goal = None
+        self.offered_upgrade_ctas.clear()
+        self.pending_user_choice = None
+        self.pending_recovery_note = None
         if rotate_identity:
             # Rotate session identity so the new post-reset session gets its own ID and file.
             self.session_id = str(uuid.uuid4())

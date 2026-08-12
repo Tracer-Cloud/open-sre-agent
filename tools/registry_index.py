@@ -51,6 +51,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "tools.interactive_shell.actions.sample_alert",
         ),
         ToolDescriptor(
+            "ask_user_choice",
+            ("action",),
+            "interactive_shell",
+            None,
+            "tools.interactive_shell.actions.ask_choice",
+        ),
+        ToolDescriptor(
             "assistant_handoff",
             ("action",),
             "interactive_shell",
@@ -119,13 +126,6 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "slack",
             None,
             "integrations.slack.tools.slack_add_reaction_tool.tool",
-        ),
-        ToolDescriptor(
-            "slack_capture_task",
-            ("investigation", "chat", "action"),
-            "slack",
-            None,
-            "integrations.slack.tools.slack_capture_task_tool.tool",
         ),
         ToolDescriptor(
             "slack_join_channel",
@@ -203,6 +203,13 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
             "rocketchat",
             None,
             "integrations.rocketchat.tools.rocketchat_send_message_tool.tool",
+        ),
+        ToolDescriptor(
+            "buzz_send_message",
+            ("investigation", "action"),
+            "buzz",
+            None,
+            "integrations.buzz.tools.buzz_send_message_tool.tool",
         ),
         ToolDescriptor(
             "telegram_send_message",

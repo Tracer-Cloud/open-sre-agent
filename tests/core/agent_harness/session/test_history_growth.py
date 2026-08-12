@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.session.persistence.ports import SessionStorage
+from core.agent_harness.session.persistence.ports import SessionStore
 from core.agent_harness.session.session_core import RESPONSE_TEXT_WINDOW, SessionCore
 
 
@@ -36,10 +36,10 @@ class _NullStorage:
 
 
 def _session() -> SessionCore:
-    return SessionCore(storage=cast_storage(_NullStorage()))
+    return SessionCore(store=cast_storage(_NullStorage()))
 
 
-def cast_storage(obj: Any) -> SessionStorage:
+def cast_storage(obj: Any) -> SessionStore:
     """Narrow the stub to the port without importing ``typing.cast`` at each use."""
     return obj
 

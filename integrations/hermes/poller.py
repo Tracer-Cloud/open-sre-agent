@@ -169,10 +169,6 @@ class HermesLogPoll:
     # returned records: how many lines were parsed vs. yielded.
     parsed_line_count: int = field(default=0)
 
-    @property
-    def has_new_data(self) -> bool:
-        return bool(self.records) or bool(self.incidents) or self.rotation_detected
-
 
 def poll_hermes_logs(
     log_path: Path | str,

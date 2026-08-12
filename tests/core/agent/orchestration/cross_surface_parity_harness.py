@@ -15,10 +15,11 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
-from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_dispatch import (
     BufferOutputSink,
     HeadlessAgent,
@@ -27,7 +28,7 @@ from core.agent_harness.turns.headless_dispatch import (
 from core.agent_harness.turns.turn_results import TurnResult
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -199,11 +200,15 @@ class RecordingGatewaySink:
         label: str,
         chunks: Iterator[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with)
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
         text = "".join(str(chunk) for chunk in chunks)
         self.streamed.append(text)
         return text
+
+    def finish_streamed_response(self, text: str) -> None:
+        self.finalize(text)
 
     def finalize(self, text: str) -> None:
         self.finalized = text
@@ -222,7 +227,7 @@ def console() -> Console:
 
 
 def fresh_session(*, integrations: dict[str, Any] | None = None) -> Session:
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     session.resolved_integrations_cache = dict(integrations or {})
     return session
 
@@ -313,7 +318,7 @@ def _dispatch_turn(
         prompts=DefaultPromptContextProvider(session),
         reasoning=DefaultReasoningClientProvider(output=output),
         accounting=NoopTurnAccounting(),
-        gather_enabled=gather_enabled,
+        gather=GatherPorts(enabled=gather_enabled),
     )
     return agent.dispatch(message)
 
@@ -364,7 +369,7 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
+        "gateway.core.runtime.session_agents.build_default_headless_agent",
         _spy_build,
     )
 

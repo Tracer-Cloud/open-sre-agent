@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from core.agent_harness.ports import SessionStore
+from core.agent_harness.ports import SessionState
 from core.agent_harness.session.integration_resolution import (
     has_resolved_integrations,
     resolve_and_cache_integrations,
@@ -43,7 +43,7 @@ class TurnPlan:
         return self.snapshot.resolved_integrations
 
 
-def build_turn_plan(snapshot: TurnSnapshot, session: SessionStore) -> TurnPlan:
+def build_turn_plan(snapshot: TurnSnapshot, session: SessionState) -> TurnPlan:
     """Assemble the turn plan: resolve integrations once, then compose the snapshot.
 
     Resolution runs only when the snapshot has not already been populated (a

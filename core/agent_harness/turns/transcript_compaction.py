@@ -76,7 +76,7 @@ def compact_session_branch(
     final_summary = merge_summary_texts(prior, summary or deterministic_summary(compacted))
     session.agent.messages = [("assistant", f"{SESSION_SUMMARY_PREFIX}{final_summary}"), *kept]
     after_chars = _message_chars(list(session.agent.messages))
-    session.storage.append_compaction(
+    session.store.append_compaction(
         session.session_id,
         summary=final_summary,
         first_kept_entry_id=first_kept_entry_id,

@@ -553,40 +553,23 @@ RULES: tuple[PathRule, ...] = (
     PathRule("tools/system/watch_dog/", ("tests/watch_dog/",)),
     PathRule("tools/", ("tests/tools/",)),
     PathRule("platform/analytics/", ("tests/analytics/",)),
+    # Without this rule a change under platform/filestorage/ matches nothing,
+    # and the credential deny-list tests only run via the no-targets fallback —
+    # which a diff that also touches any test file silently defeats.
+    PathRule(
+        "platform/filestorage/",
+        ("tests/filestorage/", "tests/surfaces/test_remote_sync_surface_contract.py"),
+    ),
     PathRule("platform/guardrails/", ("tests/platform/guardrails/",)),
     PathRule("platform/masking/", ("tests/masking/",)),
     PathRule("platform/packaging/", ("tests/packaging/",)),
     PathRule("platform/sandbox/", ("tests/sandbox/",)),
     PathRule(
         "platform/deployment_ec2/",
-        (
-            "tests/platform/deployment_fargate/test_deploy_account_guard.py",
-            "tests/platform/deployment_fargate/test_ec2_launch_instance.py",
-            "tests/platform/deployment_fargate/test_ec2_security_group.py",
-            "tests/platform/deployment_fargate/test_ec2_stack_instances.py",
-            "tests/platform/deployment_ec2/telegram_gateway/",
-        ),
-    ),
-    PathRule(
-        "platform/deployment_fargate/lambda_control_plane/",
-        (
-            "tests/deployment/",
-            "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",
-        ),
-    ),
-    PathRule(
-        "platform/deployment_fargate/lambda_public_forwarder/",
-        (
-            "tests/deployment/",
-            "tests/platform/deployment_fargate/test_lambda_bundle_paths.py",
-        ),
-    ),
-    PathRule(
-        "platform/deployment_fargate/",
-        ("tests/deployment/", "tests/platform/deployment_fargate/"),
+        ("tests/platform/deployment_ec2/",),
     ),
     PathRule("platform/auth/", ("tests/platform/auth/",)),
-    PathRule("gateway/http/webapp.py", ("gateway/tests/http/test_webapp.py",)),
+    PathRule("gateway/web/webapp.py", ("gateway/tests/web/test_webapp.py",)),
     # Repo-wide config
     PathRule("pyproject.toml", (), always_escalate=True),
     PathRule("uv.lock", (), always_escalate=True),

@@ -269,7 +269,8 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
         # Bare setup delegates to the CLI service picker on the REPL; headless
         # surfaces (Telegram) have no picker, so return usage guidance instead.
         if not headless:
-            result = run_cli_command(console, ["integrations", "setup"])
+            # Interactive service picker + credential prompts on the real TTY.
+            result = run_cli_command(console, ["integrations", "setup"], capture_output=False)
             session.refresh_integration_state()
             return result
         repl_print(console, f"[{DIM}]usage:[/] /integrations setup <service>")
@@ -296,6 +297,7 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
     result = run_cli_command(
         console,
         ["integrations", "setup", service, *args[2:]],
+        capture_output=False,
         session=session,
     )
     session.refresh_integration_state()

@@ -491,7 +491,8 @@ class TestDispatchSlash:
 
         calls: list[list[str]] = []
 
-        def _fake_run_cli_command(_console: Console, args: list[str]) -> bool:
+        def _fake_run_cli_command(_console: Console, args: list[str], **kwargs: object) -> bool:
+            del kwargs
             calls.append(args)
             return True
 
@@ -871,7 +872,9 @@ class TestIntegrationsCommand:
         from surfaces.interactive_shell.command_registry import integrations as m
 
         captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        monkeypatch.setattr(
+            m, "run_cli_command", lambda _, args, **_kw: (captured.append(args), True)[1]
+        )
         dispatch_slash("/integrations setup", Session(), Console())
         assert captured == [["integrations", "setup"]]
 
@@ -929,7 +932,9 @@ class TestMcpCommand:
         from surfaces.interactive_shell.command_registry import integrations as m
 
         captured = []
-        monkeypatch.setattr(m, "run_cli_command", lambda _, args: (captured.append(args), True)[1])
+        monkeypatch.setattr(
+            m, "run_cli_command", lambda _, args, **_kw: (captured.append(args), True)[1]
+        )
         dispatch_slash("/mcp connect", Session(), Console())
         assert captured == [["integrations", "setup"]]
 
@@ -1888,12 +1893,12 @@ class TestResumeCommand:
         from unittest.mock import patch
 
         from core.agent_harness.session import (
-            JsonlSessionStorage,
+            JsonlSessionStore,
             default_session_repo,
         )
         from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
-        SessionStore = JsonlSessionStorage()
+        SessionState = JsonlSessionStore()
         session = Session()
         old_id = session.session_id
         target_id = "old-abc-1234567890"
@@ -1902,7 +1907,7 @@ class TestResumeCommand:
             "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
-            SessionStore.open_session(session)
+            SessionState.open_session(session)
             session.record("chat", "pre-resume turn")
 
             # Pre-create a finalized target session file to resume into.
@@ -2048,10 +2053,10 @@ class TestResumeCommand:
         """History display uses REPL turn order and includes slash commands."""
         from unittest.mock import patch
 
-        from core.agent_harness.session import JsonlSessionStorage
+        from core.agent_harness.session import JsonlSessionStore
         from surfaces.interactive_shell.command_registry.session_cmds import _apply_resume_data
 
-        SessionStore = JsonlSessionStorage()
+        SessionState = JsonlSessionStore()
         data = {
             "session_id": "display-test-abc123456789",
             "name": "My Session",
@@ -2074,7 +2079,7 @@ class TestResumeCommand:
             "core.agent_harness.session.persistence.paths.sessions_dir",
             return_value=tmp_path,
         ):
-            SessionStore.open_session(session)
+            SessionState.open_session(session)
             _apply_resume_data(data, session, console)
 
         output = buf.getvalue()
@@ -2668,7 +2673,7 @@ class TestRunCliCommand:
     ) -> None:
         """Gateway/headless surfaces need the real exit status for slash analytics."""
         from core.agent_harness.session import SessionCore
-        from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+        from core.agent_harness.session.persistence.memory import InMemorySessionStore
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
         def _fake_run(
@@ -2688,7 +2693,7 @@ class TestRunCliCommand:
             return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="boom\n")
 
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
-        session = SessionCore(storage=InMemorySessionStorage())
+        session = SessionCore(store=InMemorySessionStore())
         session.record("slash", "/remote health", ok=True)
         console, _buf = _capture()
         assert m.run_cli_command(console, ["remote", "health"], session=session) is False
@@ -2726,7 +2731,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, _ = _capture()
 
-        assert m.run_cli_command(console, ["onboard"]) is True
+        assert m.run_cli_command(console, ["onboard"], capture_output=False) is True
         assert captured == [["/tmp/opensre", "onboard"]]
 
     def test_script_entrypoint_delegate_reuses_opensre_without_module_flags(
@@ -2763,7 +2768,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, _ = _capture()
 
-        assert m.run_cli_command(console, ["onboard"]) is True
+        assert m.run_cli_command(console, ["onboard"], capture_output=False) is True
         assert captured == [["/tmp/bin/opensre", "onboard"]]
 
     def test_cli_delegate_marks_parent_interactive_shell(
@@ -2788,7 +2793,7 @@ class TestRunCliCommand:
         monkeypatch.setattr(m.subprocess, "run", _fake_run)
         console, _ = _capture()
 
-        assert m.run_cli_command(console, ["onboard"]) is True
+        assert m.run_cli_command(console, ["onboard"], capture_output=False) is True
         assert captured_envs[0]["OPENSRE_PARENT_INTERACTIVE_SHELL"] == "1"
 
 
@@ -2850,10 +2855,10 @@ class TestCliDelegatedCommands:
         self, monkeypatch: object, slash_input: str
     ) -> None:
         """Both the known-subcommand fall-through (e.g. ``/tests list``) and
-        the flag-style branch (e.g. ``/tests --help``) must call
-        ``run_cli_command`` with ``capture_output=True`` so the delegated CLI
-        output is replayed through the REPL console instead of vanishing onto
-        the parent process's stdout FD.
+        the flag-style branch (e.g. ``/tests --help``) must inherit the
+        capturing default of ``run_cli_command`` (no ``capture_output=False``
+        opt-out) so the delegated CLI output is replayed through the REPL
+        console instead of vanishing onto the parent process's stdout FD.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -2864,9 +2869,10 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(slash_input, Session(), Console())
+        session = Session()
+        dispatch_slash(slash_input, session, Console())
 
-        assert captured_kwargs == [{"capture_output": True}]
+        assert captured_kwargs == [{"session": session}]
 
     @pytest.mark.parametrize(
         "slash_input",
@@ -2876,10 +2882,11 @@ class TestCliDelegatedCommands:
         self, monkeypatch: object, slash_input: str
     ) -> None:
         """Bare ``/guardrails`` (no subcommand), known subcommands, and flag-style
-        invocations must all call ``run_cli_command`` with
-        ``capture_output=True``. Without this, Click's usage block (printed for
-        the no-subcommand case) and subcommand output bypass ``console.print``
-        and never reach the REPL buffer — see issue #2388.
+        invocations must all inherit the capturing default of
+        ``run_cli_command`` (no ``capture_output=False`` opt-out). Without
+        capture, Click's usage block (printed for the no-subcommand case) and
+        subcommand output bypass ``console.print`` and never reach the REPL
+        buffer — see issue #2388.
         """
         from surfaces.interactive_shell.command_registry import cli_parity as m
 
@@ -2890,9 +2897,60 @@ class TestCliDelegatedCommands:
             return True
 
         monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
-        dispatch_slash(slash_input, Session(), Console())
+        session = Session()
+        dispatch_slash(slash_input, session, Console())
 
-        assert captured_kwargs == [{"capture_output": True}]
+        assert captured_kwargs == [{"session": session}]
+
+    def test_run_cli_command_captures_output_by_default(self) -> None:
+        """The capturing default is the safety net the per-handler tests rely on:
+        a printer that passes no ``capture_output`` must get capture, so its
+        output reaches the REPL buffer and the agent's slash observation."""
+        import inspect
+
+        from surfaces.interactive_shell.command_registry.cli_parity import run_cli_command
+
+        parameter = inspect.signature(run_cli_command).parameters["capture_output"]
+        assert parameter.default is True
+
+    @pytest.mark.parametrize(
+        "slash_input",
+        ["/cron", "/cron list", "/cron remove ecf7c2580b83"],
+    )
+    def test_slash_cron_printers_opt_into_output_capture(
+        self, monkeypatch: object, slash_input: str
+    ) -> None:
+        """Non-daemon cron subcommands must capture output so the table (and
+        task ids in it) reaches the REPL buffer and the slash history row."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        captured_kwargs: list[dict[str, object]] = []
+
+        def _fake_run_cli_command(_console: Console, _args: list[str], **kwargs: object) -> bool:
+            captured_kwargs.append(kwargs)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        session = Session()
+        dispatch_slash(slash_input, session, Console())
+
+        assert captured_kwargs == [{"capture_output": True, "session": session}]
+
+    def test_slash_cron_start_streams_to_the_tty(self, monkeypatch: object) -> None:
+        """The scheduler daemon blocks; capturing would buffer its output forever."""
+        from surfaces.interactive_shell.command_registry import cli_parity as m
+
+        captured_kwargs: list[dict[str, object]] = []
+
+        def _fake_run_cli_command(_console: Console, _args: list[str], **kwargs: object) -> bool:
+            captured_kwargs.append(kwargs)
+            return True
+
+        monkeypatch.setattr(m, "run_cli_command", _fake_run_cli_command)
+        session = Session()
+        dispatch_slash("/cron start", session, Console())
+
+        assert captured_kwargs == [{"capture_output": False, "session": session}]
 
     def test_slash_onboard_with_args_forwards_them_to_subprocess(self, monkeypatch: object) -> None:
         """Args passed to ``/onboard`` must be forwarded to the subprocess."""

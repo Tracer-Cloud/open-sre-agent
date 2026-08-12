@@ -195,6 +195,9 @@ not a Mintlify docs-site page).
 | `OPENSRE_PROMPT_LOG_LOCAL_DISABLED` | `0` | Disable local prompt log file | `.env.example` |
 | `OPENSRE_PROMPT_LOG_REDACT` | `1` | Redact known token shapes from prompts/responses before local or PostHog logging | `.env.example` |
 | `OPENSRE_PROMPT_LOG_PATH` | `~/.config/opensre/prompt_log.jsonl` | Path to local prompt log file | `.env.example` |
+| `OPENSRE_OPERATIONS_LOG_DISABLED` | `0` | Disable the local operations log | `.env.example` |
+| `OPENSRE_OPERATIONS_LOG_PATH` | `~/.opensre/operations_log.jsonl` | Path to the local operations log | `.env.example` |
+| `OPENSRE_OPERATIONS_LOG_MAX_BYTES` | `5242880` | Rotate the local operations log after this many bytes | `.env.example` |
 | `DO_NOT_TRACK` | `0` | Honor global do-not-track preference | `platform/observability/sentry_sdk.py` |
 | `SENTRY_TRACES_SAMPLE_RATE` | `1.0` | Trace sampling rate for Sentry | `.env.example` |
 | `SENTRY_ERROR_SAMPLE_RATE` | `1.0` | Error sampling rate for Sentry | `.env.example` |
@@ -204,6 +207,7 @@ not a Mintlify docs-site page).
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
 | `INVESTIGATIONS_DIR` | `~/.opensre/investigations` | Directory for saved investigations | `remote/server` |
+| `OPENSRE_HOME` | `~/.opensre` | Root directory for local OpenSRE state, including sessions, settings, and operational files | `config/constants/paths` |
 | `OPENSRE_PROJECT_ENV_PATH` | `PROJECT_ROOT/.env` | Path to project-level `.env` file | `surfaces/cli/wizard/config` |
 | `OPENSRE_WIZARD_STORE_PATH` | `~/.opensre/opensre.json` | Path to the local wizard/provider selection store | `config/constants` |
 
@@ -222,8 +226,9 @@ not a Mintlify docs-site page).
 |----------|---------|-------------|--------|
 | `GRAFANA_INSTANCE_URL` | | Grafana instance URL | `integrations/_catalog_impl` |
 | `GRAFANA_READ_TOKEN` | | Grafana API token | `integrations/_catalog_impl` |
-| `GRAFANA_LOKI_DATASOURCE_UID` | | UID of Loki datasource in Grafana | `.env.example` |
-| `GRAFANA_TEMPO_DATASOURCE_UID` | | UID of Tempo datasource in Grafana | `.env.example` |
+| `GRAFANA_LOKI_DATASOURCE_UID` | | UID of Loki datasource in Grafana (fallback when auto-discovery misses it) | `.env.example` |
+| `GRAFANA_TEMPO_DATASOURCE_UID` | | UID of Tempo datasource in Grafana (fallback when auto-discovery misses it) | `.env.example` |
+| `GRAFANA_MIMIR_DATASOURCE_UID` | | UID of Mimir/Prometheus datasource in Grafana (fallback when auto-discovery misses it) | `.env.example` |
 | `GRAFANA_VERIFY_SSL` | `true` | Verify Grafana SSL certificate | `integrations/_catalog_impl` |
 | `GRAFANA_CA_BUNDLE` | | Path to a CA bundle for Grafana TLS verification (self-signed/internal CA) | `integrations/_catalog_impl` |
 | `DD_API_KEY` | | Datadog API key | `integrations/_catalog_impl` |
@@ -276,6 +281,11 @@ not a Mintlify docs-site page).
 | `SLACK_WEBHOOK_URL` | | Slack incoming webhook URL | `interactive_shell/ui/output`, `integrations/slack/delivery.py` |
 | `SLACK_BOT_TOKEN` | | Slack bot token | `scheduler/credentials`, `.env.example` |
 | `SLACK_ACCESS_TOKEN` | | Slack user token | `scheduler/credentials` |
+| `SLACK_GATEWAY_INBOUND_TRANSPORT` | `socket_mode` | How Slack delivers events: `socket_mode` or `events_api_http` | `transports/slack/settings` |
+| `SLACK_APP_TOKEN` | | App-level token (`xapp-…`). Required for `socket_mode` | `transports/slack/settings` |
+| `SLACK_SIGNING_SECRET` | | Request-signature secret. Required for `events_api_http` | `transports/slack/settings` |
+| `SLACK_GATEWAY_HTTP_PORT` | `3000` | Port the `events_api_http` listener binds | `transports/slack/settings` |
+| `SLACK_GATEWAY_ALLOW_LOCAL_DEDUP` | | Accept process-local event dedup when `DATABASE_URL` is unset. Single replica only — a Slack retry reaching a second replica runs the turn twice | `transports/slack/startup` |
 | `SLACK_GITHUB_ISSUES_WEBHOOK_URL` | | Slack webhook for GitHub issues | `integrations/github/issue_comments` |
 | `DISCORD_BOT_TOKEN` | | Discord bot token | `scheduler/credentials`, `remote/server` |
 | `DISCORD_APPLICATION_ID` | | Discord application ID | `integrations/_catalog_impl` |

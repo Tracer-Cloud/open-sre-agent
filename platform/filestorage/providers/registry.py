@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from config.constants.filestorage import DEFAULT_MAX_PARALLEL_UPLOADS
 from platform.filestorage.enums import BucketExposure, BuiltInProvider, RemoteSyncField
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.exposure import PublicAccessChecker, PublicAccessStatus, not_checked
@@ -57,6 +58,7 @@ _REGISTRY: dict[str, ObjectStoreFactory] = {}
 _CREDENTIAL_HINTS: dict[str, str] = {}
 _EXTRA_FIELDS: dict[str, tuple[SetupExtraField, ...]] = {}
 _PUBLIC_ACCESS_CHECKERS: dict[str, PublicAccessChecker] = {}
+_MAX_PARALLEL_UPLOADS: dict[str, int] = {}
 _REGISTRY_LOCK = threading.RLock()
 
 # Built-in backends, imported on first use so this package never imports itself.
@@ -84,6 +86,7 @@ def register_object_store(
     credential_hint: str | None = None,
     extra_fields: tuple[SetupExtraField, ...] = (),
     public_access_checker: PublicAccessChecker | None = None,
+    max_parallel_uploads: int | None = None,
 ) -> None:
     """Bind ``name`` (the value of ``OPENSRE_REMOTE_SYNC_PROVIDER``) to a factory.
 
@@ -100,10 +103,20 @@ def register_object_store(
     (see :func:`check_bucket_exposure`). Omit it when the provider has no way
     to ask — ``status`` then reports the exposure as unchecked rather than
     guessing.
+
+    ``max_parallel_uploads`` is how many ``put_object`` calls a push may have
+    in flight against this backend (see :func:`max_parallel_uploads_for_provider`).
+    Declared by the provider rather than fixed in the engine because the
+    backends are not interchangeable here: one behind an SDK that retries
+    throttling absorbs a burst that would make another — a bare HTTP client
+    with no retry, where a single 429 aborts the whole push — fail. Omit it to
+    inherit the deliberately low default.
     """
     key = name.strip().lower()
     if not key:
         raise ValueError("object-store provider name must be non-empty")
+    if max_parallel_uploads is not None and max_parallel_uploads < 1:
+        raise ValueError("max_parallel_uploads must be at least 1")
     with _REGISTRY_LOCK:
         _REGISTRY[key] = factory
         if credential_hint is not None:
@@ -113,6 +126,10 @@ def register_object_store(
             _PUBLIC_ACCESS_CHECKERS.pop(key, None)
         else:
             _PUBLIC_ACCESS_CHECKERS[key] = public_access_checker
+        if max_parallel_uploads is None:
+            _MAX_PARALLEL_UPLOADS.pop(key, None)
+        else:
+            _MAX_PARALLEL_UPLOADS[key] = max_parallel_uploads
 
 
 def unregister_object_store(name: str) -> None:
@@ -123,6 +140,7 @@ def unregister_object_store(name: str) -> None:
         _CREDENTIAL_HINTS.pop(key, None)
         _EXTRA_FIELDS.pop(key, None)
         _PUBLIC_ACCESS_CHECKERS.pop(key, None)
+        _MAX_PARALLEL_UPLOADS.pop(key, None)
 
 
 def registered_providers() -> tuple[str, ...]:
@@ -199,6 +217,22 @@ def check_bucket_exposure(config: RemoteSyncConfig) -> PublicAccessStatus:
         )
 
 
+def max_parallel_uploads_for_provider(provider: str) -> int:
+    """How many concurrent ``put_object`` calls ``provider`` accepts.
+
+    Loads a not-yet-imported built-in module first, same as
+    :func:`credential_hint_for_provider`. A provider that declared nothing —
+    and an unknown name — resolves to
+    :data:`~config.constants.filestorage.DEFAULT_MAX_PARALLEL_UPLOADS`, so a
+    backend nobody has profiled is never pushed harder than the cautious
+    default.
+    """
+    key = provider.strip().lower()
+    with _REGISTRY_LOCK:
+        _load_builtin(key)
+        return _MAX_PARALLEL_UPLOADS.get(key, DEFAULT_MAX_PARALLEL_UPLOADS)
+
+
 def provider_extra_fields(provider: str) -> tuple[SetupExtraField, ...]:
     """``region``/``profile`` fields ``provider`` declared, or ``()`` for neither.
 
@@ -221,6 +255,7 @@ __all__ = [
     "builtin_providers",
     "check_bucket_exposure",
     "credential_hint_for_provider",
+    "max_parallel_uploads_for_provider",
     "provider_extra_fields",
     "register_object_store",
     "registered_providers",

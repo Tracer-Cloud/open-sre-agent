@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pytest
 
 from config.constants.filestorage import (
+    DEFAULT_MAX_PARALLEL_UPLOADS,
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_PROVIDER_ENV,
@@ -29,6 +31,7 @@ from platform.filestorage.providers import build_object_store as surface_build
 from platform.filestorage.providers.registry import (
     SetupExtraField,
     build_object_store,
+    max_parallel_uploads_for_provider,
     provider_extra_fields,
     register_object_store,
     registered_providers,
@@ -66,15 +69,20 @@ class _MemStore:
 
 
 @pytest.fixture(autouse=True)
-def _restore_registry() -> None:
+def _restore_registry() -> Iterator[None]:
     from platform.filestorage.providers import registry as reg
 
     with reg._REGISTRY_LOCK:
         snap = dict(reg._REGISTRY)
+        # Restored alongside the factories: a declared upload cap outliving its
+        # registration would silently re-tune a later test's push.
+        caps = dict(reg._MAX_PARALLEL_UPLOADS)
     yield
     with reg._REGISTRY_LOCK:
         reg._REGISTRY.clear()
         reg._REGISTRY.update(snap)
+        reg._MAX_PARALLEL_UPLOADS.clear()
+        reg._MAX_PARALLEL_UPLOADS.update(caps)
 
 
 def test_formatters_return_immutable_tuples() -> None:
@@ -217,6 +225,70 @@ def test_provider_extra_fields_registered_and_cleaned_up() -> None:
     )
     unregister_object_store("extra-fields-test")
     assert provider_extra_fields("extra-fields-test") == ()
+
+
+def test_aws_declares_a_wider_upload_cap_than_the_default() -> None:
+    # boto3 retries throttling and S3 absorbs the concurrency, so this backend
+    # opts above the cautious shared default rather than inheriting it.
+    assert max_parallel_uploads_for_provider("aws") > DEFAULT_MAX_PARALLEL_UPLOADS
+
+
+def test_backends_without_write_retry_inherit_the_cautious_default() -> None:
+    # gcs/vercel/azure all raise on the first non-2xx with no retry, so a wide
+    # fan-out would turn one throttled write into a failed push.
+    for provider in ("gcs", "vercel", "azure"):
+        assert max_parallel_uploads_for_provider(provider) == DEFAULT_MAX_PARALLEL_UPLOADS
+
+
+def test_an_unknown_provider_gets_the_default_cap() -> None:
+    # A backend nobody has profiled is never pushed harder than the default.
+    assert max_parallel_uploads_for_provider("does-not-exist") == DEFAULT_MAX_PARALLEL_UPLOADS
+
+
+def test_a_provider_declares_its_own_upload_cap_and_it_is_cleaned_up() -> None:
+    register_object_store("cap-test", lambda _cfg: _MemStore(), max_parallel_uploads=7)
+    assert max_parallel_uploads_for_provider("cap-test") == 7
+    unregister_object_store("cap-test")
+    assert max_parallel_uploads_for_provider("cap-test") == DEFAULT_MAX_PARALLEL_UPLOADS
+
+
+def test_re_registering_without_a_cap_drops_the_previous_one() -> None:
+    # Registration is a full replacement, so a stale cap must not survive it.
+    register_object_store("cap-reset", lambda _cfg: _MemStore(), max_parallel_uploads=9)
+    register_object_store("cap-reset", lambda _cfg: _MemStore())
+    assert max_parallel_uploads_for_provider("cap-reset") == DEFAULT_MAX_PARALLEL_UPLOADS
+    unregister_object_store("cap-reset")
+
+
+def test_a_cap_below_one_is_rejected_at_registration() -> None:
+    # Zero workers would mean a push that silently transfers nothing.
+    with pytest.raises(ValueError, match="at least 1"):
+        register_object_store("cap-zero", lambda _cfg: _MemStore(), max_parallel_uploads=0)
+
+
+def test_the_shared_service_hands_the_engine_the_providers_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cap must actually reach ``push``, not just sit in the registry."""
+    from platform.filestorage import operations as sync_service
+
+    seen: dict[str, object] = {}
+
+    def _capturing_run_sync(_store: object, **kwargs: object) -> SyncReport:
+        seen.update(kwargs)
+        return SyncReport()
+
+    register_object_store("cap-wiring", lambda _cfg: _MemStore(), max_parallel_uploads=11)
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "b")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "cap-wiring")
+    monkeypatch.setattr(sync_service, "syncable_roots", tuple)
+    monkeypatch.setattr(sync_service, "run_sync", _capturing_run_sync)
+
+    run_remote_sync()
+
+    assert seen["max_parallel_uploads"] == 11
+    unregister_object_store("cap-wiring")
 
 
 def test_registry_safe_under_concurrent_register_and_build() -> None:

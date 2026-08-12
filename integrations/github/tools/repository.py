@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
@@ -76,7 +77,7 @@ def _normalize_repository(repo: dict[str, Any], *, owner: str, repo_name: str) -
     ],
     requires=["owner", "repo"],
     surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {

@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
@@ -66,8 +67,8 @@ class DescribeRDSInstanceOutput(BaseModel):
     ],
     requires=["db_instance_identifier"],
     source_id="aws_rds",
-    evidence_type="deployment_metadata",
-    side_effect_level="read_only",
+    evidence_type=EvidenceType.DEPLOYMENT_METADATA,
+    side_effect_level=SideEffectLevel.READ_ONLY,
     examples=[
         "Describe `prod-orders-db` to confirm if status is `modifying` during an incident.",
         "Check engine version and backup configuration before rollback decisions.",

@@ -5,13 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.agent_harness.harness import AgentSession
 from core.agent_harness.session.integration_resolution import (
     merge_resolved_integrations,
     resolve_and_cache_integrations,
 )
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
-from core.agent_harness.turns.headless_adapters import BufferOutputSink
 from core.agent_harness.turns.turn_results import TurnResult
 from integrations.sentry.project_scope import (
     apply_sentry_project_scope,
@@ -61,30 +59,13 @@ def _require_sentry_configured() -> None:
 
 def _dispatch_headless_turn(message: str, payload: AgentPayload) -> TurnResult:
     _require_sentry_configured()
-
-    harness = AgentHarness(
-        HarnessConfig(
-            load_env=True,
-            hydrate_integrations=True,
-            warm_integrations=True,
-            persistent_tasks=False,
-            open_storage=False,
-        )
-    )
-    startup = harness.startup()
-    session = startup.session
-    _apply_digest_project_scope(session, payload)
-    output = BufferOutputSink()
-    agent = build_default_headless_agent(
-        session=session,
-        output=output,
+    return AgentSession.run_headless_turn(
+        message,
+        prepare_session=lambda session: _apply_digest_project_scope(session, payload),
         logger=logger,
-        message=message,
         gather_enabled=True,
         is_tty=False,
     )
-    harness.attach_agent(agent)
-    return harness.dispatch_message(message)
 
 
 def run_sentry_morning_digest(payload: AgentPayload) -> str:
@@ -92,7 +73,13 @@ def run_sentry_morning_digest(payload: AgentPayload) -> str:
     message = build_morning_digest_prompt(payload)
     result = _dispatch_headless_turn(message, payload)
     report = result.primary_response_text
-    if not result.answered or not report:
+    if not result.answered:
+        if report:
+            raise RuntimeError(f"Sentry morning digest failed: {report}")
+        raise RuntimeError(
+            "Sentry morning digest failed: the reasoning client did not produce a response."
+        )
+    if not report:
         raise RuntimeError(
             "Sentry morning digest failed: the reasoning client did not produce a response."
         )

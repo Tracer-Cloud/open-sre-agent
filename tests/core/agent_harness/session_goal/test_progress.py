@@ -1,0 +1,320 @@
+"""Checklist success criteria on SessionGoal (structured tags only)."""
+
+from __future__ import annotations
+
+import pytest
+
+from core.agent_harness.session.session_core import SessionCore
+from core.agent_harness.session_goal.evaluate import default_evaluate_session_goal
+from core.agent_harness.session_goal.goal import (
+    SessionGoal,
+    SessionGoalStatus,
+    apply_session_goal_progress,
+    attach_session_goal,
+    session_goal_from_assistant_handoffs,
+    session_goal_from_handoffs,
+)
+from core.agent_harness.session_goal.run_until import run_until_session_goal
+from core.agent_harness.turns.assistant_handoff import AssistantHandoff
+from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+
+
+def test_checklist_items_from_structured_handoff_tags() -> None:
+    goal = session_goal_from_handoffs(
+        (
+            "session_goal:max_turns=5;steps=3",
+            "session_goal_item:List the goal",
+            "session_goal_item:Name step one",
+            "session_goal_item:Confirm done",
+        ),
+        condition="run the checklist",
+    )
+
+    assert goal is not None
+    assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
+    assert goal.completed == frozenset()
+    assert goal.max_outer_turns == 5
+
+
+def test_checklist_items_from_typed_assistant_handoff_fields() -> None:
+    goal = session_goal_from_assistant_handoffs(
+        (
+            AssistantHandoff(
+                content="run the checklist",
+                session_goal="max_turns=5;steps=3",
+                session_goal_items=("List the goal", "Name step one", "Confirm done"),
+            ),
+        ),
+        condition="run the checklist",
+    )
+
+    assert goal is not None
+    assert goal.checklist == ("List the goal", "Name step one", "Confirm done")
+    assert goal.max_outer_turns == 5
+    assert goal.step_count == 3
+
+
+def test_done_tags_mark_checklist_items_and_achieve_when_complete() -> None:
+    goal = SessionGoal(
+        condition="checklist",
+        max_outer_turns=5,
+        checklist=("A", "B", "C"),
+    )
+    after_one = apply_session_goal_progress(goal, "Did A. session_goal:done=0")
+    assert after_one.completed == frozenset({0})
+    assert (
+        default_evaluate_session_goal(
+            after_one,
+            type("R", (), {"assistant_response_text": "session_goal:done=0"})(),
+        )
+        == SessionGoalStatus.ACTIVE
+    )
+
+    after_all = apply_session_goal_progress(
+        after_one,
+        "Finished. session_goal:done=1,2",
+    )
+    assert after_all.completed == frozenset({0, 1, 2})
+    assert (
+        default_evaluate_session_goal(
+            after_all,
+            type("R", (), {"assistant_response_text": "session_goal:done=1,2"})(),
+        )
+        == SessionGoalStatus.ACHIEVED
+    )
+
+
+def test_format_session_goal_progress_shows_checklist() -> None:
+    from core.agent_harness.session_goal.progress import format_session_goal_progress
+
+    goal = SessionGoal(
+        condition="ship the checklist",
+        turns_used=2,
+        max_outer_turns=5,
+        checklist=("One", "Two", "Three"),
+        completed=frozenset({0}),
+        last_reason="checklist 1/3 done — next: Two",
+    )
+    rendered = format_session_goal_progress(goal)
+
+    assert "◎ /goal active" in rendered
+    assert "turn 2/5" in rendered
+    assert "condition: ship the checklist" in rendered
+    assert "reason: checklist 1/3 done — next: Two" in rendered
+    assert "One" in rendered and "Two" in rendered and "Three" in rendered
+    assert "[x]" in rendered
+    assert "[ ]" in rendered
+    assert "→" in rendered  # next unfinished item marker
+
+
+def test_format_session_goal_status_line_is_compact() -> None:
+    from core.agent_harness.session_goal.progress import format_session_goal_status_line
+
+    goal = SessionGoal(
+        condition="two-step",
+        turns_used=1,
+        max_outer_turns=3,
+        checklist=("one", "two"),
+        completed=frozenset({0}),
+    )
+    line = format_session_goal_status_line(goal)
+    assert "\n" not in line
+    assert "◎ /goal active" in line
+    assert "turn 1/3" in line
+    assert "next: two" in line
+
+
+def test_format_session_goal_progress_active_header_includes_duration() -> None:
+    from core.agent_harness.session_goal.goal import mark_session_goal_started
+    from core.agent_harness.session_goal.progress import format_session_goal_progress
+
+    goal = mark_session_goal_started(
+        SessionGoal(condition="finish migrate", max_outer_turns=5, turns_used=1),
+        now=1_000.0,
+        input_tokens=10,
+        output_tokens=5,
+    )
+    rendered = format_session_goal_progress(
+        goal,
+        now=1_083.0,
+        input_tokens=110,
+        output_tokens=55,
+    )
+    assert "◎ /goal active" in rendered
+    assert "1m 23s" in rendered or "83s" in rendered
+    assert "turn 1/5" in rendered
+    assert "tokens" in rendered.lower()
+    assert "+150" in rendered or "150" in rendered
+
+
+def test_format_duration_and_token_compacts() -> None:
+    from core.agent_harness.session_goal.progress import (
+        format_duration_compact,
+        format_token_count_compact,
+    )
+
+    assert format_duration_compact(45) == "45s"
+    assert format_duration_compact(83) == "1m 23s"
+    assert format_duration_compact(3725) == "1h 02m"
+    assert format_token_count_compact(150) == "150"
+    assert format_token_count_compact(1200) == "1.2k"
+    assert format_token_count_compact(3_400_000) == "3.4M"
+
+
+def test_session_goal_payload_round_trips_started_at_and_token_baseline() -> None:
+    from core.agent_harness.session_goal.goal import mark_session_goal_started
+    from core.agent_harness.session_goal.persist import (
+        session_goal_from_payload,
+        session_goal_to_payload,
+    )
+
+    goal = mark_session_goal_started(
+        SessionGoal(condition="persist clocks", max_outer_turns=2),
+        now=1_700_000_000.0,
+        input_tokens=11,
+        output_tokens=7,
+    )
+    restored = session_goal_from_payload(session_goal_to_payload(goal))
+    assert restored is not None
+    assert restored.started_at == 1_700_000_000.0
+    assert restored.token_baseline_input == 11
+    assert restored.token_baseline_output == 7
+
+
+def test_outer_loop_achieves_via_checklist_without_achieved_tag() -> None:
+    session = SessionCore()
+    turns: list[str] = []
+    goal = SessionGoal(
+        condition="three checks",
+        max_outer_turns=5,
+        checklist=("A", "B", "C"),
+    )
+    attach_session_goal(session, goal)
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        n = len(turns)
+        # Mark one new item per turn via structured done tags.
+        body = f"Working. session_goal:done={n - 1}"
+        return TurnResult(
+            final_intent="cli_agent_fallback",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=True,
+            ),
+            assistant_response_text=body,
+            llm_run=None,
+        )
+
+    outcome = run_until_session_goal(_chat, session, "go", goal=goal)
+
+    assert len(turns) == 3
+    assert outcome.goal.status == SessionGoalStatus.ACHIEVED
+    assert outcome.goal.completed == frozenset({0, 1, 2})
+
+
+def test_nudge_lists_unfinished_checklist_items() -> None:
+    from core.agent_harness.session_goal.continuation import continuation_nudge
+
+    goal = SessionGoal(
+        condition="x",
+        checklist=("A", "B", "C"),
+        completed=frozenset({0}),
+        last_reason="checklist 1/3 done — next: B",
+    )
+    nudge = continuation_nudge(goal)
+
+    assert "B" in nudge and "C" in nudge
+    assert "session_goal:done=" in nudge
+    assert "Last progress: checklist 1/3 done — next: B" in nudge
+
+
+def test_outer_loop_nudge_carries_reason_after_partial_progress() -> None:
+    session = SessionCore()
+    turns: list[str] = []
+    goal = SessionGoal(
+        condition="two checks",
+        max_outer_turns=4,
+        checklist=("A", "B"),
+    )
+    attach_session_goal(session, goal)
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        n = len(turns)
+        body = f"Working. session_goal:done={n - 1}"
+        return TurnResult(
+            final_intent="cli_agent_fallback",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=True,
+            ),
+            assistant_response_text=body,
+            llm_run=None,
+        )
+
+    run_until_session_goal(_chat, session, "go", goal=goal)
+
+    assert len(turns) == 2
+    assert "Last progress:" in turns[1]
+    assert "next: B" in turns[1]
+
+
+def test_strip_session_goal_progress_tags_hides_harness_tokens() -> None:
+    from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
+
+    raw = "Finished step two.\nsession_goal:done=1\nMore prose. session_goal:achieved"
+    cleaned = strip_session_goal_progress_tags(raw)
+
+    assert "session_goal:" not in cleaned
+    assert "Finished step two." in cleaned
+    assert "More prose." in cleaned
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "session_goal:done=1, session_goal:achieved\n\nStraight answer",
+        "session_goal:done=1,session_goal:achieved\n\nStraight answer",
+        "session_goal:done=1, session_goal:achieved",
+    ],
+)
+def test_strip_session_goal_progress_tags_handles_comma_joined_tokens(raw: str) -> None:
+    from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
+
+    cleaned = strip_session_goal_progress_tags(raw)
+    assert "session_goal:" not in cleaned
+    if "Straight" in raw:
+        assert "Straight answer" in cleaned
+    else:
+        assert cleaned == ""
+
+
+def test_strip_shell_prompt_chrome_removes_repeated_prompt_prefix() -> None:
+    from core.agent_harness.session_goal.goal import strip_shell_prompt_chrome
+
+    assert (
+        strip_shell_prompt_chrome(
+            "[1] ❯ [1] ❯ what windows users number did open opensre during last 7 days?"
+        )
+        == "what windows users number did open opensre during last 7 days?"
+    )
+    assert strip_shell_prompt_chrome("bare question") == "bare question"
+
+
+def test_attach_session_goal_strips_prompt_chrome_from_condition() -> None:
+    session = SessionCore()
+    attached = attach_session_goal(
+        session,
+        SessionGoal(
+            condition="[1] ❯ what windows users number did open opensre during last 7 days?",
+            max_outer_turns=3,
+        ),
+    )
+    assert attached.condition == ("what windows users number did open opensre during last 7 days?")

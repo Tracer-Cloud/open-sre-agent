@@ -19,12 +19,14 @@ import pytest
 from rich.console import Console
 
 from core.agent_harness.session import SessionCore
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import action_tool_names
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
 from core.llm.types import AgentLLMResponse, ToolCall
-from gateway.runtime.headless_subprocess_presenter import headless_subprocess_presenter_factory
+from tools.interactive_shell.subprocess_presenter import (
+    headless_subprocess_presenter_factory,
+)
 from tools.registry import clear_tool_registry_cache
 
 _USER_MESSAGE = (
@@ -48,11 +50,15 @@ class _ComputeThenSlackLLM:
       temperature embedded in the message body.
     * Turn 3 concludes with a plain reply and no tool call.
 
-    The turn counter lets the test assert the "two or three turns" expectation.
+    The action driver additionally asks the same LLM one goal-review question
+    at conclusion time (``build_goal_reviewer``); that call is answered with
+    structured ``{"verdict": "GOAL_REACHED"}`` and tracked separately so the
+    loop-turn counter keeps asserting the "two or three turns" expectation.
     """
 
     def __init__(self) -> None:
         self.turns = 0
+        self.review_calls = 0
         self.sent_slack_message: str | None = None
 
     def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
@@ -65,7 +71,10 @@ class _ComputeThenSlackLLM:
         system: str | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AgentLLMResponse:
-        _ = (system, tools)
+        _ = tools
+        if system is not None and "GOAL_REACHED" in system:
+            self.review_calls += 1
+            return AgentLLMResponse(content='{"verdict": "GOAL_REACHED"}')
         self.turns += 1
         shell_output = self._shell_output(messages)
         if not shell_output:
@@ -171,7 +180,7 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
 
     # Build the gateway agent's action surface exactly as ``start_gateway`` does:
     # shared action tools wrapped in the core-owned default provider.
-    session = SessionCore(storage=InMemorySessionStorage())
+    session = SessionCore(store=InMemorySessionStore())
     integrations: dict[str, Any] = {"slack": {"webhook_url": _SLACK_WEBHOOK}}
     session.resolved_integrations_cache = integrations
     console = Console(force_terminal=False)
@@ -203,6 +212,8 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     # The agent ran the compound request as a sequence of turns: compute, send,
     # finalize. "Two or three turns" — the final no-tool reply is the third.
     assert llm.turns == 3
+    # The conclusion triggered exactly one bounded goal-review call.
+    assert llm.review_calls == 1
 
     # Turn 1 actually executed a shell command to compute the temperature.
     shell_entries = [entry for entry in session.history if entry.get("type") == "shell"]

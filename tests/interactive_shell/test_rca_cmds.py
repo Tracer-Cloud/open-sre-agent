@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from rich.console import Console
 
-from core.agent_harness.session import JsonlSessionStorage
+from core.agent_harness.session import JsonlSessionStore
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import Session
 
-SessionStore = JsonlSessionStorage()
+SessionState = JsonlSessionStore()
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -28,8 +28,8 @@ def test_rca_history_lists_persisted_reports(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "redis timeout", "problem_md": "cache unavailable"},
         trigger="/investigate generic",
@@ -50,8 +50,8 @@ def test_rca_show_renders_full_report(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    inv_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    inv_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "bad deploy", "problem_md": "## Report\nRollback required"},
         trigger="/investigate grafana",
@@ -84,8 +84,8 @@ def test_tty_rca_menu_latest_shows_report(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    inv_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    inv_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "connection pool exhausted", "problem_md": "## Report\nPool at max"},
         trigger="/investigate generic",
@@ -111,13 +111,13 @@ def test_tty_rca_history_menu_picks_report_directly(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    older_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    older_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "older issue", "problem_md": "older report"},
         trigger="/investigate grafana",
     )
-    SessionStore.append_investigation_result(
+    SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "newer issue", "problem_md": "newer report"},
         trigger="/investigate generic",
@@ -143,13 +143,13 @@ def test_tty_rca_root_menu_history_picks_report(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    older_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    older_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "older issue", "problem_md": "older report"},
         trigger="/investigate grafana",
     )
-    SessionStore.append_investigation_result(
+    SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "newer issue", "problem_md": "newer report"},
         trigger="/investigate generic",
@@ -174,8 +174,8 @@ def test_rca_save_writes_markdown(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "redis timeout", "problem_md": "cache unavailable"},
         trigger="/investigate generic",
@@ -198,8 +198,8 @@ def test_rca_save_by_id_writes_json(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    inv_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    inv_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "bad deploy", "problem_md": "rollback required"},
         trigger="/investigate grafana",
@@ -222,8 +222,8 @@ def test_rca_save_strips_quoted_path(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    inv_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    inv_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "quoted path", "problem_md": "saved body"},
         trigger="/investigate generic",
@@ -243,8 +243,8 @@ def test_rca_save_to_new_folder_adds_default_filename(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    inv_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    inv_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "folder save", "problem_md": "in subfolder"},
         trigger="/investigate generic",
@@ -267,8 +267,8 @@ def test_rca_save_to_new_folder_trailing_slash_creates_subdirectory(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    inv_id = SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    inv_id = SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "nested save", "problem_md": "inside new folder"},
         trigger="/investigate generic",
@@ -290,8 +290,8 @@ def test_rca_save_unknown_id_reports_not_found(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "existing issue", "problem_md": "existing report"},
         trigger="/investigate generic",
@@ -322,8 +322,8 @@ def test_tty_rca_save_menu_picks_latest_and_prompts_path(
     monkeypatch.setattr("config.constants.OPENSRE_HOME_DIR", tmp_path)
     monkeypatch.setattr("config.constants.paths.OPENSRE_HOME_DIR", tmp_path)
     session = Session()
-    SessionStore.open_session(session)
-    SessionStore.append_investigation_result(
+    SessionState.open_session(session)
+    SessionState.append_investigation_result(
         session.session_id,
         {"root_cause": "latest root cause", "problem_md": "latest body"},
         trigger="/investigate generic",

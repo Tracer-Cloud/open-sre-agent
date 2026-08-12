@@ -35,7 +35,11 @@ from platform.filestorage.enums import SyncDirection, SyncRootName
 from platform.filestorage.errors import OrgScopeNotSupportedError
 from platform.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules
 from platform.filestorage.exposure import PublicAccessStatus
-from platform.filestorage.providers import build_object_store, check_bucket_exposure
+from platform.filestorage.providers import (
+    build_object_store,
+    check_bucket_exposure,
+    max_parallel_uploads_for_provider,
+)
 from platform.filestorage.syncable import SyncRoot, syncable_roots
 
 
@@ -177,6 +181,8 @@ def run_remote_sync(
             exclusions=config.exclude,
             dry_run=dry_run,
             on_progress=on_progress,
+            # The backend, not the engine, knows how hard it can be pushed.
+            max_parallel_uploads=max_parallel_uploads_for_provider(config.provider),
         )
     )
 

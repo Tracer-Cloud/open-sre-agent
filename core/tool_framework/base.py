@@ -58,7 +58,7 @@ class BaseTool(ABC):
     retrieval_controls: ClassVar[RetrievalControls] = (
         RetrievalControls()
     )  # Declares supported controls
-    surfaces: ClassVar[tuple[ToolSurface, ...]] = ("investigation",)
+    surfaces: ClassVar[tuple[ToolSurface | str, ...]] = (ToolSurface.INVESTIGATION,)
     tags: ClassVar[Sequence[str]] = ()
     parallel_safe: ClassVar[bool] = True
     requires_approval: ClassVar[bool] = False  # Whether this tool needs approval from messaging

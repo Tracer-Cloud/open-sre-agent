@@ -38,6 +38,13 @@ from config.constants.billing import (
     USAGE_SECRET_ENV,
     WEBAPP_URL_ENV,
 )
+from config.constants.buzz import (
+    BUZZ_AUTH_TAG_ENV,
+    BUZZ_DEFAULT_CHANNEL_ENV,
+    BUZZ_PATH_ENV,
+    BUZZ_PRIVATE_KEY_ENV,
+    BUZZ_RELAY_URL_ENV,
+)
 from config.constants.coralogix import (
     CORALOGIX_API_KEY_ENV,
     CORALOGIX_APPLICATION_NAME_ENV,
@@ -52,6 +59,7 @@ from config.constants.datadog import (
 )
 from config.constants.filestorage import (
     BLOB_READ_WRITE_TOKEN_ENV,
+    DEFAULT_MAX_PARALLEL_UPLOADS,
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
@@ -62,6 +70,18 @@ from config.constants.filestorage import (
     REMOTE_SYNC_PROFILE_ENV,
     REMOTE_SYNC_PROVIDER_ENV,
     REMOTE_SYNC_REGION_ENV,
+)
+from config.constants.gateway import (
+    ATTACHMENT_MAX_FILE_CHARS,
+    ATTACHMENT_MAX_TOTAL_CHARS,
+    CREDITS_DENIED_MESSAGE,
+    DEFAULT_MAX_CONVERSATION_LOCKS,
+    NEW_SESSION_MESSAGE,
+    NO_ACTIVE_TURN_MESSAGE,
+    TURN_ERROR_MESSAGE,
+    TURN_TIMEOUT_MESSAGE,
+    UNAUTHORIZED_MESSAGE,
+    USER_STOP_MESSAGE,
 )
 from config.constants.git import (
     OPENSRE_COMMIT_COAUTHOR_EMAIL,
@@ -82,7 +102,10 @@ from config.constants.gitlab import GITLAB_AUTH_TOKEN_ENV, GITLAB_BASE_URL_ENV
 from config.constants.grafana import (
     GRAFANA_CA_BUNDLE_ENV,
     GRAFANA_INSTANCE_URL_ENV,
+    GRAFANA_LOKI_DATASOURCE_UID_ENV,
+    GRAFANA_MIMIR_DATASOURCE_UID_ENV,
     GRAFANA_READ_TOKEN_ENV,
+    GRAFANA_TEMPO_DATASOURCE_UID_ENV,
     GRAFANA_VERIFY_SSL_ENV,
 )
 from config.constants.groundcover import (
@@ -175,10 +198,18 @@ from config.constants.opensearch import (
     OPENSEARCH_URL_ENV,
     OPENSEARCH_USERNAME_ENV,
 )
+from config.constants.operations_log import (
+    DEFAULT_OPENSRE_OPERATIONS_LOG_MAX_BYTES,
+    OPENSRE_OPERATIONS_LOG_DISABLED_ENV,
+    OPENSRE_OPERATIONS_LOG_FILENAME,
+    OPENSRE_OPERATIONS_LOG_MAX_BYTES_ENV,
+    OPENSRE_OPERATIONS_LOG_PATH_ENV,
+)
 from config.constants.pagerduty import PAGERDUTY_API_KEY_ENV, PAGERDUTY_BASE_URL_ENV
 from config.constants.paths import (
     CONTEXT_ROOT_ENV,
     OPENSRE_HOME_DIR,
+    OPENSRE_HOME_ENV,
     OPENSRE_TMP_DIR,
     ORGS_DIR_NAME,
     USERS_DIR_NAME,
@@ -186,6 +217,7 @@ from config.constants.paths import (
     ensure_opensre_tmp_dir,
     get_memory_dir,
     get_store_path,
+    get_work_items_dir,
     integrations_store_path,
     opensre_home,
     session_home,
@@ -224,6 +256,7 @@ from config.constants.redis import (
     REDIS_SSL_ENV,
     REDIS_USERNAME_ENV,
 )
+from config.constants.reporting import SLACK_LINK_RE
 from config.constants.runtime_metadata import (
     GITHUB_REPO_ENV,
     GITHUB_REPOSITORY_ENV,
@@ -303,6 +336,7 @@ from config.constants.twilio import (
     WHATSAPP_DEFAULT_TO_ENV,
 )
 from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
+from config.constants.work_items import OPENSRE_WORK_ITEMS_DIR_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 
 __all__ = [
@@ -334,8 +368,24 @@ __all__ = [
     "BETTERSTACK_QUERY_ENDPOINT_ENV",
     "BETTERSTACK_SOURCES_ENV",
     "BETTERSTACK_USERNAME_ENV",
+    "BUZZ_AUTH_TAG_ENV",
+    "BUZZ_DEFAULT_CHANNEL_ENV",
+    "BUZZ_PATH_ENV",
+    "BUZZ_PRIVATE_KEY_ENV",
+    "BUZZ_RELAY_URL_ENV",
+    "ATTACHMENT_MAX_FILE_CHARS",
+    "ATTACHMENT_MAX_TOTAL_CHARS",
+    "CREDITS_DENIED_MESSAGE",
     "CONTEXT_ROOT_ENV",
     "BLOB_READ_WRITE_TOKEN_ENV",
+    "DEFAULT_MAX_CONVERSATION_LOCKS",
+    "NEW_SESSION_MESSAGE",
+    "NO_ACTIVE_TURN_MESSAGE",
+    "TURN_ERROR_MESSAGE",
+    "TURN_TIMEOUT_MESSAGE",
+    "UNAUTHORIZED_MESSAGE",
+    "USER_STOP_MESSAGE",
+    "DEFAULT_MAX_PARALLEL_UPLOADS",
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "REMOTE_SYNC_BUCKET_ENV",
@@ -375,7 +425,10 @@ __all__ = [
     "GITLAB_BASE_URL_ENV",
     "GRAFANA_CA_BUNDLE_ENV",
     "GRAFANA_INSTANCE_URL_ENV",
+    "GRAFANA_LOKI_DATASOURCE_UID_ENV",
+    "GRAFANA_MIMIR_DATASOURCE_UID_ENV",
     "GRAFANA_READ_TOKEN_ENV",
+    "GRAFANA_TEMPO_DATASOURCE_UID_ENV",
     "GRAFANA_VERIFY_SSL_ENV",
     "GROUNDCOVER_API_KEY_ENV",
     "GROUNDCOVER_BACKEND_ID_ENV",
@@ -434,13 +487,20 @@ __all__ = [
     "OPENSEARCH_PASSWORD_ENV",
     "OPENSEARCH_URL_ENV",
     "OPENSEARCH_USERNAME_ENV",
+    "DEFAULT_OPENSRE_OPERATIONS_LOG_MAX_BYTES",
     "OPENSRE_DISABLE_KEYRING_ENV",
+    "OPENSRE_OPERATIONS_LOG_DISABLED_ENV",
+    "OPENSRE_OPERATIONS_LOG_FILENAME",
+    "OPENSRE_OPERATIONS_LOG_MAX_BYTES_ENV",
+    "OPENSRE_OPERATIONS_LOG_PATH_ENV",
     "OPENSRE_USE_KEYRING_ENV",
     "OPENSRE_HOME_DIR",
+    "OPENSRE_HOME_ENV",
     "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED_ENV",
     "OPENSRE_MEMORY_DIR_ENV",
     "OPENSRE_MEMORY_DISABLED_ENV",
     "OPENSRE_MEMORY_GATEWAY_ENABLED_ENV",
+    "OPENSRE_WORK_ITEMS_DIR_ENV",
     "OPENSRE_TMP_DIR",
     "ORGANIZATION_ID_ENV",
     "CREDENTIALS_API_URL_ENV",
@@ -497,6 +557,7 @@ __all__ = [
     "SIGNOZ_URL_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
+    "SLACK_LINK_RE",
     "SMTP_DEFAULT_TO_ENV",
     "SMTP_FROM_ADDRESS_ENV",
     "SMTP_HOST_ENV",
@@ -534,6 +595,7 @@ __all__ = [
     "ensure_opensre_tmp_dir",
     "get_memory_dir",
     "get_store_path",
+    "get_work_items_dir",
     "integrations_store_path",
     "opensre_home",
     "session_home",

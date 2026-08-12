@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.conversation_memory import (
+from core.agent_harness.prompts.memory.conversation import (
     NO_HISTORY_PLACEHOLDER,
     format_prior_action_facts,
     format_recent_conversation,

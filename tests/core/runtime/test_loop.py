@@ -180,30 +180,33 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
     assert first.assistant_response_text == "hello from headless"
     assert second.assistant_response_text == "hello from headless"
     # Both turns landed on the same shared session — reuse, not a fresh store per call.
-    assert len(agent._store.cli_agent_messages) == 4
+    assert len(agent._session.cli_agent_messages) == 4
 
 
-def test_provided_accounting_is_reused_across_messages() -> None:
+def test_provided_accounting_is_consumed_once() -> None:
+    """Constructor accounting is take-once — hosts must rebind per message."""
     from core.agent_harness.turns.headless_dispatch import NoopTurnAccounting, NullToolProvider
 
     accounting = NoopTurnAccounting()
     agent = HeadlessAgent(tools=NullToolProvider(), accounting=accounting)
-    assert agent._accounting_for("a") is accounting
-    assert agent._accounting_for("b") is accounting
+    assert agent._take_accounting("a") is accounting
+    # Slot cleared so a forgotten bind_turn cannot leak the prior turn's prompt.
+    assert agent._take_accounting("b") is not accounting
 
 
 def test_default_accounting_is_resolved_fresh_per_message() -> None:
     from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-    from core.agent_harness.turns.headless_dispatch import InMemorySessionStore, NullToolProvider
+    from core.agent_harness.turns.headless_dispatch import InMemorySessionState, NullToolProvider
 
-    class _PersistentStore(InMemorySessionStore):
-        storage = object()  # a persistent-backed store selects DefaultTurnAccounting
+    class _PersistentState(InMemorySessionState):
+        store = object()  # persistent-backed session selects DefaultTurnAccounting
 
-    agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentStore())
+    agent = HeadlessAgent(tools=NullToolProvider(), session=_PersistentState())
 
-    first = agent._accounting_for("msg-a")
-    second = agent._accounting_for("msg-b")
+    first = agent._take_accounting("msg-a")
+    second = agent._take_accounting("msg-b")
     assert isinstance(first, DefaultTurnAccounting)
+    assert isinstance(second, DefaultTurnAccounting)
     assert first is not second  # resolved per message, not once at construction
 
 
@@ -471,6 +474,33 @@ def test_runtime_events_emit_typed_lifecycle_and_streaming_order() -> None:
     assert [event.delta for event in message_updates] == ["final"]
 
 
+def test_message_update_flags_tool_call_iterations() -> None:
+    """Intermediate commentary carries has_tool_calls=True; the final answer False."""
+    llm = FakeLLM(
+        iter(
+            [
+                AgentLLMResponse(
+                    content="### [1/2] Checking logs",
+                    tool_calls=[ToolCall(id="c1", name="query_logs", input={})],
+                    raw_content=None,
+                ),
+                _text_response("final"),
+            ]
+        )
+    )
+    events: list[RuntimeEvent] = []
+
+    _agent(llm, _tools(FakeTool("query_logs")), on_runtime_event=events.append).run(
+        [{"role": "user", "content": "hello"}]
+    )
+
+    updates = [event for event in events if isinstance(event, MessageUpdateEvent)]
+    assert [(event.delta, event.data["has_tool_calls"]) for event in updates] == [
+        ("### [1/2] Checking logs", True),
+        ("final", False),
+    ]
+
+
 def test_legacy_on_event_bridge_emits_kinds_in_order() -> None:
     llm = FakeLLM(
         iter(
@@ -495,6 +525,7 @@ def test_legacy_on_event_bridge_emits_kinds_in_order() -> None:
         "tool_start",
         "tool_end",
         "llm_start",
+        "message_update",
         "agent_end",
     ]
 

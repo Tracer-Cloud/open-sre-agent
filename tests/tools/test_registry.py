@@ -1053,3 +1053,10 @@ def test_resolve_tool_activity_labels_uses_registry_metadata() -> None:
         "Tools",
         "query grafana mystery",
     )
+
+
+def test_activity_source_badge_drops_trailing_mcp_segment() -> None:
+    assert registry_module._activity_source_badge("posthog_mcp") == "Posthog"
+    assert registry_module._activity_source_badge("sentry_mcp") == "Sentry"
+    assert registry_module._activity_source_badge("grafana") == "Grafana"
+    assert registry_module._activity_source_badge("mcp") == "Mcp"

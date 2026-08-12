@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from gateway.storage.investigations.store import InMemoryInvestigationStore, InvestigationStatus
+from gateway.core.storage.investigations.store import (
+    InMemoryInvestigationStore,
+    InvestigationStatus,
+)
 
 
 def test_create_persists_workspace_id() -> None:

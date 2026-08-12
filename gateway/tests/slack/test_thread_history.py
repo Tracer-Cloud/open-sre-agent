@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
-import gateway.slack.thread_history as thread_history
+import gateway.transports.slack.processing.thread_history as thread_history
+from core.agent_harness.session import SessionCore
 
 
 def test_session_needs_seed_for_bare_yes() -> None:
@@ -122,12 +122,25 @@ def test_seed_session_writes_cli_agent_messages(monkeypatch: pytest.MonkeyPatch)
             ("assistant", "Want me to: list titles?"),
         ],
     )
-    session: Any = SimpleNamespace(cli_agent_messages=[])
+    session = SessionCore()
     n = thread_history.seed_session_from_slack_thread(
         session, channel_id="C1", thread_ts="1.0", exclude_ts="1.2"
     )
     assert n == 2
     assert session.cli_agent_messages[1][1] == "Want me to: list titles?"
+
+
+def test_slack_reseed_replaces_stale_session_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    latest = [("assistant", "Want me to: use the latest option?")]
+    monkeypatch.setattr(thread_history, "messages_from_slack_thread", lambda **_k: latest)
+    session = SessionCore()
+    session.cli_agent_messages = [("assistant", "stale offer")]
+
+    assert (
+        thread_history.seed_session_from_slack_thread(session, channel_id="C1", thread_ts="1.0")
+        == 1
+    )
+    assert session.cli_agent_messages == latest
 
 
 def test_empty_session_yes_after_thread_seed_expands_dual_offer(
@@ -140,7 +153,7 @@ def test_empty_session_yes_after_thread_seed_expands_dual_offer(
     investigate onboarding. Seeding from the thread then expanding must yield
     an actionable ``do both`` request.
     """
-    from core.agent_harness.prompts.conversation_memory import expand_affirmative_follow_up
+    from core.agent_harness.prompts.memory.conversation import expand_affirmative_follow_up
 
     offer = (
         "I found: the team has 12 members in the connected Slack workspace.\n\n"
@@ -156,7 +169,7 @@ def test_empty_session_yes_after_thread_seed_expands_dual_offer(
         ],
     )
 
-    session: Any = SimpleNamespace(cli_agent_messages=[])
+    session = SessionCore()
     assert thread_history.session_needs_thread_seed("yes") is True
     assert (
         thread_history.seed_session_from_slack_thread(

@@ -159,7 +159,7 @@ def clear_tool_registry_cache() -> None:
     clear_descriptor_index_cache()
 
 
-def get_registered_tools(surface: ToolSurface | None = None) -> list[RegisteredTool]:
+def get_registered_tools(surface: ToolSurface | str | None = None) -> list[RegisteredTool]:
     if surface is None:
         return list(_load_registry_snapshot())
     return list(_load_surface_snapshot(surface))
@@ -175,13 +175,13 @@ def get_registered_tool(tool_name: str) -> RegisteredTool | None:
     return _load_registry_tool_map().get(tool_name)
 
 
-def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
+def get_registered_tool_map(surface: ToolSurface | str | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())
     return {tool.name: tool for tool in get_registered_tools(surface)}
 
 
-def get_tool_descriptors(surface: ToolSurface | None = None) -> list[ToolDescriptor]:
+def get_tool_descriptors(surface: ToolSurface | str | None = None) -> list[ToolDescriptor]:
     """Cheap tool metadata for ``surface`` — reads the static index, imports no
     executor. Use for listing/availability; call :func:`load_tool` to materialize
     an executor only when a tool must run.
@@ -229,12 +229,24 @@ def resolve_tool_display_name(tool_name: str) -> str:
     return tool_name.replace("_", " ")
 
 
+def _activity_source_badge(source: str) -> str:
+    """Human source name for progress lines.
+
+    Registry sources often end in ``_mcp`` (transport qualifier). Drop that
+    last segment so badges read ``Posthog`` / ``Sentry``, not ``Posthog Mcp``.
+    """
+    parts = [part for part in str(source).replace("-", "_").split("_") if part]
+    if len(parts) > 1 and parts[-1].casefold() == "mcp":
+        parts = parts[:-1]
+    return " ".join(parts).title()
+
+
 def resolve_tool_activity_labels(tool_name: str) -> tuple[str, str]:
     """Return ``(source_badge, short_label)`` from registry metadata."""
     tool = _load_registry_tool_map().get(tool_name)
     if tool is None:
         return "Tools", tool_name.replace("_", " ")
-    source = str(tool.source).replace("_", " ").title()
+    source = _activity_source_badge(str(tool.source))
     display = tool.display_name or tool.name.replace("_", " ")
     prefix = f"{source} "
     if display.lower().startswith(prefix.lower()):

@@ -321,6 +321,8 @@ Authentication relies entirely on Azure's ambient credentials (`DefaultAzureCred
 
 The authenticated principal must have the **Storage Blob Data Contributor** role assignment on the storage account. The generic "Contributor" role is insufficient as it only grants control-plane access, not data-plane access.
 
+Add `Microsoft.Storage/storageAccounts/blobServices/containers/read` (included in the Storage Blob Data Reader role) so `status` can warn you if the container is publicly readable — see [The store](#the-store). Without it, `status` shows "could not confirm it is private" instead of failing.
+
 ## The store
 
 <Warning>

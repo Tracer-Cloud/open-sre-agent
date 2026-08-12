@@ -14,12 +14,12 @@ from collections.abc import Callable
 from dotenv import load_dotenv
 
 from integrations.cli import (
-    SUPPORTED,
     cmd_list,
     cmd_remove,
     cmd_setup,
     cmd_show,
     cmd_verify,
+    setup_services,
 )
 from integrations.verify import SUPPORTED_VERIFY_SERVICES
 from platform.analytics.cli import build_cli_invoked_properties, capture_cli_invoked
@@ -73,7 +73,7 @@ _COMMANDS: dict[str, CommandHandler] = {
 
 def _print_help() -> None:
     print(__doc__)
-    print(f"  Supported services: {SUPPORTED}\n")
+    print(f"  Supported services: {', '.join(setup_services())}\n")
     print(f"  Verify services: {', '.join(SUPPORTED_VERIFY_SERVICES)}\n")
 
 

@@ -16,9 +16,9 @@ def persist_turn_system_prompt(
     if not text:
         return
 
-    storage = getattr(session, "storage", None)
+    store = getattr(session, "store", None)
     session_id = getattr(session, "session_id", "")
-    append_message = getattr(storage, "append_message", None)
+    append_message = getattr(store, "append_message", None)
     if not callable(append_message) or not isinstance(session_id, str) or not session_id:
         return
 

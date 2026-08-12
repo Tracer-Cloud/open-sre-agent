@@ -1,7 +1,14 @@
 """Build a :class:`HeadlessAgent` with the standard default port stack.
 
-Gateway, scheduled digests, and other headless surfaces share this wiring so
-tool/prompt/reasoning defaults stay aligned.
+**This is the single headless construction seam.** Gateway
+``SessionAgentPool``, ``AgentSession.start``, and ``AgentSession.run_headless_turn``
+all call here — they are not parallel stacks. Surfaces pass host-specific kwargs
+(``output``, ``slash_ports_factory``, ``subprocess_presenter_factory``, …);
+they must not re-assemble ``DefaultToolProvider`` / reasoning / accounting by
+hand.
+
+Process boot (``configure_process``) is a **different layer** — adapters and
+env — and does not build agents.
 """
 
 from __future__ import annotations
@@ -15,15 +22,20 @@ from rich.console import Console
 from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.ports import OutputSink, PromptContextProvider, TurnAccounting
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
+from core.agent_harness.ports import (
+    OutputSink,
+    PromptContextProvider,
+    SubprocessPresenterFactory,
+    TurnAccounting,
+)
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,
     SlashPortsFactory,
-    SubprocessPresenterFactory,
 )
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
+from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 
 if TYPE_CHECKING:
@@ -37,6 +49,37 @@ def _default_prompts(session: SessionCore, surface: str | None) -> PromptContext
     if surface is not None:
         return DefaultPromptContextProvider(session, surface=surface)
     return DefaultPromptContextProvider(session)
+
+
+def _resolve_gather(
+    gather: GatherPorts | None,
+    *,
+    gather_enabled: bool,
+    gather_max_iterations: int | None,
+) -> GatherPorts:
+    if gather is not None:
+        return gather
+    if not gather_enabled:
+        return GATHER_DISABLED
+    return GatherPorts(enabled=True, max_iterations=gather_max_iterations)
+
+
+def _resolved_presenter_factory(
+    explicit: SubprocessPresenterFactory | None,
+) -> SubprocessPresenterFactory | None:
+    """Return the caller's presenter, else the one registered at process boot.
+
+    Without this the default port stack has no presenter, so ``shell_run``
+    refuses every call and the agent degrades into describing a plan it cannot
+    run. A host that wants different behavior (a TTY console) still passes its
+    own factory and wins.
+    """
+    if explicit is not None:
+        return explicit
+    import platform.harness_ports as harness_ports
+
+    registered: SubprocessPresenterFactory | None = harness_ports.get_subprocess_presenter_factory()
+    return registered
 
 
 def build_default_headless_agent(
@@ -53,7 +96,9 @@ def build_default_headless_agent(
     subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
     slash_ports_factory: SlashPortsFactory | None = None,
     prompts: PromptContextProvider | None = None,
+    gather: GatherPorts | None = None,
     gather_enabled: bool = True,
+    gather_max_iterations: int | None = None,
     is_tty: bool = False,
 ) -> HeadlessAgent:
     """Return a :class:`HeadlessAgent` wired with default harness ports.
@@ -64,6 +109,9 @@ def build_default_headless_agent(
     ``message`` (or an explicit ``accounting``) when the agent should
     account for a single turn at construction time. Gateway reuse binds
     accounting later via :meth:`HeadlessAgent.bind_turn`.
+
+    Prefer ``gather=GatherPorts(...)`` for full control. ``gather_enabled`` /
+    ``gather_max_iterations`` remain as convenience kwargs for scheduled runners.
     """
     if console is None:
         console = Console(force_terminal=False, file=StringIO())
@@ -81,7 +129,7 @@ def build_default_headless_agent(
             console,
             tool_action_logger=tool_action_logger or logger,
             observer_factory=observer_factory,
-            subprocess_presenter_factory=subprocess_presenter_factory,
+            subprocess_presenter_factory=_resolved_presenter_factory(subprocess_presenter_factory),
             slash_ports_factory=slash_ports_factory,
         ),
         # ``is not None``, not ``or``: a provider defining __bool__ would be
@@ -95,7 +143,11 @@ def build_default_headless_agent(
         run_factory=DefaultRunRecordFactory(session),
         accounting=turn_accounting,
         error_reporter=error_reporter,
-        gather_enabled=gather_enabled,
+        gather=_resolve_gather(
+            gather,
+            gather_enabled=gather_enabled,
+            gather_max_iterations=gather_max_iterations,
+        ),
         is_tty=is_tty,
     )
 

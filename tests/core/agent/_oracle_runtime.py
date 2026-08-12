@@ -152,6 +152,8 @@ def fresh_session(
     configured_integrations: tuple[str, ...] = (),
     available_capabilities: dict[str, tuple[str, ...]] | None = None,
     resolved_integrations_override: dict[str, Any] | None = None,
+    pending_investigation_alert: str | None = None,
+    conversation_seed: tuple[tuple[str, str], ...] = (),
 ) -> Session:
     session = Session()
     if with_prior_state:
@@ -170,7 +172,32 @@ def fresh_session(
     # An explicit empty mapping ({}) deliberately forces a no-integration world.
     if resolved_integrations_override is not None:
         session.resolved_integrations_cache = resolved_integrations_override
+    if conversation_seed:
+        session.cli_agent_messages = list(conversation_seed)
+    if pending_investigation_alert:
+        from core.agent_harness.session.pending_offer import PendingInvestigationOffer
+
+        session.pending_investigation_offer = PendingInvestigationOffer(
+            alert_text=pending_investigation_alert.strip()
+        )
     return session
+
+
+def session_from_scenario(
+    scenario_session: Any,
+    *,
+    resolved_integrations_override: dict[str, Any] | None,
+    available_capabilities: dict[str, tuple[str, ...]] | None,
+) -> Session:
+    """Build a fixture session including Phase 1b pending-offer seeds."""
+    return fresh_session(
+        with_prior_state=scenario_session.has_prior_state,
+        configured_integrations=scenario_session.configured_integrations,
+        available_capabilities=available_capabilities,
+        resolved_integrations_override=resolved_integrations_override,
+        pending_investigation_alert=getattr(scenario_session, "pending_investigation_alert", None),
+        conversation_seed=tuple(getattr(scenario_session, "conversation_seed", ()) or ()),
+    )
 
 
 def match_actions(actual: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
@@ -272,12 +299,30 @@ def strip_redundant_integrations_list_history(
     ]
 
 
+def strip_session_goal_continuation_history(
+    actual_history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop session-goal continuation nudges from oracle history.
+
+    ``execute_shell_turn`` may call ``run_until_session_goal``, which records each
+    ``[session_goal] Continue…`` nudge as another ``cli_agent`` history row.
+    Planner-contract fixtures (e.g. 347) expect only the user's first turn; host
+    continuation is covered by SessionGoal unit tests, not live oracle history.
+    """
+    return [
+        entry
+        for entry in actual_history
+        if not str(entry.get("text_normalized", "")).lstrip().startswith("[session_goal]")
+    ]
+
+
 def normalize_history_for_oracle_match(
     actual_history: list[dict[str, Any]],
     expected_actions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Collapse duplicate alert rows when a single investigation dispatch is expected."""
-    filtered = strip_redundant_integrations_list_history(actual_history, expected_actions)
+    """Collapse known host-loop extras so fixtures pin the user turn under test."""
+    filtered = strip_session_goal_continuation_history(actual_history)
+    filtered = strip_redundant_integrations_list_history(filtered, expected_actions)
     if len(expected_actions) != 1:
         return filtered
     if str(expected_actions[0].get("kind", "")).strip() != "investigation":
@@ -505,11 +550,10 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     resolved_override, _unavailable = resolve_live_integrations(
         case.scenario.session.resolved_integrations
     )
-    session = fresh_session(
-        with_prior_state=case.scenario.session.has_prior_state,
-        configured_integrations=case.scenario.session.configured_integrations,
-        available_capabilities=session_capabilities(case.scenario.available_capabilities),
+    session = session_from_scenario(
+        case.scenario.session,
         resolved_integrations_override=resolved_override,
+        available_capabilities=session_capabilities(case.scenario.available_capabilities),
     )
     executed: list[dict[str, Any]] = []
     patch_execution_boundary(monkeypatch, executed)

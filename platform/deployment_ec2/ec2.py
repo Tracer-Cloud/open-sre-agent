@@ -10,10 +10,11 @@ import time
 
 from botocore.exceptions import ClientError
 
-from platform.deployment_ec2.client import DEFAULT_REGION, get_boto3_client, get_standard_tags
+from platform.deployment_ec2.client import get_boto3_client, get_standard_tags
 from platform.deployment_ec2.config import (
     AL2023_AMI_SSM_PARAMETER,
     BEDROCK_POLICY_ARN,
+    DEFAULT_REGION,
     EC2_INSTANCE_ROLE_DESCRIPTION,
     EC2_ROOT_DEVICE_NAME,
     EC2_VOLUME_SIZE_GB,

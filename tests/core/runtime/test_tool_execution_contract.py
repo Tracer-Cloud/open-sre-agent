@@ -516,26 +516,26 @@ def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
     import json
     from pathlib import Path
 
-    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
+        NoopSessionTraceStore,
         bind_session_trace,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
-    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+    from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: Path(tmp_path) / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-tool-exec"
     path = Path(tmp_path) / f"{session_id}.jsonl"
     path.write_text(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
     try:
         with bind_session_trace(session_id):
             result = execute_tool_calls([_call()], [_tool()], {})[0]
@@ -553,7 +553,7 @@ def test_execute_tool_calls_emits_tool_span_without_tool_author_hooks(
         assert tool_spans[0]["attributes"]["source"] == "agent"
         assert tool_spans[0]["attributes"]["tool_call_id"] == "echo-1"
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_execute_tool_calls_span_marks_error_on_unknown_tool(
@@ -562,26 +562,26 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
     import json
     from pathlib import Path
 
-    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
+        NoopSessionTraceStore,
         bind_session_trace,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
-    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+    from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: Path(tmp_path) / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-tool-unknown"
     path = Path(tmp_path) / f"{session_id}.jsonl"
     path.write_text(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
     try:
         with bind_session_trace(session_id):
             result = execute_tool_calls([_call("missing")], [], {})[0]
@@ -597,14 +597,14 @@ def test_execute_tool_calls_span_marks_error_on_unknown_tool(
         assert tool_spans[0]["status"] == "error"
         assert tool_spans[0]["attributes"]["outcome"] == "unknown_tool"
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_execute_tool_calls_noop_sink_does_not_require_session_binding() -> None:
     """Prod default: tool execution must not depend on a registered trace sink."""
-    from platform.observability.trace.spans import NoopSessionTraceSink, set_session_trace_sink
+    from platform.observability.trace.spans import NoopSessionTraceStore, set_session_trace_store
 
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
     result = execute_tool_calls([_call()], [_tool()], {})[0]
     assert result.is_error is False
     assert result.details == {"value": "ok"}
@@ -614,12 +614,12 @@ def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: 
     import json
     from pathlib import Path
 
-    from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
-    from platform.observability.trace.spans import set_session_trace_sink
-    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+    from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
+    from platform.observability.trace.spans import set_session_trace_store
+    from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda sid: Path(tmp_path) / f"{sid}.jsonl",
     )
     path = Path(tmp_path) / f"{session_id}.jsonl"
@@ -627,7 +627,7 @@ def _activate_tool_trace(tmp_path, monkeypatch: pytest.MonkeyPatch, session_id: 
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=JsonlSessionStorage()))
+    set_session_trace_store(JsonlSessionTraceStore(store=JsonlSessionStore()))
     return path
 
 
@@ -646,9 +646,9 @@ def test_execute_tool_calls_span_marks_validation_error(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
+        NoopSessionTraceStore,
         bind_session_trace,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
 
     session_id = "sess-tool-validation"
@@ -666,14 +666,14 @@ def test_execute_tool_calls_span_marks_validation_error(
         assert spans[0]["status"] == "error"
         assert spans[0]["attributes"]["outcome"] == "validation_error"
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_execute_tool_calls_span_marks_blocked(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
+        NoopSessionTraceStore,
         bind_session_trace,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
 
     session_id = "sess-tool-blocked"
@@ -697,16 +697,16 @@ def test_execute_tool_calls_span_marks_blocked(tmp_path, monkeypatch: pytest.Mon
         assert spans[0]["attributes"]["outcome"] == "blocked"
         assert spans[0]["attributes"]["source"] == "agent"
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_execute_tool_calls_span_marks_tool_error_and_exception(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
+        NoopSessionTraceStore,
         bind_session_trace,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
 
     session_id = "sess-tool-err"
@@ -739,4 +739,4 @@ def test_execute_tool_calls_span_marks_tool_error_and_exception(
         assert by_name["hard"]["attributes"]["outcome"] == "exception"
         assert by_name["hard"]["status"] == "error"
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())

@@ -15,8 +15,9 @@ from surfaces.interactive_shell.runtime.startup.first_launch_github import (
     require_startup_github_login,
 )
 from surfaces.interactive_shell.runtime.startup.initial_input import run_initial_input
-from surfaces.interactive_shell.ui.banner import render_ready_box, render_splash
+from surfaces.interactive_shell.runtime.startup.loop_suggestions import offer_loop_suggestions
 from surfaces.interactive_shell.ui.input_prompt import build_prompt_session
+from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 from tools.system.fleet_monitoring.sweep import run_startup_sweep
 
 # Fallback when a caller does not supply one. Forces a terminal because the
@@ -34,7 +35,11 @@ async def run_repl_async(
 ) -> int:
     """Run the shell on an existing event loop and return its exit code."""
     from platform.analytics.cli import identify_saved_github_username
+    from platform.logging import quiet_noisy_third_party_loggers
 
+    # Keep MCP schema-cache warnings / httpx chatter off the transcript —
+    # progress is soft status lines, not library WARNINGs.
+    quiet_noisy_third_party_loggers()
     identify_saved_github_username()
 
     cfg = config or ReplConfig.load()
@@ -48,7 +53,7 @@ async def run_repl_async(
         return run_initial_input(initial_input, session, out)
 
     # Open the session file now that we know this is an interactive REPL run.
-    SessionManager.for_session(session).open_storage(session)
+    SessionManager.for_session(session).open_store(session)
 
     try:
         if resume_session_id:
@@ -64,6 +69,10 @@ async def run_repl_async(
                 slash_command=slash_command,
             ):
                 return 1
+        else:
+            # Fresh interactive start with no scheduled loops: offer the
+            # suggested-loops picker before the prompt loop takes stdin.
+            offer_loop_suggestions(session)
 
         await InteractiveShellController(
             runtime_context,
@@ -95,8 +104,7 @@ def run_repl(
 
     try:
         if not initial_input:
-            render_splash(out)
-            render_ready_box(out)
+            render_terminal_ui(out)
             if not require_startup_github_login(out):
                 return 0
 

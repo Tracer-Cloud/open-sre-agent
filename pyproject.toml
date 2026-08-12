@@ -22,7 +22,7 @@ dependencies = [
     # uv builds on Python 3.14) and changes the model price table (breaks the
     # gpt-5.6 alias pricing). 1.90.0 is the last version verified green here.
     # Lift once the wheel + pricing are resolved upstream.
-    "litellm>=1.90.0,<1.91.0",
+    "litellm>=1.90.0,<1.96.0",
     # Data validation
     "pydantic>=2.12.5,<3",
     "pydantic-settings>=2.12.0,<3",
@@ -34,11 +34,12 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     # Authentication
     "PyJWT>=2.13.0",
-    # Cap below 49: cryptography 49.0.0 dropped x86-64 macOS wheels, which breaks
-    # the frozen darwin-x64 release binary (PyInstaller bundles a broken _openssl
-    # extension and the binary crashes at startup). Keep 48.x until the darwin-x64
-    # release target is dropped.
-    "cryptography>=48.0.1,<49",
+    # 50.0.0 is the first version patched for CVE-2026-69247 (GHSA-g6cj-pr64-35w5,
+    # PKCS#7 Bleichenbacher oracle). cryptography >=49 ships no x86-64 macOS wheel,
+    # so the frozen darwin-x64 release binary builds it from source against
+    # OpenSSL >= 3.2 (SSL_get0_group_name). release.yml pins Homebrew openssl@3
+    # and re-copies those dylibs into the PyInstaller onedir bundle.
+    "cryptography>=50.0.0,<51",
     "keyring>=23.0.1",
     # AWS
     "boto3>=1.42.88",
@@ -144,13 +145,10 @@ postgresql = [
 azure_sql = [
     "pyodbc>=5.1.0,<6.0.0",
 ]
-cdk = [
-    "aws-cdk-lib>=2.170.0",
-    "constructs>=10.3.0",
-]
 
 [tool.setuptools.packages.find]
 include = [
+  "bootstrap*",
   "config*",
   "core*",
   "gateway*",
@@ -172,6 +170,7 @@ data_file = ".pytest_cache/.coverage"
 
 [tool.vulture]
 paths = [
+  "bootstrap",
   "config",
   "core",
   "gateway",
@@ -209,7 +208,7 @@ ignore_names = [
   "validate_*_config",                             # integration config validators
   "*_config_from_env",                             # env-backed integration helpers
   "describe_llm_*", "llm_provider_*", "has_credentials_*",
-  "get_account_*", "get_datasource_uids",
+  "get_account_*",
   "configure_grafana_cloud", "apply_otel_env_defaults", "validate_grafana_cloud_config",
   "on_thread_*", "on_assistant_*", "on_cron_*",
   "discord_interactions", "health_check",

@@ -18,6 +18,7 @@ from rich.markup import escape
 
 from core.agent_harness.turns import evidence_driver
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory
+from core.agent_harness.turns.gather_observation import GatheredEvidence
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
@@ -90,15 +91,21 @@ def _format_gathering_progress_line(
     *,
     repeat_index: int,
 ) -> str:
-    source, label = resolve_tool_activity_labels(tool_name)
-    call_display = f"{source} · {label}" if label else source
+    """Soft status line — source name, not tool-method chatter.
+
+    Prefer ``· checking PostHog…`` over
+    ``· gathering via Posthog Mcp · list posthog tools…`` so the transcript
+    reads like exploration progress, not an MCP debug log.
+    """
+    source, _label = resolve_tool_activity_labels(tool_name)
+    display = source.strip()
     if repeat_index > 1:
-        call_display = f"{call_display} ({repeat_index})"
-    safe_display = escape(call_display)
+        display = f"{display} ({repeat_index})"
+    safe_display = escape(display)
     hint = _tool_input_hint(tool_input)
     if hint:
-        return f"· gathering via {safe_display} — {escape(hint)}…"
-    return f"· gathering via {safe_display}…"
+        return f"· checking {safe_display} — {escape(hint)}…"
+    return f"· checking {safe_display}…"
 
 
 def _resolve_gather_integrations(
@@ -124,10 +131,10 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
     Arguments and results are redacted and bounded before writing; failures are
     swallowed so logging never breaks the turn.
     """
-    from core.agent_harness.session import default_session_storage
+    from core.agent_harness.session import default_session_store
     from platform.observability.trace.redaction import redact_sensitive
 
-    storage = default_session_storage()
+    store = default_session_store()
     for tc, output in executed:
         with contextlib.suppress(Exception):
             body = (
@@ -138,7 +145,7 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
             arguments = (
                 redact_sensitive(tc.input) if isinstance(tc.input, dict) else {"value": tc.input}
             )
-            storage.append_tool_call(
+            store.append_tool_call(
                 session.session_id,
                 tool=str(tc.name),
                 arguments=arguments,
@@ -154,11 +161,12 @@ def gather_integration_tool_evidence(
     *,
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
-) -> str | None:
+) -> str | GatheredEvidence | None:
     """Run a bounded tool-calling loop and return collected evidence, or None.
 
-    Returns a formatted observation block when at least one tool was executed;
-    otherwise ``None`` so the caller falls back to the normal text-only answer.
+    Returns :class:`~core.agent_harness.turns.gather_observation.GatheredEvidence`
+    (or legacy observation text) when at least one tool was executed; otherwise
+    ``None`` so the caller falls back to the normal text-only answer.
     ``resolved_integrations`` is the turn's resolved view; it is forwarded so the
     gather phase reuses it instead of resolving again.
     """

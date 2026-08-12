@@ -85,6 +85,20 @@ def test_decide_submits_normal_turn_without_wait_by_default() -> None:
     assert _decide(InputSubmitted("  show status  ")) == SubmitTurn(text="show status")
 
 
+def test_decide_strips_pasted_shell_prompt_chrome() -> None:
+    assert _decide(
+        InputSubmitted("[1] ❯ [1] ❯ what windows users number did open opensre during last 7 days?")
+    ) == SubmitTurn(
+        text="what windows users number did open opensre during last 7 days?",
+    )
+
+
+def test_decide_ignores_placeholder_text_stuck_in_buffer() -> None:
+    from surfaces.interactive_shell.ui.input_prompt.rendering import DEFAULT_PLACEHOLDER_TEXT
+
+    assert _decide(InputSubmitted(DEFAULT_PLACEHOLDER_TEXT)) == IgnoreInput()
+
+
 def test_decide_submits_normal_turn_with_exclusive_stdin_wait() -> None:
     assert _decide(InputSubmitted("/integrations"), needs_exclusive_stdin=True) == SubmitTurn(
         text="/integrations",

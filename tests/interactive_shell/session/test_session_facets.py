@@ -10,19 +10,24 @@ from __future__ import annotations
 
 import dataclasses
 
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.session.session_core import SessionCore
 from core.domain.alerts.inbox import IncomingAlert
 from surfaces.interactive_shell.session.session import Session
 
 # Core fields are inherited from SessionCore; the shell adds these two facets.
-# Includes pending_schedule_offer (structured yes → /cron confirmations).
-_CORE_FIELD_COUNT = 20
+# Includes pending_schedule_offer (structured yes → /cron confirmations),
+# pending_investigation_offer (structured yes → investigation dispatch),
+# pending_user_choice (structured decision → /choose selection menu), and
+# pending_recovery_note (WAL recovery note for the first turn after /resume),
+# plus the session-goal trio (session_goal, pending_integration_setup_offer,
+# offered_upgrade_ctas).
+_CORE_FIELD_COUNT = 26
 _FACET_FIELDS = ("alerts", "terminal")
 
 
 def _session() -> Session:
-    return Session(storage=InMemorySessionStorage())
+    return Session(store=InMemorySessionStore())
 
 
 def test_session_is_a_session_core_with_two_facets() -> None:
@@ -63,7 +68,6 @@ def test_terminal_facet_holds_the_pending_prompt_cluster() -> None:
         "pending_prompt_default",
         "pending_prompt_autosubmit",
         "exclusive_stdin_active",
-        "agent_turn_executed_slashes",
     ):
         assert hasattr(terminal, f)
 

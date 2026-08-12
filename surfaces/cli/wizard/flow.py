@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shlex
@@ -82,6 +83,7 @@ from surfaces.cli.wizard.validation import (
 )
 
 WIZARD_TOTAL_STEPS = 4
+logger = logging.getLogger(__name__)
 
 _CLI_SUBSCRIPTION_LOGIN_ARGS: dict[str, tuple[str, ...]] = {
     "claude-code": ("auth", "login"),
@@ -118,6 +120,17 @@ __all__ = [
 # materialize on first access.
 def build_demo_action_response():
     return _build_demo_action_response()
+
+
+def _seed_onboarding_loops() -> int:
+    """Seed starter scheduled loops after onboarding completes."""
+    from platform.scheduler.loops import seed_starter_loops
+
+    try:
+        return len(seed_starter_loops())
+    except Exception:
+        logger.debug("Failed to seed onboarding starter loops", exc_info=True)
+        return 0
 
 
 def _provider_label_for_saved_summary(
@@ -924,6 +937,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         integration_env_path = None
 
     summary_env_path = integration_env_path or str(env_path)
+    _seed_onboarding_loops()
 
     _step_header(4, WIZARD_TOTAL_STEPS, "Summary")
     _render_saved_summary(

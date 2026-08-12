@@ -7,7 +7,6 @@ on:
       - "surfaces/**"
       - "config/**"
       - "core/**"
-      - "platform/deployment_fargate/**"
       - "integrations/**"
       - "platform/**"
       - "tools/**"
@@ -23,6 +22,7 @@ on:
       - ".importlinter.strict"
       - ".github/ci/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
 
   # No path filter: a filtered workflow never starts, so its gate never
   # reports and a PR that needs it can wait forever. The `changes` job
@@ -59,7 +59,6 @@ jobs:
               - "surfaces/**"
               - "config/**"
               - "core/**"
-              - "platform/deployment_fargate/**"
               - "integrations/**"
               - "platform/**"
               - "tools/**"
@@ -75,6 +74,7 @@ jobs:
               - ".importlinter.strict"
               - ".github/ci/**"
               - ".github/workflows/ci.yml"
+              - ".github/workflows/release.yml"
 
   quality:
     needs: [changes]
@@ -177,7 +177,6 @@ jobs:
             shard: integrations-and-misc
             pytest_paths: >-
               tests/integrations
-              tests/deployment
               tests/benchmarks
               tests/chaos_engineering
               tests/shared
@@ -276,7 +275,7 @@ jobs:
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=platform.deployment_ec2 --cov=platform.deployment_fargate
+          --cov=platform.deployment_ec2
           --cov=integrations
           --cov=platform
           --cov=surfaces
@@ -305,10 +304,13 @@ jobs:
     name: coverage-report
     runs-on: ubuntu-latest
     needs: [test]
+    # Do not use always(): when test is cancelled (concurrency) or failed,
+    # there are no coverage-data-* artifacts and ``coverage combine`` exits 1
+    # with "No data to combine". Skip instead; CI Gate treats skipped as OK.
     if: >-
-      always() &&
       github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      needs.test.result == 'success'
     timeout-minutes: 15
 
     steps:
@@ -409,7 +411,6 @@ jobs:
               - ".github/workflows/ci.yml"
               - "pyproject.toml"
               - "uv.lock"
-              - "platform/deployment_fargate/**"
               - "integrations/**"
               - "tools/investigation/**"
               - "tools/**"

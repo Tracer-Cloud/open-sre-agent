@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from gateway.discord.worker import _reap_cancelled_task
+from gateway.transports.discord.worker import _reap_cancelled_task
 
 
 def test_reap_cancelled_task_awaits_cleanup() -> None:

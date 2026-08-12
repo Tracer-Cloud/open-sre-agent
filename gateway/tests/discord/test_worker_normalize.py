@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import discord
 
-from gateway.discord.worker import normalize_message
+from gateway.transports.discord.worker import normalize_message
 
 
 def _message(

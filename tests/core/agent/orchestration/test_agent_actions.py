@@ -366,7 +366,11 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
         console,  # type: ignore[arg-type]
     )
 
-    assert handled.handled is True
+    # A cancelled turn reports ``cancelled``; the orchestrator short-circuits on
+    # that flag to skip gather/answer, which is what forcing ``handled=True``
+    # used to accomplish. ``handled`` now reflects the work that actually ran.
+    assert handled.cancelled is True
+    assert handled.handled is False
     # Only the first action ran; the second was skipped because the
     # cancel event was set between iterations.
     assert dispatched == ["/health"], (

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.runtime.status_messages import (
+from gateway.core.runtime.status_messages import (
     INITIAL_STATUSES,
     _tool_label,
     initial_status_message,

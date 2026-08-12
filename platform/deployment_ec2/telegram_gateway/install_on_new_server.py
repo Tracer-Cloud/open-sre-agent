@@ -21,8 +21,8 @@ from urllib.parse import urlparse
 from botocore.exceptions import ClientError
 
 from config.constants import OPENSRE_HOME_DIR
-from platform.deployment_ec2.client import DEFAULT_REGION
 from platform.deployment_ec2.config import (
+    DEFAULT_REGION,
     EC2_UBUNTU_ROOT_DEVICE_NAME,
     INSTANCE_TYPE,
     SSM_MANAGED_POLICY_ARN,

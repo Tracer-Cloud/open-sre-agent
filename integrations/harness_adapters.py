@@ -37,6 +37,7 @@ def register_harness_adapters() -> None:
     _register_alert_detail_fields()
     _register_secondary_tool_sources()
     _register_gateway_persona()
+    _register_preferred_evidence_sources()
 
 
 def _register_vcs_repo_scope_providers() -> None:
@@ -92,8 +93,10 @@ def _register_incident_anchor_parsers() -> None:
 
 
 def _register_prompt_fragments() -> None:
+    from integrations.buzz.action_prompt import buzz_action_prompt_fragment
     from integrations.github.action_prompt import github_action_prompt_fragment
     from integrations.github.gather_prompt import github_gather_prompt_fragment
+    from integrations.posthog.assistant_prompt import posthog_assistant_prompt_fragment
     from integrations.rocketchat.action_prompt import rocketchat_action_prompt_fragment
     from integrations.sentry.assistant_prompt import sentry_assistant_prompt_fragment
     from integrations.sentry.gather_prompt import sentry_gather_prompt_fragment
@@ -120,9 +123,11 @@ def _register_prompt_fragments() -> None:
     register_action_prompt_fragment(github_action_prompt_fragment)
     register_action_prompt_fragment(telegram_action_prompt_fragment)
     register_action_prompt_fragment(rocketchat_action_prompt_fragment)
+    register_action_prompt_fragment(buzz_action_prompt_fragment)
 
     clear_assistant_prompt_fragments()
     register_assistant_prompt_fragment(sentry_assistant_prompt_fragment)
+    register_assistant_prompt_fragment(posthog_assistant_prompt_fragment)
     register_assistant_prompt_fragment(slack_assistant_prompt_fragment)
 
 
@@ -183,6 +188,22 @@ def _register_gateway_persona() -> None:
 
     clear_gateway_persona_fragments()
     register_gateway_persona_fragment(gateway_persona_prompt_fragment)
+
+
+def _register_preferred_evidence_sources() -> None:
+    """Let vendor packages opt into ask kinds they can authoritatively answer.
+
+    No central default list — each integration registers itself. Skip a
+    vendor's ``register_*_evidence_sources`` call to stop treating it as
+    preferred (no L0 CTA for that id).
+    """
+    from integrations.posthog_mcp.evidence_sources import (
+        register_posthog_mcp_evidence_sources,
+    )
+    from platform.harness_ports import clear_preferred_evidence_sources
+
+    clear_preferred_evidence_sources()
+    register_posthog_mcp_evidence_sources()
 
 
 def _register_cli_llm_adapters() -> None:

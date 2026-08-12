@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 
@@ -570,8 +571,8 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     ],
     requires=["metric_name"],
     source_id="grafana_mimir",
-    evidence_type="metrics",
-    side_effect_level="read_only",
+    evidence_type=EvidenceType.METRICS,
+    side_effect_level=SideEffectLevel.READ_ONLY,
     examples=[
         "Query `pipeline_runs_total` to verify throughput drops.",
         "Query HTTP error rate metric with a `service_name` filter.",

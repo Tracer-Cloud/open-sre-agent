@@ -3,7 +3,7 @@
 Covers the four invariants the parent issue (#1493) and the design
 review hammered on:
 
-* ``attach()`` validates *eagerly* — :class:`AttachUnsupported` lands
+* ``attach()`` validates *eagerly* — :class:`AttachUnsupportedError` lands
   at the call site, never as a deferred ``StopIteration`` surprise.
 * :class:`TailBuffer` caps memory at ``DEFAULT_MAX_BYTES`` and drops
   *whole chunks* so UTF-8 decoding never splits a codepoint.
@@ -30,7 +30,7 @@ from tools.system.fleet_monitoring import tail as tail_mod
 from tools.system.fleet_monitoring.tail import (
     DEFAULT_MAX_BYTES,
     AttachSession,
-    AttachUnsupported,
+    AttachUnsupportedError,
     TailBuffer,
     _parse_lsof_fd1,
     _resolve_linux_target,
@@ -173,32 +173,32 @@ class TestResolveLinuxTarget:
 
     def test_socket_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "readlink", lambda _path: "socket:[1234]")
-        with pytest.raises(AttachUnsupported, match="socket"):
+        with pytest.raises(AttachUnsupportedError, match="socket"):
             _resolve_linux_target(123)
 
     def test_pipe_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "readlink", lambda _path: "pipe:[5678]")
-        with pytest.raises(AttachUnsupported, match="pipe"):
+        with pytest.raises(AttachUnsupportedError, match="pipe"):
             _resolve_linux_target(123)
 
     def test_anon_inode_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "readlink", lambda _path: "anon_inode:[eventfd]")
-        with pytest.raises(AttachUnsupported, match="anon_inode"):
+        with pytest.raises(AttachUnsupportedError, match="anon_inode"):
             _resolve_linux_target(123)
 
     def test_pts_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "readlink", lambda _path: "/dev/pts/3")
-        with pytest.raises(AttachUnsupported, match="terminal"):
+        with pytest.raises(AttachUnsupportedError, match="terminal"):
             _resolve_linux_target(123)
 
     def test_dev_null_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "readlink", lambda _path: "/dev/null")
-        with pytest.raises(AttachUnsupported, match="/dev/null"):
+        with pytest.raises(AttachUnsupportedError, match="/dev/null"):
             _resolve_linux_target(123)
 
     def test_non_path_target_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(os, "readlink", lambda _path: "[event_poll]")
-        with pytest.raises(AttachUnsupported, match="not a filesystem path"):
+        with pytest.raises(AttachUnsupportedError, match="not a filesystem path"):
             _resolve_linux_target(123)
 
     def test_permission_denied_on_readlink(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,7 +206,7 @@ class TestResolveLinuxTarget:
             raise PermissionError(13, "perm denied")
 
         monkeypatch.setattr(os, "readlink", _denied)
-        with pytest.raises(AttachUnsupported, match="permission"):
+        with pytest.raises(AttachUnsupportedError, match="permission"):
             _resolve_linux_target(123)
 
     def test_no_such_pid_on_readlink(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -214,7 +214,7 @@ class TestResolveLinuxTarget:
             raise FileNotFoundError(2, "no such")
 
         monkeypatch.setattr(os, "readlink", _missing)
-        with pytest.raises(AttachUnsupported, match="no such pid"):
+        with pytest.raises(AttachUnsupportedError, match="no such pid"):
             _resolve_linux_target(123)
 
     def test_target_is_directory_rejected(
@@ -222,7 +222,7 @@ class TestResolveLinuxTarget:
     ) -> None:
         # Even if readlink returns a real path, it must be a regular file.
         monkeypatch.setattr(os, "readlink", lambda _path: str(tmp_path))
-        with pytest.raises(AttachUnsupported, match="not a regular file"):
+        with pytest.raises(AttachUnsupportedError, match="not a regular file"):
             _resolve_linux_target(123)
 
 
@@ -252,7 +252,7 @@ class TestResolveMacosTarget:
         monkeypatch.setattr(
             tail_mod.subprocess, "run", lambda *_a, **_kw: _Completed(stdout=stdout)
         )
-        with pytest.raises(AttachUnsupported, match="terminal"):
+        with pytest.raises(AttachUnsupportedError, match="terminal"):
             _resolve_macos_target(1234)
 
     def test_pipe_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -260,7 +260,7 @@ class TestResolveMacosTarget:
         monkeypatch.setattr(
             tail_mod.subprocess, "run", lambda *_a, **_kw: _Completed(stdout=stdout)
         )
-        with pytest.raises(AttachUnsupported, match="pipe"):
+        with pytest.raises(AttachUnsupportedError, match="pipe"):
             _resolve_macos_target(1234)
 
     def test_socket_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,7 +268,7 @@ class TestResolveMacosTarget:
         monkeypatch.setattr(
             tail_mod.subprocess, "run", lambda *_a, **_kw: _Completed(stdout=stdout)
         )
-        with pytest.raises(AttachUnsupported, match="socket"):
+        with pytest.raises(AttachUnsupportedError, match="socket"):
             _resolve_macos_target(1234)
 
     def test_no_fd1_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -276,7 +276,7 @@ class TestResolveMacosTarget:
         monkeypatch.setattr(
             tail_mod.subprocess, "run", lambda *_a, **_kw: _Completed(stdout=stdout)
         )
-        with pytest.raises(AttachUnsupported, match="no fd 1"):
+        with pytest.raises(AttachUnsupportedError, match="no fd 1"):
             _resolve_macos_target(1234)
 
     def test_no_such_pid(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -285,7 +285,7 @@ class TestResolveMacosTarget:
             "run",
             lambda *_a, **_kw: _Completed(returncode=1, stdout="", stderr="No such pid"),
         )
-        with pytest.raises(AttachUnsupported, match="no such pid"):
+        with pytest.raises(AttachUnsupportedError, match="no such pid"):
             _resolve_macos_target(1234)
 
     def test_lsof_warnings_on_stderr_do_not_break_parse(
@@ -313,7 +313,7 @@ class TestResolveMacosTarget:
             raise FileNotFoundError(2, "lsof")
 
         monkeypatch.setattr(tail_mod.subprocess, "run", _missing)
-        with pytest.raises(AttachUnsupported, match="lsof not found"):
+        with pytest.raises(AttachUnsupportedError, match="lsof not found"):
             _resolve_macos_target(1234)
 
     def test_dev_null_rejected_with_specific_message(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -323,7 +323,7 @@ class TestResolveMacosTarget:
         monkeypatch.setattr(
             tail_mod.subprocess, "run", lambda *_a, **_kw: _Completed(stdout=stdout)
         )
-        with pytest.raises(AttachUnsupported, match="/dev/null"):
+        with pytest.raises(AttachUnsupportedError, match="/dev/null"):
             _resolve_macos_target(1234)
 
     def test_fd1_with_no_type_field_gives_specific_message(
@@ -335,27 +335,27 @@ class TestResolveMacosTarget:
         monkeypatch.setattr(
             tail_mod.subprocess, "run", lambda *_a, **_kw: _Completed(stdout=stdout)
         )
-        with pytest.raises(AttachUnsupported, match="no type"):
+        with pytest.raises(AttachUnsupportedError, match="no type"):
             _resolve_macos_target(1234)
 
 
 class TestResolveTargetDispatch:
     def test_windows_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(tail_mod.sys, "platform", "win32")
-        with pytest.raises(AttachUnsupported, match="Windows"):
+        with pytest.raises(AttachUnsupportedError, match="Windows"):
             _resolve_target(1234)
 
     def test_no_such_pid_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # platform is not "win32" so we hit the pid_exists check
         monkeypatch.setattr(tail_mod.sys, "platform", "linux")
         monkeypatch.setattr(tail_mod, "pid_exists", lambda _pid: False)
-        with pytest.raises(AttachUnsupported, match="no such pid"):
+        with pytest.raises(AttachUnsupportedError, match="no such pid"):
             _resolve_target(99_999_999)
 
     def test_unknown_platform_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(tail_mod.sys, "platform", "freebsd13")
         monkeypatch.setattr(tail_mod, "pid_exists", lambda _pid: True)
-        with pytest.raises(AttachUnsupported, match="freebsd13"):
+        with pytest.raises(AttachUnsupportedError, match="freebsd13"):
             _resolve_target(1234)
 
     @pytest.mark.parametrize("invalid_pid", [0, -1, -99])
@@ -364,7 +364,7 @@ class TestResolveTargetDispatch:
     ) -> None:
         # Regression guard: ``psutil.pid_exists(0)`` can raise
         # ``PermissionError`` on macOS. The slash handler only catches
-        # ``AttachUnsupported``, so an unguarded probe would crash the
+        # ``AttachUnsupportedError``, so an unguarded probe would crash the
         # REPL. ``_resolve_target`` must reject non-positive ids before
         # touching ``pid_exists`` at all.
         def _boom(_pid: int) -> bool:
@@ -372,7 +372,7 @@ class TestResolveTargetDispatch:
 
         monkeypatch.setattr(tail_mod.sys, "platform", "darwin")
         monkeypatch.setattr(tail_mod, "pid_exists", _boom)
-        with pytest.raises(AttachUnsupported, match="must be positive"):
+        with pytest.raises(AttachUnsupportedError, match="must be positive"):
             _resolve_target(invalid_pid)
 
 
@@ -380,14 +380,14 @@ class TestAttachEagerValidation:
     def test_attach_raises_immediately_on_unsupported(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # The contract: AttachUnsupported lands on the call to attach(),
+        # The contract: AttachUnsupportedError lands on the call to attach(),
         # not deferred to first iteration. Regression guard for the
         # design-review point #1.
         def _fail(_pid: int) -> _ResolvedTarget:
-            raise AttachUnsupported("planned failure")
+            raise AttachUnsupportedError("planned failure")
 
         monkeypatch.setattr(tail_mod, "_resolve_target", _fail)
-        with pytest.raises(AttachUnsupported, match="planned failure"):
+        with pytest.raises(AttachUnsupportedError, match="planned failure"):
             attach(1234)
 
 

@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import time
 
-from platform.deployment_ec2.client import DEFAULT_REGION, get_boto3_client
+from platform.deployment_ec2.client import get_boto3_client
 from platform.deployment_ec2.config import (
+    DEFAULT_REGION,
     SSM_CMD_POLL_ATTEMPTS,
     SSM_CMD_POLL_INTERVAL_SECONDS,
     SSM_REGISTRATION_MAX_ATTEMPTS,

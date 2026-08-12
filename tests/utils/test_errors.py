@@ -8,9 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from platform.observability.errors.boundary import (
-    OpenSRESilentFallback,
     report_and_reraise,
-    report_and_swallow,
     report_exception,
 )
 
@@ -92,58 +90,6 @@ class TestReportException:
         mock_cap.assert_called_once_with(exc, extra=None)
 
 
-class TestReportAndSwallow:
-    def test_swallows_matching_exception(self) -> None:
-        mock_log = _mock_logger()
-        with (
-            patch("platform.observability.errors.boundary.capture_exception"),
-            report_and_swallow(logger=mock_log, message="swallowed"),
-        ):
-            raise ValueError("silent")
-
-    def test_does_not_swallow_other_types(self) -> None:
-        mock_log = _mock_logger()
-        with (
-            pytest.raises(TypeError),
-            report_and_swallow(logger=mock_log, message="only value", swallow=ValueError),
-        ):
-            raise TypeError("not swallowed")
-
-    def test_calls_report_exception_on_match(self) -> None:
-        mock_log = _mock_logger()
-        exc = RuntimeError("reported")
-        with (
-            patch("platform.observability.errors.boundary.capture_exception") as mock_cap,
-            report_and_swallow(logger=mock_log, message="msg"),
-        ):
-            _raise(exc)
-        mock_cap.assert_called_once_with(exc, extra=None)
-
-    def test_no_exception_passes_through(self) -> None:
-        mock_log = _mock_logger()
-        result: list[int] = []
-        with (
-            patch("platform.observability.errors.boundary.capture_exception") as mock_cap,
-            report_and_swallow(logger=mock_log, message="msg"),
-        ):
-            result.append(1)
-        assert result == [1]
-        mock_cap.assert_not_called()
-
-    def test_tuple_of_swallow_types(self) -> None:
-        mock_log = _mock_logger()
-        for exc_type in (ValueError, KeyError):
-            with (
-                patch("platform.observability.errors.boundary.capture_exception"),
-                report_and_swallow(
-                    logger=mock_log,
-                    message="multi",
-                    swallow=(ValueError, KeyError),
-                ),
-            ):
-                raise exc_type("x")
-
-
 class TestReportAndReraise:
     def test_propagates_exception(self) -> None:
         mock_log = _mock_logger()
@@ -175,8 +121,3 @@ class TestReportAndReraise:
         ):
             _raise(ValueError("x"))
         mock_log.error.assert_called_once()
-
-
-class TestOpenSRESilentFallback:
-    def test_is_a_warning(self) -> None:
-        assert issubclass(OpenSRESilentFallback, Warning)

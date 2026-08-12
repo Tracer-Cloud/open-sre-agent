@@ -7,6 +7,7 @@ from tools.investigation.reporting.context import ReportContext
 from tools.investigation.reporting.formatters.base import (
     format_html_link,
     format_slack_link,
+    slack_links_to_plain_text,
 )
 from tools.investigation.reporting.formatters.evidence import (
     format_cited_evidence_section,
@@ -716,7 +717,9 @@ def format_whatsapp_message(ctx: ReportContext) -> str:
     if meta_bits:
         parts.append(" | ".join(meta_bits))
 
-    return "\n\n".join(p for p in parts if p)
+    # Shared helpers emit Slack <url|label> links; WhatsApp and SMS render no
+    # markup, so convert at this boundary to plain `label (url)` form.
+    return slack_links_to_plain_text("\n\n".join(p for p in parts if p))
 
 
 # ---------------------------------------------------------------------------

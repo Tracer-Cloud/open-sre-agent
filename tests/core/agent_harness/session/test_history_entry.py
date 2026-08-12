@@ -44,9 +44,9 @@ def test_supplied_optional_fields_are_kept() -> None:
 def test_both_session_kinds_record_the_same_shape() -> None:
     """The headless adapter mirrors SessionCore; prove it rather than comment it."""
     # Arrange
-    from core.agent_harness.turns.headless_adapters import InMemorySessionStore
+    from core.agent_harness.turns.headless_adapters import InMemorySessionState
 
-    headless = InMemorySessionStore()
+    headless = InMemorySessionState()
 
     # Act
     headless.record("shell", "curl wttr.in", ok=True, response_text="Amsterdam: +20C")

@@ -122,3 +122,63 @@ def test_evidence_type_valid_literals(et: EvidenceType) -> None:
 def test_evidence_type_rejects_unknown() -> None:
     with pytest.raises(ValidationError):
         ToolMetadata.model_validate(_valid_kwargs(evidence_type="profiling"))
+
+
+def _run_mypy_snippet(code: str) -> str:
+    """Helper to run mypy.api.run on a Python code snippet in an isolated temporary directory."""
+    import tempfile
+    from pathlib import Path
+
+    api = pytest.importorskip("mypy.api")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        snippet_file = tmp_path / "snippet.py"
+        cache_dir = tmp_path / ".mypy_cache"
+        snippet_file.write_text(code, encoding="utf-8")
+
+        stdout, _stderr, _exit_code = api.run([str(snippet_file), "--cache-dir", str(cache_dir)])
+        return stdout
+
+
+def test_static_typechecking_rejects_side_effect_level_typos() -> None:
+    """Verify that static typechecking with mypy fails on invalid side_effect_level strings."""
+    code = """from core.tool_framework.base import BaseTool
+
+class Tool(BaseTool):
+    side_effect_level = "reed_only"
+"""
+    stdout = _run_mypy_snippet(code)
+    assert "Incompatible types in assignment" in stdout, stdout
+
+
+def test_static_typechecking_rejects_evidence_type_typos() -> None:
+    """Verify that static typechecking with mypy fails on invalid evidence_type strings."""
+    code = """from core.tool_framework.base import BaseTool
+
+class Tool(BaseTool):
+    evidence_type = "metricz"
+"""
+    stdout = _run_mypy_snippet(code)
+    assert "Incompatible types in assignment" in stdout, stdout
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Blocked on Phase B: BaseTool.surfaces is ClassVar[tuple[ToolSurface | str, ...]] "
+        "until Phase B migrates tool surface declarations to ToolSurface enums."
+    ),
+)
+def test_static_typechecking_rejects_surfaces_typos() -> None:
+    """Verify static typechecking for surfaces typos.
+
+    Currently xfail: BaseTool.surfaces intentionally permits str until Phase B.
+    """
+    code = """from core.tool_framework.base import BaseTool
+
+class Tool(BaseTool):
+    surfaces = ("investigaton",)
+"""
+    stdout = _run_mypy_snippet(code)
+    assert "Incompatible types in assignment" in stdout, stdout
