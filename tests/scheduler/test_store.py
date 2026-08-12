@@ -242,3 +242,85 @@ class TestAddTaskDeduplicates:
 
         # Assert
         assert len(list_tasks(store_path)) == 2
+
+
+class TestStoreDurability:
+    """A crash or a damaged file must not erase the operator's schedules.
+
+    The store is the only record of what is scheduled: a torn write that
+    truncates it, or a later write that lands on top of a file nobody could
+    read, silently cancels every digest, report, and uptime watch.
+    """
+
+    @staticmethod
+    def _task(name: str, cron: str) -> ScheduledTask:
+        return ScheduledTask(
+            name=name,
+            kind=TaskKind.DAILY_SUMMARY,
+            cron=cron,
+            provider=Provider.TELEGRAM,
+            chat_id="-100123",
+        )
+
+    def test_failed_write_leaves_the_previous_tasks_intact(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Arrange: one stored task, then make the final rename fail.
+        add_task(self._task("digest-7", "0 7 * * *"), store_path)
+        before = store_path.read_text(encoding="utf-8")
+
+        def _failing_replace(src: str, dst: str) -> None:
+            raise OSError("simulated crash during replace")
+
+        monkeypatch.setattr("platform.scheduler.store.os.replace", _failing_replace)
+
+        # Act
+        with pytest.raises(OSError):
+            add_task(self._task("digest-8", "0 8 * * *"), store_path)
+
+        # Assert: the original file is byte-identical, not truncated.
+        assert store_path.read_text(encoding="utf-8") == before
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+
+    def test_failed_write_does_not_leak_a_temp_file(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Arrange
+        add_task(self._task("digest-7", "0 7 * * *"), store_path)
+
+        def _failing_replace(src: str, dst: str) -> None:
+            raise OSError("simulated crash during replace")
+
+        monkeypatch.setattr("platform.scheduler.store.os.replace", _failing_replace)
+
+        # Act
+        with pytest.raises(OSError):
+            add_task(self._task("digest-8", "0 8 * * *"), store_path)
+
+        # Assert: a retry loop must not fill the directory with debris.
+        assert list(store_path.parent.glob("*.tmp*")) == []
+
+    def test_unreadable_store_is_preserved_rather_than_overwritten(self, store_path: Path) -> None:
+        # Arrange: a store truncated by an earlier torn write.
+        add_task(self._task("digest-7", "0 7 * * *"), store_path)
+        full = store_path.read_text(encoding="utf-8")
+        store_path.write_text(full[: len(full) // 2], encoding="utf-8")
+
+        # Act
+        add_task(self._task("digest-8", "0 8 * * *"), store_path)
+
+        # Assert: the damaged file survives for recovery instead of vanishing.
+        backups = list(store_path.parent.glob("scheduler_tasks.json.corrupt-*"))
+        assert len(backups) == 1
+        assert "digest-7" in backups[0].read_text(encoding="utf-8")
+        assert [task.name for task in list_tasks(store_path)] == ["digest-8"]
+
+    def test_non_list_json_is_treated_as_unreadable(self, store_path: Path) -> None:
+        # Arrange: a JSON object where a list belongs is damage, not "no tasks".
+        store_path.write_text('{"tasks": []}', encoding="utf-8")
+
+        # Act
+        add_task(self._task("digest-8", "0 8 * * *"), store_path)
+
+        # Assert
+        assert list(store_path.parent.glob("scheduler_tasks.json.corrupt-*"))
