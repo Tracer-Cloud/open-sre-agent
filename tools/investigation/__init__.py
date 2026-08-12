@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from tools.investigation.capability import (
@@ -23,7 +24,7 @@ from tools.investigation.capability import (
         "Run the full OpenSRE investigation workflow for an alert or incident description."
     ),
     side_effect_level=SideEffectLevel.EXTERNAL,
-    surfaces=("chat",),
+    surfaces=(ToolSurface.CHAT,),
     tags=("investigation", "composite"),
     input_schema={
         "type": "object",

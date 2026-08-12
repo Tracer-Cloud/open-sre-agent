@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.markup import escape
 
+from core.domain.types.tools import ToolSurface
 from core.agent_harness.session.terminal_access import (
     exclusive_stdin_active,
     session_terminal,
@@ -239,7 +240,7 @@ slash_invoke_tool = RegisteredTool(
     description=slash_invoke_tool_description(),
     input_schema=slash_invoke_input_schema(),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_slash,

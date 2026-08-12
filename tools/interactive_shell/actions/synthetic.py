@@ -6,6 +6,7 @@ from functools import lru_cache
 from typing import Any
 
 from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
+from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -79,7 +80,7 @@ synthetic_run_tool = RegisteredTool(
         required=("suite", "scenario"),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_synthetic,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -49,7 +50,7 @@ cli_exec_tool = RegisteredTool(
         required=("payload",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_cli_command,

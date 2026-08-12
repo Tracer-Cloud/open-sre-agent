@@ -10,6 +10,7 @@ from config.runtime_metadata import (
     STATIC_FACT_KEYS,
 )
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from platform.observability.trace.spans import component_span
 from tools.system.python_execution_tool.credentials import execution_env, github_extract_params
@@ -32,7 +33,7 @@ class PythonExecutionTool(BaseTool):
     display_name = "Python execution"
     source = "knowledge"
     side_effect_level = SideEffectLevel.READ_ONLY
-    surfaces = ("investigation", "chat")
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT)
     injected_params = ["github_token"]
     description = (
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "

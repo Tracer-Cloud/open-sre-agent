@@ -7,6 +7,7 @@ from typing import Any
 from rich.markup import escape
 
 from config.llm_auth.provider_catalog import PROVIDER_BY_VALUE
+from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -78,7 +79,7 @@ llm_set_provider_tool = RegisteredTool(
         required=("target",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_llm_provider,

@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -118,7 +119,7 @@ alert_sample_tool = RegisteredTool(
         required=("template",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_sample_alert_action,

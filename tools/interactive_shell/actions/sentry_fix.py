@@ -19,6 +19,7 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
     string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.cross_vendor.fix_sentry_issue import fix_sentry_issue
@@ -124,7 +125,7 @@ fix_sentry_issue_start_tool = RegisteredTool(
         required=("sentry_url",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
