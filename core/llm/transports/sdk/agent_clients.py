@@ -24,6 +24,7 @@ from core.llm.shared.openai_chat_completions import (
     AGENT_CLIENT_TIMEOUT_SEC,
     message_to_dict,
     parse_tool_calls,
+    resolve_openai_reasoning_effort,
 )
 from core.llm.shared.openai_chat_completions import (
     build_assistant_message as build_openai_compat_assistant_message,
@@ -87,6 +88,7 @@ class AnthropicAgentClient:
         *,
         client: Any | None = None,
         credential_resolver: Callable[[str], str] | None = None,
+        temperature: float | None = None,
     ) -> None:
         if client is None:
             from anthropic import Anthropic
@@ -100,6 +102,7 @@ class AnthropicAgentClient:
             self._client = client
         self._model = model
         self._max_tokens = max_tokens
+        self._temperature = temperature
 
     @property
     def model_id(self) -> str | None:
@@ -173,6 +176,8 @@ class AnthropicAgentClient:
             kwargs["system"] = _anthropic_cached_system(system) if cache else system
         if tools:
             kwargs["tools"] = _anthropic_tools_with_cache(tools) if cache else tools
+        if self._temperature is not None:
+            kwargs["temperature"] = self._temperature
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
@@ -278,6 +283,10 @@ class AnthropicAgentClient:
             getattr(response, "usage", None),
             input_key="input_tokens",
             output_key="output_tokens",
+            response_model=getattr(response, "model", None),
+            api_type="anthropic_messages",
+            max_output_tokens=self._max_tokens,
+            temperature=getattr(self, "_temperature", None),
         )
 
         text_parts: list[str] = []
@@ -537,6 +546,7 @@ class OpenAIAgentClient:
         api_key_env: str = "OPENAI_API_KEY",
         api_key_default: str = "",
         credential_resolver: Callable[[str], str] | None = None,
+        temperature: float | None = None,
     ) -> None:
         from openai import OpenAI
 
@@ -553,6 +563,7 @@ class OpenAIAgentClient:
         self._model = model
         self._max_tokens = max_tokens
         self._api_key_env = api_key_env
+        self._temperature = temperature
 
     @property
     def model_id(self) -> str | None:
@@ -631,9 +642,10 @@ class OpenAIAgentClient:
                 kwargs["tools"] = responses_tool_specs(tools)
                 kwargs["tool_choice"] = "auto"
                 kwargs["parallel_tool_calls"] = True
-            from config.llm_reasoning_effort import get_active_reasoning_effort
-
-            reasoning_effort = get_active_reasoning_effort()
+            reasoning_effort = resolve_openai_reasoning_effort(
+                model=self._model,
+                api_key_env=api_key_env,
+            )
             if reasoning_effort is not None:
                 kwargs["reasoning"] = {"effort": reasoning_effort}
         else:
@@ -647,6 +659,15 @@ class OpenAIAgentClient:
                 kwargs["tool_choice"] = "auto"
                 if _supports_openai_parallel_tool_calls_param(api_key_env):
                     kwargs["parallel_tool_calls"] = True
+            reasoning_effort = resolve_openai_reasoning_effort(
+                model=self._model,
+                api_key_env=api_key_env,
+            )
+            if reasoning_effort is not None:
+                kwargs["reasoning_effort"] = reasoning_effort
+            temperature = getattr(self, "_temperature", None)
+            if temperature is not None:
+                kwargs["temperature"] = temperature
 
         backoff = _RETRY_INITIAL_BACKOFF_SEC
         last_err: Exception | None = None
@@ -703,6 +724,10 @@ class OpenAIAgentClient:
                 getattr(response, "usage", None),
                 input_key="input_tokens",
                 output_key="output_tokens",
+                response_model=getattr(response, "model", None),
+                api_type="openai_responses",
+                max_output_tokens=self._max_tokens,
+                reasoning_effort=reasoning_effort,
             )
             responses_tool_calls = response_tool_calls(response)
             return AgentLLMResponse(
@@ -722,6 +747,11 @@ class OpenAIAgentClient:
             getattr(response, "usage", None),
             input_key="prompt_tokens",
             output_key="completion_tokens",
+            response_model=getattr(response, "model", None),
+            api_type="openai_chat_completions",
+            max_output_tokens=self._max_tokens,
+            temperature=getattr(self, "_temperature", None),
+            reasoning_effort=reasoning_effort,
         )
         choice = response.choices[0]
         msg = choice.message

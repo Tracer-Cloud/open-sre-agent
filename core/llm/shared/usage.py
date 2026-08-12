@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from core.llm.types import LLMResponse
@@ -12,6 +13,26 @@ logger = logging.getLogger(__name__)
 
 UsageHook = Callable[[str, int, int], object]
 _usage_hook: UsageHook | None = None
+
+
+@dataclass(frozen=True)
+class ModelCallUsage:
+    """Provider-reported usage plus request provenance for one completed call."""
+
+    requested_model: str
+    response_model: str | None
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
+    api_type: str | None = None
+    max_output_tokens: int | None = None
+    temperature: float | None = None
+    reasoning_effort: str | None = None
+
+
+DetailedUsageHook = Callable[[ModelCallUsage], object]
+_detailed_usage_hook: DetailedUsageHook | None = None
 
 
 def set_usage_hook(hook: UsageHook | None) -> None:
@@ -25,6 +46,46 @@ def set_usage_hook(hook: UsageHook | None) -> None:
             "set_usage_hook docstring for the contract."
         )
     _usage_hook = hook
+
+
+def set_detailed_usage_hook(hook: DetailedUsageHook | None) -> None:
+    """Register richer per-call accounting without changing the legacy hook contract."""
+    global _detailed_usage_hook
+    if hook is not None and _detailed_usage_hook is not None:
+        raise RuntimeError("A detailed usage hook is already registered")
+    _detailed_usage_hook = hook
+
+
+def _emit_detailed_usage(
+    model: str,
+    inp: int | None,
+    out: int | None,
+    cache_read: int | None,
+    cache_write: int | None,
+    *,
+    response_model: str | None = None,
+    api_type: str | None = None,
+    max_output_tokens: int | None = None,
+    temperature: float | None = None,
+    reasoning_effort: str | None = None,
+) -> None:
+    hook = _detailed_usage_hook
+    if hook is None or (inp is None and out is None):
+        return
+    hook(
+        ModelCallUsage(
+            requested_model=model,
+            response_model=response_model,
+            input_tokens=int(inp or 0),
+            output_tokens=int(out or 0),
+            cache_read_tokens=cache_read,
+            cache_creation_tokens=cache_write,
+            api_type=api_type,
+            max_output_tokens=max_output_tokens,
+            temperature=temperature,
+            reasoning_effort=reasoning_effort,
+        )
+    )
 
 
 def emit_usage(model: str, tokens_in: int | None, tokens_out: int | None) -> None:
@@ -123,11 +184,29 @@ def emit_provider_usage(
     *,
     input_key: str,
     output_key: str,
+    response_model: str | None = None,
+    api_type: str | None = None,
+    max_output_tokens: int | None = None,
+    temperature: float | None = None,
+    reasoning_effort: str | None = None,
 ) -> None:
     """Emit provider-reported usage from an arbitrary usage payload (agent clients)."""
     inp, out = coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
-    _log_usage(model, inp, out, *extract_cache_tokens(usage))
+    cache_read, cache_write = extract_cache_tokens(usage)
+    _log_usage(model, inp, out, cache_read, cache_write)
     emit_usage(model, inp, out)
+    _emit_detailed_usage(
+        model,
+        inp,
+        out,
+        cache_read,
+        cache_write,
+        response_model=response_model,
+        api_type=api_type,
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
+    )
 
 
 def llm_response_with_usage(
@@ -137,11 +216,28 @@ def llm_response_with_usage(
     *,
     input_key: str,
     output_key: str,
+    response_model: str | None = None,
+    api_type: str | None = None,
+    max_output_tokens: int | None = None,
+    temperature: float | None = None,
+    reasoning_effort: str | None = None,
 ) -> LLMResponse:
     inp, out = coerce_usage_tokens(usage, input_key=input_key, output_key=output_key)
     cache_read, cache_write = extract_cache_tokens(usage)
     _log_usage(model, inp, out, cache_read, cache_write)
     emit_usage(model, inp, out)
+    _emit_detailed_usage(
+        model,
+        inp,
+        out,
+        cache_read,
+        cache_write,
+        response_model=response_model,
+        api_type=api_type,
+        max_output_tokens=max_output_tokens,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
+    )
     return LLMResponse(
         content=content,
         input_tokens=inp,

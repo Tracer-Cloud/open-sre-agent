@@ -38,6 +38,8 @@ from core.llm.shared.openai_chat_completions import (
     _RETRY_MAX_ATTEMPTS,
     LLM_CLIENT_TIMEOUT_SEC,
     normalize_messages_openai,
+    resolve_openai_reasoning_effort,
+    uses_max_completion_tokens,
 )
 from core.llm.shared.structured_output import (
     StructuredOutputClient,
@@ -168,20 +170,6 @@ def _format_openai_connection_error(err: Exception, provider_label: str) -> str:
         f"Cannot connect to {provider_label} API. "
         "Check your network connection and that the endpoint URL is reachable."
     )
-
-
-def _uses_max_completion_tokens(model: str) -> bool:
-    """Reasoning models (o1, o3, o4, gpt-5 series) require max_completion_tokens."""
-    return model.startswith(("o1", "o3", "o4", "gpt-5"))
-
-
-def _resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | None:
-    """Session override for OpenAI reasoning models in the interactive shell."""
-    if api_key_env != "OPENAI_API_KEY" or not _uses_max_completion_tokens(model):
-        return None
-    from config.llm_reasoning_effort import get_active_reasoning_effort
-
-    return get_active_reasoning_effort()
 
 
 class LLMClient:
@@ -743,6 +731,11 @@ class OpenAILLMClient:
             getattr(completion, "usage", None),
             input_key="prompt_tokens",
             output_key="completion_tokens",
+            response_model=getattr(completion, "model", None),
+            api_type="openai_chat_completions_parse",
+            max_output_tokens=self._max_tokens,
+            temperature=self._temperature,
+            reasoning_effort=kwargs.get("reasoning_effort"),
         )
         message = completion.choices[0].message
         if getattr(message, "refusal", None):
@@ -796,14 +789,14 @@ class OpenAILLMClient:
         messages, _ = apply_guardrails_to_messages(messages)
 
         token_param = (
-            "max_completion_tokens" if _uses_max_completion_tokens(self._model) else "max_tokens"
+            "max_completion_tokens" if uses_max_completion_tokens(self._model) else "max_tokens"
         )
         kwargs: dict[str, Any] = {
             "model": self._model,
             token_param: self._max_tokens,
             "messages": messages,
         }
-        reasoning_effort = _resolve_openai_reasoning_effort(
+        reasoning_effort = resolve_openai_reasoning_effort(
             model=self._model,
             api_key_env=self._api_key_env,
         )
@@ -908,6 +901,11 @@ class OpenAILLMClient:
             usage,
             input_key="prompt_tokens",
             output_key="completion_tokens",
+            response_model=getattr(response, "model", None),
+            api_type="openai_chat_completions",
+            max_output_tokens=self._max_tokens,
+            temperature=self._temperature,
+            reasoning_effort=kwargs.get("reasoning_effort"),
         )
 
     def invoke_stream(self, prompt_or_messages: Any) -> Iterator[str]:

@@ -12,9 +12,11 @@ import logging
 from types import SimpleNamespace
 
 from core.llm.shared.usage import (
+    ModelCallUsage,
     emit_provider_usage,
     extract_cache_tokens,
     llm_response_with_usage,
+    set_detailed_usage_hook,
 )
 
 
@@ -145,3 +147,41 @@ def test_openai_nested_cache_write_tokens_are_extracted() -> None:
     # Assert
     assert read == 384
     assert write == 116
+
+
+def test_detailed_usage_hook_preserves_request_and_response_provenance() -> None:
+    events: list[ModelCallUsage] = []
+    set_detailed_usage_hook(events.append)
+    try:
+        emit_provider_usage(
+            "openai-gpt-5.5",
+            {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "prompt_tokens_details": {"cached_tokens": 64},
+            },
+            input_key="prompt_tokens",
+            output_key="completion_tokens",
+            response_model="gpt-5.5-2026-07-01",
+            api_type="openai_chat_completions",
+            max_output_tokens=16384,
+            temperature=1,
+            reasoning_effort="medium",
+        )
+    finally:
+        set_detailed_usage_hook(None)
+
+    assert events == [
+        ModelCallUsage(
+            requested_model="openai-gpt-5.5",
+            response_model="gpt-5.5-2026-07-01",
+            input_tokens=100,
+            output_tokens=20,
+            cache_read_tokens=64,
+            cache_creation_tokens=None,
+            api_type="openai_chat_completions",
+            max_output_tokens=16384,
+            temperature=1,
+            reasoning_effort="medium",
+        )
+    ]

@@ -112,6 +112,27 @@ def test_openai_llm_client_adds_reasoning_effort_for_reasoning_models(monkeypatc
     assert kwargs["reasoning_effort"] == "xhigh"
 
 
+def test_openai_llm_client_recognizes_gateway_prefixed_gpt5(monkeypatch) -> None:
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "medium")
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key",
+        lambda _env_var: "test-key",
+    )
+    client = sdk_llm.OpenAILLMClient(
+        model="openai-gpt-5.5",
+        max_tokens=16384,
+        temperature=1,
+        api_key_env="OPENAI_API_KEY",
+    )
+    monkeypatch.setattr(client, "_ensure_client", lambda: object())
+
+    kwargs = client._build_request_kwargs("diagnose")
+
+    assert kwargs["max_completion_tokens"] == 16384
+    assert kwargs["reasoning_effort"] == "medium"
+    assert kwargs["temperature"] == 1
+
+
 def test_openai_llm_client_omits_reasoning_effort_for_non_reasoning_models(monkeypatch) -> None:
     monkeypatch.setattr(
         "core.llm.providers.provider_credentials.resolve_llm_api_key",

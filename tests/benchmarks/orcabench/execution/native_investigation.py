@@ -11,6 +11,7 @@ _TIME_SENSITIVE_GRAFANA_TOOLS = frozenset(
         "query_grafana_annotations",
         "query_grafana_logs",
         "query_grafana_metrics",
+        "query_grafana_service_names",
         "query_grafana_traces",
     }
 )
@@ -83,6 +84,37 @@ def _with_orca_time_bounds(tools: list[Any]) -> list[Any]:
             continue
         input_schema = deepcopy(tool.input_schema)
         input_schema.setdefault("properties", {})["time_bounds"] = time_schema
+        properties = input_schema["properties"]
+        if tool.name == "query_grafana_logs":
+            properties.update(
+                {
+                    "query": {
+                        "type": "string",
+                        "description": "OpenSearch Lucene query_string expression",
+                    },
+                    "sort_order": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "default": "asc",
+                    },
+                    "cursor": {
+                        "type": "array",
+                        "description": "Opaque next_cursor from the previous page",
+                        "items": {},
+                    },
+                }
+            )
+        elif tool.name == "query_grafana_traces":
+            properties.update(
+                {
+                    "action": {"type": "string", "enum": ["search", "get_trace"]},
+                    "trace_id": {"type": "string"},
+                    "operation": {"type": "string"},
+                    "tags": {"type": "object", "additionalProperties": True},
+                    "min_duration": {"type": "string"},
+                    "max_duration": {"type": "string"},
+                }
+            )
         controls = tool.retrieval_controls.model_copy(update={"time_bounds": True})
         adapted.append(
             replace(

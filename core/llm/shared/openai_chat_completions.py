@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import time
 from collections.abc import Callable, Iterator
 from http import HTTPStatus
@@ -22,6 +23,22 @@ _RETRY_MAX_ATTEMPTS = 3
 
 AGENT_CLIENT_TIMEOUT_SEC: float = 90.0
 LLM_CLIENT_TIMEOUT_SEC: float = 60.0
+
+
+def uses_max_completion_tokens(model: str) -> bool:
+    """Return whether an OpenAI model uses the reasoning-model token field."""
+    return bool(
+        re.search(r"(?:^|[^A-Za-z0-9])(?:o[134]|gpt-5)", model, re.IGNORECASE)
+    )
+
+
+def resolve_openai_reasoning_effort(*, model: str, api_key_env: str) -> str | None:
+    """Resolve the active effort only for first-party OpenAI reasoning models."""
+    if api_key_env != "OPENAI_API_KEY" or not uses_max_completion_tokens(model):
+        return None
+    from config.llm_reasoning_effort import get_active_reasoning_effort
+
+    return get_active_reasoning_effort()
 
 
 def get_attr_or_item(value: Any, key: str, default: Any = None) -> Any:

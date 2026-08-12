@@ -8,6 +8,7 @@ model:
   transport: sdk
   reasoning_effort: medium
   max_tokens: 16384
+  temperature: 1
 
 grafana:
   username: admin

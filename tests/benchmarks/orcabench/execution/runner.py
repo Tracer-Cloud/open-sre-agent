@@ -132,6 +132,8 @@ def _manifest(
         model_provider=model.provider,
         model_transport=model.transport,
         reasoning_effort=model.reasoning_effort,
+        temperature=model.temperature,
+        native_max_output_tokens=model.max_tokens,
         instruction_sha256=sha256_bytes(instruction),
         started_at=started_at,
     )
@@ -195,19 +197,26 @@ def run(config_path: Path, instruction_path: Path) -> int:
             writer,
         )
 
-        from core.llm.shared.usage import set_usage_hook
+        from core.llm.shared.usage import ModelCallUsage, set_detailed_usage_hook
 
-        def collect_usage(model: str, input_tokens: int, output_tokens: int) -> None:
+        def collect_usage(event: ModelCallUsage) -> None:
             usage_events.append(
                 UsageEvent(
                     sequence=len(usage_events) + 1,
-                    model=model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
+                    requested_model=event.requested_model,
+                    response_model=event.response_model,
+                    input_tokens=event.input_tokens,
+                    output_tokens=event.output_tokens,
+                    cache_read_tokens=event.cache_read_tokens,
+                    cache_creation_tokens=event.cache_creation_tokens,
+                    api_type=event.api_type,
+                    max_output_tokens=event.max_output_tokens,
+                    temperature=event.temperature,
+                    reasoning_effort=event.reasoning_effort,
                 )
             )
 
-        set_usage_hook(collect_usage)
+        set_detailed_usage_hook(collect_usage)
         try:
             state = mode.investigation.investigate(
                 task_context.investigation_alert(),
@@ -218,7 +227,7 @@ def run(config_path: Path, instruction_path: Path) -> int:
             writer.write_jsonl("evidence.jsonl", list(state.get("evidence_entries") or []))
             payload = mode.investigation.build_payload(state)
         finally:
-            set_usage_hook(None)
+            set_detailed_usage_hook(None)
 
         writer.write_json("payload.json", payload)
         report_bytes = mode.report.write(payload, runtime.report_path)
@@ -236,6 +245,13 @@ def run(config_path: Path, instruction_path: Path) -> int:
                 "llm_calls": len(usage_events),
                 "input_tokens": sum(event.input_tokens for event in usage_events),
                 "output_tokens": sum(event.output_tokens for event in usage_events),
+                "returned_models": tuple(
+                    dict.fromkeys(
+                        event.response_model
+                        for event in usage_events
+                        if event.response_model
+                    )
+                ),
             }
         )
         writer.write_json("manifest.json", completed)
@@ -271,6 +287,13 @@ def run(config_path: Path, instruction_path: Path) -> int:
                 "llm_calls": len(usage_events),
                 "input_tokens": sum(event.input_tokens for event in usage_events),
                 "output_tokens": sum(event.output_tokens for event in usage_events),
+                "returned_models": tuple(
+                    dict.fromkeys(
+                        event.response_model
+                        for event in usage_events
+                        if event.response_model
+                    )
+                ),
             }
         )
         writer.write_json("manifest.json", failed)

@@ -50,6 +50,7 @@ def test_checked_in_config_is_native_and_model_route_is_explicit() -> None:
     assert settings.model.transport == "sdk"
     assert settings.model.reasoning_effort == "medium"
     assert settings.model.max_tokens == 16384
+    assert settings.model.temperature == 1.0
     assert settings.runtime.source_root == Path("/app/opentelemetry-demo")
     assert settings.model.required_environment_names == (
         "OPENAI_API_KEY",

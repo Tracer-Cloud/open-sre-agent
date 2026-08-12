@@ -207,6 +207,20 @@ def test_llm_settings_from_env_max_tokens_default(monkeypatch) -> None:
     assert settings.max_tokens == DEFAULT_MAX_TOKENS
 
 
+def test_llm_settings_from_env_temperature_override(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_TEMPERATURE", "1")
+
+    assert LLMSettings.from_env().temperature == 1.0
+
+
+def test_llm_settings_omits_temperature_by_default(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("LLM_TEMPERATURE", raising=False)
+
+    assert LLMSettings.from_env().temperature is None
+
+
 def test_llm_settings_from_env_claude_code_without_api_key(monkeypatch) -> None:
     """CLI-backed Claude Code: onboard writes LLM_PROVIDER only; no hosted API key."""
     monkeypatch.setenv("LLM_PROVIDER", "claude-code")

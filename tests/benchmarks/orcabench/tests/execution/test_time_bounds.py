@@ -7,6 +7,7 @@ from integrations.grafana.tools import (
     query_grafana_annotations,
     query_grafana_logs,
     query_grafana_metrics,
+    query_grafana_service_names,
     query_grafana_traces,
 )
 from tests.benchmarks.orcabench.execution.native_investigation import (
@@ -20,6 +21,7 @@ from tests.benchmarks.orcabench.execution.native_investigation import (
         query_grafana_annotations,
         query_grafana_logs,
         query_grafana_metrics,
+        query_grafana_service_names,
         query_grafana_traces,
     ],
 )
@@ -38,3 +40,22 @@ def test_openai_tool_schema_preserves_native_time_bounds_fields(tool_function) -
     }
     assert adapted.retrieval_controls.time_bounds is True
     assert registered.retrieval_controls.time_bounds is False
+
+
+def test_orca_log_and_trace_schemas_expose_rich_backend_controls() -> None:
+    log_tool, trace_tool = _with_orca_time_bounds(
+        [
+            query_grafana_logs.__opensre_registered_tool__,
+            query_grafana_traces.__opensre_registered_tool__,
+        ]
+    )
+
+    assert {"query", "sort_order", "cursor"} <= set(log_tool.input_schema["properties"])
+    assert {
+        "action",
+        "trace_id",
+        "operation",
+        "tags",
+        "min_duration",
+        "max_duration",
+    } <= set(trace_tool.input_schema["properties"])

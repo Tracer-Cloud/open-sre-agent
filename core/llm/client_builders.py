@@ -60,19 +60,28 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
     from core.llm.transports.sdk import agent_clients as sdk
 
     settings, provider = route.settings, route.provider
+    configured_temperature = getattr(settings, "temperature", None)
 
     if is_openai_compat_provider(provider):
         from core.llm.types import ModelType
 
         resolved = resolve_openai_compat_provider(settings, provider, ModelType.REASONING)
         max_tokens = 1024 if provider == PROVIDER_OLLAMA else settings.max_tokens
-        return sdk.OpenAIAgentClient(
-            model=resolved.model,
-            max_tokens=max_tokens,
-            base_url=resolved.base_url,
-            api_key_env=resolved.api_key_env,
-            api_key_default=resolved.api_key_default,
+        agent_kwargs: dict[str, Any] = {
+            "model": resolved.model,
+            "max_tokens": max_tokens,
+            "base_url": resolved.base_url,
+            "api_key_env": resolved.api_key_env,
+            "api_key_default": resolved.api_key_default,
+        }
+        effective_temperature = (
+            configured_temperature
+            if configured_temperature is not None
+            else resolved.temperature
         )
+        if effective_temperature is not None:
+            agent_kwargs["temperature"] = effective_temperature
+        return sdk.OpenAIAgentClient(**agent_kwargs)
 
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]
     model = getattr(settings, f"{spec.env_prefix}_reasoning_model")
@@ -84,8 +93,14 @@ def _native_sdk_agent_client(route: LLMRoute) -> AgentLLMClient:
         return sdk.BedrockConverseAgentClient(model=model, max_tokens=spec.max_tokens)
 
     if provider == PROVIDER_OPENAI:
-        return sdk.OpenAIAgentClient(model=model, max_tokens=spec.max_tokens)
-    return sdk.AnthropicAgentClient(model=model, max_tokens=spec.max_tokens)
+        kwargs: dict[str, Any] = {"model": model, "max_tokens": spec.max_tokens}
+        if configured_temperature is not None:
+            kwargs["temperature"] = configured_temperature
+        return sdk.OpenAIAgentClient(**kwargs)
+    kwargs = {"model": model, "max_tokens": spec.max_tokens}
+    if configured_temperature is not None:
+        kwargs["temperature"] = configured_temperature
+    return sdk.AnthropicAgentClient(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +153,7 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
     from core.llm.types import ModelType
 
     settings, provider = route.settings, route.provider
+    configured_temperature = getattr(settings, "temperature", None)
 
     def _fallback_model(provider_prefix: str) -> str | None:
         if model_type is ModelType.TOOLCALL:
@@ -153,7 +169,11 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
             base_url=compat.base_url,
             api_key_env=compat.api_key_env,
             api_key_default=compat.api_key_default,
-            temperature=compat.temperature,
+            temperature=(
+                configured_temperature
+                if configured_temperature is not None
+                else compat.temperature
+            ),
         )
 
     spec = FIRST_PARTY_PROVIDERS.get(provider) or FIRST_PARTY_PROVIDERS[PROVIDER_ANTHROPIC]
@@ -163,7 +183,12 @@ def _native_sdk_llm_client(route: LLMRoute, model_type: ModelType) -> Any:
             model=model,
             model_fallback=_fallback_model("openai"),
             max_tokens=spec.max_tokens,
+            temperature=configured_temperature,
         )
     if provider == PROVIDER_BEDROCK:
         return sdk.BedrockLLMClient(model=model, max_tokens=spec.max_tokens)
-    return sdk.LLMClient(model=model, max_tokens=spec.max_tokens)
+    return sdk.LLMClient(
+        model=model,
+        max_tokens=spec.max_tokens,
+        temperature=configured_temperature,
+    )

@@ -448,6 +448,9 @@ def query_grafana_logs(
             execution_run_id=execution_run_id,
             limit=limit,
             time_bounds=time_bounds,
+            query=_kwargs.get("query"),
+            sort_order=str(_kwargs.get("sort_order") or "asc"),
+            cursor=_kwargs.get("cursor"),
         )
 
     client = _resolve_grafana_client(
@@ -697,12 +700,20 @@ def query_grafana_service_names(
     grafana_verify_ssl: bool = True,
     grafana_ca_bundle: str = "",
     grafana_backend: Any = None,
+    time_bounds: dict[str, Any] | None = None,
     **_kwargs: Any,
 ) -> dict:
     """Discover available service names in Loki."""
     if grafana_backend is not None:
         query_service_names = getattr(grafana_backend, "query_service_names", None)
-        service_names = query_service_names() if callable(query_service_names) else []
+        if callable(query_service_names):
+            service_names = (
+                query_service_names(time_bounds=time_bounds)
+                if time_bounds is not None
+                else query_service_names()
+            )
+        else:
+            service_names = []
         if not isinstance(service_names, list):
             service_names = []
         return {
@@ -814,6 +825,12 @@ def query_grafana_traces(
             limit=limit,
             time_bounds=time_bounds,
             extract_pipeline_spans=_extract_pipeline_spans,
+            action=str(_kwargs.get("action") or "search"),
+            trace_id=_kwargs.get("trace_id"),
+            operation=_kwargs.get("operation"),
+            tags=_kwargs.get("tags"),
+            min_duration=_kwargs.get("min_duration"),
+            max_duration=_kwargs.get("max_duration"),
         )
 
     client = _resolve_grafana_client(

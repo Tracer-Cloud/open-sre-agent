@@ -221,6 +221,7 @@ def test_runner_marks_incomplete_investigation_failed_without_writing_report(
     manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
     error = json.loads((artifact_dir / "error.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "failed"
+    assert manifest["native_max_output_tokens"] == 16384
     assert error["category"] == "investigation_failed"
     assert error["exception_type"] == "NativeInvestigationIncompleteError"
     assert (artifact_dir / "state.json").is_file()

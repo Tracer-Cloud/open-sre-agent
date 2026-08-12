@@ -21,10 +21,20 @@ def query_logs_from_backend(
     execution_run_id: str | None = None,
     limit: int = 100,
     time_bounds: dict[str, Any] | None = None,
+    query: str | None = None,
+    sort_order: str = "asc",
+    cursor: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Return a Loki-shaped payload from an injected Grafana backend."""
     time_kwargs = {"time_bounds": time_bounds} if time_bounds is not None else {}
-    raw = backend.query_logs(service_name=service_name, limit=limit, **time_kwargs)
+    raw = backend.query_logs(
+        service_name=service_name,
+        limit=limit,
+        query=query,
+        sort_order=sort_order,
+        cursor=cursor,
+        **time_kwargs,
+    )
     logs: list[dict[str, Any]] = []
     for stream in raw.get("data", {}).get("result", []):
         stream_labels = stream.get("stream", {})
@@ -53,7 +63,9 @@ def query_logs_from_backend(
         "error_taxonomy": error_taxonomy,
         "service_name": service_name,
         "execution_run_id": execution_run_id,
-        "query": "",
+        "query": query or "",
+        "sort_order": sort_order,
+        "next_cursor": raw.get("next_cursor"),
     }
     summary = summarize_counts(len(logs), len(compacted_logs), "logs")
     if summary:
@@ -90,10 +102,26 @@ def query_traces_from_backend(
     limit: int = 20,
     time_bounds: dict[str, Any] | None = None,
     extract_pipeline_spans: Any | None = None,
+    action: str = "search",
+    trace_id: str | None = None,
+    operation: str | None = None,
+    tags: dict[str, Any] | None = None,
+    min_duration: str | None = None,
+    max_duration: str | None = None,
 ) -> dict[str, Any]:
     """Return a Tempo-shaped payload from an injected Grafana backend."""
     time_kwargs = {"time_bounds": time_bounds} if time_bounds is not None else {}
-    raw = backend.query_traces(service_name=service_name, limit=limit, **time_kwargs)
+    raw = backend.query_traces(
+        service_name=service_name,
+        limit=limit,
+        action=action,
+        trace_id=trace_id,
+        operation=operation,
+        tags=tags,
+        min_duration=min_duration,
+        max_duration=max_duration,
+        **time_kwargs,
+    )
     traces = raw.get("traces", [])
     if execution_run_id and traces:
         filtered = [
@@ -119,6 +147,9 @@ def query_traces_from_backend(
         "total_traces": len(traces),
         "service_name": service_name,
         "execution_run_id": execution_run_id,
+        "action": action,
+        "trace_id": trace_id,
+        "query_window": raw.get("query_window"),
     }
     summary = summarize_counts(len(traces), len(compacted_traces), "traces")
     if summary:

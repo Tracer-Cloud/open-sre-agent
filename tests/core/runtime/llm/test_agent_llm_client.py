@@ -914,6 +914,41 @@ def test_openai_standard_models_use_max_tokens(
         )
 
 
+def test_openai_gpt5_agent_request_applies_effective_benchmark_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_openai(monkeypatch)
+    monkeypatch.setenv("OPENSRE_REASONING_EFFORT", "medium")
+    captured: dict[str, object] = {}
+
+    client = OpenAIAgentClient.__new__(OpenAIAgentClient)
+    client._client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(
+                create=lambda **kwargs: (
+                    captured.update(kwargs) or _make_fake_openai_response(content="ok")
+                )
+            )
+        )
+    )
+    client._model = "openai-gpt-5.5"
+    client._max_tokens = 16384
+    client._api_key_env = "OPENAI_API_KEY"
+    client._temperature = 1.0
+
+    client.invoke(
+        messages=[{"role": "user", "content": "investigate"}],
+        tools=[{"type": "function", "function": {"name": "logs", "parameters": {}}}],
+    )
+
+    assert captured["model"] == "openai-gpt-5.5"
+    assert captured["max_completion_tokens"] == 16384
+    assert captured["temperature"] == 1.0
+    assert captured["reasoning_effort"] == "medium"
+    assert captured["tool_choice"] == "auto"
+    assert captured["parallel_tool_calls"] is True
+
+
 def test_openai_rate_limit_error_is_retried_then_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

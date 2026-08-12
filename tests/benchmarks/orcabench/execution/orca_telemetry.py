@@ -146,6 +146,9 @@ class OrcaTelemetryBackend:
         *,
         limit: int = 20,
         time_bounds: dict[str, Any] | TimeBounds | None = None,
+        query: str | None = None,
+        sort_order: str = "asc",
+        cursor: list[Any] | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         """Search bounded OpenSearch log documents and return a Loki-compatible shape."""
@@ -159,12 +162,22 @@ class OrcaTelemetryBackend:
             {"range": {"@timestamp": {"gte": start, "lte": end}}}
         ]
         filters.append({"term": {"resource.service.name.keyword": service_name}})
-        effective_limit = max(1, limit)
+        effective_limit = min(max(1, limit), 1000)
+        if sort_order not in {"asc", "desc"}:
+            raise ValueError("Log sort_order must be 'asc' or 'desc'")
+        bool_query: dict[str, Any] = {"filter": filters}
+        if query and query.strip() and query.strip() != "*":
+            bool_query["must"] = [{"query_string": {"query": query.strip()}}]
         body = {
             "size": effective_limit,
-            "sort": [{"@timestamp": "asc"}],
-            "query": {"bool": {"filter": filters}},
+            "sort": [
+                {"@timestamp": sort_order},
+                {"_id": sort_order},
+            ],
+            "query": {"bool": bool_query},
         }
+        if cursor:
+            body["search_after"] = cursor
         response = self._session.post(
             self._url(self.LOGS_UID, "/otel-logs-*/_search"),
             auth=self._auth,
@@ -192,6 +205,7 @@ class OrcaTelemetryBackend:
                         "service_name": str(actual_service),
                         "log_level": str(source.get("severity.text", "")),
                         "attributes": attributes,
+                        "document_id": str(hit.get("_id", "")),
                     },
                     "values": [[timestamp_ns, str(message)]],
                 }
@@ -202,14 +216,20 @@ class OrcaTelemetryBackend:
                 "resultType": "streams",
                 "result": streams,
             },
+            "next_cursor": hits[-1].get("sort") if len(hits) == effective_limit else None,
         }
 
-    def query_service_names(self) -> list[str]:
+    def query_service_names(
+        self,
+        *,
+        time_bounds: dict[str, Any] | TimeBounds | None = None,
+    ) -> list[str]:
         """Return service names represented in bounded OpenSearch log documents."""
+        start, end, _start_seconds, _end_seconds = self._query_window(time_bounds)
         body = {
             "size": 0,
             "query": {
-                "range": {"@timestamp": {"gte": self._start, "lte": self._end}}
+                "range": {"@timestamp": {"gte": start, "lte": end}}
             },
             "aggs": {
                 "services": {
@@ -276,22 +296,48 @@ class OrcaTelemetryBackend:
         *,
         limit: int = 20,
         time_bounds: dict[str, Any] | TimeBounds | None = None,
+        action: str = "search",
+        trace_id: str | None = None,
+        operation: str | None = None,
+        tags: dict[str, Any] | None = None,
+        min_duration: str | None = None,
+        max_duration: str | None = None,
         **_: Any,
     ) -> dict[str, Any]:
         """Query bounded Jaeger traces for a concrete service."""
+        if action not in {"search", "get_trace"}:
+            raise ValueError("Trace action must be 'search' or 'get_trace'")
+        start, end, start_seconds, end_seconds = self._query_window(time_bounds)
+        if action == "get_trace":
+            if not trace_id:
+                raise ValueError("trace_id is required for get_trace")
+            payload = self._get(self.TRACES_UID, f"/api/traces/{trace_id}")
+            return {
+                "traces": payload.get("data", []),
+                "metrics": {},
+                "query_window": {"start": start, "end": end},
+            }
         if not service_name:
             return {"traces": [], "metrics": {}, "query_window": self.query_window}
-        start, end, start_seconds, end_seconds = self._query_window(time_bounds)
-        effective_limit = max(1, limit)
+        effective_limit = min(max(1, limit), 1000)
+        params: dict[str, Any] = {
+            "service": service_name,
+            "start": int(start_seconds * 1_000_000),
+            "end": int(end_seconds * 1_000_000),
+            "limit": effective_limit,
+        }
+        if operation:
+            params["operation"] = operation
+        if tags:
+            params["tags"] = json.dumps(tags, sort_keys=True, separators=(",", ":"))
+        if min_duration:
+            params["minDuration"] = min_duration
+        if max_duration:
+            params["maxDuration"] = max_duration
         payload = self._get(
             self.TRACES_UID,
             "/api/traces",
-            params={
-                "service": service_name,
-                "start": int(start_seconds * 1_000_000),
-                "end": int(end_seconds * 1_000_000),
-                "limit": effective_limit,
-            },
+            params=params,
         )
         return {
             "traces": payload.get("data", []),

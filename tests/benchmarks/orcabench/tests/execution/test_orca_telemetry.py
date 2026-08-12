@@ -4,6 +4,10 @@ from typing import Any
 
 import pytest
 
+from integrations.opensre.grafana_backend_queries import (
+    query_logs_from_backend,
+    query_traces_from_backend,
+)
 from tests.benchmarks.orcabench.execution.orca_telemetry import OrcaTelemetryBackend
 
 
@@ -31,7 +35,7 @@ class _Session:
             return _Response([])  # type: ignore[arg-type]
         if url.endswith("/api/services"):
             return _Response({"data": ["checkout", "frontend"]})
-        if url.endswith("/api/traces"):
+        if url.endswith("/api/traces") or "/api/traces/" in url:
             return _Response({"data": [{"traceID": "abc", "spans": []}]})
         return _Response(
             {
@@ -57,6 +61,8 @@ class _Session:
                 "hits": {
                     "hits": [
                         {
+                            "_id": "log-1",
+                            "sort": ["2026-04-21T12:00:00Z", "log-1"],
                             "_source": {
                                 "@timestamp": "2026-04-21T12:00:00Z",
                                 "body": "checkout completed",
@@ -265,3 +271,95 @@ def test_empty_log_service_does_not_query_every_service() -> None:
 
     assert result["data"]["result"] == []
     assert session.post_calls == []
+
+
+def test_log_query_sort_and_cursor_reach_opensearch() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    result = backend.query_logs(
+        "checkout",
+        limit=1,
+        query='severity.text:ERROR AND body:"payment failed"',
+        sort_order="desc",
+        cursor=["2026-04-21T12:05:00Z", "log-2"],
+    )
+
+    body = session.post_calls[0][1]["json"]
+    assert body["query"]["bool"]["must"] == [
+        {"query_string": {"query": 'severity.text:ERROR AND body:"payment failed"'}}
+    ]
+    assert body["sort"] == [{"@timestamp": "desc"}, {"_id": "desc"}]
+    assert body["search_after"] == ["2026-04-21T12:05:00Z", "log-2"]
+    assert result["next_cursor"] == ["2026-04-21T12:00:00Z", "log-1"]
+
+
+def test_service_discovery_honors_historical_bounds() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    backend.query_service_names(
+        time_bounds={
+            "start_time": "2026-04-20T15:00:00Z",
+            "end_time": "2026-04-20T16:00:00Z",
+        }
+    )
+
+    assert session.post_calls[0][1]["json"]["query"] == {
+        "range": {
+            "@timestamp": {
+                "gte": "2026-04-20T15:00:00Z",
+                "lte": "2026-04-20T16:00:00Z",
+            }
+        }
+    }
+
+
+def test_trace_filters_and_trace_id_retrieval_reach_jaeger() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    backend.query_traces(
+        "checkout",
+        operation="POST /checkout",
+        tags={"error": True, "http.status_code": 500},
+        min_duration="100ms",
+        max_duration="5s",
+    )
+    exact = backend.query_traces("", action="get_trace", trace_id="abc")
+
+    search_params = session.get_calls[0][1]["params"]
+    assert search_params["operation"] == "POST /checkout"
+    assert search_params["tags"] == '{"error":true,"http.status_code":500}'
+    assert search_params["minDuration"] == "100ms"
+    assert search_params["maxDuration"] == "5s"
+    assert session.get_calls[1][0].endswith("/api/traces/abc")
+    assert exact["traces"][0]["traceID"] == "abc"
+
+
+def test_rich_controls_and_source_attributes_survive_model_facing_bridge() -> None:
+    session = _Session()
+    backend = _backend(session)
+
+    logs = query_logs_from_backend(
+        backend,
+        service_name="checkout",
+        limit=1,
+        query="trace.id:trace-123",
+        sort_order="desc",
+    )
+    trace = query_traces_from_backend(
+        backend,
+        service_name="checkout",
+        action="get_trace",
+        trace_id="abc",
+    )
+
+    assert logs["query"] == "trace.id:trace-123"
+    assert logs["sort_order"] == "desc"
+    assert logs["next_cursor"] == ["2026-04-21T12:00:00Z", "log-1"]
+    assert logs["logs"][0]["attributes"]["trace.id"] == "trace-123"
+    assert logs["logs"][0]["document_id"] == "log-1"
+    assert trace["action"] == "get_trace"
+    assert trace["trace_id"] == "abc"
+    assert trace["traces"][0]["traceID"] == "abc"

@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from config.constants.llm import LLM_MAX_TOKENS_ENV
+from config.constants.llm import LLM_MAX_TOKENS_ENV, LLM_TEMPERATURE_ENV
 from tests.benchmarks.orcabench.config import ModelSettings, RunnerSettings
 
 
@@ -24,7 +24,7 @@ def native_environment_values(model: ModelSettings) -> dict[str, str]:
     provider = model.provider_spec
     if provider.classification_model_env is None or provider.toolcall_model_env is None:
         raise ValueError(f"{model.provider} lacks benchmark model-slot metadata")
-    return {
+    values = {
         "LLM_PROVIDER": model.provider,
         "OPENSRE_LLM_TRANSPORT": model.transport,
         provider.model_env: model.opensre_model,
@@ -36,6 +36,9 @@ def native_environment_values(model: ModelSettings) -> dict[str, str]:
         "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED": "1",
         "OPENSRE_NO_TELEMETRY": "1",
     }
+    if model.temperature is not None:
+        values[LLM_TEMPERATURE_ENV] = str(model.temperature)
+    return values
 
 
 def configure_native_environment(settings: RunnerSettings) -> None:

@@ -27,9 +27,16 @@ class UsageEvent(ArtifactModel):
     """One model call observed through OpenSRE's native usage hook."""
 
     sequence: int = Field(ge=1)
-    model: str
+    requested_model: str
+    response_model: str | None = None
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
+    cache_read_tokens: int | None = Field(default=None, ge=0)
+    cache_creation_tokens: int | None = Field(default=None, ge=0)
+    api_type: str | None = None
+    max_output_tokens: int | None = Field(default=None, ge=1)
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    reasoning_effort: str | None = None
 
 
 class ErrorRecord(ArtifactModel):
@@ -67,7 +74,9 @@ class RunManifest(ArtifactModel):
     model_provider: str
     model_transport: str
     reasoning_effort: str
-    native_max_output_tokens: int = 4096
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    native_max_output_tokens: int = Field(ge=1)
+    returned_models: tuple[str, ...] = ()
     instruction_sha256: str
     report_sha256: str | None = None
     started_at: datetime
