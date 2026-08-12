@@ -8,10 +8,8 @@ API error on stargazers fetch, unexpected payload types.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
-
-import pytest
 from http import HTTPStatus
+from unittest.mock import patch
 
 from integrations.github.tools.stargazers import (
     _normalize_days,
@@ -19,8 +17,8 @@ from integrations.github.tools.stargazers import (
     get_github_star_history,
 )
 
-
 # ── unit tests for pure helpers ───────────────────────────────────────────────
+
 
 def test_normalize_days_default() -> None:
     assert _normalize_days(None) == 30
@@ -58,6 +56,7 @@ def test_parse_github_timestamp_invalid() -> None:
 
 # ── fixture helpers ───────────────────────────────────────────────────────────
 
+
 def _make_star_item(days_ago: int) -> dict[str, str]:
     # Build a starred_at timestamp N days before now
     ts = datetime.now(UTC) - timedelta(days=days_ago)
@@ -70,11 +69,14 @@ def _repo_payload(stars: int = 5) -> dict[str, int | str]:
 
 # ── integration-level fixture tests ──────────────────────────────────────────
 
+
 def test_happy_path_returns_daily_rows() -> None:
     # Repo has 2 stars both within the last 7 days
     star_items = [_make_star_item(1), _make_star_item(3)]
 
-    def fake_request(method, path, params=None, accept=None):
+    def fake_request(
+        method: str, path: str, params: dict | None = None, accept: str | None = None
+    ) -> object:
         if "stargazers" in path:
             return star_items
         return _repo_payload(stars=2)
@@ -97,7 +99,9 @@ def test_missing_starred_at_returns_unavailable() -> None:
     # Stargazer items exist but have no starred_at field
     star_items = [{"user": "someone"}]
 
-    def fake_request(method, path, params=None, accept=None):
+    def fake_request(
+        method: str, path: str, params: dict | None = None, accept: str | None = None
+    ) -> object:
         if "stargazers" in path:
             return star_items
         return _repo_payload(stars=1)
@@ -115,7 +119,9 @@ def test_missing_starred_at_returns_unavailable() -> None:
 def test_repo_fetch_error_returns_unavailable() -> None:
     from integrations.github.client import GitHubApiError
 
-    def fake_request(method, path, params=None, accept=None):
+    def fake_request(
+        method: str, path: str, params: dict | None = None, accept: str | None = None
+    ) -> object:
         raise GitHubApiError("Not found", status_code=HTTPStatus.NOT_FOUND)
 
     with patch(
@@ -133,7 +139,9 @@ def test_stargazers_fetch_error_returns_unavailable() -> None:
 
     call_count = 0
 
-    def fake_request(method, path, params=None, accept=None):
+    def fake_request(
+        method: str, path: str, params: dict | None = None, accept: str | None = None
+    ) -> object:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -151,7 +159,9 @@ def test_stargazers_fetch_error_returns_unavailable() -> None:
 
 
 def test_zero_stars_returns_empty_daily_rows() -> None:
-    def fake_request(method, path, params=None, accept=None):
+    def fake_request(
+        method: str, path: str, params: dict | None = None, accept: str | None = None
+    ) -> object:
         if "stargazers" in path:
             return []
         return _repo_payload(stars=0)
@@ -168,7 +178,9 @@ def test_zero_stars_returns_empty_daily_rows() -> None:
 
 
 def test_unexpected_repo_payload_returns_unavailable() -> None:
-    def fake_request(method, path, params=None, accept=None):
+    def fake_request(
+        method: str, path: str, params: dict | None = None, accept: str | None = None
+    ) -> object:
         return "not a dict"
 
     with patch(
