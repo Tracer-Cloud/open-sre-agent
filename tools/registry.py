@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import sys
 import threading
 from functools import lru_cache
 from types import ModuleType
@@ -124,7 +125,17 @@ def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
     surfaces' vendor executors. Runtime-registered external packages are already
     imported, so they are collected directly. Equivalent to the full snapshot
     filtered by ``surface`` (pinned by the registry-index contract test).
+
+    In a PyInstaller frozen binary the AST scanner cannot locate ``.py`` source
+    files (they are compiled to bytecode and not extracted), so
+    ``build_descriptor_index`` returns only the hand-written fallback entries and
+    Grafana / other integration tools are never discovered.  Fall back to the
+    full dynamic snapshot — which imports via ``importlib`` and works correctly
+    with the bundled bytecode — and filter by surface there.
     """
+    if getattr(sys, "frozen", False):
+        return tuple(t for t in _load_registry_snapshot() if surface in t.surfaces)
+
     from tools.registry_index import build_descriptor_index
 
     index = build_descriptor_index()
