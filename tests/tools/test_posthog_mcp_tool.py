@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -158,6 +159,76 @@ def test_normalize_unwraps_nested_execute_sql_query() -> None:
     assert _normalize_mcp_tool_arguments("execute-sql", flat) is flat
     other = {"query": {"kind": "HogQLQuery", "query": "SELECT 1"}}
     assert _normalize_mcp_tool_arguments("execute-sql", other) is other
+
+
+def test_normalize_rewrites_botched_exec_shapes_to_execute_sql() -> None:
+    """Live dogfood: list returned only ``exec``; three wrong shapes failed."""
+    from integrations.posthog_mcp.tools.posthog_mcp_tool import _normalize_mcp_tool_call
+
+    sql = (
+        "SELECT uniqExact(person_id) AS windows_users_last_7d FROM events "
+        "WHERE timestamp >= now() - INTERVAL 7 DAY "
+        "AND lowerUTF8(toString(properties.$os)) = 'windows'"
+    )
+    # Shape A — query without command (missing required parameter: command).
+    assert _normalize_mcp_tool_call("exec", {"query": sql}) == (
+        "execute-sql",
+        {"query": sql},
+    )
+    # Shape B — raw SQL as command (Unknown command: SELECT).
+    assert _normalize_mcp_tool_call("exec", {"command": sql}) == (
+        "execute-sql",
+        {"query": sql},
+    )
+    # Shape C — structured call fields (Usage: call <tool_name> <json_input>).
+    assert _normalize_mcp_tool_call(
+        "exec",
+        {
+            "command": "call",
+            "tool": "execute-sql",
+            "arguments": {"query": sql},
+        },
+    ) == ("execute-sql", {"query": sql})
+    # Shape D — canonical exec command string.
+    assert _normalize_mcp_tool_call(
+        "exec",
+        {"command": f'call execute-sql {{"query": {json.dumps(sql)}}}'},
+    ) == ("execute-sql", {"query": sql})
+
+
+def test_call_tool_rewrites_exec_query_before_mcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_call(
+        _config: object, tool_name: str, arguments: dict[str, object]
+    ) -> dict[str, object]:
+        captured["tool_name"] = tool_name
+        captured["arguments"] = arguments
+        return {
+            "is_error": False,
+            "text": "windows_users_last_7d\n271",
+            "structured_content": {},
+            "content": [],
+            "tool": tool_name,
+            "arguments": arguments,
+        }
+
+    monkeypatch.setattr(
+        "integrations.posthog_mcp.tools.posthog_mcp_tool.call_posthog_mcp_tool",
+        _fake_call,
+    )
+    result = call_posthog_tool(
+        tool_name="exec",
+        arguments={"query": "SELECT uniqExact(person_id) FROM events"},
+        posthog_url="https://mcp.posthog.com/mcp",
+        posthog_mode="streamable-http",
+        posthog_token="phx_secret",
+    )
+    assert result["available"] is True
+    assert captured["tool_name"] == "execute-sql"
+    assert captured["arguments"] == {"query": "SELECT uniqExact(person_id) FROM events"}
 
 
 def test_call_tool_unwraps_nested_execute_sql_before_mcp(

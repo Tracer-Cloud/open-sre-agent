@@ -986,7 +986,7 @@ html.dark .index-diagram-kicker {
     color: #a3a3a3;
 }
 
-/* Prevent how_tracer_works image from stretching in lightbox */
+/* Prevent how_opensre / how_tracer works image from stretching in lightbox */
 img[src*="how_tracer_works"] {
     object-fit: contain !important;
     width: 100% !important;
@@ -1313,7 +1313,7 @@ html.dark svg g[fill="currentColor"] {
     fill: #ffffff !important;
 }
 
-/* Try Tracer CTA */
+/* Primary CTA */
 nav a[href*="sign-up"],
 header a[href*="sign-up"],
 #sidebar a[href*="sign-up"],

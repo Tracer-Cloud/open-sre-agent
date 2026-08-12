@@ -63,7 +63,10 @@ from core.agent_harness.turns.evidence_need import (
     reclassify_evidence_need_after_gather,
     should_skip_gather,
 )
-from core.agent_harness.turns.gather_observation import coerce_gathered_evidence
+from core.agent_harness.turns.gather_observation import (
+    coerce_gathered_evidence,
+    count_gather_tool_successes,
+)
 from core.agent_harness.turns.handoff_keys import HandoffTag
 from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
@@ -269,6 +272,7 @@ class _RouteOutcome:
     llm_run: Any | None = None
     # Gather / action evidence to arm PendingInvestigationOffer (not session stash).
     evidence_for_offer: str | None = None
+    gather_success_count: int = 0
 
 
 def _cancelled_turn_result(
@@ -312,11 +316,12 @@ def _gather_and_answer(
     handoff_requires_gather: bool = True,
     output: OutputSink | None = None,
     evidence_need: EvidenceNeed | None = None,
-) -> tuple[Any | None, str | None, EvidenceNeed | None] | None:
+) -> tuple[Any | None, str | None, EvidenceNeed | None, int] | None:
     """Run gather+answer, or ``None`` when the host cancelled mid-path.
 
-    Returns ``(run, observation, evidence_need)``. ``evidence_need`` may flip
-    from L1 to L0_degraded after gather when preferred-source auth/config fails.
+    Returns ``(run, observation, evidence_need, gather_success_count)``.
+    ``evidence_need`` may flip from L1 to L0_degraded after gather when
+    preferred-source auth/config fails.
     """
     # Three cases skip the live gather loop:
     # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
@@ -397,7 +402,7 @@ def _gather_and_answer(
     )
     if host_cancel_requested(output):
         return None
-    return run, observation, evidence_need
+    return run, observation, evidence_need, count_gather_tool_successes(gathered)
 
 
 def run_turn(
@@ -584,7 +589,7 @@ def run_turn(
                 )
             if gathered_outcome is None:
                 return _cancelled_turn_result(accounting, action_result)
-            run, gathered, updated_need = gathered_outcome
+            run, gathered, updated_need, gather_success_count = gathered_outcome
             if updated_need is not None:
                 evidence_need = updated_need
             outcome = _RouteOutcome(
@@ -592,6 +597,7 @@ def run_turn(
                 response_text=_response_text(run),
                 llm_run=run,
                 evidence_for_offer=gathered,
+                gather_success_count=gather_success_count,
             )
         else:
             raise AssertionError(f"Unknown route intent: {route.intent!r}")
@@ -618,6 +624,7 @@ def run_turn(
                 action_result=action_result,
                 assistant_response_text=outcome.response_text,
                 llm_run=outcome.llm_run,
+                gather_success_count=outcome.gather_success_count,
             )
         )
 

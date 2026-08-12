@@ -9,10 +9,12 @@ sits one layer above and adds env resolution and prompt context.
 
 Construct **one** agent per logical session, then many turns::
 
-    session = AgentSession.start()       # or attach_agent(custom_headless)
-    result = session.chat("…")           # turn 1
-    follow = session.chat("…")           # turn 2 — same attached agent
-    report = session.investigate({…})    # Path-2 (no attached chat agent required)
+    session = AgentSession.start(config)  # or attach_agent(custom_headless)
+    result = session.chat("…")            # turn 1
+    follow = session.chat("…")            # turn 2 — same attached agent
+    report = session.investigate({…})     # Path-2 (no attached chat agent required)
+
+Embedded scripts that need local adapters: ``bootstrap.embedded.start_embedded_session``.
 
 Custom ports (live gateway sink, REPL)::
 
@@ -74,6 +76,13 @@ class SessionConfig:
     persistent_tasks: bool = True
     open_store: bool = True
     session_manager: SessionManager | None = None
+    # Optional process boot run once at :meth:`AgentSession.startup`. A
+    # callable, not a flag: ``core`` may not import ``bootstrap`` (package
+    # layers), so the host supplies the step. Embedded scripts use
+    # :func:`bootstrap.embedded.start_embedded_session`, which fills this
+    # with ``configure_process(EMBEDDED_PROFILE)``. CLI, gateway and web
+    # already boot their own profile and leave this unset.
+    boot_process: Callable[[], None] | None = None
 
 
 # Scheduled/one-shot runs: a fresh warm session that leaves no persisted task
@@ -205,13 +214,20 @@ class AgentSession:
     ) -> AgentSession:
         """Return a session that is ready to :meth:`chat`.
 
-        The single headless bootstrap: create the session, run ``prepare_session``,
-        resolve the sink and prompt context, and attach the default agent. Build
-        it once and dispatch as many turns as the caller needs::
+        Create the session, run ``prepare_session``, resolve the sink and prompt
+        context, and attach the default agent. Build it once and dispatch as
+        many turns as the caller needs::
 
-            session = AgentSession.start()
+            session = AgentSession.start(config)
             for prompt in prompts:
                 result = session.chat(prompt)
+
+        Does **not** import ``bootstrap`` — package layers forbid it. Embedded
+        hosts that need local adapters use
+        :func:`bootstrap.embedded.start_embedded_session` (or pass
+        ``SessionConfig(boot_process=…)`` after calling
+        ``configure_process``). Surfaces that already booted another profile
+        leave ``boot_process`` unset.
 
         ``prepare_session`` runs after session create (e.g. pin a project scope)
         and before the agent is built. ``message`` is the first turn's text when
@@ -268,7 +284,17 @@ class AgentSession:
         return self._agent
 
     def startup(self) -> SessionStartupResult:
-        """Run env resolution, session bootstrap/resume, and context loading."""
+        """Run process boot (optional), env, session bootstrap/resume, and context.
+
+        :attr:`SessionConfig.boot_process`, when supplied, runs first — an
+        embedded host passes ``lambda: configure_process(EMBEDDED_PROFILE)`` so
+        gather and tools see the same local integrations as the interactive
+        shell. CLI, gateway and web already boot their own profile, so they
+        leave it unset. ``configure_process`` is idempotent per profile, so a
+        host that boots twice is harmless.
+        """
+        if self._config.boot_process is not None:
+            self._config.boot_process()
         self.resolve_env_variables()
         session = self.load_or_create_session()
         prompts = self.load_context()

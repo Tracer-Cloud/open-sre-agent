@@ -37,7 +37,7 @@ def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
 
     text = _reference_with_cli().build_text()
     captured = capsys.readouterr()
-    first_command = sorted(cli.commands.keys())[0]
+    first_command = sorted(name for name, command in cli.commands.items() if not command.hidden)[0]
 
     assert captured.out == ""
     assert captured.err == ""

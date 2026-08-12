@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.agent_harness.harness import AgentSession
+from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.investigation_api import (
     InvestigationResult,
     install_investigation_payload_runner,
@@ -29,6 +29,86 @@ def _stub_turn_result() -> TurnResult:
         assistant_response_text="ok",
         llm_run=object(),
     )
+
+
+def test_startup_runs_the_boot_step_the_host_supplied() -> None:
+    """Parity S1/S4: an embedded host must not resolve zero integrations.
+
+    ``core`` may not import ``bootstrap``, so the host passes the boot step in
+    rather than the harness reaching up a tier for it.
+    """
+    # Arrange — what an embedded caller supplies.
+    from bootstrap.process import EMBEDDED_PROFILE, configure_process
+
+    seen: list[Any] = []
+
+    def _boot() -> None:
+        seen.append(EMBEDDED_PROFILE.name)
+        configure_process(EMBEDDED_PROFILE)
+
+    # Act.
+    AgentSession(
+        SessionConfig(open_store=False, persistent_tasks=False, boot_process=_boot)
+    ).startup()
+
+    # Assert.
+    assert seen == [EMBEDDED_PROFILE.name]
+
+
+def test_startup_boots_nothing_when_the_host_supplies_no_step() -> None:
+    """CLI, gateway and web boot their own profile; the harness must not add one."""
+    # Arrange.
+    seen: list[Any] = []
+
+    def _boot() -> None:
+        seen.append("booted")
+
+    # Act — the default leaves boot_process unset.
+    AgentSession(SessionConfig(open_store=False, persistent_tasks=False)).startup()
+
+    # Assert.
+    assert seen == []
+    assert _boot  # the step exists but was never wired in
+
+
+def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
+    """Without adapters, resolve is empty; the host's boot step must install them.
+
+    ``core`` may not import ``bootstrap``, so the caller passes an explicit
+    ``boot_process`` (or uses :func:`bootstrap.embedded.start_embedded_session`).
+    """
+    from bootstrap.process import (
+        EMBEDDED_PROFILE,
+        configure_process,
+        reset_process_runtime_for_tests,
+    )
+    from platform.harness_ports import (
+        configured_integration_services,
+        get_investigation_tools,
+        reset_harness_ports,
+        resolve_integrations,
+    )
+
+    reset_harness_ports()
+    reset_process_runtime_for_tests()
+    assert configured_integration_services() == ()
+    assert resolve_integrations() == {}
+    assert list(get_investigation_tools({"grafana": {"connection_verified": True}})) == []
+
+    AgentSession.start(
+        SessionConfig(
+            open_store=False,
+            persistent_tasks=False,
+            warm_integrations=True,
+            boot_process=lambda: configure_process(EMBEDDED_PROFILE),
+        )
+    )
+
+    # Tool registry is populated even when the local store is empty (CI).
+    grafana_tools = list(
+        get_investigation_tools({"grafana": {"endpoint": "http://g", "connection_verified": True}})
+    )
+    assert any(t.name.startswith("query_grafana") for t in grafana_tools)
 
 
 def test_chat_is_the_public_verb(monkeypatch: Any) -> None:

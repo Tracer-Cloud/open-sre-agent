@@ -140,9 +140,9 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `TRACER_VERBOSE` | `0` | Verbose output for tracer (`1`, `true`, `yes`) | `surfaces/interactive_shell/ui/output` |
-| `TRACER_OUTPUT_FORMAT` | | Output format for tracer results | `platform/observability/output_format` |
-| `TRACER_API_URL` | | API URL for tracer reports | `integrations/slack/delivery.py` |
+| `TRACER_VERBOSE` | `0` | Verbose OpenSRE CLI/UI output (`1`, `true`, `yes`) | `surfaces/interactive_shell/ui/output` |
+| `TRACER_OUTPUT_FORMAT` | | OpenSRE result output format | `platform/observability/output_format` |
+| `TRACER_API_URL` | | Base URL for the tracer observability integration / report delivery | `integrations/tracer` |
 | `NO_COLOR` | | Disable colored output (standard convention) | `platform/observability/output_format` |
 | `COLUMNS` | `80` | Terminal column width for output formatting | `surfaces/interactive_shell/ui/output` |
 | `ENV` | `development` | Environment (`development`, `production`) | `config` |

@@ -45,6 +45,7 @@ MergeIntegrationsByServiceFn = Callable[
     list[dict[str, Any]],
 ]
 ConfiguredIntegrationServicesFn = Callable[[], tuple[str, ...]]
+SetupableIntegrationServicesFn = Callable[[], tuple[str, ...]]
 
 
 def _default_fetch_remote(org_id: str, auth_token: str) -> list[dict[str, Any]]:
@@ -86,6 +87,10 @@ def _default_configured_services() -> tuple[str, ...]:
     return ()
 
 
+def _default_setupable_services() -> tuple[str, ...]:
+    return ()
+
+
 def _default_fetch_webapp_vault() -> list[dict[str, Any]] | None:
     return None
 
@@ -98,6 +103,7 @@ _classify_integrations: ClassifyIntegrationsFn = _default_classify_integrations
 _merge_local_integrations: MergeLocalIntegrationsFn = _default_merge_local
 _merge_integrations_by_service: MergeIntegrationsByServiceFn = _default_merge_by_service
 _configured_integration_services: ConfiguredIntegrationServicesFn = _default_configured_services
+_setupable_integration_services: SetupableIntegrationServicesFn = _default_setupable_services
 _fetch_webapp_vault: WebappVaultFetcherFn = _default_fetch_webapp_vault
 
 
@@ -112,6 +118,17 @@ def fetch_remote_integrations(*, org_id: str, auth_token: str) -> list[dict[str,
 
 def configured_integration_services() -> tuple[str, ...]:
     return _configured_integration_services()
+
+
+def set_setupable_integration_services(fetcher: SetupableIntegrationServicesFn) -> None:
+    """Register the catalog of service ids valid for ``/integrations setup``."""
+    global _setupable_integration_services
+    _setupable_integration_services = fetcher
+
+
+def setupable_integration_services() -> tuple[str, ...]:
+    """Service ids that have a real setup handler (never invent outside this set)."""
+    return _setupable_integration_services()
 
 
 def set_integration_resolution_adapters(
@@ -745,6 +762,7 @@ def reset_harness_ports() -> None:
     clear_preferred_evidence_sources()
     set_subprocess_presenter_factory(None)
     set_integration_setup_command(_default_integration_setup_command)
+    set_setupable_integration_services(_default_setupable_services)
 
     # Core leaf registries (populated by integrations/harness_adapters).
     from core.domain.alerts.alert_source import (

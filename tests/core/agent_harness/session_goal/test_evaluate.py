@@ -10,6 +10,7 @@ from core.agent_harness.session_goal.evaluate import (
 )
 from core.agent_harness.session_goal.goal import (
     SessionGoal,
+    SessionGoalReason,
     SessionGoalStatus,
     attach_session_goal,
 )
@@ -22,6 +23,7 @@ def _result(
     *,
     executed: int = 0,
     success: int = 0,
+    gather_success: int = 0,
 ) -> TurnResult:
     return TurnResult(
         final_intent="cli_agent_handled",
@@ -33,6 +35,7 @@ def _result(
             handled=True,
         ),
         assistant_response_text=text,
+        gather_success_count=gather_success,
     )
 
 
@@ -80,7 +83,10 @@ def test_waiting_for_reason_is_not_an_achieved_claim() -> None:
 
 def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
     """Regression: /goal set turn captured status text and falsely achieved."""
-    from core.agent_harness.session_goal.goal import SessionGoalReason
+    from core.agent_harness.session_goal.progress import (
+        SESSION_GOAL_PAINT_MARK,
+        SESSION_GOAL_USER_WORD,
+    )
 
     session = SessionCore()
     goal = SessionGoal(
@@ -89,15 +95,14 @@ def test_slash_capture_waiting_reason_does_not_achieve_host_goal() -> None:
         host_owned=True,
     )
     attach_session_goal(session, goal)
+    paint = (
+        f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD} active · 0s · turn 0/4 · +0 tokens\n"
+        "  condition: How many Windows users?\n"
+        f"  reason: {SessionGoalReason.WAITING_HOST_SIGNAL}"
+    )
     verdict = evaluate_session_goal(
         goal,
-        _result(
-            "◎ /goal active · 0s · turn 0/4 · +0 tokens\n"
-            "  condition: How many Windows users?\n"
-            f"  reason: {SessionGoalReason.WAITING_HOST_SIGNAL}",
-            executed=1,
-            success=1,
-        ),
+        _result(paint, executed=1, success=1),
         session=session,
     )
     assert verdict.status == SessionGoalStatus.ACTIVE
@@ -141,6 +146,98 @@ def test_goal_set_attach_turn_does_not_consume_outer_budget() -> None:
     outcome2 = run_until_session_goal(_chat, session, "count windows users")
     assert outcome2.goal.status == SessionGoalStatus.ACHIEVED
     assert outcome2.goal.turns_used == 1
+
+
+def test_host_owned_tool_answer_without_achieved_tag_completes_same_turn() -> None:
+    """Parity S1 R7: live metric + tools must not force a second identical turn.
+
+    Models often omit ``session_goal:achieved`` (and the shell scrubs it from
+    the visible reply). Host-owned goals previously stayed ACTIVE → continuation
+    nudge → duplicate PostHog count.
+    """
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="How many Windows users in the last 7 days?",
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    turns: list[str] = []
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        return _result(
+            "I found: 272 Windows users.\n\n| Window | Users |\n| Last 7 days | 272 |",
+            executed=2,
+            success=2,
+        )
+
+    outcome = run_until_session_goal(_chat, session, "How many Windows users in the last 7 days?")
+    assert len(turns) == 1
+    assert outcome.goal.status == SessionGoalStatus.ACHIEVED
+    assert outcome.goal.turns_used == 1
+    assert outcome.goal.last_reason == SessionGoalReason.ACHIEVED_TOOL_EVIDENCE
+
+
+def test_host_owned_gather_only_answer_completes_same_turn() -> None:
+    """Live dogfood: metric_read handoff + PostHog gather, zero action successes.
+
+    ``assistant_handoff`` does not increment ``executed_success_count``. Before
+    gather successes counted as SessionGoal evidence, the host stayed ACTIVE
+    and ran a second identical PostHog turn.
+    """
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="How many Windows users in the last 7 days?",
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    turns: list[str] = []
+
+    def _chat(message: str) -> TurnResult:
+        turns.append(message)
+        return _result(
+            "I found: 272 Windows users in the connected production PostHog "
+            "project during the last 7 days.",
+            executed=0,
+            success=0,
+            gather_success=2,
+        )
+
+    outcome = run_until_session_goal(_chat, session, "How many Windows users in the last 7 days?")
+    assert len(turns) == 1
+    assert outcome.goal.status == SessionGoalStatus.ACHIEVED
+    assert outcome.goal.turns_used == 1
+    assert outcome.goal.last_reason == SessionGoalReason.ACHIEVED_TOOL_EVIDENCE
+
+
+def test_turn_has_session_goal_evidence_counts_gather_successes() -> None:
+    assert turn_has_session_goal_evidence(_result("done", gather_success=1)) is True
+    assert turn_has_session_goal_evidence(_result("done", gather_success=0)) is False
+
+
+def test_host_owned_without_tools_or_achieved_tag_stays_active() -> None:
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="list three steps",
+        max_outer_turns=3,
+        host_owned=True,
+    )
+    attach_session_goal(session, goal)
+
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Still thinking."),
+        session=session,
+    )
+
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_HOST_SIGNAL
 
 
 def test_bare_achieved_without_checklist_or_tools_stays_active() -> None:

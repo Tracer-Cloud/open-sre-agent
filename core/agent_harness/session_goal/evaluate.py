@@ -17,6 +17,11 @@ claim, not proof. This module is the independent host check:
   (starting RCA is not finishing the goal).
 * ``achieved`` on a **host-owned** (``/goal set``) goal → achieved without tools
   when no investigation was dispatched (explicit slash-path product rule).
+* Host-owned goal, **no** ``achieved`` tag, but tools succeeded (action **or**
+  gather) and the reply is non-empty → achieve (same-turn answer). Waiting for
+  a scrubbed/forgotten tag forced a redundant outer turn that repeated the
+  live answer (parity S1 R7). Gather successes count: metric handoffs often
+  leave action ``executed_success_count`` at 0.
 * ``achieved`` with no checklist on a handoff goal → require tool evidence, or
   stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
@@ -36,6 +41,7 @@ from core.agent_harness.session_goal.goal import (
     apply_session_goal_progress,
     attach_session_goal,
 )
+from core.agent_harness.session_goal.progress import is_session_goal_progress_paint
 
 # Standalone progress tag — same token shape as strip_session_goal_progress_tags.
 _ACHIEVED_CLAIM = re.compile(r"session_goal:achieved")
@@ -96,19 +102,28 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
     call must not let an ``achieved`` claim through. ``executed_count`` alone
     would say yes to a turn whose only action failed.
 
+    Counts action-phase successes **and** gather-phase successes. A metric_read
+    turn typically executes only ``assistant_handoff`` in the action phase
+    (which does not increment ``executed_success_count``) and the live query
+    in gather — that gather work is the real evidence.
+
     Dispatching ``investigation_start`` is not finishing evidence for a session
     goal — that work lands in later turns / the investigation report.
     """
     if turn_dispatched_investigation(result):
         return False
     action = getattr(result, "action_result", None)
-    if action is None:
-        return False
+    action_succeeded = 0
+    if action is not None:
+        try:
+            action_succeeded = int(getattr(action, "executed_success_count", 0) or 0)
+        except (TypeError, ValueError):
+            action_succeeded = 0
     try:
-        succeeded = int(getattr(action, "executed_success_count", 0) or 0)
+        gather_succeeded = int(getattr(result, "gather_success_count", 0) or 0)
     except (TypeError, ValueError):
-        return False
-    return succeeded > 0
+        gather_succeeded = 0
+    return action_succeeded > 0 or gather_succeeded > 0
 
 
 # metric_read-style attach usually emits query + report (2 items). Longer
@@ -228,6 +243,21 @@ def evaluate_session_goal(
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACTIVE,
                 reason=SessionGoalReason.INVESTIGATION_RUNNING,
+            )
+        elif (
+            current.host_owned
+            and evidence
+            and not dispatched
+            and bool(text.strip())
+            and not is_session_goal_progress_paint(text)
+        ):
+            # Live tools + answer already delivered on a host-set goal. Do not
+            # wait for session_goal:achieved — that tag is scrubbed from the
+            # user-visible reply and models often omit it, which previously
+            # forced a second outer turn that repeated the same metric answer.
+            verdict = SessionGoalVerdict(
+                status=SessionGoalStatus.ACHIEVED,
+                reason=SessionGoalReason.ACHIEVED_TOOL_EVIDENCE,
             )
         elif current.host_owned:
             verdict = SessionGoalVerdict(

@@ -35,7 +35,10 @@ configure_process(EMBEDDED_PROFILE)
 Every surface uses the same two verbs:
 
 ```python
+from bootstrap.process import EMBEDDED_PROFILE, configure_process
 from core.agent_harness import AgentSession
+
+configure_process(EMBEDDED_PROFILE)
 
 session = AgentSession.start()
 result = session.chat("why is checkout-api slow?")
@@ -46,10 +49,20 @@ report = session.investigate({"alert_name": "HighLatency", "severity": "warning"
 print(report.report)
 ```
 
+Or the one-liner that wires the same boot step for you:
+
+```python
+from bootstrap.embedded import start_embedded_session
+
+session = start_embedded_session()
+```
+
 `AgentSession.start()` resolves the environment, opens a session, and attaches
 an agent with the standard ports — the same tools and prompts the interactive
-shell uses. `investigate` does not require an attached chat agent; it uses the
-payload runner installed by `configure_process`.
+shell uses. It does **not** register adapters (``core`` may not import
+``bootstrap``); call ``configure_process`` first or use
+``start_embedded_session``. `investigate` does not require an attached chat
+agent; it uses the payload runner installed by `configure_process`.
 
 Always check `result.answered` before trusting chat text: when a turn fails (for
 example the LLM provider is unreachable), the error message itself lands in

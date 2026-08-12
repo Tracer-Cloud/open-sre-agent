@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass, field
 
 from config.constants.grafana import (
     GRAFANA_CA_BUNDLE_ENV,
@@ -20,12 +21,28 @@ from integrations.grafana.tempo import TempoMixin
 
 logger = logging.getLogger(__name__)
 
+# Successful clients only. Transport failures are NOT cached here — a process-
+# wide failure entry would pin a host "dead" across /new and after recovery.
+# Concurrent gather tools that miss the success cache share one in-flight build
+# via ``_BuildGate`` so they do not each wait out the connect timeout.
 _grafana_client_cache: dict[str, GrafanaClient] = {}
 #: Datasource discovery is one network round trip per account. An investigation
 #: queries Mimir, Loki, Tempo and alert rules concurrently, so without this the
 #: first callers all miss the empty cache and each runs its own discovery — and
 #: against an unreachable Grafana each one waits out the full connect timeout.
 _grafana_client_lock = threading.Lock()
+
+
+@dataclass
+class _BuildGate:
+    """One shared build attempt for concurrent callers of the same cache key."""
+
+    done: threading.Event = field(default_factory=threading.Event)
+    client: GrafanaClient | None = None
+    error: BaseException | None = None
+
+
+_grafana_build_inflight: dict[str, _BuildGate] = {}
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
@@ -63,13 +80,39 @@ def get_grafana_client_from_credentials(
     cached = _grafana_client_cache.get(cache_key)
     if cached is not None:
         return cached
+
+    gate: _BuildGate | None = None
+    leader = False
     with _grafana_client_lock:
-        # Re-check inside the lock: a caller that queued behind the discovery
-        # above must reuse its result rather than repeat the round trip.
         cached = _grafana_client_cache.get(cache_key)
         if cached is not None:
             return cached
-        return _build_and_cache_client(
+        gate = _grafana_build_inflight.get(cache_key)
+        if gate is None:
+            gate = _BuildGate()
+            _grafana_build_inflight[cache_key] = gate
+            leader = True
+
+    assert gate is not None
+    if not leader:
+        gate.done.wait()
+        if gate.client is not None:
+            return gate.client
+        if gate.error is not None:
+            raise gate.error
+        # Leader finished without client or error (should not happen); retry.
+        return get_grafana_client_from_credentials(
+            endpoint=endpoint,
+            api_key=api_key,
+            account_id=account_id,
+            username=username,
+            password=password,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+        )
+
+    try:
+        client = _build_and_cache_client(
             cache_key=cache_key,
             endpoint=endpoint,
             api_key=api_key,
@@ -79,6 +122,16 @@ def get_grafana_client_from_credentials(
             verify_ssl=verify_ssl,
             ca_bundle=ca_bundle,
         )
+        gate.client = client
+        return client
+    except BaseException as exc:
+        gate.error = exc
+        raise
+    finally:
+        gate.done.set()
+        with _grafana_client_lock:
+            if _grafana_build_inflight.get(cache_key) is gate:
+                del _grafana_build_inflight[cache_key]
 
 
 def _build_and_cache_client(
@@ -144,5 +197,6 @@ def _build_and_cache_client(
             account_id,
         )
 
-    _grafana_client_cache[cache_key] = client
+    with _grafana_client_lock:
+        _grafana_client_cache[cache_key] = client
     return client

@@ -102,25 +102,54 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
     *is* — the difference between an assertion and a checked result. The data
     already reaches the gather prompt; the answer path was told only when the
     set was empty, so a reply could not say what it had looked at.
+
+    Also pins valid ``/integrations setup`` ids and preferred product-analytics
+    coverage so the model cannot invent vendors (parity S5: Mixpanel CTA while
+    PostHog was already ready).
     """
+    from platform.harness_ports import (
+        preferred_evidence_sources_for,
+        setupable_integration_services,
+    )
+
     if not ctx.configured_integrations_known:
         return ""
 
-    if ctx.configured_integrations:
-        connected = ", ".join(ctx.configured_integrations)
-        return (
-            f"Integrations connected in this session: {connected}. When the user "
+    parts: list[str] = []
+    connected = tuple(ctx.configured_integrations)
+    if connected:
+        parts.append(
+            f"Integrations connected in this session: {', '.join(connected)}. When the user "
             "asks about a data source that is not in that list, say which ones "
-            "are connected rather than only that theirs is missing.\n\n"
+            "are connected rather than only that theirs is missing."
+        )
+    else:
+        parts.append(
+            "No integrations are configured in this session. You may still help the user "
+            "configure one: explain `/integrations setup <service>` for integrations or "
+            "`/mcp connect <server>` for MCP servers. Do not claim any integration is "
+            "already connected, and for show/verify/remove requests against unconfigured "
+            "integrations, answer with guidance only."
         )
 
-    return (
-        "No integrations are configured in this session. You may still help the user "
-        "configure one: explain `/integrations setup <service>` for integrations or "
-        "`/mcp connect <server>` for MCP servers. Do not claim any integration is "
-        "already connected, and for show/verify/remove requests against unconfigured "
-        "integrations, answer with guidance only.\n\n"
-    )
+    setupable = tuple(setupable_integration_services())
+    if setupable:
+        parts.append(
+            "Only these service ids are valid in `/integrations setup <id>`: "
+            f"{', '.join(setupable)}. Never invent a vendor that is not in that list "
+            "(for example do not suggest mixpanel unless it appears here)."
+        )
+
+    preferred = preferred_evidence_sources_for("metric_read")
+    if preferred and connected and all(p in connected for p in preferred):
+        parts.append(
+            "Product analytics preferred source(s) already connected: "
+            f"{', '.join(preferred)}. If the user asks for the most important missing "
+            "vendor for product analytics, say product analytics is already covered — "
+            "do not invent another analytics vendor or a setup CTA for one."
+        )
+
+    return "\n".join(parts) + "\n\n"
 
 
 @dataclass(frozen=True)

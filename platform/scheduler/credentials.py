@@ -13,7 +13,21 @@ import logging
 import os
 from typing import Any
 
-from config.constants import TELEGRAM_DEFAULT_CHAT_ID_ENV
+from config.constants.buzz import (
+    BUZZ_AUTH_TAG_ENV,
+    BUZZ_DEFAULT_CHANNEL_ENV,
+    BUZZ_PATH_ENV,
+    BUZZ_PRIVATE_KEY_ENV,
+    BUZZ_RELAY_URL_ENV,
+)
+from config.constants.discord import DISCORD_BOT_TOKEN_ENV
+from config.constants.rocketchat import (
+    ROCKETCHAT_AUTH_TOKEN_ENV,
+    ROCKETCHAT_SERVER_URL_ENV,
+    ROCKETCHAT_USER_ID_ENV,
+)
+from config.constants.slack import SLACK_BOT_TOKEN_ENV
+from config.constants.telegram import TELEGRAM_BOT_TOKEN_ENV, TELEGRAM_DEFAULT_CHAT_ID_ENV
 from config.llm_credentials import resolve_env_credential
 from platform.scheduler.loop_constants import LOOP_TELEGRAM_CHAT_ID_PARAM
 from platform.scheduler.types import Provider
@@ -30,7 +44,7 @@ def resolve_telegram_credentials(task_params: dict[str, str]) -> dict[str, str]:
         task_params,
         service="telegram",
         credential_key="bot_token",
-        env_vars=("TELEGRAM_BOT_TOKEN",),
+        env_vars=(TELEGRAM_BOT_TOKEN_ENV,),
     )
 
 
@@ -75,7 +89,7 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
         {},
         service="slack",
         credential_key="access_token",
-        env_vars=("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"),
+        env_vars=(SLACK_BOT_TOKEN_ENV, "SLACK_ACCESS_TOKEN"),
     )
 
 
@@ -88,7 +102,7 @@ def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
         task_params,
         service="discord",
         credential_key="bot_token",
-        env_vars=("DISCORD_BOT_TOKEN",),
+        env_vars=(DISCORD_BOT_TOKEN_ENV,),
     )
 
 
@@ -108,8 +122,8 @@ def resolve_rocketchat_credentials(task_params: dict[str, str]) -> dict[str, str
 
     # Non-secret / non-keyring fields: params → store → plain env.
     for key, env_var in (
-        ("server_url", "ROCKETCHAT_SERVER_URL"),
-        ("user_id", "ROCKETCHAT_USER_ID"),
+        ("server_url", ROCKETCHAT_SERVER_URL_ENV),
+        ("user_id", ROCKETCHAT_USER_ID_ENV),
     ):
         value = task_params.get(key, "").strip()
         if not value:
@@ -124,7 +138,7 @@ def resolve_rocketchat_credentials(task_params: dict[str, str]) -> dict[str, str
         task_params,
         service="rocketchat",
         credential_key="auth_token",
-        env_vars=("ROCKETCHAT_AUTH_TOKEN",),
+        env_vars=(ROCKETCHAT_AUTH_TOKEN_ENV,),
     )
     resolved.update(auth)
 
@@ -152,10 +166,10 @@ def resolve_buzz_credentials(task_params: dict[str, str]) -> dict[str, str]:
 
     # Non-secret fields: params → store → plain env.
     for key, env_var in (
-        ("relay_url", "BUZZ_RELAY_URL"),
-        ("default_channel", "BUZZ_DEFAULT_CHANNEL"),
-        ("auth_tag", "BUZZ_AUTH_TAG"),
-        ("buzz_path", "BUZZ_PATH"),
+        ("relay_url", BUZZ_RELAY_URL_ENV),
+        ("default_channel", BUZZ_DEFAULT_CHANNEL_ENV),
+        ("auth_tag", BUZZ_AUTH_TAG_ENV),
+        ("buzz_path", BUZZ_PATH_ENV),
     ):
         value = task_params.get(key, "").strip()
         if not value:
@@ -170,7 +184,7 @@ def resolve_buzz_credentials(task_params: dict[str, str]) -> dict[str, str]:
         task_params,
         service="buzz",
         credential_key="private_key",
-        env_vars=("BUZZ_PRIVATE_KEY",),
+        env_vars=(BUZZ_PRIVATE_KEY_ENV,),
     )
     resolved.update(private_key)
 

@@ -176,6 +176,22 @@ def format_session_goal_status_line(
     )
 
 
+def is_session_goal_progress_paint(text: str) -> bool:
+    """True when ``text`` is ``/goal`` status chrome, not an assistant answer.
+
+    The ``/goal set`` attach turn may run ``slash_invoke`` (counts as tool
+    evidence) and capture the painted status block as the turn "reply". Host
+    evaluate must not treat that as a completed answer.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if SessionGoalReason.WAITING_HOST_SIGNAL in stripped:
+        return True
+    paint_lead = f"{SESSION_GOAL_PAINT_MARK} {SESSION_GOAL_USER_WORD}"
+    return paint_lead in stripped
+
+
 __all__ = [
     "SESSION_GOAL_PAINT_MARK",
     "SESSION_GOAL_USER_WORD",
@@ -183,4 +199,5 @@ __all__ = [
     "format_session_goal_progress",
     "format_session_goal_status_line",
     "format_token_count_compact",
+    "is_session_goal_progress_paint",
 ]

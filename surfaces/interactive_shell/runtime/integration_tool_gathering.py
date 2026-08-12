@@ -170,16 +170,20 @@ def gather_integration_tool_evidence(
     ``resolved_integrations`` is the turn's resolved view; it is forwarded so the
     gather phase reuses it instead of resolving again.
     """
-    tool_call_counts: dict[str, int] = {}
+    # Key by display source (PostHog), not MCP method name — ``list_*`` and
+    # ``call_*`` otherwise both print identical ``· checking Posthog…`` lines.
+    source_call_counts: dict[str, int] = {}
 
     def on_progress(kind: str, data: dict[str, Any]) -> None:
         if kind == "tool_start":
             name = str(data.get("name", "")).strip() or "tool"
-            tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
+            source, _label = resolve_tool_activity_labels(name)
+            count_key = source.strip() or name
+            source_call_counts[count_key] = source_call_counts.get(count_key, 0) + 1
             line = _format_gathering_progress_line(
                 name,
                 data.get("input"),
-                repeat_index=tool_call_counts[name],
+                repeat_index=source_call_counts[count_key],
             )
             console.print(f"[{DIM}]{line}[/]")
         elif kind == "gather_cancelled":
