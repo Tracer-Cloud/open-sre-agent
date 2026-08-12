@@ -14,6 +14,7 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
     string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.scheduler.credentials import requires_explicit_chat_id
@@ -257,7 +258,7 @@ propose_scheduled_delivery_tool = RegisteredTool(
         required=("kind", "cron", "provider"),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_propose_scheduled_delivery,

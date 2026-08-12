@@ -37,7 +37,7 @@ def _extract_no_params(_sources: dict[str, dict]) -> dict[str, Any]:
     return {}
 
 
-def _normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...]:
+def _normalize_surfaces(surfaces: Iterable[ToolSurface] | None) -> tuple[ToolSurface, ...]:
     """Backward-compatible alias for registry surface normalization."""
     return normalize_surfaces(surfaces)
 
@@ -55,7 +55,7 @@ class RegisteredTool:
     source_id: str | None = None
     evidence_type: EvidenceType | None = None
     side_effect_level: SideEffectLevel | None = None
-    surfaces: tuple[ToolSurface | str, ...] = _DEFAULT_SURFACES
+    surfaces: tuple[ToolSurface, ...] = _DEFAULT_SURFACES
     use_cases: list[str] = field(default_factory=list)
     examples: list[str] = field(default_factory=list)
     anti_examples: list[str] = field(default_factory=list)
@@ -206,7 +206,7 @@ class RegisteredTool:
         cls,
         tool: BaseTool,
         *,
-        surfaces: Iterable[str] | None = None,
+        surfaces: Iterable[ToolSurface] | None = None,
         retrieval_controls: RetrievalControls | None = None,
         tags: tuple[str, ...] | None = None,
         requires_approval: bool | None = None,
@@ -290,7 +290,7 @@ class RegisteredTool:
         source_id: str | None = None,
         evidence_type: EvidenceType | None = None,
         side_effect_level: SideEffectLevel | None = None,
-        surfaces: Iterable[str] | None = None,
+        surfaces: Iterable[ToolSurface] | None = None,
         use_cases: list[str] | None = None,
         examples: list[str] | None = None,
         anti_examples: list[str] | None = None,

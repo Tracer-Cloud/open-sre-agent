@@ -26,6 +26,7 @@ from core.agent_harness.turns.headless_dispatch import (
     NoopTurnAccounting,
 )
 from core.agent_harness.turns.turn_results import TurnResult
+from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
@@ -254,11 +255,11 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
     by_name = {tool.name: tool for tool in tools}
 
     class _FixedToolRegistry:
-        def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
+        def tools_for_surface(self, surface: ToolSurface) -> list[RegisteredTool]:
             del surface
             return list(tools)
 
-        def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
+        def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, RegisteredTool]:
             del surface
             return dict(by_name)
 

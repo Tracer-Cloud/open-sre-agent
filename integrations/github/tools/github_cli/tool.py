@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.github.tools.github_cli.credentials import (
@@ -95,7 +96,7 @@ def _normalize_args(args: list[str] | None) -> list[str]:
         "Printing or logging the GitHub token",
         "Inventing repo lists without calling github_cli",
     ],
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     side_effect_level=SideEffectLevel.MUTATING,
     requires_approval=False,
     input_schema=_ARGS_SCHEMA,

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.redis import (
     RedisConfig,
@@ -18,7 +19,7 @@ from integrations.redis import (
         "execution duration, and originating client, to surface slow commands."
     ),
     source="redis",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identify slow Redis commands when latency or timeouts are reported.",
         "Correlate a latency spike with specific expensive commands and their callers.",

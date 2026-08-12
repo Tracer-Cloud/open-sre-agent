@@ -12,6 +12,8 @@ import pytest
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
 
+from core.agent_harness.session import SessionCore
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
@@ -332,6 +334,45 @@ class TestDispatchSlash:
         output = buf.getvalue()
         assert "background notify channels set" in output.lower()
         assert "invalid channel" not in output.lower()
+
+    def test_background_read_forms_survive_a_headless_session(self) -> None:
+        """Chat transports dispatch literal slashes against SessionCore, which has
+        no terminal facet; the read forms must report empty state, not raise."""
+        session = SessionCore(store=InMemorySessionStore())
+        console, buf = _capture()
+
+        assert dispatch_slash("/background list", session, console) is True
+        assert "no background investigations" in buf.getvalue().lower()
+
+    def test_background_status_survives_a_headless_session(self) -> None:
+        session = SessionCore(store=InMemorySessionStore())
+        console, buf = _capture()
+
+        assert dispatch_slash("/background status", session, console) is True
+        assert "background mode" in buf.getvalue().lower()
+
+    @pytest.mark.parametrize("form", ["on", "off", "notify set email"])
+    def test_background_write_forms_are_interactive_shell_only(self, form: str) -> None:
+        """Write forms have no headless equivalent: background_mode_enabled has no
+        setter and preferences live on the terminal facet. They must point at the
+        REPL rather than crashing or silently doing nothing."""
+        session = SessionCore(store=InMemorySessionStore())
+        console, buf = _capture()
+
+        assert dispatch_slash(f"/background {form}", session, console) is True
+        assert "uv run opensre" in buf.getvalue()
+
+    @pytest.mark.parametrize(
+        "form",
+        ["", "status", "list", "show bg123", "use bg123", "notify list", "bogus"],
+    )
+    def test_background_every_form_answers_on_a_headless_session(self, form: str) -> None:
+        """No form may raise on SessionCore: chat transports dispatch all of them."""
+        session = SessionCore(store=InMemorySessionStore())
+        console, buf = _capture()
+
+        assert dispatch_slash(f"/background {form}".strip(), session, console) is True
+        assert buf.getvalue().strip()
 
     def test_background_notify_set_accepts_email_and_telegram_combined(self) -> None:
         """AC-2: email,telegram combined -> both stored, first-seen order preserved."""

@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.kafka import (
     KafkaConfig,
@@ -15,7 +16,7 @@ from integrations.kafka import (
     name="get_kafka_topic_health",
     description="Retrieve topic partition health from a Kafka cluster, including replica status, ISR counts, and under-replicated partitions.",
     source="kafka",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking partition health during a consumer lag incident",
         "Identifying under-replicated partitions after a broker failure",

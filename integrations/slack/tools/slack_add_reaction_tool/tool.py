@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
@@ -118,5 +119,5 @@ class SlackAddReactionTool(BaseTool):
 
 slack_add_reaction = tool(
     SlackAddReactionTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
 )

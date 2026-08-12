@@ -995,7 +995,7 @@ def test_openai_agent_client_provider_label_preserves_brand_casing(
     """.title() mangles brand names with an internal capital letter (e.g.
     "OpenRouter" -> "Openrouter", "MiniMax" -> "Minimax"). Providers this
     class is actually constructed with (see
-    core/llm/openai_compat_providers.py) must keep their canonical casing."""
+    core/llm/providers/openai_compat_providers.py) must keep their canonical casing."""
     client = OpenAIAgentClient.__new__(OpenAIAgentClient)
     client._api_key_env = api_key_env
 

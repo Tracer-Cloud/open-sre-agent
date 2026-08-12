@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.tracer import get_tracer_web_client
 from platform.common.log_compaction import build_error_taxonomy, deduplicate_logs
@@ -43,7 +44,7 @@ def _error_logs_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     },
     is_available=_error_logs_available,
     extract_params=_error_logs_extract_params,
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def get_error_logs(trace_id: str, size: int = 500, error_only: bool = True) -> dict[str, Any]:
     """Get logs from OpenSearch, optionally filtered for errors.

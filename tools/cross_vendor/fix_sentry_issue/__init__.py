@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import SideEffectLevel
 from tools.cross_vendor.fix_sentry_issue.context import gather_issue_context
@@ -58,7 +59,7 @@ class FixSentryIssueTool(BaseTool):
     display_name = "Fix Sentry issue"
     source = SOURCE
     side_effect_level = SideEffectLevel.MUTATING
-    surfaces = ("investigation",)
+    surfaces = (ToolSurface.INVESTIGATION,)
     requires_approval = True
     approval_reason = (
         "Runs a coding agent to edit files based on a Sentry issue, and can open a PR."

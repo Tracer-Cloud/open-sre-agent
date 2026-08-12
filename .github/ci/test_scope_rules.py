@@ -27,8 +27,18 @@ RULES: tuple[PathRule, ...] = (
     # User-facing quickstart surface
     PathRule("docs/quickstart.mdx", ("tests/cli/test_quickstart.py",)),
     # Installer surfaces (curl/bash, PowerShell, docs, Homebrew sync)
-    PathRule("install.sh", ("tests/cli/test_install_matrix.py", "tests/cli/test_install_sh_path.py", "tests/cli/test_install_sh_resolution.py")),
-    PathRule("install.ps1", ("tests/cli/test_install_matrix.py", "tests/cli/test_install_ps1_progress.py")),
+    PathRule(
+        "install.sh",
+        (
+            "tests/cli/test_install_matrix.py",
+            "tests/cli/test_install_sh_path.py",
+            "tests/cli/test_install_sh_resolution.py",
+        ),
+    ),
+    PathRule(
+        "install.ps1",
+        ("tests/cli/test_install_matrix.py", "tests/cli/test_install_ps1_progress.py"),
+    ),
     PathRule("docs/install.mdx", ("tests/cli/test_install_matrix.py",)),
     PathRule("docs/install-local.mdx", ("tests/cli/test_install_matrix.py",)),
     PathRule(

@@ -234,11 +234,13 @@ gathered_calls: list[str] = []
 
 original_run = Agent.run
 
+
 def _recording_run(self, initial_messages):
     result = original_run(self, initial_messages)
     for tc, _ in result.executed:
         gathered_calls.append(tc.name)
     return result
+
 
 monkeypatch.setattr(Agent, "run", _recording_run)
 ```

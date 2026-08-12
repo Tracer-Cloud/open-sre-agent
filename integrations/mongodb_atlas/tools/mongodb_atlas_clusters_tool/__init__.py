@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.mongodb_atlas import (
     MongoDBAtlasConfig,
@@ -15,7 +16,7 @@ from integrations.mongodb_atlas import (
     name="get_mongodb_atlas_clusters",
     description="Retrieve all MongoDB Atlas clusters in a project including state, version, instance size, and replication topology.",
     source="mongodb_atlas",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=atlas_is_available,
     injected_params=("api_private_key", "api_public_key", "base_url"),
     extract_params=atlas_extract_params,

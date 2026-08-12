@@ -11,6 +11,7 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
     string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.shell.runner import run_shell_command
 from tools.interactive_shell.subprocess import require_subprocess_presenter
@@ -77,7 +78,7 @@ shell_run_tool = RegisteredTool(
         required=("command",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_shell,

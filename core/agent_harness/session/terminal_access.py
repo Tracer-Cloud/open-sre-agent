@@ -30,6 +30,22 @@ def background_mode_enabled(session: Any) -> bool:
     return False
 
 
+def background_investigations(session: Any) -> dict[str, Any]:
+    terminal = session_terminal(session)
+    if terminal is not None:
+        records: dict[str, Any] = terminal.background_investigations
+        return records
+    return {}
+
+
+def background_notification_channels(session: Any) -> tuple[str, ...]:
+    terminal = session_terminal(session)
+    if terminal is not None:
+        channels: tuple[str, ...] = terminal.background_notification_preferences.channels
+        return channels
+    return ()
+
+
 def trust_mode_enabled(session: Any) -> bool:
     terminal = session_terminal(session)
     if terminal is not None:
@@ -90,7 +106,9 @@ def clear_pending_autosubmit(session: Any) -> None:
 
 
 __all__ = [
+    "background_investigations",
     "background_mode_enabled",
+    "background_notification_channels",
     "clear_pending_autosubmit",
     "exclusive_stdin_active",
     "pop_turn_outcome_hint",

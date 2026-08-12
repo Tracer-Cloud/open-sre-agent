@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.azure_sql import (
     azure_sql_extract_params,
@@ -15,7 +16,7 @@ from integrations.azure_sql import (
     name="get_azure_sql_server_status",
     description="Retrieve Azure SQL Database server metrics including service tier, resource utilization, connections, and database size.",
     source="azure_sql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking Azure SQL Database health during an incident",
         "Identifying DTU/vCore throttling or resource exhaustion",

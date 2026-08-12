@@ -5,6 +5,12 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
+from core.agent_harness.session.terminal_access import (
+    background_investigations,
+    background_mode_enabled,
+    background_notification_channels,
+    session_terminal,
+)
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import (
@@ -32,23 +38,36 @@ def _render_background_status(session: Session, console: Console) -> None:
     table = repl_table(title="Background mode\n", title_style=BOLD_BRAND, show_header=False)
     table.add_column("key", style="bold")
     table.add_column("value")
-    table.add_row("enabled", "yes" if session.terminal.background_mode_enabled else "no")
-    table.add_row("tracked jobs", str(len(session.terminal.background_investigations)))
+    table.add_row("enabled", "yes" if background_mode_enabled(session) else "no")
+    table.add_row("tracked jobs", str(len(background_investigations(session))))
     table.add_row(
         "notify channels",
-        ", ".join(session.terminal.background_notification_preferences.channels) or "none",
+        ", ".join(background_notification_channels(session)) or "none",
     )
     print_repl_table(console, table)
+
+
+def _reject_repl_only(session: Session, console: Console, form: str) -> bool:
+    console.print(
+        f"[{ERROR}]/background {escape(form)} changes interactive-shell state.[/]\n"
+        f"[{DIM}]Run it in the REPL:[/] uv run opensre"
+    )
+    session.mark_latest(ok=False, kind="slash")
+    return True
 
 
 def _cmd_background(session: Session, console: Console, args: list[str]) -> bool:
     sub = (args[0].lower() if args else "status").strip()
 
     if sub == "on":
+        if session_terminal(session) is None:
+            return _reject_repl_only(session, console, "on")
         session.terminal.background_mode_enabled = True
         console.print(f"[{HIGHLIGHT}]background mode enabled[/]")
         return True
     if sub == "off":
+        if session_terminal(session) is None:
+            return _reject_repl_only(session, console, "off")
         session.terminal.background_mode_enabled = False
         console.print(f"[{DIM}]background mode disabled[/]")
         return True
@@ -56,7 +75,8 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
         _render_background_status(session, console)
         return True
     if sub == "list":
-        if not session.terminal.background_investigations:
+        tracked = background_investigations(session)
+        if not tracked:
             console.print(f"[{DIM}]no background investigations tracked in this session.[/]")
             return True
         table = repl_table(title="Background investigations\n", title_style=BOLD_BRAND)
@@ -64,7 +84,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
         table.add_column("status")
         table.add_column("command")
         table.add_column("root cause", overflow="fold")
-        for task_id, tracked_record in session.terminal.background_investigations.items():
+        for task_id, tracked_record in tracked.items():
             table.add_row(
                 task_id,
                 tracked_record.status,
@@ -79,7 +99,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
             session.mark_latest(ok=False, kind="slash")
             return True
         task_id = args[1]
-        selected_record = session.terminal.background_investigations.get(task_id)
+        selected_record = background_investigations(session).get(task_id)
         if selected_record is None:
             console.print(f"[{ERROR}]unknown background task:[/] {escape(task_id)}")
             session.mark_latest(ok=False, kind="slash")
@@ -119,7 +139,7 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
             session.mark_latest(ok=False, kind="slash")
             return True
         task_id = args[1]
-        selected_record = session.terminal.background_investigations.get(task_id)
+        selected_record = background_investigations(session).get(task_id)
         if selected_record is None:
             console.print(f"[{ERROR}]unknown background task:[/] {escape(task_id)}")
             session.mark_latest(ok=False, kind="slash")
@@ -142,10 +162,12 @@ def _cmd_background(session: Session, console: Console, args: list[str]) -> bool
         if action == "list":
             console.print(
                 f"[{DIM}]background notify channels:[/] "
-                f"{', '.join(session.terminal.background_notification_preferences.channels) or 'none'}"
+                f"{', '.join(background_notification_channels(session)) or 'none'}"
             )
             return True
         if action == "set":
+            if session_terminal(session) is None:
+                return _reject_repl_only(session, console, "notify set")
             if len(args) < 3:
                 console.print(f"[{ERROR}]usage:[/] /background notify set <channel[,channel...]>")
                 session.mark_latest(ok=False, kind="slash")

@@ -23,6 +23,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.domain.types.incident_window import IncidentWindow
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
@@ -167,7 +168,7 @@ def _is_available(sources: dict[str, dict]) -> bool:
         "Building a short-form deploy timeline for RCA narrative",
     ],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

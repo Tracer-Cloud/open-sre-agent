@@ -6,6 +6,7 @@ import os
 import re
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
@@ -255,5 +256,5 @@ def _extract_list_id(raw: str) -> str:
 
 slack_read_list = tool(
     SlackReadListTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
 )

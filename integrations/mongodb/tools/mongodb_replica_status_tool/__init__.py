@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.mongodb import (
     MongoDBConfig,
@@ -15,7 +16,7 @@ from integrations.mongodb import (
     name="get_mongodb_replica_status",
     description="Retrieve replica set status, member health, and oplog lag for a MongoDB instance.",
     source="mongodb",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=mongodb_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.domain.types.tools import ToolSurface
 from tools.registry import clear_tool_registry_cache, get_registered_tools
 
 
@@ -30,7 +31,7 @@ def test_core_orchestration_import_path_removed() -> None:
 
 def test_investigation_tool_is_registry_discoverable() -> None:
     clear_tool_registry_cache()
-    tools_by_name = {tool.name: tool for tool in get_registered_tools(surface="chat")}
+    tools_by_name = {tool.name: tool for tool in get_registered_tools(surface=ToolSurface.CHAT)}
 
     investigation_tool = tools_by_name["run_investigation"]
     assert investigation_tool.origin_module == "tools.investigation"

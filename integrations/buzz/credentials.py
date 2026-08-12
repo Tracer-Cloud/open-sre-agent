@@ -17,6 +17,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 
+from config.constants.buzz import BUZZ_DEFAULT_CHANNEL_ENV
 from platform.common.errors import OpenSREError
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ def _resolve_channel(channel_override: str | None) -> str:
     store_channel = _store_default_channel()
     if store_channel:
         return store_channel
-    return os.getenv("BUZZ_DEFAULT_CHANNEL", "").strip()
+    return os.getenv(BUZZ_DEFAULT_CHANNEL_ENV, "").strip()
 
 
 def load_credentials_from_env(

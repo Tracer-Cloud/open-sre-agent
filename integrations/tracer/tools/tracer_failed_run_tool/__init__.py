@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from config.config import get_tracer_base_url
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.tracer import (
     PipelineRunSummary,
@@ -67,7 +68,7 @@ def _find_failed_run(client: Any, pipeline_names: Iterable[str]) -> PipelineRunS
         "required": [],
     },
     is_available=lambda sources: bool(sources.get("tracer_web")),
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def fetch_failed_run(pipeline_name: str | None = None) -> dict[str, Any]:
     """Fetch context (metadata) about a failed run from Tracer Web App."""

@@ -16,6 +16,7 @@ import json
 import logging
 from typing import Any, cast
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.aws.aws_sdk_client import execute_aws_sdk_call
@@ -117,7 +118,7 @@ def _parse_attributes(raw_attrs: dict[str, str]) -> dict[str, Any]:
     injected_params=("aws_backend",),
     is_available=sqs_is_available,
     extract_params=sqs_extract_params,
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def get_sqs_queue_attributes(
     queue_name_prefix: str = "",

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
@@ -54,7 +55,7 @@ class PostgreSQLSlowQueriesOutput(BaseModel):
         " by mean execution time."
     ),
     source="postgresql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identifying slow queries that may be causing performance degradation",
         "Analyzing query execution patterns during incident timeframes",

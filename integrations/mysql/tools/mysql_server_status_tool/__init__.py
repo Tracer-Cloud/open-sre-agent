@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.mysql import (
@@ -16,7 +17,7 @@ from integrations.mysql import (
     name="get_mysql_server_status",
     description="Retrieve MySQL server metrics including connections, uptime, query rates, and InnoDB buffer pool statistics.",
     source="mysql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking MySQL server health during an incident",
         "Identifying connection saturation or exhaustion issues",

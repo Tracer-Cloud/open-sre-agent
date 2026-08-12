@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
@@ -165,5 +166,5 @@ class SlackSendMessageTool(BaseTool):
 
 slack_send_message = tool(
     SlackSendMessageTool(),
-    surfaces=("investigation", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
 )

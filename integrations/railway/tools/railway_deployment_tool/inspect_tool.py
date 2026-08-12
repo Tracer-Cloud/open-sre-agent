@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 from core.domain.types.evidence import EvidenceSource
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
@@ -17,7 +18,7 @@ from integrations.railway.client import (
 class InspectRailwayDeploymentTool(BaseTool):
     name = "inspect_railway_deployment"
     source: ClassVar[EvidenceSource] = "railway"
-    surfaces = ("investigation", "chat", "action")
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
     side_effect_level = SideEffectLevel.READ_ONLY
     description = (
         "Show the latest successful Railway deployment and source commit metadata for a service."
@@ -71,4 +72,7 @@ class InspectRailwayDeploymentTool(BaseTool):
 
 
 inspect_railway_deployment = InspectRailwayDeploymentTool()
-tool(inspect_railway_deployment, surfaces=("investigation", "chat", "action"))
+tool(
+    inspect_railway_deployment,
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+)

@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 from rich.console import Console
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
@@ -29,7 +30,7 @@ def _make_tool(
     name: str,
     *,
     description: str = "Tool description.",
-    surfaces: tuple[str, ...] = ("investigation",),
+    surfaces: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,),
     input_schema: dict[str, Any] | None = None,
     origin_module: str = "tools.registry",
 ) -> RegisteredTool:
@@ -51,7 +52,9 @@ def fake_registry(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[RegisteredTo
     """Replace the live registry with a curated set so tests are deterministic."""
     tools: list[RegisteredTool] = []
 
-    def _fake_get_registered_tools(surface: str | None = None) -> list[RegisteredTool]:
+    def _fake_get_registered_tools(
+        surface: ToolSurface | str | None = None,
+    ) -> list[RegisteredTool]:
         if surface is None:
             return list(tools)
         return [t for t in tools if surface in t.surfaces]
@@ -117,7 +120,7 @@ class TestBuildToolCatalog:
             _make_tool(
                 "search_github",
                 description="Search GitHub code.",
-                surfaces=("investigation", "chat"),
+                surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
                 input_schema={
                     "type": "object",
                     "properties": {"query": {"type": "string"}},
@@ -138,12 +141,12 @@ class TestBuildToolCatalog:
     def test_filters_by_surface_when_provided(self, fake_registry: list[RegisteredTool]) -> None:
         fake_registry.extend(
             [
-                _make_tool("inv_only", surfaces=("investigation",)),
-                _make_tool("chat_only", surfaces=("chat",)),
-                _make_tool("both", surfaces=("investigation", "chat")),
+                _make_tool("inv_only", surfaces=(ToolSurface.INVESTIGATION,)),
+                _make_tool("chat_only", surfaces=(ToolSurface.CHAT,)),
+                _make_tool("both", surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT)),
             ]
         )
-        chat_entries = build_tool_catalog(surface="chat")
+        chat_entries = build_tool_catalog(surface=ToolSurface.CHAT)
         names = {e.name for e in chat_entries}
         assert names == {"chat_only", "both"}
 

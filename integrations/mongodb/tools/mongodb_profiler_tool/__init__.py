@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.mongodb import (
     MongoDBConfig,
@@ -15,7 +16,7 @@ from integrations.mongodb import (
     name="get_mongodb_profiler_data",
     description="Retrieve slow queries from the MongoDB database system.profile collection (requires profiling enabled).",
     source="mongodb",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=mongodb_database_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

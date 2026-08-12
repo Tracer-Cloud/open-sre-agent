@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from math import ceil
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
@@ -106,7 +107,7 @@ def _github_stargazer_listing_error(exc: GitHubApiError) -> str:
         "stars_in_window": "Total stars gained during the returned window",
         "complete": "Whether the requested window was fully scanned before the page cap",
     },
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",

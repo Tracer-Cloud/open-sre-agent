@@ -132,6 +132,7 @@ from config.constants.helm import (
     HELM_KUBECONFIG_ENV,
     HELM_NAMESPACE_ENV,
     HELM_PATH_ENV,
+    OSRE_HELM_INTEGRATION_ENV,
 )
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
@@ -463,6 +464,7 @@ __all__ = [
     "HELM_KUBE_CONTEXT_ENV",
     "HELM_NAMESPACE_ENV",
     "HELM_PATH_ENV",
+    "OSRE_HELM_INTEGRATION_ENV",
     "HONEYCOMB_API_KEY_ENV",
     "HONEYCOMB_BASE_URL_ENV",
     "HONEYCOMB_DATASET_ENV",

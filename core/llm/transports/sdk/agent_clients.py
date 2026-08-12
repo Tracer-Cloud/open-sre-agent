@@ -531,7 +531,7 @@ def _openai_max_token_kwarg(model: str) -> str:
 # .title() breaks brand names with an internal capital letter (e.g.
 # "OPENAI_API_KEY" -> "Openai" instead of "OpenAI"). Override just the
 # providers this class is actually constructed with (see
-# core/llm/openai_compat_providers.py) where that happens.
+# core/llm/providers/openai_compat_providers.py) where that happens.
 _PROVIDER_LABEL_OVERRIDES = {
     "OPENAI_API_KEY": "OpenAI",
     "OPENROUTER_API_KEY": "OpenRouter",

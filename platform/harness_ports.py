@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 
 if TYPE_CHECKING:
@@ -366,10 +367,10 @@ InvestigationToolsFn = Callable[[dict[str, Any]], list[RegisteredTool]]
 class _EmptyToolRegistry:
     """Default tool registry that resolves nothing until one is injected."""
 
-    def tools_for_surface(self, _surface: str) -> list[RegisteredTool]:
+    def tools_for_surface(self, _surface: ToolSurface) -> list[RegisteredTool]:
         return []
 
-    def tool_map_for_surface(self, _surface: str) -> dict[str, RegisteredTool]:
+    def tool_map_for_surface(self, _surface: ToolSurface) -> dict[str, RegisteredTool]:
         return {}
 
 
@@ -381,11 +382,11 @@ _tool_registry: ToolRegistry = _EmptyToolRegistry()
 _get_investigation_tools: InvestigationToolsFn = _default_investigation_tools
 
 
-def get_surface_tools(surface: str) -> list[RegisteredTool]:
+def get_surface_tools(surface: ToolSurface) -> list[RegisteredTool]:
     return _tool_registry.tools_for_surface(surface)
 
 
-def get_surface_tool_map(surface: str) -> dict[str, RegisteredTool]:
+def get_surface_tool_map(surface: ToolSurface) -> dict[str, RegisteredTool]:
     return _tool_registry.tool_map_for_surface(surface)
 
 

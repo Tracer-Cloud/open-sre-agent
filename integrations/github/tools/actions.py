@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.github.helpers import (
@@ -288,7 +289,7 @@ def _github_actions_run_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Finding a run that matches an outage window or rollback event",
     ],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -381,7 +382,7 @@ def list_github_actions_workflow_runs(
         "Spotting queued deploys that may be waiting on a shared runner or lock",
     ],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -494,7 +495,7 @@ def list_github_actions_active_runs(
         "Checking step-by-step status for test, build, and deploy jobs",
     ],
     requires=["owner", "repo", "run_id"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -613,7 +614,7 @@ def _fetch_job_log(
         "Checking the exact log snippet for a flaky test or secret-related failure",
     ],
     requires=["owner", "repo", "run_id", "job_id"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

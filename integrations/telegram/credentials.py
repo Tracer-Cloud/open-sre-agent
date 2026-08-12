@@ -18,6 +18,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 
+from config.constants.telegram import TELEGRAM_BOT_TOKEN_ENV, TELEGRAM_DEFAULT_CHAT_ID_ENV
 from platform.common.errors import OpenSREError
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ def _resolve_bot_token(store_config: dict[str, object]) -> str:
     # keyring — so guided setup (which stores the token in the keyring) works.
     from config.llm_credentials import resolve_env_credential
 
-    return resolve_env_credential("TELEGRAM_BOT_TOKEN").strip()
+    return resolve_env_credential(TELEGRAM_BOT_TOKEN_ENV).strip()
 
 
 def _resolve_chat_id(store_config: dict[str, object], chat_id_override: str | None) -> str:
@@ -78,7 +79,7 @@ def _resolve_chat_id(store_config: dict[str, object], chat_id_override: str | No
     store_chat_id = str(store_config.get("default_chat_id") or "").strip()
     if store_chat_id:
         return store_chat_id
-    return os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "").strip()
+    return os.getenv(TELEGRAM_DEFAULT_CHAT_ID_ENV, "").strip()
 
 
 def load_credentials_from_env(

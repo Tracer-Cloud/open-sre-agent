@@ -50,16 +50,30 @@ from config.constants.betterstack import (
     BETTERSTACK_SOURCES_ENV,
     BETTERSTACK_USERNAME_ENV,
 )
+from config.constants.buzz import (
+    BUZZ_AUTH_TAG_ENV,
+    BUZZ_DEFAULT_CHANNEL_ENV,
+    BUZZ_PATH_ENV,
+    BUZZ_PRIVATE_KEY_ENV,
+    BUZZ_RELAY_URL_ENV,
+)
 from config.constants.coralogix import (
     CORALOGIX_API_KEY_ENV,
     CORALOGIX_APPLICATION_NAME_ENV,
     CORALOGIX_BASE_URL_ENV,
     CORALOGIX_SUBSYSTEM_NAME_ENV,
 )
+from config.constants.dagster import DAGSTER_API_TOKEN_ENV, DAGSTER_ENDPOINT_ENV
 from config.constants.datadog import (
     DATADOG_API_KEY_ENV,
     DATADOG_APP_KEY_ENV,
     DATADOG_SITE_ENV,
+)
+from config.constants.discord import (
+    DISCORD_APPLICATION_ID_ENV,
+    DISCORD_BOT_TOKEN_ENV,
+    DISCORD_DEFAULT_CHANNEL_ID_ENV,
+    DISCORD_PUBLIC_KEY_ENV,
 )
 from config.constants.github import (
     GITHUB_MCP_ARGS_ENV,
@@ -84,11 +98,19 @@ from config.constants.groundcover import (
     GROUNDCOVER_TENANT_UUID_ENV,
     GROUNDCOVER_TIMEZONE_ENV,
 )
+from config.constants.helm import (
+    HELM_KUBE_CONTEXT_ENV,
+    HELM_KUBECONFIG_ENV,
+    HELM_NAMESPACE_ENV,
+    HELM_PATH_ENV,
+    OSRE_HELM_INTEGRATION_ENV,
+)
 from config.constants.honeycomb import (
     HONEYCOMB_API_KEY_ENV,
     HONEYCOMB_BASE_URL_ENV,
     HONEYCOMB_DATASET_ENV,
 )
+from config.constants.incident_io import INCIDENT_IO_API_KEY_ENV, INCIDENT_IO_BASE_URL_ENV
 from config.constants.kubernetes import (
     KUBECONFIG_CONTENT_ENV,
     KUBECONFIG_CONTEXT_ENV,
@@ -108,6 +130,12 @@ from config.constants.mongodb import (
     MONGODB_CONNECTION_STRING_ENV,
     MONGODB_DATABASE_ENV,
     MONGODB_TLS_ENV,
+)
+from config.constants.mongodb_atlas import (
+    MONGODB_ATLAS_BASE_URL_ENV,
+    MONGODB_ATLAS_PRIVATE_KEY_ENV,
+    MONGODB_ATLAS_PROJECT_ID_ENV,
+    MONGODB_ATLAS_PUBLIC_KEY_ENV,
 )
 from config.constants.mysql import (
     MYSQL_DATABASE_ENV,
@@ -130,6 +158,7 @@ from config.constants.opensearch import (
     OPENSEARCH_URL_ENV,
     OPENSEARCH_USERNAME_ENV,
 )
+from config.constants.pagerduty import PAGERDUTY_API_KEY_ENV, PAGERDUTY_BASE_URL_ENV
 from config.constants.postgresql import (
     POSTGRESQL_DATABASE_ENV,
     POSTGRESQL_HOST_ENV,
@@ -150,6 +179,12 @@ from config.constants.railway import (
     RAILWAY_SERVICE_ENV,
     RAILWAY_TOKEN_ENV,
 )
+from config.constants.rocketchat import (
+    ROCKETCHAT_AUTH_TOKEN_ENV,
+    ROCKETCHAT_DEFAULT_CHANNEL_ENV,
+    ROCKETCHAT_SERVER_URL_ENV,
+    ROCKETCHAT_USER_ID_ENV,
+)
 from config.constants.sentry import (
     DEFAULT_SENTRY_BASE_URL,
     SENTRY_AUTH_TOKEN_ENV,
@@ -168,6 +203,25 @@ from config.constants.servicenow import (
     SERVICENOW_USERNAME_ENV,
 )
 from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV
+from config.constants.smtp import (
+    SMTP_DEFAULT_TO_ENV,
+    SMTP_FROM_ADDRESS_ENV,
+    SMTP_HOST_ENV,
+    SMTP_PASSWORD_ENV,
+    SMTP_PORT_ENV,
+    SMTP_SECURITY_ENV,
+    SMTP_USERNAME_ENV,
+)
+from config.constants.telegram import (
+    TELEGRAM_BOT_TOKEN_ENV,
+    TELEGRAM_DEFAULT_CHAT_ID_ENV,
+)
+from config.constants.temporal import (
+    TEMPORAL_API_KEY_ENV,
+    TEMPORAL_BASE_URL_ENV,
+    TEMPORAL_NAMESPACE_ENV,
+)
+from config.constants.tracer import TRACER_BASE_URL_ENV, TRACER_JWT_TOKEN_ENV
 from config.constants.twilio import (
     TWILIO_ACCOUNT_SID_ENV,
     TWILIO_AUTH_TOKEN_ENV,
@@ -1077,7 +1131,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    helm_env_enabled = os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {
+    helm_env_enabled = os.getenv(OSRE_HELM_INTEGRATION_ENV, "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -1086,10 +1140,10 @@ def load_env_integrations() -> list[dict[str, Any]]:
         try:
             helm_env_config = HelmIntegrationConfig.model_validate(
                 {
-                    "helm_path": os.getenv("HELM_PATH", "helm").strip() or "helm",
-                    "kube_context": os.getenv("HELM_KUBE_CONTEXT", "").strip(),
-                    "kubeconfig": os.getenv("HELM_KUBECONFIG", "").strip(),
-                    "default_namespace": os.getenv("HELM_NAMESPACE", "").strip(),
+                    "helm_path": os.getenv(HELM_PATH_ENV, "helm").strip() or "helm",
+                    "kube_context": os.getenv(HELM_KUBE_CONTEXT_ENV, "").strip(),
+                    "kubeconfig": os.getenv(HELM_KUBECONFIG_ENV, "").strip(),
+                    "default_namespace": os.getenv(HELM_NAMESPACE_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -1140,11 +1194,11 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    pagerduty_api_key = resolve_env_credential("PAGERDUTY_API_KEY")
+    pagerduty_api_key = resolve_env_credential(PAGERDUTY_API_KEY_ENV)
     if pagerduty_api_key:
         try:
             _envs: dict[str, Any] = {"api_key": pagerduty_api_key}
-            base_url = os.getenv("PAGERDUTY_BASE_URL", "").strip()
+            base_url = os.getenv(PAGERDUTY_BASE_URL_ENV, "").strip()
             if base_url:
                 _envs["base_url"] = base_url
             pagerduty_config = PagerDutyIntegrationConfig.model_validate(_envs)
@@ -1158,13 +1212,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    incident_io_api_key = resolve_env_credential("INCIDENT_IO_API_KEY")
+    incident_io_api_key = resolve_env_credential(INCIDENT_IO_API_KEY_ENV)
     if incident_io_api_key:
         try:
             incident_io_config = IncidentIoIntegrationConfig.model_validate(
                 {
                     "api_key": incident_io_api_key,
-                    "base_url": os.getenv("INCIDENT_IO_BASE_URL", "").strip(),
+                    "base_url": os.getenv(INCIDENT_IO_BASE_URL_ENV, "").strip(),
                 }
             )
         except Exception as exc:
@@ -1229,15 +1283,15 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    discord_bot_token = resolve_env_credential("DISCORD_BOT_TOKEN")
+    discord_bot_token = resolve_env_credential(DISCORD_BOT_TOKEN_ENV)
     if discord_bot_token:
         try:
             discord_config = DiscordBotConfig.model_validate(
                 {
                     "bot_token": discord_bot_token,
-                    "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
-                    "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
-                    "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip()
+                    "application_id": os.getenv(DISCORD_APPLICATION_ID_ENV, "").strip(),
+                    "public_key": os.getenv(DISCORD_PUBLIC_KEY_ENV, "").strip(),
+                    "default_channel_id": os.getenv(DISCORD_DEFAULT_CHANNEL_ID_ENV, "").strip()
                     or None,
                 }
             )
@@ -1250,13 +1304,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
     if airflow_config is not None:
         integrations.append(_active_env_record("airflow", airflow_config.model_dump()))
 
-    telegram_bot_token = resolve_env_credential("TELEGRAM_BOT_TOKEN")
+    telegram_bot_token = resolve_env_credential(TELEGRAM_BOT_TOKEN_ENV)
     if telegram_bot_token:
         try:
             tg_config = TelegramBotConfig.model_validate(
                 {
                     "bot_token": telegram_bot_token,
-                    "default_chat_id": os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "").strip() or None,
+                    "default_chat_id": os.getenv(TELEGRAM_DEFAULT_CHAT_ID_ENV, "").strip() or None,
                 }
             )
         except Exception as exc:
@@ -1265,17 +1319,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
             integrations.append(_active_env_record("telegram", tg_config.model_dump()))
 
     # PAT is keyring-backed via wizard sync_env_secret; webhook URL stays store/env only.
-    rocketchat_auth_token = resolve_env_credential("ROCKETCHAT_AUTH_TOKEN")
+    rocketchat_auth_token = resolve_env_credential(ROCKETCHAT_AUTH_TOKEN_ENV)
     rocketchat_webhook_url = os.getenv("ROCKETCHAT_WEBHOOK_URL", "").strip()
     if rocketchat_auth_token or rocketchat_webhook_url:
         try:
             rocketchat_config = RocketChatConfig.model_validate(
                 {
-                    "server_url": os.getenv("ROCKETCHAT_SERVER_URL", "").strip(),
+                    "server_url": os.getenv(ROCKETCHAT_SERVER_URL_ENV, "").strip(),
                     "auth_token": rocketchat_auth_token,
-                    "user_id": os.getenv("ROCKETCHAT_USER_ID", "").strip(),
+                    "user_id": os.getenv(ROCKETCHAT_USER_ID_ENV, "").strip(),
                     "webhook_url": rocketchat_webhook_url,
-                    "default_channel": os.getenv("ROCKETCHAT_DEFAULT_CHANNEL", "").strip() or None,
+                    "default_channel": os.getenv(ROCKETCHAT_DEFAULT_CHANNEL_ENV, "").strip()
+                    or None,
                 }
             )
         except Exception as exc:
@@ -1285,16 +1340,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
 
     # Private key is keyring-backed via wizard sync_env_secret; the rest stay
     # store/env only (relay_url, default_channel, auth_tag, buzz_path).
-    buzz_private_key = resolve_env_credential("BUZZ_PRIVATE_KEY")
+    buzz_private_key = resolve_env_credential(BUZZ_PRIVATE_KEY_ENV)
     if buzz_private_key:
         try:
             buzz_config = BuzzConfig.model_validate(
                 {
-                    "relay_url": os.getenv("BUZZ_RELAY_URL", "").strip() or "http://localhost:3000",
+                    "relay_url": os.getenv(BUZZ_RELAY_URL_ENV, "").strip()
+                    or "http://localhost:3000",
                     "private_key": buzz_private_key,
-                    "default_channel": os.getenv("BUZZ_DEFAULT_CHANNEL", "").strip(),
-                    "auth_tag": os.getenv("BUZZ_AUTH_TAG", "").strip(),
-                    "buzz_path": os.getenv("BUZZ_PATH", "").strip() or "buzz",
+                    "default_channel": os.getenv(BUZZ_DEFAULT_CHANNEL_ENV, "").strip(),
+                    "auth_tag": os.getenv(BUZZ_AUTH_TAG_ENV, "").strip(),
+                    "buzz_path": os.getenv(BUZZ_PATH_ENV, "").strip() or "buzz",
                 }
             )
         except Exception as exc:
@@ -1316,18 +1372,18 @@ def load_env_integrations() -> list[dict[str, Any]]:
         if slack_view is not None:
             integrations.append(_active_env_record("slack", slack_view))
 
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_host = os.getenv(SMTP_HOST_ENV, "").strip()
     if smtp_host:
         try:
             smtp_config = SMTPIntegrationConfig.model_validate(
                 {
                     "host": smtp_host,
-                    "port": os.getenv("SMTP_PORT", "").strip() or 587,
-                    "security": os.getenv("SMTP_SECURITY", "").strip() or "starttls",
-                    "username": os.getenv("SMTP_USERNAME", "").strip(),
-                    "password": resolve_env_credential("SMTP_PASSWORD"),
-                    "from_address": os.getenv("SMTP_FROM_ADDRESS", "").strip(),
-                    "default_to": os.getenv("SMTP_DEFAULT_TO", "").strip() or None,
+                    "port": os.getenv(SMTP_PORT_ENV, "").strip() or 587,
+                    "security": os.getenv(SMTP_SECURITY_ENV, "").strip() or "starttls",
+                    "username": os.getenv(SMTP_USERNAME_ENV, "").strip(),
+                    "password": resolve_env_credential(SMTP_PASSWORD_ENV),
+                    "from_address": os.getenv(SMTP_FROM_ADDRESS_ENV, "").strip(),
+                    "default_to": os.getenv(SMTP_DEFAULT_TO_ENV, "").strip() or None,
                 }
             )
         except Exception as exc:
@@ -1388,9 +1444,9 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
-    atlas_pub = resolve_env_credential("MONGODB_ATLAS_PUBLIC_KEY")
-    atlas_priv = resolve_env_credential("MONGODB_ATLAS_PRIVATE_KEY")
-    atlas_project = os.getenv("MONGODB_ATLAS_PROJECT_ID", "").strip()
+    atlas_pub = resolve_env_credential(MONGODB_ATLAS_PUBLIC_KEY_ENV)
+    atlas_priv = resolve_env_credential(MONGODB_ATLAS_PRIVATE_KEY_ENV)
+    atlas_project = os.getenv(MONGODB_ATLAS_PROJECT_ID_ENV, "").strip()
     if atlas_pub and atlas_priv and atlas_project:
         try:
             atlas_config = build_mongodb_atlas_config(
@@ -1399,7 +1455,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "api_private_key": atlas_priv,
                     "project_id": atlas_project,
                     "base_url": os.getenv(
-                        "MONGODB_ATLAS_BASE_URL", "https://cloud.mongodb.com/api/atlas/v2"
+                        MONGODB_ATLAS_BASE_URL_ENV, "https://cloud.mongodb.com/api/atlas/v2"
                     ).strip(),
                 }
             )
@@ -1590,13 +1646,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
         except Exception as exc:
             _report_env_loader_failure(exc, integration="mariadb")
 
-    dagster_endpoint = os.getenv("DAGSTER_ENDPOINT", "").strip()
+    dagster_endpoint = os.getenv(DAGSTER_ENDPOINT_ENV, "").strip()
     if dagster_endpoint:
         try:
             dagster_config = build_dagster_config(
                 {
                     "endpoint": dagster_endpoint,
-                    "api_token": resolve_env_credential("DAGSTER_API_TOKEN"),
+                    "api_token": resolve_env_credential(DAGSTER_API_TOKEN_ENV),
                 }
             )
             integrations.append(
@@ -1956,14 +2012,14 @@ def load_env_integrations() -> list[dict[str, Any]]:
     except Exception as exc:
         _report_env_loader_failure(exc, integration="tempo")
 
-    temporal_url = os.getenv("TEMPORAL_API_URL", "").strip()
-    temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default").strip()
+    temporal_url = os.getenv(TEMPORAL_BASE_URL_ENV, "").strip()
+    temporal_namespace = os.getenv(TEMPORAL_NAMESPACE_ENV, "default").strip()
     if temporal_url and temporal_namespace:
         try:
             temporal_config = TemporalConfig.model_validate(
                 {
                     "base_url": temporal_url,
-                    "api_key": resolve_env_credential("TEMPORAL_API_KEY"),
+                    "api_key": resolve_env_credential(TEMPORAL_API_KEY_ENV),
                     "namespace": temporal_namespace,
                 }
             )
@@ -2184,12 +2240,12 @@ def resolve_effective_integrations(
             },
         )
     else:
-        jwt_token = resolve_env_credential("JWT_TOKEN")
+        jwt_token = resolve_env_credential(TRACER_JWT_TOKEN_ENV)
         if jwt_token:
             effective["tracer"] = _effective_entry(
                 "local env",
                 {
-                    "base_url": os.getenv("TRACER_API_URL", "").strip() or get_tracer_base_url(),
+                    "base_url": os.getenv(TRACER_BASE_URL_ENV, "").strip() or get_tracer_base_url(),
                     "jwt_token": jwt_token,
                 },
             )

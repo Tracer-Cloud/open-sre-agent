@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from config.constants.helm import OSRE_HELM_INTEGRATION_ENV
 from integrations import _catalog_impl
 from integrations.store import load_integrations
 
@@ -111,7 +112,7 @@ def load_env_integration_services() -> list[str]:
             )
         ),
     )
-    add("helm", os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {"1", "true", "yes"})
+    add("helm", os.getenv(OSRE_HELM_INTEGRATION_ENV, "").strip().lower() in {"1", "true", "yes"})
     add(
         "railway",
         _env_is_set("RAILWAY_TOKEN")

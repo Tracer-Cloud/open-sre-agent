@@ -16,6 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from core.domain.types.tools import ToolSurface
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
@@ -159,10 +160,10 @@ class ToolProvider(Protocol):
 class ToolRegistry(Protocol):
     """Resolves the registered tools available to a named surface."""
 
-    def tools_for_surface(self, surface: str) -> list[Any]:
+    def tools_for_surface(self, surface: ToolSurface) -> list[Any]:
         """Return the registered tools for ``surface`` (e.g. ``"action"``)."""
 
-    def tool_map_for_surface(self, surface: str) -> dict[str, Any]:
+    def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, Any]:
         """Return the registered tools for ``surface`` keyed by tool name."""
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.domain.work_items import (
     WORK_ITEM_PRIORITIES,
     WORK_ITEM_STATUSES,
@@ -214,7 +215,7 @@ def _schedule_item_reminder(
         "User asks to create a GitHub issue rather than a local work item",
     ],
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
     side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
@@ -340,7 +341,7 @@ def work_task_add(
         "hackathon task overview, completed tasks, blocked tasks, or project-specific todos."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
     side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_work_items_available,
     input_schema={
@@ -386,7 +387,7 @@ def work_task_list(
         "Use when the user says a task is done or asks to mark tasks Y and Z completed."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
     side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     is_available=_work_items_available,
@@ -422,7 +423,7 @@ def work_task_complete(selectors: list[str]) -> dict[str, Any]:
         "notes, or reminder channel."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
     side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,
@@ -569,7 +570,7 @@ def work_task_update(
         "and 'which of these tasks should I pick up?'. Use the returned reasons in the final answer."
     ),
     tags=("safe", "fast", "no-credentials"),
-    surfaces=("action", "investigation"),
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
     side_effect_level=SideEffectLevel.READ_ONLY,
     is_available=_work_items_available,
     input_schema={
@@ -622,7 +623,7 @@ def work_task_prioritize(
         "User asks for proactive reminders in Slack or Telegram on a recurring cadence",
     ],
     tags=("safe", "no-credentials"),
-    surfaces=("action", "investigation"),
+    surfaces=(ToolSurface.ACTION, ToolSurface.INVESTIGATION),
     side_effect_level=SideEffectLevel.MUTATING,
     parallel_safe=False,
     accepts_runtime_context=True,

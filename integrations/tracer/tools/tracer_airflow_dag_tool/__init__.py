@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.airflow.config import (
     AirflowConfig,
@@ -51,7 +52,7 @@ def _airflow_dag_id(sources: dict[str, Any]) -> str:
         "Finding failed or retrying task instances",
         "Grounding RCA in Airflow DAG/task evidence",
     ],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     requires=["dag_id"],
     input_schema={
         "type": "object",
@@ -97,7 +98,7 @@ def get_recent_airflow_failures(
         "Finding failed DAG runs",
         "Validating Airflow orchestration state",
     ],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     requires=["dag_id"],
     input_schema={
         "type": "object",
@@ -146,7 +147,7 @@ def get_airflow_dag_runs(
         "Finding task-level failure evidence",
         "Grounding RCA in Airflow task state",
     ],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     requires=["dag_id", "dag_run_id"],
     input_schema={
         "type": "object",

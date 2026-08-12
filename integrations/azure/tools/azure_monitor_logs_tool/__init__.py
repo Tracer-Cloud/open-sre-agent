@@ -11,6 +11,7 @@ from config.constants.azure import (
     AZURE_MAX_RESULTS_DEFAULT,
     AZURE_MAX_RESULTS_HARD_LIMIT,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
@@ -58,7 +59,7 @@ def _ensure_take_clause(query: str, limit: int) -> str:
     name="query_azure_monitor_logs",
     description="Query Azure Monitor Log Analytics using a bounded KQL query.",
     source="azure",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     requires=["workspace_id", "access_token"],
     input_schema={
         "type": "object",

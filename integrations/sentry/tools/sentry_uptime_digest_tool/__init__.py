@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.sentry.uptime import (
     UptimeTransitionRecord,
@@ -201,7 +202,7 @@ def _build_rollup(
     injected_params=("project_slug",),
     is_available=_sentry_available,
     extract_params=_extract_params,
-    surfaces=("chat",),
+    surfaces=(ToolSurface.CHAT,),
 )
 def get_sentry_uptime_digest(
     window_hours: int = 24,

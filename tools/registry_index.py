@@ -19,6 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from config.constants.paths import REPO_ROOT
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registry_metadata import normalize_surfaces
 from tools.registry_discovery import INTEGRATION_TOOL_PACKAGES
 
@@ -31,7 +32,7 @@ class ToolDescriptor:
     """Cheap tool metadata read without importing the executor module."""
 
     name: str
-    surfaces: tuple[str, ...]
+    surfaces: tuple[ToolSurface, ...]
     source: str | None
     display_name: str | None
     module: str
@@ -45,175 +46,175 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
     return (
         ToolDescriptor(
             "alert_sample",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.sample_alert",
         ),
         ToolDescriptor(
             "ask_user_choice",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.ask_choice",
         ),
         ToolDescriptor(
             "assistant_handoff",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.assistant_handoff",
         ),
         ToolDescriptor(
             "cli_exec",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.cli_command",
         ),
         ToolDescriptor(
             "code_implement",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.implementation",
         ),
         ToolDescriptor(
             "fix_sentry_issue_start",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.sentry_fix",
         ),
         ToolDescriptor(
             "investigation_start",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.investigation",
         ),
         ToolDescriptor(
             "llm_set_provider",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.llm_provider",
         ),
         ToolDescriptor(
             "shell_run",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.shell",
         ),
         ToolDescriptor(
             "propose_scheduled_delivery",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.propose_scheduled_delivery",
         ),
         ToolDescriptor(
             "skill_view",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.skill_view",
         ),
         ToolDescriptor(
             "slack_add_reaction",
-            ("investigation", "chat", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_add_reaction_tool.tool",
         ),
         ToolDescriptor(
             "slack_join_channel",
-            ("investigation", "chat", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_join_channel_tool.tool",
         ),
         ToolDescriptor(
             "slack_list_team_members",
-            ("investigation", "chat", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_list_members_tool.tool",
         ),
         ToolDescriptor(
             "slack_read_list",
-            ("investigation", "chat", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_read_list_tool.tool",
         ),
         ToolDescriptor(
             "slack_read_messages",
-            ("investigation", "chat", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_read_messages_tool.tool",
         ),
         ToolDescriptor(
             "slack_reply_message",
-            ("investigation", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_reply_message_tool.tool",
         ),
         ToolDescriptor(
             "slack_search_messages",
-            ("investigation", "chat", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_search_messages_tool.tool",
         ),
         ToolDescriptor(
             "slack_send_message",
-            ("investigation", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.ACTION),
             "slack",
             None,
             "integrations.slack.tools.slack_send_message_tool.tool",
         ),
         ToolDescriptor(
             "slash_invoke",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.slash",
         ),
         ToolDescriptor(
             "synthetic_run",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.synthetic",
         ),
         ToolDescriptor(
             "task_cancel",
-            ("action",),
+            (ToolSurface.ACTION,),
             "interactive_shell",
             None,
             "tools.interactive_shell.actions.task_cancel",
         ),
         ToolDescriptor(
             "rocketchat_send_message",
-            ("investigation", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.ACTION),
             "rocketchat",
             None,
             "integrations.rocketchat.tools.rocketchat_send_message_tool.tool",
         ),
         ToolDescriptor(
             "buzz_send_message",
-            ("investigation", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.ACTION),
             "buzz",
             None,
             "integrations.buzz.tools.buzz_send_message_tool.tool",
         ),
         ToolDescriptor(
             "telegram_send_message",
-            ("investigation", "action"),
+            (ToolSurface.INVESTIGATION, ToolSurface.ACTION),
             "telegram",
             None,
             "integrations.telegram.tools.telegram_send_message_tool.tool",
@@ -224,6 +225,12 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
 def _string_constant(node: ast.expr | None) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
+    if (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "ToolSurface"
+    ):
+        return node.attr.lower()
     return None
 
 
