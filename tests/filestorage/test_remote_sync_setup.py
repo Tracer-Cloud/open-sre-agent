@@ -85,7 +85,7 @@ def test_save_writes_remote_sync_section(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert loaded.bucket == "opensre-remote-sync"
 
 
-def test_save_supplies_exactly_the_six_non_secret_values(
+def test_save_supplies_exactly_the_seven_non_secret_values(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
@@ -101,6 +101,7 @@ def test_save_supplies_exactly_the_six_non_secret_values(
         "prefix": "opensre",
         "region": "",
         "profile": "",
+        "endpoint": "",
     }
     assert config == RemoteSyncConfig(bucket="My-Bucket", provider="gcs")
 

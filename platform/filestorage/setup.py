@@ -32,6 +32,7 @@ class RemoteSyncSetupRequest:
     prefix: str = DEFAULT_REMOTE_SYNC_PREFIX
     region: str = ""
     profile: str = ""
+    endpoint: str = ""
     enabled: bool = True
 
 
@@ -52,8 +53,13 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
     prefix = request.prefix.strip() or DEFAULT_REMOTE_SYNC_PREFIX
     region = request.region.strip()
     profile = request.profile.strip()
+    endpoint = request.endpoint.strip()
     declared = {extra.field for extra in provider_extra_fields(provider)}
-    for field, value in ((RemoteSyncField.REGION, region), (RemoteSyncField.PROFILE, profile)):
+    for field, value in (
+        (RemoteSyncField.REGION, region),
+        (RemoteSyncField.PROFILE, profile),
+        (RemoteSyncField.ENDPOINT, endpoint),
+    ):
         if value and field not in declared:
             raise RemoteSyncConfigError(
                 f"--{field.value} is not used by provider {provider!r}; "
@@ -69,6 +75,7 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
                 "prefix": prefix,
                 "region": region,
                 "profile": profile,
+                "endpoint": endpoint,
             },
         )
     except LocalSettingsError as exc:
@@ -79,6 +86,7 @@ def save_remote_sync_settings(request: RemoteSyncSetupRequest) -> RemoteSyncConf
         prefix=prefix,
         region=region,
         profile=profile,
+        endpoint=endpoint,
     )
 
 

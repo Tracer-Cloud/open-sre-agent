@@ -205,6 +205,39 @@ def test_setup_disabled_says_off_without_a_sync_suggestion(
     assert "remote-sync sync" not in out
 
 
+def test_setup_forwards_endpoint_and_region_for_s3compat(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The slash setup must preserve the endpoint the CLI accepts.
+
+    Greptile P1: without forwarding, /remote-sync setup silently wrote an empty
+    endpoint and pointed boto3 at AWS instead of the configured store.
+    """
+    from config.constants import paths as paths_mod
+    from platform.filestorage.config import load_remote_sync_config
+
+    monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
+    console, buf = _capture()
+    assert (
+        dispatch_slash(
+            "/remote-sync setup --provider s3compat --bucket b "
+            "--endpoint https://minio.example.local --region us-east-1",
+            Session(),
+            console,
+        )
+        is True
+    )
+    out = buf.getvalue()
+    assert "settings saved" in out
+    assert "s3compat" in out
+
+    loaded = load_remote_sync_config()
+    assert loaded is not None
+    assert loaded.provider == "s3compat"
+    assert loaded.endpoint == "https://minio.example.local"
+    assert loaded.region == "us-east-1"
+
+
 def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**_kwargs: object) -> SyncReport:
         raise RemoteSyncConfigError("bad flags")

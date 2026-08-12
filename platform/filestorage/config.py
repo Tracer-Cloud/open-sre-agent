@@ -17,6 +17,7 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENDPOINT_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_EXCLUDE_ENV,
     REMOTE_SYNC_EXCLUDE_OFF_ENV,
@@ -37,8 +38,8 @@ class RemoteSyncConfig:
 
     ``bucket`` is the top-level store name for the chosen provider (S3 bucket,
     GCS bucket, or Vercel Blob store name/id; community backends may reuse the
-    field). Provider-specific fields (``profile``, ``region``) are ignored by
-    backends that do not need them.
+    field). Provider-specific fields (``profile``, ``region``, ``endpoint``)
+    are ignored by backends that do not need them.
 
     ``exclude`` narrows what mirrors. It cannot widen it: the credential
     deny-list is enforced separately, in
@@ -50,6 +51,7 @@ class RemoteSyncConfig:
     prefix: str = DEFAULT_REMOTE_SYNC_PREFIX
     region: str = ""
     profile: str = ""
+    endpoint: str = ""
     exclude: ExclusionRules = NO_EXCLUSIONS
 
     def key_for(self, relative_key: str) -> str:
@@ -188,6 +190,7 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
         prefix=prefix,
         region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
         profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
+        endpoint=_env_or_stored(REMOTE_SYNC_ENDPOINT_ENV, "endpoint", stored),
         exclude=_exclusions(stored),
     )
 

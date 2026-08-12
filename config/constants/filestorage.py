@@ -25,6 +25,9 @@ REMOTE_SYNC_PREFIX_ENV = "OPENSRE_REMOTE_SYNC_PREFIX"
 REMOTE_SYNC_REGION_ENV = "OPENSRE_REMOTE_SYNC_REGION"
 # Named credentials profile, for users who keep opensre credentials separate.
 REMOTE_SYNC_PROFILE_ENV = "OPENSRE_REMOTE_SYNC_PROFILE"
+# Custom S3-compatible endpoint (MinIO, Cloudflare R2, DigitalOcean Spaces, …)
+# for the s3compat provider; blank means ambient AWS endpoints.
+REMOTE_SYNC_ENDPOINT_ENV = "OPENSRE_REMOTE_SYNC_ENDPOINT"
 # Comma-separated glob patterns held back from the sync. Subtractive only: a
 # pattern can shrink what mirrors, never widen it past the credential deny-list.
 REMOTE_SYNC_EXCLUDE_ENV = "OPENSRE_REMOTE_SYNC_EXCLUDE"
@@ -57,4 +60,5 @@ __all__ = [
     "REMOTE_SYNC_PROFILE_ENV",
     "REMOTE_SYNC_PROVIDER_ENV",
     "REMOTE_SYNC_REGION_ENV",
+    "REMOTE_SYNC_ENDPOINT_ENV",
 ]

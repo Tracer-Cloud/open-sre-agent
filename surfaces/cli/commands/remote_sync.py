@@ -95,6 +95,11 @@ def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
 @click.option("--region", default=None, help="Region override when the provider supports it.")
 @click.option("--profile", default=None, help="Named credentials profile (AWS).")
 @click.option(
+    "--endpoint",
+    default=None,
+    help="Custom S3-compatible endpoint URL (MinIO, R2, Spaces) for the s3compat provider.",
+)
+@click.option(
     "--enabled/--disabled",
     default=True,
     show_default=True,
@@ -106,6 +111,7 @@ def setup_command(
     prefix: str | None,
     region: str | None,
     profile: str | None,
+    endpoint: str | None,
     enabled: bool,
 ) -> None:
     """Write remote_sync settings to ~/.opensre/config.yml (interactive if flags omitted)."""
@@ -113,7 +119,11 @@ def setup_command(
         # --disabled with no new settings just switches the stored section off.
         try:
             _reject_disabled_with_setup_flags(
-                provider=provider, prefix=prefix, region=region, profile=profile
+                provider=provider,
+                prefix=prefix,
+                region=region,
+                profile=profile,
+                endpoint=endpoint,
             )
             disable_remote_sync()
         except RemoteSyncError as exc:
@@ -128,6 +138,7 @@ def setup_command(
             prefix=prefix,
             region=region,
             profile=profile,
+            endpoint=endpoint,
             enabled=enabled,
         )
         config = save_remote_sync_settings(request)
@@ -147,6 +158,7 @@ def _reject_disabled_with_setup_flags(
     prefix: str | None,
     region: str | None,
     profile: str | None,
+    endpoint: str | None,
 ) -> None:
     """``--disabled`` only flips the switch; explicit setup values need a bucket."""
     given = [
@@ -156,6 +168,7 @@ def _reject_disabled_with_setup_flags(
             ("prefix", prefix),
             ("region", region),
             ("profile", profile),
+            ("endpoint", endpoint),
         )
         if value is not None and value.strip() != ""
     ]
@@ -174,6 +187,7 @@ def _collect_setup_request(
     prefix: str | None,
     region: str | None,
     profile: str | None,
+    endpoint: str | None,
     enabled: bool,
 ) -> RemoteSyncSetupRequest:
     """Use flags when complete; otherwise prompt on a TTY."""
@@ -185,6 +199,7 @@ def _collect_setup_request(
             prefix=prefix if prefix is not None else DEFAULT_REMOTE_SYNC_PREFIX,
             region=region or "",
             profile=profile or "",
+            endpoint=endpoint or "",
             enabled=enabled,
         )
 
@@ -210,6 +225,7 @@ def _collect_setup_request(
         prefix=prefix_value,
         region=_prompt_extra_field(RemoteSyncField.REGION, provider_value, region),
         profile=_prompt_extra_field(RemoteSyncField.PROFILE, provider_value, profile),
+        endpoint=_prompt_extra_field(RemoteSyncField.ENDPOINT, provider_value, endpoint),
         enabled=enabled,
     )
 

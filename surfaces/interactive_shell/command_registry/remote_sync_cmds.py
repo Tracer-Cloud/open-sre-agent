@@ -145,6 +145,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
     prefix = _flag_value(args, "prefix") or DEFAULT_REMOTE_SYNC_PREFIX
     region = _flag_value(args, "region") or ""
     profile = _flag_value(args, "profile") or ""
+    endpoint = _flag_value(args, "endpoint") or ""
     enabled = "--disabled" not in {a.lower() for a in args}
     config = save_remote_sync_settings(
         RemoteSyncSetupRequest(
@@ -153,6 +154,7 @@ def _run_setup(console: Console, args: list[str]) -> bool:
             prefix=prefix,
             region=region,
             profile=profile,
+            endpoint=endpoint,
             enabled=enabled,
         )
     )

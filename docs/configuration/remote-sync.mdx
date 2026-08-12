@@ -72,6 +72,12 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 # export OPENSRE_REMOTE_SYNC_PROVIDER=azure
 # export OPENSRE_REMOTE_SYNC_PROFILE=my-storage-account
 # export OPENSRE_REMOTE_SYNC_BUCKET=my-container
+
+# Or an S3-compatible endpoint (MinIO / R2 / Spaces)
+# export OPENSRE_REMOTE_SYNC=1
+# export OPENSRE_REMOTE_SYNC_PROVIDER=s3compat
+# export OPENSRE_REMOTE_SYNC_BUCKET=my-bucket
+# export OPENSRE_REMOTE_SYNC_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 ```
 
 | Variable | Description |
@@ -82,6 +88,7 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 | `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix, default `opensre`. Machines that should share history must use the same one |
 | `OPENSRE_REMOTE_SYNC_REGION` | Region override when the provider supports it (AWS) |
 | `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile, if opensre should not use your default (AWS) |
+| `OPENSRE_REMOTE_SYNC_ENDPOINT` | Custom S3-compatible endpoint URL for `provider=s3compat` (MinIO, R2, Spaces). Blank uses AWS endpoints |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob read-write token (when `provider=vercel`). Ambient; opensre never stores it |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE` | Comma-separated glob patterns to keep off the store. See [Exclude paths](#exclude-paths) |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | Set to `1` to ignore your exclusions for one run and sync everything |
@@ -226,6 +233,7 @@ backends today:
 | Google Cloud Storage | `gcs` | Application Default Credentials (`gcloud auth application-default login`) |
 | Vercel Blob | `vercel` | Ambient `BLOB_READ_WRITE_TOKEN` |
 | Azure Blob Storage | `azure` | Ambient Azure config (`AZURE_*`, Azure CLI, Managed Identity) |
+| S3-compatible endpoint | `s3compat` | Ambient AWS config (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) |
 
 Other clouds (GCS, …) are community additions: implement `ObjectStore`,
 call `register_object_store("<name>", factory)`, and set
@@ -322,6 +330,44 @@ Authentication relies entirely on Azure's ambient credentials (`DefaultAzureCred
 The authenticated principal must have the **Storage Blob Data Contributor** role assignment on the storage account. The generic "Contributor" role is insufficient as it only grants control-plane access, not data-plane access.
 
 Add `Microsoft.Storage/storageAccounts/blobServices/containers/read` (included in the Storage Blob Data Reader role) so `status` can warn you if the container is publicly readable — see [The store](#the-store). Without it, `status` shows "could not confirm it is private" instead of failing.
+
+### S3-compatible endpoint (MinIO / R2 / Spaces)
+
+Any store that speaks the S3 API at a custom endpoint — self-hosted MinIO,
+Cloudflare R2, DigitalOcean Spaces — works through the `s3compat` provider.
+It uses the same wire protocol as the AWS backend, pointed at your endpoint
+instead of AWS's.
+
+```bash
+export OPENSRE_REMOTE_SYNC=1
+export OPENSRE_REMOTE_SYNC_PROVIDER=s3compat
+export OPENSRE_REMOTE_SYNC_BUCKET=my-bucket
+export OPENSRE_REMOTE_SYNC_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+```
+
+Or through setup:
+
+```bash
+opensre remote-sync setup --provider s3compat --bucket my-bucket \
+  --endpoint https://<account-id>.r2.cloudflarestorage.com
+```
+
+Credentials are ambient, exactly like AWS: `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` (R2 and Spaces both issue S3-compatible keys), or a
+credentials profile via `OPENSRE_REMOTE_SYNC_PROFILE`. The endpoint determines
+where the keys are accepted. `OPENSRE_REMOTE_SYNC_REGION` is optional — some
+stores (DigitalOcean Spaces) want the region that owns the bucket.
+
+`put_object` deliberately sends no `ServerSideEncryption` parameter, because
+MinIO, R2, and Spaces reject it. Minimum permissions are the same as AWS on
+the prefix you use:
+
+```
+s3:ListBucket, s3:GetObject, s3:PutObject
+```
+
+Add `s3:GetBucketPolicyStatus` so `status` can warn you if the bucket is
+publicly readable — see [The store](#the-store).
 
 ## The store
 
