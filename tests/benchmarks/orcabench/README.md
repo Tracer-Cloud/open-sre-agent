@@ -1,5 +1,5 @@
 ```text
-orcabench/                           # One-task OpenSRE integration for ORCA-Bench
+orcabench/                           # OpenSRE integration for ORCA-Bench
 ├── README.md                           # Annotated directory map
 ├── __init__.py                         # Public benchmark package exports
 ├── config.py                           # Validated shared configuration and manifests
@@ -14,7 +14,7 @@ orcabench/                           # One-task OpenSRE integration for ORCA-Ben
 ├── host/                             # Code run by Harbor on the host
 │   ├── __init__.py                     # Host integration package marker
 │   ├── agent.py                        # Harbor installed-agent adapter
-│   ├── launcher.py                     # Exact one-task Harbor launcher
+│   ├── launcher.py                     # Exact-task Harbor batch launcher
 │   ├── pricing.py                      # ORCA pricing adapter
 │   ├── snapshot.py                     # Docker snapshot cache staging
 │   ├── validation.py                   # Fast prerequisite validation CLI
@@ -41,7 +41,7 @@ orcabench/                           # One-task OpenSRE integration for ORCA-Ben
     │   ├── __init__.py                 # Host test package marker
     │   ├── test_agent.py               # Real Harbor adapter contract tests
     │   ├── test_bundle.py              # Bundle integrity and safety tests
-    │   └── test_launcher.py            # Exact one-task command tests
+    │   └── test_launcher.py            # Exact-task command tests
     └── execution/                     # Tests for in-container behavior
         ├── __init__.py                 # Execution test package marker
         ├── test_health.py               # Real HTTP health-check test
@@ -60,3 +60,12 @@ provider-native model ID to be selected at launch. Supply both options together:
 The benchmark route reuses OpenSRE's provider catalog. Currently allowed routes are
 `openai`, `openrouter`, `nvidia`, `gemini`, and `groq`; their existing OpenSRE
 credential variables are forwarded without embedding secret values in the command.
+
+The launcher accepts one or more exact `--task-name` values. Repeating the option
+stages the snapshot once and creates one sequential Harbor job; Harbor still runs
+each selected task in its own isolated trial.
+
+```text
+--task-name orca-bench/583936eecbdda829 \
+--task-name orca-bench/76303b2a0ffee409
+```

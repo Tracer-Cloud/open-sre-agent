@@ -1,4 +1,4 @@
-"""Stage ORCA data and launch exactly one native OpenSRE Harbor task."""
+"""Stage ORCA data and launch selected native OpenSRE Harbor tasks."""
 
 from __future__ import annotations
 
@@ -31,7 +31,12 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--orca-repo", type=Path, required=True)
     parser.add_argument("--bundle", type=Path, required=True)
-    parser.add_argument("--task-name", required=True)
+    parser.add_argument(
+        "--task-name",
+        action="append",
+        required=True,
+        help="Exact published task name; repeat to run selected tasks in one job.",
+    )
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
     parser.add_argument(
         "--config",
@@ -60,6 +65,14 @@ def _validate_exact_task_name(task_name: str) -> str:
     return value
 
 
+def _validate_exact_task_names(task_names: list[str]) -> tuple[str, ...]:
+    """Validate a non-empty, duplicate-free selection of exact task names."""
+    validated = tuple(_validate_exact_task_name(task_name) for task_name in task_names)
+    if len(set(validated)) != len(validated):
+        raise ValueError("--task-name values must not contain duplicates")
+    return validated
+
+
 def _environment_flags(flag: str, names: tuple[str, ...]) -> list[str]:
     """Build Harbor's deferred, secret-safe environment arguments."""
     return [item for name in names for item in (flag, f"{name}=${{{name}}}")]
@@ -71,11 +84,11 @@ def build_harbor_command(
     bundle: Path,
     config_path: Path,
     settings: BenchmarkSettings,
-    task_name: str,
+    task_names: tuple[str, ...],
     snapshot_cache: Path,
     dataset: str = DEFAULT_DATASET,
 ) -> tuple[str, ...]:
-    """Build the single-task Harbor command with secret-safe env templates."""
+    """Build the selected-task Harbor command with secret-safe env templates."""
     job_config = orca_repo / "job-config.yaml"
     mounts = json.dumps(
         [
@@ -117,14 +130,13 @@ def build_harbor_command(
         )
     else:
         command.append("--disable-verification")
+    command.extend(["--dataset", dataset])
+    for task_name in task_names:
+        command.extend(["--include-task-name", task_name])
     command.extend(
         [
-            "--dataset",
-            dataset,
-            "--include-task-name",
-            task_name,
             "--n-tasks",
-            "1",
+            str(len(task_names)),
             "--n-concurrent",
             "1",
             "--max-retries",
@@ -138,12 +150,12 @@ def build_harbor_command(
     return tuple(command)
 
 
-def run_one(args: argparse.Namespace) -> int:
-    """Validate all local inputs, stage the snapshot, and execute Harbor."""
+def run_tasks(args: argparse.Namespace) -> int:
+    """Validate inputs, stage one snapshot cache, and execute one Harbor job."""
     orca_repo = args.orca_repo.expanduser().resolve()
     bundle = args.bundle.expanduser().resolve()
     config_path = args.config.expanduser().resolve()
-    task_name = _validate_exact_task_name(args.task_name)
+    task_names = _validate_exact_task_names(args.task_name)
 
     if not (orca_repo / "job-config.yaml").is_file():
         raise FileNotFoundError(f"ORCA job config is missing: {orca_repo / 'job-config.yaml'}")
@@ -166,7 +178,7 @@ def run_one(args: argparse.Namespace) -> int:
         bundle=bundle,
         config_path=config_path,
         settings=settings,
-        task_name=task_name,
+        task_names=task_names,
         snapshot_cache=snapshot_cache,
         dataset=args.dataset,
     )
@@ -186,7 +198,7 @@ def run_one(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """CLI entry point."""
-    return run_one(_parser().parse_args())
+    return run_tasks(_parser().parse_args())
 
 
 if __name__ == "__main__":

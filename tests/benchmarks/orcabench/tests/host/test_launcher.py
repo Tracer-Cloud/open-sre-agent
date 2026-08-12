@@ -5,13 +5,16 @@ from pathlib import Path
 import pytest
 
 from tests.benchmarks.orcabench.config import BenchmarkSettings
+from tests.benchmarks.orcabench.host import launcher
 from tests.benchmarks.orcabench.host.launcher import (
     AGENT_IMPORT_PATH,
     DEFAULT_DATASET,
     _opensre_repo_root,
     _parser,
     _validate_exact_task_name,
+    _validate_exact_task_names,
     build_harbor_command,
+    run_tasks,
 )
 
 
@@ -37,6 +40,11 @@ def _settings(path: Path) -> BenchmarkSettings:
 def test_launcher_rejects_task_globs() -> None:
     with pytest.raises(ValueError, match="exact published task name"):
         _validate_exact_task_name("*")
+
+
+def test_launcher_rejects_duplicate_task_names() -> None:
+    with pytest.raises(ValueError, match="must not contain duplicates"):
+        _validate_exact_task_names(["orca-bench/a", "orca-bench/a"])
 
 
 @pytest.mark.parametrize(
@@ -67,22 +75,46 @@ def test_launcher_accepts_runtime_provider_and_model(
 
     assert args.provider == provider
     assert args.model == model
+    assert args.task_name == ["orca-bench/5b71925cf2820c86"]
 
 
-def test_harbor_command_structurally_limits_run_to_one_task(tmp_path: Path) -> None:
+def test_launcher_accepts_repeated_exact_task_names() -> None:
+    args = _parser().parse_args(
+        [
+            "--orca-repo",
+            "/orca",
+            "--bundle",
+            "/bundle",
+            "--task-name",
+            "orca-bench/a",
+            "--task-name",
+            "orca-bench/b",
+        ]
+    )
+
+    assert _validate_exact_task_names(args.task_name) == ("orca-bench/a", "orca-bench/b")
+
+
+def test_harbor_command_preserves_selected_task_names(tmp_path: Path) -> None:
+    task_names = ("0123456789abcdef", "fedcba9876543210")
     command = build_harbor_command(
         orca_repo=tmp_path / "ORCA-bench",
         bundle=tmp_path / "bundle",
         config_path=_config_path(),
         settings=_settings(_config_path()),
-        task_name="0123456789abcdef",
+        task_names=task_names,
         snapshot_cache=tmp_path / "snapshot",
     )
 
     assert command[command.index("--agent") + 1] == AGENT_IMPORT_PATH
     assert command[command.index("--dataset") + 1] == DEFAULT_DATASET
-    assert command[command.index("--include-task-name") + 1] == "0123456789abcdef"
-    assert command[command.index("--n-tasks") + 1] == "1"
+    selected_task_names = tuple(
+        command[index + 1]
+        for index, argument in enumerate(command)
+        if argument == "--include-task-name"
+    )
+    assert selected_task_names == task_names
+    assert command[command.index("--n-tasks") + 1] == "2"
     assert command[command.index("--n-concurrent") + 1] == "1"
     assert command[command.index("--max-retries") + 1] == "0"
     assert "OPENAI_API_KEY=${OPENAI_API_KEY}" in command
@@ -90,6 +122,70 @@ def test_harbor_command_structurally_limits_run_to_one_task(tmp_path: Path) -> N
     assert "--disable-verification" not in command
     assert "model_provider=openai" in command
     assert all(not argument.startswith("OPENAI_API_KEY=sk-") for argument in command)
+
+
+def test_launcher_stages_once_and_starts_one_job_for_selected_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    orca_repo = tmp_path / "ORCA-bench"
+    orca_repo.mkdir()
+    (orca_repo / "job-config.yaml").touch()
+    bundle = tmp_path / "bundle"
+    snapshot_cache = tmp_path / "snapshot"
+    args = _parser().parse_args(
+        [
+            "--orca-repo",
+            str(orca_repo),
+            "--bundle",
+            str(bundle),
+            "--task-name",
+            "orca-bench/a",
+            "--task-name",
+            "orca-bench/b",
+            "--config",
+            str(_smoke_config_path()),
+        ]
+    )
+    stage_calls: list[tuple[str, Path]] = []
+    subprocess_calls: list[tuple[tuple[str, ...], Path, dict[str, str]]] = []
+
+    def validate_bundle(_: Path) -> None:
+        """Avoid requiring a real bundle for launcher orchestration coverage."""
+
+    def stage_snapshot(image: str, cache_root: Path) -> Path:
+        """Record the single snapshot staging call and return a test cache path."""
+        stage_calls.append((image, cache_root))
+        return snapshot_cache
+
+    def run_subprocess(
+        command: tuple[str, ...],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        check: bool,
+    ) -> object:
+        """Capture the one Harbor invocation without starting a real job."""
+        assert check is False
+        subprocess_calls.append((command, cwd, env))
+        return type("Result", (), {"returncode": 0})()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(launcher, "validate_bundle", validate_bundle)
+    monkeypatch.setattr(launcher, "stage_snapshot", stage_snapshot)
+    monkeypatch.setattr(launcher.subprocess, "run", run_subprocess)
+
+    assert run_tasks(args) == 0
+    assert len(stage_calls) == 1
+    assert len(subprocess_calls) == 1
+    command, cwd, environment = subprocess_calls[0]
+    assert cwd == orca_repo
+    assert environment["SNAPSHOT_CACHE_HOST_DIR"] == str(snapshot_cache)
+    assert tuple(
+        command[index + 1]
+        for index, argument in enumerate(command)
+        if argument == "--include-task-name"
+    ) == ("orca-bench/a", "orca-bench/b")
 
 
 def test_openrouter_smoke_command_uses_its_key_and_disables_verification(
@@ -103,7 +199,7 @@ def test_openrouter_smoke_command_uses_its_key_and_disables_verification(
             "openrouter",
             "nvidia/nemotron-3-super-120b-a12b:free",
         ),
-        task_name="orca-bench/5b71925cf2820c86",
+        task_names=("orca-bench/5b71925cf2820c86",),
         snapshot_cache=tmp_path / "snapshot",
     )
 
@@ -126,7 +222,7 @@ def test_nvidia_smoke_command_forwards_only_its_provider_key(tmp_path: Path) -> 
             "nvidia",
             "z-ai/glm-5.2",
         ),
-        task_name="orca-bench/5b71925cf2820c86",
+        task_names=("orca-bench/5b71925cf2820c86",),
         snapshot_cache=tmp_path / "snapshot",
     )
 
@@ -146,7 +242,7 @@ def test_groq_smoke_command_forwards_only_groq_key(tmp_path: Path) -> None:
         bundle=tmp_path / "bundle",
         config_path=_smoke_config_path(),
         settings=settings,
-        task_name="orca-bench/5b71925cf2820c86",
+        task_names=("orca-bench/5b71925cf2820c86",),
         snapshot_cache=tmp_path / "snapshot",
     )
 
@@ -163,7 +259,7 @@ def test_gemini_smoke_command_forwards_only_gemini_key(tmp_path: Path) -> None:
         bundle=tmp_path / "bundle",
         config_path=_smoke_config_path(),
         settings=_settings(_smoke_config_path()),
-        task_name="orca-bench/5b71925cf2820c86",
+        task_names=("orca-bench/5b71925cf2820c86",),
         snapshot_cache=tmp_path / "snapshot",
     )
 

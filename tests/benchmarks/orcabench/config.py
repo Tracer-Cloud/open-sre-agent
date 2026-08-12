@@ -167,7 +167,7 @@ class RuntimeSettings(StrictFrozenModel):
 
 
 class BenchmarkSettings(StrictFrozenModel):
-    """Checked-in, secret-free settings for the one-task native experiment."""
+    """Checked-in, secret-free settings for a native ORCA-Bench experiment."""
 
     schema_version: Literal[1] = SCHEMA_VERSION
     profile: Literal["benchmark", "smoke"] = "benchmark"
