@@ -18,7 +18,7 @@ from integrations.railway.client import (
 class InspectRailwayDeploymentTool(BaseTool):
     name = "inspect_railway_deployment"
     source: ClassVar[EvidenceSource] = "railway"
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
     side_effect_level = SideEffectLevel.READ_ONLY
     description = (
         "Show the latest successful Railway deployment and source commit metadata for a service."
@@ -72,4 +72,7 @@ class InspectRailwayDeploymentTool(BaseTool):
 
 
 inspect_railway_deployment = InspectRailwayDeploymentTool()
-tool(inspect_railway_deployment, surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION))
+tool(
+    inspect_railway_deployment,
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+)

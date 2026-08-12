@@ -39,7 +39,7 @@ class SplunkSearchTool(BaseTool):
         "Fetching recent error logs for a service identified in an alert",
         "Correlating trace IDs with Splunk log entries",
     ]
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT)
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
     requires = []  # connection_verified check is in is_available()
     outputs = {
         "splunk_logs": "All log events returned from Splunk search",

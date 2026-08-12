@@ -59,7 +59,7 @@ class FixSentryIssueTool(BaseTool):
     display_name = "Fix Sentry issue"
     source = SOURCE
     side_effect_level = SideEffectLevel.MUTATING
-    surfaces=(ToolSurface.INVESTIGATION,)
+    surfaces = (ToolSurface.INVESTIGATION,)
     requires_approval = True
     approval_reason = (
         "Runs a coding agent to edit files based on a Sentry issue, and can open a PR."

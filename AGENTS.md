@@ -31,6 +31,7 @@
   def _build_harness() -> Any:
       return type("H", (), {"resolve_env_variables": lambda _self: None})()
 
+
   monkeypatch.setattr(startup, "_build_harness", _build_harness)
   ```
 

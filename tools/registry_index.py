@@ -225,7 +225,11 @@ def _fallback_descriptors() -> tuple[ToolDescriptor, ...]:
 def _string_constant(node: ast.expr | None) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
-    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "ToolSurface":
+    if (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "ToolSurface"
+    ):
         return node.attr.lower()
     return None
 

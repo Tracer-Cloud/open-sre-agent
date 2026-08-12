@@ -53,7 +53,11 @@ STAGNATION_NUDGE = (
 
 def get_available_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
     available_sources = availability_view(resolved_integrations)
-    return [t for t in get_registered_tools(ToolSurface.INVESTIGATION) if t.is_available(available_sources)]
+    return [
+        t
+        for t in get_registered_tools(ToolSurface.INVESTIGATION)
+        if t.is_available(available_sources)
+    ]
 
 
 def planned_action_names(state: dict[str, Any]) -> list[str]:

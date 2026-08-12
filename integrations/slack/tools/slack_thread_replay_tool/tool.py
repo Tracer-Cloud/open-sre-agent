@@ -14,7 +14,7 @@ from integrations.slack.web_client import bot_token_configured
 class ReplaySlackThreadLocallyTool(BaseTool):
     name = "replay_slack_thread_locally"
     source: ClassVar[EvidenceSource] = "slack"
-    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION)
     side_effect_level = SideEffectLevel.READ_ONLY
     description = "Fetch a captured Slack thread for local replay and Slack bot behavior testing."
     input_schema = {
@@ -48,4 +48,7 @@ class ReplaySlackThreadLocallyTool(BaseTool):
 
 
 replay_slack_thread_locally = ReplaySlackThreadLocallyTool()
-tool(replay_slack_thread_locally, surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION))
+tool(
+    replay_slack_thread_locally,
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
+)

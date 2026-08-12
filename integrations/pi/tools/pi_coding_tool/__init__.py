@@ -54,7 +54,7 @@ class PiCodingTool(BaseTool):
     display_name = "Pi coding task"
     source = SOURCE
     side_effect_level = SideEffectLevel.MUTATING
-    surfaces=(ToolSurface.INVESTIGATION,)
+    surfaces = (ToolSurface.INVESTIGATION,)
     description = (
         "Submit a coding task to the Pi agent (pi.dev). Pi edits files in the workspace to "
         "implement the change and returns a summary plus the git diff. It does not commit, "
