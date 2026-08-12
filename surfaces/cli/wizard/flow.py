@@ -59,6 +59,11 @@ from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_URL,
 )
+from surfaces.cli.wizard.custom_endpoints import (
+    onboarding_provider_choices,
+    onboarding_provider_default,
+    resolve_onboarding_provider,
+)
 from surfaces.cli.wizard.endpoint_prompt import (
     ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
@@ -722,9 +727,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
         if change_provider:
             try:
-                provider = PROVIDER_BY_VALUE[
-                    _choose(
-                        "Choose your LLM provider",
+                provider_selection = _choose(
+                    "Choose your LLM provider",
+                    onboarding_provider_choices(
                         [
                             Choice(
                                 value=p.value,
@@ -732,7 +737,13 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                                 hint=p.group,
                             )
                             for p in provider_options
-                        ],
+                        ]
+                    ),
+                    default=onboarding_provider_default(default_provider_value),
+                )
+                provider = PROVIDER_BY_VALUE[
+                    resolve_onboarding_provider(
+                        provider_selection,
                         default=default_provider_value,
                     )
                 ]

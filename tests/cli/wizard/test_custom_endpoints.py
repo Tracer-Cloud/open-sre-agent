@@ -6,8 +6,15 @@ from typing import Any
 
 import pytest
 
+from surfaces.cli.wizard._ui import Choice
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-from surfaces.cli.wizard.custom_endpoints import ensure_endpoint_settings
+from surfaces.cli.wizard.custom_endpoints import (
+    CUSTOM_ENDPOINT_SELECTION,
+    ensure_endpoint_settings,
+    onboarding_provider_choices,
+    onboarding_provider_default,
+    resolve_onboarding_provider,
+)
 
 
 def test_configured_custom_openai_short_circuits_and_keeps_v1(monkeypatch: Any) -> None:
@@ -42,3 +49,50 @@ def test_blank_prompt_is_rejected(monkeypatch: Any, slug: str) -> None:
 
     monkeypatch.setattr(ui, "_prompt_value", lambda *_a, **_k: "")
     assert ensure_endpoint_settings(PROVIDER_BY_VALUE[slug]) is None
+
+
+def test_onboarding_collapses_custom_providers_into_one_prominent_choice() -> None:
+    choices = [
+        Choice(value="openai", label="OpenAI"),
+        Choice(value="custom-openai", label="Custom OpenAI"),
+        Choice(value="custom-anthropic", label="Custom Anthropic"),
+    ]
+
+    result = onboarding_provider_choices(choices)
+
+    assert result[0].value == CUSTOM_ENDPOINT_SELECTION
+    assert result[0].label == "Custom API endpoint"
+    values = [choice.value for choice in result]
+    assert values.count(CUSTOM_ENDPOINT_SELECTION) == 1
+    assert "custom-openai" not in values
+    assert "custom-anthropic" not in values
+
+
+def test_saved_custom_provider_defaults_to_collapsed_choice() -> None:
+    assert onboarding_provider_default("custom-anthropic") == CUSTOM_ENDPOINT_SELECTION
+    assert onboarding_provider_default("openai") == "openai"
+
+
+def test_custom_choice_opens_compatibility_dropdown(monkeypatch: Any) -> None:
+    captured: dict[str, Any] = {}
+
+    def _choose_compatibility(prompt: str, choices: list[Choice], **kwargs: Any) -> str:
+        captured["prompt"] = prompt
+        captured["choices"] = choices
+        captured["default"] = kwargs["default"]
+        return "custom-anthropic"
+
+    monkeypatch.setattr("surfaces.cli.wizard._ui._choose", _choose_compatibility)
+
+    result = resolve_onboarding_provider(
+        CUSTOM_ENDPOINT_SELECTION,
+        default="custom-anthropic",
+    )
+
+    assert result == "custom-anthropic"
+    assert captured["prompt"] == "Choose endpoint compatibility"
+    assert captured["default"] == "custom-anthropic"
+    assert [choice.value for choice in captured["choices"]] == [
+        "custom-openai",
+        "custom-anthropic",
+    ]

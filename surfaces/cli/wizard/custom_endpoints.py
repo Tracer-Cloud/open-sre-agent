@@ -13,7 +13,57 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from surfaces.cli.wizard._ui import Choice
     from surfaces.cli.wizard.config import ProviderOption
+
+CUSTOM_ENDPOINT_SELECTION = "__custom-api-endpoint__"
+_CUSTOM_PROVIDER_VALUES = frozenset(("custom-openai", "custom-anthropic"))
+
+
+def onboarding_provider_choices(choices: list[Choice]) -> list[Choice]:
+    """Collapse both custom protocols into one discoverable onboarding choice."""
+    from surfaces.cli.wizard._ui import Choice
+
+    custom = Choice(
+        value=CUSTOM_ENDPOINT_SELECTION,
+        label="Custom API endpoint",
+        hint="Use your own OpenAI- or Anthropic-compatible base URL",
+    )
+    return [custom, *(choice for choice in choices if choice.value not in _CUSTOM_PROVIDER_VALUES)]
+
+
+def onboarding_provider_default(provider: str | None) -> str | None:
+    """Map a saved custom provider to the collapsed onboarding choice."""
+    if provider in _CUSTOM_PROVIDER_VALUES:
+        return CUSTOM_ENDPOINT_SELECTION
+    return provider
+
+
+def resolve_onboarding_provider(selection: str, *, default: str | None) -> str:
+    """Resolve the custom choice through a second protocol dropdown."""
+    if selection != CUSTOM_ENDPOINT_SELECTION:
+        return selection
+
+    from surfaces.cli.wizard._ui import Choice, _choose, _step
+
+    _step("Custom API Endpoint")
+    return _choose(
+        "Choose endpoint compatibility",
+        [
+            Choice(
+                value="custom-openai",
+                label="OpenAI-compatible API",
+                hint="Chat Completions API (LiteLLM proxy, vLLM, LocalAI, …)",
+            ),
+            Choice(
+                value="custom-anthropic",
+                label="Anthropic-compatible API",
+                hint="Anthropic Messages API",
+            ),
+        ],
+        default=default if default in _CUSTOM_PROVIDER_VALUES else "custom-openai",
+        back_on_cancel=True,
+    )
 
 
 def _base_url_normalizer(provider: ProviderOption) -> Callable[[str], str]:
