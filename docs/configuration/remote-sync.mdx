@@ -139,7 +139,7 @@ In organization-scoped deployments (like Slack team installations), the storage 
 - Personal data (sessions, memory) is stored per-user under `users/<slack_user_id>/`
 - Without the mount, organization data nests under `~/.opensre/orgs/<organization_id>/` for multi-org testing
 
-Because organization-scoped storage is already persistent and shared via the mounted volume, enabling remote sync would create redundant copies. The remote sync feature is designed for personal machines where data needs to be carried between devices, not for organization-scoped deployments where the infrastructure already provides persistence.
+Because organization-scoped storage is already persistent and shared via the mounted volume, OpenSRE refuses remote sync for organization-scoped turns before any data is mirrored. Remote sync is designed for personal machines where data needs to be carried between devices.
 
 Check what would move before moving it:
 
