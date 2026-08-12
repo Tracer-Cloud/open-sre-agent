@@ -4,10 +4,11 @@ Each test times its target N times, uses the median (robust to jitter), and
 asserts a generous upper bound calibrated at ~10-100x the measured Darwin
 arm64 baseline so slow CI runners don't flake.
 
-Baseline (Darwin arm64, Python 3.14.3, n=500):
-- session dict lookup       ~0.0001 ms
+Baseline (Darwin arm64, Python 3.14.3, n=200; includes host OS + workspace
+identity probes):
+- session dict lookup        ~0.0001 ms
 - importlib.metadata.version ~0.56 ms
-- build_runtime_metadata     ~0.58 ms
+- build_runtime_metadata     ~1.7 ms (can approach ~6 ms under xdist load)
 - build_environment_block    ~0.0016 ms
 """
 
@@ -61,16 +62,17 @@ def test_importlib_version_lookup_stays_under_5ms() -> None:
     assert median_ms < 5.0, f"regression: {median_ms} ms > 5 ms threshold"
 
 
-def test_build_runtime_metadata_stays_under_5ms() -> None:
+def test_build_runtime_metadata_stays_under_15ms() -> None:
     """The one-time bootstrap cost at session init / /new / /resume.
 
-    Baseline ~0.58 ms; ~10x buffer = 5 ms. If this breaches, someone added an
-    expensive call to build_runtime_metadata — undermines the "cheap to call
-    per session" invariant.
+    Baseline ~1.7 ms; ~10x buffer = 15 ms (covers xdist/suite-load jitter that
+    previously breached a 5 ms cap around ~6 ms). If this breaches, someone
+    added an expensive call to build_runtime_metadata — undermines the
+    "cheap to call per session" invariant.
     """
     median_ms = _time_median_ms(build_runtime_metadata)
     print(f"\n  build_runtime_metadata: {median_ms:.2f} ms")
-    assert median_ms < 5.0, f"regression: {median_ms} ms > 5 ms threshold"
+    assert median_ms < 15.0, f"regression: {median_ms} ms > 15 ms threshold"
 
 
 def test_environment_block_render_stays_under_1ms() -> None:
@@ -117,5 +119,5 @@ def test_baseline_stability(_i: int) -> None:
 
     assert dict_ms < 0.01, f"dict {dict_ms} ms"
     assert imp_ms < 5.0, f"importlib {imp_ms} ms"
-    assert build_ms < 5.0, f"build {build_ms} ms"
+    assert build_ms < 15.0, f"build {build_ms} ms"
     assert env_ms < 1.0, f"env {env_ms} ms"
