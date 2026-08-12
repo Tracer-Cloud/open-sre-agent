@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import httpx
@@ -672,3 +673,25 @@ def test_verify_ssl_false_is_passed_to_http_client(monkeypatch: pytest.MonkeyPat
 
     assert client._get_client() is not None
     assert captured["verify"] is False
+
+
+def _raise_runtime_error(**_kwargs: Any) -> None:
+    raise RuntimeError("construction failure")
+
+
+def test_make_client_logs_soft_fail_on_construction_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Force config construction inside the factory to raise, exercising the
+    # soft-fail `except Exception` path. The factory must still return None,
+    # but must no longer swallow the exception silently.
+    monkeypatch.setattr("integrations.argocd.client.ArgoCDConfig", _raise_runtime_error)
+
+    with caplog.at_level(logging.WARNING, logger="integrations.argocd.client"):
+        result = make_argocd_client("https://argocd.example.com", bearer_token="tok_test")
+
+    assert result is None
+    assert any(
+        record.levelno == logging.WARNING and record.exc_info is not None
+        for record in caplog.records
+    )

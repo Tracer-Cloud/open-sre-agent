@@ -543,5 +543,6 @@ def make_argocd_client(
                 verify_ssl=_normalize_verify_ssl(verify_ssl),
             )
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to create Argo CD client: %s", exc, exc_info=True)
         return None
