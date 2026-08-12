@@ -171,6 +171,9 @@ if result.answered:
 
 See **[Python API](https://www.opensre.com/docs/python-api)** for sessions, conversations, and custom output sinks.
 
+**For your team's daily loop:** embed OpenSRE in the Python services and automations your teammates already use.
+Start with the in-repo [Python API guide](docs/python-api.mdx), then use it every day to make incident response repeatable.
+
 Other useful commands:
 
 ```bash
