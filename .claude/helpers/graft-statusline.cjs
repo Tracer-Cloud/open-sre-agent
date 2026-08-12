@@ -37,7 +37,16 @@ function entry(name) {
     const f = path.join(d, name);
     if (fs.existsSync(f)) return f;
   }
-  return path.join(dir, 'dist', 'claude', name); // last-ditch; import will no-op if absent
+  // No trusted candidate holds the entrypoint, so there is nothing to run.
+  // This used to fall back to `<project>/dist/claude/<name>` -- which, on a
+  // machine without graft installed, imports and executes that file straight
+  // out of whatever repository happens to be open. A clone carrying its own
+  // dist/claude/hooks.js would run on session-start, post-edit and stop with
+  // no install step and no prompt. Absent graft, the hook must do nothing.
+  return null;
 }
 
-import(pathToFileURL(entry("statusline.js")).href).then((m) => m.main()).catch(() => { /* graft unavailable — no-op */ });
+const statuslineEntry = entry("statusline.js");
+if (statuslineEntry) {
+  import(pathToFileURL(statuslineEntry).href).then((m) => m.main()).catch(() => { /* graft unavailable — no-op */ });
+}
