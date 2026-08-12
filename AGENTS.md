@@ -335,6 +335,12 @@ Steps:
 <!-- graft:start -->
 ## Graft — repo context graph
 
+Graft is an external CLI, not a dependency of this repo: the MCP server entry
+runs a bare `graft`, so without it on `PATH` the server fails to start with
+command-not-found and every command below is unavailable. Install it with
+`npm i -g @nanonets/graft`; nothing here vendors or installs it for you, and
+contributors who skip it are unaffected otherwise.
+
 `graft/` is a local, regenerable cache: small linked markdown nodes that explain
 each system and carry exact file:line spans. It is gitignored, so a fresh clone
 does not have it -- run `graft build` when it is absent or stale, before
