@@ -1,4 +1,13 @@
-"""Python sandbox runner with timeout and restricted access."""
+"""Python sandbox runner with timeout and restricted access.
+
+**These guards are not a security boundary.** They are injected into the same
+interpreter that runs the supplied code, so code that is *trying* to get out
+can: ``importlib.reload`` restores any patched module, ``ctypes`` and
+``os.posix_spawn`` were never patched, and a child interpreter started by any
+route receives no preamble at all. Treat the restrictions as protection against
+an agent damaging the host by accident, and gate the calling tool on approval
+wherever the code author is not the operator.
+"""
 
 from __future__ import annotations
 
@@ -51,9 +60,17 @@ _NETWORK_BLOCK_PREAMBLE = textwrap.dedent("""\
 # Preamble always injected before user code: restricts filesystem writes and subprocesses.
 _SANDBOX_PREAMBLE = textwrap.dedent(f"""\
     import builtins as _builtins_module
+    import io as _io_module
     import os as _os_module
 
     _ALLOWED_WRITE_ROOTS = ({_SANDBOX_TMP_ROOT!r},)
+
+    def _write_allowed(path):
+        abs_path = _os_module.path.realpath(_os_module.fspath(path))
+        return any(
+            abs_path == root or abs_path.startswith(root + _os_module.sep)
+            for root in _ALLOWED_WRITE_ROOTS
+        )
 
     _original_open = _builtins_module.open
 
@@ -61,17 +78,31 @@ _SANDBOX_PREAMBLE = textwrap.dedent(f"""\
         if isinstance(file, (str, bytes)) or hasattr(file, "__fspath__"):
             mode_str = str(mode)
             if any(c in mode_str for c in ("w", "a", "x")):
-                abs_path = _os_module.path.realpath(_os_module.fspath(file))
-                if not any(
-                    abs_path == root or abs_path.startswith(root + _os_module.sep)
-                    for root in _ALLOWED_WRITE_ROOTS
-                ):
+                if not _write_allowed(file):
                     raise PermissionError(
                         f"Write access denied outside the OpenSRE temp directory: {{file}}"
                     )
         return _original_open(file, mode, *args, **kwargs)
 
     _builtins_module.open = _restricted_open
+    # pathlib.Path.open/write_text/write_bytes resolve io.open, which is a
+    # separate binding from builtins.open. Patching only the latter left every
+    # pathlib write unguarded.
+    _io_module.open = _restricted_open
+
+    _original_os_open = _os_module.open
+
+    def _restricted_os_open(path, flags, *args, **kwargs):
+        _write_flags = (
+            _os_module.O_WRONLY | _os_module.O_RDWR | _os_module.O_APPEND | _os_module.O_CREAT
+        )
+        if flags & _write_flags and not _write_allowed(path):
+            raise PermissionError(
+                f"Write access denied outside the OpenSRE temp directory: {{path}}"
+            )
+        return _original_os_open(path, flags, *args, **kwargs)
+
+    _os_module.open = _restricted_os_open
 
     import subprocess as _subprocess_module
     import os as _os_shell_module
@@ -116,13 +147,17 @@ def run_python_sandbox(
     env: dict[str, str] | None = None,
     allow_network: bool = False,
 ) -> SandboxResult:
-    """Run Python code in a sandboxed subprocess with timeout and access restrictions.
+    """Run Python code in a subprocess with a timeout and best-effort restrictions.
 
     Network access is blocked by replacing ``socket.socket`` and related helpers
     with a class that raises ``PermissionError``. Filesystem writes are restricted
-    to the OpenSRE temp directory, so any attempt to open a file outside that
-    directory for writing raises ``PermissionError``. Execution is capped at
-    *timeout* seconds.
+    to the OpenSRE temp directory via ``builtins.open``, ``io.open`` and
+    ``os.open``. Execution is capped at *timeout* seconds.
+
+    As the module docstring says, none of this contains hostile code — the guards
+    live in the interpreter being guarded. Callers that accept code from anyone
+    other than the operator must add their own gate (see
+    ``PythonExecutionTool.requires_approval``).
 
     Args:
         code: Python source code to execute.
@@ -158,6 +193,10 @@ def run_python_sandbox(
             suffix=".py",
             delete=False,
             dir=OPENSRE_TMP_DIR,
+            # Without this the script is written in the locale encoding (cp1252
+            # on Windows) while the interpreter reads .py as UTF-8, so any
+            # non-ASCII character in generated code dies with a SyntaxError.
+            encoding="utf-8",
         ) as tmp:
             tmp.write(full_code)
             tmp_path = tmp.name
@@ -207,7 +246,10 @@ def run_python_sandbox(
 
 def _sandbox_env(extra_env: dict[str, str] | None) -> dict[str, str]:
     """Build a narrow subprocess environment plus explicitly approved values."""
-    sandbox_env: dict[str, str] = {}
+    # stdout/stderr are decoded as UTF-8 below, so the child must encode as
+    # UTF-8 too. Without this it writes in its locale encoding (cp1252 on
+    # Windows) and every non-ASCII character comes back as mojibake.
+    sandbox_env: dict[str, str] = {"PYTHONIOENCODING": "utf-8"}
     for key in _BASE_ENV_KEYS:
         value = os.environ.get(key)
         if value:

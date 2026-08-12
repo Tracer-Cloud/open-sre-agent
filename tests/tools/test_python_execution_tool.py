@@ -25,6 +25,19 @@ class TestPythonExecutionToolMetadata:
         assert "investigation" in registered.surfaces
         assert "chat" in registered.surfaces
 
+    def test_requires_approval_on_messaging_surfaces(self) -> None:
+        """A remote chat user must not reach code execution unattended.
+
+        The sandbox guards are in-process monkeypatches that executed code can
+        undo, and this tool hands the subprocess a live GITHUB_TOKEN. On the
+        chat surface the code author is whoever is typing at the bot, so the
+        gateway approval gate (``gateway.core.runtime.approvals``) is the
+        control that stands between them and the host.
+        """
+        clear_tool_registry_cache()
+        registered = get_registered_tool_map("chat")["execute_python_code"]
+        assert registered.requires_approval is True
+
     def test_github_token_hidden_from_public_schema(self) -> None:
         clear_tool_registry_cache()
         registered = get_registered_tool_map("chat")["execute_python_code"]

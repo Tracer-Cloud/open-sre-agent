@@ -33,12 +33,18 @@ class PythonExecutionTool(BaseTool):
     source = "knowledge"
     side_effect_level = SideEffectLevel.READ_ONLY
     surfaces = ("investigation", "chat")
+    # The sandbox restricts accidents, not deliberate escapes: its guards are
+    # in-process monkeypatches that executed code can undo. On messaging
+    # surfaces the code author is a remote chat user (or injected content), and
+    # this process holds an injected GITHUB_TOKEN, so a human approves the run.
+    # Local CLI/investigation turns are unaffected — the gate is gateway-only.
+    requires_approval = True
     injected_params = ["github_token"]
     description = (
         "Execute generated Python code in a restricted subprocess, capture stdout, stderr, "
         "exceptions, and timeout state, and return the result to the agent. Network access is "
-        "blocked by default; opt in only for approved API-backed analysis. Subprocess spawning "
-        "is always blocked. Runtime facts "
+        "blocked by default; opt in only for approved API-backed analysis. Do not spawn "
+        "subprocesses, and do not work around the sandbox guards. Runtime facts "
         f"({_RUNTIME_FACT_KEYS}) are already stated in the conversation's environment block — "
         "answer them from there directly and never call this tool just to re-read them; code "
         "already running for another reason can reuse them via `inputs['opensre_runtime']` "
@@ -60,7 +66,7 @@ class PythonExecutionTool(BaseTool):
     anti_examples = [
         _RUNTIME_FACTS_ANTI_EXAMPLE,
         "Changing local files or shelling out to other processes",
-        f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all blocked by the sandbox)",
+        f"Calling {', '.join(BLOCKED_INTROSPECTION_COMMANDS)} (all refused by the sandbox)",
         "Probing cloud instance metadata over the network (use the injected cloud facts)",
         "Using allow_network for arbitrary host/port reachability probes or scanning (allow_network is unrestricted once enabled — only for approved API-backed analysis)",
         "Long-running jobs, crawlers, or broad external scans",

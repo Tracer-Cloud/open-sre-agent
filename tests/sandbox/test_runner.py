@@ -179,3 +179,82 @@ class TestSandboxResultModel:
             timed_out=True,
         )
         assert r.success is False
+
+
+class TestSandboxWriteGuardCoversEveryOpenPath:
+    """The write guard must not be limited to ``builtins.open``.
+
+    ``pathlib`` resolves ``io.open`` and low-level writes go through
+    ``os.open``; both are separate bindings, so a guard on ``builtins.open``
+    alone let generated code write anywhere the process could write.
+    """
+
+    @staticmethod
+    def _outside_target() -> str:
+        # The system temp dir is the parent of OPENSRE_TMP_DIR, so a file
+        # placed directly in it is outside the one allowed write root.
+        return os.path.join(tempfile.gettempdir(), "opensre_sandbox_guard_test.txt")
+
+    def _assert_blocked(self, code: str) -> None:
+        target = self._outside_target()
+        try:
+            result = run_python_sandbox(code)
+            assert not result.success
+            assert "PermissionError" in result.stderr or "PermissionError" in result.stdout
+            assert not os.path.exists(target)
+        finally:
+            if os.path.exists(target):
+                os.unlink(target)
+
+    def test_pathlib_write_text_outside_tmp_blocked(self) -> None:
+        target = self._outside_target()
+        self._assert_blocked(f"from pathlib import Path\nPath({target!r}).write_text('escaped')\n")
+
+    def test_os_open_write_outside_tmp_blocked(self) -> None:
+        target = self._outside_target()
+        self._assert_blocked(
+            "import os\n"
+            f"fd = os.open({target!r}, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"
+            "os.write(fd, b'escaped')\n"
+            "os.close(fd)\n"
+        )
+
+    def test_pathlib_write_inside_opensre_tmp_still_allowed(self) -> None:
+        # The guard must not break the directory the tool is meant to use.
+        ensure_opensre_tmp_dir()
+        target = os.path.join(os.fspath(OPENSRE_TMP_DIR), "sandbox_pathlib_write.txt")
+        try:
+            result = run_python_sandbox(
+                f"from pathlib import Path\nPath({target!r}).write_text('ok')\n"
+            )
+            assert result.success, result.stderr
+        finally:
+            if os.path.exists(target):
+                os.unlink(target)
+
+    def test_os_open_read_outside_tmp_still_allowed(self) -> None:
+        # Only writes are restricted; a read-only os.open must still work.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as handle:
+            handle.write("data")
+            path = handle.name
+        try:
+            result = run_python_sandbox(
+                f"import os\nfd = os.open({path!r}, os.O_RDONLY)\n"
+                "print(os.read(fd, 4).decode())\nos.close(fd)\n"
+            )
+            assert result.success, result.stderr
+            assert "data" in result.stdout
+        finally:
+            os.unlink(path)
+
+
+class TestSandboxSourceEncoding:
+    def test_non_ascii_code_runs(self) -> None:
+        """The script is read back as UTF-8, so it must be written as UTF-8.
+
+        Under a non-UTF-8 locale (cp1252 on Windows) the default encoding made
+        any non-ASCII character in generated code fail with a SyntaxError.
+        """
+        result = run_python_sandbox("print('caf\u00e9 \u2014 na\u00efve')")
+        assert result.success, result.stderr
+        assert "café" in result.stdout
