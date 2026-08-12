@@ -135,6 +135,7 @@ In organization-scoped deployments (like Slack team installations), the storage 
 - The organization's shared context is mounted at `OPENSRE_CONTEXT_ROOT` (e.g., `/workspace/memories`)
 - This volume is chrooted to a specific organization, so OpenSRE doesn't add its own org segment
 - Organization-wide data (like `integrations.json`) lives at the root of this mount
+- User-specific configuration (`config.yml`) remains in `~/.opensre/` on the local machine
 - Personal data (sessions, memory) is stored per-user under `users/<slack_user_id>/`
 - Without the mount, organization data nests under `~/.opensre/orgs/<organization_id>/` for multi-org testing
 
