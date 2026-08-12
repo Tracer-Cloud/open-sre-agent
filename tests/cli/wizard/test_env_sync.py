@@ -757,6 +757,30 @@ def test_sync_provider_env_preserves_custom_model_from_environ_when_blank(
     assert "CUSTOM_ANTHROPIC_REASONING_MODEL=\n" not in content
 
 
+def test_sync_provider_env_preserves_custom_legacy_model_when_blank(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("CUSTOM_OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("CUSTOM_OPENAI_MODEL", raising=False)
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1")
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=custom-openai\n"
+        "CUSTOM_OPENAI_BASE_URL=http://localhost:4000/v1\n"
+        "CUSTOM_OPENAI_MODEL=gateway-model\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["custom-openai"],
+        model="",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "CUSTOM_OPENAI_REASONING_MODEL=gateway-model\n" in content
+    assert "CUSTOM_OPENAI_MODEL=gateway-model\n" in content
+
+
 def test_sync_provider_env_cli_provider_keeps_empty_model(tmp_path, monkeypatch) -> None:
     # The blank-model preservation is scoped to custom gateways; a CLI provider
     # with an empty model still writes its (empty) CLI-default slot as before.

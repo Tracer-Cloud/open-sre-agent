@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from surfaces.cli.wizard._ui import Choice
+import surfaces.cli.wizard._ui as ui
 from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.cli.wizard.custom_endpoints import (
     CUSTOM_ENDPOINT_SELECTION,
@@ -34,8 +34,6 @@ def test_configured_custom_anthropic_strips_trailing_v1(monkeypatch: Any) -> Non
 def test_unset_endpoint_prompts(monkeypatch: Any) -> None:
     # When the endpoint env is unset the module prompts; stub the prompt to a value.
     monkeypatch.delenv("CUSTOM_OPENAI_BASE_URL", raising=False)
-    import surfaces.cli.wizard._ui as ui
-
     monkeypatch.setattr(ui, "_prompt_value", lambda *_a, **_k: "http://gw.internal:8000/v1")
     result = ensure_endpoint_settings(PROVIDER_BY_VALUE["custom-openai"])
     assert result == {"CUSTOM_OPENAI_BASE_URL": "http://gw.internal:8000/v1"}
@@ -45,17 +43,15 @@ def test_unset_endpoint_prompts(monkeypatch: Any) -> None:
 def test_blank_prompt_is_rejected(monkeypatch: Any, slug: str) -> None:
     endpoint_env = PROVIDER_BY_VALUE[slug].endpoint_env
     monkeypatch.delenv(endpoint_env, raising=False)
-    import surfaces.cli.wizard._ui as ui
-
     monkeypatch.setattr(ui, "_prompt_value", lambda *_a, **_k: "")
     assert ensure_endpoint_settings(PROVIDER_BY_VALUE[slug]) is None
 
 
 def test_onboarding_collapses_custom_providers_into_one_prominent_choice() -> None:
     choices = [
-        Choice(value="openai", label="OpenAI"),
-        Choice(value="custom-openai", label="Custom OpenAI"),
-        Choice(value="custom-anthropic", label="Custom Anthropic"),
+        ui.Choice(value="openai", label="OpenAI"),
+        ui.Choice(value="custom-openai", label="Custom OpenAI"),
+        ui.Choice(value="custom-anthropic", label="Custom Anthropic"),
     ]
 
     result = onboarding_provider_choices(choices)
@@ -76,7 +72,7 @@ def test_saved_custom_provider_defaults_to_collapsed_choice() -> None:
 def test_custom_choice_opens_compatibility_dropdown(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
-    def _choose_compatibility(prompt: str, choices: list[Choice], **kwargs: Any) -> str:
+    def _choose_compatibility(prompt: str, choices: list[ui.Choice], **kwargs: Any) -> str:
         captured["prompt"] = prompt
         captured["choices"] = choices
         captured["default"] = kwargs["default"]

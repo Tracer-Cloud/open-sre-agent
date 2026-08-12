@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import surfaces.interactive_shell.command_registry.model.switching as switching
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 
 
 class _Console:
@@ -126,3 +127,12 @@ def test_custom_provider_no_model_preserves_configured_model(monkeypatch: Any) -
     console = _Console()
     assert switching.switch_llm_provider("custom-openai", console) is True  # type: ignore[arg-type]
     assert synced and synced[0]["model"] == "gpt-5.4"
+
+
+def test_custom_provider_no_model_uses_legacy_model(monkeypatch: Any) -> None:
+    provider = PROVIDER_BY_VALUE["custom-openai"]
+    monkeypatch.delenv(provider.model_env, raising=False)
+    assert provider.legacy_model_env is not None
+    monkeypatch.setenv(provider.legacy_model_env, "gateway-model")
+
+    assert switching._resolve_omitted_model(provider) == "gateway-model"

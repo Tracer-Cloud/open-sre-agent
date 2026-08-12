@@ -66,7 +66,10 @@ def _resolve_omitted_model(provider: object) -> str:
 
     model_env = str(getattr(provider, "model_env", "") or "")
     if model_env and is_custom_provider(str(getattr(provider, "value", ""))):
-        return os.getenv(model_env, "").strip()
+        legacy_model_env = str(getattr(provider, "legacy_model_env", "") or "")
+        return os.getenv(model_env, "").strip() or (
+            os.getenv(legacy_model_env, "").strip() if legacy_model_env else ""
+        )
     return default_model
 
 

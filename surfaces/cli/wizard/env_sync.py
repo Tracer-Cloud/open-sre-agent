@@ -176,9 +176,15 @@ def sync_provider_env(
     # an empty model (its CLI default), so scope this strictly to custom gateways.
     resolved_model = model
     if not resolved_model and is_custom_provider(provider.value):
+        legacy_env = resolved_model_provider.legacy_model_env
         resolved_model = (
             _env_value_from_lines(lines, resolved_model_provider.model_env)
             or os.getenv(resolved_model_provider.model_env, "").strip()
+            or (
+                _env_value_from_lines(lines, legacy_env) or os.getenv(legacy_env, "").strip()
+                if legacy_env
+                else ""
+            )
         )
 
     values: dict[str, str] = {
