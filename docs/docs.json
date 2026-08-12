@@ -301,7 +301,7 @@
     },
     {
       "source": "/environments/codespaces",
-      "destination": "/environments/windows-local"
+      "destination": "/install"
     },
     {
       "source": "/environments/overview",
