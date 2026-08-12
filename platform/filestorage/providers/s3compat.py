@@ -156,8 +156,17 @@ def check_public_access(
             return PublicAccessStatus(
                 BucketExposure.UNKNOWN, "missing the s3:GetBucketPolicyStatus permission"
             )
-        if code in ("NoSuchBucketPolicy", "MethodNotAllowed", "NotImplemented"):
+        if code == "NoSuchBucketPolicy":
             return PublicAccessStatus(BucketExposure.PRIVATE)
+        if code in (
+            "MethodNotAllowed",
+            "NotImplemented",
+            "InvalidRequest",
+            "UnsupportedOperation",
+        ):
+            return PublicAccessStatus(
+                BucketExposure.UNKNOWN, "bucket policy status check not supported by endpoint"
+            )
         return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")
     except (BotoCoreError, ValueError, RemoteSyncUnavailableError) as exc:
         return PublicAccessStatus(BucketExposure.UNKNOWN, f"cannot check ({type(exc).__name__})")

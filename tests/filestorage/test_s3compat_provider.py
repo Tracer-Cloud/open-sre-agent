@@ -167,6 +167,45 @@ def test_s3compat_check_public_access_returns_private() -> None:
 
     # Assert
     assert status.exposure == BucketExposure.PRIVATE
+    assert status.detail == ""
+
+
+def test_s3compat_check_public_access_no_policy_returns_private() -> None:
+    # Arrange
+    class _NoPolicyClient:
+        def get_bucket_policy_status(self, Bucket: str) -> dict[str, Any]:  # noqa: ARG002
+            raise ClientError(
+                {"Error": {"Code": "NoSuchBucketPolicy", "Message": "The bucket policy does not exist"}},
+                "GetBucketPolicyStatus",
+            )
+
+    config = RemoteSyncConfig(bucket="minio-bucket", provider="s3compat", prefix="opensre")
+
+    # Act
+    status = check_public_access(config, client=_NoPolicyClient())
+
+    # Assert
+    assert status.exposure == BucketExposure.PRIVATE
+
+
+@pytest.mark.parametrize("code", ["MethodNotAllowed", "NotImplemented", "InvalidRequest", "UnsupportedOperation"])
+def test_s3compat_check_public_access_unsupported_api_returns_unknown(code: str) -> None:
+    # Arrange
+    class _UnsupportedClient:
+        def get_bucket_policy_status(self, Bucket: str) -> dict[str, Any]:  # noqa: ARG002
+            raise ClientError(
+                {"Error": {"Code": code, "Message": "The specified method is not allowed."}},
+                "GetBucketPolicyStatus",
+            )
+
+    config = RemoteSyncConfig(bucket="r2-bucket", provider="s3compat", prefix="opensre")
+
+    # Act
+    status = check_public_access(config, client=_UnsupportedClient())
+
+    # Assert
+    assert status.exposure == BucketExposure.UNKNOWN
+    assert "not supported" in status.detail
 
 
 def test_s3compat_provider_registration() -> None:

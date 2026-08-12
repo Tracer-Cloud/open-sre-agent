@@ -49,6 +49,16 @@ def test_the_organization_id_is_re_exported() -> None:
         assert name in constants.__all__
 
 
+def test_remote_sync_endpoint_url_env_is_re_exported() -> None:
+    """Verify REMOTE_SYNC_ENDPOINT_URL_ENV is re-exported from config.constants."""
+    # Arrange / Act
+    from config import constants
+
+    # Assert
+    assert constants.REMOTE_SYNC_ENDPOINT_URL_ENV == "OPENSRE_REMOTE_SYNC_ENDPOINT_URL"
+    assert "REMOTE_SYNC_ENDPOINT_URL_ENV" in constants.__all__
+
+
 @pytest.mark.parametrize("module", ["billing", "tenancy"])
 def test_constants_module_stays_a_leaf(module: str) -> None:
     """``config`` sits at the bottom layer, so the constants must not
