@@ -7,7 +7,6 @@ from typing import Any
 
 from rich.console import Console
 
-from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -15,6 +14,7 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
     string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskRecord
 from tools.interactive_shell.shared.investigation_launch import (

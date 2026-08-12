@@ -26,8 +26,8 @@ from core.agent_harness.turns.headless_dispatch import (
     NoopTurnAccounting,
 )
 from core.agent_harness.turns.turn_results import TurnResult
-from core.llm.types import AgentLLMResponse, ToolCall
 from core.domain.types.tools import ToolSurface
+from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn

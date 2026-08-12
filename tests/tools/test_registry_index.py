@@ -108,6 +108,7 @@ def test_load_tool_materializes_the_executor() -> None:
 
 def test_surfaces_attribute_resolution() -> None:
     import ast
+
     from tools.registry_index import _string_constant
 
     # ast.Attribute for ToolSurface.CHAT

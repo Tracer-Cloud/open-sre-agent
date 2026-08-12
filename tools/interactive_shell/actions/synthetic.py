@@ -6,7 +6,6 @@ from functools import lru_cache
 from typing import Any
 
 from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
-from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
@@ -14,6 +13,7 @@ from core.agent_harness.tools.tool_context import (
     object_schema,
     string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.subprocess import require_subprocess_presenter
 from tools.interactive_shell.synthetic.runner import run_synthetic_test

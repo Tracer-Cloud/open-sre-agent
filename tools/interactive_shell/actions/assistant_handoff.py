@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,
@@ -14,6 +13,7 @@ from core.agent_harness.tools.tool_context import (
 )
 from core.agent_harness.turns.evidence_kind import EVIDENCE_KIND_VALUES
 from core.agent_harness.turns.handoff_keys import HandoffField
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 
 

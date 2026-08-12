@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from core.agent_harness.turns.gather_observation import GatheredEvidence
-from core.domain.types.tools import ToolSurface
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from core.domain.types.tools import ToolSurface
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]

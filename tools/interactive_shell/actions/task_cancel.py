@@ -7,13 +7,13 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.domain.types.tools import ToolSurface
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
     object_schema,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from platform.common.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool

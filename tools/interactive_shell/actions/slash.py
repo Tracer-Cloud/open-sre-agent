@@ -7,7 +7,6 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.domain.types.tools import ToolSurface
 from core.agent_harness.session.terminal_access import (
     exclusive_stdin_active,
     session_terminal,
@@ -18,6 +17,7 @@ from core.agent_harness.tools.tool_context import (
     capability_available_from_sources,
     execute_with_action_context,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.interactive_shell.shared import plan_foreground_tool
 from tools.interactive_shell.shared.slash_catalog import (
