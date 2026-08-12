@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from core.domain.types.evidence import EvidenceSource
 from core.domain.types.retrieval import RetrievalControls
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
@@ -27,7 +28,7 @@ def tool(
     source_id: str | None = None,
     evidence_type: EvidenceType | None = None,
     side_effect_level: SideEffectLevel | None = None,
-    surfaces: tuple[str, ...] | None = None,
+    surfaces: tuple[ToolSurface, ...] | None = None,
     use_cases: list[str] | None = None,
     examples: list[str] | None = None,
     anti_examples: list[str] | None = None,
@@ -62,7 +63,7 @@ def tool[F: Callable[..., Any]](
     source_id: str | None = None,
     evidence_type: EvidenceType | None = None,
     side_effect_level: SideEffectLevel | None = None,
-    surfaces: tuple[str, ...] | None = None,
+    surfaces: tuple[ToolSurface, ...] | None = None,
     use_cases: list[str] | None = None,
     examples: list[str] | None = None,
     anti_examples: list[str] | None = None,
@@ -97,7 +98,7 @@ def tool[F: Callable[..., Any]](
     source_id: str | None = None,
     evidence_type: EvidenceType | None = None,
     side_effect_level: SideEffectLevel | None = None,
-    surfaces: tuple[str, ...] | None = None,
+    surfaces: tuple[ToolSurface, ...] | None = None,
     use_cases: list[str] | None = None,
     examples: list[str] | None = None,
     anti_examples: list[str] | None = None,
@@ -131,7 +132,7 @@ def tool[F: Callable[..., Any]](
     source_id: str | None = None,
     evidence_type: EvidenceType | None = None,
     side_effect_level: SideEffectLevel | None = None,
-    surfaces: tuple[str, ...] | None = None,
+    surfaces: tuple[ToolSurface, ...] | None = None,
     use_cases: list[str] | None = None,
     examples: list[str] | None = None,
     anti_examples: list[str] | None = None,

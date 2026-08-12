@@ -117,7 +117,7 @@ def _load_registry_tool_map() -> dict[str, RegisteredTool]:
 
 
 @lru_cache(maxsize=8)
-def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
+def _load_surface_snapshot(surface: ToolSurface) -> tuple[RegisteredTool, ...]:
     """Import only the modules that statically declare a tool for ``surface``.
 
     Resolved from the descriptor index so a surface load never imports the other
@@ -159,7 +159,7 @@ def clear_tool_registry_cache() -> None:
     clear_descriptor_index_cache()
 
 
-def get_registered_tools(surface: ToolSurface | str | None = None) -> list[RegisteredTool]:
+def get_registered_tools(surface: ToolSurface | None = None) -> list[RegisteredTool]:
     if surface is None:
         return list(_load_registry_snapshot())
     return list(_load_surface_snapshot(surface))
@@ -175,13 +175,13 @@ def get_registered_tool(tool_name: str) -> RegisteredTool | None:
     return _load_registry_tool_map().get(tool_name)
 
 
-def get_registered_tool_map(surface: ToolSurface | str | None = None) -> dict[str, RegisteredTool]:
+def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())
     return {tool.name: tool for tool in get_registered_tools(surface)}
 
 
-def get_tool_descriptors(surface: ToolSurface | str | None = None) -> list[ToolDescriptor]:
+def get_tool_descriptors(surface: ToolSurface | None = None) -> list[ToolDescriptor]:
     """Cheap tool metadata for ``surface`` — reads the static index, imports no
     executor. Use for listing/availability; call :func:`load_tool` to materialize
     an executor only when a tool must run.
@@ -215,11 +215,11 @@ def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
 class RegisteredToolRegistry:
     """:class:`~core.agent_harness.ports.ToolRegistry` backed by discovered tool packages."""
 
-    def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
-        return get_registered_tools(surface)  # type: ignore[arg-type]
+    def tools_for_surface(self, surface: ToolSurface) -> list[RegisteredTool]:
+        return get_registered_tools(surface)
 
-    def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
-        return get_registered_tool_map(surface)  # type: ignore[arg-type]
+    def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, RegisteredTool]:
+        return get_registered_tool_map(surface)
 
 
 def resolve_tool_display_name(tool_name: str) -> str:
