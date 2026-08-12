@@ -80,6 +80,40 @@ def test_make_argocd_client_logs_soft_fail_on_construction_error(
     ), caplog.text
 
 
+def test_make_argocd_client_soft_fail_log_does_not_echo_config_input(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Arrange: supplying both auth methods is a real misconfiguration that gets
+    # past the factory's guards and reaches ArgoCDConfig's model validator.
+    # A model-level pydantic failure renders the whole input mapping via
+    # `input_value=...`, which is where a bearer token or password would escape.
+    secret_token = "s3cr3t-argocd-bearer-token"
+    secret_password = "s3cr3t-argocd-password"
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger="integrations.argocd.client"):
+        result = make_argocd_client(
+            "https://argocd.example.com",
+            bearer_token=secret_token,
+            username="admin",
+            password=secret_password,
+        )
+
+    # Assert: the soft-fail contract and the warning both survive, but no part
+    # of the submitted config is echoed. Asserting on `input_value` rather than
+    # only on the literal secrets is deliberate: pydantic elides the middle of a
+    # long mapping, so a secret-substring check passes by accident today and
+    # would stop protecting us if field order or pydantic's truncation changed.
+    assert result is None
+    assert any(
+        record.levelno == logging.WARNING and record.exc_info is not None
+        for record in caplog.records
+    ), caplog.text
+    assert "input_value" not in caplog.text
+    assert secret_token not in caplog.text
+    assert secret_password not in caplog.text
+
+
 def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         ArgoCDClient,
