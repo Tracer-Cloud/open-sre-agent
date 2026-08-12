@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.gitlab import (
@@ -42,7 +43,7 @@ def _list_gitlab_mrs_available(sources: dict[str, dict]) -> bool:
         "Identifying open MRs that may have deployed breaking changes",
     ],
     requires=["project_id"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

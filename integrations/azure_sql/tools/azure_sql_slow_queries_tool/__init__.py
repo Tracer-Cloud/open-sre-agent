@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.azure_sql import (
@@ -19,7 +20,7 @@ from integrations.azure_sql import (
         " ordered by average elapsed time."
     ),
     source="azure_sql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identifying queries with high average execution time",
         "Finding resource-intensive queries causing DTU throttling",

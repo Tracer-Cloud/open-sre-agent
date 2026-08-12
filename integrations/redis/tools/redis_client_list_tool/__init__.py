@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.redis import (
     RedisConfig,
@@ -20,7 +21,7 @@ from integrations.redis import (
         "exhaustion and stuck or blocked clients."
     ),
     source="redis",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Diagnose connection-pool exhaustion when connected_clients is high or rising.",
         "Find clients blocked on BLPOP/BRPOP/XREAD during a stall or deadlock.",

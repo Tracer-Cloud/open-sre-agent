@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
@@ -83,7 +84,7 @@ def _extract_records(body: dict[str, Any]) -> list[dict[str, Any]]:
     name="query_openobserve_logs",
     description="Query OpenObserve logs using bounded read-only search.",
     source="openobserve",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     requires=["base_url"],
     input_schema={
         "type": "object",

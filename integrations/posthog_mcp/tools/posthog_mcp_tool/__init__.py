@@ -9,6 +9,7 @@ or renames individual MCP-side tools.
 
 from __future__ import annotations
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.mcp_bridge import unavailable_response
@@ -210,7 +211,7 @@ def _normalize_tool_result(result: PostHogMCPToolCallResult) -> PostHogMCPRespon
         "Finding the right tool for a task by passing a name_filter (e.g. 'events query sql')",
         "Fetching the input schema of a specific tool with include_schema before calling it",
     ],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -337,7 +338,7 @@ def list_posthog_tools(
         "Searching PostHog docs or fetching insight/dashboard data during an investigation",
     ],
     requires=["tool_name"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

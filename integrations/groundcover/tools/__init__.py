@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.groundcover.availability import groundcover_available_or_backend
@@ -129,7 +130,7 @@ def _query_ref_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     display_name="groundcover query reference",
     source="groundcover",
     tags=("observability", "reference"),
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     description=(
         "Get the groundcover Query Language (gcQL) reference: operators, functions, pipes, and "
         "query patterns. Call this ONCE before writing gcQL for any query_groundcover_* tool. "

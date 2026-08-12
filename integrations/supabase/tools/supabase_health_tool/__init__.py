@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.supabase import (
     get_service_health,
@@ -15,7 +16,7 @@ from integrations.supabase import (
     name="get_supabase_service_health",
     description="Check the health of all Supabase services (PostgREST, Auth, Storage) for a given project.",
     source="supabase",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking Supabase project health during an incident",
         "Identifying which Supabase service (Auth, Storage, PostgREST) is degraded",

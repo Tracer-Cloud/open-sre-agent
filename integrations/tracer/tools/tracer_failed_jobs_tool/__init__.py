@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.tracer import (
     AWSBatchJobResult,
@@ -40,7 +41,7 @@ def _tracer_trace_id(sources: dict[str, dict]) -> str:
     },
     is_available=_tracer_available,
     extract_params=lambda sources: {"trace_id": _tracer_trace_id(sources)},
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def get_failed_jobs(trace_id: str) -> dict[str, Any]:
     """Get AWS Batch jobs that failed during a pipeline run."""

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.slack.tools.slack_read_messages_tool.constants import SOURCE
@@ -141,5 +142,5 @@ class SlackReplyMessageTool(BaseTool):
 
 slack_reply_message = tool(
     SlackReplyMessageTool(),
-    surfaces=("investigation", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
 )

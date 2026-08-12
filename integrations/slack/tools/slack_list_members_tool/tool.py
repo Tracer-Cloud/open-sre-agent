@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from core.tool_framework.tool_decorator import tool
@@ -104,5 +105,5 @@ class SlackListTeamMembersTool(BaseTool):
 
 slack_list_team_members = tool(
     SlackListTeamMembersTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
 )

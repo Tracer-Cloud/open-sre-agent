@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.github.helpers import (
@@ -45,7 +46,7 @@ def _get_github_file_contents_available(sources: dict[str, dict]) -> bool:
         "Checking how a specific path looked on a branch or commit",
     ],
     requires=["owner", "repo", "path"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

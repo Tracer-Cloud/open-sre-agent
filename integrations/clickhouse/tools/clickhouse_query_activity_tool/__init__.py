@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.clickhouse import (
     ClickHouseConfig,
@@ -15,7 +16,7 @@ from integrations.clickhouse import (
     name="get_clickhouse_query_activity",
     description="Retrieve recent query activity from a ClickHouse instance, including query duration, rows read, and memory usage.",
     source="clickhouse",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identifying slow or resource-heavy queries during an incident",
         "Checking recent query patterns that may correlate with performance issues",

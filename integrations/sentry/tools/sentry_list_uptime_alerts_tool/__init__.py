@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from integrations.sentry import (
@@ -75,7 +76,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     injected_params=("organization_slug", "sentry_token", "sentry_url", "project_slug"),
     is_available=_sentry_available,
     extract_params=_extract_params,
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def list_sentry_uptime_alerts(
     organization_slug: str,

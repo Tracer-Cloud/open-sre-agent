@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.bitbucket import (
@@ -68,7 +69,7 @@ def _search_bitbucket_code_available(sources: dict[str, dict]) -> bool:
     name="search_bitbucket_code",
     description="Search code across a Bitbucket workspace or specific repository.",
     source="bitbucket",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Finding where a specific function or configuration is defined",
         "Searching for error patterns across repositories",

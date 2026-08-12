@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.rabbitmq import (
     RabbitMQConfig,
@@ -15,7 +16,7 @@ from integrations.rabbitmq import (
     name="get_rabbitmq_node_health",
     description="Return per-node RabbitMQ resource utilization: memory used vs. limit (with alarm flag), disk free vs. limit (with alarm flag), file descriptors, sockets, erlang process usage, and cluster partition state. Essential for diagnosing backpressure, partitions, or node crashes.",
     source="rabbitmq",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking if a RabbitMQ node is under memory or disk pressure",
         "Detecting cluster network partitions between nodes",

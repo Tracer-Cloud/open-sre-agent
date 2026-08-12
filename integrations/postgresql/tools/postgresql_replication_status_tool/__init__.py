@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.postgresql import (
@@ -16,7 +17,7 @@ from integrations.postgresql import (
     name="get_postgresql_replication_status",
     description="Retrieve PostgreSQL replication status including replica lag, WAL positions, and streaming status.",
     source="postgresql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Investigating replication lag issues during database incidents",
         "Checking replica health and synchronization status",

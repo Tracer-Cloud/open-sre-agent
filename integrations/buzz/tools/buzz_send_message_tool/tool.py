@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.buzz.tools.buzz_send_message_tool.constants import SOURCE
@@ -118,5 +119,5 @@ class BuzzSendMessageTool(BaseTool):
 
 buzz_send_message = tool(
     BuzzSendMessageTool(),
-    surfaces=("investigation", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
 )

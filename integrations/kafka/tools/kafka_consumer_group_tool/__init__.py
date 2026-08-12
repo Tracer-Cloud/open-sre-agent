@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.kafka import (
     KafkaConfig,
@@ -15,7 +16,7 @@ from integrations.kafka import (
     name="get_kafka_consumer_group_lag",
     description="Retrieve consumer group lag per partition from a Kafka cluster, showing committed offsets versus high watermarks.",
     source="kafka",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Diagnosing consumer lag causing processing delays",
         "Identifying stuck or slow consumers during an incident",

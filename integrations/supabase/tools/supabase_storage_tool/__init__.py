@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.supabase import (
     get_storage_buckets,
@@ -15,7 +16,7 @@ from integrations.supabase import (
     name="get_supabase_storage_buckets",
     description="List all Supabase Storage buckets and their configuration metadata.",
     source="supabase",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Auditing storage bucket configuration during a file upload incident",
         "Checking whether a bucket is public or private when debugging access errors",

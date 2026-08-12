@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from integrations.rocketchat.tools.rocketchat_send_message_tool.constants import SOURCE
@@ -127,5 +128,5 @@ class RocketChatSendMessageTool(BaseTool):
 
 rocketchat_send_message = tool(
     RocketChatSendMessageTool(),
-    surfaces=("investigation", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.ACTION),
 )

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
@@ -114,5 +115,5 @@ class SlackJoinChannelTool(BaseTool):
 
 slack_join_channel = tool(
     SlackJoinChannelTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
 )

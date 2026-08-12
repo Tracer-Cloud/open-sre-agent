@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.tool_framework.base import BaseTool
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from core.tool_framework.tool_decorator import tool
@@ -97,5 +98,5 @@ class SlackSearchMessagesTool(BaseTool):
 
 slack_search_messages = tool(
     SlackSearchMessagesTool(),
-    surfaces=("investigation", "chat", "action"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT, ToolSurface.ACTION),
 )
