@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import tempfile
-import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -82,8 +81,15 @@ def _quarantine_unreadable(store_path: Path) -> None:
     and let it write over the only copy of the schedules — the exact loss this
     preservation step exists to prevent, so it fails closed instead.
     """
-    backup = store_path.with_name(f"{store_path.name}.corrupt-{int(time.time())}")
     try:
+        # mkstemp reserves a unique name atomically. A second-precision
+        # timestamp did not: two quarantines inside the same second picked the
+        # same path, and the second rename destroyed the first backup — losing
+        # the very schedules this step exists to keep.
+        handle, backup = tempfile.mkstemp(
+            prefix=f"{store_path.name}.corrupt-", dir=store_path.parent
+        )
+        os.close(handle)
         os.replace(store_path, backup)
     except OSError:
         logger.error(

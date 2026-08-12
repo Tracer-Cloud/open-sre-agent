@@ -345,3 +345,19 @@ class TestStoreDurability:
 
         # Assert: failing to preserve must not license overwriting the original.
         assert store_path.read_text(encoding="utf-8") == damaged
+
+    def test_repeated_quarantines_each_keep_their_own_backup(self, store_path: Path) -> None:
+        # Arrange / Act: damage and quarantine twice in quick succession.
+        for index, name in enumerate(("digest-7", "digest-8")):
+            add_task(self._task(name, f"0 {index + 7} * * *"), store_path)
+            full = store_path.read_text(encoding="utf-8")
+            store_path.write_text(full[: len(full) // 2], encoding="utf-8")
+            add_task(self._task(f"{name}-after", "0 9 * * *"), store_path)
+
+        # Assert: two backups, and the earlier one still holds its schedule.
+        # A second-precision name gave both the same path, so the second
+        # rename replaced the first backup and lost what it was keeping.
+        backups = sorted(store_path.parent.glob("scheduler_tasks.json.corrupt-*"))
+        assert len(backups) == 2
+        preserved = " ".join(path.read_text(encoding="utf-8") for path in backups)
+        assert "digest-7" in preserved
