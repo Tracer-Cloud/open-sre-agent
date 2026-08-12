@@ -244,6 +244,7 @@ backends today:
 | Google Cloud Storage | `gcs` | Application Default Credentials (`gcloud auth application-default login`) |
 | Vercel Blob | `vercel` | Ambient `BLOB_READ_WRITE_TOKEN` |
 | Azure Blob Storage | `azure` | Ambient Azure config (`AZURE_*`, Azure CLI, Managed Identity) |
+| S3-Compatible (MinIO / R2 / Spaces) | `s3compat` | Ambient S3 credentials + `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` |
 
 Other clouds (GCS, …) are community additions: implement `ObjectStore`,
 call `register_object_store("<name>", factory)`, and set
@@ -340,6 +341,21 @@ Authentication relies entirely on Azure's ambient credentials (`DefaultAzureCred
 The authenticated principal must have the **Storage Blob Data Contributor** role assignment on the storage account. The generic "Contributor" role is insufficient as it only grants control-plane access, not data-plane access.
 
 Add `Microsoft.Storage/storageAccounts/blobServices/containers/read` (included in the Storage Blob Data Reader role) so `status` can warn you if the container is publicly readable — see [The store](#the-store). Without it, `status` shows "could not confirm it is private" instead of failing.
+
+### S3-Compatible (MinIO / Cloudflare R2 / DigitalOcean Spaces)
+
+Set `OPENSRE_REMOTE_SYNC_PROVIDER=s3compat` and supply your custom endpoint URL via `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` (or standard `AWS_ENDPOINT_URL_S3` / `AWS_ENDPOINT_URL`). Path-style addressing is enabled automatically for MinIO compatibility.
+
+```bash
+export OPENSRE_REMOTE_SYNC=1
+export OPENSRE_REMOTE_SYNC_PROVIDER=s3compat
+export OPENSRE_REMOTE_SYNC_BUCKET=my-minio-bucket
+export OPENSRE_REMOTE_SYNC_ENDPOINT_URL=http://localhost:9000
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+```
+
+For Cloudflare R2 or DigitalOcean Spaces, set `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` to your account endpoint (e.g., `https://<account_id>.r2.cloudflarestorage.com` or `https://<region>.digitaloceanspaces.com`).
 
 ## The store
 
