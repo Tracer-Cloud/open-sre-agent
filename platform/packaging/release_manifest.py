@@ -11,6 +11,7 @@ _RUNTIME_PACKAGE_NAMES = (
 )
 _ACTION_SKILLS_DIR = Path("core/agent_harness/prompts/skills")
 _SKILL_DATA_ROOTS = (Path("integrations"), Path("tools"))
+_RUNTIME_DISCOVERY_EXCLUSIONS = frozenset({"investigation_registry", "registry.py"})
 
 
 def _module_name(repo_root: Path, source_path: Path) -> str:
@@ -34,7 +35,11 @@ def runtime_hidden_imports(repo_root: Path) -> tuple[str, ...]:
     for package_name in _RUNTIME_PACKAGE_NAMES:
         package_root = repo_root / Path(*package_name.split("."))
         for source_path in package_root.rglob("*.py"):
-            if "__pycache__" in source_path.parts:
+            if (
+                "__pycache__" in source_path.parts
+                or _RUNTIME_DISCOVERY_EXCLUSIONS.intersection(source_path.parts)
+                or source_path.stem.endswith("_test")
+            ):
                 continue
             module_name = _module_name(repo_root, source_path)
             if module_name:
