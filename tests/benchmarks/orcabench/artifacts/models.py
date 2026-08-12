@@ -39,6 +39,20 @@ class UsageEvent(ArtifactModel):
     reasoning_effort: str | None = None
 
 
+class ModelCallAttemptEvent(ArtifactModel):
+    """One provider request attempt, including failures that have no usage."""
+
+    sequence: int = Field(ge=1)
+    requested_model: str
+    api_type: str
+    attempt: int = Field(ge=1)
+    status: Literal["succeeded", "failed"]
+    duration_seconds: float = Field(ge=0)
+    response_model: str | None = None
+    response_id: str | None = None
+    error_type: str | None = None
+
+
 class ErrorRecord(ArtifactModel):
     """Redacted exception details retained when native execution fails."""
 
@@ -56,6 +70,8 @@ class RunSummary(ArtifactModel):
     llm_calls: int = Field(ge=0, strict=True)
     input_tokens: int = Field(ge=0, strict=True)
     output_tokens: int = Field(ge=0, strict=True)
+    cache_read_tokens: int = Field(default=0, ge=0, strict=True)
+    cache_creation_tokens: int = Field(default=0, ge=0, strict=True)
     report_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -73,7 +89,7 @@ class RunManifest(ArtifactModel):
     model: str
     model_provider: str
     model_transport: str
-    reasoning_effort: str
+    reasoning_effort: str | None = None
     temperature: float | None = Field(default=None, ge=0, le=2)
     native_max_output_tokens: int = Field(ge=1)
     returned_models: tuple[str, ...] = ()
@@ -85,3 +101,5 @@ class RunManifest(ArtifactModel):
     llm_calls: int = Field(default=0, ge=0)
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
+    cache_read_tokens: int = Field(default=0, ge=0)
+    cache_creation_tokens: int = Field(default=0, ge=0)

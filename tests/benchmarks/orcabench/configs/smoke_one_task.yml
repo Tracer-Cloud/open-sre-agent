@@ -6,7 +6,6 @@ model:
   harbor_model: gemini/gemini-3.5-flash-lite
   provider: gemini
   transport: sdk
-  reasoning_effort: medium
   max_tokens: 16384
 
 verifier:

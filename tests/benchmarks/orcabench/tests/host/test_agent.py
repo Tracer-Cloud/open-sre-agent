@@ -91,18 +91,27 @@ def test_post_run_summary_populates_harbor_context(tmp_path: Path) -> None:
         llm_calls=8,
         input_tokens=1200,
         output_tokens=300,
+        cache_read_tokens=400,
+        cache_creation_tokens=100,
         report_sha256="a" * 64,
     )
     (summary_dir / "summary.json").write_text(summary.model_dump_json(), encoding="utf-8")
+    (summary_dir / "usage.jsonl").write_text(
+        '{"input_tokens":1200,"output_tokens":300,"cache_read_tokens":400,'
+        '"cache_creation_tokens":0}\n',
+        encoding="utf-8",
+    )
     context = AgentContext()
 
     agent.populate_context_post_run(context)
 
     assert context.n_input_tokens == 1200
     assert context.n_output_tokens == 300
+    assert context.n_cache_tokens == 400
     assert context.metadata is not None
     assert context.metadata["llm_calls"] == 8
     assert context.metadata["report_sha256"] == "a" * 64
+    assert context.metadata["cache_creation_tokens"] == 100
 
 
 def test_missing_post_run_summary_is_nonfatal(tmp_path: Path) -> None:

@@ -21,17 +21,6 @@ _SECRET_KEY_PARTS = (
     "secret",
     "token",
 )
-_NON_SECRET_COUNTER_KEYS = frozenset(
-    {
-        "cache_tokens",
-        "cached_tokens",
-        "input_tokens",
-        "native_max_output_tokens",
-        "output_tokens",
-    }
-)
-
-
 class Redactor:
     """Convert arbitrary state to JSON-safe values while removing credentials."""
 
@@ -49,7 +38,7 @@ class Redactor:
 
     def value(self, value: Any, *, key: str | None = None) -> Any:
         """Recursively convert and redact a value for JSON serialization."""
-        if key is not None and self._is_secret_key(key):
+        if key is not None and self._is_secret_key(key, value):
             return REDACTED
         if value is None or isinstance(value, (bool, int, float)):
             return value
@@ -80,8 +69,15 @@ class Redactor:
         }
 
     @staticmethod
-    def _is_secret_key(key: str) -> bool:
+    def _is_secret_key(key: str, value: Any) -> bool:
         normalized = key.lower()
-        if normalized in _NON_SECRET_COUNTER_KEYS:
+        # Usage counters consistently use the plural ``*_tokens`` form and are
+        # numeric (or absent). Credentials use singular names such as
+        # ``access_token`` and remain redacted. This avoids a brittle allowlist
+        # that must be updated for every new token measurement.
+        if normalized.endswith("_tokens") and (
+            value is None
+            or (isinstance(value, (int, float)) and not isinstance(value, bool))
+        ):
             return False
         return any(part in normalized for part in _SECRET_KEY_PARTS)

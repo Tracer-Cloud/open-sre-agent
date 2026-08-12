@@ -45,7 +45,7 @@ from core.llm.shared.structured_output import (
     StructuredOutputClient,
     json_schema_for_structured_output,
 )
-from core.llm.shared.usage import llm_response_with_usage
+from core.llm.shared.usage import llm_response_with_usage, observe_provider_attempt
 from core.llm.transports.sdk.anthropic_cache import (
     cached_system,
     is_cache_unsupported_error,
@@ -277,7 +277,12 @@ class LLMClient:
         last_err: Exception | None = None
         for attempt in range(max_attempts):
             try:
-                return self._client.messages.create(**kwargs)
+                return observe_provider_attempt(
+                    lambda: self._client.messages.create(**kwargs),
+                    requested_model=self._model,
+                    api_type="anthropic_messages",
+                    attempt=attempt + 1,
+                )
             except AuthenticationError as err:
                 raise RuntimeError(
                     "Anthropic authentication failed. Check ANTHROPIC_API_KEY in your environment or .env."
@@ -751,7 +756,12 @@ class OpenAILLMClient:
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
-                return client.chat.completions.parse(**parse_kwargs)
+                return observe_provider_attempt(
+                    lambda: client.chat.completions.parse(**parse_kwargs),
+                    requested_model=self._model,
+                    api_type="openai_chat_completions_parse",
+                    attempt=attempt + 1,
+                )
             except (OpenAIAuthError, OpenAINotFoundError, OpenAIBadRequestError):
                 raise
             except Exception as err:
@@ -820,7 +830,12 @@ class OpenAILLMClient:
         last_err: Exception | None = None
         for attempt in range(max_attempts):
             try:
-                response = client.chat.completions.create(**kwargs)
+                response = observe_provider_attempt(
+                    lambda kwargs=kwargs: client.chat.completions.create(**kwargs),
+                    requested_model=self._model,
+                    api_type="openai_chat_completions",
+                    attempt=attempt + 1,
+                )
                 break
             except OpenAIAuthError as err:
                 raise RuntimeError(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shlex
 from pathlib import Path, PurePosixPath
 from typing import Any, override
@@ -163,24 +164,31 @@ class OpenSRENativeAgent(BaseInstalledAgent):
 
         context.n_input_tokens = summary.input_tokens
         context.n_output_tokens = summary.output_tokens
+        context.n_cache_tokens = summary.cache_read_tokens
         metadata.update(
             {
                 "llm_calls": summary.llm_calls,
                 "report_sha256": summary.report_sha256,
+                "cache_creation_tokens": summary.cache_creation_tokens,
             }
         )
         try:
+            usage_path = self.logs_dir / "opensre-orca" / "usage.jsonl"
+            usage_events = [
+                json.loads(line)
+                for line in usage_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
             context.cost_usd = calculate_orca_cost(
                 self._benchmark_settings.model.harbor_model,
-                input_tokens=summary.input_tokens,
-                output_tokens=summary.output_tokens,
+                usage_events=usage_events,
             )
         except Exception as exc:  # noqa: BLE001 - metadata must not fail a trial
             self.logger.warning("Could not calculate ORCA model cost: %s", exc)
             context.cost_usd = None
 
         metadata["cost_basis"] = (
-            "ORCA pricing; usage hook does not expose cache tokens"
+            "ORCA per-call pricing with provider-reported cache usage"
             if context.cost_usd is not None
             else "unavailable for configured model"
         )

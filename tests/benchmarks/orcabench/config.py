@@ -49,7 +49,7 @@ class ModelSettings(StrictFrozenModel):
     harbor_model: str = "gradient_ai/openai-gpt-5.5"
     provider: str = "openai"
     transport: Literal["sdk"] = "sdk"
-    reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    reasoning_effort: Literal["low", "medium", "high"] | None = None
     max_tokens: int = Field(default=16384, ge=1)
     temperature: float | None = Field(default=None, ge=0, le=2)
 

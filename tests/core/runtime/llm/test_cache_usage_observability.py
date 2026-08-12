@@ -9,14 +9,18 @@ that the counts survive extraction and land on the response and in the log.
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from types import SimpleNamespace
 
 from core.llm.shared.usage import (
+    ModelCallAttempt,
     ModelCallUsage,
     emit_provider_usage,
     extract_cache_tokens,
     llm_response_with_usage,
+    observe_provider_attempt,
     set_detailed_usage_hook,
+    set_model_call_attempt_hook,
 )
 
 
@@ -185,3 +189,34 @@ def test_detailed_usage_hook_preserves_request_and_response_provenance() -> None
             reasoning_effort="medium",
         )
     ]
+
+
+def test_model_call_attempt_hook_records_success_and_failure_without_payloads() -> None:
+    events: list[ModelCallAttempt] = []
+    set_model_call_attempt_hook(events.append)
+    try:
+        response = observe_provider_attempt(
+            lambda: SimpleNamespace(model="returned-model", id="request-123"),
+            requested_model="requested-model",
+            api_type="openai_chat_completions",
+            attempt=1,
+        )
+        with suppress(TimeoutError):
+            observe_provider_attempt(
+                lambda: (_ for _ in ()).throw(TimeoutError("secret payload")),
+                requested_model="requested-model",
+                api_type="openai_chat_completions",
+                attempt=2,
+            )
+    finally:
+        set_model_call_attempt_hook(None)
+
+    assert response.id == "request-123"
+    assert len(events) == 2
+    assert events[0].status == "succeeded"
+    assert events[0].response_model == "returned-model"
+    assert events[0].response_id == "request-123"
+    assert events[0].duration_seconds >= 0
+    assert events[1].status == "failed"
+    assert events[1].error_type == "TimeoutError"
+    assert events[1].response_id is None

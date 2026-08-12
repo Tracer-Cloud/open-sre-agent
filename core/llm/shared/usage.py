@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from core.llm.types import LLMResponse
 
@@ -35,6 +36,24 @@ DetailedUsageHook = Callable[[ModelCallUsage], object]
 _detailed_usage_hook: DetailedUsageHook | None = None
 
 
+@dataclass(frozen=True)
+class ModelCallAttempt:
+    """One provider request attempt, including attempts that fail before usage exists."""
+
+    requested_model: str
+    api_type: str
+    attempt: int
+    status: Literal["succeeded", "failed"]
+    duration_seconds: float
+    response_model: str | None = None
+    response_id: str | None = None
+    error_type: str | None = None
+
+
+ModelCallAttemptHook = Callable[[ModelCallAttempt], object]
+_model_call_attempt_hook: ModelCallAttemptHook | None = None
+
+
 def set_usage_hook(hook: UsageHook | None) -> None:
     """Register or clear the process-wide usage observer (``model, tokens_in, tokens_out``)."""
     global _usage_hook
@@ -54,6 +73,69 @@ def set_detailed_usage_hook(hook: DetailedUsageHook | None) -> None:
     if hook is not None and _detailed_usage_hook is not None:
         raise RuntimeError("A detailed usage hook is already registered")
     _detailed_usage_hook = hook
+
+
+def set_model_call_attempt_hook(hook: ModelCallAttemptHook | None) -> None:
+    """Register or clear the process-wide provider-attempt observer."""
+    global _model_call_attempt_hook
+    if hook is not None and _model_call_attempt_hook is not None:
+        raise RuntimeError("A model-call attempt hook is already registered")
+    _model_call_attempt_hook = hook
+
+
+def observe_provider_attempt[CallResultT](
+    call: Callable[[], CallResultT],
+    *,
+    requested_model: str,
+    api_type: str,
+    attempt: int,
+) -> CallResultT:
+    """Run one SDK request and publish secret-free timing/outcome metadata.
+
+    This deliberately wraps only the provider operation. Backoff sleep remains
+    outside the duration, and each retry produces its own event.
+    """
+    started = time.monotonic()
+    try:
+        response = call()
+    except Exception as exc:
+        hook = _model_call_attempt_hook
+        if hook is not None:
+            hook(
+                ModelCallAttempt(
+                    requested_model=requested_model,
+                    api_type=api_type,
+                    attempt=attempt,
+                    status="failed",
+                    duration_seconds=time.monotonic() - started,
+                    error_type=type(exc).__name__,
+                )
+            )
+        raise
+
+    hook = _model_call_attempt_hook
+    if hook is not None:
+        if isinstance(response, dict):
+            response_model = response.get("model")
+            metadata = response.get("ResponseMetadata")
+            response_id = response.get("id") or (
+                metadata.get("RequestId") if isinstance(metadata, dict) else None
+            )
+        else:
+            response_model = getattr(response, "model", None)
+            response_id = getattr(response, "id", None)
+        hook(
+            ModelCallAttempt(
+                requested_model=requested_model,
+                api_type=api_type,
+                attempt=attempt,
+                status="succeeded",
+                duration_seconds=time.monotonic() - started,
+                response_model=str(response_model) if response_model else None,
+                response_id=str(response_id) if response_id else None,
+            )
+        )
+    return response
 
 
 def _emit_detailed_usage(

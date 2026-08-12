@@ -2,9 +2,10 @@
 
 from tests.benchmarks.orcabench.artifacts.models import (
     ErrorRecord,
+    ModelCallAttemptEvent,
     RunManifest,
-    RunSummary,
     RunStatus,
+    RunSummary,
     UsageEvent,
 )
 from tests.benchmarks.orcabench.artifacts.writer import ArtifactWriter, sha256_bytes
@@ -12,6 +13,7 @@ from tests.benchmarks.orcabench.artifacts.writer import ArtifactWriter, sha256_b
 __all__ = [
     "ArtifactWriter",
     "ErrorRecord",
+    "ModelCallAttemptEvent",
     "RunManifest",
     "RunSummary",
     "RunStatus",

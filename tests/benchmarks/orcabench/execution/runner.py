@@ -18,9 +18,10 @@ ensure_project_platform_package()
 from tests.benchmarks.orcabench.artifacts import (
     ArtifactWriter,
     ErrorRecord,
+    ModelCallAttemptEvent,
     RunManifest,
-    RunSummary,
     RunStatus,
+    RunSummary,
     UsageEvent,
     sha256_bytes,
 )
@@ -162,6 +163,7 @@ def run(config_path: Path, instruction_path: Path) -> int:
     writer.write_bytes("instruction.txt", instruction_bytes)
 
     usage_events: list[UsageEvent] = []
+    model_call_attempts: list[ModelCallAttemptEvent] = []
     state: dict[str, Any] | None = None
 
     try:
@@ -197,7 +199,12 @@ def run(config_path: Path, instruction_path: Path) -> int:
             writer,
         )
 
-        from core.llm.shared.usage import ModelCallUsage, set_detailed_usage_hook
+        from core.llm.shared.usage import (
+            ModelCallAttempt,
+            ModelCallUsage,
+            set_detailed_usage_hook,
+            set_model_call_attempt_hook,
+        )
 
         def collect_usage(event: ModelCallUsage) -> None:
             usage_events.append(
@@ -216,7 +223,23 @@ def run(config_path: Path, instruction_path: Path) -> int:
                 )
             )
 
+        def collect_model_call_attempt(event: ModelCallAttempt) -> None:
+            model_call_attempts.append(
+                ModelCallAttemptEvent(
+                    sequence=len(model_call_attempts) + 1,
+                    requested_model=event.requested_model,
+                    api_type=event.api_type,
+                    attempt=event.attempt,
+                    status=event.status,
+                    duration_seconds=event.duration_seconds,
+                    response_model=event.response_model,
+                    response_id=event.response_id,
+                    error_type=event.error_type,
+                )
+            )
+
         set_detailed_usage_hook(collect_usage)
+        set_model_call_attempt_hook(collect_model_call_attempt)
         try:
             state = mode.investigation.investigate(
                 task_context.investigation_alert(),
@@ -227,12 +250,14 @@ def run(config_path: Path, instruction_path: Path) -> int:
             writer.write_jsonl("evidence.jsonl", list(state.get("evidence_entries") or []))
             payload = mode.investigation.build_payload(state)
         finally:
+            set_model_call_attempt_hook(None)
             set_detailed_usage_hook(None)
 
         writer.write_json("payload.json", payload)
         report_bytes = mode.report.write(payload, runtime.report_path)
         writer.write_bytes("report.md", report_bytes)
         writer.write_jsonl("usage.jsonl", usage_events)
+        writer.write_jsonl("model-calls.jsonl", model_call_attempts)
 
         finished_at = _utc_now()
         report_sha256 = sha256_bytes(report_bytes)
@@ -245,6 +270,10 @@ def run(config_path: Path, instruction_path: Path) -> int:
                 "llm_calls": len(usage_events),
                 "input_tokens": sum(event.input_tokens for event in usage_events),
                 "output_tokens": sum(event.output_tokens for event in usage_events),
+                "cache_read_tokens": sum(event.cache_read_tokens or 0 for event in usage_events),
+                "cache_creation_tokens": sum(
+                    event.cache_creation_tokens or 0 for event in usage_events
+                ),
                 "returned_models": tuple(
                     dict.fromkeys(
                         event.response_model
@@ -261,6 +290,8 @@ def run(config_path: Path, instruction_path: Path) -> int:
                 llm_calls=completed.llm_calls,
                 input_tokens=completed.input_tokens,
                 output_tokens=completed.output_tokens,
+                cache_read_tokens=completed.cache_read_tokens,
+                cache_creation_tokens=completed.cache_creation_tokens,
                 report_sha256=report_sha256,
             ),
         )
@@ -270,6 +301,7 @@ def run(config_path: Path, instruction_path: Path) -> int:
             writer.write_json("state.json", state)
             writer.write_jsonl("evidence.jsonl", list(state.get("evidence_entries") or []))
         writer.write_jsonl("usage.jsonl", usage_events)
+        writer.write_jsonl("model-calls.jsonl", model_call_attempts)
         writer.write_json(
             "error.json",
             ErrorRecord(
@@ -287,6 +319,10 @@ def run(config_path: Path, instruction_path: Path) -> int:
                 "llm_calls": len(usage_events),
                 "input_tokens": sum(event.input_tokens for event in usage_events),
                 "output_tokens": sum(event.output_tokens for event in usage_events),
+                "cache_read_tokens": sum(event.cache_read_tokens or 0 for event in usage_events),
+                "cache_creation_tokens": sum(
+                    event.cache_creation_tokens or 0 for event in usage_events
+                ),
                 "returned_models": tuple(
                     dict.fromkeys(
                         event.response_model

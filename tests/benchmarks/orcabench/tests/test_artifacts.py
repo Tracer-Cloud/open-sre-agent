@@ -24,6 +24,10 @@ def test_artifact_writer_redacts_nested_keys_and_known_values(tmp_path: Path) ->
             },
             "input_tokens": 123,
             "output_tokens": 45,
+            "cache_read_tokens": 100,
+            "cache_creation_tokens": None,
+            "max_output_tokens": 16384,
+            "numeric_access_token": 123456,
             "error": "request contained known-secret-value",
         },
     )
@@ -36,6 +40,10 @@ def test_artifact_writer_redacts_nested_keys_and_known_values(tmp_path: Path) ->
     assert saved["error"] == f"request contained {REDACTED}"
     assert saved["input_tokens"] == 123
     assert saved["output_tokens"] == 45
+    assert saved["cache_read_tokens"] == 100
+    assert saved["cache_creation_tokens"] is None
+    assert saved["max_output_tokens"] == 16384
+    assert saved["numeric_access_token"] == REDACTED
 
 
 def test_artifact_writer_rejects_paths_outside_its_root(tmp_path: Path) -> None:

@@ -40,7 +40,11 @@ from core.llm.shared.openai_responses import (
     uses_responses_api,
 )
 from core.llm.shared.tool_schema_normalize import build_openai_tool_specs
-from core.llm.shared.usage import emit_provider_usage, extract_cache_tokens
+from core.llm.shared.usage import (
+    emit_provider_usage,
+    extract_cache_tokens,
+    observe_provider_attempt,
+)
 from core.llm.transports.sdk.anthropic_cache import (
     cached_system as _anthropic_cached_system,
 )
@@ -183,7 +187,12 @@ class AnthropicAgentClient:
         last_err: Exception | None = None
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
-                response = self._client.messages.create(**kwargs)
+                response = observe_provider_attempt(
+                    lambda: self._client.messages.create(**kwargs),
+                    requested_model=self._model,
+                    api_type="anthropic_messages",
+                    attempt=attempt + 1,
+                )
                 break
             except AuthenticationError as err:
                 raise RuntimeError(self._authentication_error_message()) from err
@@ -674,9 +683,19 @@ class OpenAIAgentClient:
         for attempt in range(_RETRY_MAX_ATTEMPTS):
             try:
                 if use_responses:
-                    response = self._client.responses.create(**kwargs)
+                    response = observe_provider_attempt(
+                        lambda: self._client.responses.create(**kwargs),
+                        requested_model=self._model,
+                        api_type="openai_responses",
+                        attempt=attempt + 1,
+                    )
                 else:
-                    response = self._client.chat.completions.create(**kwargs)
+                    response = observe_provider_attempt(
+                        lambda: self._client.chat.completions.create(**kwargs),
+                        requested_model=self._model,
+                        api_type="openai_chat_completions",
+                        attempt=attempt + 1,
+                    )
                 break
             except AuthenticationError as err:
                 raise RuntimeError(f"{self._provider_label} authentication failed.") from err

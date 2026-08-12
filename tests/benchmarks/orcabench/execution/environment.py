@@ -31,19 +31,23 @@ def native_environment_values(model: ModelSettings) -> dict[str, str]:
         provider.classification_model_env: model.opensre_model,
         provider.toolcall_model_env: model.opensre_model,
         LLM_MAX_TOKENS_ENV: str(model.max_tokens),
-        "OPENSRE_REASONING_EFFORT": model.reasoning_effort,
         "OPENSRE_MEMORY_DISABLED": "1",
         "OPENSRE_MEMORY_AUTOEXTRACT_DISABLED": "1",
         "OPENSRE_NO_TELEMETRY": "1",
     }
     if model.temperature is not None:
         values[LLM_TEMPERATURE_ENV] = str(model.temperature)
+    if model.reasoning_effort is not None:
+        values["OPENSRE_REASONING_EFFORT"] = model.reasoning_effort
     return values
 
 
 def configure_native_environment(settings: RunnerSettings) -> None:
     """Apply the explicit native OpenSRE route before importing LLM clients."""
     model = settings.benchmark.model
+    # Absence means provider/model default. Do not inherit an unrelated shell
+    # override into an otherwise explicit benchmark configuration.
+    os.environ.pop("OPENSRE_REASONING_EFFORT", None)
     os.environ.update(native_environment_values(model))
 
     for name in model.required_environment_names:

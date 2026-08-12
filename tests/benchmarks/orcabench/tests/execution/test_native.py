@@ -97,6 +97,7 @@ def test_openrouter_environment_uses_provider_specific_model_names() -> None:
     assert values["OPENROUTER_CLASSIFICATION_MODEL"] == expected_model
     assert values["OPENROUTER_TOOLCALL_MODEL"] == expected_model
     assert values["LLM_MAX_TOKENS"] == "16384"
+    assert "OPENSRE_REASONING_EFFORT" not in values
     assert all(not name.startswith("OPENAI_") for name in values)
 
 
@@ -110,6 +111,7 @@ def test_nvidia_environment_uses_existing_native_provider_contract() -> None:
     assert values["NVIDIA_CLASSIFICATION_MODEL"] == "z-ai/glm-5.2"
     assert values["NVIDIA_TOOLCALL_MODEL"] == "z-ai/glm-5.2"
     assert values["LLM_MAX_TOKENS"] == "16384"
+    assert "OPENSRE_REASONING_EFFORT" not in values
 
 
 def test_groq_environment_uses_existing_native_provider_contract() -> None:
@@ -125,6 +127,7 @@ def test_groq_environment_uses_existing_native_provider_contract() -> None:
     assert values["GROQ_CLASSIFICATION_MODEL"] == "openai/gpt-oss-120b"
     assert values["GROQ_TOOLCALL_MODEL"] == "openai/gpt-oss-120b"
     assert values["LLM_MAX_TOKENS"] == "16384"
+    assert "OPENSRE_REASONING_EFFORT" not in values
 
 
 def test_gemini_environment_uses_existing_native_provider_contract() -> None:
@@ -140,6 +143,15 @@ def test_gemini_environment_uses_existing_native_provider_contract() -> None:
     assert values["GEMINI_CLASSIFICATION_MODEL"] == "gemini-3.5-flash-lite"
     assert values["GEMINI_TOOLCALL_MODEL"] == "gemini-3.5-flash-lite"
     assert values["LLM_MAX_TOKENS"] == "16384"
+    assert "OPENSRE_REASONING_EFFORT" not in values
+
+
+def test_openai_environment_includes_explicit_reasoning_effort_only() -> None:
+    values = native_environment_values(
+        ModelSettings(reasoning_effort="medium")
+    )
+
+    assert values["OPENSRE_REASONING_EFFORT"] == "medium"
 
 
 def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(

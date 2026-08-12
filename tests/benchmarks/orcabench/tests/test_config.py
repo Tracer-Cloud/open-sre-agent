@@ -66,6 +66,7 @@ def test_smoke_config_is_unverified_and_defaults_to_gemini() -> None:
     assert settings.model.harbor_model == "gemini/gemini-3.5-flash-lite"
     assert settings.model.opensre_model == "gemini-3.5-flash-lite"
     assert settings.model.max_tokens == 16384
+    assert settings.model.reasoning_effort is None
     assert settings.model.required_environment_names == ("GEMINI_API_KEY",)
     assert not settings.verifier.enabled
     assert settings.verifier.required_environment_names == ()
