@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Final
 from urllib.parse import urlsplit
 
+import platform
 from config.constants.runtime_metadata import (
     OPENSRE_ALLOW_NETWORK_ENV,
     WORKSPACE_REPO_ENV_KEYS,
@@ -126,25 +127,41 @@ def disk_memory_facts() -> dict[str, Any]:
     }
 
 
+def host_os_facts() -> dict[str, str]:
+    """Host OS identity via :mod:`platform` — no ``uname`` subprocess.
+
+    Always present so “what environment are you running in?” has a true local
+    answer (e.g. macOS) instead of a vacuum the model fills with a cloud guess.
+    """
+    system = (platform.system() or "").strip()
+    release = (platform.release() or "").strip()
+    family = {
+        "Darwin": "macOS",
+        "Linux": "Linux",
+        "Windows": "Windows",
+    }.get(system, system or "unknown")
+    return {"os_family": family, "os_release": release}
+
+
 def cloud_facts() -> dict[str, str]:
     """Cloud provider/region from deploy-time env vars — no metadata endpoint.
 
     ``CLOUD_PROVIDER`` / ``CLOUD_REGION`` are the canonical injection points
-    (set at deploy time). Region falls back to ``AWS_REGION`` /
-    ``AWS_DEFAULT_REGION`` — the same pair the LLM transports already read —
-    and when the region came from an AWS var the provider defaults to ``aws``.
-    Never calls the instance metadata service (IMDS); the sandbox blocks
-    network anyway.
+    (set at deploy time). ``AWS_REGION`` / ``AWS_DEFAULT_REGION`` alone must
+    **not** claim this process is running in AWS — those vars are routine on
+    developer laptops (``.env.example`` ships ``AWS_REGION=us-east-1`` for the
+    AWS integration). Region may fall back to the AWS vars only when
+    ``CLOUD_PROVIDER`` is already set (typically ``aws`` on a silo). Never
+    calls the instance metadata service (IMDS).
     """
     provider = (os.environ.get("CLOUD_PROVIDER") or "").strip()
     region = (os.environ.get("CLOUD_REGION") or "").strip()
-    aws_region = (
-        os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
-    ).strip()
-    if not region and aws_region:
-        region = aws_region
-        if not provider:
-            provider = "aws"
+    if not region and provider:
+        aws_region = (
+            os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
+        ).strip()
+        if aws_region:
+            region = aws_region
     return {"cloud_provider": provider, "cloud_region": region}
 
 
@@ -282,6 +299,7 @@ __all__ = [
     "capability_warning_facts",
     "cloud_facts",
     "disk_memory_facts",
+    "host_os_facts",
     "installed_tools",
     "kubeconfig_path",
     "local_tz_name",

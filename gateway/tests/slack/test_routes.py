@@ -8,6 +8,7 @@ JSON events path — a defect invisible to admission-level tests.
 from __future__ import annotations
 
 import json
+import time
 from http import HTTPStatus
 from typing import Any
 from urllib.parse import urlencode
@@ -30,7 +31,16 @@ from gateway.transports.slack.transport.events_api.server import (
 from gateway.transports.slack.transport.events_api.signature import expected_signature
 
 _SECRET = "8f742231b10e8888abcd99yyyzzz85a5"
-_TIMESTAMP = str(int(__import__("time").time()))
+
+
+def _now_timestamp() -> str:
+    """Signed at request time, not import time.
+
+    The signature check enforces a five-minute replay window, so a timestamp
+    captured when the module loads is already stale by the time a full suite
+    reaches these tests — they pass alone and fail in CI.
+    """
+    return str(int(time.time()))
 
 
 def _settings() -> SlackGatewaySettings:
@@ -54,11 +64,12 @@ def _client(submitted: list[Any]) -> TestClient:
 
 
 def _headers(body: bytes) -> dict[str, str]:
+    timestamp = _now_timestamp()
     return {
         SIGNATURE_HEADER: expected_signature(
-            signing_secret=_SECRET, timestamp=_TIMESTAMP, body=body
+            signing_secret=_SECRET, timestamp=timestamp, body=body
         ),
-        TIMESTAMP_HEADER: _TIMESTAMP,
+        TIMESTAMP_HEADER: timestamp,
     }
 
 
@@ -107,7 +118,7 @@ def test_unsigned_request_is_unauthorized_on_both_routes() -> None:
     # Arrange.
     submitted: list[Any] = []
     client = _client(submitted)
-    bad = {SIGNATURE_HEADER: "v0=deadbeef", TIMESTAMP_HEADER: _TIMESTAMP}
+    bad = {SIGNATURE_HEADER: "v0=deadbeef", TIMESTAMP_HEADER: _now_timestamp()}
 
     # Act / Assert.
     for path, body in (
