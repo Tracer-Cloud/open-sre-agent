@@ -29,7 +29,7 @@ class LlmProviderPorts(Protocol):
         is_tty: bool | None,
         action_already_listed: bool,
     ) -> bool:
-        raise NotImplementedError
+        """Return True if the action is allowed to proceed based on the policy. This method is responsible for executing the REPL's half of the execution gate: rendering confirmation prompts, handling user input, and emitting analytic about execution policy decisions."""
 
     def apply_target(self, target: str, console: Console) -> bool:
         raise NotImplementedError
