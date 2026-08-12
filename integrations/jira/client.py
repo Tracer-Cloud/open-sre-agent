@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from integrations.config_models import JiraIntegrationConfig
 from platform.observability.errors.service import capture_service_error
@@ -297,5 +298,17 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except Exception:
+    except Exception as exc:
+        # `ValidationError` renders the rejected input inline via `input_value=`,
+        # and an error raised against the model rather than one field dumps the
+        # whole config mapping — `api_token` included. Local `exc_info` logging
+        # bypasses Sentry's scrubber, so swap in a message-only error that keeps
+        # the traceback (but no `__cause__`, which would print the raw text
+        # again). Same technique as
+        # `integrations._validation_helpers.report_classify_failure`.
+        safe_exc: BaseException = exc
+        if isinstance(exc, ValidationError):
+            safe_exc = ValueError("Jira config validation failed")
+            safe_exc.__traceback__ = exc.__traceback__
+        logger.warning("Failed to create Jira client: %s", safe_exc, exc_info=safe_exc)
         return None
