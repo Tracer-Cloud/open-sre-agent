@@ -37,7 +37,7 @@ Tool packages must be substantive production modules — no empty or discovery-o
 - [ ] Output is normalized enough for the planner/LLM to consume reliably
 - [ ] Secrets never leak through `extract_params`, return values, logs, or traceable tool-call kwargs; secret/PII output is run through `platform/masking/` before return
 - [ ] External side effects declare `side_effect_level`, `requires_approval`, and `approval_reason` where appropriate
-- [ ] To appear in both investigation and chat, set `surfaces=("investigation", "chat")`
+- [ ] To appear in both investigation and chat, set `surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT)`
 
 ### Live payload parsing
 
