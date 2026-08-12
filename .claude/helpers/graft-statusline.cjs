@@ -23,12 +23,20 @@ function globalRoot() {
   } catch { return null; /* npm unavailable */ }
 }
 
+// Ordered by how much the machine's owner controls them, not by proximity.
+//
+// The project-local lookup comes last on purpose. It resolves through the open
+// repository's own node_modules, so a clone that ships
+// node_modules/@nanonets/graft executes on session-start, post-edit and stop
+// without anyone running an install. Supporting a project-local graft is worth
+// keeping, but it must never outrank an installation the user chose: ranked
+// last, it is reached only when nothing trusted is present.
 function candidates() {
   const out = [];
   if (BAKED) out.push(BAKED);
-  const local = fromPkg(dir); if (local) out.push(local);
   const legacy = fromPkg(path.join(path.dirname(process.execPath), '..', 'lib')); if (legacy) out.push(legacy);
   const gr = globalRoot(); if (gr) out.push(path.join(gr, '@nanonets', 'graft', 'dist', 'claude'));
+  const local = fromPkg(dir); if (local) out.push(local);
   return out;
 }
 
