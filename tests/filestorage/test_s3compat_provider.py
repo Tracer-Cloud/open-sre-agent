@@ -175,7 +175,12 @@ def test_s3compat_check_public_access_no_policy_returns_private() -> None:
     class _NoPolicyClient:
         def get_bucket_policy_status(self, Bucket: str) -> dict[str, Any]:  # noqa: ARG002
             raise ClientError(
-                {"Error": {"Code": "NoSuchBucketPolicy", "Message": "The bucket policy does not exist"}},
+                {
+                    "Error": {
+                        "Code": "NoSuchBucketPolicy",
+                        "Message": "The bucket policy does not exist",
+                    }
+                },
                 "GetBucketPolicyStatus",
             )
 
@@ -188,7 +193,9 @@ def test_s3compat_check_public_access_no_policy_returns_private() -> None:
     assert status.exposure == BucketExposure.PRIVATE
 
 
-@pytest.mark.parametrize("code", ["MethodNotAllowed", "NotImplemented", "InvalidRequest", "UnsupportedOperation"])
+@pytest.mark.parametrize(
+    "code", ["MethodNotAllowed", "NotImplemented", "InvalidRequest", "UnsupportedOperation"]
+)
 def test_s3compat_check_public_access_unsupported_api_returns_unknown(code: str) -> None:
     # Arrange
     class _UnsupportedClient:
