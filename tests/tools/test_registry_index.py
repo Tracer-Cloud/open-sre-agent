@@ -104,3 +104,17 @@ def test_load_tool_materializes_the_executor() -> None:
         descriptor = next(d for d in registry_module.get_tool_descriptors() if d.name == name)
         tool = registry_module.load_tool(descriptor)
         assert tool is not None and tool.name == name
+
+
+def test_surfaces_attribute_resolution() -> None:
+    import ast
+    from tools.registry_index import _string_constant
+
+    # ast.Attribute for ToolSurface.CHAT
+    node = ast.Attribute(
+        value=ast.Name(id="ToolSurface", ctx=ast.Load()),
+        attr="CHAT",
+        ctx=ast.Load(),
+    )
+    assert _string_constant(node) == "chat"
+
