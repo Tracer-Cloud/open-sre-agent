@@ -76,17 +76,23 @@ def _load_raw_for_write(store_path: Path) -> list[dict[str, object]]:
 
 
 def _quarantine_unreadable(store_path: Path) -> None:
-    """Move an unreadable store aside so the next write cannot erase it."""
+    """Move an unreadable store aside so the next write cannot erase it.
+
+    Raises if the rename fails. Continuing would hand the caller an empty list
+    and let it write over the only copy of the schedules — the exact loss this
+    preservation step exists to prevent, so it fails closed instead.
+    """
     backup = store_path.with_name(f"{store_path.name}.corrupt-{int(time.time())}")
     try:
         os.replace(store_path, backup)
     except OSError:
-        logger.warning(
-            "Could not preserve unreadable scheduler store at %s; leaving it in place",
+        logger.error(
+            "Could not preserve unreadable scheduler store at %s; refusing to "
+            "overwrite it. Move or repair the file by hand to continue.",
             store_path,
             exc_info=True,
         )
-        return
+        raise
     logger.error(
         "Scheduler store at %s was unreadable and has been preserved at %s. "
         "Scheduled tasks it held are not loaded; recover them from that file.",

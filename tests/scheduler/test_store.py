@@ -324,3 +324,24 @@ class TestStoreDurability:
 
         # Assert
         assert list(store_path.parent.glob("scheduler_tasks.json.corrupt-*"))
+
+    def test_mutation_aborts_when_the_damaged_store_cannot_be_preserved(
+        self, store_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Arrange: a damaged store whose quarantine rename will fail.
+        add_task(self._task("digest-7", "0 7 * * *"), store_path)
+        full = store_path.read_text(encoding="utf-8")
+        damaged = full[: len(full) // 2]
+        store_path.write_text(damaged, encoding="utf-8")
+
+        def _failing_replace(src: str, dst: str) -> None:
+            raise OSError("simulated rename failure")
+
+        monkeypatch.setattr("platform.scheduler.store.os.replace", _failing_replace)
+
+        # Act
+        with pytest.raises(OSError):
+            add_task(self._task("digest-8", "0 8 * * *"), store_path)
+
+        # Assert: failing to preserve must not license overwriting the original.
+        assert store_path.read_text(encoding="utf-8") == damaged
