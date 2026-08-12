@@ -25,6 +25,11 @@ _BASE_ENV_KEYS = (
     "PYTHONPATH",
     "REQUESTS_CA_BUNDLE",
     "SSL_CERT_FILE",
+    # Windows loads the Winsock service provider relative to SystemRoot. Drop
+    # it and every socket call fails with WinError 10106 before any sandbox
+    # rule applies, so ``allow_network=True`` cannot work. Absent on POSIX,
+    # where the lookup below simply skips it.
+    "SystemRoot",
     "TMPDIR",
 )
 

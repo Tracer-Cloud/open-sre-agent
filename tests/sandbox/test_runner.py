@@ -9,6 +9,7 @@ from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 from platform.sandbox.runner import (
     MAX_TIMEOUT,
     SandboxResult,
+    _sandbox_env,
     run_python_sandbox,
 )
 
@@ -179,3 +180,22 @@ class TestSandboxResultModel:
             timed_out=True,
         )
         assert r.success is False
+
+
+class TestSandboxEnvironment:
+    def test_system_root_is_forwarded_for_winsock(self, monkeypatch) -> None:
+        """Windows resolves the Winsock provider relative to ``SystemRoot``.
+
+        Dropping it made every socket call in the child fail with
+        ``WinError 10106`` before any sandbox rule applied, so
+        ``allow_network=True`` could never work there. Set explicitly rather
+        than probing the host so the contract is pinned on every platform.
+        """
+        monkeypatch.setenv("SystemRoot", r"C:\WINDOWS")
+        assert _sandbox_env(None).get("SystemRoot") == r"C:\WINDOWS"
+
+    def test_unlisted_variables_are_not_forwarded(self, monkeypatch) -> None:
+        # The narrow allowlist is the point: secrets in the parent environment
+        # must not reach generated code just because they are set.
+        monkeypatch.setenv("SOME_PRIVATE_API_KEY", "secret-value")
+        assert "SOME_PRIVATE_API_KEY" not in _sandbox_env(None)
