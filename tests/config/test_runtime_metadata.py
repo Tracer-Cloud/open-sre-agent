@@ -144,15 +144,29 @@ def test_cloud_facts_read_deploy_time_env_vars(monkeypatch: pytest.MonkeyPatch) 
     assert meta["cloud_region"] == "europe-west3"
 
 
-def test_cloud_facts_fall_back_to_aws_region_vars(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AWS deployments usually carry AWS_REGION/AWS_DEFAULT_REGION already —
-    the same pair the LLM transports read. A region from an AWS var implies
-    provider aws unless CLOUD_PROVIDER says otherwise."""
+def test_cloud_facts_aws_region_alone_does_not_claim_aws(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Laptop ``.env`` often sets AWS_REGION for the AWS integration — that is
+    not evidence this process is running inside AWS."""
     for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-central-1")
-    facts = probes_module.cloud_facts()
-    assert facts == {"cloud_provider": "aws", "cloud_region": "eu-central-1"}
+    assert probes_module.cloud_facts() == {"cloud_provider": "", "cloud_region": ""}
+
+
+def test_cloud_facts_aws_region_fills_region_when_provider_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Silos set CLOUD_PROVIDER=aws; AWS_REGION may supply the region."""
+    for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("CLOUD_PROVIDER", "aws")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-central-1")
+    assert probes_module.cloud_facts() == {
+        "cloud_provider": "aws",
+        "cloud_region": "eu-central-1",
+    }
 
 
 def test_cloud_facts_empty_when_not_deployed_to_cloud(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -160,6 +174,43 @@ def test_cloud_facts_empty_when_not_deployed_to_cloud(monkeypatch: pytest.Monkey
     for var in ("CLOUD_PROVIDER", "CLOUD_REGION", "AWS_REGION", "AWS_DEFAULT_REGION"):
         monkeypatch.delenv(var, raising=False)
     assert probes_module.cloud_facts() == {"cloud_provider": "", "cloud_region": ""}
+
+
+def test_host_os_facts_are_always_present() -> None:
+    """Environment questions need a true host OS, not a cloud vacuum."""
+    # Arrange / Act.
+    facts = probes_module.host_os_facts()
+    meta = build_runtime_metadata()
+
+    # Assert.
+    assert facts["os_family"]
+    assert meta["os_family"] == facts["os_family"]
+
+
+@pytest.mark.parametrize(
+    ("sys_platform", "expected"),
+    [("darwin", "macOS"), ("linux", "Linux"), ("linux2", "Linux"), ("win32", "Windows")],
+)
+def test_host_os_family_reports_the_product_not_the_kernel(
+    monkeypatch: pytest.MonkeyPatch, sys_platform: str, expected: str
+) -> None:
+    """``Darwin`` is the kernel; a user on a MacBook is running macOS."""
+    # Arrange.
+    monkeypatch.setattr(probes_module.sys, "platform", sys_platform)
+
+    # Act / Assert.
+    assert probes_module.host_os_facts() == {"os_family": expected}
+
+
+def test_host_os_facts_omit_a_version() -> None:
+    """``platform.release()`` is the kernel version, not the OS version.
+
+    On macOS it reports Darwin's number (25.5.0) while the OS is 26.5.2, so
+    publishing it as the OS release states a false fact in the block whose
+    whole purpose is preventing them.
+    """
+    # Arrange / Act / Assert.
+    assert set(probes_module.host_os_facts()) == {"os_family"}
 
 
 def test_cloud_facts_never_touch_the_network(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -50,6 +50,29 @@ def _is_model_allowed(provider: object, model: str) -> bool:
     return bool(model) and _provider_allows_custom_models(provider)
 
 
+def _resolve_omitted_model(provider: object) -> str:
+    """Model to persist/display when the caller supplies none (switch/restore-default).
+
+    Custom gateways ship an empty ``default_model`` (the user's gateway serves its
+    own names); falling back to it would blank a previously-working model and break
+    the next ``LLMSettings`` load. Mirror the missing-base-URL guard: reuse the
+    already-configured model from the environment. First-party providers keep their
+    real ``default_model``.
+    """
+    default_model = str(getattr(provider, "default_model", "") or "")
+    if default_model:
+        return default_model
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    model_env = str(getattr(provider, "model_env", "") or "")
+    if model_env and is_custom_provider(str(getattr(provider, "value", ""))):
+        legacy_model_env = str(getattr(provider, "legacy_model_env", "") or "")
+        return os.getenv(model_env, "").strip() or (
+            os.getenv(legacy_model_env, "").strip() if legacy_model_env else ""
+        )
+    return default_model
+
+
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
     from core.llm.factory import reset_llm_clients
@@ -92,6 +115,18 @@ def switch_llm_provider(
                 "set AZURE_OPENAI_BASE_URL, or run [bold]opensre onboard[/bold]."
             )
             return False
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    if (
+        is_custom_provider(provider.value)
+        and provider.endpoint_env
+        and not os.getenv(provider.endpoint_env, "").strip()
+    ):
+        console.print(
+            f"[{ERROR}]missing base URL for {provider.value}:[/] "
+            f"set {provider.endpoint_env}, or run [bold]opensre onboard[/bold]."
+        )
+        return False
     if provider.credential_secret and provider.api_key_env and not auth_status.configured:
         console.print(
             f"[{ERROR}]missing credential for {provider.value}:[/] "
@@ -140,7 +175,16 @@ def switch_llm_provider(
             f"[{DIM}]to refresh metadata if the next LLM request fails.[/]"
         )
 
-    selected_model = _normalize_model_id(model) if model else provider.default_model
+    selected_model = _normalize_model_id(model) if model else _resolve_omitted_model(provider)
+    if is_custom_provider(provider.value) and not selected_model:
+        # Custom gateways require a model; refuse rather than persist a blank one
+        # (which would break the next config load), mirroring the base-URL guard.
+        console.print(
+            f"[{ERROR}]missing model for {provider.value}:[/] pass one "
+            f"(e.g. [bold]/model set {provider.value} <model>[/bold]), set "
+            f"{provider.model_env}, or run [bold]opensre onboard[/bold]."
+        )
+        return False
     if selected_model and not _is_model_allowed(provider, selected_model):
         console.print(f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}")
         console.print(

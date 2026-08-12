@@ -681,3 +681,118 @@ def test_sync_env_values_empty_update_strips_fallback_secrets(tmp_path) -> None:
     sync_env_values({}, env_path=env_path)
 
     assert env_path.read_text(encoding="utf-8") == ""
+
+
+def test_sync_provider_env_preserves_custom_openai_base_url(tmp_path, monkeypatch) -> None:
+    # The custom gateway base URL must survive the sync (not be stripped), and
+    # custom providers must NOT get azure's OPENSRE_LLM_TRANSPORT=litellm flag.
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1")
+    env_path = tmp_path / ".env"
+    env_path.write_text("ENV=development\n", encoding="utf-8")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["custom-openai"],
+        model="gpt-5.4",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=custom-openai\n" in content
+    assert "CUSTOM_OPENAI_BASE_URL=http://localhost:4000/v1\n" in content
+    assert "CUSTOM_OPENAI_REASONING_MODEL=gpt-5.4\n" in content
+    assert "OPENSRE_LLM_TRANSPORT" not in content
+
+
+def test_sync_provider_env_preserves_custom_openai_model_when_blank(tmp_path, monkeypatch) -> None:
+    # Switching/restoring a custom provider with no explicit model must NOT blank a
+    # previously-working CUSTOM_OPENAI_REASONING_MODEL (which would fail the next
+    # config load) — the configured model is preserved from the .env.
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("CUSTOM_OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("CUSTOM_OPENAI_MODEL", raising=False)
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1")
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=custom-openai\n"
+        "CUSTOM_OPENAI_BASE_URL=http://localhost:4000/v1\n"
+        "CUSTOM_OPENAI_REASONING_MODEL=gpt-5.4\n"
+        "CUSTOM_OPENAI_MODEL=gpt-5.4\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["custom-openai"],
+        model="",  # provider default is "" for custom gateways
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "CUSTOM_OPENAI_REASONING_MODEL=gpt-5.4\n" in content
+    assert "CUSTOM_OPENAI_MODEL=gpt-5.4\n" in content
+    assert "CUSTOM_OPENAI_REASONING_MODEL=\n" not in content
+    assert "CUSTOM_OPENAI_BASE_URL=http://localhost:4000/v1\n" in content
+
+
+def test_sync_provider_env_preserves_custom_model_from_environ_when_blank(
+    tmp_path, monkeypatch
+) -> None:
+    # The configured model may live only in the process env (not yet in .env);
+    # a blank switch must still preserve it rather than write an empty value.
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("CUSTOM_ANTHROPIC_MODEL", raising=False)
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_BASE_URL", "https://proxy.example.com")
+    monkeypatch.setenv("CUSTOM_ANTHROPIC_REASONING_MODEL", "claude-opus-4-7")
+    env_path = tmp_path / ".env"
+    env_path.write_text("ENV=development\n", encoding="utf-8")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["custom-anthropic"],
+        model="",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "CUSTOM_ANTHROPIC_REASONING_MODEL=claude-opus-4-7\n" in content
+    assert "CUSTOM_ANTHROPIC_REASONING_MODEL=\n" not in content
+
+
+def test_sync_provider_env_preserves_custom_legacy_model_when_blank(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("CUSTOM_OPENAI_REASONING_MODEL", raising=False)
+    monkeypatch.delenv("CUSTOM_OPENAI_MODEL", raising=False)
+    monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1")
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "LLM_PROVIDER=custom-openai\n"
+        "CUSTOM_OPENAI_BASE_URL=http://localhost:4000/v1\n"
+        "CUSTOM_OPENAI_MODEL=gateway-model\n",
+        encoding="utf-8",
+    )
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["custom-openai"],
+        model="",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "CUSTOM_OPENAI_REASONING_MODEL=gateway-model\n" in content
+    assert "CUSTOM_OPENAI_MODEL=gateway-model\n" in content
+
+
+def test_sync_provider_env_cli_provider_keeps_empty_model(tmp_path, monkeypatch) -> None:
+    # The blank-model preservation is scoped to custom gateways; a CLI provider
+    # with an empty model still writes its (empty) CLI-default slot as before.
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    env_path = tmp_path / ".env"
+    env_path.write_text("ENV=development\n", encoding="utf-8")
+
+    sync_provider_env(
+        provider=PROVIDER_BY_VALUE["codex"],
+        model="",
+        env_path=env_path,
+    )
+
+    content = env_path.read_text(encoding="utf-8")
+    assert "LLM_PROVIDER=codex\n" in content

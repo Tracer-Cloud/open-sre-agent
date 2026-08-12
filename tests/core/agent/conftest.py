@@ -141,10 +141,32 @@ def _resolve_live_llm_configuration(
                 f" provider={settings.provider!r}, env={spec.api_key_env}"
             )
 
-    from core.llm.factory import reset_llm_clients
+    from core.llm.factory import LLMRole, get_llm, reset_llm_clients
 
     monkeypatch.setenv("LLM_PROVIDER", settings.provider)
     reset_llm_clients()
+    # credential_status can look fine while the provider SDK still refuses to
+    # construct a client (empty/placeholder key, wrong env for the active
+    # provider). Probe once here so live tests skip/fail at setup, not mid-call.
+    try:
+        get_llm(LLMRole.AGENT)
+    except Exception as exc:
+        detail = str(exc).lower()
+        if any(
+            marker in detail
+            for marker in (
+                "missing credentials",
+                "invalid_api_key",
+                "incorrect api key",
+                "authenticationerror",
+                "could not resolve credentials",
+            )
+        ):
+            _skip_or_fail_live_llm(
+                "Live LLM turn tests require a constructible provider client:"
+                f" provider={settings.provider!r}. {exc}"
+            )
+        raise
     yield
     reset_llm_clients()
 

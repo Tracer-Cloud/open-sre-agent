@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 
 _MESSAGE_LIMIT = MAX_MESSAGE_SIZE
 _BOT_TOKEN_RE = re.compile(r"(bot)[^/]+(/)")
-_SIMPLE_TAG_NAMES = frozenset({"b", "i", "u", "code"})
+# Every Telegram ``parse_mode=HTML`` element that wraps content, so a cut taken
+# while one is open leaves markup the Bot API rejects. Mirrors the supported set
+# documented in ``integrations.telegram.markdown``; ``<pre>`` in particular is
+# what ``render_markdown_as_telegram_html`` emits for fenced code blocks.
+_BALANCED_TAG_NAMES = frozenset({"a", "b", "code", "i", "pre", "s", "u"})
 
 
 def _strip_trailing_incomplete_tag(chunk: str) -> str:
@@ -42,8 +46,21 @@ def _strip_trailing_partial_entity(chunk: str) -> str:
     return chunk[:amp].rstrip()
 
 
+def _parse_tag(raw_tag: str) -> tuple[str, bool]:
+    """Return ``(element_name, is_closing)`` for *raw_tag*, angle brackets included.
+
+    The name is lowercased, and empty when the tag carries none. ``<>`` and
+    ``< >`` occur in ordinary report text (a SQL ``<>`` predicate, say), so they
+    must fall through as plain text rather than being read as an element.
+    """
+    inner = raw_tag[1:-1].strip()
+    is_closing = inner.startswith("/")
+    parts = inner.removeprefix("/").split(maxsplit=1)
+    return (parts[0].lower() if parts else ""), is_closing
+
+
 def _balance_telegram_markup_tags(fragment: str) -> str:
-    """Append closing tags for open ``b``/``i``/``u``/``code``/``a`` elements at end of *fragment*."""
+    """Append closing tags for Telegram elements still open at the end of *fragment*."""
     stack: list[str] = []
     pos = 0
     while pos < len(fragment):
@@ -53,24 +70,15 @@ def _balance_telegram_markup_tags(fragment: str) -> str:
         end = fragment.find(">", pos)
         if end == -1:
             break
-        raw = fragment[pos : end + 1]
-        low = raw.lower()
-        if low.startswith("<a ") and not low.startswith("</"):
-            stack.append("a")
-        elif low == "</a>":
-            if stack and stack[-1] == "a":
-                stack.pop()
-        elif low.startswith("</"):
-            name = low[2:-1].strip().lower()
-            if name in _SIMPLE_TAG_NAMES and stack and stack[-1] == name:
-                stack.pop()
-        elif not low.startswith("<a ") and low[1] != "/":
-            name = low[1:-1].strip().lower().split()[0]
-            if name in _SIMPLE_TAG_NAMES:
+        name, is_closing = _parse_tag(fragment[pos : end + 1])
+        if name in _BALANCED_TAG_NAMES:
+            if not is_closing:
                 stack.append(name)
+            elif stack and stack[-1] == name:
+                stack.pop()
         pos = end + 1
 
-    return fragment + "".join(f"</{t}>" for t in reversed(stack))
+    return fragment + "".join(f"</{tag}>" for tag in reversed(stack))
 
 
 def truncate_for_telegram_html(text: str, max_len: int, suffix: str = "…") -> str:

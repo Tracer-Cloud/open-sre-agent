@@ -434,9 +434,10 @@ not a Mintlify docs-site page).
 | `AZURE_SQL_ENCRYPT` | `true` | Enable Azure SQL encryption | `integrations/_catalog_impl` |
 | `AZURE_LOG_ANALYTICS_WORKSPACE_ID` | | Azure Log Analytics workspace ID | `integrations/_catalog_impl` |
 | `AZURE_LOG_ANALYTICS_TOKEN` | | Azure Log Analytics token | `integrations/_catalog_impl` |
+| `AZURE_LOG_ANALYTICS_ENDPOINT` | `https://api.loganalytics.io` | Log Analytics Query API host (override for sovereign clouds) | `integrations/_catalog_impl` |
 | `AZURE_TENANT_ID` | | Azure tenant ID | `integrations/_catalog_impl` |
 | `AZURE_SUBSCRIPTION_ID` | | Azure subscription ID | `integrations/_catalog_impl` |
-| `AZURE_MAX_RESULTS` | `100` | Max Azure results | `integrations/_catalog_impl` |
+| `AZURE_MAX_RESULTS` | `100` | Max Azure results (capped at 200) | `integrations/_catalog_impl` |
 
 ### MCP Servers
 | Variable | Default | Description | Module |

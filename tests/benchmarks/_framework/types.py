@@ -18,7 +18,7 @@ Module organization (split from the original monolithic ``adapters.py``):
 existing ``from tests.benchmarks._framework.adapters import ...`` callers
 keep working.
 
-This module deliberately has zero ``app.*`` imports — the framework is
+This module deliberately has zero product-package imports — the framework is
 independent of opensre internals. Adapters bridge to opensre.
 """
 

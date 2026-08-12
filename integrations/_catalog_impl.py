@@ -25,6 +25,16 @@ from config.constants.aws import (
     AWS_SECRET_ACCESS_KEY_ENV,
     AWS_SESSION_TOKEN_ENV,
 )
+from config.constants.azure import (
+    AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT,
+    AZURE_LOG_ANALYTICS_ENDPOINT_ENV,
+    AZURE_LOG_ANALYTICS_TOKEN_ENV,
+    AZURE_LOG_ANALYTICS_WORKSPACE_ID_ENV,
+    AZURE_MAX_RESULTS_DEFAULT,
+    AZURE_MAX_RESULTS_ENV,
+    AZURE_SUBSCRIPTION_ID_ENV,
+    AZURE_TENANT_ID_ENV,
+)
 from config.constants.azure_sql import (
     AZURE_SQL_DATABASE_ENV,
     AZURE_SQL_DRIVER_ENV,
@@ -1744,8 +1754,8 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
         )
 
-    azure_workspace_id = os.getenv("AZURE_LOG_ANALYTICS_WORKSPACE_ID", "").strip()
-    azure_access_token = resolve_env_credential("AZURE_LOG_ANALYTICS_TOKEN")
+    azure_workspace_id = os.getenv(AZURE_LOG_ANALYTICS_WORKSPACE_ID_ENV, "").strip()
+    azure_access_token = resolve_env_credential(AZURE_LOG_ANALYTICS_TOKEN_ENV)
     if azure_workspace_id and azure_access_token:
         integrations.append(
             _active_env_record(
@@ -1755,13 +1765,17 @@ def load_env_integrations() -> list[dict[str, Any]]:
                     "access_token": azure_access_token,
                     "endpoint": (
                         os.getenv(
-                            "AZURE_LOG_ANALYTICS_ENDPOINT", "https://api.loganalytics.io"
+                            AZURE_LOG_ANALYTICS_ENDPOINT_ENV,
+                            AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT,
                         ).strip()
-                        or "https://api.loganalytics.io"
+                        or AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT
                     ),
-                    "tenant_id": os.getenv("AZURE_TENANT_ID", "").strip(),
-                    "subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", "").strip(),
-                    "max_results": safe_int(os.getenv("AZURE_MAX_RESULTS", "100"), 100),
+                    "tenant_id": os.getenv(AZURE_TENANT_ID_ENV, "").strip(),
+                    "subscription_id": os.getenv(AZURE_SUBSCRIPTION_ID_ENV, "").strip(),
+                    "max_results": safe_int(
+                        os.getenv(AZURE_MAX_RESULTS_ENV, str(AZURE_MAX_RESULTS_DEFAULT)),
+                        AZURE_MAX_RESULTS_DEFAULT,
+                    ),
                 },
             )
         )

@@ -15,9 +15,14 @@ def test_provider_model_defaults_cover_tiered_provider_specs() -> None:
         defaults = PROVIDER_MODEL_DEFAULTS[spec.value]
         assert defaults.provider == spec.value
         assert defaults.settings_key
-        assert defaults.reasoning
-        assert defaults.classification
-        assert defaults.toolcall
+        if defaults.requires_explicit_models:
+            assert not defaults.reasoning
+            assert not defaults.classification
+            assert not defaults.toolcall
+        else:
+            assert defaults.reasoning
+            assert defaults.classification
+            assert defaults.toolcall
 
 
 def test_provider_model_defaults_settings_keys_match_llm_settings() -> None:

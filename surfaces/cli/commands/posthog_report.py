@@ -13,7 +13,7 @@ from rich.table import Table
 
 from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
 from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
-from surfaces.cli.commands.cron import _validate_cron_and_timezone
+from surfaces.cli.commands.scheduling import add_task_and_echo, validate_cron_and_timezone
 
 _console = Console()
 _PROVIDER_CHOICES = [p.value for p in SUPPORTED_DELIVERY_PROVIDERS]
@@ -133,12 +133,11 @@ def posthog_report_schedule_add(
         require_posthog_integration,
         require_report_delivery_provider,
     )
-    from platform.scheduler.store import add_task
     from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_posthog_integration()
     require_report_delivery_provider(provider)
-    _validate_cron_and_timezone(cron_expr, timezone)
+    validate_cron_and_timezone(cron_expr, timezone)
 
     period = stats_period.strip() or DEFAULT_POSTHOG_PERIOD
     params: dict[str, str] = {"stats_period": period}
@@ -157,10 +156,7 @@ def posthog_report_schedule_add(
         window_hours=0,
         params=params,
     )
-    added = add_task(task)
-    _console.print(f"[green]PostHog report task {added.id} created.[/green]")
-    _console.print(f"  Cron: {added.cron}  TZ: {added.timezone}")
-    _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
+    add_task_and_echo(task, label="PostHog report")
     _console.print(f"  Period: {params['stats_period']}")
     if "metrics" in params:
         _console.print(f"  Metrics: {params['metrics']}")

@@ -150,11 +150,15 @@ def sync_provider_env(
     classification_env = _classification_model_env(resolved_model_provider)
     if classification_env:
         active_non_secret.add(classification_env)
-    if provider.value == "azure-openai":
-        if provider.endpoint_env:
-            active_non_secret.add(provider.endpoint_env)
-        if provider.api_version_env:
-            active_non_secret.add(provider.api_version_env)
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    # Providers that carry a user-supplied endpoint (Azure + the custom gateways)
+    # keep their base URL in .env; without this it is stripped on the next sync.
+    provider_has_endpoint = provider.value == "azure-openai" or is_custom_provider(provider.value)
+    if provider_has_endpoint and provider.endpoint_env:
+        active_non_secret.add(provider.endpoint_env)
+    if provider.value == "azure-openai" and provider.api_version_env:
+        active_non_secret.add(provider.api_version_env)
     # A ``host`` credential (e.g. the Ollama host) is non-secret runtime config
     # that the wizard persists to ``.env`` — keep it as an active key so this
     # sync does not strip it back out in the same wizard run.
@@ -164,29 +168,50 @@ def sync_provider_env(
 
     lines = _remove_keys(existing, keys_to_remove)
 
+    # Custom gateways ship no default model (the user's gateway serves its own
+    # names). A switch/restore that supplies no model must NOT blank a
+    # previously-working one — mirror the base-URL guard below and preserve the
+    # configured model instead of writing an empty CUSTOM_*_MODEL that would fail
+    # the required-model validation on the next load. A CLI provider keeps writing
+    # an empty model (its CLI default), so scope this strictly to custom gateways.
+    resolved_model = model
+    if not resolved_model and is_custom_provider(provider.value):
+        legacy_env = resolved_model_provider.legacy_model_env
+        resolved_model = (
+            _env_value_from_lines(lines, resolved_model_provider.model_env)
+            or os.getenv(resolved_model_provider.model_env, "").strip()
+            or (
+                _env_value_from_lines(lines, legacy_env) or os.getenv(legacy_env, "").strip()
+                if legacy_env
+                else ""
+            )
+        )
+
     values: dict[str, str] = {
         "LLM_PROVIDER": provider.value,
-        resolved_model_provider.model_env: model,
+        resolved_model_provider.model_env: resolved_model,
     }
     if auth_method:
         values[LLM_AUTH_METHOD_ENV] = auth_method
     if resolved_model_provider.legacy_model_env:
-        values[resolved_model_provider.legacy_model_env] = model
+        values[resolved_model_provider.legacy_model_env] = resolved_model
     if toolcall_model and resolved_model_provider.toolcall_model_env:
         values[resolved_model_provider.toolcall_model_env] = toolcall_model
     if provider.value == "azure-openai":
+        # Azure forces the LiteLLM transport; the custom gateways stay on the
+        # native SDK, so they must NOT write LLM_TRANSPORT_ENV.
         values[LLM_TRANSPORT_ENV] = "litellm"
         if provider.api_version_env:
             from core.llm.providers.azure_openai import resolve_azure_openai_api_version
 
             values[provider.api_version_env] = resolve_azure_openai_api_version()
-        if provider.endpoint_env:
-            preserved_base = (
-                _env_value_from_lines(lines, provider.endpoint_env)
-                or os.getenv(provider.endpoint_env, "").strip()
-            )
-            if preserved_base:
-                values[provider.endpoint_env] = preserved_base
+    if provider_has_endpoint and provider.endpoint_env:
+        preserved_base = (
+            _env_value_from_lines(lines, provider.endpoint_env)
+            or os.getenv(provider.endpoint_env, "").strip()
+        )
+        if preserved_base:
+            values[provider.endpoint_env] = preserved_base
     if extra_env:
         values.update(extra_env)
 
@@ -204,7 +229,7 @@ def sync_provider_env(
     os.environ.update(values)
     _sync_llm_selection_to_store(
         provider=provider,
-        model=model,
+        model=resolved_model,
         model_provider=resolved_model_provider,
         auth_method=auth_method,
     )

@@ -86,15 +86,36 @@ _CREDIT_EXHAUSTED_MARKERS = (
     "billing_hard_limit_reached",
 )
 
+# SDK init / auth failures that mean "no usable key", not a planner assertion.
+_MISSING_CREDENTIAL_MARKERS = (
+    "missing credentials",
+    "invalid_api_key",
+    "incorrect api key",
+    "authenticationerror",
+    "could not resolve credentials",
+)
+
 
 def _provider_credit_exhausted_message(text: str) -> bool:
     normalized = text.lower()
     return any(marker in normalized for marker in _CREDIT_EXHAUSTED_MARKERS)
 
 
+def _missing_llm_credentials_message(text: str) -> bool:
+    normalized = text.lower()
+    return any(marker in normalized for marker in _MISSING_CREDENTIAL_MARKERS)
+
+
 def _skip_or_fail_provider_credit_exhausted(message: str) -> None:
     skip_or_fail(
         "Live LLM provider credit/quota is exhausted; cannot verify live turn "
+        f"scenario behavior. {message}"
+    )
+
+
+def _skip_or_fail_missing_llm_credentials(message: str) -> None:
+    skip_or_fail(
+        "Live LLM credentials are missing or unusable; cannot verify live turn "
         f"scenario behavior. {message}"
     )
 
@@ -680,11 +701,23 @@ def test_live_action_planning(
         except LLMCreditExhaustedError as exc:
             _skip_or_fail_provider_credit_exhausted(str(exc))
         except RuntimeError as exc:
-            if _provider_credit_exhausted_message(str(exc)):
-                _skip_or_fail_provider_credit_exhausted(str(exc))
+            msg = str(exc)
+            if _provider_credit_exhausted_message(msg):
+                _skip_or_fail_provider_credit_exhausted(msg)
+            if _missing_llm_credentials_message(msg):
+                _skip_or_fail_missing_llm_credentials(msg)
             raise
         except AssertionError as exc:
             failures.append(str(exc))
+        except Exception as exc:
+            # OpenAI/Anthropic SDK init errors (e.g. OpenAIError: Missing
+            # credentials) are not AssertionError/RuntimeError subclasses.
+            msg = str(exc)
+            if _provider_credit_exhausted_message(msg):
+                _skip_or_fail_provider_credit_exhausted(msg)
+            if _missing_llm_credentials_message(msg):
+                _skip_or_fail_missing_llm_credentials(msg)
+            raise
         else:
             passed_count += 1
 

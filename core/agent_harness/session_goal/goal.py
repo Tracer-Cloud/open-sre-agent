@@ -29,7 +29,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix
+from core.agent_harness.turns.handoff_tag_parse import find_tag_suffix, handoff_has_tag
 from platform.common.evidence_compaction import truncate_message
 
 if TYPE_CHECKING:
@@ -106,6 +106,10 @@ class SessionGoalReason:
 # A reason is one line of the checklist render; a condition is persisted in
 # full-ish for resume.
 MAX_GOAL_REASON_CHARS = 240
+
+# How many earlier turns a continuation is reminded of. Bounded because the
+# findings ride in every subsequent prompt; the most recent are what matter.
+MAX_GOAL_FINDINGS = 4
 MAX_GOAL_CONDITION_CHARS = 400
 
 # Session-goal turns a goal may run before the host stops on budget.
@@ -136,6 +140,11 @@ class SessionGoal:
     completed: frozenset[int] = frozenset()
     # Last host/evaluator reason shown in progress paint and continuation nudges.
     last_reason: str = ""
+    # What earlier turns established, oldest first. Continuations are fresh
+    # ``chat`` calls and history carries prose only, so without this a later
+    # turn sees only its own tools and reads their absence as an absence
+    # overall — reporting completed work as never done.
+    findings: tuple[str, ...] = ()
     # Wall-clock start for ``/goal`` duration paint (``time.time()``).
     started_at: float | None = None
     # Session token totals when the goal was attached — delta is goal spend.
@@ -155,6 +164,13 @@ class SessionGoal:
 
     def with_completed(self, completed: frozenset[int]) -> SessionGoal:
         return replace(self, completed=completed)
+
+    def with_finding(self, finding: str) -> SessionGoal:
+        """Append one turn's answer to what later turns are told."""
+        text = truncate_message(finding.strip(), MAX_GOAL_REASON_CHARS)
+        if not text:
+            return self
+        return replace(self, findings=(*self.findings, text)[-MAX_GOAL_FINDINGS:])
 
     def with_reason(self, reason: str) -> SessionGoal:
         text = truncate_message(reason.strip(), MAX_GOAL_REASON_CHARS)
@@ -259,11 +275,18 @@ def session_goal_from_assistant_handoffs(
     *,
     condition: str = "",
 ) -> SessionGoal | None:
-    """Build a :class:`SessionGoal` from typed :class:`AssistantHandoff` fields."""
+    """Build a :class:`SessionGoal` from typed :class:`AssistantHandoff` fields.
+
+    ``database_query:*`` handoffs never attach a host loop — missing DB
+    connectivity is explained in one reply (connect/setup guidance). A planner
+    that still sets ``session_goal=true`` on those handoffs is ignored here.
+    """
     # Reuse the tag body parser by projecting fields to clean content tags —
     # ontology fields are already validated at decode time.
     projected: list[str] = []
     for handoff in handoffs:
+        if handoff_has_tag(handoff.content, "database_query"):
+            continue
         if handoff.session_goal:
             projected.append("session_goal:continue")
             if handoff.session_goal_max_turns is not None:
@@ -295,7 +318,9 @@ def attach_session_goal_from_handoffs(
     detected = None
     if handoffs:
         detected = session_goal_from_assistant_handoffs(handoffs, condition=condition)
-    if detected is None:
+    if detected is None and not any(
+        handoff_has_tag(content, "database_query") for content in handoff_contents
+    ):
         detected = session_goal_from_handoffs(handoff_contents, condition=condition)
     if detected is None:
         return None

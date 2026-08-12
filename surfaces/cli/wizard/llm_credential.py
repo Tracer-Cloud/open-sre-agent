@@ -41,10 +41,10 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.azure_openai import (
-    ensure_endpoint_settings as ensure_azure_openai_endpoint_settings,
-)
 from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
+from surfaces.cli.wizard.endpoint_prompt import (
+    ensure_endpoint_settings as ensure_provider_endpoint_settings,
+)
 from surfaces.cli.wizard.env_sync import sync_env_values
 from surfaces.cli.wizard.validation import ValidationResult, validate_provider_credentials
 
@@ -299,17 +299,19 @@ def _persist_llm_credential_with_recovery(
     return CANCEL
 
 
-def _clear_azure_openai_endpoint_env(provider: ProviderOption) -> None:
-    """Drop the Azure endpoint env vars so the endpoint is re-prompted next iteration.
+def _clear_provider_endpoint_env(provider: ProviderOption) -> None:
+    """Drop a provider's endpoint env vars so the endpoint is re-prompted next iteration.
 
-    After an Azure validation failure the endpoint the user typed may be the wrong
-    resource URL, but ``azure_openai.ensure_endpoint_settings`` short-circuits while
-    ``azure_openai_endpoint_configured()`` still sees that stale value in ``os.environ``
-    — so retry/repick would silently reuse the bad endpoint and never ask for a
-    correction. Popping the endpoint env (azure-only) forces a fresh endpoint prompt.
-    ``azure_openai.py`` has no clear-endpoint delegate, so this #3591 helper stays local.
+    After a validation failure the endpoint the user typed may be the wrong resource
+    URL / gateway base URL, but ``ensure_endpoint_settings`` short-circuits while that
+    stale value is still in ``os.environ`` — so retry/repick would silently reuse the
+    bad endpoint and never ask for a correction. Popping the endpoint env forces a
+    fresh prompt. Applies to the endpoint-carrying providers (Azure and the custom
+    OpenAI-/Anthropic-compatible gateways); a no-op for everything else (#3591).
     """
-    if not is_azure_openai_provider(provider.value):
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    if not (is_azure_openai_provider(provider.value) or is_custom_provider(provider.value)):
         return
     for env_key in (provider.endpoint_env, provider.api_version_env):
         if env_key:
@@ -342,6 +344,12 @@ def _prompt_validated_llm_credential(
     credential_display = f"{label} {provider.credential_label}"
     env_key = provider.api_key_env
     is_azure = is_azure_openai_provider(provider.value)
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    # Azure and the custom gateways both collect an endpoint before validation, so
+    # a failed probe should re-prompt the endpoint too (a wrong base URL is the
+    # usual cause). Only Azure additionally does live deployment discovery.
+    needs_endpoint = is_azure or is_custom_provider(provider.value)
     for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
         try:
             value = _prompt_value(
@@ -360,7 +368,7 @@ def _prompt_validated_llm_credential(
             _console.print(f"\n[{WARNING}]Setup cancelled.[/]")
             return CANCEL, model
 
-        azure_env = ensure_azure_openai_endpoint_settings(provider)
+        azure_env = ensure_provider_endpoint_settings(provider)
         if azure_env is None:  # endpoint back-out -> provider menu
             return REPICK, model
         os.environ.update(azure_env)  # endpoint env must exist before discovery/validation
@@ -381,7 +389,7 @@ def _prompt_validated_llm_credential(
             except WizardBack:
                 # Backing out of the deployment pick returns to the provider menu; drop the
                 # endpoint so the re-selected Azure provider re-prompts it (#3591).
-                _clear_azure_openai_endpoint_env(provider)
+                _clear_provider_endpoint_env(provider)
                 return REPICK, model
 
         validation = _validate_llm_credential(provider, value=value, model=model)
@@ -394,12 +402,12 @@ def _prompt_validated_llm_credential(
                 # it is genuinely re-prompted.
                 retry_label=(
                     f"Re-enter the endpoint and {provider.credential_label}"
-                    if is_azure
+                    if needs_endpoint
                     else f"Re-enter the {provider.credential_label}"
                 ),
                 retry_hint=(
                     f"Prompts for {provider.endpoint_env} and {env_key} again"
-                    if is_azure
+                    if needs_endpoint
                     else f"Prompts for {env_key} again"
                 ),
                 escape=Choice(
@@ -414,12 +422,12 @@ def _prompt_validated_llm_credential(
             if action == RETRY:
                 # Drop the (possibly wrong) Azure endpoint so retry re-prompts it, not
                 # just the key; a no-op for every non-Azure provider.
-                _clear_azure_openai_endpoint_env(provider)
+                _clear_provider_endpoint_env(provider)
                 continue
             if action == REPICK:
                 # Same reason as retry: the re-selected Azure provider must re-prompt the
                 # endpoint instead of short-circuiting on the stale env var.
-                _clear_azure_openai_endpoint_env(provider)
+                _clear_provider_endpoint_env(provider)
                 return REPICK, model
             if action != SAVE_ANYWAY:
                 return CANCEL, model  # ESCAPE, or defensively: no other values are offered

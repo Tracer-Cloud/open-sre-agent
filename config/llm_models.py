@@ -37,6 +37,7 @@ class ProviderModelDefaults:
     toolcall: str
     base_url: str | None = None
     single_model_settings: bool = False
+    requires_explicit_models: bool = False
 
 
 DEFAULT_MAX_TOKENS = 4096
@@ -121,6 +122,22 @@ PROVIDER_MODEL_DEFAULTS: dict[str, ProviderModelDefaults] = {
         classification="gpt-5.4-mini",
         toolcall="gpt-5.4-mini",
     ),
+    "custom-openai": ProviderModelDefaults(
+        provider="custom-openai",
+        settings_key="custom_openai",
+        reasoning="",
+        classification="",
+        toolcall="",
+        requires_explicit_models=True,
+    ),
+    "custom-anthropic": ProviderModelDefaults(
+        provider="custom-anthropic",
+        settings_key="custom_anthropic",
+        reasoning="",
+        classification="",
+        toolcall="",
+        requires_explicit_models=True,
+    ),
     "bedrock": ProviderModelDefaults(
         provider="bedrock",
         settings_key="bedrock",
@@ -197,6 +214,14 @@ AZURE_OPENAI_REASONING_MODEL = _defaults("azure-openai").reasoning
 AZURE_OPENAI_CLASSIFICATION_MODEL = _defaults("azure-openai").classification
 AZURE_OPENAI_TOOLCALL_MODEL = _defaults("azure-openai").toolcall
 
+CUSTOM_OPENAI_REASONING_MODEL = _defaults("custom-openai").reasoning
+CUSTOM_OPENAI_CLASSIFICATION_MODEL = _defaults("custom-openai").classification
+CUSTOM_OPENAI_TOOLCALL_MODEL = _defaults("custom-openai").toolcall
+
+CUSTOM_ANTHROPIC_REASONING_MODEL = _defaults("custom-anthropic").reasoning
+CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL = _defaults("custom-anthropic").classification
+CUSTOM_ANTHROPIC_TOOLCALL_MODEL = _defaults("custom-anthropic").toolcall
+
 BEDROCK_REASONING_MODEL = _defaults("bedrock").reasoning
 BEDROCK_CLASSIFICATION_MODEL = _defaults("bedrock").classification
 BEDROCK_TOOLCALL_MODEL = _defaults("bedrock").toolcall
@@ -213,6 +238,8 @@ OPENROUTER_LLM_CONFIG = model_config_for("openrouter")
 DEEPSEEK_LLM_CONFIG = model_config_for("deepseek")
 GROQ_LLM_CONFIG = model_config_for("groq")
 AZURE_OPENAI_LLM_CONFIG = model_config_for("azure-openai")
+CUSTOM_OPENAI_LLM_CONFIG = model_config_for("custom-openai")
+CUSTOM_ANTHROPIC_LLM_CONFIG = model_config_for("custom-anthropic")
 GEMINI_LLM_CONFIG = model_config_for("gemini")
 NVIDIA_LLM_CONFIG = model_config_for("nvidia")
 MINIMAX_LLM_CONFIG = model_config_for("minimax")
@@ -233,6 +260,14 @@ __all__ = [
     "BEDROCK_LLM_CONFIG",
     "BEDROCK_REASONING_MODEL",
     "BEDROCK_TOOLCALL_MODEL",
+    "CUSTOM_ANTHROPIC_CLASSIFICATION_MODEL",
+    "CUSTOM_ANTHROPIC_LLM_CONFIG",
+    "CUSTOM_ANTHROPIC_REASONING_MODEL",
+    "CUSTOM_ANTHROPIC_TOOLCALL_MODEL",
+    "CUSTOM_OPENAI_CLASSIFICATION_MODEL",
+    "CUSTOM_OPENAI_LLM_CONFIG",
+    "CUSTOM_OPENAI_REASONING_MODEL",
+    "CUSTOM_OPENAI_TOOLCALL_MODEL",
     "DEEPSEEK_BASE_URL",
     "DEEPSEEK_CLASSIFICATION_MODEL",
     "DEEPSEEK_LLM_CONFIG",

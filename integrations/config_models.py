@@ -9,6 +9,11 @@ from urllib.parse import urlparse
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from config.config import get_tracer_base_url
+from config.constants.azure import (
+    AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT,
+    AZURE_MAX_RESULTS_DEFAULT,
+    AZURE_MAX_RESULTS_HARD_LIMIT,
+)
 from config.strict_config import StrictConfigModel
 from integrations._validators import (
     normalize_bearer,
@@ -1112,14 +1117,14 @@ class AzureIntegrationConfig(StrictConfigModel):
 
     workspace_id: str
     access_token: str
-    endpoint: str = "https://api.loganalytics.io"
+    endpoint: str = AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT
     tenant_id: str = ""
     subscription_id: str = ""
-    max_results: int = 100
+    max_results: int = AZURE_MAX_RESULTS_DEFAULT
     integration_id: str = ""
 
     _normalize_endpoint = field_validator("endpoint", mode="before")(
-        normalize_url("https://api.loganalytics.io")
+        normalize_url(AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT)
     )
     _normalize_strs = field_validator(
         "tenant_id", "subscription_id", "integration_id", mode="before"
@@ -1131,8 +1136,8 @@ class AzureIntegrationConfig(StrictConfigModel):
         try:
             v: int = int(value)  # type: ignore[arg-type,call-overload]
         except (TypeError, ValueError):
-            return 100
-        return max(1, min(v, 500))
+            return AZURE_MAX_RESULTS_DEFAULT
+        return max(1, min(v, AZURE_MAX_RESULTS_HARD_LIMIT))
 
 
 class OpenObserveIntegrationConfig(StrictConfigModel):

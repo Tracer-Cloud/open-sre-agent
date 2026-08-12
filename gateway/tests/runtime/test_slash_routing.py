@@ -82,6 +82,25 @@ def test_gateway_investigate_discord_alert_prefix(monkeypatch: pytest.MonkeyPatc
     assert "failed" not in (sink.finalized or "").lower()
 
 
+def test_gateway_background_read_forms_are_not_swallowed() -> None:
+    """Literal /background read forms run against SessionCore, which has no
+    terminal facet; they must answer instead of raising AttributeError."""
+    listed = _run_gateway_slash("/background list")
+    assert listed.finalized is not None
+    assert "no background investigations" in listed.finalized.lower()
+
+    status = _run_gateway_slash("/background status")
+    assert status.finalized is not None
+    assert "background mode" in status.finalized.lower()
+
+
+def test_gateway_background_write_forms_report_repl_only() -> None:
+    """/background on toggles REPL-local state with no headless equivalent."""
+    sink = _run_gateway_slash("/background on")
+    assert sink.finalized is not None
+    assert "uv run opensre" in sink.finalized
+
+
 def test_gateway_onboard_slash_returns_headless_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
     """Literal /onboard on SessionCore must not spawn a blocking interactive wizard."""
     recorded: list[list[str]] = []

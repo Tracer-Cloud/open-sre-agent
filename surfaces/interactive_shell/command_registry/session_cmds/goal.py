@@ -1,4 +1,4 @@
-"""Slash sugar for the SessionGoal API: /goal show|set|pause|resume|edit|clear.
+"""/goal slash command: show|set|pause|resume|edit|clear.
 
 ``/goal set`` attaches a completion condition and immediately queues that
 condition as the next turn (autosubmit). Status shows the paint progress line

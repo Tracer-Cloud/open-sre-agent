@@ -23,11 +23,15 @@ _BLOCKED_COMMANDS = ", ".join(f"`{command}`" for command in BLOCKED_INTROSPECTIO
 _STATIC_GUIDANCE = (
     ". When the user asks which OpenSRE version is running, reply with the "
     "full version string above verbatim — including any parenthetical suffix. "
-    "When the user asks for the local timezone name, Python version, process "
+    "When the user asks what environment this process is running in, or for "
+    "the host operating system, local timezone name, Python version, process "
     "id, parent process id, host/pod name, cloud provider or region, "
     "kubeconfig path, or which tools are installed, answer from the strings "
     "above directly, WITHOUT any tool call — these facts are authoritative "
-    "and re-reading them through the sandbox wastes a round-trip. Never run "
+    "and re-reading them through the sandbox wastes a round-trip. Quote the "
+    "host operating system for environment questions; when no cloud provider "
+    "was detected, say so — never invent AWS, GCP, Azure, or a region. Never "
+    "run "
     f"{_BLOCKED_COMMANDS}, and never probe cloud instance metadata over the "
     "network. To list files in the scratchpad or another directory, "
     "use the Python execution sandbox with `pathlib.Path(...).iterdir()` — "
@@ -126,6 +130,14 @@ def _tools_line(runtime: Mapping[str, Any]) -> str | None:
     return f"installed tools on PATH are {', '.join(present)}"
 
 
+def _host_os_line(runtime: Mapping[str, Any]) -> str | None:
+    """Host OS — always stated when the key was probed."""
+    if "os_family" not in runtime:
+        return None
+    family = _clean_str(runtime, "os_family")
+    return f"host operating system is {family}" if family else None
+
+
 def _cloud_line(runtime: Mapping[str, Any]) -> str | None:
     """Cloud identity, or an explicit statement that none was detected.
 
@@ -187,6 +199,7 @@ def _capability_warnings_line(runtime: Mapping[str, Any]) -> str | None:
 _STATIC_FACT_PRODUCERS: tuple[FactProducer, ...] = (
     _version_line,
     _str_fact("runtime_env", "runtime environment is {}"),
+    _host_os_line,
     _str_fact("hostname", "host name is {}"),
     _str_fact("tz_name", "local timezone is {}"),
     _str_fact("python_version", "Python interpreter version is {}"),

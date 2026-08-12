@@ -196,3 +196,19 @@ def test_metadata_cannot_override_billing_fields(monkeypatch: pytest.MonkeyPatch
     assert sent["json"]["amount"] == 1.0
     assert sent["json"]["organizationId"] == "org_real"
     assert sent["json"]["reason"] == "slack_turn"
+
+
+def test_creditsoutcome_is_strenum_with_identical_values() -> None:
+    # Arrange: the persisted/logged string for each outcome must not move.
+    expected_values = {
+        CreditsOutcome.ALLOWED: "allowed",
+        CreditsOutcome.DENIED: "denied",
+        CreditsOutcome.UNCONFIGURED: "unconfigured",
+        CreditsOutcome.UNAVAILABLE: "unavailable",
+    }
+
+    # Act / Assert: StrEnum members behave as their plain string value.
+    for member, expected in expected_values.items():
+        assert member.value == expected
+        assert member == expected
+        assert isinstance(member, str)

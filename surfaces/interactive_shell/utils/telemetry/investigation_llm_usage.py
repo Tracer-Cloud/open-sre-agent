@@ -62,7 +62,8 @@ def resolve_configured_llm_identity() -> tuple[str, str]:
         provider = effective_llm_provider(
             settings.provider, get_configured_llm_auth_method(settings.provider)
         )
-        model = str(getattr(settings, f"{provider}_reasoning_model", "") or "")
+        # Settings attributes use the underscore form; the slug can be hyphenated.
+        model = str(getattr(settings, f"{provider.replace('-', '_')}_reasoning_model", "") or "")
         return provider, model
     except Exception:
         return "", ""

@@ -43,6 +43,19 @@ _LOCALTIME_LINK = Path("/etc/localtime")
 
 _HOSTNAME_FILE = Path("/etc/hostname")
 
+# Values of CLOUD_PROVIDER for which AWS_REGION / AWS_DEFAULT_REGION describe
+# the same deployment. Any other provider keeps its own region source.
+_AWS_PROVIDER_NAMES: Final[frozenset[str]] = frozenset({"aws", "amazon"})
+
+# ``sys.platform`` prefixes mapped to the OS name a user would recognise.
+# Prefix-matched: Linux reports linux/linux2 and BSDs carry a version suffix.
+_OS_FAMILY_BY_PLATFORM_PREFIX: Final[tuple[tuple[str, str], ...]] = (
+    ("darwin", "macOS"),
+    ("linux", "Linux"),
+    ("win", "Windows"),
+    ("freebsd", "FreeBSD"),
+)
+
 
 def local_tz_name() -> str:
     """Best-effort local timezone name — IANA (``Europe/Berlin``) when possible.
@@ -126,25 +139,46 @@ def disk_memory_facts() -> dict[str, Any]:
     }
 
 
+def host_os_facts() -> dict[str, str]:
+    """Host OS family — ``macOS``, ``Linux``, ``Windows``.
+
+    Always present so "what environment are you running in?" has a true local
+    answer instead of a vacuum the model fills with a cloud guess.
+
+    No version: ``platform.release()`` is the *kernel* release — on macOS the
+    Darwin number (25.5.0), not the macOS version (26.5.2) — so publishing it
+    as the OS release states a false fact in the block that exists to prevent
+    them.
+
+    ``sys.platform`` rather than ``platform.system()``: this repo ships its own
+    ``platform`` package (see ``config/secrets/os_keyring.py``), so the stdlib
+    name only resolves through a shim.
+    """
+    identifier = sys.platform
+    for prefix, family in _OS_FAMILY_BY_PLATFORM_PREFIX:
+        if identifier.startswith(prefix):
+            return {"os_family": family}
+    return {"os_family": identifier or "unknown"}
+
+
 def cloud_facts() -> dict[str, str]:
     """Cloud provider/region from deploy-time env vars — no metadata endpoint.
 
     ``CLOUD_PROVIDER`` / ``CLOUD_REGION`` are the canonical injection points
-    (set at deploy time). Region falls back to ``AWS_REGION`` /
-    ``AWS_DEFAULT_REGION`` — the same pair the LLM transports already read —
-    and when the region came from an AWS var the provider defaults to ``aws``.
-    Never calls the instance metadata service (IMDS); the sandbox blocks
-    network anyway.
+    (set at deploy time). ``AWS_REGION`` / ``AWS_DEFAULT_REGION`` alone must
+    **not** claim this process is running in AWS — those vars are routine on
+    developer laptops (``.env.example`` ships ``AWS_REGION=us-east-1`` for the
+    AWS integration). They may fill in the region only when the provider is
+    itself AWS: an AWS region under ``CLOUD_PROVIDER=gcp`` would be a wrong
+    location stated as authoritative runtime identity. Never calls the instance
+    metadata service (IMDS).
     """
     provider = (os.environ.get("CLOUD_PROVIDER") or "").strip()
     region = (os.environ.get("CLOUD_REGION") or "").strip()
-    aws_region = (
-        os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
-    ).strip()
-    if not region and aws_region:
-        region = aws_region
-        if not provider:
-            provider = "aws"
+    if not region and provider.lower() in _AWS_PROVIDER_NAMES:
+        region = (
+            os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
+        ).strip()
     return {"cloud_provider": provider, "cloud_region": region}
 
 
@@ -282,6 +316,7 @@ __all__ = [
     "capability_warning_facts",
     "cloud_facts",
     "disk_memory_facts",
+    "host_os_facts",
     "installed_tools",
     "kubeconfig_path",
     "local_tz_name",

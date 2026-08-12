@@ -182,6 +182,37 @@ def test_host_owned_achieved_without_tools_completes() -> None:
     assert session.session_goal.status == SessionGoalStatus.ACHIEVED
 
 
+def test_database_query_handoff_does_not_attach_session_goal() -> None:
+    """Oracle 332: planner session_goal on a DB query must not start the host loop."""
+    from core.agent_harness.session_goal.goal import attach_session_goal_from_handoffs
+    from core.agent_harness.turns.assistant_handoff import AssistantHandoff
+
+    session = SessionCore()
+    handoff = AssistantHandoff.from_tool_input(
+        {
+            "content": "database_query:mysql_active_connections",
+            "session_goal": True,
+        }
+    )
+    attached = attach_session_goal_from_handoffs(
+        session,
+        handoff.to_handoff_contents(),
+        condition="Use the MySQL tool to query active connections.",
+        handoffs=(handoff,),
+    )
+    assert attached is None
+    assert getattr(session, "session_goal", None) is None
+
+    # Legacy tags alone (no typed handoffs) also stay one-shot.
+    session2 = SessionCore()
+    attached_legacy = attach_session_goal_from_handoffs(
+        session2,
+        ("database_query:mysql_active_connections", "session_goal:continue"),
+        condition="query mysql",
+    )
+    assert attached_legacy is None
+
+
 def test_handoff_does_not_replace_active_host_owned_goal() -> None:
     from core.agent_harness.session_goal.goal import attach_session_goal_from_handoffs
 

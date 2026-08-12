@@ -15,7 +15,12 @@ import pytest
 from config.constants.filestorage import (
     REMOTE_SYNC_BUCKET_ENV,
     REMOTE_SYNC_ENV,
+    REMOTE_SYNC_EXCLUDE_ENV,
+    REMOTE_SYNC_EXCLUDE_OFF_ENV,
     REMOTE_SYNC_PREFIX_ENV,
+    REMOTE_SYNC_PROFILE_ENV,
+    REMOTE_SYNC_PROVIDER_ENV,
+    REMOTE_SYNC_REGION_ENV,
 )
 from platform.filestorage import engine as sync_module
 from platform.filestorage.config import load_remote_sync_config, remote_sync_enabled
@@ -1185,13 +1190,13 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
     monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
     monkeypatch.setenv(REMOTE_SYNC_PREFIX_ENV, "env-prefix")
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_REGION", "eu-west-2")
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROFILE", "env-profile")
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_PROVIDER", "aws")
+    monkeypatch.setenv(REMOTE_SYNC_REGION_ENV, "eu-west-2")
+    monkeypatch.setenv(REMOTE_SYNC_PROFILE_ENV, "env-profile")
+    monkeypatch.setenv(REMOTE_SYNC_PROVIDER_ENV, "aws")
     # Exclusions are a setting like any other, so "purely by env" now includes
-    # them. Left unset, the file has to be read to find out what the user wants
-    # held back — see test_a_corrupt_settings_file_does_not_sync_everything.
-    monkeypatch.setenv("OPENSRE_REMOTE_SYNC_EXCLUDE", "*.tmp")
+    # them. Left unset, an unreadable stored section falls back to the defaults
+    # — see test_a_corrupt_settings_file_defaults_to_no_exclusions_when_env_covers_required.
+    monkeypatch.setenv(REMOTE_SYNC_EXCLUDE_ENV, "*.tmp")
 
     # Act
     config = load_remote_sync_config()
@@ -1201,6 +1206,67 @@ def test_env_only_config_ignores_a_corrupt_settings_file(
     assert config.bucket == "env-bucket"
     assert config.prefix == "env-prefix"
     assert config.exclude.patterns == ("*.tmp",)
+
+
+def test_the_two_documented_env_vars_survive_a_corrupt_settings_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The documented env-only setup works with defaults for unset optionals.
+
+    Docs teach enabling sync with just ``OPENSRE_REMOTE_SYNC`` and
+    ``OPENSRE_REMOTE_SYNC_BUCKET``; every other value defaults. A corrupt
+    ``config.yml`` must not block that happy path, even though the optionals
+    would otherwise fall through to the file.
+    """
+    # Arrange
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("just a string, not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.setenv(REMOTE_SYNC_BUCKET_ENV, "env-bucket")
+    for env in (
+        REMOTE_SYNC_PREFIX_ENV,
+        REMOTE_SYNC_REGION_ENV,
+        REMOTE_SYNC_PROFILE_ENV,
+        REMOTE_SYNC_PROVIDER_ENV,
+        REMOTE_SYNC_EXCLUDE_ENV,
+        REMOTE_SYNC_EXCLUDE_OFF_ENV,
+    ):
+        monkeypatch.delenv(env, raising=False)
+
+    # Act
+    config = load_remote_sync_config()
+
+    # Assert: env provides what is required, defaults cover the rest.
+    assert config is not None
+    assert config.bucket == "env-bucket"
+    assert config.prefix == "opensre"
+    assert config.provider == "aws"
+    assert config.region == ""
+    assert config.profile == ""
+    assert config.exclude.patterns == ()
+
+
+def test_a_corrupt_settings_file_still_fails_when_the_bucket_has_no_env_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable file only blocks sync when the env cannot supply a value.
+
+    With the switch on but the bucket only available in the stored section,
+    the settings file is required, so its damage has to reach the surface.
+    """
+    # Arrange
+    from config.constants import paths
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    (tmp_path / "config.yml").write_text("not a mapping", encoding="utf-8")
+    monkeypatch.setenv(REMOTE_SYNC_ENV, "1")
+    monkeypatch.delenv(REMOTE_SYNC_BUCKET_ENV, raising=False)
+
+    # Act / Assert
+    with pytest.raises(RemoteSyncConfigError):
+        load_remote_sync_config()
 
 
 def test_list_prefix_is_delimited_so_a_sibling_bucket_path_cannot_match() -> None:

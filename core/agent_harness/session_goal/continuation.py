@@ -17,6 +17,13 @@ def continuation_nudge(goal: SessionGoal) -> str:
     """User-visible follow-up message for the next session-goal turn."""
     reason = goal.last_reason.strip() or derive_session_goal_reason(goal)
     reason_block = f"Last progress: {reason}\n\n"
+    if goal.findings:
+        established = "\n".join(f"  - {item}" for item in goal.findings)
+        reason_block += (
+            "Already established in earlier turns of this goal — treat these as "
+            "done and do not report them as unavailable:\n"
+            f"{established}\n\n"
+        )
     unfinished = goal.unfinished_items
     if unfinished:
         pending = "\n".join(f"  - [{index}] {item}" for index, item in unfinished)

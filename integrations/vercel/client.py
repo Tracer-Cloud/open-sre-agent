@@ -585,5 +585,6 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
         return None
     try:
         return VercelClient(VercelConfig(api_token=token, team_id=team_id or ""))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to create Vercel client: %s", exc, exc_info=True)
         return None

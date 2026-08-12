@@ -17,7 +17,7 @@ from __future__ import annotations
 import functools
 import logging
 import os
-from enum import Enum
+from enum import StrEnum
 from http import HTTPStatus
 from typing import Any
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 _CONSUME_PATH = "/api/credits/consume"
 
 
-class CreditsOutcome(Enum):
+class CreditsOutcome(StrEnum):
     """Classification of one credit-consume attempt; policy belongs to callers."""
 
     ALLOWED = "allowed"
