@@ -17,9 +17,9 @@ import contextlib
 import threading
 from collections.abc import Iterator
 from contextvars import ContextVar, Token
+from enum import StrEnum
 from typing import Final
 from uuid import uuid4
-from enum import StrEnum
 
 from config.constants.organization import organization_id
 from platform.analytics.repl_context import get_cli_session_id
