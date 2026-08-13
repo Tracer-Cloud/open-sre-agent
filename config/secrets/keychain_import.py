@@ -165,7 +165,15 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
             discovered = listed
 
     for env_var in _candidate_env_vars(discovered=discovered):
-        if local_file.get(env_var):
+        try:
+            already_local = bool(local_file.get(env_var))
+        except OSError:
+            # Lock timeout / unreadable store — leave migration pending; never
+            # abort lookup/startup through this path.
+            logger.debug("Could not read local credential for %s", env_var, exc_info=True)
+            complete = False
+            continue
+        if already_local:
             # Local file wins; still drop a stale keychain duplicate.
             if not _scrub_keychain(env_var):
                 complete = False

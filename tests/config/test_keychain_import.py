@@ -211,6 +211,23 @@ def test_a_locked_keychain_leaves_the_import_pending(monkeypatch: pytest.MonkeyP
     assert local_file.get("ANTHROPIC_API_KEY") == "sk-ant-live"
 
 
+def test_a_local_file_lock_timeout_leaves_the_import_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A contended credential file must not raise through lookup/startup."""
+    from filelock import Timeout
+
+    _install_keychain(monkeypatch, {"ANTHROPIC_API_KEY": "sk-ant-live"})
+
+    def _locked(_name: str) -> str:
+        raise Timeout("/tmp/credentials.json.lock")
+
+    monkeypatch.setattr(local_file, "get", _locked)
+
+    assert keychain_import.import_keychain_secrets_once() == ()
+    assert keychain_import._already_imported() is False
+
+
 def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     """Local copy alone must not complete migration while the OS entry remains."""
     from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
