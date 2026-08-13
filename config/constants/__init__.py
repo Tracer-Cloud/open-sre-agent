@@ -323,6 +323,10 @@ from config.constants.slack import (
     SLACK_BOT_TOKEN_ENV,
     SLACK_FILE_HOST_SUFFIXES,
 )
+from config.constants.slash_commands import (
+    INTEGRATIONS_SETUP_COMMAND,
+    INTEGRATIONS_SETUP_PREFIX,
+)
 from config.constants.smtp import (
     SMTP_DEFAULT_TO_ENV,
     SMTP_FROM_ADDRESS_ENV,
@@ -516,6 +520,8 @@ __all__ = [
     "MARIADB_PORT_ENV",
     "MARIADB_SSL_ENV",
     "MARIADB_USERNAME_ENV",
+    "INTEGRATIONS_SETUP_COMMAND",
+    "INTEGRATIONS_SETUP_PREFIX",
     "INVESTIGATION_TOOL_CACHE_MAX_CHARS",
     "INVESTIGATION_TOOL_CACHE_MAX_ENTRIES",
     "MAX_INVESTIGATION_LOOPS",

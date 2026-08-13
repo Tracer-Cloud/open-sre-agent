@@ -10,7 +10,7 @@ import base64
 import json
 import logging
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -741,7 +741,7 @@ def _require_service_id(service_id: str, *, port: str) -> str:
     return key
 
 
-def register_metric_query_tools(service_id: str, tools: tuple[str, ...]) -> None:
+def register_metric_query_tools(service_id: str, tools: Collection[str]) -> None:
     """Register the tool names that run a live query for this source.
 
     Without this, core falls back to shape rules that recognise no vendor, so
@@ -754,7 +754,7 @@ def register_metric_query_tools(service_id: str, tools: tuple[str, ...]) -> None
     _metric_query_tools[key] = _metric_query_tools.get(key, frozenset()) | names
 
 
-def register_discovery_targets(service_id: str, targets: tuple[str, ...]) -> None:
+def register_discovery_targets(service_id: str, targets: Collection[str]) -> None:
     """Register the bridge targets that only explore schema for this source."""
     key = _require_service_id(service_id, port="register_discovery_targets")
     names = frozenset(name.strip().lower() for name in targets if name and name.strip())

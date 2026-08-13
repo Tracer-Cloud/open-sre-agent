@@ -22,6 +22,7 @@ import shlex
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from config.constants.slash_commands import INTEGRATIONS_SETUP_PREFIX
 from core.agent_harness.session.want_me_to import (
     offer_from_assistant_content,
     replace_want_me_to_body,
@@ -122,13 +123,13 @@ class PendingIntegrationSetupOffer:
     def to_slash_command(self) -> str:
         """Literal slash dispatched without an LLM round-trip."""
         service = self.service_id.strip()
-        return f"/integrations setup {shlex.quote(service)}" if service else ""
+        return f"{INTEGRATIONS_SETUP_PREFIX}{shlex.quote(service)}" if service else ""
 
     def to_dispatch_message(self) -> str:
         return self.to_slash_command()
 
     def matches_expanded(self, expanded: str) -> bool:
-        return isinstance(expanded, str) and expanded.startswith("/integrations setup ")
+        return isinstance(expanded, str) and expanded.startswith(INTEGRATIONS_SETUP_PREFIX)
 
     def want_me_to_body(self) -> str:
         return f"connect `{self.service_id}` now"

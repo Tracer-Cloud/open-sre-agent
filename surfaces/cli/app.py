@@ -29,6 +29,7 @@ from surfaces.cli.invocation import (  # noqa: E402
     is_fast_version_invocation,
     print_fast_version,
     resolve_command_parts,
+    try_fast_investigate_print_template,
 )
 from surfaces.cli.telemetry import (  # noqa: E402
     analytics_needs_flush,
@@ -242,6 +243,10 @@ def main(argv: list[str] | None = None) -> int:
     if is_fast_version_invocation(cli_argv):
         print_fast_version(cli_argv)
         return 0
+
+    print_template_exit = try_fast_investigate_print_template(cli_argv)
+    if print_template_exit is not None:
+        return print_template_exit
 
     startup.run(cli, cli_argv)
     StructuredError = load_structured_error_type()

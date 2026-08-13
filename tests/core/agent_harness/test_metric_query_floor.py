@@ -168,6 +168,9 @@ def test_signup_goal_unverified_after_live_probes_gets_draft_without_reconnect()
     """Connected analytics ran candidate queries; signup still unresolved → draft only."""
     observation = (
         "Tool: call_posthog_tool\n"
+        'Arguments: {"tool_name": "event-definitions"}\n'
+        "Result: ['$pageview', 'login']\n\n"
+        "Tool: call_posthog_tool\n"
         'Arguments: {"tool_name": "execute-sql", '
         '"arguments": {"query": "SELECT 1 WHERE event = \'user_signed_up\'"}}\n'
         "Result: 0\n\n"
@@ -208,8 +211,42 @@ def test_signup_goal_unverified_after_live_probes_gets_draft_without_reconnect()
     assert "/integrations setup" not in text
 
 
+def test_signup_goal_guessed_sql_event_without_schema_keeps_floor() -> None:
+    """Guessing event='user_signed_up' in HogQL must not count as verified identity."""
+    observation = (
+        "Tool: call_posthog_tool\n"
+        'Arguments: {"tool_name": "execute-sql", '
+        '"arguments": {"query": "SELECT … WHERE event = \'user_signed_up\'"}}\n'
+        "Result: 12%"
+    )
+    reply = "D7 retention is 12% for Windows signups (event user_signed_up)."
+    session = type(
+        "S",
+        (),
+        {
+            "session_goal": SessionGoal(
+                condition="D7 retention for users who signed up on Windows",
+                max_outer_turns=4,
+                host_owned=True,
+            )
+        },
+    )()
+    text = apply_unformed_metric_floor(
+        reply,
+        _need(),
+        observation=observation,
+        setup_command_for=lambda name: f"/integrations setup {name}",
+        session=session,
+    )
+    assert "```sql" in text
+    assert "<signup_event>" in text
+
+
 def test_signup_goal_verified_live_percent_skips_floor() -> None:
     observation = (
+        "Tool: call_posthog_tool\n"
+        'Arguments: {"tool_name": "event-definitions"}\n'
+        "Result: ['user_signed_up', '$pageview']\n\n"
         "Tool: call_posthog_tool\n"
         'Arguments: {"tool_name": "execute-sql", '
         '"arguments": {"query": "SELECT … WHERE event = \'user_signed_up\'"}}\n'
