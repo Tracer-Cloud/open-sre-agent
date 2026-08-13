@@ -812,8 +812,17 @@ def test_evidence_is_false_when_the_success_counts_are_not_numbers() -> None:
 
     class _BadResult:
         action_result = _BadCounts()
-        gather_success_count = None
+        # Truthy, so it survives the `or 0` and actually reaches int(). A None
+        # here would normalize to zero and leave the gather guard unexercised.
+        gather_success_count = "three"
         assistant_response_text = "done"
 
-    # Act / Assert
+    class _OnlyGatherIsBad:
+        action_result = None
+        gather_success_count = "three"
+        assistant_response_text = "done"
+
+    # Act / Assert: each count is converted separately, so each guard is
+    # reached on its own rather than only via the first one that raises.
     assert turn_has_session_goal_evidence(_BadResult()) is False
+    assert turn_has_session_goal_evidence(_OnlyGatherIsBad()) is False
