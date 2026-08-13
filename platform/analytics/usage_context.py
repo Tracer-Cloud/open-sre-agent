@@ -27,16 +27,7 @@ type JsonScalar = str | bool | int | float
 type JsonValue = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 type Properties = dict[str, JsonValue]
 
-from enum import Enum as _Enum
-
-try:
-    # Python 3.11+: prefer stdlib StrEnum
-    from enum import StrEnum as _StdStrEnum  # type: ignore
-    StrEnum = _StdStrEnum
-except Exception:
-    class StrEnum(str, _Enum):
-        """Lightweight StrEnum fallback for older Python versions."""
-        pass
+from enum import StrEnum
 
 
 class UsageSurface(StrEnum):
@@ -45,6 +36,7 @@ class UsageSurface(StrEnum):
     TELEGRAM = "telegram"
     DISCORD = "discord"
     BUZZ = "buzz"
+
 
 # Legacy string constants kept for backwards compatibility with callers/tests
 SURFACE_CLI: Final[str] = UsageSurface.CLI.value
