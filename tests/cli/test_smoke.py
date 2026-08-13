@@ -576,6 +576,10 @@ def test_investigate_onboard_handoff_smoke(cli_sandbox: CliSandbox, tmp_path: Pa
         "-i",
         str(alert_path),
         extra_env={"LLM_PROVIDER": "anthropic"},
+        # Full CLI boot (adapters + verifiers) then fail closed on credentials.
+        # Under loaded ``test-cov`` (xdist + coverage) a cold subprocess can
+        # exceed the default 15s budget even though the happy path is ~3s.
+        timeout=60.0,
     )
 
     # Exit 1 is expected — no real API key in CI.

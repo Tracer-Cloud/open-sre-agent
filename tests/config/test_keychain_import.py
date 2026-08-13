@@ -22,6 +22,10 @@ def _isolated_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     os_keyring.reset_keyring_state()
     monkeypatch.setattr(local_file, "store_path", lambda: tmp_path / "credentials.json")
     monkeypatch.setattr(keychain_import, "_marker_path", lambda: tmp_path / "keychain-imported")
+    # Tests that need enumeration opt in; default off so CI never dumps the
+    # developer keychain and so non-macOS runners stay deterministic.
+    monkeypatch.setattr(keychain_import.os_keyring, "supports_username_enumeration", lambda: False)
+    monkeypatch.setattr(keychain_import.os_keyring, "list_usernames", lambda: None)
 
 
 def _install_keychain(monkeypatch: pytest.MonkeyPatch, entries: dict[str, str]) -> list[str]:
@@ -205,3 +209,103 @@ def test_a_locked_keychain_leaves_the_import_pending(monkeypatch: pytest.MonkeyP
     # Assert
     assert keychain_import.import_keychain_secrets_once() == ("ANTHROPIC_API_KEY",)
     assert local_file.get("ANTHROPIC_API_KEY") == "sk-ant-live"
+
+
+def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Local copy alone must not complete migration while the OS entry remains."""
+    from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
+
+    entries = {"ANTHROPIC_API_KEY": "sk-ant-live"}
+    monkeypatch.setattr(
+        keychain_import.os_keyring, "item_exists", lambda name: name in entries
+    )
+    monkeypatch.setattr(
+        keychain_import.os_keyring, "get", lambda name: entries.get(name, "")
+    )
+
+    def _locked_delete(_name: str) -> None:
+        raise KeyringUnavailableError(
+            "locked", reason=KeyringUnavailableReason.BACKEND_ERROR
+        )
+
+    monkeypatch.setattr(keychain_import.os_keyring, "delete", _locked_delete)
+
+    assert keychain_import.import_keychain_secrets_once() == ("ANTHROPIC_API_KEY",)
+    assert local_file.get("ANTHROPIC_API_KEY") == "sk-ant-live"
+    # Marker must stay absent so a later run retries the scrub.
+    assert keychain_import._already_imported() is False
+
+    deleted: list[str] = []
+    monkeypatch.setattr(
+        keychain_import.os_keyring, "delete", lambda name: deleted.append(name)
+    )
+    assert keychain_import.import_keychain_secrets_once() == ()
+    assert "ANTHROPIC_API_KEY" in deleted
+    assert keychain_import._already_imported() is True
+
+
+def test_enumerated_dynamic_names_are_migrated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Names the constants scan never knew must still move when the keychain lists them."""
+    dynamic = "record:custom-integration-token"
+    deleted = _install_keychain(monkeypatch, {dynamic: "secret-from-keychain"})
+    monkeypatch.setattr(keychain_import.os_keyring, "supports_username_enumeration", lambda: True)
+    monkeypatch.setattr(keychain_import.os_keyring, "list_usernames", lambda: (dynamic,))
+
+    imported = keychain_import.import_keychain_secrets_once()
+
+    assert dynamic in imported
+    assert local_file.get(dynamic) == "secret-from-keychain"
+    assert dynamic in deleted
+    assert keychain_import._already_imported() is True
+
+
+def test_failed_username_enumeration_leaves_the_import_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On enumerable platforms, a failed dump must not write the completion marker."""
+    _install_keychain(monkeypatch, {"ANTHROPIC_API_KEY": "sk-ant-live"})
+    monkeypatch.setattr(keychain_import.os_keyring, "supports_username_enumeration", lambda: True)
+    monkeypatch.setattr(keychain_import.os_keyring, "list_usernames", lambda: None)
+
+    imported = keychain_import.import_keychain_secrets_once()
+
+    assert "ANTHROPIC_API_KEY" in imported
+    assert keychain_import._already_imported() is False
+
+
+def test_local_file_keys_are_scrubbed_even_when_not_in_constants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A leftover keychain duplicate of a dynamic local name must still be deleted."""
+    dynamic = "MY_CUSTOM_INTEGRATION_TOKEN"
+    local_file.set(dynamic, "sk-local")
+    deleted = _install_keychain(monkeypatch, {dynamic: "sk-stale-keychain"})
+
+    keychain_import.import_keychain_secrets_once()
+
+    assert local_file.get(dynamic) == "sk-local"
+    assert dynamic in deleted
+
+
+def test_dump_parser_extracts_accounts_for_our_service() -> None:
+    dump = """
+keychain: "/Users/me/Library/Keychains/login.keychain-db"
+class: "genp"
+attributes:
+    "acct"<blob>="ANTHROPIC_API_KEY"
+    "svce"<blob>="opensre.llm"
+keychain: "/Users/me/Library/Keychains/login.keychain-db"
+class: "genp"
+attributes:
+    "acct"<blob>="record:provider-auth:deepseek"
+    "svce"<blob>="opensre.llm"
+keychain: "/Users/me/Library/Keychains/login.keychain-db"
+class: "genp"
+attributes:
+    "acct"<blob>="Chrome"
+    "svce"<blob>="Chrome Safe Storage"
+"""
+    assert os_keyring._usernames_for_service(dump, "opensre.llm") == (
+        "ANTHROPIC_API_KEY",
+        "record:provider-auth:deepseek",
+    )

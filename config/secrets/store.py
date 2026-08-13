@@ -110,18 +110,29 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
 def delete_secret(env_var: str) -> None:
     """Remove a stored secret from the local file and any legacy keychain copy.
 
-    Never raises for an absent entry — logout must not fail because what it was
-    clearing was already gone. The keychain scrub covers credentials migrated
-    from older installs (and any leftover the one-time importer did not drop).
-
-    The scrub runs even under ``OPENSRE_DISABLE_KEYRING``: that switch declines
-    local *persistence*, and skipping revocation there left a logged-out
-    credential recoverable by unsetting the flag or running an older release.
+    Absent entries are fine. A machine with no keychain backend has nothing to
+    scrub. A locked or unreachable keychain after the local copy is gone raises
+    :class:`KeyringUnavailableError` — reporting logout success while an OS
+    copy remains would let the credential be recovered.
     """
     with suppress(OSError):
         local_file.delete(env_var)
-    with suppress(KeyringUnavailableError, OSError, RuntimeError):
+    try:
         os_keyring.delete(env_var)
+    except KeyringUnavailableError as exc:
+        if exc.reason == KeyringUnavailableReason.NO_BACKEND:
+            return
+        raise KeyringUnavailableError(
+            f"Removed the local copy of {env_var}, but the OS keychain copy "
+            "could not be deleted. Unlock the keychain and retry logout.",
+            reason=exc.reason,
+        ) from exc
+    except (OSError, RuntimeError) as exc:
+        raise KeyringUnavailableError(
+            f"Removed the local copy of {env_var}, but the OS keychain copy "
+            "could not be deleted. Unlock the keychain and retry logout.",
+            reason=KeyringUnavailableReason.BACKEND_ERROR,
+        ) from exc
 
 
 def keyring_is_disabled() -> bool:

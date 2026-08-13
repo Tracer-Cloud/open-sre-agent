@@ -100,6 +100,15 @@ def get(env_var: str) -> str:
         return _load_unlocked(path).get(env_var, "").strip()
 
 
+def keys() -> tuple[str, ...]:
+    """Names currently stored in the local file (no values)."""
+    path = store_path()
+    if not path.exists():
+        return ()
+    with FileLock(str(_lock_path(path)), timeout=_LOCK_TIMEOUT_SECONDS):
+        return tuple(_load_unlocked(path))
+
+
 def set(env_var: str, value: str) -> None:  # noqa: A001 - mirrors get/delete in this tier
     """Store a secret, replacing any existing entry."""
     path = store_path()
@@ -123,4 +132,4 @@ def delete(env_var: str) -> None:
         _write_unlocked(path, secrets)
 
 
-__all__ = ["delete", "get", "set", "store_path"]
+__all__ = ["delete", "get", "keys", "set", "store_path"]

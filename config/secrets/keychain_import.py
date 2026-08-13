@@ -10,12 +10,15 @@ present are read when that probe is definitive. When the probe is indeterminate
 (``None``), a real read is attempted so Linux/Windows and macOS without
 ``security`` still migrate. A locked or unreachable keychain leaves the marker
 unwritten so a later run can finish the move.
+
+On macOS, account names are also taken from a metadata-only keychain dump so
+dynamically named secrets (``record:…``, custom integration env vars) are not
+stranded after the finite constants scan finishes.
 """
 
 from __future__ import annotations
 
 import logging
-from contextlib import suppress
 from pathlib import Path
 
 from config.constants.paths import opensre_home
@@ -31,7 +34,7 @@ def _marker_path() -> Path:
     return opensre_home() / _MARKER_FILENAME
 
 
-def _candidate_env_vars() -> tuple[str, ...]:
+def _constant_candidate_env_vars() -> tuple[str, ...]:
     """Secret names an earlier version could have written to the keychain.
 
     Includes LLM provider API keys and every sensitive ``*_ENV`` string under
@@ -65,6 +68,17 @@ def _candidate_env_vars() -> tuple[str, ...]:
     return tuple(dict.fromkeys(names))
 
 
+def _candidate_env_vars(*, discovered: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Union of known constants, local-file keys, and keychain-enumerated names."""
+    names: list[str] = list(_constant_candidate_env_vars())
+    try:
+        names.extend(local_file.keys())
+    except OSError:
+        logger.debug("Could not list local credential names", exc_info=True)
+    names.extend(discovered)
+    return tuple(dict.fromkeys(names))
+
+
 def _already_imported() -> bool:
     try:
         return _marker_path().exists()
@@ -82,12 +96,26 @@ def _mark_imported() -> None:
         logger.debug("Could not write the keychain-import marker at %s", path)
 
 
-def _scrub_keychain(env_var: str) -> None:
-    """Best-effort remove of a migrated keychain copy. Never raises."""
-    if os_keyring.keyring_is_disabled():
-        return
-    with suppress(KeyringUnavailableError, OSError, RuntimeError):
+def _scrub_keychain(env_var: str) -> bool:
+    """Delete a keychain copy. True when gone (or never present).
+
+    False when the backend could not answer — the caller must leave the import
+    marker unwritten so a later run retries the scrub. No-backend machines have
+    nothing to scrub, so they count as success.
+    """
+    from config.secrets.backend import KeyringUnavailableReason
+
+    try:
         os_keyring.delete(env_var)
+    except KeyringUnavailableError as exc:
+        if exc.reason == KeyringUnavailableReason.NO_BACKEND:
+            return True
+        logger.debug("Keychain scrub failed for %s", env_var, exc_info=True)
+        return False
+    except (OSError, RuntimeError):
+        logger.debug("Keychain scrub failed for %s", env_var, exc_info=True)
+        return False
+    return True
 
 
 def _read_keychain_value(env_var: str) -> tuple[str | None, bool]:
@@ -116,19 +144,31 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
     """Copy keychain secrets into the local file. Returns the names imported.
 
     Never raises. The marker is written only after every candidate was probed
-    successfully — a locked keychain leaves the import pending for the next run.
-    Migrated (and already-local) names are scrubbed from the keychain so logout
-    cannot leave a recoverable OS copy behind.
+    **and** every keychain copy that needed scrubbing was deleted — a locked
+    keychain leaves the import pending so a later run can finish the scrub.
+
+    When the platform can enumerate keychain usernames (macOS), a failed dump
+    also leaves the import pending: otherwise a dynamically named leftover
+    would never be discovered after the marker lands.
     """
     if _already_imported() or os_keyring.keyring_is_disabled():
         return ()
 
     imported: list[str] = []
     complete = True
-    for env_var in _candidate_env_vars():
+    discovered: tuple[str, ...] = ()
+    if os_keyring.supports_username_enumeration():
+        listed = os_keyring.list_usernames()
+        if listed is None:
+            complete = False
+        else:
+            discovered = listed
+
+    for env_var in _candidate_env_vars(discovered=discovered):
         if local_file.get(env_var):
             # Local file wins; still drop a stale keychain duplicate.
-            _scrub_keychain(env_var)
+            if not _scrub_keychain(env_var):
+                complete = False
             continue
         value, ok = _read_keychain_value(env_var)
         if not ok:
@@ -143,7 +183,8 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
             complete = False
             continue
         imported.append(env_var)
-        _scrub_keychain(env_var)
+        if not _scrub_keychain(env_var):
+            complete = False
 
     if complete:
         _mark_imported()

@@ -24,6 +24,7 @@ from config.llm_auth.records import (
     resolve_provider_auth_record,
     save_provider_auth_record,
 )
+from config.secrets.backend import KeyringUnavailableError
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
 from surfaces.cli.llm_auth.persist import AuthSetupError, persist_api_key_secret
 from surfaces.cli.llm_auth.providers import (
@@ -312,7 +313,10 @@ def logout_provider(raw_name: str, *, vendor: bool = False) -> str:
     delete_provider_auth_record(provider.value)
 
     if profile.kind == "api_key":
-        delete_provider_auth(provider.value)
+        try:
+            delete_provider_auth(provider.value)
+        except KeyringUnavailableError as exc:
+            raise AuthSetupError(str(exc)) from exc
         return f"Removed {provider.api_key_env} from OpenSRE's local credential storage."
 
     if not vendor:

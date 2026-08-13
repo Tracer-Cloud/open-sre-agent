@@ -138,6 +138,42 @@ def test_delete_also_scrubs_a_legacy_keychain_copy(monkeypatch) -> None:
     assert resolve_secret(_ENV_VAR) == ""
 
 
+def test_delete_raises_when_the_keychain_scrub_fails(monkeypatch) -> None:
+    """Logout must not report success while an OS copy remains recoverable."""
+    save_secret(_ENV_VAR, "sk-stored")
+
+    def _locked(_name: str) -> None:
+        raise KeyringUnavailableError(
+            "locked", reason=KeyringUnavailableReason.BACKEND_ERROR
+        )
+
+    monkeypatch.setattr(os_keyring, "delete", _locked)
+
+    with pytest.raises(KeyringUnavailableError) as excinfo:
+        delete_secret(_ENV_VAR)
+
+    assert excinfo.value.reason == KeyringUnavailableReason.BACKEND_ERROR
+    assert _ENV_VAR not in _stored_contents()
+
+
+def test_delete_raises_when_the_keychain_scrub_fails(monkeypatch) -> None:
+    """Logout must not report success while an OS copy may still exist."""
+    save_secret(_ENV_VAR, "sk-stored")
+
+    def _locked(_name: str) -> None:
+        raise KeyringUnavailableError(
+            "locked", reason=KeyringUnavailableReason.BACKEND_ERROR
+        )
+
+    monkeypatch.setattr(os_keyring, "delete", _locked)
+
+    with pytest.raises(KeyringUnavailableError) as excinfo:
+        delete_secret(_ENV_VAR)
+
+    assert excinfo.value.reason == KeyringUnavailableReason.BACKEND_ERROR
+    assert _ENV_VAR not in _stored_contents()
+
+
 def test_provider_logout_clears_the_stored_copy(monkeypatch) -> None:
     """Regression: `opensre auth logout` reported success while the key still worked."""
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
