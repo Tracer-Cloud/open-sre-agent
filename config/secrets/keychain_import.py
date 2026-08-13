@@ -199,8 +199,11 @@ def import_named_keychain_secret(env_var: str) -> str:
     Used when the platform cannot enumerate usernames: a dynamic name absent
     from the constants catalog becomes visible the first time something looks
     it up, instead of staying stranded in the retired keychain tier.
+
+    Once the permanent marker exists, the keychain is fully retired for reads —
+    including on-demand — so absent names do not reopen it.
     """
-    if not env_var or os_keyring.keyring_is_disabled():
+    if not env_var or os_keyring.keyring_is_disabled() or _already_imported():
         return ""
     value, _ok = _migrate_one(env_var)
     return value
@@ -243,11 +246,10 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
 
     for env_var in _candidate_env_vars(discovered=discovered, local_names=local_names):
         value, ok = _migrate_one(env_var)
-        if not ok:
-            complete = False
-            continue
         if value:
             imported.append(env_var)
+        if not ok:
+            complete = False
 
     if complete and can_finalize:
         _mark_imported()

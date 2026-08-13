@@ -98,12 +98,12 @@ def test_lookup_never_opens_the_os_keychain(monkeypatch) -> None:
 
     # Arrange — finish the one-time import so lookup does not probe the keychain.
     monkeypatch.setattr(keychain_import, "_already_imported", lambda: True)
-    monkeypatch.setattr(keychain_import, "import_named_keychain_secret", lambda _name: "")
 
     def _fail(env_var: str) -> str:
         raise AssertionError(f"the keychain was read for {env_var}")
 
     monkeypatch.setattr(os_keyring, "get", _fail)
+    monkeypatch.setattr(keychain_import.os_keyring, "get", _fail)
     save_secret(_ENV_VAR, "sk-local")
 
     # Act / Assert
