@@ -224,10 +224,13 @@ def test_shift_enter_inserts_newline_before_submit(
         ):
             prompt = input_prompt.build_prompt_session()
             task = asyncio.create_task(prompt.prompt_async(""))
+            # Yield so prompt_async attaches readers before keystrokes arrive;
+            # under loaded ``test-cov`` (xdist + coverage) a 1s wait_for flakes.
+            await asyncio.sleep(0)
             pipe_input.send_bytes(b"first line")
             pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
             pipe_input.send_bytes(b"second line\r")
-            return await asyncio.wait_for(task, timeout=1)
+            return await asyncio.wait_for(task, timeout=5.0)
 
     assert asyncio.run(_collect()) == "first line\nsecond line"
 

@@ -200,3 +200,23 @@ def test_empty_value_clears_instead_of_storing() -> None:
 
     assert resolve_secret(_ENV_VAR) == ""
     assert _ENV_VAR not in _stored_contents()
+
+
+def test_logout_scrubs_the_keychain_even_when_local_storage_is_disabled(monkeypatch) -> None:
+    """Revocation must reach the legacy keychain copy regardless of the switch.
+
+    ``OPENSRE_DISABLE_KEYRING`` means "do not persist locally", not "leave a
+    revoked credential recoverable". Returning early left the keychain entry
+    intact while logout reported success, so unsetting the flag — or running an
+    older release — restored access.
+    """
+    # Arrange
+    deleted: list[str] = []
+    monkeypatch.setattr(os_keyring, "delete", deleted.append)
+    monkeypatch.setenv(OPENSRE_DISABLE_KEYRING_ENV, "1")
+
+    # Act
+    delete_secret(_ENV_VAR)
+
+    # Assert
+    assert deleted == [_ENV_VAR]

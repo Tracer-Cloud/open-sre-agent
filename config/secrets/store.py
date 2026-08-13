@@ -112,11 +112,13 @@ def delete_secret(env_var: str) -> None:
     Never raises for an absent entry — logout must not fail because what it was
     clearing was already gone. The keychain scrub covers credentials migrated
     from older installs (and any leftover the one-time importer did not drop).
+
+    The scrub runs even under ``OPENSRE_DISABLE_KEYRING``: that switch declines
+    local *persistence*, and skipping revocation there left a logged-out
+    credential recoverable by unsetting the flag or running an older release.
     """
     with suppress(OSError):
         local_file.delete(env_var)
-    if os_keyring.keyring_is_disabled():
-        return
     with suppress(KeyringUnavailableError, OSError, RuntimeError):
         os_keyring.delete(env_var)
 

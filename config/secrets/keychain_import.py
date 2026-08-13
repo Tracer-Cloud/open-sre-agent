@@ -38,7 +38,7 @@ def _candidate_env_vars() -> tuple[str, ...]:
     share the same keyring service (Telegram, Slack, Sentry, …).
     """
     import config.constants as constants
-    from config.env_file import is_sensitive_env_key
+    from config.env_key_sensitivity import is_sensitive_env_key
     from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 
     names: list[str] = []
