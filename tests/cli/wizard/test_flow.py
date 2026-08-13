@@ -4479,7 +4479,12 @@ def test_run_wizard_keyring_failure_at_legacy_migration_site_reaches_the_shared_
 def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholder(
     monkeypatch, tmp_path
 ) -> None:
-    """Enter on an empty Azure key prompt must NOT save the endpoint placeholder as the key."""
+    """Enter on an empty Azure key prompt must NOT save the endpoint placeholder.
+
+    Azure's ``credential_default`` is an endpoint URL, so a pre-filled prompt
+    would let a bare Enter persist it as the API key. A blank answer now defers
+    setup instead of re-prompting, and must still persist nothing.
+    """
     monkeypatch.delenv("AZURE_OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
 
@@ -4487,7 +4492,7 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
     assert placeholder == "https://your-resource.openai.azure.com"  # sanity: the trap exists
 
     password_calls: list[dict[str, object]] = []
-    password_asks = iter(["", "az-real-key"])  # bare Enter, then a real key
+    password_asks = iter([""])  # bare Enter: no key to hand
     validated_keys: list[str] = []
     saved_llm_keys: list[tuple[str, str]] = []
 
@@ -4545,8 +4550,9 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
     assert all(call.get("default") == "" for call in password_calls)
     assert placeholder not in validated_keys
     assert all(value != placeholder for _provider, value in saved_llm_keys)
-    assert validated_keys == ["az-real-key"]
-    assert saved_llm_keys == [("azure-openai", "az-real-key")]
+    # Deferred: nothing validated, nothing persisted, wizard still completes.
+    assert validated_keys == []
+    assert saved_llm_keys == []
 
 
 def test_run_wizard_ollama_host_prompt_keeps_its_localhost_default(monkeypatch, tmp_path) -> None:
@@ -5035,3 +5041,64 @@ def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale
 
     # Assert
     assert seen["default"] == "focused"
+
+
+def test_run_wizard_blank_llm_key_defers_setup_instead_of_ending(monkeypatch, tmp_path) -> None:
+    """A blank key finishes onboarding; it must not cancel or loop forever.
+
+    The credential prompt was the one step with no "later": its outcomes were
+    repick, cancel, save-anyway and continue-unsaved. A user without a key to
+    hand had to abandon the wizard.
+    """
+    # Arrange
+    saved_llm_keys: list[tuple[str, str]] = []
+    validator_calls: list[tuple[str, str]] = []
+    password_asks = 0
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "Choose your LLM provider" in prompt:
+            m.ask.return_value = "openai"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        nonlocal password_asks
+        password_asks += 1
+        m = MagicMock()
+        m.ask.return_value = ""  # the user has no key to hand
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        return ValidationResult(ok=True, detail="unexpected")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
+    )
+
+    # Act
+    exit_code = flow.run_wizard()
+
+    # Assert
+    assert exit_code == 0, "a deferred key must not fail onboarding"
+    assert saved_llm_keys == [], "nothing may be persisted for a blank key"
+    assert validator_calls == [], "a blank key must not be sent to the provider"
+    assert password_asks == 1, "the prompt must accept the blank answer, not re-ask"

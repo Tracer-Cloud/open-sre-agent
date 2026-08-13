@@ -32,7 +32,7 @@ from surfaces.cli.llm_auth.providers import (
     provider_for_profile,
     resolve_auth_profile,
 )
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption, WizardCredentialKind
 from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.validation import validate_provider_credentials
 
@@ -88,7 +88,7 @@ def configure_api_key_provider(
 ) -> AuthSetupResult:
     """Validate and persist an API-key provider credential."""
     provider = provider_for_profile(profile)
-    if provider.credential_kind != "api_key" or not provider.api_key_env:
+    if provider.credential_kind != WizardCredentialKind.API_KEY or not provider.api_key_env:
         raise AuthSetupError(f"{provider.label} does not use an OpenSRE-managed API key.")
 
     normalized_key = api_key.strip()
@@ -165,7 +165,7 @@ def configure_cli_subscription_provider(
 ) -> AuthSetupResult:
     """Configure a CLI-backed subscription provider such as ChatGPT/Codex or Claude Code."""
     provider = provider_for_profile(profile)
-    if provider.credential_kind != "cli" or provider.adapter_factory is None:
+    if provider.credential_kind != WizardCredentialKind.CLI or provider.adapter_factory is None:
         raise AuthSetupError(f"{provider.label} is not a CLI-backed subscription provider.")
 
     adapter = provider.adapter_factory()

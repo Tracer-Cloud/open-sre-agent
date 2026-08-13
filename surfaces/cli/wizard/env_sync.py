@@ -21,7 +21,7 @@ from config.env_file import (
     write_env_lines,
 )
 from config.llm_auth.auth_method import LLM_AUTH_METHOD_ENV
-from surfaces.cli.wizard.config import ProviderOption
+from surfaces.cli.wizard.config import ProviderOption, WizardCredentialKind
 
 
 def sync_reasoning_model_env(
@@ -162,7 +162,7 @@ def sync_provider_env(
     # A ``host`` credential (e.g. the Ollama host) is non-secret runtime config
     # that the wizard persists to ``.env`` — keep it as an active key so this
     # sync does not strip it back out in the same wizard run.
-    if provider.credential_kind == "host" and provider.api_key_env:
+    if provider.credential_kind == WizardCredentialKind.HOST and provider.api_key_env:
         active_non_secret.add(provider.api_key_env)
     keys_to_remove -= active_non_secret
 
