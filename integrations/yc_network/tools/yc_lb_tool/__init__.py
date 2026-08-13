@@ -43,7 +43,7 @@ def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]],
         balancer_id = balancer.get("id", "")
         states = client.get(
             _NLB_SERVICE,
-            f"{_NLB_PATH}/{balancer_id}:targetStates",
+            f"{_NLB_PATH}/{balancer_id}:getTargetStates",
             {"targetGroupId": _first_target_group(balancer)},
         )
         targets = (states.get("data") or {}).get("targetStates") or []

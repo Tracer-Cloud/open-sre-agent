@@ -3,7 +3,8 @@
 The data is generated from the protobuf definitions in yandex-cloud/cloudapi,
 where each method carries its REST binding as a ``google.api.http`` option — so
 this is what the API actually exposes rather than a hand-kept list that drifts.
-Regenerate with ``scripts/build_api_index.py`` after Yandex ships new services;
+Regenerate with ``build_api_index.py`` next to this file after Yandex ships new
+services;
 :func:`provenance` reports which cloudapi commit the current data came from.
 
 Only read bindings are present. The agent has no mutating path at all, so an
@@ -13,10 +14,13 @@ index that also listed writes would just invite it to attempt one.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final, NamedTuple
+
+logger = logging.getLogger(__name__)
 
 _INDEX_FILE: Final = Path(__file__).with_name("api_index.json")
 #: Enough to show every shape of a resource without flooding the context.
@@ -51,7 +55,12 @@ class ApiEndpoint(NamedTuple):
 def _raw_index() -> dict[str, Any]:
     try:
         loaded: dict[str, Any] = json.loads(_INDEX_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        # An empty index is indistinguishable from "Yandex exposes nothing", and
+        # the tool then reports no endpoints instead of a broken install. The
+        # usual cause is a packaging regression that leaves the data file out of
+        # the artifact, so say which file is missing rather than degrade quietly.
+        logger.warning("Yandex Cloud API index unavailable at %s: %s", _INDEX_FILE, exc)
         return {}
     return loaded
 

@@ -26,7 +26,7 @@ resources is an image or volume problem, not a scheduling one.
 
 **A pod is not a Yandex Cloud resource.** The Yandex Cloud API knows the
 Kubernetes *cluster* — version, health, node groups, read with
-`list_yc_k8s_clusters` and `get_yc_k8s_cluster` — and nothing about what runs
+`execute_yc_operation` on `/managed-kubernetes/` — and nothing about what runs
 inside it. Neither `execute_yc_operation` nor `find_yc_api` can reach a pod, an
 event or a container log, and no `/managed-kubernetes/` path returns one. Read
 those with `kubernetes_list_pods`, `kubernetes_get_events`,
@@ -52,10 +52,10 @@ tell the user a piece of it "is not configured":
 | --- | --- |
 | Metrics, CPU, memory, disk, saturation | `query_yc_metrics`, `list_yc_metrics` |
 | Logs (Cloud Logging) | `read_yc_logs`, `list_yc_log_groups` |
-| Logs of a managed database | `read_yc_db_logs` — a separate store, see below |
-| Audit events, who changed what | `read_yc_audit_events` |
+| Logs of a managed database | not readable yet — a separate store, see below |
+| Audit events, who changed what | not readable yet — audit trails write to a sink |
 | VMs, disks, images, instance groups | `execute_yc_operation` |
-| Kubernetes **clusters and node groups** | `list_yc_k8s_clusters`, `get_yc_k8s_cluster` |
+| Kubernetes **clusters and node groups** | `execute_yc_operation` on `/managed-kubernetes/` |
 | Kubernetes **pods, events, pod logs, nodes** | `kubernetes_list_pods`, `kubernetes_get_events`, `kubernetes_get_pod_logs`, `kubernetes_list_nodes` |
 | Managed PostgreSQL/MySQL/ClickHouse/Redis/MongoDB/Kafka/OpenSearch | `execute_yc_operation` |
 | Functions, containers, triggers, API gateways | `execute_yc_operation` |
@@ -108,15 +108,16 @@ API server:
 So an incident in a Managed Kubernetes cluster is usually two reads, in this
 order:
 
-1. `list_yc_k8s_clusters` — is the control plane itself healthy? A degraded
-   master explains everything below it, and nothing else needs checking.
+1. `execute_yc_operation` on `/managed-kubernetes/v1/clusters` — is the control
+   plane itself healthy? A degraded master explains everything below it, and
+   nothing else needs checking.
 2. `kubernetes_list_pods` and `kubernetes_get_events` — what is actually wrong
    with the workload.
 
 These tools appear only when a cluster was connected during setup. If they are
 absent, say that Managed Kubernetes access is not configured and that
-`opensre-yc configure` connects it — do not fall back to `execute_yc_operation`
-and report that pods cannot be read.
+`opensre integrations setup kubernetes` connects it — do not fall back to
+`execute_yc_operation` and report that pods cannot be read.
 
 A pod stuck in `Pending` has no logs at all: the container never started, so the
 API answers `400`, not `403`. Read its events instead — that is where the reason
@@ -129,7 +130,7 @@ Cloud Logging and nothing else.** Where to look depends on who wrote the log:
 
 | Written by | Read with | Reaches Cloud Logging? |
 | --- | --- | --- |
-| A managed database engine | `read_yc_db_logs` | Only if export was switched on |
+| A managed database engine | not readable yet | Only if export was switched on |
 | A container in Kubernetes | `kubernetes_get_pod_logs` | Only if a log agent was deployed |
 | A serverless function or container | `read_yc_logs` | Yes, by default |
 | Your own application, sending to Cloud Logging | `read_yc_logs` | Yes, that is what it is |
@@ -138,10 +139,10 @@ So the search order for "why did this break" is: ask the owning service first,
 then Cloud Logging. Doing it the other way round produces a confident "no logs
 found" for a database that has been logging all along.
 
-`read_yc_db_logs` covers every engine. Each keeps several streams and serves one
-at a time, so name it when the question is specific: `MYSQL_SLOW_QUERY` rather
-than the error log MySQL defaults to, `POOLER` rather than `POSTGRESQL` when
-connections are being refused. The result lists the alternatives it did not read.
+Managed-database logs are not reachable from this tree yet. When a database
+question needs them, say so plainly and fall back to metrics and to the cluster
+state read through `execute_yc_operation` on `/managed-<engine>/`, rather than
+reporting Cloud Logging's silence as "no logs".
 
 Export to Cloud Logging is optional and off unless someone enabled it. If a
 managed service has no log group, that is a configuration fact worth reporting —
@@ -165,7 +166,7 @@ Retention differs by source, and an empty result means different things:
 | Source | Kept | An empty result means |
 | --- | --- | --- |
 | Cloud Logging (`read_yc_logs`) | ~31 days | Beyond retention if the date is older — say so, do not call it "no evidence" |
-| Managed-database logs (`read_yc_db_logs`) | per cluster | Try it: it is a separate store from Cloud Logging |
+| Managed-database logs (not readable yet) | per cluster | A separate store from Cloud Logging, so Cloud Logging's silence says nothing about it |
 | Monitoring (`query_yc_metrics`) | months | Genuinely no data for that window, if the window was right |
 
 So for an incident weeks back, metrics are usually the only surviving evidence,

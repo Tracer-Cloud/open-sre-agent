@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from integrations.yc_monitoring.client import resolve_window, summarize_series
-from integrations.yc_monitoring.tools import query_yc_metrics
+from integrations.yc_monitoring.tools import list_yc_metrics, query_yc_metrics
 
 FOLDER = "b1gexamplefolder"
 _CREDENTIALS: dict[str, Any] = {"folder_id": FOLDER, "iam_token": "t1.token"}
@@ -129,3 +129,91 @@ class TestMetricReads:
 
         assert "error" in result
         assert called["n"] == 0
+
+
+def _discovery_responder(names: list[str], keys: list[str]) -> Any:
+    """Return a request stand-in answering the two discovery endpoints."""
+
+    def _request(_method: str, url: str, **_kwargs: Any) -> httpx.Response:
+        if "/names" in url:
+            return httpx.Response(200, json={"names": names})
+        return httpx.Response(200, json={"keys": keys})
+
+    return _request
+
+
+class TestMetricDiscovery:
+    def test_names_and_labels_come_back_together(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """One call has to answer both, or the caller cannot build a query at all."""
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu_usage", "memory_usage"], ["host", "service"]),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert result["names"] == ["cpu_usage", "memory_usage"]
+        assert result["labels"] == ["host", "service"]
+        assert result["name_count"] == 2
+
+    def test_the_name_filter_narrows_locally(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Yandex accepts nameFilter and ignores it, so every filter would return the lot."""
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["cpu_usage", "memory_usage"], ["host"]),
+        )
+
+        result = list_yc_metrics(name_filter="MEMORY", **_CREDENTIALS)
+
+        assert result["names"] == ["memory_usage"]
+
+    def test_an_empty_default_scope_points_at_custom_metrics(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Nothing found usually means the wrong scope, not that the folder is empty."""
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder([], []),
+        )
+
+        result = list_yc_metrics(**_CREDENTIALS)
+
+        assert 'service="custom"' in result["note"]
+
+    def test_an_explicit_scope_is_reported_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _discovery_responder(["pushed_metric"], []),
+        )
+
+        result = list_yc_metrics(selectors='service="custom"', **_CREDENTIALS)
+
+        assert result["scope"] == 'service="custom"'
+        assert "note" not in result
+
+
+class TestTheQueryLanguageIsDocumented:
+    """The schema text is the only thing stopping the model writing PromQL.
+
+    It is prose inside a long constant, which is exactly what a prompt-budget
+    trim deletes without anyone noticing the tool got worse.
+    """
+
+    def test_it_says_the_language_is_not_promql(self) -> None:
+        from tools.registry import get_registered_tool_map
+
+        schema = get_registered_tool_map("investigation")["query_yc_metrics"].input_schema
+        description = schema["properties"]["query"]["description"]
+
+        assert "NOT PromQL" in description
+        assert "series_sum" in description
+
+    def test_it_calls_out_the_folder_label_trap(self) -> None:
+        """`folderId` parses fine and silently matches nothing, which reads as no data."""
+        from tools.registry import get_registered_tool_map
+
+        schema = get_registered_tool_map("investigation")["query_yc_metrics"].input_schema
+        description = schema["properties"]["query"]["description"]
+
+        assert "folder_id" in description
+        assert "folderId" in description

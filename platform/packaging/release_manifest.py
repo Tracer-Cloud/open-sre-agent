@@ -11,6 +11,10 @@ _RUNTIME_PACKAGE_NAMES = (
 )
 _ACTION_SKILLS_DIR = Path("core/agent_harness/prompts/skills")
 _SKILL_DATA_ROOTS = (Path("integrations"), Path("tools"))
+#: Data files a tool reads at runtime that are not skill documents. Without an
+#: entry here a file is absent from both the wheel and the frozen binary, and
+#: the tool that reads it degrades silently rather than failing to import.
+_RUNTIME_DATA_FILES = (Path("integrations/yandex_cloud/api_index.json"),)
 _RUNTIME_DISCOVERY_EXCLUSIONS = frozenset({"investigation_registry", "registry.py"})
 
 
@@ -48,10 +52,11 @@ def runtime_hidden_imports(repo_root: Path) -> tuple[str, ...]:
 
 
 def required_skill_files(repo_root: Path) -> tuple[Path, ...]:
-    """Return built-in action skills and tool workflow-guidance data files."""
+    """Return built-in action skills, workflow guidance, and tool data files."""
     files = set((repo_root / _ACTION_SKILLS_DIR).rglob("*.md"))
     for relative_root in _SKILL_DATA_ROOTS:
         files.update((repo_root / relative_root).rglob("SKILL.md"))
+    files.update(repo_root / relative_path for relative_path in _RUNTIME_DATA_FILES)
     return tuple(sorted(path for path in files if path.is_file()))
 
 

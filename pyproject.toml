@@ -168,7 +168,7 @@ include = [
 [tool.setuptools.package-data]
 "surfaces.cli" = ["investigation/sample_alerts/*.json"]
 "core.agent_harness.prompts" = ["skills/**/*.md"]
-"integrations" = ["**/SKILL.md"]
+"integrations" = ["**/SKILL.md", "yandex_cloud/api_index.json"]
 "tools" = ["**/SKILL.md"]
 
 # With pytest-xdist (-n auto), each worker writes a fragment; put them under

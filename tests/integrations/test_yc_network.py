@@ -42,7 +42,7 @@ class TestLoadBalancers:
             "integrations.yandex_cloud.rest_client.send_request",
             _responder(
                 {
-                    ":targetStates": {
+                    ":getTargetStates": {
                         "targetStates": [
                             {"address": "10.0.0.1", "status": "HEALTHY"},
                             {"address": "10.0.0.2", "status": "UNHEALTHY"},
