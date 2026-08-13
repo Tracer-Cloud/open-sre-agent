@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+from typing import Any
 
 import keyring
 import keyring.errors
@@ -212,7 +213,11 @@ def _list_secret_service_usernames() -> tuple[str, ...] | None:
     from contextlib import closing
 
     try:
-        backend = _backend()
+        # The Secret Service backend publishes no typed surface for any of this
+        # — ``schemes``/``scheme`` and ``_query`` are internals — so it is bound
+        # as ``Any`` rather than annotated with a shape this package would then
+        # have to keep in step with ``keyring``.
+        backend: Any = _backend()
         scheme = backend.schemes[backend.scheme]
         username_key = scheme["username"]
         collection = backend.get_preferred_collection()

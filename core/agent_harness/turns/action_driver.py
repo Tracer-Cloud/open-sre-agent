@@ -870,16 +870,19 @@ def _compose_response(
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
         )
-        # A handoff means the assistant answers this turn, so the action's
-        # closing prose would be a second reply to one message.
         or bool(counts.handoff_contents)
     )
     final_text_chunk = "" if suppress_final else final_text
+    # Unhandled turns fall through to ``gather_and_answer`` / ``stream_answer``.
+    # Painting the closing here produced two ``● assistant`` bubbles (e.g. a
+    # wrong weekday from the action agent, then the grounded day from live
+    # runtime facts). Keep ``response_text``; blank only the console chunk.
+    display_final = "" if (suppress_final or not counts.handled) else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
-    display_chunks = [chunk for chunk in (final_text_chunk, generic_text, hint) if chunk]
+    display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (

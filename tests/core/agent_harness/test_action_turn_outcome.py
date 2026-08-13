@@ -64,6 +64,10 @@ def test_a_turn_with_no_tool_calls_is_unhandled() -> None:
         "accounting_status": "completed",
         "investigation_dispatched": False,
     }
+    # Fall-through to stream_answer owns the user-visible reply — painting here
+    # produced a second ● assistant bubble on conversational asks.
+    assert "assistant" not in _console_text(harness)
+    assert "just talking" not in _console_text(harness)
 
 
 def test_an_assistant_handoff_is_reported_but_not_counted_as_planned() -> None:
