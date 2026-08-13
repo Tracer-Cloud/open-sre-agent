@@ -156,6 +156,79 @@ def _same_turn_completable(goal: SessionGoal) -> bool:
     return len(goal.checklist) <= _SAME_TURN_CHECKLIST_MAX_ITEMS
 
 
+def _reply_is_nonempty_and_not_progress_paint(text: str) -> bool:
+    """True when the assistant reply is real content, not ``/goal`` status chrome."""
+    return bool(text.strip()) and not is_session_goal_progress_paint(text)
+
+
+def _short_checklist_has_achieved_claim_and_tool_evidence(
+    goal: SessionGoal,
+    *,
+    claimed: bool,
+    has_evidence: bool,
+    investigation_dispatched: bool,
+) -> bool:
+    """True when a short checklist turn claimed achieved and tools succeeded."""
+    return (
+        _same_turn_completable(goal) and claimed and has_evidence and not investigation_dispatched
+    )
+
+
+def _short_checklist_has_no_prior_progress_and_tool_answer(
+    goal: SessionGoal,
+    *,
+    has_evidence: bool,
+    investigation_dispatched: bool,
+    text: str,
+    completed_before: frozenset[int],
+) -> bool:
+    """True when the first short-checklist turn already has tools and a reply."""
+    return (
+        _same_turn_completable(goal)
+        and has_evidence
+        and not investigation_dispatched
+        and bool(text.strip())
+        and not completed_before
+    )
+
+
+def _host_owned_achieved_claim_lacks_tool_evidence(
+    goal: SessionGoal,
+    *,
+    has_evidence: bool,
+) -> bool:
+    """True when a host-owned ``/goal`` achieved-claim has no tool evidence."""
+    return goal.host_owned and not has_evidence
+
+
+def _host_owned_goal_has_unverified_cohort_reply(goal: SessionGoal, text: str) -> bool:
+    """True when a host-owned signup/retention ``/goal`` reply says identity is open.
+
+    Prefer this over tool-evidence achieve so optional LLM confirm cannot veto
+    a correct refuse+draft as "metric not reached".
+    """
+    return (
+        goal.host_owned
+        and _reply_is_nonempty_and_not_progress_paint(text)
+        and goal_needs_cohort_identity(goal.condition)
+        and reply_reports_cohort_unverified(text)
+    )
+
+
+def _host_owned_goal_has_tool_evidence_and_answer_reply(
+    goal: SessionGoal,
+    text: str,
+    *,
+    has_evidence: bool,
+) -> bool:
+    """True when a host-owned ``/goal`` already has tools and a real answer reply.
+
+    Do not wait for ``session_goal:achieved`` — that tag is scrubbed from the
+    visible reply and models often omit it.
+    """
+    return goal.host_owned and has_evidence and _reply_is_nonempty_and_not_progress_paint(text)
+
+
 def evaluate_session_goal(
     goal: SessionGoal,
     result: Any,
@@ -188,7 +261,12 @@ def evaluate_session_goal(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=SessionGoalReason.CHECKLIST_COMPLETE,
             )
-        elif _same_turn_completable(current) and claimed and evidence and not dispatched:
+        elif _short_checklist_has_achieved_claim_and_tool_evidence(
+            current,
+            claimed=claimed,
+            has_evidence=evidence,
+            investigation_dispatched=dispatched,
+        ):
             current = _complete_checklist(current)
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
@@ -203,16 +281,13 @@ def evaluate_session_goal(
                 status=SessionGoalStatus.ACTIVE,
                 reason=SessionGoalReason.achieved_ignored_incomplete(done, total, next_label),
             )
-        elif (
-            _same_turn_completable(current)
-            and evidence
-            and not dispatched
-            and bool(text.strip())
-            and not completed_before
+        elif _short_checklist_has_no_prior_progress_and_tool_answer(
+            current,
+            has_evidence=evidence,
+            investigation_dispatched=dispatched,
+            text=text,
+            completed_before=completed_before,
         ):
-            # Tools + answer already delivered on the first short-checklist
-            # turn. Partial done= (query only) must not leave "report" open —
-            # that forces a redundant outer turn that repeats the same answer.
             current = _complete_checklist(current)
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
@@ -233,8 +308,11 @@ def evaluate_session_goal(
             reason=SessionGoalReason.ACHIEVED_IGNORED_INVESTIGATION,
         )
     elif claimed:
-        if current.host_owned or turn_has_session_goal_evidence(result):
-            soft_host = current.host_owned and not turn_has_session_goal_evidence(result)
+        if current.host_owned or evidence:
+            soft_host = _host_owned_achieved_claim_lacks_tool_evidence(
+                current,
+                has_evidence=evidence,
+            )
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=(
@@ -254,35 +332,16 @@ def evaluate_session_goal(
                 status=SessionGoalStatus.ACTIVE,
                 reason=SessionGoalReason.INVESTIGATION_RUNNING,
             )
-        elif (
-            current.host_owned
-            and not dispatched
-            and bool(text.strip())
-            and not is_session_goal_progress_paint(text)
-            and goal_needs_cohort_identity(current.condition)
-            and reply_reports_cohort_unverified(text)
-        ):
-            # Honest refuse on an attached cohort /goal: identity was the
-            # deliverable (condition allows draft when a live % is impossible).
-            # Prefer this over ACHIEVED_TOOL_EVIDENCE so optional LLM confirm
-            # cannot veto a correct refuse+draft as "metric not reached".
+        elif _host_owned_goal_has_unverified_cohort_reply(current, text):
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=SessionGoalReason.ACHIEVED_HOST_SET,
             )
-        elif (
-            current.host_owned
-            and evidence
-            and not dispatched
-            and bool(text.strip())
-            and not is_session_goal_progress_paint(text)
+        elif _host_owned_goal_has_tool_evidence_and_answer_reply(
+            current,
+            text,
+            has_evidence=evidence,
         ):
-            # Live tools + answer already delivered on a host-set goal. Do not
-            # wait for session_goal:achieved — that tag is scrubbed from the
-            # user-visible reply and models often omit it, which previously
-            # forced a second outer turn that repeated the same metric answer.
-            # Require real action/gather successes — route identity alone would
-            # let unsupported fallbacks close the goal without evidence.
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=SessionGoalReason.ACHIEVED_TOOL_EVIDENCE,

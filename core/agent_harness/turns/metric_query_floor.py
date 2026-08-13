@@ -154,6 +154,33 @@ def _session_goal_condition(session: Any | None) -> str:
     return condition if isinstance(condition, str) else ""
 
 
+def _setup_line(
+    need: EvidenceNeed,
+    *,
+    body: str,
+    setup_command_for: SetupCommandForSource,
+) -> str | None:
+    """The connect command to append as its own line, or ``None`` for no line.
+
+    ``None`` when there is no source to name, the surface renders no command,
+    or the reply already carries one — a second line reads as a second
+    instruction.
+    """
+    service_id = _setup_service_id(need)
+    if service_id is None:
+        return None
+    command = setup_command_for(service_id)
+    if not command or command in body:
+        return None
+    # The command minus the service id is the surface's connect verb, so a line
+    # naming a different source is still a setup line. Taken from the rendered
+    # command rather than a literal: core must not know the surface's syntax.
+    verb = command.replace(service_id, "").strip(" `")
+    if verb and verb in body:
+        return None
+    return command if command.startswith("`") else f"`{command}`"
+
+
 def apply_unformed_metric_floor(
     response_text: str,
     need: EvidenceNeed,
@@ -179,28 +206,21 @@ def apply_unformed_metric_floor(
         evidence,
         metric_source_ids=(*need.preferred_sources, *need.connected),
     )
-    if formed:
-        if not cohort_goal:
-            return response_text
-        if _cohort_identity_resolved(need, evidence, response_text):
-            return response_text
+    # Live query is enough unless this SessionGoal still needs cohort identity.
+    if formed and (not cohort_goal or _cohort_identity_resolved(need, evidence, response_text)):
+        return response_text
 
-    parts: list[str] = []
     body = (response_text or "").rstrip()
-    if body:
-        parts.append(body)
+    parts: list[str] = [body] if body else []
     if "```" not in body:
         parts.append(_draft_for(need, cohort_goal=cohort_goal))
-    # No live query: still append setup even when connected.
-    # Cohort floor after live probes on an already-connected source: draft
-    # only — a reconnect CTA is the wrong next step.
-    append_setup = bool(need.missing) or not formed
-    if append_setup:
-        service_id = _setup_service_id(need)
-        if service_id is not None:
-            command = setup_command_for(service_id)
-            if command and command not in body and "/integrations setup" not in body:
-                parts.append(f"`{command}`" if not command.startswith("`") else command)
+    # No live query: still append setup even when connected. Cohort floor after
+    # live probes on an already-connected source: draft only — a reconnect CTA
+    # is the wrong next step.
+    if bool(need.missing) or not formed:
+        setup_line = _setup_line(need, body=body, setup_command_for=setup_command_for)
+        if setup_line is not None:
+            parts.append(setup_line)
     return "\n\n".join(parts)
 
 

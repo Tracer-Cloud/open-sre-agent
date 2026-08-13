@@ -34,6 +34,9 @@ def test_a_registered_vendor_query_tool_counts_as_a_live_metric_query() -> None:
 
     # Act / Assert
     assert is_live_metric_query_call("call_newrelic_nrql", {"query": "SELECT 1"}) is True
+    from core.agent_harness.turns.gather_discovery_budget import is_mcp_metric_target
+
+    assert is_mcp_metric_target("call_newrelic_nrql") is True
 
 
 def test_a_registered_vendor_discovery_target_spends_the_discovery_budget() -> None:
@@ -48,6 +51,14 @@ def test_a_registered_vendor_discovery_target_spends_the_discovery_budget() -> N
 def test_an_unregistered_tool_is_not_a_metric_query() -> None:
     """The registry is a closed set: absence must not be guessed as a fetch."""
     assert is_live_metric_query_call("call_newrelic_nrql", {"query": "SELECT 1"}) is False
+
+
+def test_mcp_metric_target_does_not_guess_from_query_prefix() -> None:
+    """``query-*`` alone is not a metric tool — vendors must register names."""
+    from core.agent_harness.turns.gather_discovery_budget import is_mcp_metric_target
+
+    assert is_mcp_metric_target("query-made-up-tool") is False
+    assert is_mcp_metric_target("execute-sql") is False  # cleared by fixture
 
 
 def test_registering_an_empty_service_id_is_a_wiring_error() -> None:

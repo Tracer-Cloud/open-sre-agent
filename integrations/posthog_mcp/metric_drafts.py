@@ -22,7 +22,7 @@ from platform.harness_ports import (
 )
 
 # PostHog MCP bridge targets: which run a query, which only read schema.
-_METRIC_QUERY_TOOLS = ("execute-sql", "query-trends")
+_METRIC_QUERY_TOOLS = ("execute-sql", "query-trends", "query-run")
 _DISCOVERY_TARGETS = (
     "docs-search",
     "event-definitions",

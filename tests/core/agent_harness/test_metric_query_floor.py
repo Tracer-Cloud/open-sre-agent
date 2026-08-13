@@ -268,3 +268,37 @@ def test_cohort_floor_applies_with_grafana_only_preferred_source() -> None:
     )
     assert "```promql" in text
     assert "/integrations setup" not in text
+
+
+def test_unformed_floor_wraps_a_bare_setup_command_in_backticks_once() -> None:
+    """The appended command is code-formatted, and never double-wrapped."""
+    # Arrange
+    bare = apply_unformed_metric_floor(
+        "No live count.",
+        _need(),
+        observation="Tool: list_posthog_tools\nResult: []",
+        setup_command_for=lambda name: f"/connect {name}",
+    )
+    already_wrapped = apply_unformed_metric_floor(
+        "No live count.",
+        _need(),
+        observation="Tool: list_posthog_tools\nResult: []",
+        setup_command_for=lambda name: f"`/connect {name}`",
+    )
+
+    # Assert
+    assert "`/connect posthog_mcp`" in bare
+    assert "`/connect posthog_mcp`" in already_wrapped
+    assert "``/connect" not in already_wrapped
+
+
+def test_unformed_floor_omits_setup_when_the_surface_has_no_command() -> None:
+    """An empty command must append nothing rather than an empty code fence."""
+    text = apply_unformed_metric_floor(
+        "No live count.",
+        _need(),
+        observation="Tool: list_posthog_tools\nResult: []",
+        setup_command_for=lambda _name: "",
+    )
+
+    assert "/connect" not in text

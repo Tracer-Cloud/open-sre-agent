@@ -13,7 +13,8 @@ This hook:
 * Matches bridge tools by naming shape (``list_*_tools`` / ``call_*_tool``),
   not a vendor allow-list.
 * Treats structured ``tool_name`` targets as discovery unless they are a
-  known metric tool (``execute-sql`` / ``query-*``).
+  registered metric query tool (vendors opt in via
+  :func:`~platform.harness_ports.register_metric_query_tools`).
 * Dedupes exact discovery fingerprints for the gather turn (command text /
   tool target; ``context`` prose is ignored).
 * Caps how many discovery-style calls may run (including failed ones);
@@ -123,15 +124,14 @@ def is_mcp_discovery_target(target: str) -> bool:
 
 
 def is_mcp_metric_target(target: str) -> bool:
-    """True for MCP tools that fetch metric / query results (not schema)."""
+    """True for MCP tools registered as live metric / query fetches.
+
+    Vendors declare names via
+    :func:`~platform.harness_ports.register_metric_query_tools`. Core must not
+    hard-code PostHog ``execute-sql`` / ``query-*`` conventions here.
+    """
     name = target.strip().lower()
-    if not name:
-        return False
-    if name == "execute-sql":
-        return True
-    if name in registered_metric_query_tools():
-        return True
-    return name.startswith("query-")
+    return bool(name) and name in registered_metric_query_tools()
 
 
 def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool:
@@ -140,6 +140,10 @@ def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool
     Narrower than ``not is_gather_discovery_call``: Sentry ``issue_get``, X
     ``search_tweets``, and other non-discovery fetches must not count as a
     formed metric query (that would suppress the draft-query floor).
+
+    Matching is exact against the vendor-registered closed set — no substring
+    scans and no hyphen/underscore dual checks. Alternate spellings must be
+    registered explicitly if both are real tool names.
     """
     name = tool_name.strip()
     if not name or is_mcp_list_tools(name):
@@ -155,11 +159,7 @@ def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool
         if verb == "call":
             return is_mcp_metric_target(_call_target(command))
         return False
-    lowered = name.lower()
-    if lowered in registered_metric_query_tools():
-        return True
-    # Fixture labels that carry an execute-sql style query tool name.
-    return "execute-sql" in lowered or "execute_sql" in lowered
+    return name.lower() in registered_metric_query_tools()
 
 
 def _fingerprint_arg_hint(arguments: dict[str, Any]) -> str:
