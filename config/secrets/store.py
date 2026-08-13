@@ -17,8 +17,9 @@ once by :mod:`config.secrets.keychain_import`.
 from __future__ import annotations
 
 import os
-from contextlib import suppress
 from dataclasses import dataclass
+
+from filelock import Timeout as FileLockTimeout
 
 from config.secrets import local_file, os_keyring
 from config.secrets.backend import (
@@ -67,15 +68,16 @@ def lookup(env_var: str, *, default: str = "") -> SecretLookup:
         import_keychain_secrets_once()
         stored_value = local_file.get(env_var)
     except local_file.LOCAL_STORE_ERRORS:
-        # Contended credential file — treat as a miss for this call rather than
-        # aborting credential resolution / startup. Catch filelock.Timeout by
-        # name (via LOCAL_STORE_ERRORS), not only OSError.
+        # Contended credential file — miss this call; do not abort startup.
         return SecretLookup("", SecretTier.NONE)
     if stored_value:
         return SecretLookup(stored_value, SecretTier.FALLBACK)
     # Non-enumerable platforms never write the permanent import marker; a
     # dynamic keychain-only name becomes visible the first time it is looked up.
-    migrated = import_named_keychain_secret(env_var)
+    try:
+        migrated = import_named_keychain_secret(env_var)
+    except local_file.LOCAL_STORE_ERRORS:
+        return SecretLookup("", SecretTier.NONE)
     if migrated:
         return SecretLookup(migrated, SecretTier.FALLBACK)
     return SecretLookup("", SecretTier.NONE)
@@ -125,28 +127,40 @@ def delete_secret(env_var: str) -> None:
     """Remove a stored secret from the local file and any legacy keychain copy.
 
     Absent entries are fine. A machine with no keychain backend has nothing to
-    scrub. A locked or unreachable keychain after the local copy is gone raises
-    :class:`KeyringUnavailableError` — reporting logout success while an OS
-    copy remains would let the credential be recovered.
+    scrub. Failure to clear either tier raises :class:`KeyringUnavailableError`
+    — logout must not report success while a copy remains resolvable (local
+    file lock timeout) or recoverable (OS keychain).
     """
-    with suppress(*local_file.LOCAL_STORE_ERRORS):
+    local_error: BaseException | None = None
+    try:
         local_file.delete(env_var)
+    except (local_file.LocalStoreError, FileLockTimeout, OSError) as exc:
+        # Do not suppress: a contended store would leave the credential
+        # resolvable after a "successful" logout.
+        local_error = exc
+
     try:
         os_keyring.delete(env_var)
     except KeyringUnavailableError as exc:
-        if exc.reason == KeyringUnavailableReason.NO_BACKEND:
-            return
-        raise KeyringUnavailableError(
-            f"Removed the local copy of {env_var}, but the OS keychain copy "
-            "could not be deleted. Unlock the keychain and retry logout.",
-            reason=exc.reason,
-        ) from exc
+        if exc.reason != KeyringUnavailableReason.NO_BACKEND:
+            raise KeyringUnavailableError(
+                f"Could not delete the OS keychain copy of {env_var}. "
+                "Unlock the keychain and retry logout.",
+                reason=exc.reason,
+            ) from exc
     except (OSError, RuntimeError) as exc:
         raise KeyringUnavailableError(
-            f"Removed the local copy of {env_var}, but the OS keychain copy "
-            "could not be deleted. Unlock the keychain and retry logout.",
+            f"Could not delete the OS keychain copy of {env_var}. "
+            "Unlock the keychain and retry logout.",
             reason=KeyringUnavailableReason.BACKEND_ERROR,
         ) from exc
+
+    if local_error is not None:
+        raise KeyringUnavailableError(
+            f"Could not remove the local copy of {env_var}. "
+            "Retry logout when the credential store is available.",
+            reason=KeyringUnavailableReason.BACKEND_ERROR,
+        ) from local_error
 
 
 def keyring_is_disabled() -> bool:

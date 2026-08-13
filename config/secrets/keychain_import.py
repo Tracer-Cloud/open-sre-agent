@@ -231,37 +231,42 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
 
     imported: list[str] = []
     complete = True
-    discovered: tuple[str, ...] = ()
-    can_finalize = False
-    if os_keyring.supports_username_enumeration():
-        listed = os_keyring.list_usernames()
-        if listed is None:
-            complete = False
-        else:
-            discovered = listed
-            can_finalize = True
-    # else: cannot certify the keychain has no unknown names — never finalize.
+    try:
+        discovered: tuple[str, ...] = ()
+        can_finalize = False
+        if os_keyring.supports_username_enumeration():
+            listed = os_keyring.list_usernames()
+            if listed is None:
+                complete = False
+            else:
+                discovered = listed
+                can_finalize = True
+        # else: cannot certify the keychain has no unknown names — never finalize.
 
-    local_names = _local_credential_names()
-    if local_names is None:
-        # Dropping dynamic local names would skip scrubbing their keychain twins.
+        local_names = _local_credential_names()
+        if local_names is None:
+            # Dropping dynamic local names would skip scrubbing their keychain twins.
+            complete = False
+            local_names = ()
+
+        for env_var in _candidate_env_vars(discovered=discovered, local_names=local_names):
+            value, ok = _migrate_one(env_var)
+            if value:
+                imported.append(env_var)
+            if not ok:
+                complete = False
+
+        if complete and can_finalize:
+            _mark_imported()
+        if complete:
+            # Known-name pass finished cleanly. Non-enumerable platforms stay
+            # without a disk marker so a later release can still grow discovery;
+            # this process does not repeat the catalog scan.
+            _pass_attempted = True
+    except local_file.LOCAL_STORE_ERRORS:
+        # Belt-and-suspenders: no credential-store failure may escape into lookup.
+        logger.debug("Keychain import interrupted by the local credential store", exc_info=True)
         complete = False
-        local_names = ()
-
-    for env_var in _candidate_env_vars(discovered=discovered, local_names=local_names):
-        value, ok = _migrate_one(env_var)
-        if value:
-            imported.append(env_var)
-        if not ok:
-            complete = False
-
-    if complete and can_finalize:
-        _mark_imported()
-    if complete:
-        # Known-name pass finished cleanly. Non-enumerable platforms stay without
-        # a disk marker so a later release can still grow discovery; this process
-        # does not repeat the catalog scan.
-        _pass_attempted = True
     return tuple(imported)
 
 

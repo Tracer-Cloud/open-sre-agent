@@ -127,18 +127,15 @@ def test_lookup_tolerates_a_credential_file_lock_timeout(monkeypatch) -> None:
     assert lookup(_ENV_VAR).tier == SecretTier.NONE
 
 
-def test_lookup_tolerates_timeout_even_when_it_is_not_an_oserror(monkeypatch) -> None:
-    """Contention handling must name filelock.Timeout, not rely on OSError alone."""
-
-    class _OrphanTimeout(Exception):
-        """Stand-in that is *not* an OSError subclass."""
+def test_lookup_tolerates_local_store_error_that_is_not_an_oserror(monkeypatch) -> None:
+    """LocalStoreError must be caught even though it does not subclass OSError."""
+    assert not issubclass(local_file.LocalStoreError, OSError)
 
     monkeypatch.setattr(keychain_import, "import_keychain_secrets_once", lambda: ())
     monkeypatch.setattr(keychain_import, "import_named_keychain_secret", lambda _name: "")
-    monkeypatch.setattr(local_file, "LOCAL_STORE_ERRORS", (OSError, _OrphanTimeout))
 
     def _locked(_name: str) -> str:
-        raise _OrphanTimeout("/tmp/credentials.json.lock")
+        raise local_file.LocalStoreError("lock timed out")
 
     monkeypatch.setattr(local_file, "get", _locked)
 
@@ -147,10 +144,8 @@ def test_lookup_tolerates_timeout_even_when_it_is_not_an_oserror(monkeypatch) ->
 
 
 def test_save_maps_a_lock_timeout_to_unavailable(monkeypatch) -> None:
-    from filelock import Timeout
-
     def _locked(*_args: object, **_kwargs: object) -> None:
-        raise Timeout("/tmp/credentials.json.lock")
+        raise local_file.LocalStoreError("lock timed out")
 
     monkeypatch.setattr(local_file, "set", _locked)
 
@@ -229,6 +224,25 @@ def test_delete_raises_when_the_keychain_scrub_fails(monkeypatch) -> None:
 
     assert excinfo.value.reason == KeyringUnavailableReason.BACKEND_ERROR
     assert _ENV_VAR not in _stored_contents()
+
+
+def test_delete_raises_when_the_local_store_lock_times_out(monkeypatch) -> None:
+    """Logout must not report success while the local credential still resolves."""
+    save_secret(_ENV_VAR, "sk-stored")
+    scrubbed: list[str] = []
+    monkeypatch.setattr(os_keyring, "delete", lambda name: scrubbed.append(name))
+
+    def _locked(_name: str) -> None:
+        raise local_file.LocalStoreError("lock timed out")
+
+    monkeypatch.setattr(local_file, "delete", _locked)
+
+    with pytest.raises(KeyringUnavailableError) as excinfo:
+        delete_secret(_ENV_VAR)
+
+    assert excinfo.value.reason == KeyringUnavailableReason.BACKEND_ERROR
+    assert _ENV_VAR in scrubbed
+    assert _ENV_VAR in _stored_contents()
 
 
 def test_provider_logout_clears_the_stored_copy(monkeypatch) -> None:
