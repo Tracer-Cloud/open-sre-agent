@@ -82,6 +82,8 @@ _CREDIT_EXHAUSTED_MARKERS = (
     "credit exhausted",
     "credit balance is too low",
     "credit balance too low",
+    "credit_balance_exhausted",
+    "no credits remaining",
     "insufficient_quota",
     "billing_hard_limit_reached",
 )

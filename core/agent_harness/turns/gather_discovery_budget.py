@@ -1,13 +1,12 @@
-"""Cap MCP discovery thrash during evidence gather.
+"""Limit how many schema-exploring MCP calls one evidence gather may spend.
 
 MCP bridges typically expose ``list_*_tools`` plus a ``call_*_tool`` exec
 surface where the model explores with ``search`` / ``info`` / ``schema`` and
-meta ``call read-data-schema`` before any real metric query. PostHog's bridge
-also takes a structured ``tool_name`` + ``arguments`` shape (not only an
-``exec`` command string). Those discovery calls often succeed or fail with
-taxonomy errors, so :class:`SourceCircuitBreaker` never trips — live
-SessionGoal metric asks burned discovery lines and still returned no count
-(parity S1).
+meta ``call read-data-schema`` before any real metric query. Some bridges take
+a structured ``tool_name`` + ``arguments`` shape, not only an ``exec`` command
+string. Those exploring calls succeed, or fail with taxonomy errors, so
+:class:`SourceCircuitBreaker` never trips: a gather can spend every iteration
+exploring and return no data.
 
 This hook:
 
@@ -127,6 +126,36 @@ def is_mcp_metric_target(target: str) -> bool:
     if name == "execute-sql":
         return True
     return name.startswith("query-")
+
+
+def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool:
+    """True when this call is a live metric/SQL/PromQL fetch — not discovery.
+
+    Narrower than ``not is_gather_discovery_call``: Sentry ``issue_get``, X
+    ``search_tweets``, and other non-discovery fetches must not count as a
+    formed metric query (that would suppress the draft HogQL/PromQL floor).
+    """
+    name = tool_name.strip()
+    if not name or is_mcp_list_tools(name):
+        return False
+    if is_mcp_exec_bridge(name):
+        target = bridge_tool_target(arguments)
+        if target:
+            return is_mcp_metric_target(target)
+        command = _exec_command(arguments)
+        if not command:
+            return False
+        verb = command.split(None, 1)[0].lower()
+        if verb == "call":
+            return is_mcp_metric_target(_call_target(command))
+        return False
+    lowered = name.lower()
+    # Native gather tools that return series / log-derived metrics.
+    return (
+        "query_grafana_metrics" in lowered
+        or "query_grafana_logs" in lowered
+        or lowered in {"execute_sql", "execute-sql"}
+    )
 
 
 def _fingerprint_arg_hint(arguments: dict[str, Any]) -> str:
@@ -271,6 +300,7 @@ __all__ = [
     "bridge_tool_target",
     "discovery_fingerprint",
     "is_gather_discovery_call",
+    "is_live_metric_query_call",
     "is_mcp_exec_bridge",
     "is_mcp_list_tools",
     "is_mcp_metric_target",

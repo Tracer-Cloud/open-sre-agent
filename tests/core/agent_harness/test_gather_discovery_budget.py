@@ -16,6 +16,7 @@ from __future__ import annotations
 from core.agent_harness.turns.gather_discovery_budget import (
     DEFAULT_MAX_DISCOVERY_CALLS,
     is_gather_discovery_call,
+    is_live_metric_query_call,
     is_mcp_exec_bridge,
     is_mcp_list_tools,
     with_gather_discovery_budget,
@@ -282,3 +283,22 @@ def test_known_discovery_targets_still_count() -> None:
         assert is_gather_discovery_call(
             "call_posthog_tool", {"tool_name": target, "arguments": {}}
         ), f"{target} is discovery"
+
+
+def test_live_metric_query_call_is_narrower_than_non_discovery() -> None:
+    """Metric floor must not treat every non-discovery fetch as a count query."""
+    assert is_live_metric_query_call(
+        "call_posthog_tool",
+        {"tool_name": "execute-sql", "arguments": {"query": "SELECT 1"}},
+    )
+    assert is_live_metric_query_call(
+        "call_posthog_tool",
+        {"tool_name": "query-trends", "arguments": {}},
+    )
+    assert is_live_metric_query_call("query_grafana_metrics", {"expr": "up"})
+    # Data fetches that are not metric queries.
+    for target in ("issue_get", "search_tweets", "conversations_get"):
+        assert not is_live_metric_query_call(
+            "call_posthog_tool", {"tool_name": target, "arguments": {}}
+        ), f"{target} must not count as a live metric query"
+    assert not is_live_metric_query_call("query_grafana_alert_rules", {})

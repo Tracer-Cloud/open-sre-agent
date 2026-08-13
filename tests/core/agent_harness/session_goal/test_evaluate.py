@@ -221,13 +221,11 @@ def test_turn_has_session_goal_evidence_counts_gather_successes() -> None:
     assert turn_has_session_goal_evidence(_result("done", gather_success=0)) is False
 
 
-def test_host_owned_gather_answer_intent_without_success_count_completes() -> None:
-    """R7: gather/summarize reply must close host-owned goals when counters are 0.
+def test_host_owned_fallback_route_without_tool_evidence_stays_active() -> None:
+    """Route identity is not evidence — unsupported fallbacks must not close.
 
-    Live metric turns sometimes leave ``gather_success_count`` at 0 (empty
-    ``tool_results``, roster-only probes) while still answering via
-    ``cli_agent_fallback``. Waiting for counters burned the outer-turn budget
-    repeating the same PostHog answer.
+    ``cli_agent_fallback`` alone previously closed host-owned goals even when
+    no action/gather tool succeeded (draft-only / failed-query answers).
     """
     session = SessionCore()
     attach_session_goal(
@@ -238,11 +236,9 @@ def test_host_owned_gather_answer_intent_without_success_count_completes() -> No
             host_owned=True,
         ),
     )
-    turns: list[str] = []
-
-    def _chat(message: str) -> TurnResult:
-        turns.append(message)
-        return TurnResult(
+    verdict = evaluate_session_goal(
+        session.session_goal,  # type: ignore[arg-type]
+        TurnResult(
             final_intent="cli_agent_fallback",
             action_result=ToolCallingTurnResult(
                 planned_count=0,
@@ -252,16 +248,14 @@ def test_host_owned_gather_answer_intent_without_success_count_completes() -> No
                 handled=False,
             ),
             assistant_response_text=(
-                "I found: 272 unique Windows users in PostHog over the last 7 days."
+                "I could not get a live count. Here is draft HogQL and a setup CTA."
             ),
             gather_success_count=0,
-        )
-
-    outcome = run_until_session_goal(_chat, session, "How many Windows users in the last 7 days?")
-    assert len(turns) == 1
-    assert outcome.goal.status == SessionGoalStatus.ACHIEVED
-    assert outcome.goal.turns_used == 1
-    assert outcome.goal.last_reason == SessionGoalReason.ACHIEVED_TOOL_EVIDENCE
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_HOST_SIGNAL
 
 
 def test_host_owned_without_tools_or_achieved_tag_stays_active() -> None:

@@ -138,6 +138,15 @@ def test_is_credit_exhausted_uses_structured_code_when_message_is_clean() -> Non
     assert llm_retry.is_credit_exhausted_error(err)
 
 
+def test_is_credit_exhausted_uses_credit_balance_exhausted_code() -> None:
+    """OpenAI also emits ``credit_balance_exhausted`` (empty prepaid balance)."""
+    err = _FakeOpenAIAPIError(
+        "We had trouble processing your request.",
+        code="credit_balance_exhausted",
+    )
+    assert llm_retry.is_credit_exhausted_error(err)
+
+
 def test_is_credit_exhausted_uses_body_error_code_when_top_level_is_none() -> None:
     """SDK sometimes leaves ``.code`` None and only fills the parsed
     response body. Our extractor falls through to ``body.error.code``."""

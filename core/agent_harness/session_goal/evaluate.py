@@ -21,12 +21,9 @@ claim, not proof. This module is the independent host check:
   gather) and the reply is non-empty → achieve (same-turn answer). Waiting for
   a scrubbed/forgotten tag forced a redundant outer turn that repeated the
   live answer (parity S1 R7). Gather successes count: metric handoffs often
-  leave action ``executed_success_count`` at 0.
-* Host-owned goal, **no** ``achieved`` tag, gather/summarize answer path
-  (``cli_agent_fallback`` / ``cli_agent_summarized``) with a non-empty reply →
-  achieve even when gather success counts stayed 0 (empty ``tool_results`` /
-  only ``list_*_tools``). Same R7 symptom: without this, the host burns the
-  remaining outer turns repeating the live answer.
+  leave action ``executed_success_count`` at 0. Final-route identity alone
+  (``cli_agent_fallback`` / summarize) is not evidence — unsupported fallbacks
+  must not close the goal.
 * ``achieved`` with no checklist on a handoff goal → require tool evidence, or
   stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
@@ -129,19 +126,6 @@ def turn_has_session_goal_evidence(result: Any) -> bool:
     except (TypeError, ValueError):
         gather_succeeded = 0
     return action_succeeded > 0 or gather_succeeded > 0
-
-
-# Answer routes that already delivered a conversational reply after live work
-# (gather loop or action-observation summary). Host-owned goals close on these
-# even when success counters stayed at 0 — otherwise R7 repeats the answer
-# until the outer-turn budget is exhausted.
-_GATHER_ANSWER_INTENTS = frozenset({"cli_agent_fallback", "cli_agent_summarized"})
-
-
-def turn_delivered_gather_answer(result: Any) -> bool:
-    """True when the turn took gather_and_answer or summarize_observation."""
-    intent = getattr(result, "final_intent", None)
-    return isinstance(intent, str) and intent in _GATHER_ANSWER_INTENTS
 
 
 # metric_read-style attach usually emits query + report (2 items). Longer
@@ -264,17 +248,17 @@ def evaluate_session_goal(
             )
         elif (
             current.host_owned
+            and evidence
             and not dispatched
             and bool(text.strip())
             and not is_session_goal_progress_paint(text)
-            and (evidence or turn_delivered_gather_answer(result))
         ):
             # Live tools + answer already delivered on a host-set goal. Do not
             # wait for session_goal:achieved — that tag is scrubbed from the
             # user-visible reply and models often omit it, which previously
             # forced a second outer turn that repeated the same metric answer.
-            # ``cli_agent_fallback`` / summarize also count when gather success
-            # counters stayed 0 (empty tool_results / roster-only probes).
+            # Require real action/gather successes — route identity alone would
+            # let unsupported fallbacks close the goal without evidence.
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=SessionGoalReason.ACHIEVED_TOOL_EVIDENCE,
@@ -312,7 +296,6 @@ __all__ = [
     "evaluate_session_goal",
     "reply_claims_session_goal_achieved",
     "session_goal_reply_text",
-    "turn_delivered_gather_answer",
     "turn_dispatched_investigation",
     "turn_has_session_goal_evidence",
 ]

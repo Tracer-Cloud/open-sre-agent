@@ -7,6 +7,7 @@ import re
 # Patterns ordered by specificity — first match wins in classify_cli_failure_category_hint.
 _QUOTA_RE = re.compile(
     r"quota|rate.?limit|429|too many request|insufficient_quota|"
+    r"credit_balance_exhausted|no credits remaining|"
     r"out of credit|billing|usage limit|spending limit|plan limit|"
     r"exceeded.*limit|limit.*exceeded|maximum.*usage",
     re.IGNORECASE,

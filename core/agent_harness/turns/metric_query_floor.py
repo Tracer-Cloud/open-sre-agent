@@ -15,7 +15,7 @@ from typing import Any
 
 from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import EvidenceNeed, SetupCommandForSource
-from core.agent_harness.turns.gather_discovery_budget import is_gather_discovery_call
+from core.agent_harness.turns.gather_discovery_budget import is_live_metric_query_call
 from core.agent_harness.turns.gather_observation import (
     GatheredEvidence,
     coerce_gathered_evidence,
@@ -63,15 +63,21 @@ def _iter_observation_calls(observation: str) -> Iterator[tuple[str, dict[str, A
 
 
 def gather_formed_live_metric_query(evidence: GatheredEvidence | None) -> bool:
-    """True when gather executed a real metric/query tool, not only discovery."""
+    """True when gather executed a live metric/SQL/PromQL query.
+
+    Discovery probes and other non-metric fetches (issue lookup, tweet search,
+    alert-rule roster, …) must not suppress the draft-query floor.
+    """
     if evidence is None:
         return False
     for name, arguments in _iter_observation_calls(evidence.observation):
-        if not is_gather_discovery_call(name, arguments):
+        if is_live_metric_query_call(name, arguments):
             return True
+    # tool_results carry names only — use empty args so bridge calls without a
+    # parsed tool_name cannot false-positive as execute-sql.
     if evidence.tool_results and not (evidence.observation or "").strip():
         for name, _payload in evidence.tool_results:
-            if not is_gather_discovery_call(str(name or ""), {}):
+            if is_live_metric_query_call(str(name or ""), {}):
                 return True
     return False
 
