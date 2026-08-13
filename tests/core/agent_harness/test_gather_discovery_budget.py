@@ -296,6 +296,7 @@ def test_live_metric_query_call_is_narrower_than_non_discovery() -> None:
         {"tool_name": "query-trends", "arguments": {}},
     )
     assert is_live_metric_query_call("query_grafana_metrics", {"expr": "up"})
+    assert is_live_metric_query_call("posthog_mcp execute-sql", {})
     # Data fetches that are not metric queries.
     for target in ("issue_get", "search_tweets", "conversations_get"):
         assert not is_live_metric_query_call(

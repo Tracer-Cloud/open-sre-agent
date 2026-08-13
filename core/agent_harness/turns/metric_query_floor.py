@@ -62,22 +62,36 @@ def _iter_observation_calls(observation: str) -> Iterator[tuple[str, dict[str, A
         yield name, _parse_arguments(args_text)
 
 
-def gather_formed_live_metric_query(evidence: GatheredEvidence | None) -> bool:
+def gather_formed_live_metric_query(
+    evidence: GatheredEvidence | None,
+    *,
+    metric_source_ids: tuple[str, ...] = (),
+) -> bool:
     """True when gather executed a live metric/SQL/PromQL query.
 
     Discovery probes and other non-metric fetches (issue lookup, tweet search,
     alert-rule roster, …) must not suppress the draft-query floor.
+
+    Fixture / native gather often labels the block with the analytics source
+    id (``Tool: posthog_mcp``) when a HogQL query already ran — including
+    syntax errors. Those stay L1 (honest answer, no setup CTA).
     """
     if evidence is None:
         return False
+    sources = frozenset(s.strip().lower() for s in metric_source_ids if str(s).strip())
     for name, arguments in _iter_observation_calls(evidence.observation):
         if is_live_metric_query_call(name, arguments):
+            return True
+        if name.strip().lower() in sources:
             return True
     # tool_results carry names only — use empty args so bridge calls without a
     # parsed tool_name cannot false-positive as execute-sql.
     if evidence.tool_results and not (evidence.observation or "").strip():
         for name, _payload in evidence.tool_results:
-            if is_live_metric_query_call(str(name or ""), {}):
+            tool = str(name or "")
+            if is_live_metric_query_call(tool, {}):
+                return True
+            if tool.strip().lower() in sources:
                 return True
     return False
 
@@ -114,7 +128,10 @@ def apply_unformed_metric_floor(
     if need.kind is not EvidenceKind.METRIC_READ:
         return response_text
     evidence = coerce_gathered_evidence(observation)
-    if gather_formed_live_metric_query(evidence):
+    if gather_formed_live_metric_query(
+        evidence,
+        metric_source_ids=(*need.preferred_sources, *need.connected),
+    ):
         return response_text
 
     parts: list[str] = []

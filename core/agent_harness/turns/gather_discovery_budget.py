@@ -150,11 +150,13 @@ def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool
             return is_mcp_metric_target(_call_target(command))
         return False
     lowered = name.lower()
-    # Native gather tools that return series / log-derived metrics.
+    # Native gather tools that return series / log-derived metrics. Also
+    # ``posthog_mcp execute-sql`` fixture labels (source id + query tool).
     return (
         "query_grafana_metrics" in lowered
         or "query_grafana_logs" in lowered
-        or lowered in {"execute_sql", "execute-sql"}
+        or "execute-sql" in lowered
+        or "execute_sql" in lowered
     )
 
 

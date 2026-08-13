@@ -100,6 +100,21 @@ def test_unformed_floor_does_not_duplicate_existing_draft_and_cta() -> None:
     assert text.count("/integrations setup posthog_mcp") == 1
 
 
+def test_source_labeled_hogql_error_does_not_get_setup_cta() -> None:
+    """HogQL syntax failures already ran a query — stay L1, no reconnect slash."""
+    observation = "Tool: posthog_mcp\nResult: HogQL syntax error near WHERE"
+    evidence = GatheredEvidence(observation=observation, tool_results=())
+    original = "The HogQL query failed; try a simpler property."
+    assert gather_formed_live_metric_query(evidence, metric_source_ids=("posthog_mcp",)) is True
+    text = apply_unformed_metric_floor(
+        original,
+        _need(),
+        observation=observation,
+        setup_command_for=lambda name: f"/integrations setup {name}",
+    )
+    assert text == original
+
+
 def test_grafana_unformed_floor_uses_promql() -> None:
     need = EvidenceNeed(
         kind=EvidenceKind.METRIC_READ,

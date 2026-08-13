@@ -35,6 +35,7 @@ from core.agent_harness.closed_llm_verdict import invoke_closed_goal_verdict
 from core.agent_harness.turns.gather_discovery_budget import (
     bridge_tool_target,
     is_gather_discovery_call,
+    is_live_metric_query_call,
 )
 from core.events import RuntimeEvent, RuntimeEventCallback, ToolExecutionEndEvent
 from core.llm.types import AgentLLMClient
@@ -148,13 +149,13 @@ def _gather_ran_only_discovery(calls: list[ExecutedToolCall]) -> bool:
 
 
 def _gather_ran_metric_query(calls: list[ExecutedToolCall]) -> bool:
-    """True when at least one executed call fetched data rather than a schema.
+    """True when at least one executed call was a live metric/SQL/PromQL fetch.
 
-    Every vendor is classified by one predicate. Re-deriving "is this a fetch"
-    from the tool name left a gap for any bridge not named
-    ``call_<vendor>_tool``, which then reported as no query at all.
+    Deliberately narrower than "not discovery": a Sentry issue read or a Slack
+    conversation fetch is real evidence but not a formed metric query, and the
+    reviewer note must not imply one ran.
     """
-    return any(not is_gather_discovery_call(name, args) for name, args in calls)
+    return any(is_live_metric_query_call(name, args) for name, args in calls)
 
 
 @dataclass

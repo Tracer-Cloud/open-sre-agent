@@ -392,7 +392,13 @@ def _gather_and_answer(
     if (
         evidence_need is not None
         and evidence_need.kind is EvidenceKind.METRIC_READ
-        and not gather_formed_live_metric_query(gathered)
+        and not gather_formed_live_metric_query(
+            gathered,
+            metric_source_ids=(
+                *evidence_need.preferred_sources,
+                *evidence_need.connected,
+            ),
+        )
         and METRIC_UNFORMED_HANDOFF not in answer_handoffs
         and not any(str(tag).startswith("evidence_tier:L0_degraded") for tag in answer_handoffs)
     ):

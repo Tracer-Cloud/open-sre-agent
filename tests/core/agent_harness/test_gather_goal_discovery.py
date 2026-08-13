@@ -109,19 +109,19 @@ def _metric_note(calls: list[tuple[str, dict[str, Any]]]) -> str:
     return text.split("Metric query executed: ", 1)[1].split("\n", 1)[0].strip()
 
 
-def test_review_note_reports_a_vendor_query_tool_as_a_metric_query() -> None:
-    """A native (non-bridge) data tool is a real query, not exploration."""
-    assert _metric_note([("query_grafana_datasource", {"expr": "up"})]) == "yes"
+def test_review_note_reports_a_native_metric_tool_as_a_metric_query() -> None:
+    """A native metrics/logs query tool is a formed metric query."""
+    assert _metric_note([("query_grafana_metrics", {"expr": "up"})]) == "yes"
 
 
 def test_review_note_reports_a_structured_metric_target_as_a_metric_query() -> None:
-    """``call_<vendor>_tool(tool_name=execute-sql)`` is a real query."""
+    """``call_<vendor>_tool(tool_name=execute-sql)`` is a formed metric query."""
     calls = [("call_posthog_tool", {"tool_name": "execute-sql", "arguments": {}})]
     assert _metric_note(calls) == "yes"
 
 
 def test_review_note_reports_no_metric_query_when_no_tool_ran() -> None:
-    """No executed calls is the only honest "no".
+    """No executed calls is the only honest "no" for an all-discovery gather.
 
     A gather where *every* call was schema probing never reaches the reviewer
     at all — it is rejected before the LLM — so the note cannot report on it.
@@ -129,19 +129,22 @@ def test_review_note_reports_no_metric_query_when_no_tool_ran() -> None:
     assert _metric_note([]) == "no"
 
 
-def test_review_note_counts_a_non_discovery_bridge_call_whatever_its_name() -> None:
-    """Any executed call the discovery classifier did not claim is a fetch.
+def test_review_note_separates_a_non_metric_fetch_from_a_metric_query() -> None:
+    """A real but non-metric fetch must not claim a metric query ran.
 
-    Pins the fallback by shape rather than by tool-name prefix: a bridge whose
-    naming does not match ``call_<vendor>_tool`` still fetched data.
+    Sentry issue reads are evidence, so the gather is not discovery-only and
+    does reach the reviewer — but the note must still say no query was formed,
+    or the metric floor would be suppressed by an unrelated fetch.
     """
-    assert _metric_note([("posthog_run_query", {"query": "SELECT 1"})]) == "yes"
+    calls = [("call_sentry_tool", {"tool_name": "issue_get", "arguments": {}})]
+    assert _metric_note(calls) == "no"
 
 
-def test_review_note_counts_a_call_prefixed_tool_that_is_not_a_bridge() -> None:
-    """A ``call_``-prefixed vendor tool outside the bridge shape still fetches.
+def test_review_note_does_not_yet_know_vendor_query_tools_outside_the_list() -> None:
+    """Pins the known limit: the native metric tools are a hard-coded list.
 
-    Reading the tool name for the prefix pair ``call_``/``_tool`` reported a
-    real query as none, telling the reviewer no data had been fetched.
+    ``call_newrelic_nrql`` runs a real query, and the note still says no.
+    Vendors outside the list in :mod:`gather_discovery_budget` are invisible
+    here; registering them per integration is what closes this.
     """
-    assert _metric_note([("call_newrelic_nrql", {"query": "SELECT 1"})]) == "yes"
+    assert _metric_note([("call_newrelic_nrql", {"query": "SELECT 1"})]) == "no"
