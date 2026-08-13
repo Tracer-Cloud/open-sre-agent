@@ -13,6 +13,7 @@ import pytest
 
 from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
 from config.secrets import keychain_import, local_file, os_keyring
+from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 
 
 @pytest.fixture(autouse=True)
@@ -295,7 +296,6 @@ def test_non_enumerable_platform_never_writes_the_permanent_marker(
 
 def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     """Local copy alone must not complete migration while the OS entry remains."""
-    from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 
     entries = {"ANTHROPIC_API_KEY": "sk-ant-live"}
     monkeypatch.setattr(keychain_import.os_keyring, "item_exists", lambda name: name in entries)
@@ -383,3 +383,42 @@ attributes:
         "ANTHROPIC_API_KEY",
         "record:provider-auth:deepseek",
     )
+
+
+def test_a_failed_scrub_is_retried_on_a_later_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A keychain copy must not survive because the local copy now shadows it.
+
+    On-demand migration copies the value locally and then deletes the keychain
+    entry. When that delete fails, later lookups resolve the local copy and never
+    reach the on-demand path again, so the revoked-tier copy stayed recoverable.
+    """
+    # Arrange — the keychain holds the value; deleting it fails the first time.
+    scrub_attempts: list[str] = []
+    deleted: list[str] = []
+
+    def _delete(env_var: str) -> None:
+        scrub_attempts.append(env_var)
+        if len(scrub_attempts) == 1:
+            raise KeyringUnavailableError("locked", reason=KeyringUnavailableReason.BACKEND_ERROR)
+        deleted.append(env_var)
+
+    target = "MY_DYNAMIC_API_KEY"
+    monkeypatch.setattr(keychain_import.os_keyring, "item_exists", lambda n: n == target)
+    monkeypatch.setattr(
+        keychain_import.os_keyring, "get", lambda n: "sk-live" if n == target else ""
+    )
+    monkeypatch.setattr(keychain_import.os_keyring, "delete", _delete)
+
+    # A clean known-name pass has already run in this process.
+    keychain_import.import_keychain_secrets_once()
+
+    # Act — on-demand migration copies the value but cannot scrub.
+    assert keychain_import.import_named_keychain_secret("MY_DYNAMIC_API_KEY") == "sk-live"
+    assert local_file.get("MY_DYNAMIC_API_KEY") == "sk-live"
+    assert deleted == []
+
+    # A completed known-name pass must not close the door on the pending scrub.
+    keychain_import.import_keychain_secrets_once()
+
+    # Assert
+    assert deleted == ["MY_DYNAMIC_API_KEY"]

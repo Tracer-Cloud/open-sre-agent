@@ -37,16 +37,37 @@ logger = logging.getLogger(__name__)
 
 _MARKER_FILENAME = "keychain-imported"
 
-# After a clean known-name pass on a non-enumerable platform, skip repeating the
-# full candidate scan in this process. The permanent marker is not written there;
-# :func:`import_named_keychain_secret` still migrates dynamic names on demand.
-_pass_attempted = False
+# Per-process skip after a clean known-name pass on a non-enumerable platform.
+# Stored in a dict so this module both reads and writes the flag (a bare
+# ``global`` bool is often reported unused by CodeQL). The disk marker is not
+# written on those platforms — :func:`import_named_keychain_secret` still
+# migrates dynamic names on demand.
+_IMPORT_STATE = {"pass_attempted": False}
+
+# Names copied locally whose keychain delete failed. Once local, lookup never
+# revisits migration, so these must be retried.
+_pending_scrubs: set[str] = set()
 
 
 def reset_import_state() -> None:
-    """Forget the per-process pass flag (test hook)."""
-    global _pass_attempted
-    _pass_attempted = False
+    """Forget the per-process pass flag and pending scrubs (test hook)."""
+    _IMPORT_STATE["pass_attempted"] = False
+    _pending_scrubs.clear()
+
+
+def retry_pending_scrubs() -> None:
+    """Re-attempt keychain deletes that failed after the value was copied."""
+    for env_var in tuple(_pending_scrubs):
+        if _scrub_keychain(env_var):
+            _pending_scrubs.discard(env_var)
+
+
+def _pass_was_attempted() -> bool:
+    return bool(_IMPORT_STATE["pass_attempted"])
+
+
+def _mark_pass_attempted() -> None:
+    _IMPORT_STATE["pass_attempted"] = True
 
 
 def _marker_path() -> Path:
@@ -193,7 +214,9 @@ def _migrate_one(env_var: str) -> tuple[str, bool]:
         logger.debug("Could not persist an imported credential", exc_info=True)
         return "", False
     if not _scrub_keychain(env_var):
+        _pending_scrubs.add(env_var)
         return value, False
+    _pending_scrubs.discard(env_var)
     return value, True
 
 
@@ -225,15 +248,17 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
     skip so lookups do not re-scan the catalog every time; named leftovers use
     :func:`import_named_keychain_secret`.
     """
-    global _pass_attempted
-    if _already_imported() or os_keyring.keyring_is_disabled() or _pass_attempted:
+    if os_keyring.keyring_is_disabled():
+        return ()
+    retry_pending_scrubs()
+    if _already_imported() or _pass_was_attempted():
         return ()
 
     imported: list[str] = []
-    complete = True
     try:
         discovered: tuple[str, ...] = ()
         can_finalize = False
+        complete = True
         if os_keyring.supports_username_enumeration():
             listed = os_keyring.list_usernames()
             if listed is None:
@@ -262,11 +287,12 @@ def import_keychain_secrets_once() -> tuple[str, ...]:
             # Known-name pass finished cleanly. Non-enumerable platforms stay
             # without a disk marker so a later release can still grow discovery;
             # this process does not repeat the catalog scan.
-            _pass_attempted = True
+            _mark_pass_attempted()
     except local_file.LOCAL_STORE_ERRORS:
         # Belt-and-suspenders: no credential-store failure may escape into lookup.
+        # Leave the pass unfinished (no marker / no pass_attempted).
         logger.debug("Keychain import interrupted by the local credential store", exc_info=True)
-        complete = False
+        return tuple(imported)
     return tuple(imported)
 
 
