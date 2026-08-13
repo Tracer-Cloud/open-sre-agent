@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from pydantic import ValidationError
 
 from integrations.config_models import ArgoCDIntegrationConfig
 from integrations.probes import ProbeResult
@@ -543,5 +544,16 @@ def make_argocd_client(
                 verify_ssl=_normalize_verify_ssl(verify_ssl),
             )
         )
-    except Exception:
+    except Exception as exc:
+        # `ValidationError` renders the rejected input inline via `input_value=`,
+        # and for a model-level failure that is the whole config mapping — bearer
+        # token and password included. Local `exc_info` logging bypasses Sentry's
+        # scrubber, so swap in a message-only error that keeps the traceback (but
+        # no `__cause__`, which would print the raw text again). Same technique as
+        # `integrations._validation_helpers.report_classify_failure`.
+        safe_exc: BaseException = exc
+        if isinstance(exc, ValidationError):
+            safe_exc = ValueError("Argo CD config validation failed")
+            safe_exc.__traceback__ = exc.__traceback__
+        logger.warning("Failed to create Argo CD client: %s", safe_exc, exc_info=safe_exc)
         return None
