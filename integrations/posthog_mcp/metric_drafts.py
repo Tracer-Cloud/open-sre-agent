@@ -81,6 +81,9 @@ _SIGNUP_EVENT_MARKERS = (
 )
 
 _EVENT_NAME_KEYS = ("name", "event", "event_name")
+# event-definitions envelopes nest the roster under these keys — never scrape
+# free-form string fields (description, tags, …) as event names.
+_SCHEMA_LIST_KEYS = ("results", "events", "data", "items", "definitions")
 
 
 def _parse_jsonish(raw: str) -> Any | None:
@@ -217,29 +220,52 @@ def _events_from_query(query: str) -> frozenset[str]:
     return frozenset(found)
 
 
+def _add_schema_event_name(found: set[str], value: Any) -> None:
+    if not isinstance(value, str):
+        return
+    name = value.strip()
+    if name and not _is_placeholder_event(name):
+        found.add(name)
+
+
 def _events_from_schema_payload(payload: Any) -> frozenset[str]:
-    """Walk a parsed event-definitions payload for event name strings."""
+    """Collect event names from an event-definitions payload.
+
+    Accepts only:
+    * bare string entries in a list (``["user_signed_up", "$pageview"]``)
+    * ``name`` / ``event`` / ``event_name`` on a definition object
+    * those same shapes nested under known roster keys (``results``, …)
+
+    Does **not** promote arbitrary nested strings (descriptions, tags, docs)
+    to event names — that would let metadata confirm a guessed signup event.
+    """
     found: set[str] = set()
 
     def walk(node: Any) -> None:
         if isinstance(node, str):
-            name = node.strip()
-            if name and not _is_placeholder_event(name):
-                found.add(name)
+            _add_schema_event_name(found, node)
             return
         if isinstance(node, dict):
+            took_name = False
             for key in _EVENT_NAME_KEYS:
                 value = node.get(key)
                 if isinstance(value, str):
-                    name = value.strip()
-                    if name and not _is_placeholder_event(name):
-                        found.add(name)
-            for value in node.values():
-                walk(value)
+                    _add_schema_event_name(found, value)
+                    took_name = True
+            if took_name:
+                # Definition row: ignore description / tags / other strings.
+                return
+            for key in _SCHEMA_LIST_KEYS:
+                nested = node.get(key)
+                if nested is not None:
+                    walk(nested)
             return
         if isinstance(node, (list, tuple)):
             for item in node:
-                walk(item)
+                if isinstance(item, str):
+                    _add_schema_event_name(found, item)
+                else:
+                    walk(item)
 
     walk(payload)
     return frozenset(found)

@@ -80,6 +80,45 @@ def test_structured_schema_dicts_resolve_without_scraping_result_text() -> None:
     assert posthog_signup_cohort_resolved(evidence, "D7 retention was 41%") is True
 
 
+def test_schema_metadata_strings_do_not_confirm_a_guessed_signup_event() -> None:
+    """Descriptions / tags must not satisfy the schema ∩ SQL check."""
+    evidence = _evidence(
+        event="user_signed_up",
+        schema_lists=[
+            {
+                "name": "$pageview",
+                "description": "user_signed_up",
+                "tags": ["user_signed_up", "signup"],
+            }
+        ],
+        use_structured_tool_results=True,
+    )
+    assert posthog_signup_cohort_resolved(evidence, "D7 retention was 41%") is False
+
+
+def test_schema_results_envelope_uses_name_fields_only() -> None:
+    evidence = GatheredEvidence(
+        observation=(
+            "Tool: call_posthog_tool\n"
+            'Arguments: {"tool_name": "event-definitions"}\n'
+            'Result: {"results": [{"name": "user_signed_up", "description": "x"}]}\n\n'
+            "Tool: call_posthog_tool\n"
+            'Arguments: {"tool_name": "execute-sql", '
+            '"arguments": {"query": "SELECT count() FROM events '
+            "WHERE event = 'user_signed_up'\"}}\n"
+            "Result: eligible=120"
+        ),
+        tool_results=(
+            (
+                "call_posthog_tool",
+                {"results": [{"name": "user_signed_up", "description": "user_signed_up docs"}]},
+            ),
+            ("call_posthog_tool", {"eligible": 120}),
+        ),
+    )
+    assert posthog_signup_cohort_resolved(evidence, "D7 retention was 41%") is True
+
+
 def test_guessed_signup_in_sql_without_schema_does_not_resolve() -> None:
     """A signup-shaped name in HogQL alone must not suppress the cohort floor."""
     evidence = _evidence(event="user_signed_up", schema_lists=None)
