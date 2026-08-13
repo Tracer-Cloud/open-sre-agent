@@ -125,39 +125,98 @@ class TestAnIncompleteListSaysSo:
         assert "note" not in result
 
 
-class TestApplicationBalancersAreListedNotFabricated:
-    """Application target health follows a nested path this tool does not walk.
+# Response shapes captured live from a real application balancer (folder
+# b1g...i3): listener -> router -> route -> backend group -> target group ->
+# targetStates, where health is reported per zone.
+_ALB_ROUTES = {
+    "/apploadbalancer/v1/loadBalancers/alb-1/targetStates/bg-1/tg-1": {
+        "targetStates": [
+            {
+                "target": {"subnetId": "sn-a", "ipAddress": "10.0.0.5"},
+                "status": {"zoneStatuses": [{"zoneId": "ru-central1-a", "status": "UNHEALTHY"}]},
+            },
+            {
+                "target": {"subnetId": "sn-b", "ipAddress": "10.0.0.6"},
+                "status": {
+                    "zoneStatuses": [
+                        {"zoneId": "ru-central1-a", "status": "UNHEALTHY"},
+                        {"zoneId": "ru-central1-b", "status": "HEALTHY"},
+                    ]
+                },
+            },
+        ]
+    },
+    "/apploadbalancer/v1/backendGroups/bg-1": {
+        "http": {"backends": [{"targetGroups": {"targetGroupIds": ["tg-1"]}}]},
+        "id": "bg-1",
+    },
+    "/apploadbalancer/v1/httpRouters/router-1/virtualHosts": {
+        "virtualHosts": [{"routes": [{"http": {"route": {"backendGroupId": "bg-1"}}}]}]
+    },
+    "/apploadbalancer/v1/loadBalancers": {
+        "loadBalancers": [
+            {
+                "id": "alb-1",
+                "name": "ingress",
+                "status": "ACTIVE",
+                "listeners": [{"http": {"handler": {"httpRouterId": "router-1"}}}],
+            }
+        ]
+    },
+}
 
-    The network balancer's ``:getTargetStates`` action does not exist for the
-    application balancer, whose target states live under
-    ``/loadBalancers/{id}/targetStates/{backend_group}/{target_group}``. So the
-    tool lists application balancers with their status and points at the real
-    path rather than calling a URL the API does not serve.
+
+class TestApplicationTargetsReachAggregation:
+    """A failing application backend must surface in unhealthy_targets.
+
+    The tool walks the balancer's backend graph to its targetStates, so an
+    unhealthy application target feeds the same summary the network balancer
+    does. A target is unhealthy only when every zone fails its health check.
     """
 
-    def test_an_application_balancer_is_listed_with_a_pointer(
+    def test_an_unhealthy_application_target_is_collected(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        called: list[str] = []
-
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
-            called.append(url)
-            if "/apploadbalancer/v1/loadBalancers" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "loadBalancers": [{"id": "alb-1", "name": "ingress", "status": "ACTIVE"}]
-                    },
-                )
-            return httpx.Response(200, json={"loadBalancers": []})
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            for fragment, payload in _ALB_ROUTES.items():
+                if fragment in url:
+                    return httpx.Response(200, json=payload)
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
-        result = get_yc_lb_health(type="application", **_CREDENTIALS)
+        result = get_yc_lb_health(**_CREDENTIALS)
 
-        alb = result["balancers"][0]
-        assert alb["status"] == "ACTIVE"
-        assert "targetStates" in alb["target_health"]
-        # The tool must not invent per-target health by hitting a path the API
-        # does not serve for application balancers.
-        assert not any(":getTargetStates" in url for url in called)
-        assert result["unhealthy_targets"] == []
+        unhealthy = result["unhealthy_targets"]
+        assert len(unhealthy) == 1
+        assert unhealthy[0]["address"] == "10.0.0.5"
+        assert unhealthy[0]["balancer"] == "ingress"
+        # A target healthy in any zone is not reported unhealthy.
+        assert all(t["address"] != "10.0.0.6" for t in unhealthy)
+
+    def test_an_unnamed_balancer_is_labelled_by_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A real application balancer can come back without a name; use the id."""
+        routes = {k: v for k, v in _ALB_ROUTES.items() if k != "/apploadbalancer/v1/loadBalancers"}
+        routes["/apploadbalancer/v1/loadBalancers"] = {
+            "loadBalancers": [
+                {
+                    "id": "alb-1",
+                    "status": "ACTIVE",
+                    "listeners": [{"http": {"handler": {"httpRouterId": "router-1"}}}],
+                }
+            ]
+        }
+
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            for fragment, payload in routes.items():
+                if fragment in url:
+                    return httpx.Response(200, json=payload)
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert result["unhealthy_targets"][0]["balancer"] == "alb-1"

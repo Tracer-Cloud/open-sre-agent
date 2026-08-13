@@ -87,26 +87,110 @@ def _first_target_group(balancer: dict[str, Any]) -> str:
     return str(attachments[0].get("targetGroupId", "")) if attachments else ""
 
 
-#: Where per-target health for an application balancer actually lives. Unlike
-#: the network balancer's ``:getTargetStates`` action, the application one is a
-#: nested read keyed by backend group and target group, so it needs the
-#: balancer's backend-group graph walked first — out of scope for a summary
-#: tool, but reachable through the generic reader.
-_ALB_TARGET_HEALTH_HINT = (
-    "not retrieved here; read it with execute_yc_operation on "
-    "/apploadbalancer/v1/loadBalancers/<id>/targetStates/"
-    "<backend_group_id>/<target_group_id>"
-)
+_ALB_HTTP_ROUTER_PATH = "/apploadbalancer/v1/httpRouters"
+_ALB_BACKEND_GROUP_PATH = "/apploadbalancer/v1/backendGroups"
+
+
+def _alb_router_ids(balancer: dict[str, Any]) -> list[str]:
+    """Pull the HTTP router id out of every listener handler shape."""
+    ids: list[str] = []
+    for listener in balancer.get("listeners") or []:
+        for key in ("http", "tls"):
+            handler = listener.get(key) or {}
+            direct = (handler.get("handler") or {}).get("httpRouterId")
+            if direct:
+                ids.append(direct)
+            nested = ((handler.get("defaultHandler") or {}).get("httpHandler") or {}).get(
+                "httpRouterId"
+            )
+            if nested:
+                ids.append(nested)
+    return sorted(set(ids))
+
+
+def _alb_backend_group_ids(client: YandexCloudClient, router_ids: list[str]) -> list[str]:
+    """Return the backend groups the balancer's routes point at."""
+    ids: list[str] = []
+    for router_id in router_ids:
+        resp = client.get(_ALB_SERVICE, f"{_ALB_HTTP_ROUTER_PATH}/{router_id}/virtualHosts")
+        for vhost in (resp.get("data") or {}).get("virtualHosts") or []:
+            for route in vhost.get("routes") or []:
+                backend_group = (route.get("http") or {}).get("route", {}).get("backendGroupId")
+                if backend_group:
+                    ids.append(backend_group)
+    return sorted(set(ids))
+
+
+def _alb_target_group_ids(backend_group: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for kind in ("http", "grpc", "stream"):
+        for backend in (backend_group.get(kind) or {}).get("backends") or []:
+            ids += (backend.get("targetGroups") or {}).get("targetGroupIds") or []
+    return ids
+
+
+def _alb_targets(states: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten an application targetStates response into per-target health.
+
+    An application target's health is reported per zone; it is healthy overall
+    if any zone can reach it, and unhealthy only when every zone fails its
+    active health check.
+    """
+    targets: list[dict[str, Any]] = []
+    for entry in (states.get("data") or {}).get("targetStates") or []:
+        target = entry.get("target") or {}
+        zones = (entry.get("status") or {}).get("zoneStatuses") or []
+        healthy = any(zone.get("status") == _HEALTHY_TARGET for zone in zones)
+        targets.append(
+            {
+                "address": target.get("ipAddress", ""),
+                "subnet_id": target.get("subnetId", ""),
+                "status": _HEALTHY_TARGET if healthy else "UNHEALTHY",
+                "healthy": healthy,
+            }
+        )
+    return targets
+
+
+def _alb_target_health(
+    client: YandexCloudClient, lb_id: str, balancer: dict[str, Any]
+) -> tuple[list[dict[str, Any]], str]:
+    """Walk the balancer's backend graph and collect its targets' health.
+
+    The graph is listener -> HTTP router -> route -> backend group -> target
+    group, and only then can targetStates be read. Single-resource reads pass
+    page_size=None: Yandex answers a target-state or backend-group read that
+    carries a stray pageSize with a bare 404.
+    """
+    targets: list[dict[str, Any]] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    for bg_id in _alb_backend_group_ids(client, _alb_router_ids(balancer)):
+        group = client.get(_ALB_SERVICE, f"{_ALB_BACKEND_GROUP_PATH}/{bg_id}", page_size=None)
+        if not group.get("success"):
+            errors.append(f"backend group {bg_id}: {group.get('error', '')}")
+            continue
+        for tg_id in _alb_target_group_ids(group.get("data") or {}):
+            path = f"{_ALB_PATH}/{lb_id}/targetStates/{bg_id}/{tg_id}"
+            states = client.get(_ALB_SERVICE, path, page_size=None)
+            if not states.get("success"):
+                errors.append(f"targetStates {bg_id}/{tg_id}: {states.get('error', '')}")
+                continue
+            for target in _alb_targets(states):
+                if target["address"] not in seen:
+                    seen.add(target["address"])
+                    targets.append(target)
+    return targets, "; ".join(errors)
 
 
 def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str, str]:
-    """Return application load balancers with their status, and the next-page token.
+    """Return application load balancers with per-target health, and the next-page token.
 
-    Per-target health is deliberately not fetched: the application balancer's
-    target-state read follows a nested path (see ``_ALB_TARGET_HEALTH_HINT``)
-    rather than the network balancer's action suffix, so listing the balancers
-    with their overall status is what this tool offers, and the pointer says
-    where to get the rest.
+    Unlike the network balancer's single ``:getTargetStates`` action, the
+    application one keeps target states behind a nested path that needs the
+    balancer's backend-group graph walked first (see ``_alb_target_health``).
+    Walking it is what lets a failing application backend reach the same
+    ``unhealthy_targets`` summary the network balancer feeds.
     """
     listed = client.get(_ALB_SERVICE, _ALB_PATH, {"folderId": client.folder_id})
     if not listed.get("success"):
@@ -115,14 +199,17 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
 
     balancers: list[dict[str, Any]] = []
     for balancer in (listed.get("data") or {}).get("loadBalancers") or []:
+        lb_id = balancer.get("id", "")
+        targets, error = _alb_target_health(client, lb_id, balancer)
         balancers.append(
             {
-                "id": balancer.get("id", ""),
+                "id": lb_id,
                 "name": balancer.get("name", ""),
                 "type": TYPE_APPLICATION,
                 "status": balancer.get("status", ""),
                 "listeners": len(balancer.get("listeners") or []),
-                "target_health": _ALB_TARGET_HEALTH_HINT,
+                "targets": targets,
+                "target_states_error": error,
             }
         )
     return balancers, "", more
@@ -148,8 +235,8 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
     ],
     requires=[],
     outputs={
-        "balancers": "each balancer with its status; network balancers also carry per-target health",
-        "unhealthy_targets": "targets failing their health check on network balancers; application balancers list status only, with a pointer to their nested target-state path",
+        "balancers": "each balancer with its status and per-target health",
+        "unhealthy_targets": "targets failing their health check, across network and application balancers",
         "count": "how many balancers were returned",
     },
     input_schema={
@@ -206,7 +293,9 @@ def get_yc_lb_health(
             incomplete.append(TYPE_APPLICATION)
 
     unhealthy = [
-        {"balancer": balancer["name"], **target}
+        # An application balancer can come back without a name; fall back to its
+        # id so an unhealthy target is never reported against a blank owner.
+        {"balancer": balancer.get("name") or balancer.get("id", ""), **target}
         for balancer in balancers
         for target in balancer.get("targets", [])
         if not target.get("healthy", True)
