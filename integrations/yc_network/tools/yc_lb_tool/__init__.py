@@ -32,6 +32,25 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     return yc_credentials(sources)
 
 
+def _normalized_targets(states: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten a getTargetStates response into per-target health.
+
+    Both balancer kinds answer with the same ``{"targetStates": [...]}`` shape,
+    so both feed the same ``unhealthy_targets`` aggregation downstream. Skipping
+    this for one kind is how an unhealthy target goes unreported.
+    """
+    raw = (states.get("data") or {}).get("targetStates") or []
+    return [
+        {
+            "address": target.get("address", ""),
+            "subnet_id": target.get("subnetId", ""),
+            "status": target.get("status", ""),
+            "healthy": target.get("status") == _HEALTHY_TARGET,
+        }
+        for target in raw
+    ]
+
+
 def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str, str]:
     """Return network load balancers, an error, and the token for any further page."""
     listed = client.get(_NLB_SERVICE, _NLB_PATH, {"folderId": client.folder_id})
@@ -47,7 +66,6 @@ def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]],
             f"{_NLB_PATH}/{balancer_id}:getTargetStates",
             {"targetGroupId": _first_target_group(balancer)},
         )
-        targets = (states.get("data") or {}).get("targetStates") or []
         balancers.append(
             {
                 "id": balancer_id,
@@ -55,15 +73,7 @@ def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]],
                 "type": TYPE_NETWORK,
                 "status": balancer.get("status", ""),
                 "listeners": len(balancer.get("listeners") or []),
-                "targets": [
-                    {
-                        "address": target.get("address", ""),
-                        "subnet_id": target.get("subnetId", ""),
-                        "status": target.get("status", ""),
-                        "healthy": target.get("status") == _HEALTHY_TARGET,
-                    }
-                    for target in targets
-                ],
+                "targets": _normalized_targets(states),
                 "target_states_error": ""
                 if states.get("success")
                 else str(states.get("error", "")),
@@ -95,6 +105,10 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
                 "type": TYPE_APPLICATION,
                 "status": balancer.get("status", ""),
                 "listeners": len(balancer.get("listeners") or []),
+                # Normalised like the network balancer so its unhealthy targets
+                # reach the aggregation; the raw response stays for the detail
+                # the flattened view drops.
+                "targets": _normalized_targets(states),
                 "target_states": (states.get("data") or {}) if states.get("success") else {},
                 "target_states_error": ""
                 if states.get("success")

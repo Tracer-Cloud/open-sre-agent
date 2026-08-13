@@ -33,11 +33,12 @@ SOURCE = "yc_logging"
 _WHERE_ELSE_LOGS_LIVE = (
     "No entries in Cloud Logging for this window. That is not evidence nothing "
     "logged: a managed database keeps its own log and sends nothing here unless "
-    "export was switched on — read it with read_yc_db_logs. Kubernetes container "
-    "logs are read with kubernetes_get_pod_logs. Serverless functions do log "
-    "here by default, so for those an empty result is meaningful. Check the "
-    "window too: window_minutes counts back from now, and a past incident needs "
-    "from_time and to_time."
+    "export was switched on, and those database logs are not readable yet — fall "
+    "back to metrics and cluster state. Kubernetes container logs are read with "
+    "kubernetes_get_pod_logs. Serverless functions do log here by default, so "
+    "for those an empty result is meaningful. Check the window too: "
+    "window_minutes counts back from now, and a past incident needs from_time "
+    "and to_time."
 )
 
 _FILTER_HELP = (

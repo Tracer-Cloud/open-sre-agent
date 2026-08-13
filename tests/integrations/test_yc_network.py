@@ -123,3 +123,37 @@ class TestAnIncompleteListSaysSo:
 
         assert "complete" not in result
         assert "note" not in result
+
+
+class TestApplicationTargetsReachAggregation:
+    """An unhealthy application-balancer target must surface, not just network ones.
+
+    Both kinds answer getTargetStates with the same shape, so both feed the
+    unhealthy_targets summary. Reading only the network kind is how a failing
+    application backend goes unreported.
+    """
+
+    def test_an_unhealthy_alb_target_is_collected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/load-balancer/v1/networkLoadBalancers": {"loadBalancers": []},
+                    ":getTargetStates": {
+                        "targetStates": [
+                            {"address": "10.1.0.1", "status": "HEALTHY"},
+                            {"address": "10.1.0.9", "status": "UNHEALTHY"},
+                        ]
+                    },
+                    "/apploadbalancer/v1/loadBalancers": {
+                        "loadBalancers": [{"id": "alb-1", "name": "ingress", "status": "ACTIVE"}]
+                    },
+                }
+            ),
+        )
+
+        result = get_yc_lb_health(type="application", **_CREDENTIALS)
+
+        assert len(result["unhealthy_targets"]) == 1
+        assert result["unhealthy_targets"][0]["address"] == "10.1.0.9"
+        assert result["unhealthy_targets"][0]["balancer"] == "ingress"
