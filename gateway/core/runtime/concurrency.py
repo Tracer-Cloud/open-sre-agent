@@ -49,7 +49,7 @@ class TurnConcurrencyGate:
 
     @classmethod
     def for_profile(cls, profile: SizeProfile | str) -> TurnConcurrencyGate:
-        """Build the documented concurrency limit for a Fargate size profile."""
+        """Build the documented concurrency limit for an ``OPENSRE_SIZE_PROFILE``."""
         return cls(turn_limit_for_profile(profile))
 
     def try_acquire(self) -> bool:

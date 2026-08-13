@@ -533,6 +533,15 @@ def test_investigate_print_template_smoke(cli_sandbox: CliSandbox) -> None:
     assert payload["message"]
 
 
+def test_investigate_print_template_new_relic_smoke(cli_sandbox: CliSandbox) -> None:
+    result = _run_cli(cli_sandbox, "investigate", "--print-template", "new_relic")
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["alert_source"] == "new_relic"
+    assert payload["message"]
+
+
 def test_investigate_onboard_handoff_smoke(cli_sandbox: CliSandbox, tmp_path: Path) -> None:
     """project.env written by onboard is read by investigate before it reaches the LLM.
 

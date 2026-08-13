@@ -1,62 +1,29 @@
 ---
 title: "Windows"
-description: "Run Tracer on Windows using WSL or GitHub Codespaces"
+description: "Install OpenSRE on Windows with PowerShell or WSL"
 ---
 
-<Info>
-**No Native Windows Support**<br/>
-Tracer is not natively compatible with Microsoft Windows at the moment. We recommend using one of the quick alternatives below.
-</Info>
+## Option 1: Native PowerShell installer
 
-<Tabs>
-  <Tab title="Option 1: GitHub Codespaces">
+```powershell
+irm https://install.opensre.com | iex
+```
 
-## GitHub Codespaces
+Then configure your LLM and integrations:
 
-Try Tracer instantly in a cloud development environment without any local setup.
+```powershell
+opensre onboard
+opensre health
+opensre integrations verify
+```
 
-<Card href="/environments/codespaces">
-  <img
-    className="block dark:hidden"
-    src="/images/other_logos/GitHub-Black.png"
-    alt="GitHub Logo"
-    style={{ width: '5%', height: 'auto', marginTop: '0rem', marginBottom: '1rem' }}
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/other_logos/GitHub-Black.png"
-    alt="GitHub Logo"
-    style={{ width: '5%', height: 'auto', marginTop: '0rem', marginBottom: '1rem' }}
-  />
+## Option 2: WSL (Windows Subsystem for Linux)
 
-  <div style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1rem', color: 'inherit' }}>
-    Launch GitHub Codespaces
-  </div>
+1. Install WSL: [Microsoft WSL install guide](https://learn.microsoft.com/en-us/windows/wsl/install)
+2. Open your Linux distro terminal and follow [Linux (local)](/environments/linux-local)
 
-  <div style={{ color: 'inherit' }}>
-    Open your cloud development environment and follow the installation guide
-  </div>
-</Card>
+## Next steps
 
-  </Tab>
-  <Tab title="Option 2: WSL (Windows Subsystem for Linux)">
-
-<Card title="Step 1" href="https://learn.microsoft.com/en-us/windows/wsl/install">
-Install Windows Subsystem for Linux (WSL)
-</Card>
-
-Once WSL is installed, open your Ubuntu terminal and follow the Linux (Local) installation guide.
-
-<Card title="Step 2" href="/environments/linux-local">
-Follow Linux Installation Guide
-</Card>
-
-  </Tab>
-</Tabs>
-
-## Stay Updated
-
-Get Notified About Native Windows Support
-
-**Want to be notified when native Windows support is available?<br/>**
-Follow our [GitHub repository](https://github.com/Tracer-Cloud) or join our community for updates on Windows compatibility.
+- [Quickstart](/quickstart)
+- [Local and on-prem setup](/install-local)
+- [Integrations overview](/integrations-overview)

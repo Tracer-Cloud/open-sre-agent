@@ -197,6 +197,17 @@ from config.constants.mysql import (
     MYSQL_SSL_MODE_ENV,
     MYSQL_USERNAME_ENV,
 )
+from config.constants.new_relic import (
+    NEW_RELIC_ACCOUNT_ID_ENV,
+    NEW_RELIC_ALLOWED_BASE_URLS,
+    NEW_RELIC_API_KEY_ENV,
+    NEW_RELIC_BASE_URL_ENV,
+    NEW_RELIC_DEFAULT_INCIDENT_LIMIT,
+    NEW_RELIC_DEFAULT_WINDOW_MINUTES,
+    NEW_RELIC_INSTANCES_ENV,
+    NEW_RELIC_NRQL_LIMIT_MAX,
+    NEW_RELIC_NRQL_TIMEOUT_SECONDS,
+)
 from config.constants.openclaw import (
     OPENCLAW_MCP_ARGS_ENV,
     OPENCLAW_MCP_AUTH_TOKEN_ENV,
@@ -354,6 +365,22 @@ from config.constants.twilio import (
 from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.constants.work_items import OPENSRE_WORK_ITEMS_DIR_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
+from config.constants.yandex_cloud import (
+    AUTH_MODE_IAM_TOKEN,
+    AUTH_MODE_METADATA,
+    AUTH_MODE_OAUTH,
+    AUTH_MODE_SA_KEY,
+    AUTH_MODE_SA_KEY_FILE,
+    YC_API_ENDPOINT_ENV,
+    YC_CLOUD_ID_ENV,
+    YC_ENDPOINT_OVERRIDES_ENV,
+    YC_FOLDER_ID_ENV,
+    YC_IAM_TOKEN_ENV,
+    YC_SA_KEY_ENV,
+    YC_SA_KEY_FILE_ENV,
+    YC_TOKEN_ENV,
+    YC_USE_METADATA_ENV,
+)
 
 __all__ = [
     "RELEASE_STAGE",
@@ -503,6 +530,15 @@ __all__ = [
     "MYSQL_PORT_ENV",
     "MYSQL_SSL_MODE_ENV",
     "MYSQL_USERNAME_ENV",
+    "NEW_RELIC_ACCOUNT_ID_ENV",
+    "NEW_RELIC_ALLOWED_BASE_URLS",
+    "NEW_RELIC_API_KEY_ENV",
+    "NEW_RELIC_BASE_URL_ENV",
+    "NEW_RELIC_DEFAULT_INCIDENT_LIMIT",
+    "NEW_RELIC_DEFAULT_WINDOW_MINUTES",
+    "NEW_RELIC_INSTANCES_ENV",
+    "NEW_RELIC_NRQL_LIMIT_MAX",
+    "NEW_RELIC_NRQL_TIMEOUT_SECONDS",
     "OPENCLAW_MCP_ARGS_ENV",
     "OPENCLAW_MCP_AUTH_TOKEN_ENV",
     "OPENCLAW_MCP_COMMAND_ENV",
@@ -626,4 +662,18 @@ __all__ = [
     "integrations_store_path",
     "opensre_home",
     "session_home",
+    "AUTH_MODE_IAM_TOKEN",
+    "AUTH_MODE_METADATA",
+    "AUTH_MODE_OAUTH",
+    "AUTH_MODE_SA_KEY",
+    "AUTH_MODE_SA_KEY_FILE",
+    "YC_API_ENDPOINT_ENV",
+    "YC_CLOUD_ID_ENV",
+    "YC_ENDPOINT_OVERRIDES_ENV",
+    "YC_FOLDER_ID_ENV",
+    "YC_IAM_TOKEN_ENV",
+    "YC_SA_KEY_ENV",
+    "YC_SA_KEY_FILE_ENV",
+    "YC_TOKEN_ENV",
+    "YC_USE_METADATA_ENV",
 ]

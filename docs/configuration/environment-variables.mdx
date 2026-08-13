@@ -5,6 +5,25 @@ description: Complete reference of all supported OpenSRE environment variables.
 
 All configuration options for OpenSRE can be set via environment variables. This page provides a complete reference.
 
+## Secret storage
+
+Environment variables are checked before OpenSRE's local stores. For credentials
+entered through `opensre onboard` or `opensre integrations setup`, writes to the
+system keychain are opt-in. Without `OPENSRE_USE_KEYRING`, OpenSRE writes the
+credential to an owner-only fallback file under `~/.opensre/`, which keeps the
+first-run path working without an OS keychain prompt.
+
+Set `OPENSRE_USE_KEYRING=1` before onboarding to prefer the system keychain:
+
+```bash
+OPENSRE_USE_KEYRING=1 opensre onboard
+```
+
+If the keychain cannot store the credential, OpenSRE falls back to the same
+owner-only local file. A value supplied in the process environment or a local
+`.env` file takes precedence when reading credentials. Keep `.env` out of source
+control and never commit real secrets.
+
 ## LLM Providers
 
 | Variable | Default | Description | Module |
@@ -140,9 +159,9 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `TRACER_VERBOSE` | `0` | Verbose output for tracer (`1`, `true`, `yes`) | `surfaces/interactive_shell/ui/output` |
-| `TRACER_OUTPUT_FORMAT` | | Output format for tracer results | `platform/observability/output_format` |
-| `TRACER_API_URL` | | API URL for tracer reports | `integrations/slack/delivery.py` |
+| `TRACER_VERBOSE` | `0` | Verbose OpenSRE CLI/UI output (`1`, `true`, `yes`) | `surfaces/interactive_shell/ui/output` |
+| `TRACER_OUTPUT_FORMAT` | | OpenSRE result output format | `platform/observability/output_format` |
+| `TRACER_API_URL` | | Base URL for the tracer observability integration / report delivery | `integrations/tracer` |
 | `NO_COLOR` | | Disable colored output (standard convention) | `platform/observability/output_format` |
 | `COLUMNS` | `80` | Terminal column width for output formatting | `surfaces/interactive_shell/ui/output` |
 | `ENV` | `development` | Environment (`development`, `production`) | `config` |

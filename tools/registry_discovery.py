@@ -62,6 +62,7 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.mongodb.tools",
     "integrations.mongodb_atlas.tools",
     "integrations.mysql.tools",
+    "integrations.new_relic.tools",
     "integrations.openclaw.tools",
     "integrations.openobserve.tools",
     "integrations.opensearch.tools",

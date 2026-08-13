@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
+from config.constants.new_relic import NEW_RELIC_DEFAULT_WINDOW_MINUTES
+
 PROVENANCE_SOURCE_ALIASES: dict[str, str] = {
     "cloudwatch_logs": "cloudwatch",
     "grafana_logs": "grafana",
@@ -15,6 +17,7 @@ PROVENANCE_SOURCE_ALIASES: dict[str, str] = {
     "honeycomb_traces": "honeycomb",
     "coralogix_logs": "coralogix",
     "betterstack_logs": "betterstack",
+    "new_relic_alerts": "new_relic",
     "s3_metadata": "s3",
     "s3_audit": "s3",
 }
@@ -82,6 +85,22 @@ def build_source_provenance(
                     if honeycomb.get("service_name")
                     else None,
                     f"trace_id={honeycomb.get('trace_id')}" if honeycomb.get("trace_id") else None,
+                ]
+                if part
+            ),
+        }
+
+    new_relic = available_sources.get("new_relic") or {}
+    if new_relic:
+        provenance["new_relic"] = {
+            "label": "New Relic",
+            "summary": ", ".join(
+                part
+                for part in [
+                    f"account={new_relic.get('account_id')}"
+                    if new_relic.get("account_id")
+                    else None,
+                    f"window={new_relic.get('since_minutes', NEW_RELIC_DEFAULT_WINDOW_MINUTES)}m",
                 ]
                 if part
             ),

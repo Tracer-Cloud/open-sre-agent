@@ -518,6 +518,7 @@ _TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("grafana", "Grafana alert template"),
     ("honeycomb", "Honeycomb trigger template"),
     ("coralogix", "Coralogix alert template"),
+    ("new_relic", "New Relic incident template"),
     ("splunk", "Splunk alert template"),
 )
 
@@ -528,6 +529,7 @@ _INVESTIGATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("grafana", "run Grafana sample alert"),
     ("honeycomb", "run Honeycomb sample alert"),
     ("coralogix", "run Coralogix sample alert"),
+    ("new_relic", "run New Relic sample alert"),
     ("splunk", "run Splunk sample alert"),
 )
 
@@ -543,6 +545,7 @@ COMMANDS: list[SlashCommand] = [
             "/template grafana",
             "/template honeycomb",
             "/template coralogix",
+            "/template new_relic",
             "/template splunk",
         ),
         notes=("In a TTY, bare /template opens an interactive menu.",),

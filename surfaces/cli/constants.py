@@ -27,6 +27,7 @@ SAMPLE_ALERT_OPTIONS: tuple[tuple[str, str], ...] = (
     ("grafana", "Grafana - Pipeline failure rate high"),
     ("honeycomb", "Honeycomb - checkout-api latency regression"),
     ("coralogix", "Coralogix - payments worker errors"),
+    ("new_relic", "New Relic - checkout-latency threshold breach"),
     ("splunk", "Splunk - payments service error spike"),
 )
 

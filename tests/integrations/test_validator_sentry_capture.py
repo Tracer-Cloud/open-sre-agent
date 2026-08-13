@@ -147,16 +147,16 @@ CASES: tuple[MigrationCase, ...] = (
     ),
     # bitbucket
     MigrationCase(
-        "integrations/bitbucket.py",
+        "integrations/bitbucket/client.py",
         "validate_bitbucket_config",
         "bitbucket",
         "validate_bitbucket_config",
     ),
-    MigrationCase("integrations/bitbucket.py", "list_commits", "bitbucket", "list_commits"),
+    MigrationCase("integrations/bitbucket/client.py", "list_commits", "bitbucket", "list_commits"),
     MigrationCase(
-        "integrations/bitbucket.py", "get_file_contents", "bitbucket", "get_file_contents"
+        "integrations/bitbucket/client.py", "get_file_contents", "bitbucket", "get_file_contents"
     ),
-    MigrationCase("integrations/bitbucket.py", "search_code", "bitbucket", "search_code"),
+    MigrationCase("integrations/bitbucket/client.py", "search_code", "bitbucket", "search_code"),
     # mongodb
     MigrationCase(
         "integrations/mongodb.py",

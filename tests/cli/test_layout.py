@@ -15,6 +15,15 @@ def _normalized_output(output: str) -> str:
     return " ".join(output.split())
 
 
+def _visible_command_names(group: click.Group) -> list[str]:
+    ctx = click.Context(group)
+    return [
+        name
+        for name in group.list_commands(ctx)
+        if (command := group.get_command(ctx, name)) is not None and not command.hidden
+    ]
+
+
 def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
     monkeypatch.setattr("surfaces.interactive_shell.ui.banner.banner._is_first_run", lambda: True)
     render_help(cli)
@@ -28,8 +37,7 @@ def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
     assert "Options:" in output
     assert "Welcome back" not in output
 
-    ctx = click.Context(cli)
-    for name in cli.list_commands(ctx):
+    for name in _visible_command_names(cli):
         assert name in output
 
     for label, description in _options_from_command(cli):
@@ -46,8 +54,7 @@ def test_render_help_includes_uninstall(capsys) -> None:
 def test_render_help_command_list_matches_cli_registry(capsys) -> None:
     render_help(cli)
     output = _normalized_output(capsys.readouterr().out)
-    ctx = click.Context(cli)
-    for name in cli.list_commands(ctx):
+    for name in _visible_command_names(cli):
         assert name in output, f"command '{name}' missing from help output"
 
 

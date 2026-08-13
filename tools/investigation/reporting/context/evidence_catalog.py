@@ -24,6 +24,7 @@ SOURCE_ALIASES: dict[str, str] = {
     "honeycomb": "honeycomb_traces",
     "coralogix": "coralogix_logs",
     "betterstack": "betterstack_logs",
+    "new_relic": "new_relic_alerts",
 }
 
 
@@ -369,6 +370,31 @@ def _add_coralogix_logs(
     source_to_id["coralogix_logs"] = eid
 
 
+def _add_new_relic_alerts(
+    evidence: dict[str, Any],
+    catalog: dict[str, dict],
+    source_to_id: dict[str, str],
+) -> None:
+    new_relic_alerts = evidence.get("new_relic_alerts") or []
+    if not new_relic_alerts:
+        return
+    open_incidents = [i for i in new_relic_alerts if i.get("status") == "open"]
+    label = (
+        f"New Relic Alerts ({len(open_incidents)} open)"
+        if open_incidents
+        else f"New Relic Alerts ({len(new_relic_alerts)})"
+    )
+    eid = "evidence/new_relic/alerts"
+    catalog[eid] = {
+        "label": label,
+        "summary": f"{len(new_relic_alerts)} incidents",
+        "snippet": as_snippet(
+            ", ".join(i.get("condition_name") or "" for i in new_relic_alerts[:3])
+        ),
+    }
+    source_to_id["new_relic_alerts"] = eid
+
+
 def build_evidence_catalog(
     ns: NormalizedState,
 ) -> tuple[dict[str, dict], dict[str, str]]:
@@ -388,6 +414,7 @@ def build_evidence_catalog(
     _add_honeycomb_traces(ns.evidence, catalog, source_to_id)
     _add_coralogix_logs(ns.evidence, catalog, source_to_id)
     _add_betterstack_logs(ns.evidence, catalog, source_to_id)
+    _add_new_relic_alerts(ns.evidence, catalog, source_to_id)
 
     for i, entry in enumerate(catalog.values()):
         entry["display_id"] = f"E{i + 1}"

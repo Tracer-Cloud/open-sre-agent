@@ -13,7 +13,7 @@ from surfaces.interactive_shell.ui.layout import _commands_from_group
 
 
 def test_registered_commands_match_help_table() -> None:
-    registered = {cmd.name for cmd in _COMMANDS}
+    registered = {cmd.name for cmd in _COMMANDS if not cmd.hidden}
     assert None not in registered, (
         "A command in _COMMANDS has no name set. "
         "Ensure every click.Command is decorated with an explicit name."

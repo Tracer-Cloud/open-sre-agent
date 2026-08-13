@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from config.constants.railway import RAILWAY_TOKEN_ENV
 from integrations.config_models import RailwayIntegrationConfig
 from integrations.probes import ProbeResult
 from integrations.railway.models import DeploymentInfo, RailwayScope, RedeployInfo
@@ -61,8 +62,7 @@ class RailwayClient:
 
     def _redact_error(self, text: str) -> str:
         redacted = redact_token(text, self._config.token)
-        redacted = redact_token(redacted, os.getenv("RAILWAY_TOKEN", "").strip())
-        redacted = redact_token(redacted, os.getenv("RAILWAY_API_TOKEN", "").strip())
+        redacted = redact_token(redacted, os.getenv(RAILWAY_TOKEN_ENV, "").strip())
         return redacted[:_ERROR_LIMIT]
 
     def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:

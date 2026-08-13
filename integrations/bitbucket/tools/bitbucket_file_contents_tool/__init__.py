@@ -7,8 +7,8 @@ from typing import Any
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
-from integrations.bitbucket import get_file_contents
-from integrations.bitbucket.availability import bitbucket_available_or_backend
+from integrations.bitbucket.client import get_file_contents
+from integrations.bitbucket.tools.availability import bitbucket_available_or_backend
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_creds,
     _resolve_config,

@@ -145,6 +145,12 @@ from config.constants.mysql import (
     MYSQL_SSL_MODE_ENV,
     MYSQL_USERNAME_ENV,
 )
+from config.constants.new_relic import (
+    NEW_RELIC_ACCOUNT_ID_ENV,
+    NEW_RELIC_API_KEY_ENV,
+    NEW_RELIC_BASE_URL_ENV,
+    NEW_RELIC_INSTANCES_ENV,
+)
 from config.constants.openclaw import (
     OPENCLAW_MCP_ARGS_ENV,
     OPENCLAW_MCP_AUTH_TOKEN_ENV,
@@ -233,6 +239,15 @@ from config.constants.twilio import (
 )
 from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
+from config.constants.yandex_cloud import (
+    YC_CLOUD_ID_ENV,
+    YC_FOLDER_ID_ENV,
+    YC_IAM_TOKEN_ENV,
+    YC_SA_KEY_ENV,
+    YC_SA_KEY_FILE_ENV,
+    YC_TOKEN_ENV,
+    YC_USE_METADATA_ENV,
+)
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
@@ -244,7 +259,7 @@ from integrations.azure_sql import build_azure_sql_config
 from integrations.azure_sql import classify as _classify_azure_sql
 from integrations.betterstack import build_betterstack_config
 from integrations.betterstack import classify as _classify_betterstack
-from integrations.bitbucket import classify as _classify_bitbucket
+from integrations.bitbucket.config import classify as _classify_bitbucket
 from integrations.buzz import classify as _classify_buzz
 from integrations.config_models import (
     DEFAULT_DATADOG_SITE,
@@ -302,6 +317,8 @@ from integrations.mongodb_atlas import build_mongodb_atlas_config
 from integrations.mongodb_atlas import classify as _classify_mongodb_atlas
 from integrations.mysql import build_mysql_config
 from integrations.mysql import classify as _classify_mysql
+from integrations.new_relic import classify as _classify_new_relic
+from integrations.new_relic.config import NewRelicIntegrationConfig
 from integrations.openclaw import build_openclaw_config
 from integrations.openclaw import classify as _classify_openclaw
 from integrations.openobserve import classify as _classify_openobserve
@@ -359,6 +376,8 @@ from integrations.victoria_logs import classify as _classify_victoria_logs
 from integrations.whatsapp import classify as _classify_whatsapp
 from integrations.x_mcp import build_x_mcp_config
 from integrations.x_mcp import classify as _classify_x_mcp
+from integrations.yandex_cloud import classify as _classify_yandex_cloud
+from integrations.yandex_cloud.config import YandexCloudIntegrationConfig
 from platform.common.coercion import safe_int
 from platform.observability.errors.boundary import report_exception
 
@@ -532,6 +551,8 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "smtp": _classify_smtp,
     "prefect": _classify_prefect,
     "railway": _classify_railway,
+    "new_relic": _classify_new_relic,
+    "yandex_cloud": _classify_yandex_cloud,
 }
 
 #: Classifiers contributed by out-of-tree integration packages.
@@ -896,6 +917,35 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "honeycomb",
                     honeycomb_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    new_relic_multi = _parse_instances_env(NEW_RELIC_INSTANCES_ENV, "new_relic")
+    if new_relic_multi is not None:
+        integrations.append(new_relic_multi)
+        new_relic_api_key = ""
+        new_relic_account_id = ""
+        new_relic_base_url = ""
+    else:
+        new_relic_api_key = resolve_env_credential(NEW_RELIC_API_KEY_ENV)
+        new_relic_account_id = os.getenv(NEW_RELIC_ACCOUNT_ID_ENV, "").strip()
+        new_relic_base_url = os.getenv(NEW_RELIC_BASE_URL_ENV, "").strip()
+    if new_relic_api_key and new_relic_account_id:
+        try:
+            new_relic_config = NewRelicIntegrationConfig.model_validate(
+                {
+                    "api_key": new_relic_api_key,
+                    "account_id": new_relic_account_id,
+                    "base_url": new_relic_base_url,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="new_relic")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "new_relic",
+                    new_relic_config.model_dump(exclude={"integration_id"}),
                 )
             )
 
@@ -2030,6 +2080,39 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "temporal",
                     temporal_config.model_dump(),
+                )
+            )
+
+    yandex_cloud_folder = os.getenv(YC_FOLDER_ID_ENV, "").strip()
+    yandex_cloud_use_metadata = os.getenv(YC_USE_METADATA_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    # A folder alone is not a configuration: every read is folder-scoped, but it
+    # still needs a credential. On an instance the metadata service is the
+    # credential, and it also knows the folder, so that flag stands on its own.
+    if yandex_cloud_folder or yandex_cloud_use_metadata:
+        try:
+            yandex_cloud_config = YandexCloudIntegrationConfig.model_validate(
+                {
+                    "folder_id": yandex_cloud_folder,
+                    "cloud_id": os.getenv(YC_CLOUD_ID_ENV, "").strip(),
+                    "sa_key_file": os.getenv(YC_SA_KEY_FILE_ENV, "").strip(),
+                    "sa_key": resolve_env_credential(YC_SA_KEY_ENV),
+                    "oauth_token": resolve_env_credential(YC_TOKEN_ENV),
+                    "iam_token": resolve_env_credential(YC_IAM_TOKEN_ENV),
+                    "use_metadata": yandex_cloud_use_metadata,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="yandex_cloud")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "yandex_cloud",
+                    yandex_cloud_config.model_dump(exclude={"integration_id"}),
                 )
             )
 

@@ -20,7 +20,7 @@ html.dark #navigation-items .sidebar-group-header h5 {
   color: #ffffff !important;
 }
 
-/* Use the Tracer mark for the Tracer tab and swap to the white asset in dark mode. */
+/* Prefer white logo assets in dark mode when legacy black marks are present. */
 header img[src*="Tracer-Head-Black.png"],
 header img[src*="Tracer-Head-White.png"],
 nav img[src*="Tracer-Head-Black.png"],
