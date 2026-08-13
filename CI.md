@@ -2,6 +2,8 @@
 
 This file is the **single source of truth** for required local validation before
 any push or pull request. Repository-wide validation runs in GitHub Actions.
+Feature- or package-specific validation required by an applicable contributor
+guide supplements this harness and is intentionally not duplicated here.
 
 <!--
 Keep this document focused on required local checks and post-PR follow-through.
