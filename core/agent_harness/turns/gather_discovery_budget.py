@@ -34,6 +34,10 @@ from core.execution import (
     ToolExecutionRequest,
     ToolExecutionResult,
 )
+from platform.harness_ports import (
+    registered_discovery_targets,
+    registered_metric_query_tools,
+)
 
 DEFAULT_MAX_DISCOVERY_CALLS = 4
 
@@ -115,7 +119,7 @@ def is_mcp_discovery_target(target: str) -> bool:
         return False
     # Exact names. Prefix matching would read ``search_tweets`` as the probe
     # verb ``search`` and bill a data fetch to the discovery budget.
-    return name in _DISCOVERY_TARGETS
+    return name in _DISCOVERY_TARGETS or name in registered_discovery_targets()
 
 
 def is_mcp_metric_target(target: str) -> bool:
@@ -124,6 +128,8 @@ def is_mcp_metric_target(target: str) -> bool:
     if not name:
         return False
     if name == "execute-sql":
+        return True
+    if name in registered_metric_query_tools():
         return True
     return name.startswith("query-")
 
@@ -150,14 +156,10 @@ def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool
             return is_mcp_metric_target(_call_target(command))
         return False
     lowered = name.lower()
-    # Native gather tools that return series / log-derived metrics. Also
-    # fixture labels that include an execute-sql style query tool name.
-    return (
-        "query_grafana_metrics" in lowered
-        or "query_grafana_logs" in lowered
-        or "execute-sql" in lowered
-        or "execute_sql" in lowered
-    )
+    if lowered in registered_metric_query_tools():
+        return True
+    # Fixture labels that carry an execute-sql style query tool name.
+    return "execute-sql" in lowered or "execute_sql" in lowered
 
 
 def _fingerprint_arg_hint(arguments: dict[str, Any]) -> str:

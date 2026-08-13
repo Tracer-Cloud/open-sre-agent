@@ -147,6 +147,8 @@ def _slash_arg_for_join(parts_so_far: list[str], arg: str) -> str:
         if shlex.split(candidate, posix=True) == candidate_parts:
             return arg
     except ValueError:
+        # Unbalanced quotes in the joined line: it cannot round-trip as-is, so
+        # fall through to quoting.
         pass
     return shlex.quote(arg)
 

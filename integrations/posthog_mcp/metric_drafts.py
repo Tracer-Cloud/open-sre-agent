@@ -15,8 +15,19 @@ from core.agent_harness.turns.gather_observation import (
     coerce_gathered_evidence,
 )
 from platform.harness_ports import (
+    register_discovery_targets,
     register_metric_cohort_resolver,
     register_metric_query_draft,
+    register_metric_query_tools,
+)
+
+# PostHog MCP bridge targets: which run a query, which only read schema.
+_METRIC_QUERY_TOOLS = ("execute-sql", "query-trends")
+_DISCOVERY_TARGETS = (
+    "docs-search",
+    "event-definitions",
+    "property-definitions",
+    "property-values",
 )
 
 _DRAFT_HOGQL_COUNT = """```sql
@@ -96,8 +107,11 @@ def register_posthog_mcp_metric_drafts() -> None:
         "posthog_mcp",
         count_draft=_DRAFT_HOGQL_COUNT,
         cohort_draft=_DRAFT_HOGQL_COHORT,
+        priority=10,
     )
     register_metric_cohort_resolver("posthog_mcp", posthog_signup_cohort_resolved)
+    register_metric_query_tools("posthog_mcp", _METRIC_QUERY_TOOLS)
+    register_discovery_targets("posthog_mcp", _DISCOVERY_TARGETS)
 
 
 __all__ = [

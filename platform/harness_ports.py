@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -705,15 +706,73 @@ def clear_preferred_evidence_sources() -> None:
 #
 # Core owns *when* an unformed metric answer needs a draft fence + setup slash
 # and *when* a SessionGoal is about people-cohort identity
-# (:mod:`core.agent_harness.turns.cohort_identity`). Draft text and how to
-# parse a vendor's observations for "cohort resolved" are integration-owned
-# and opt in here. With no draft registered, core uses a generic text fence.
+# (:mod:`core.agent_harness.turns.cohort_identity`). Draft text, which tools
+# run a query, which targets are schema discovery, and how to read a vendor's
+# observations for "cohort resolved" are integration-owned and opt in here.
+# With no draft registered, core uses a generic text fence.
+#
+# A source that registers only a draft is still second-class: core cannot tell
+# its query tools from its schema probes. Register the tools too.
 
 MetricCohortResolvedFn = Callable[[Any, str], bool]
 """``(evidence, reply) -> True`` when a vendor cohort is live-resolved."""
 
-_metric_query_drafts: dict[str, tuple[str, str | None]] = {}
+
+@dataclass(frozen=True, slots=True)
+class MetricQueryDraft:
+    """Draft fences one analytics source offers when no live query formed."""
+
+    count: str
+    cohort: str | None
+    priority: int
+
+
+_metric_query_drafts: dict[str, MetricQueryDraft] = {}
 _metric_cohort_resolvers: dict[str, MetricCohortResolvedFn] = {}
+_metric_query_tools: dict[str, frozenset[str]] = {}
+_metric_discovery_targets: dict[str, frozenset[str]] = {}
+
+
+def _require_service_id(service_id: str, *, port: str) -> str:
+    """Return the trimmed id, or raise — a blank id is a wiring bug, not input."""
+    key = (service_id or "").strip()
+    if not key:
+        raise ValueError(f"{port} needs a non-empty service_id")
+    return key
+
+
+def register_metric_query_tools(service_id: str, tools: tuple[str, ...]) -> None:
+    """Register the tool names that run a live query for this source.
+
+    Without this, core falls back to shape rules that recognise no vendor, so
+    the source's real queries read as "no metric query ran".
+    """
+    key = _require_service_id(service_id, port="register_metric_query_tools")
+    names = frozenset(name.strip().lower() for name in tools if name and name.strip())
+    if not names:
+        raise ValueError(f"register_metric_query_tools({key!r}) needs at least one tool name")
+    _metric_query_tools[key] = _metric_query_tools.get(key, frozenset()) | names
+
+
+def register_discovery_targets(service_id: str, targets: tuple[str, ...]) -> None:
+    """Register the bridge targets that only explore schema for this source."""
+    key = _require_service_id(service_id, port="register_discovery_targets")
+    names = frozenset(name.strip().lower() for name in targets if name and name.strip())
+    if not names:
+        raise ValueError(f"register_discovery_targets({key!r}) needs at least one target")
+    _metric_discovery_targets[key] = _metric_discovery_targets.get(key, frozenset()) | names
+
+
+def registered_metric_query_tools() -> frozenset[str]:
+    """Every tool name any source registered as running a live query."""
+    return frozenset().union(*_metric_query_tools.values()) if _metric_query_tools else frozenset()
+
+
+def registered_discovery_targets() -> frozenset[str]:
+    """Every bridge target any source registered as schema discovery."""
+    if not _metric_discovery_targets:
+        return frozenset()
+    return frozenset().union(*_metric_discovery_targets.values())
 
 
 def register_metric_query_draft(
@@ -721,19 +780,22 @@ def register_metric_query_draft(
     *,
     count_draft: str,
     cohort_draft: str | None = None,
+    priority: int = 50,
 ) -> None:
     """Register the draft fence(s) this analytics source owns.
 
     ``count_draft`` / ``cohort_draft`` are full markdown fences. ``cohort_draft``
-    is optional — omit it when the vendor has no cohort/signup template.
+    is optional — omit it when the vendor has no cohort/signup template. Lower
+    ``priority`` wins when several registered sources are connected at once.
     """
-    key = service_id.strip()
-    if not key or not count_draft.strip():
-        return
+    key = _require_service_id(service_id, port="register_metric_query_draft")
+    count = (count_draft or "").strip()
+    if not count:
+        raise ValueError(f"register_metric_query_draft({key!r}) needs a non-empty count_draft")
     cohort = (
         cohort_draft.strip() if isinstance(cohort_draft, str) and cohort_draft.strip() else None
     )
-    _metric_query_drafts[key] = (count_draft.strip(), cohort)
+    _metric_query_drafts[key] = MetricQueryDraft(count=count, cohort=cohort, priority=priority)
 
 
 def register_metric_cohort_resolver(service_id: str, resolver: MetricCohortResolvedFn) -> None:
@@ -742,9 +804,8 @@ def register_metric_cohort_resolver(service_id: str, resolver: MetricCohortResol
     Used after a live query ran: core asks whether identity is still open so it
     can keep the draft fence. The vendor owns observation parsers; core must not.
     """
-    key = service_id.strip()
-    if key:
-        _metric_cohort_resolvers[key] = resolver
+    key = _require_service_id(service_id, port="register_metric_cohort_resolver")
+    _metric_cohort_resolvers[key] = resolver
 
 
 def metric_query_draft_for(
@@ -752,19 +813,23 @@ def metric_query_draft_for(
     *,
     cohort_goal: bool = False,
 ) -> str | None:
-    """Return the first registered draft matching ``service_ids``, or ``None``."""
-    for raw in service_ids:
-        key = str(raw or "").strip()
-        if not key:
-            continue
-        pair = _metric_query_drafts.get(key)
-        if pair is None:
-            continue
-        count_draft, cohort_draft = pair
-        if cohort_goal and cohort_draft is not None:
-            return cohort_draft
-        return count_draft
-    return None
+    """Return the registered draft for the highest-priority connected source.
+
+    Ranked by registration priority, then service id — never by the order the
+    caller happened to assemble ``service_ids``, which made the winner depend
+    on an unrelated tuple.
+    """
+    matches = [
+        (draft, key)
+        for key in {str(raw or "").strip() for raw in service_ids}
+        if key and (draft := _metric_query_drafts.get(key)) is not None
+    ]
+    if not matches:
+        return None
+    draft, _key = min(matches, key=lambda pair: (pair[0].priority, pair[1]))
+    if cohort_goal and draft.cohort is not None:
+        return draft.cohort
+    return draft.count
 
 
 def metric_cohort_resolved_for(
@@ -790,6 +855,8 @@ def metric_cohort_resolved_for(
 def clear_metric_query_drafts() -> None:
     _metric_query_drafts.clear()
     _metric_cohort_resolvers.clear()
+    _metric_query_tools.clear()
+    _metric_discovery_targets.clear()
 
 
 # ---------------------------------------------------------------------------
