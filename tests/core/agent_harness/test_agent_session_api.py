@@ -32,7 +32,7 @@ def _stub_turn_result() -> TurnResult:
 
 
 def test_startup_runs_the_boot_step_the_host_supplied() -> None:
-    """Parity S1/S4: an embedded host must not resolve zero integrations.
+    """An embedded host must not resolve zero integrations.
 
     ``core`` may not import ``bootstrap``, so the host passes the boot step in
     rather than the harness reaching up a tier for it.

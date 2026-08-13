@@ -1,4 +1,4 @@
-"""Assistant integration guard — no invented setup vendors (S5)."""
+"""Assistant integration guard — no invented setup vendors."""
 
 from __future__ import annotations
 

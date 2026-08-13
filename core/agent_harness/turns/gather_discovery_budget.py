@@ -133,7 +133,7 @@ def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool
 
     Narrower than ``not is_gather_discovery_call``: Sentry ``issue_get``, X
     ``search_tweets``, and other non-discovery fetches must not count as a
-    formed metric query (that would suppress the draft HogQL/PromQL floor).
+    formed metric query (that would suppress the draft-query floor).
     """
     name = tool_name.strip()
     if not name or is_mcp_list_tools(name):
@@ -151,7 +151,7 @@ def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool
         return False
     lowered = name.lower()
     # Native gather tools that return series / log-derived metrics. Also
-    # ``posthog_mcp execute-sql`` fixture labels (source id + query tool).
+    # fixture labels that include an execute-sql style query tool name.
     return (
         "query_grafana_metrics" in lowered
         or "query_grafana_logs" in lowered

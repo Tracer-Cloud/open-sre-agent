@@ -695,6 +695,131 @@ def clear_preferred_evidence_sources() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Metric query drafts + cohort identity (vendor-owned)
+# ---------------------------------------------------------------------------
+#
+# Core decides *when* an unformed metric answer needs a draft fence + setup
+# slash. Draft text, which SessionGoals need cohort identity, and how to tell
+# an honest refuse from a live answer are vendor concerns — each analytics
+# package opts in at boot. With no registrations, core never takes a
+# cohort-specific path.
+
+MetricCohortResolvedFn = Callable[[Any, str], bool]
+"""``(evidence, reply) -> True`` when a vendor cohort is live-resolved."""
+
+MetricCohortGoalMatcherFn = Callable[[str], bool]
+"""``(goal_condition) -> True`` when this vendor's cohort draft path applies."""
+
+MetricCohortUnverifiedFn = Callable[[str], bool]
+"""``(reply) -> True`` when the reply reports that cohort identity is open."""
+
+_metric_query_drafts: dict[str, tuple[str, str | None]] = {}
+_metric_cohort_resolvers: dict[str, MetricCohortResolvedFn] = {}
+_metric_cohort_goal_matchers: list[MetricCohortGoalMatcherFn] = []
+_metric_cohort_unverified_detectors: list[MetricCohortUnverifiedFn] = []
+
+
+def register_metric_query_draft(
+    service_id: str,
+    *,
+    count_draft: str,
+    cohort_draft: str | None = None,
+) -> None:
+    """Register the draft fence(s) this analytics source owns.
+
+    ``count_draft`` / ``cohort_draft`` are full markdown fences. ``cohort_draft``
+    is optional — omit it when the vendor has no cohort/signup template.
+    """
+    key = service_id.strip()
+    if not key or not count_draft.strip():
+        return
+    cohort = (
+        cohort_draft.strip() if isinstance(cohort_draft, str) and cohort_draft.strip() else None
+    )
+    _metric_query_drafts[key] = (count_draft.strip(), cohort)
+
+
+def register_metric_cohort_resolver(service_id: str, resolver: MetricCohortResolvedFn) -> None:
+    """Register how this source decides a cohort is resolved from gather evidence.
+
+    Used after a live query ran: core asks whether identity is still open so it
+    can keep the draft fence. The vendor owns observation parsers; core must not.
+    """
+    key = service_id.strip()
+    if key:
+        _metric_cohort_resolvers[key] = resolver
+
+
+def register_metric_cohort_goal_matcher(matcher: MetricCohortGoalMatcherFn) -> None:
+    """Register when a SessionGoal condition should use this vendor's cohort path."""
+    _metric_cohort_goal_matchers.append(matcher)
+
+
+def register_metric_cohort_unverified_detector(detector: MetricCohortUnverifiedFn) -> None:
+    """Register how this vendor detects an honest cohort-unverified refuse reply."""
+    _metric_cohort_unverified_detectors.append(detector)
+
+
+def metric_query_draft_for(
+    service_ids: tuple[str, ...],
+    *,
+    cohort_goal: bool = False,
+) -> str | None:
+    """Return the first registered draft matching ``service_ids``, or ``None``."""
+    for raw in service_ids:
+        key = str(raw or "").strip()
+        if not key:
+            continue
+        pair = _metric_query_drafts.get(key)
+        if pair is None:
+            continue
+        count_draft, cohort_draft = pair
+        if cohort_goal and cohort_draft is not None:
+            return cohort_draft
+        return count_draft
+    return None
+
+
+def metric_cohort_resolved_for(
+    service_ids: tuple[str, ...],
+    evidence: Any,
+    reply: str,
+) -> bool | None:
+    """Ask registered resolvers whether cohort identity is resolved.
+
+    Returns ``None`` when no opted-in source has a resolver (caller falls back
+    to reply-only signals). ``True``/``False`` from the first matching source.
+    """
+    for raw in service_ids:
+        key = str(raw or "").strip()
+        if not key:
+            continue
+        resolver = _metric_cohort_resolvers.get(key)
+        if resolver is not None:
+            return bool(resolver(evidence, reply))
+    return None
+
+
+def metric_goal_needs_cohort_identity(condition: str) -> bool:
+    """True when any registered vendor says this SessionGoal needs cohort identity."""
+    text = condition or ""
+    return any(matcher(text) for matcher in _metric_cohort_goal_matchers)
+
+
+def metric_reply_reports_cohort_unverified(reply: str) -> bool:
+    """True when any registered vendor says the reply left cohort identity open."""
+    text = reply or ""
+    return any(detector(text) for detector in _metric_cohort_unverified_detectors)
+
+
+def clear_metric_query_drafts() -> None:
+    _metric_query_drafts.clear()
+    _metric_cohort_resolvers.clear()
+    _metric_cohort_goal_matchers.clear()
+    _metric_cohort_unverified_detectors.clear()
+
+
+# ---------------------------------------------------------------------------
 # Test reset
 # ---------------------------------------------------------------------------
 
@@ -760,6 +885,7 @@ def reset_harness_ports() -> None:
     clear_gateway_persona_fragments()
     clear_message_context_prefix_strippers()
     clear_preferred_evidence_sources()
+    clear_metric_query_drafts()
     set_subprocess_presenter_factory(None)
     set_integration_setup_command(_default_integration_setup_command)
     set_setupable_integration_services(_default_setupable_services)

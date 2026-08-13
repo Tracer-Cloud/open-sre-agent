@@ -1,4 +1,4 @@
-"""Gather goal reviewer rejects discovery-only conclusions (S1 interactive)."""
+"""Gather goal reviewer rejects discovery-only conclusions."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def _obs(*, text: str = "draft HogQL…", evidence: int = 2) -> GoalObservation:
 
 
 def test_gather_discovery_only_rejected_even_when_llm_says_reached() -> None:
-    """Interactive S1: schema thrash + draft HogQL must not conclude gather."""
+    """Schema thrash + draft query must not conclude gather."""
     llm = _ScriptedLLM('{"verdict": "GOAL_REACHED"}')
     calls: list[tuple[str, dict[str, Any]]] = [
         ("list_posthog_tools", {"name_filter": "", "include_schema": True}),

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session_goal.confirm import build_session_goal_llm_evaluator
 from core.agent_harness.session_goal.evaluate import (
@@ -16,6 +18,16 @@ from core.agent_harness.session_goal.goal import (
 )
 from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from integrations.posthog_mcp.cohort_identity import register_posthog_mcp_cohort_identity
+from platform.harness_ports import clear_metric_query_drafts
+
+
+@pytest.fixture(autouse=True)
+def _register_posthog_cohort_identity() -> None:
+    clear_metric_query_drafts()
+    register_posthog_mcp_cohort_identity()
+    yield
+    clear_metric_query_drafts()
 
 
 def _result(
@@ -149,11 +161,11 @@ def test_goal_set_attach_turn_does_not_consume_outer_budget() -> None:
 
 
 def test_host_owned_tool_answer_without_achieved_tag_completes_same_turn() -> None:
-    """Parity S1 R7: live metric + tools must not force a second identical turn.
+    """Live metric + tools must not force a second identical turn.
 
     Models often omit ``session_goal:achieved`` (and the shell scrubs it from
     the visible reply). Host-owned goals previously stayed ACTIVE → continuation
-    nudge → duplicate PostHog count.
+    nudge → duplicate analytics count.
     """
     session = SessionCore()
     attach_session_goal(
@@ -278,7 +290,7 @@ def test_host_owned_without_tools_or_achieved_tag_stays_active() -> None:
 
 
 def test_host_owned_signup_unverified_refuse_achieves_without_gather() -> None:
-    """Parity S9: honest signup-unverified refuse must close the host goal."""
+    """Honest signup-unverified refuse must close the host goal."""
     session = SessionCore()
     attach_session_goal(
         session,
@@ -304,7 +316,7 @@ def test_host_owned_signup_unverified_refuse_achieves_without_gather() -> None:
 
 
 def test_host_owned_signup_refuse_after_gather_is_host_set_not_tool_evidence() -> None:
-    """Dogfood S9: live probes + unavailable retention must not use tool-evidence.
+    """Live probes + unavailable retention must not use tool-evidence.
 
     Tool-evidence achieves go through optional LLM confirm, which treats a
     refuse+draft as "retention % not reached" and leaves the goal active.

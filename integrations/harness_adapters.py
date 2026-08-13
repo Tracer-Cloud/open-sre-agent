@@ -198,19 +198,27 @@ def _register_gateway_persona() -> None:
 
 
 def _register_preferred_evidence_sources() -> None:
-    """Let vendor packages opt into ask kinds they can authoritatively answer.
+    """Let vendor packages opt into ask kinds and unformed-metric draft fences.
 
     No central default list — each integration registers itself. Skip a
-    vendor's ``register_*_evidence_sources`` call to stop treating it as
-    preferred (no L0 CTA for that id).
+    vendor's ``register_*`` call to stop treating it as preferred (no L0 CTA /
+    no dialect draft for that id).
     """
+    from integrations.grafana.metric_drafts import register_grafana_metric_drafts
     from integrations.posthog_mcp.evidence_sources import (
         register_posthog_mcp_evidence_sources,
     )
-    from platform.harness_ports import clear_preferred_evidence_sources
+    from integrations.posthog_mcp.metric_drafts import register_posthog_mcp_metric_drafts
+    from platform.harness_ports import (
+        clear_metric_query_drafts,
+        clear_preferred_evidence_sources,
+    )
 
     clear_preferred_evidence_sources()
+    clear_metric_query_drafts()
     register_posthog_mcp_evidence_sources()
+    register_posthog_mcp_metric_drafts()
+    register_grafana_metric_drafts()
 
 
 def _register_cli_llm_adapters() -> None:

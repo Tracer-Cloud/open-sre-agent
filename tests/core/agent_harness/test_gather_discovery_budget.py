@@ -1,4 +1,4 @@
-"""Gather discovery budget — block MCP schema thrash (S1 parity gap).
+"""Gather discovery budget — block MCP schema thrash.
 
 Live symptom (session e4b6f56b…): one Windows-users metric ask spent the
 gather turn on ``list_posthog_tools`` + many ``call_posthog_tool`` exec
@@ -44,8 +44,8 @@ def _ok() -> ToolExecutionResult:
     return ToolExecutionResult(content='{"ok": true}', is_error=False)
 
 
-def test_s1_style_discovery_burst_is_capped() -> None:
-    """Red on the S1 thrash pattern: > budget discovery calls in one gather turn."""
+def test_discovery_burst_is_capped() -> None:
+    """More than the budget of discovery calls in one gather turn is blocked."""
     hooks = with_gather_discovery_budget()
     assert hooks.before_tool_call is not None
     assert hooks.after_tool_call is not None
@@ -88,7 +88,7 @@ def test_s1_style_discovery_burst_is_capped() -> None:
         assert hooks.before_tool_call(req) is None
         hooks.after_tool_call(req, _ok())
 
-    # Next discovery call (S1 kept going to 10–15) must be blocked.
+    # Next discovery call after the budget must be blocked.
     overflow = _request(
         "call_posthog_tool",
         {

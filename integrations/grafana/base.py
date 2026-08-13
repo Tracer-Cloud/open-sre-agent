@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Client-side transport failures (host unreachable). Soft empty results after
 # these mislead gather: tools look successful and the circuit breaker never
-# marks Grafana, so SessionGoal turns re-pay connect timeouts (parity S4).
+# marks Grafana, so SessionGoal turns re-pay connect timeouts.
 _TRANSPORT_ERROR_MARKERS = (
     "connect timeout",
     "connecttimeouterror",

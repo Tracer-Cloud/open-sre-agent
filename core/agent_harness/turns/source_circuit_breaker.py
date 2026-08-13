@@ -5,7 +5,7 @@ loop: the first transport-level failure (connect timeout, connection refused)
 marks **that tool** unreachable for the rest of the gather run. When the host
 has never answered successfully this run, the **source** is marked too — sibling
 tools that share a dead Grafana/Kubernetes endpoint must not each re-pay the
-connect timeout (parity S4).
+connect timeout.
 
 A success for a tool is sticky for the run and clears the source mark: a
 concurrent connectivity failure that finishes after that success must not

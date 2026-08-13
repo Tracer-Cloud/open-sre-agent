@@ -168,7 +168,7 @@ def test_github_gather_prompt_routes_star_history_to_dedicated_tool() -> None:
 
 
 def test_posthog_gather_prompt_refuses_login_as_signup_stand_in() -> None:
-    """Parity S9: retention/signup must not treat user_signed_in as signup."""
+    """Retention/signup must not treat user_signed_in as signup."""
     from integrations.posthog.gather_prompt import posthog_gather_prompt_fragment
 
     prompt = posthog_gather_prompt_fragment()

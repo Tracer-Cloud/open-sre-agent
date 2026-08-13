@@ -105,7 +105,7 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
 
     When something is connected, the valid ``/integrations setup`` ids and
     preferred product-analytics coverage are named too, so a reply cannot
-    recommend an invented vendor over a ready one (parity S5: Mixpanel CTA
+    recommend an invented vendor over a ready one (e.g. naming Mixpanel
     while PostHog was already connected). An empty session gets neither: the
     id roster is several hundred characters of vendor names, and on a session
     with nothing connected it crowds out the user's actual question.

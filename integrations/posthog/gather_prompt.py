@@ -6,6 +6,8 @@ from ``integrations/harness_adapters.py``.
 
 from __future__ import annotations
 
+from integrations.posthog_mcp.cohort_identity import SIGNUP_EVENT_UNVERIFIED_MARK
+
 
 def posthog_gather_prompt_fragment() -> str:
     return (
@@ -25,8 +27,9 @@ def posthog_gather_prompt_fragment() -> str:
         "stand-in for signup. Confirm a real signup event from schema "
         "(e.g. user_signed_up, signed_up, signup) before counting or "
         "computing retention. If no signup event is verified, do not run a "
-        "count/retention query on a login event — stop with 'signup event "
-        "unverified' so the answer path can draft HogQL + one setup CTA."
+        "count/retention query on a login event — stop with "
+        f"'{SIGNUP_EVENT_UNVERIFIED_MARK}' so the answer path can draft "
+        "HogQL + one setup CTA."
     )
 
 

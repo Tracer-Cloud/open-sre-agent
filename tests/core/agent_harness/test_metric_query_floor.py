@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core.agent_harness.session_goal.goal import SessionGoal
 from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import EvidenceNeed, EvidenceTier
@@ -10,10 +12,22 @@ from core.agent_harness.turns.metric_query_floor import (
     apply_unformed_metric_floor,
     gather_formed_live_metric_query,
 )
-from core.agent_harness.turns.signup_identity import (
-    goal_condition_asks_signup_or_retention,
-    reply_reports_signup_unverified,
+from integrations.grafana.metric_drafts import register_grafana_metric_drafts
+from integrations.posthog_mcp.metric_drafts import register_posthog_mcp_metric_drafts
+from platform.harness_ports import (
+    clear_metric_query_drafts,
+    metric_goal_needs_cohort_identity,
+    metric_reply_reports_cohort_unverified,
 )
+
+
+@pytest.fixture(autouse=True)
+def _register_vendor_metric_drafts() -> None:
+    clear_metric_query_drafts()
+    register_posthog_mcp_metric_drafts()
+    register_grafana_metric_drafts()
+    yield
+    clear_metric_query_drafts()
 
 
 def _need(*, connected: tuple[str, ...] = ("posthog_mcp",)) -> EvidenceNeed:
@@ -70,7 +84,7 @@ def test_non_metric_fetch_does_not_count_as_live_metric_query() -> None:
 
 
 def test_unformed_floor_appends_draft_hogql_and_setup_slash() -> None:
-    """S2: connected PostHog, no count query → draft HogQL + one setup command."""
+    """Connected analytics, no count query → draft fence + one setup command."""
     observation = (
         "Tool: list_posthog_tools\nArguments: {}\nResult: []\n\n"
         "Tool: call_posthog_tool\n"
@@ -151,7 +165,7 @@ def test_grafana_unformed_floor_uses_promql() -> None:
 
 
 def test_signup_goal_unverified_after_live_probes_gets_draft_without_reconnect() -> None:
-    """S9: connected PostHog ran candidate queries; signup still unresolved → draft only."""
+    """Connected analytics ran candidate queries; signup still unresolved → draft only."""
     observation = (
         "Tool: call_posthog_tool\n"
         'Arguments: {"tool_name": "execute-sql", '
@@ -180,8 +194,8 @@ def test_signup_goal_unverified_after_live_probes_gets_draft_without_reconnect()
             )
         },
     )()
-    assert goal_condition_asks_signup_or_retention(session.session_goal.condition)
-    assert reply_reports_signup_unverified(reply)
+    assert metric_goal_needs_cohort_identity(session.session_goal.condition)
+    assert metric_reply_reports_cohort_unverified(reply)
     text = apply_unformed_metric_floor(
         reply,
         _need(connected=("posthog_mcp",)),

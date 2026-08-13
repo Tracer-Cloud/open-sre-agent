@@ -1,8 +1,8 @@
 """Connect timeouts must not look like empty Grafana success.
 
-Parity S4: alert-rules / annotations previously logged ConnectTimeout then
-returned ``[]``, so SourceCircuitBreaker saw ``is_error=False`` and never
-marked Grafana — SessionGoal turn 1 re-paid the same 10s timeouts.
+alert-rules / annotations previously logged ConnectTimeout then returned
+``[]``, so SourceCircuitBreaker saw ``is_error=False`` and never marked
+Grafana — the next SessionGoal turn re-paid the same connect timeouts.
 """
 
 from __future__ import annotations

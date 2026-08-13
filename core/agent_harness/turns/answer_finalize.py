@@ -149,9 +149,9 @@ def finalize_routed_answer(
     text = response_text
     if should_suppress_investigation_offer(evidence_need) or should_skip_gather(evidence_need):
         text = append_upgrade_cta(session, text, evidence_need)
-    # Metric gather that never ran a live query still gets a draft HogQL/PromQL
-    # block and one setup slash (parity S2). Signup/retention SessionGoals that
-    # leave signup identity unresolved still get a draft fence (parity S9).
+    # Metric gather that never ran a live query still gets a vendor draft
+    # block and one setup slash. Cohort SessionGoals that leave identity
+    # unresolved (vendor-registered) still get a draft fence.
     text = apply_unformed_metric_floor(
         text,
         evidence_need,

@@ -172,7 +172,7 @@ class _LLMGoalReviewer:
     # gather loop has no user to ask mid-pass, so its reviewer keeps going.
     skip_on_question: bool = True
     # Gather only: args-aware tap so discovery-only stops are rejected without
-    # waiting for the LLM (which previously treated draft HogQL as reached).
+    # waiting for the LLM (which previously treated a draft query as reached).
     executed_tool_calls: list[ExecutedToolCall] = field(default_factory=list)
     reject_discovery_only: bool = False
     reviews_remaining: int = field(default=_MAX_GOAL_REVIEWS)
@@ -261,7 +261,7 @@ def build_gather_goal_reviewer(
 
     ``executed_tool_calls`` is the shared list a :func:`tap_executed_tool_calls`
     wrapper fills; discovery-only turns are rejected deterministically before
-    the LLM review (draft HogQL after schema thrash must not count as reached).
+    the LLM review (a draft query after schema thrash must not count as reached).
     """
     calls = executed_tool_calls if executed_tool_calls is not None else []
     return Goal(

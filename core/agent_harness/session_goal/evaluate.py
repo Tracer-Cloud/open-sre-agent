@@ -20,14 +20,14 @@ claim, not proof. This module is the independent host check:
 * Host-owned goal, **no** ``achieved`` tag, but tools succeeded (action **or**
   gather) and the reply is non-empty → achieve (same-turn answer). Waiting for
   a scrubbed/forgotten tag forced a redundant outer turn that repeated the
-  live answer (parity S1 R7). Gather successes count: metric handoffs often
-  leave action ``executed_success_count`` at 0. Final-route identity alone
+  live answer. Gather successes count: metric handoffs often leave action
+  ``executed_success_count`` at 0. Final-route identity alone
   (``cli_agent_fallback`` / summarize) is not evidence — unsupported fallbacks
   must not close the goal.
-* Host-owned signup / retention goal whose reply reports signup unverified
-  (honest refuse + draft path) → achieve without requiring gather successes
-  (parity S9). Models often stop before a count query; staying ACTIVE forced
-  a redundant outer turn.
+* Host-owned goal whose reply reports cohort identity unverified (vendor-
+  registered refuse + draft path) → achieve without requiring gather
+  successes. Models often stop before a count query; staying ACTIVE forced a
+  redundant outer turn.
 * ``achieved`` with no checklist on a handoff goal → require tool evidence, or
   stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
@@ -48,9 +48,9 @@ from core.agent_harness.session_goal.goal import (
     attach_session_goal,
 )
 from core.agent_harness.session_goal.progress import is_session_goal_progress_paint
-from core.agent_harness.turns.signup_identity import (
-    goal_condition_asks_signup_or_retention,
-    reply_reports_signup_unverified,
+from platform.harness_ports import (
+    metric_goal_needs_cohort_identity,
+    metric_reply_reports_cohort_unverified,
 )
 
 # Standalone progress tag — same token shape as strip_session_goal_progress_tags.
@@ -259,13 +259,13 @@ def evaluate_session_goal(
             and not dispatched
             and bool(text.strip())
             and not is_session_goal_progress_paint(text)
-            and goal_condition_asks_signup_or_retention(current.condition)
-            and reply_reports_signup_unverified(text)
+            and metric_goal_needs_cohort_identity(current.condition)
+            and metric_reply_reports_cohort_unverified(text)
         ):
-            # Honest refuse on an attached signup/retention /goal: identity was
-            # the deliverable (condition allows draft when live % is impossible).
+            # Honest refuse on an attached cohort /goal: identity was the
+            # deliverable (condition allows draft when a live % is impossible).
             # Prefer this over ACHIEVED_TOOL_EVIDENCE so optional LLM confirm
-            # cannot veto a correct refuse+draft as "retention % not reached".
+            # cannot veto a correct refuse+draft as "metric not reached".
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACHIEVED,
                 reason=SessionGoalReason.ACHIEVED_HOST_SET,

@@ -371,7 +371,7 @@ def _gather_and_answer(
     gathered = coerce_gathered_evidence(gathered_raw)
 
     # L1 → L0_degraded when gather shows preferred-source config/auth failure
-    # (typed tool_unavailable envelopes; not HogQL / empty-result noise).
+    # (typed tool_unavailable envelopes; not empty-query / empty-result noise).
     # Refresh the handoff tag so the answer path gets reconnect guidance.
     answer_handoffs = handoff_contents
     if evidence_need is not None and not skip_gather:

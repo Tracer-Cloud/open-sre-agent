@@ -54,7 +54,7 @@ def test_a_caller_supplied_boot_step_is_kept(monkeypatch: Any) -> None:
 
 
 def test_embedded_session_boots_adapters_so_integrations_resolve() -> None:
-    """The embedded entry must boot adapters (parity S1/S4).
+    """The embedded entry must boot adapters.
 
     Without them chat claims every vendor is disconnected. ``core`` may not
     import ``bootstrap``, so ``AgentSession.start`` cannot supply the step —

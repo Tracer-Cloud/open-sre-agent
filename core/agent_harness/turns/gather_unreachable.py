@@ -2,7 +2,7 @@
 
 ``SourceCircuitBreaker`` is per gather run. Each SessionGoal continuation
 starts a new gather, so without a session carry the model re-pays connect
-timeouts on the same dead Grafana/Kubernetes hosts (parity S4 turn 1).
+timeouts on the same dead Grafana/Kubernetes hosts on the next turn.
 
 Stores are on ``SessionCore.gather_unreachable_{tools,sources}`` for the
 process lifetime of that session — enough for ``run_until_session_goal``

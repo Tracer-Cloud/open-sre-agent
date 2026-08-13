@@ -209,7 +209,7 @@ def test_connected_source_hogql_failure_gathers_without_cta() -> None:
 
 
 def test_connected_source_without_a_live_query_still_drafts_hogql_and_setup() -> None:
-    """S2: PostHog connected, only schema/list probes — draft HogQL + setup, then stop."""
+    """Analytics connected, only schema/list probes — draft + setup, then stop."""
     session = Session()
     session.resolved_integrations_cache = {"posthog_mcp": {"configured": True}}
     answer_handoffs: list[tuple[str, ...]] = []

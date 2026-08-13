@@ -523,14 +523,17 @@ def test_l0_degraded_guidance_structures_a_useful_local_close() -> None:
 
 def test_metric_unformed_guidance_requires_draft_query_and_setup_slash() -> None:
     block = build_handoff_guidance_block(("evidence_tier:metric_unformed",))
-    assert "HogQL" in block
-    assert "PromQL" in block
+    assert "draft" in block.lower()
+    assert (
+        "fenced code block" in block.lower() or "```" in block or "query language" in block.lower()
+    )
     assert "/integrations setup" in block
     assert "Want me to" in block
     assert "invent" in block.lower()
-    # Parity S9: do not publish retention from login stand-ins.
-    assert "user_signed_in" in block
-    assert "signup" in block.lower()
+    # Vendor-specific signup/login rules live in PostHog prompt fragments.
+    assert "user_signed_in" not in block
+    assert "HogQL" not in block
+    assert "PromQL" not in block
 
 
 def test_l0_degraded_config_guidance_is_distinct_from_missing_source() -> None:
