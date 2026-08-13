@@ -117,7 +117,15 @@ class YandexMonitoringClient:
             "toTime": end,
             "downsampling": {
                 "gridAggregation": grid_aggregation,
+                # Gaps stay gaps. Yandex also offers PREVIOUS, which carries the
+                # last value forward — a service that stopped reporting would
+                # then read as a flat healthy line, which is the opposite of what
+                # an investigation needs to see. NONE drops the points entirely,
+                # which hides the outage just as effectively.
                 "gapFilling": "NULL",
+                # maxPoints, gridInterval and disabled are mutually exclusive in
+                # the API; a point budget is the one that keeps a long window
+                # from flooding the prompt.
                 "maxPoints": str(max(1, max_points)),
             },
         }

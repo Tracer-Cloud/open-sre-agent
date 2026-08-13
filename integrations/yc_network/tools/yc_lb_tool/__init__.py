@@ -32,11 +32,12 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     return yc_credentials(sources)
 
 
-def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str]:
-    """Return network load balancers with the health of each of their targets."""
+def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str, str]:
+    """Return network load balancers, an error, and the token for any further page."""
     listed = client.get(_NLB_SERVICE, _NLB_PATH, {"folderId": client.folder_id})
     if not listed.get("success"):
-        return [], str(listed.get("error", ""))
+        return [], str(listed.get("error", "")), ""
+    more = str((listed.get("metadata") or {}).get("next_page_token", ""))
 
     balancers: list[dict[str, Any]] = []
     for balancer in (listed.get("data") or {}).get("loadBalancers") or []:
@@ -68,7 +69,7 @@ def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]],
                 else str(states.get("error", "")),
             }
         )
-    return balancers, ""
+    return balancers, "", more
 
 
 def _first_target_group(balancer: dict[str, Any]) -> str:
@@ -76,11 +77,12 @@ def _first_target_group(balancer: dict[str, Any]) -> str:
     return str(attachments[0].get("targetGroupId", "")) if attachments else ""
 
 
-def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str]:
-    """Return application load balancers with their backend-group health."""
+def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str, str]:
+    """Return application load balancers, an error, and the token for any further page."""
     listed = client.get(_ALB_SERVICE, _ALB_PATH, {"folderId": client.folder_id})
     if not listed.get("success"):
-        return [], str(listed.get("error", ""))
+        return [], str(listed.get("error", "")), ""
+    more = str((listed.get("metadata") or {}).get("next_page_token", ""))
 
     balancers: list[dict[str, Any]] = []
     for balancer in (listed.get("data") or {}).get("loadBalancers") or []:
@@ -99,7 +101,7 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
                 else str(states.get("error", "")),
             }
         )
-    return balancers, ""
+    return balancers, "", more
 
 
 @tool(
@@ -158,18 +160,26 @@ def get_yc_lb_health(
     wanted = type.strip().lower()
     balancers: list[dict[str, Any]] = []
     errors: list[str] = []
+    # A folder with more balancers than one page holds would otherwise lose the
+    # rest without a word, and "no unhealthy targets" is exactly the answer that
+    # must never be a guess.
+    incomplete: list[str] = []
 
     if wanted in ("", TYPE_NETWORK):
-        found, error = _network_balancers(client)
+        found, error, more = _network_balancers(client)
         balancers.extend(found)
         if error:
             errors.append(f"network: {error}")
+        if more:
+            incomplete.append(TYPE_NETWORK)
 
     if wanted in ("", TYPE_APPLICATION):
-        found, error = _application_balancers(client)
+        found, error, more = _application_balancers(client)
         balancers.extend(found)
         if error:
             errors.append(f"application: {error}")
+        if more:
+            incomplete.append(TYPE_APPLICATION)
 
     unhealthy = [
         {"balancer": balancer["name"], **target}
@@ -185,11 +195,19 @@ def get_yc_lb_health(
         "unhealthy_targets": unhealthy,
         "count": len(balancers),
     }
+    if incomplete:
+        result["complete"] = False
+        result["note"] = (
+            f"More {' and '.join(incomplete)} balancers exist than this page holds, so "
+            "an absent target is not evidence of a healthy one. Narrow the read with "
+            "type, or list the rest with execute_yc_operation."
+        )
     if errors and not balancers:
         result["available"] = False
         result["error"] = "; ".join(errors)
     elif errors:
-        result["note"] = "Partial results: " + "; ".join(errors)
+        partial = "Partial results: " + "; ".join(errors)
+        result["note"] = f"{result['note']} {partial}" if incomplete else partial
     return result
 
 

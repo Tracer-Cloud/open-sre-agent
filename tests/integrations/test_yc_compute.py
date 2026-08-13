@@ -143,3 +143,49 @@ class TestCompute:
 
         assert result["available"] is False
         assert "list_yc_instances" in result["error"]
+
+
+class TestAFilteredPageSaysSoWhenMorePagesExist:
+    """Yandex filters names by equality only, so the fragment match is local.
+
+    An empty result then means "not on this page", which reads as "no such
+    instance" unless the tool says otherwise.
+    """
+
+    def test_a_filtered_read_with_more_pages_warns(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/compute/v1/instances": {
+                        "instances": [
+                            {"id": "a", "name": "db-1", "status": "RUNNING"},
+                        ],
+                        "nextPageToken": "page-2",
+                    }
+                }
+            ),
+        )
+
+        result = list_yc_instances(name_filter="web", **_CREDENTIALS)
+
+        assert result["count"] == 0
+        assert "page_token" in result["note"]
+
+    def test_a_filtered_read_on_the_last_page_is_quiet(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/compute/v1/instances": {
+                        "instances": [{"id": "a", "name": "db-1", "status": "RUNNING"}]
+                    }
+                }
+            ),
+        )
+
+        result = list_yc_instances(name_filter="web", **_CREDENTIALS)
+
+        assert "note" not in result

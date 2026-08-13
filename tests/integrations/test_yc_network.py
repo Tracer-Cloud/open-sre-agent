@@ -80,3 +80,46 @@ class TestLoadBalancers:
         get_yc_lb_health(type="application", **_CREDENTIALS)
 
         assert all("apploadbalancer" in url for url in seen)
+
+
+class TestAnIncompleteListSaysSo:
+    """ "No unhealthy targets" must never be the answer to a truncated read."""
+
+    def test_a_further_page_is_reported_rather_than_dropped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/load-balancer/v1/networkLoadBalancers": {
+                        "loadBalancers": [
+                            {"id": "nlb-1", "name": "edge", "status": "ACTIVE"},
+                        ],
+                        "nextPageToken": "page-2",
+                    },
+                    "/apploadbalancer/v1/loadBalancers": {"loadBalancers": []},
+                }
+            ),
+        )
+
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert result["complete"] is False
+        assert "execute_yc_operation" in result["note"]
+
+    def test_a_single_page_is_not_flagged(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            _responder(
+                {
+                    "/load-balancer/v1/networkLoadBalancers": {"loadBalancers": []},
+                    "/apploadbalancer/v1/loadBalancers": {"loadBalancers": []},
+                }
+            ),
+        )
+
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert "complete" not in result
+        assert "note" not in result

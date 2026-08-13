@@ -131,18 +131,29 @@ def list_yc_instances(
 
     raw = (response.get("data") or {}).get("instances") or []
     instances = [_summarize(instance) for instance in raw]
+    # Yandex's own filter matches a name exactly (=, !=, IN, NOT IN — no
+    # substring), so narrowing by a fragment has to happen here. That makes the
+    # filter local to this page: on a later page a match would go unseen.
     needle = name_filter.strip().lower()
     if needle:
         instances = [item for item in instances if needle in str(item["name"]).lower()]
 
-    return {
+    next_page_token = response.get("metadata", {}).get("next_page_token", "")
+    result: dict[str, Any] = {
         "source": SOURCE,
         "available": True,
         "instances": instances,
         "unhealthy": [item for item in instances if item["status"] in _UNHEALTHY_STATUSES],
         "count": len(instances),
-        "next_page_token": response.get("metadata", {}).get("next_page_token", ""),
+        "next_page_token": next_page_token,
     }
+    if needle and next_page_token:
+        result["note"] = (
+            f"'{name_filter}' was matched against this page only, and further pages "
+            "exist. Pass page_token to keep looking before concluding no instance "
+            "matches."
+        )
+    return result
 
 
 @tool(
