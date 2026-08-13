@@ -34,23 +34,33 @@ def _marker_path() -> Path:
 def _candidate_env_vars() -> tuple[str, ...]:
     """Secret names an earlier version could have written to the keychain.
 
-    Includes LLM provider API keys and integration secret env constants that
-    share the same keyring service (Telegram, Slack, Sentry, …).
+    Includes LLM provider API keys and every sensitive ``*_ENV`` string under
+    :mod:`config.constants` submodules (Telegram, Slack, Discord, Airflow, …).
 
-    Reads API key names from :mod:`config.constants.llm` (a leaf) — never from
-    ``config.llm_auth``, which would import ``config.secrets.store`` and cycle.
+    Scans each ``config.constants.*`` module rather than only the package
+    ``__init__`` barrel — several integration constant modules are not
+    re-exported there, and relying on ``dir(config.constants)`` left those
+    keychain copies unmigrated. Never imports ``config.llm_auth`` or
+    ``integrations`` (both pull ``config.secrets.store`` and would cycle).
     """
-    import config.constants as constants
+    import importlib
+    import pkgutil
+
+    import config.constants as constants_pkg
     from config.constants.llm import OPEN_SRE_API_KEY_ENV_NAMES
     from config.env_key_sensitivity import is_sensitive_env_key
 
     names: list[str] = list(OPEN_SRE_API_KEY_ENV_NAMES)
-    for attr in dir(constants):
-        if attr != "POSTHOG_CAPTURE_API_KEY" and not attr.endswith("_ENV"):
+    for module_info in pkgutil.iter_modules(constants_pkg.__path__):
+        if module_info.name.startswith("_"):
             continue
-        value = getattr(constants, attr, None)
-        if isinstance(value, str) and value and is_sensitive_env_key(value):
-            names.append(value)
+        module = importlib.import_module(f"config.constants.{module_info.name}")
+        for attr in dir(module):
+            if attr != "POSTHOG_CAPTURE_API_KEY" and not attr.endswith("_ENV"):
+                continue
+            value = getattr(module, attr, None)
+            if isinstance(value, str) and value and is_sensitive_env_key(value):
+                names.append(value)
     # Deduplicate, stable order so the approval sequence is reproducible.
     return tuple(dict.fromkeys(names))
 

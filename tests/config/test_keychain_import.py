@@ -60,23 +60,39 @@ def test_existing_keychain_secrets_move_into_the_local_file(
 
 
 def test_integration_secrets_are_migrated(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Telegram / Slack tokens share the keyring service and must move too."""
+    """Integration secrets share the keyring service and must move too.
+
+    Covers barrel-exported names (Telegram/Slack), constants that live only in
+    a constants submodule (Discord), and catalog string-literal secrets
+    (Airflow/Trello) registered under ``config.constants.integration_secrets``.
+    """
     deleted = _install_keychain(
         monkeypatch,
         {
             "TELEGRAM_BOT_TOKEN": "111:telegram",
             "SLACK_BOT_TOKEN": "xoxb-slack",
+            "DISCORD_BOT_TOKEN": "discord-bot",
+            "AIRFLOW_PASSWORD": "airflow-secret",
+            "TRELLO_TOKEN": "trello-token",
+            "GITLAB_ACCESS_TOKEN": "glpat-live",
+            "DD_API_KEY": "dd-api",
         },
     )
 
     imported = keychain_import.import_keychain_secrets_once()
 
-    assert "TELEGRAM_BOT_TOKEN" in imported
-    assert "SLACK_BOT_TOKEN" in imported
-    assert local_file.get("TELEGRAM_BOT_TOKEN") == "111:telegram"
-    assert local_file.get("SLACK_BOT_TOKEN") == "xoxb-slack"
-    assert "TELEGRAM_BOT_TOKEN" in deleted
-    assert "SLACK_BOT_TOKEN" in deleted
+    for name, value in (
+        ("TELEGRAM_BOT_TOKEN", "111:telegram"),
+        ("SLACK_BOT_TOKEN", "xoxb-slack"),
+        ("DISCORD_BOT_TOKEN", "discord-bot"),
+        ("AIRFLOW_PASSWORD", "airflow-secret"),
+        ("TRELLO_TOKEN", "trello-token"),
+        ("GITLAB_ACCESS_TOKEN", "glpat-live"),
+        ("DD_API_KEY", "dd-api"),
+    ):
+        assert name in imported
+        assert local_file.get(name) == value
+        assert name in deleted
 
 
 def test_the_import_runs_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
