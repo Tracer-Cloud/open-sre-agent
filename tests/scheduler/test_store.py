@@ -323,3 +323,27 @@ class TestStoreSurvivesTornWrites:
         # Assert
         assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
         assert len(list(store_path.parent.glob(f"{store_path.name}.corrupt-*"))) == 1
+
+    def test_two_corruptions_in_one_second_keep_both_recovery_copies(
+        self, store_path: Path
+    ) -> None:
+        # Arrange: freeze the clock so both quarantines derive the same second.
+        # A name built from the timestamp alone would collide here, and the
+        # os.replace would erase the first casualty — the exact loss this
+        # function exists to prevent, one level up.
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("platform.scheduler.store.time.time", lambda: 1_700_000_000.0)
+
+            # Act
+            store_path.write_text("first torn write", encoding="utf-8")
+            add_task(self._digest(7), store_path)
+            store_path.write_text("second torn write", encoding="utf-8")
+            add_task(self._digest(8), store_path)
+
+        # Assert
+        quarantined = sorted(store_path.parent.glob(f"{store_path.name}.corrupt-*"))
+        assert len(quarantined) == 2
+        assert {path.read_text(encoding="utf-8") for path in quarantined} == {
+            "first torn write",
+            "second torn write",
+        }

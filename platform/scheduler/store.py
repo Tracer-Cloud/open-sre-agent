@@ -59,11 +59,19 @@ def _load_raw(store_path: Path) -> list[dict[str, object]]:
 def _quarantine_unreadable(store_path: Path) -> None:
     """Move an unparseable store aside so a write cannot destroy it.
 
-    Named with a timestamp rather than a fixed suffix so a second corruption
-    does not overwrite the first casualty.
+    The name carries a timestamp for the operator and a unique suffix for
+    correctness. ``mkstemp`` reserves the destination atomically, so two
+    corruptions inside the same second cannot land on one name and overwrite
+    the first casualty — which would recreate the bug this function exists to
+    prevent.
     """
-    aside = store_path.with_name(f"{store_path.name}.corrupt-{int(time.time())}")
     try:
+        fd, aside_str = tempfile.mkstemp(
+            dir=store_path.parent,
+            prefix=f"{store_path.name}.corrupt-{int(time.time())}-",
+        )
+        os.close(fd)
+        aside = Path(aside_str)
         os.replace(store_path, aside)
     except OSError:
         logger.error(
