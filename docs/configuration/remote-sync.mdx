@@ -357,6 +357,16 @@ export AWS_SECRET_ACCESS_KEY=minioadmin
 
 For Cloudflare R2 or DigitalOcean Spaces, set `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` to your account endpoint (e.g., `https://<account_id>.r2.cloudflarestorage.com` or `https://<region>.digitaloceanspaces.com`).
 
+The endpoint can also be kept in `~/.opensre/config.yml`, the same way `bucket` is, so it survives across shells and machines without re-exporting the variable every time:
+
+```yaml
+remote_sync:
+  enabled: true
+  provider: s3compat
+  bucket: my-minio-bucket
+  endpoint_url: http://localhost:9000
+```
+
 ## The store
 
 <Warning>

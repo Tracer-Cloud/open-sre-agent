@@ -5,6 +5,7 @@ Follows TDD and AAA (Arrange -> Act -> Assert) structure without live cloud call
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -123,6 +124,31 @@ def test_s3compat_resolves_endpoint_url_from_env(monkeypatch: pytest.MonkeyPatch
 
     # Assert
     assert store._endpoint_url == "https://r2.cloudflare.com"
+
+
+def test_s3compat_resolves_endpoint_url_from_stored_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``config.yml``-persisted endpoint keeps working without a shell export."""
+    # Arrange
+    from config.constants import paths
+    from config.local_settings import update_section
+
+    monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path)
+    monkeypatch.delenv(REMOTE_SYNC_ENDPOINT_URL_ENV, raising=False)
+    monkeypatch.delenv("AWS_ENDPOINT_URL_S3", raising=False)
+    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
+    update_section(
+        "remote_sync",
+        {"enabled": True, "bucket": "my-minio-bucket", "endpoint_url": "http://localhost:9000"},
+    )
+    config = RemoteSyncConfig(bucket="my-minio-bucket", provider="s3compat", prefix="opensre")
+
+    # Act
+    store = S3CompatObjectStore(config, client=_FakeS3Client("http://localhost:9000"))
+
+    # Assert
+    assert store._endpoint_url == "http://localhost:9000"
 
 
 def test_s3compat_list_objects_error_raises_remote_sync_unavailable() -> None:
