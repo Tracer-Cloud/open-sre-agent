@@ -220,3 +220,23 @@ class TestApplicationTargetsReachAggregation:
         result = get_yc_lb_health(**_CREDENTIALS)
 
         assert result["unhealthy_targets"][0]["balancer"] == "alb-1"
+
+    def test_a_grpc_route_backend_is_walked_too(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A route is HTTP or gRPC; reading only HTTP hides gRPC targets."""
+        routes = dict(_ALB_ROUTES)
+        routes["/apploadbalancer/v1/httpRouters/router-1/virtualHosts"] = {
+            "virtualHosts": [{"routes": [{"grpc": {"route": {"backendGroupId": "bg-1"}}}]}]
+        }
+
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            for fragment, payload in routes.items():
+                if fragment in url:
+                    return httpx.Response(200, json=payload)
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"])

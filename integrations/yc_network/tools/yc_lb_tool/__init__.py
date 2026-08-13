@@ -109,15 +109,20 @@ def _alb_router_ids(balancer: dict[str, Any]) -> list[str]:
 
 
 def _alb_backend_group_ids(client: YandexCloudClient, router_ids: list[str]) -> list[str]:
-    """Return the backend groups the balancer's routes point at."""
+    """Return the backend groups the balancer's routes point at.
+
+    A route is either HTTP or gRPC, and each names its backend group under its
+    own key. Reading only the HTTP form leaves a gRPC route's targets unchecked.
+    """
     ids: list[str] = []
     for router_id in router_ids:
         resp = client.get(_ALB_SERVICE, f"{_ALB_HTTP_ROUTER_PATH}/{router_id}/virtualHosts")
         for vhost in (resp.get("data") or {}).get("virtualHosts") or []:
             for route in vhost.get("routes") or []:
-                backend_group = (route.get("http") or {}).get("route", {}).get("backendGroupId")
-                if backend_group:
-                    ids.append(backend_group)
+                for proto in ("http", "grpc"):
+                    backend_group = (route.get(proto) or {}).get("route", {}).get("backendGroupId")
+                    if backend_group:
+                        ids.append(backend_group)
     return sorted(set(ids))
 
 
