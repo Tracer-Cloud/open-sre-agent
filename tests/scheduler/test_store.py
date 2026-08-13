@@ -242,3 +242,37 @@ class TestAddTaskDeduplicates:
 
         # Assert
         assert len(list_tasks(store_path)) == 2
+
+
+class TestStoreSurvivesTornWrites:
+    """A crash mid-write, or a store that will not parse, must not lose tasks."""
+
+    @staticmethod
+    def _digest(hour: int) -> ScheduledTask:
+        return ScheduledTask(
+            name=f"digest-{hour}",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron=f"0 {hour} * * *",
+            provider=Provider.TELEGRAM,
+            chat_id="-100",
+        )
+
+    def test_save_never_truncates_the_live_file(self, store_path: Path) -> None:
+        # Arrange: a store with tasks already in it.
+        add_task(self._digest(7), store_path)
+        before = store_path.read_text(encoding="utf-8")
+
+        # Act: fail the write after the temp file exists but before the rename.
+        # A truncating writer would have already destroyed `before` by now.
+        def _explode(_src: object, _dst: object) -> None:
+            raise OSError("crash during rename")
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("platform.scheduler.store.os.replace", _explode)
+            with pytest.raises(OSError):
+                add_task(self._digest(8), store_path)
+
+        # Assert: the previous list is intact and no debris is left behind.
+        assert store_path.read_text(encoding="utf-8") == before
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+        assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []

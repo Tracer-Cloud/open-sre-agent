@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -42,9 +45,30 @@ def _load_raw(store_path: Path) -> list[dict[str, object]]:
 
 
 def _save_raw(store_path: Path, data: list[dict[str, object]]) -> None:
-    """Persist task list to disk."""
+    """Persist the task list by atomic rename.
+
+    ``Path.write_text`` truncates before rewriting, so a crash inside that
+    window leaves a half-written file that no longer parses. Every other local
+    store in the repo writes through a temp file in the destination directory,
+    fsyncs, then ``os.replace``; see ``integrations/store.py::_atomic_write``
+    and the convention stated in ``platform/filestorage/__init__.py``.
+    """
     store_path.parent.mkdir(parents=True, exist_ok=True)
-    store_path.write_text(json.dumps(data, indent=2, default=str) + "\n", encoding="utf-8")
+    serialized = json.dumps(data, indent=2, default=str) + "\n"
+    tmp_path: str | None = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=store_path.parent, prefix=store_path.name + ".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(serialized)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # os.replace is atomic on POSIX and Windows.
+        os.replace(tmp_path, store_path)
+    except Exception:
+        if tmp_path:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_path)
+        raise
 
 
 def list_tasks(store_path: Path | None = None) -> list[ScheduledTask]:
