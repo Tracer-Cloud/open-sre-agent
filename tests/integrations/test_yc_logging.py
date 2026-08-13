@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -203,6 +204,6 @@ class TestTheInstallHintIsRealisable:
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = list_yc_log_groups(**_CREDENTIALS)
 
-        assert "logging.api.cloud.yandex.net" in captured["url"]
+        assert urlparse(captured["url"]).hostname == "logging.api.cloud.yandex.net"
         assert result["count"] == 1
         assert result["log_groups"][0]["id"] == "e23abc"

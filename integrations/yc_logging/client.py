@@ -14,7 +14,6 @@ investigation under that on its own rather than discovering it through 429s.
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -24,8 +23,6 @@ from integrations.yandex_cloud.auth import YandexCloudAuth
 from integrations.yandex_cloud.config import YandexCloudIntegrationConfig
 from integrations.yandex_cloud.endpoints import resolve_endpoint
 from integrations.yandex_cloud.rest_client import YandexCloudClient, sanitize
-
-logger = logging.getLogger(__name__)
 
 MANAGEMENT_SERVICE: Final = "logging"
 READER_SERVICE: Final = "log-reading"
@@ -47,7 +44,10 @@ _READ_TIMEOUT_SECONDS: Final = 30.0
 LEVELS: Final[tuple[str, ...]] = ("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL")
 
 _rate_lock = threading.Lock()
-_last_read_at = 0.0
+# The last-read timestamp lives on a mutable object rather than a bare module
+# global: its value is consumed on the next call, not within _throttle, and a
+# reassigned module global reads to static analysis as written-but-never-used.
+_throttle_state = {"last_read_at": 0.0}
 
 
 class LogReadingUnavailableError(RuntimeError):
@@ -56,12 +56,11 @@ class LogReadingUnavailableError(RuntimeError):
 
 def _throttle() -> None:
     """Space reads out so a burst of tool calls stays under the rate limit."""
-    global _last_read_at
     with _rate_lock:
-        wait = _MIN_SECONDS_BETWEEN_READS - (time.monotonic() - _last_read_at)
+        wait = _MIN_SECONDS_BETWEEN_READS - (time.monotonic() - _throttle_state["last_read_at"])
         if wait > 0:
             time.sleep(wait)
-        _last_read_at = time.monotonic()
+        _throttle_state["last_read_at"] = time.monotonic()
 
 
 def resolve_window(since: str, until: str, window_minutes: int) -> tuple[datetime, datetime]:
