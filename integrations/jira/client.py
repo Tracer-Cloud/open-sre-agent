@@ -297,5 +297,6 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to create Jira client: %s", exc, exc_info=True)
         return None

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -107,6 +109,30 @@ def test_make_jira_client_returns_client() -> None:
     )
     assert client is not None
     assert isinstance(client, JiraClient)
+
+
+def _raise_runtime_error(**_kwargs: Any) -> None:
+    raise RuntimeError("construction failure")
+
+
+def test_make_jira_client_logs_soft_fail_on_construction_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange: force config construction inside the factory to raise, exercising
+    # the soft-fail `except Exception` path. The factory must still return None,
+    # but must no longer swallow the exception silently.
+    monkeypatch.setattr("integrations.jira.client.JiraIntegrationConfig", _raise_runtime_error)
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger="integrations.jira.client"):
+        result = make_jira_client("https://myteam.atlassian.net", "user@example.com", "token")
+
+    # Assert
+    assert result is None
+    assert any(
+        record.levelno == logging.WARNING and record.exc_info is not None
+        for record in caplog.records
+    ), caplog.text
 
 
 def test_make_jira_client_returns_none_missing_url() -> None:
