@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import httpx
@@ -53,6 +54,30 @@ def test_make_argocd_client_requires_base_url_and_auth() -> None:
         make_argocd_client("https://argocd.example.com", username="admin", password="pw")
         is not None
     )
+
+
+def _raise_runtime_error(**_kwargs: Any) -> None:
+    raise RuntimeError("construction failure")
+
+
+def test_make_argocd_client_logs_soft_fail_on_construction_error(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange: force config construction inside the factory to raise, exercising
+    # the soft-fail `except Exception` path. The factory must still return None,
+    # but must no longer swallow the exception silently.
+    monkeypatch.setattr("integrations.argocd.client.ArgoCDConfig", _raise_runtime_error)
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger="integrations.argocd.client"):
+        result = make_argocd_client("https://argocd.example.com", bearer_token="tok")
+
+    # Assert
+    assert result is None
+    assert any(
+        record.levelno == logging.WARNING and record.exc_info is not None
+        for record in caplog.records
+    ), caplog.text
 
 
 def test_probe_access_success(monkeypatch: pytest.MonkeyPatch) -> None:
