@@ -28,8 +28,6 @@ type JsonScalar = str | bool | int | float
 type JsonValue = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 type Properties = dict[str, JsonValue]
 
-from enum import StrEnum
-
 
 class UsageSurface(StrEnum):
     CLI = "cli"
