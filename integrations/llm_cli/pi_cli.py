@@ -150,6 +150,7 @@ class PiAdapter:
     """Non-interactive Pi CLI (``pi -p``, print mode, no TTY)."""
 
     name = "pi"
+    streams_plain_stdout = True
     binary_env_key = "PI_BIN"
     install_hint = "npm i -g @earendil-works/pi-coding-agent"
     auth_hint = _AUTH_HINT.removesuffix(".")

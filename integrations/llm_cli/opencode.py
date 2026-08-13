@@ -120,6 +120,7 @@ class OpenCodeAdapter:
     """Non-interactive OpenCode CLI (`opencode run`, one-shot execution)."""
 
     name = "opencode"
+    streams_plain_stdout = True
     binary_env_key = "OPENCODE_BIN"
     install_hint = (
         "brew install anomalyco/tap/opencode  (macOS/Linux) | choco install opencode (Windows)"
