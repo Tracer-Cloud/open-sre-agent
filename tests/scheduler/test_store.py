@@ -276,3 +276,50 @@ class TestStoreSurvivesTornWrites:
         assert store_path.read_text(encoding="utf-8") == before
         assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
         assert list(store_path.parent.glob(f"{store_path.name}.tmp*")) == []
+
+    def test_add_preserves_an_unreadable_store_instead_of_replacing_it(
+        self, store_path: Path
+    ) -> None:
+        # Arrange: a store torn in half, exactly as an interrupted write leaves it.
+        for hour in (7, 8, 9):
+            add_task(self._digest(hour), store_path)
+        full = store_path.read_text(encoding="utf-8")
+        store_path.write_text(full[: len(full) // 2], encoding="utf-8")
+
+        # Act
+        add_task(self._digest(10), store_path)
+
+        # Assert: the new task is stored, and the damaged file still exists
+        # under a quarantine name rather than having been overwritten.
+        assert [task.name for task in list_tasks(store_path)] == ["digest-10"]
+        quarantined = list(store_path.parent.glob(f"{store_path.name}.corrupt-*"))
+        assert len(quarantined) == 1
+        assert quarantined[0].read_text(encoding="utf-8") == full[: len(full) // 2]
+
+    def test_remove_and_update_leave_an_unreadable_store_untouched(self, store_path: Path) -> None:
+        # Arrange: neither call can find its target in a store it cannot read,
+        # so neither has any business rewriting the file.
+        task = self._digest(7)
+        add_task(task, store_path)
+        store_path.write_text("{ not json", encoding="utf-8")
+
+        # Act
+        removed = remove_task(task.id, store_path)
+        updated = update_task(task, store_path)
+
+        # Assert
+        assert removed is False
+        assert updated is False
+        assert store_path.read_text(encoding="utf-8") == "{ not json"
+
+    def test_a_non_list_payload_is_treated_as_unreadable(self, store_path: Path) -> None:
+        # Arrange: valid JSON of the wrong shape is just as unusable as broken
+        # JSON, and previously fell through to the same silent-empty path.
+        store_path.write_text('{"tasks": []}', encoding="utf-8")
+
+        # Act
+        add_task(self._digest(7), store_path)
+
+        # Assert
+        assert [task.name for task in list_tasks(store_path)] == ["digest-7"]
+        assert len(list(store_path.parent.glob(f"{store_path.name}.corrupt-*"))) == 1
