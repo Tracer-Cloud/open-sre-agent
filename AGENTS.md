@@ -311,6 +311,11 @@ Steps:
   when appending to an existing file: **use the import style the file already
   established** (an existing `import core.context_budget as budget` means new
   code calls `budget.name`, not `from core.context_budget import name`).
+- Except block handles `BaseException` (code-quality): catch `Exception`, not
+  `BaseException`. Collecting request/transport failures in a test thread still
+  works — `requests.exceptions.ConnectTimeout` subclasses `Exception`. Catching
+  `BaseException` also swallows `KeyboardInterrupt` / `SystemExit`. Do not keep
+  `noqa: BLE001` to silence it.
 - Unused global variable (CodeQL / code-quality "Unused global variable"):
   CodeQL often **does not credit cross-module imports** as a use of a module-
   level constant. A `FOO = "..."` in `text.py` that is only read via

@@ -56,6 +56,7 @@ from core.agent_harness.turns.answer_finalize import (
     finish_streamed_response,
 )
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
+from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import (
     EvidenceNeed,
     classify_evidence_need,
@@ -70,6 +71,10 @@ from core.agent_harness.turns.gather_observation import (
 from core.agent_harness.turns.handoff_keys import HandoffTag
 from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
+from core.agent_harness.turns.metric_query_floor import (
+    METRIC_UNFORMED_HANDOFF,
+    gather_formed_live_metric_query,
+)
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.agent_harness.turns.turn_results import (
@@ -383,6 +388,15 @@ def _gather_and_answer(
                 )
                 answer_handoffs = (*answer_handoffs, tier_tag)
                 log.debug("evidence reclassified after gather: %s", tier_tag)
+
+    if (
+        evidence_need is not None
+        and evidence_need.kind is EvidenceKind.METRIC_READ
+        and not gather_formed_live_metric_query(gathered)
+        and METRIC_UNFORMED_HANDOFF not in answer_handoffs
+        and not any(str(tag).startswith("evidence_tier:L0_degraded") for tag in answer_handoffs)
+    ):
+        answer_handoffs = (*answer_handoffs, METRIC_UNFORMED_HANDOFF)
 
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.

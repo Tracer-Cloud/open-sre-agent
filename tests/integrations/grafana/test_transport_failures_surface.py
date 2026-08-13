@@ -145,7 +145,7 @@ def test_concurrent_builds_share_one_transport_failure() -> None:
                     api_key="tok",
                     account_id="shared_inflight",
                 )
-            except BaseException as exc:  # noqa: BLE001 — collect for assert
+            except Exception as exc:  # collect for assert
                 errors.append(exc)
 
         t1 = threading.Thread(target=_call)

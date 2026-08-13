@@ -80,14 +80,11 @@ class TestPromptRefreshAutoSubmit:
         app = _RefreshFakeApp()
         wire_prompt_refresh(session, app, _RefreshFakeLoop())
         session.terminal.dispatch_active = True
-        session.terminal.set_auto_command(
-            "How many Windows users in the last 7 days?"
-        )
+        session.terminal.set_auto_command("How many Windows users in the last 7 days?")
         assert app.current_buffer.submitted is False
         assert session.terminal.pending_prompt_autosubmit is True
         assert (
-            session.terminal.pending_prompt_default
-            == "How many Windows users in the last 7 days?"
+            session.terminal.pending_prompt_default == "How many Windows users in the last 7 days?"
         )
 
     def test_plain_prefill_does_not_auto_submit(self) -> None:

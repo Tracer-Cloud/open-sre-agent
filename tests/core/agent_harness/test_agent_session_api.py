@@ -117,9 +117,7 @@ def test_start_does_not_inject_an_embedded_boot_step() -> None:
     ``core`` may not import ``bootstrap``. Embedded hosts use
     ``start_embedded_session`` (or pass an explicit boot step).
     """
-    session = AgentSession.start(
-        SessionConfig(open_store=False, persistent_tasks=False)
-    )
+    session = AgentSession.start(SessionConfig(open_store=False, persistent_tasks=False))
     assert session._config.boot_process is None
 
 
