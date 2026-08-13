@@ -252,18 +252,21 @@ class TestTheShellCanUseThem:
             "execute_yc_operation",
             "query_yc_metrics",
             "list_yc_metrics",
+            "read_yc_logs",
+            "list_yc_log_groups",
             "get_yc_lb_health",
         ],
     )
     def test_it_is_on_the_action_surface(self, name: str) -> None:
         assert "action" in get_registered_tool_map()[name].surfaces
 
-    def test_metrics_are_there_because_the_generic_reader_cannot_reach_them(
+    def test_metrics_and_logs_are_there_because_the_generic_reader_cannot_reach_them(
         self,
     ) -> None:
-        """Monitoring reads over POST, so the GET-only generic reader cannot substitute."""
+        """Monitoring reads over POST and logs over gRPC, so GET cannot substitute."""
         tools = get_registered_tool_map()
 
-        assert "action" in tools["query_yc_metrics"].surfaces
+        for name in ("query_yc_metrics", "read_yc_logs"):
+            assert "action" in tools[name].surfaces
         # Plain GET resources stay off the action surface: execute_yc_operation covers them.
         assert "action" not in tools["list_yc_instances"].surfaces

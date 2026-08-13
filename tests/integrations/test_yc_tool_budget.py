@@ -15,6 +15,8 @@ class TestRegistration:
             "execute_yc_operation",
             "query_yc_metrics",
             "list_yc_metrics",
+            "read_yc_logs",
+            "list_yc_log_groups",
             "list_yc_instances",
             "get_yc_instance_diagnostics",
             "get_yc_lb_health",
