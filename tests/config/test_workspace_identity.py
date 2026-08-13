@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from config.constants.runtime_metadata import (
     OPENSRE_ALLOW_NETWORK_ENV,
     OPENSRE_WORKSPACE_REPO_ENV,
@@ -57,6 +59,107 @@ def test_capability_warnings_include_network_default(monkeypatch) -> None:
     assert facts["shell_available"] is True
     assert any("curl" in w for w in facts["capability_warnings"])
     assert any("network egress" in w for w in facts["capability_warnings"])
+
+
+def test_capability_warnings_report_no_shell_when_bash_and_sh_are_both_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: a PATH with neither shell. The agent is told it can run shell
+    # commands, so this gap has to reach the boot warnings rather than surface
+    # as a failed command mid-turn.
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    tools = {"curl": "/usr/bin/curl", "bash": "", "sh": ""}
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert facts["shell_available"] is False
+    assert "no interactive shell (bash/sh) on PATH" in facts["capability_warnings"]
+    assert not any("curl" in warning for warning in facts["capability_warnings"])
+
+
+def test_capability_warnings_accept_sh_as_the_shell_when_bash_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: bash absent but sh present. Minimal containers ship only sh, and
+    # warning about it would train operators to ignore the warnings.
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    tools = {"curl": "/usr/bin/curl", "bash": "", "sh": "/bin/sh"}
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert facts["shell_available"] is True
+    assert not any("shell" in warning for warning in facts["capability_warnings"])
+
+
+def test_capability_warnings_drop_the_network_line_when_egress_is_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: the network warning states the sandbox default, so it must go
+    # when the operator has opted out of that default.
+    monkeypatch.setenv(OPENSRE_ALLOW_NETWORK_ENV, "1")
+    tools = {"curl": "/usr/bin/curl", "bash": "/bin/bash", "sh": "/bin/sh"}
+
+    # Act
+    facts = capability_warning_facts(tools)
+
+    # Assert
+    assert facts["network_egress"] is True
+    assert facts["capability_warnings"] == []
+
+
+def test_capability_warnings_probe_path_only_when_no_tools_are_supplied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: the caller passes nothing, so the probe resolves PATH itself.
+    # Substituting installed_tools keeps that branch under test without making
+    # the assertion depend on what happens to be installed on the test machine.
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    calls: list[int] = []
+
+    def _fake_installed_tools() -> dict[str, str]:
+        calls.append(1)
+        return {"curl": "", "bash": "", "sh": ""}
+
+    monkeypatch.setattr("config.runtime_metadata.probes.installed_tools", _fake_installed_tools)
+
+    # Act
+    facts = capability_warning_facts()
+
+    # Assert
+    assert calls == [1]
+    assert facts["capability_warnings"] == [
+        "curl is not on PATH",
+        "no interactive shell (bash/sh) on PATH",
+        "network egress is blocked for sandboxed code by default",
+    ]
+
+
+def test_capability_warnings_treat_an_empty_mapping_as_an_answer_not_a_missing_arg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange: an empty dict is falsy but is still a caller-supplied result. A
+    # `tools or installed_tools()` check would silently fall back to walking the
+    # real PATH here, which is exactly the live-PATH flakiness to keep out.
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+
+    def _fail_if_called() -> dict[str, str]:
+        raise AssertionError("PATH must not be probed when the caller supplied tools")
+
+    monkeypatch.setattr("config.runtime_metadata.probes.installed_tools", _fail_if_called)
+
+    # Act
+    facts = capability_warning_facts({})
+
+    # Assert
+    assert facts["shell_available"] is False
+    assert facts["capability_warnings"] == [
+        "no interactive shell (bash/sh) on PATH",
+        "network egress is blocked for sandboxed code by default",
+    ]
 
 
 def test_capability_warnings_line_in_prompt() -> None:
