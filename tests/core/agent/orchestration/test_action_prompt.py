@@ -528,6 +528,9 @@ def test_metric_unformed_guidance_requires_draft_query_and_setup_slash() -> None
     assert "/integrations setup" in block
     assert "Want me to" in block
     assert "invent" in block.lower()
+    # Parity S9: do not publish retention from login stand-ins.
+    assert "user_signed_in" in block
+    assert "signup" in block.lower()
 
 
 def test_l0_degraded_config_guidance_is_distinct_from_missing_source() -> None:

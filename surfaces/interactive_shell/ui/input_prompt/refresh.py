@@ -41,12 +41,14 @@ def wire_prompt_refresh(
                 # not gate on it here — ``dispatch_active`` is the nest guard.
                 session.terminal.pending_prompt_default = None
                 session.terminal.pop_pending_autosubmit()
+                session.terminal.last_input_autosubmitted = True
                 buffer.text = pending
                 try:
                     buffer.validate_and_handle()
                 except Exception:  # noqa: BLE001
                     session.terminal.pending_prompt_default = pending
                     session.terminal.pending_prompt_autosubmit = True
+                    session.terminal.last_input_autosubmitted = False
             elif pt_app.is_running:
                 session.terminal.pending_prompt_default = None
                 buffer.text = pending

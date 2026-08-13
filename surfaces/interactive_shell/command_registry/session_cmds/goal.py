@@ -93,7 +93,9 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
     _persist_goal_state(session)
     console.print(format_session_goal_progress(goal, session=session), markup=False)
     console.print(
-        f"[{DIM}]→ starting now (condition queued as the next turn). [/][{DIM}]{_HELP_FOOTER}[/]"
+        f"[{DIM}]→ next: condition runs as its own prompt turn "
+        f"(look for [/][{HIGHLIGHT}][N] ❯[/][{DIM}] below). [/]"
+        f"[{DIM}]{_HELP_FOOTER}[/]"
     )
     return True
 
@@ -140,7 +142,9 @@ def _resume(session: Session, console: Console) -> bool:
     _persist_goal_state(session)
     console.print(format_session_goal_progress(resumed, session=session), markup=False)
     console.print(
-        f"[{DIM}]→ resuming (condition queued as the next turn). [/][{DIM}]{_HELP_FOOTER}[/]"
+        f"[{DIM}]→ next: condition runs as its own prompt turn "
+        f"(look for [/][{HIGHLIGHT}][N] ❯[/][{DIM}] below). [/]"
+        f"[{DIM}]{_HELP_FOOTER}[/]"
     )
     return True
 
@@ -165,7 +169,9 @@ def _edit(session: Session, console: Console, args: list[str]) -> bool:
     console.print(format_session_goal_progress(edited, session=session), markup=False)
     if session_goal_is_active(session):
         console.print(
-            f"[{DIM}]→ condition updated; queued as the next turn. [/][{DIM}]{_HELP_FOOTER}[/]"
+            f"[{DIM}]→ next: updated condition runs as its own prompt turn "
+            f"(look for [/][{HIGHLIGHT}][N] ❯[/][{DIM}] below). [/]"
+            f"[{DIM}]{_HELP_FOOTER}[/]"
         )
     else:
         console.print(f"[{DIM}]condition updated (still paused). {_HELP_FOOTER}[/]")

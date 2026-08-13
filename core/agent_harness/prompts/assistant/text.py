@@ -107,6 +107,10 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "Never invent metric numbers as fact.\n"
         "3. Exactly one setup line using a valid `/integrations setup <id>` "
         "(preferred source id from this session). Do not invent a vendor.\n"
+        "Signup / signed-up / retention-of-signups: never treat "
+        "`user_signed_in` / login events as signup. If the signup event is "
+        "unverified, say so and draft HogQL that leaves the event name as a "
+        "placeholder — do not publish a retention % or signup count.\n"
         "Do NOT offer a full incident investigation. Do NOT close with "
         "**Want me to:**. Stop after this reply.\n\n"
     ),

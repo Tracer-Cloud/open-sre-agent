@@ -81,6 +81,14 @@ class TerminalSession:
     exclusive-stdin dispatch path — the only place an interactive child process
     gets clean stdin."""
 
+    last_input_autosubmitted: bool = False
+    """True when the next ``render_submitted_prompt`` came from autosubmit.
+
+    Set when ``/goal set`` (or similar) queues the condition and the prompt
+    loop accepts it without Enter. Cleared when the submitted line is painted
+    so the work turn can show a distinct ``↗ /goal`` marker above ``[N] ❯``.
+    """
+
     exclusive_stdin_active: bool = False
     """True while a turn is running with exclusive stdin reserved (no live prompt).
 

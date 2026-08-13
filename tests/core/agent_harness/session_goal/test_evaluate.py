@@ -277,6 +277,65 @@ def test_host_owned_without_tools_or_achieved_tag_stays_active() -> None:
     assert verdict.reason == SessionGoalReason.WAITING_HOST_SIGNAL
 
 
+def test_host_owned_signup_unverified_refuse_achieves_without_gather() -> None:
+    """Parity S9: honest signup-unverified refuse must close the host goal."""
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition=(
+                "What is D7 retention for users who signed up on Windows in the last 30 days?"
+            ),
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    verdict = evaluate_session_goal(
+        session.session_goal,  # type: ignore[arg-type]
+        _result(
+            "signup event unverified — cannot provide a retention percentage. "
+            "Draft HogQL with a <signup_event> placeholder.",
+            gather_success=0,
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.ACHIEVED_HOST_SET
+
+
+def test_host_owned_signup_refuse_after_gather_is_host_set_not_tool_evidence() -> None:
+    """Dogfood S9: live probes + unavailable retention must not use tool-evidence.
+
+    Tool-evidence achieves go through optional LLM confirm, which treats a
+    refuse+draft as "retention % not reached" and leaves the goal active.
+    """
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition=(
+                "What is D7 retention for users who signed up on Windows "
+                "in the last 30 days? Prefer live PostHog; otherwise draft HogQL."
+            ),
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    reply = (
+        "Live PostHog returned no signup-like events in the last 30 days, so "
+        "D7 Windows retention cannot be calculated reliably. "
+        "D7 retention Unavailable — no percentage inferred. "
+        "Draft HogQL once <SIGNUP_EVENT> is confirmed."
+    )
+    verdict = evaluate_session_goal(
+        session.session_goal,  # type: ignore[arg-type]
+        _result(reply, gather_success=2),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.ACHIEVED_HOST_SET
+
+
 def test_bare_achieved_without_checklist_or_tools_stays_active() -> None:
     session = SessionCore()
     goal = SessionGoal(condition="finish migration", max_outer_turns=3)

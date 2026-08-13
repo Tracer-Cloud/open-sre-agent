@@ -24,6 +24,10 @@ claim, not proof. This module is the independent host check:
   leave action ``executed_success_count`` at 0. Final-route identity alone
   (``cli_agent_fallback`` / summarize) is not evidence — unsupported fallbacks
   must not close the goal.
+* Host-owned signup / retention goal whose reply reports signup unverified
+  (honest refuse + draft path) → achieve without requiring gather successes
+  (parity S9). Models often stop before a count query; staying ACTIVE forced
+  a redundant outer turn.
 * ``achieved`` with no checklist on a handoff goal → require tool evidence, or
   stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
@@ -44,6 +48,10 @@ from core.agent_harness.session_goal.goal import (
     attach_session_goal,
 )
 from core.agent_harness.session_goal.progress import is_session_goal_progress_paint
+from core.agent_harness.turns.signup_identity import (
+    goal_condition_asks_signup_or_retention,
+    reply_reports_signup_unverified,
+)
 
 # Standalone progress tag — same token shape as strip_session_goal_progress_tags.
 _ACHIEVED_CLAIM = re.compile(r"session_goal:achieved")
@@ -245,6 +253,22 @@ def evaluate_session_goal(
             verdict = SessionGoalVerdict(
                 status=SessionGoalStatus.ACTIVE,
                 reason=SessionGoalReason.INVESTIGATION_RUNNING,
+            )
+        elif (
+            current.host_owned
+            and not dispatched
+            and bool(text.strip())
+            and not is_session_goal_progress_paint(text)
+            and goal_condition_asks_signup_or_retention(current.condition)
+            and reply_reports_signup_unverified(text)
+        ):
+            # Honest refuse on an attached signup/retention /goal: identity was
+            # the deliverable (condition allows draft when live % is impossible).
+            # Prefer this over ACHIEVED_TOOL_EVIDENCE so optional LLM confirm
+            # cannot veto a correct refuse+draft as "retention % not reached".
+            verdict = SessionGoalVerdict(
+                status=SessionGoalStatus.ACHIEVED,
+                reason=SessionGoalReason.ACHIEVED_HOST_SET,
             )
         elif (
             current.host_owned

@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from core.agent_harness.session_goal.goal import SessionGoal
 from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import EvidenceNeed, EvidenceTier
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.metric_query_floor import (
     apply_unformed_metric_floor,
     gather_formed_live_metric_query,
+)
+from core.agent_harness.turns.signup_identity import (
+    goal_condition_asks_signup_or_retention,
+    reply_reports_signup_unverified,
 )
 
 
@@ -141,5 +146,78 @@ def test_grafana_unformed_floor_uses_promql() -> None:
         _need(),
         observation=observation,
         setup_command_for=lambda name: f"/integrations setup {name}",
+    )
+    assert text == original
+
+
+def test_signup_goal_unverified_after_live_probes_gets_draft_without_reconnect() -> None:
+    """S9: connected PostHog ran candidate queries; signup still unresolved → draft only."""
+    observation = (
+        "Tool: call_posthog_tool\n"
+        'Arguments: {"tool_name": "execute-sql", '
+        '"arguments": {"query": "SELECT 1 WHERE event = \'user_signed_up\'"}}\n'
+        "Result: 0\n\n"
+        "Tool: call_posthog_tool\n"
+        'Arguments: {"tool_name": "execute-sql", '
+        '"arguments": {"query": "SELECT 1 WHERE event = \'signed_up\'"}}\n'
+        "Result: 0"
+    )
+    reply = (
+        "Live PostHog returned no eligible Windows signups, so D7 retention is "
+        "unavailable, not 0%. The query recognized none of these candidate "
+        "signup events: user_signed_up, signed_up. signup event unverified."
+    )
+    session = type(
+        "S",
+        (),
+        {
+            "session_goal": SessionGoal(
+                condition=(
+                    "What is D7 retention for users who signed up on Windows in the last 30 days?"
+                ),
+                max_outer_turns=4,
+                host_owned=True,
+            )
+        },
+    )()
+    assert goal_condition_asks_signup_or_retention(session.session_goal.condition)
+    assert reply_reports_signup_unverified(reply)
+    text = apply_unformed_metric_floor(
+        reply,
+        _need(connected=("posthog_mcp",)),
+        observation=observation,
+        setup_command_for=lambda name: f"/integrations setup {name}",
+        session=session,
+    )
+    assert "```sql" in text
+    assert "<signup_event>" in text
+    assert "/integrations setup" not in text
+
+
+def test_signup_goal_verified_live_percent_skips_floor() -> None:
+    observation = (
+        "Tool: call_posthog_tool\n"
+        'Arguments: {"tool_name": "execute-sql", '
+        '"arguments": {"query": "SELECT … WHERE event = \'user_signed_up\'"}}\n'
+        "Result: 12%"
+    )
+    original = "D7 retention is 12% for Windows signups (event user_signed_up)."
+    session = type(
+        "S",
+        (),
+        {
+            "session_goal": SessionGoal(
+                condition="D7 retention for users who signed up on Windows",
+                max_outer_turns=4,
+                host_owned=True,
+            )
+        },
+    )()
+    text = apply_unformed_metric_floor(
+        original,
+        _need(),
+        observation=observation,
+        setup_command_for=lambda name: f"/integrations setup {name}",
+        session=session,
     )
     assert text == original

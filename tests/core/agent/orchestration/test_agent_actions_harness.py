@@ -1500,6 +1500,30 @@ def test_route_handled_without_handoff_stays_action_only() -> None:
     assert route.intent == "handled_without_llm"
 
 
+def test_route_goal_set_slash_stays_action_only_despite_session_goal_tag() -> None:
+    """``/goal set`` injects ``session_goal:continue`` but must not gather.
+
+    Gathering on the attach turn answered the condition before autosubmit, so
+    the user saw PostHog work with no ``[N] ❯`` work-turn chrome, then a second
+    identical turn after ``↗ /goal``.
+    """
+    from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
+
+    routing = TurnRoutingInput(
+        action_handled=True,
+        executed_success_count=1,
+        has_observation=False,
+    )
+    route = _route_turn(
+        routing,
+        user_text=(
+            "/goal set --max-turns 4 What is D7 retention for users who signed up on Windows?"
+        ),
+        handoff_contents=("session_goal:continue",),
+    )
+    assert route.intent == "handled_without_llm"
+
+
 def test_route_investigation_dispatch_skips_gather_even_with_handoff() -> None:
     from core.agent_harness.turns.orchestrator import TurnRoutingInput, _route_turn
 

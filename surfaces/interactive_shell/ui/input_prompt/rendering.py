@@ -73,7 +73,22 @@ def render_submitted_prompt(console: Console, session: Session, text: str) -> No
     Claims the turn's ``[N]`` number: every accepted submission (interactive or
     startup replay) passes through here exactly once, so the counter advances
     once per prompt line regardless of what the turn later records in history.
+
+    Autosubmitted lines (e.g. ``/goal set`` queuing the condition) get a dim
+    ``↗ /goal`` marker so the work turn is visually distinct from the slash
+    that attached the goal.
     """
+    autosubmitted = bool(session.terminal.last_input_autosubmitted)
+    session.terminal.last_input_autosubmitted = False
+    if autosubmitted:
+        # Keep this shorter than the condition — the ``[N] ❯`` line carries the
+        # full text; this only answers "is this still /goal set or real work?".
+        console.print(
+            Text(
+                "↗ /goal — work turn (condition auto-submitted)",
+                style=str(ui_theme.DIM),
+            )
+        )
     counter = _counter_text(session.terminal.claim_turn_number())
     lines = text.splitlines() or [""]
     continuation_prefix = " " * (len(counter) + len("❯ "))

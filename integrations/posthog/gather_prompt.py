@@ -18,7 +18,15 @@ def posthog_gather_prompt_fragment() -> str:
         "skip the exec wrapper and call execute-sql directly. If you list "
         "tools, use name_filter='execute-sql' (not broad terms that only "
         "return exec). At most one list_posthog_tools call, then run the "
-        "metric query — a failed schema probe is not an answer."
+        "metric query — a failed schema probe is not an answer. "
+        "Signup / signed-up / retention-of-signups are not the same as "
+        "sign-in or login: never use event='user_signed_in', "
+        "event='signed_in', event='login', or similar login events as a "
+        "stand-in for signup. Confirm a real signup event from schema "
+        "(e.g. user_signed_up, signed_up, signup) before counting or "
+        "computing retention. If no signup event is verified, do not run a "
+        "count/retention query on a login event — stop with 'signup event "
+        "unverified' so the answer path can draft HogQL + one setup CTA."
     )
 
 

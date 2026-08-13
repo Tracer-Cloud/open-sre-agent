@@ -150,12 +150,14 @@ def finalize_routed_answer(
     if should_suppress_investigation_offer(evidence_need) or should_skip_gather(evidence_need):
         text = append_upgrade_cta(session, text, evidence_need)
     # Metric gather that never ran a live query still gets a draft HogQL/PromQL
-    # block and one setup slash (parity S2). No-op when a query already ran.
+    # block and one setup slash (parity S2). Signup/retention SessionGoals that
+    # leave signup identity unresolved still get a draft fence (parity S9).
     text = apply_unformed_metric_floor(
         text,
         evidence_need,
         observation=evidence_for_offer,
         setup_command_for=integration_setup_command,
+        session=session,
     )
     # Bookkeeping only — never feed this into route selection.
     text_changed_after_streaming = text != streamed_text

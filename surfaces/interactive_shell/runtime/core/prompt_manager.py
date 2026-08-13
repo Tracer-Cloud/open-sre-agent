@@ -102,6 +102,9 @@ class PromptManager:
 
         prefilled = self.session.terminal.pop_pending_prompt_default()
         if prefilled and self.session.terminal.pop_pending_autosubmit():
+            # Same paint path as Enter: mark so ``render_submitted_prompt`` can
+            # label ``/goal`` work turns distinctly from the ``/goal set`` slash.
+            self.session.terminal.last_input_autosubmitted = True
             return prefilled
 
         return await self.pt_session.prompt_async(

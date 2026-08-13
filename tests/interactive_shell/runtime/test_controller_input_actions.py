@@ -104,3 +104,30 @@ def test_decide_submits_normal_turn_with_exclusive_stdin_wait() -> None:
         text="/integrations",
         wait_until_idle=True,
     )
+
+
+def test_goal_autosubmit_waits_even_without_exclusive_stdin() -> None:
+    """Prose ``/goal`` work turns must hold the next prompt until crawl finishes."""
+    from surfaces.interactive_shell.controller import _should_wait_until_turn_finishes
+
+    assert (
+        _should_wait_until_turn_finishes(
+            exclusive_stdin=False,
+            goal_condition_autosubmitted=True,
+        )
+        is True
+    )
+    assert (
+        _should_wait_until_turn_finishes(
+            exclusive_stdin=False,
+            goal_condition_autosubmitted=False,
+        )
+        is False
+    )
+    assert (
+        _should_wait_until_turn_finishes(
+            exclusive_stdin=True,
+            goal_condition_autosubmitted=False,
+        )
+        is True
+    )

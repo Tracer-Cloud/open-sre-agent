@@ -85,6 +85,7 @@ from core.agent_harness.turns.turn_results import (
 from core.agent_harness.turns.turn_route import (
     TurnRoute,
     TurnRoutingInput,
+    is_literal_slash_command,
     route_turn,
     routing_input_from_result,
 )
@@ -531,8 +532,13 @@ def run_turn(
         handoff_contents = (*handoff_contents, tier_tag)
     # Host ``/goal set`` goals never appear in action handoff tags — inject a
     # guidance tag so the assistant omits Want-me-to (observation + HANDOFF).
-    if session_goal_is_active(session) and not any(
-        tag.startswith("session_goal:") for tag in handoff_contents
+    # Skip on literal slash: the attach turn must stay action-only; injecting
+    # here previously forced gather_and_answer on ``/goal set`` itself (duplicate
+    # PostHog turn before autosubmit).
+    if (
+        session_goal_is_active(session)
+        and not is_literal_slash_command(text)
+        and not any(tag.startswith("session_goal:") for tag in handoff_contents)
     ):
         handoff_contents = (*handoff_contents, "session_goal:continue")
     observation = session.last_command_observation
