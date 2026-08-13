@@ -5,10 +5,13 @@ from __future__ import annotations
 import os
 import tempfile
 
+import pytest
+
 from config.constants import OPENSRE_TMP_DIR, ensure_opensre_tmp_dir
 from platform.sandbox.runner import (
     MAX_TIMEOUT,
     SandboxResult,
+    _sandbox_env,
     run_python_sandbox,
 )
 
@@ -72,6 +75,22 @@ class TestSandboxRunnerInputInjection:
         result = run_python_sandbox("x = 1", inputs=None)
         assert result.success
         assert result.inputs == {}
+
+
+class TestSandboxEnvironment:
+    def test_system_root_forwarded_and_allowlist_stays_narrow(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Windows needs %SystemRoot% to initialize Winsock in the child, so a
+        # sandbox without it fails every socket call with WinError 10106 before
+        # allow_network is ever consulted.
+        monkeypatch.setenv("SystemRoot", r"C:\Windows")
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "must-not-leak")
+
+        env = _sandbox_env(None)
+
+        assert env["SystemRoot"] == r"C:\Windows"
+        assert "AWS_SECRET_ACCESS_KEY" not in env
 
 
 class TestSandboxNetworkRestrictions:

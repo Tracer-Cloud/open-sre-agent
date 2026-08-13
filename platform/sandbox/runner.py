@@ -25,6 +25,10 @@ _BASE_ENV_KEYS = (
     "PYTHONPATH",
     "REQUESTS_CA_BUNDLE",
     "SSL_CERT_FILE",
+    # Windows resolves the Winsock service provider catalogue relative to
+    # %SystemRoot%; without it every socket call in the child raises
+    # WinError 10106. Absent on POSIX, where the lookup below skips it.
+    "SystemRoot",
     "TMPDIR",
 )
 
