@@ -28,11 +28,22 @@ RUN apt-get update \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . /app
+# Dependencies first, from the manifest alone, so that editing a source file does not
+# reinstall them. `pip install .` reads the requirement list out of pyproject.toml, and
+# with no package directories present yet setuptools builds a metadata-only wheel — so
+# this layer installs the ~80 runtime dependencies and nothing else, and is invalidated
+# only when pyproject.toml changes.
+COPY pyproject.toml README.md ./
 
 # postgresql extra: psycopg2 for the DATABASE_URL-backed investigations store.
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir ".[postgresql]"
+
+COPY . /app
+
+# The package itself. --no-deps because the layer above already installed and resolved
+# the dependency set; this step only needs to put opensre and its console script in.
+RUN pip install --no-cache-dir --no-deps .
 
 # Run as a non-root user (uid/gid 1000). /workspace is the writable runtime
 # working area owned by that user.
