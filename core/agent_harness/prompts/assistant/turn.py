@@ -103,9 +103,12 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
     already reaches the gather prompt; the answer path was told only when the
     set was empty, so a reply could not say what it had looked at.
 
-    Also pins valid ``/integrations setup`` ids and preferred product-analytics
-    coverage so the model cannot invent vendors (parity S5: Mixpanel CTA while
-    PostHog was already ready).
+    When something is connected, the valid ``/integrations setup`` ids and
+    preferred product-analytics coverage are named too, so a reply cannot
+    recommend an invented vendor over a ready one (parity S5: Mixpanel CTA
+    while PostHog was already connected). An empty session gets neither: the
+    id roster is several hundred characters of vendor names, and on a session
+    with nothing connected it crowds out the user's actual question.
     """
     from platform.harness_ports import (
         preferred_evidence_sources_for,
@@ -132,7 +135,7 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
             "integrations, answer with guidance only."
         )
 
-    setupable = tuple(setupable_integration_services())
+    setupable = tuple(setupable_integration_services()) if connected else ()
     if setupable:
         parts.append(
             "Only these service ids are valid in `/integrations setup <id>`: "
