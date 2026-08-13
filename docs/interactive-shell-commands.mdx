@@ -967,6 +967,16 @@ Set up a manual loop called Morning ops at 08:30 UTC to check open incidents and
 
 By default, new loops send to every configured default handle OpenSRE can reach: Telegram, Slack, and the local interactive-shell inbox.
 
+### `/remote-sync`
+
+```text
+/remote-sync status
+/remote-sync setup --provider aws --bucket my-bucket
+/remote-sync sync --pull-only
+```
+
+Sync conversation history and memory to a user-owned object store. See [Remote sync](/configuration/remote-sync) for details.
+
 ### `/sentry`
 
 ```text

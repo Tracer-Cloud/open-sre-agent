@@ -238,6 +238,20 @@ not a Mintlify docs-site page).
 | `GITLAB_MR_WRITEBACK` | | Enable GitLab merge request writeback (`true`, `1`, `yes`) | `tools/investigation/reporting/gitlab_writeback` |
 | `OPENSRE_RELEASES_API_URL` | GitHub releases API | Override releases API endpoint | `surfaces/cli/lifecycle/update` |
 
+## Remote Sync
+
+| Variable | Default | Description | Module |
+|----------|---------|-------------|--------|
+| `OPENSRE_REMOTE_SYNC` | `0` | Set to `1` to enable. Nothing uploads until you do | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | `aws` | Backend name. Default `aws` (S3). Built-in: `aws`, `gcs`, `vercel`, `azure`. Community backends register under the same name | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_BUCKET` |  | Store your own (S3 bucket name, GCS bucket name, or Vercel Blob store name/id). Required when sync is on | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_PREFIX` | `opensre` | Key prefix, default `opensre`. Machines that should share history must use the same one | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_REGION` |  | Region override when the provider supports it (AWS) | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_PROFILE` |  | Named credentials profile, if opensre should not use your default (AWS) | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE` |  | Comma-separated glob patterns to keep off the store. See [Exclude paths](#exclude-paths) in remote-sync.mdx | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | `0` | Set to `1` to ignore your exclusions for one run and sync everything | `config/constants/filestorage` |
+| `BLOB_READ_WRITE_TOKEN` |  | Vercel Blob read-write token (when `provider=vercel`). Ambient; opensre never stores it | `config/constants/filestorage` |
+
 ## Integration Credentials
 
 ### Observability & Monitoring

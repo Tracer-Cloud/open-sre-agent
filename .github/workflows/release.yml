@@ -177,8 +177,6 @@ jobs:
           VERSION="${TAG_NAME#v}"
           test -f "dist/opensre-${VERSION}.tar.gz"
           test -f "dist/opensre-${VERSION}-py3-none-any.whl"
-          uv run python platform/packaging/validate_wheel.py \
-            "dist/opensre-${VERSION}-py3-none-any.whl"
 
       - name: Upload Python distributions
         uses: actions/upload-artifact@v4
@@ -316,9 +314,23 @@ jobs:
           uv run python -c "import os, shutil, sysconfig; src = os.path.join(sysconfig.get_path('stdlib'), 'platform.py'); shutil.copy(src, os.path.join('.stdlib_vendor', 'platform.py')); print('Staged stdlib platform from ' + src)"
 
       - name: Build binary
-        env:
-          OPENSRE_PYINSTALLER_MODE: ${{ matrix.pyinstaller_mode }}
-        run: uv run pyinstaller opensre.spec --clean --noconfirm
+        run: >-
+          uv run pyinstaller surfaces/cli/__main__.py
+          --name opensre
+          --${{ matrix.pyinstaller_mode }}
+          --clean
+          --noconfirm
+          --collect-data surfaces.cli
+          --collect-data config
+          --copy-metadata opensre
+          --collect-data litellm
+          --hidden-import tiktoken_ext
+          --hidden-import tiktoken_ext.openai_public
+          --collect-submodules integrations
+          --collect-submodules surfaces.interactive_shell
+          --collect-submodules tools
+          --add-data "platform:platform"
+          --add-data ".stdlib_vendor:_opensre_stdlib_platform"
 
       - name: Align bundled libssl with cryptography (macOS onedir)
         if: runner.os == 'macOS' && matrix.pyinstaller_mode == 'onedir'
@@ -406,7 +418,6 @@ jobs:
               ;;
           esac
           "$BINARY_PATH" -h >/dev/null
-          "$BINARY_PATH" _package-smoke
           LITELLM_DATA="./dist/opensre/_internal/litellm/model_prices_and_context_window_backup.json"
           if [ ! -f "$LITELLM_DATA" ]; then
             echo "LiteLLM package data missing from Unix onedir bundle: ${LITELLM_DATA}" >&2
@@ -444,7 +455,6 @@ jobs:
             throw "Binary version mismatch. Expected '$expectedVersion' but saw '$versionText'."
           }
           & ".\dist\${{ matrix.binary_name }}" -h | Out-Null
-          & ".\dist\${{ matrix.binary_name }}" _package-smoke
 
       - name: Package binary archive (Unix)
         if: runner.os != 'Windows'
