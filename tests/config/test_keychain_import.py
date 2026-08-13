@@ -216,17 +216,11 @@ def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatc
     from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 
     entries = {"ANTHROPIC_API_KEY": "sk-ant-live"}
-    monkeypatch.setattr(
-        keychain_import.os_keyring, "item_exists", lambda name: name in entries
-    )
-    monkeypatch.setattr(
-        keychain_import.os_keyring, "get", lambda name: entries.get(name, "")
-    )
+    monkeypatch.setattr(keychain_import.os_keyring, "item_exists", lambda name: name in entries)
+    monkeypatch.setattr(keychain_import.os_keyring, "get", lambda name: entries.get(name, ""))
 
     def _locked_delete(_name: str) -> None:
-        raise KeyringUnavailableError(
-            "locked", reason=KeyringUnavailableReason.BACKEND_ERROR
-        )
+        raise KeyringUnavailableError("locked", reason=KeyringUnavailableReason.BACKEND_ERROR)
 
     monkeypatch.setattr(keychain_import.os_keyring, "delete", _locked_delete)
 
@@ -236,9 +230,7 @@ def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatc
     assert keychain_import._already_imported() is False
 
     deleted: list[str] = []
-    monkeypatch.setattr(
-        keychain_import.os_keyring, "delete", lambda name: deleted.append(name)
-    )
+    monkeypatch.setattr(keychain_import.os_keyring, "delete", lambda name: deleted.append(name))
     assert keychain_import.import_keychain_secrets_once() == ()
     assert "ANTHROPIC_API_KEY" in deleted
     assert keychain_import._already_imported() is True
