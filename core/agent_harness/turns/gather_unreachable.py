@@ -32,26 +32,36 @@ def store_gather_unreachable(
     tools: dict[str, str],
     sources: dict[str, str],
 ) -> None:
-    """Merge unreachable marks onto ``session`` (setdefault — first reason wins)."""
+    """Reconcile ``session`` with the latest breaker snapshot.
+
+    ``tools``/``sources`` is the breaker's full current down-set, not a
+    delta: a name absent from it recovered (the breaker pops a name on
+    success before snapshotting), so it is dropped from the session-level
+    map rather than kept forever. A name still present keeps its original
+    reason — first reason wins — rather than being overwritten by the new
+    snapshot's summary for the same name.
+    """
     tool_map, source_map = load_gather_unreachable(session)
-    for name, summary in tools.items():
-        tool_map.setdefault(str(name), str(summary))
-    for name, summary in sources.items():
-        source_map.setdefault(str(name), str(summary))
+    new_tool_map = {
+        str(name): tool_map.get(str(name), str(summary)) for name, summary in tools.items()
+    }
+    new_source_map = {
+        str(name): source_map.get(str(name), str(summary)) for name, summary in sources.items()
+    }
     # Prefer mutating existing maps when SessionCore fields are present so
     # ``/new`` ``clear()`` and live references stay consistent.
     existing_tools = getattr(session, _TOOLS_ATTR, None)
     existing_sources = getattr(session, _SOURCES_ATTR, None)
     if isinstance(existing_tools, dict):
         existing_tools.clear()
-        existing_tools.update(tool_map)
+        existing_tools.update(new_tool_map)
     else:
-        setattr(session, _TOOLS_ATTR, tool_map)
+        setattr(session, _TOOLS_ATTR, new_tool_map)
     if isinstance(existing_sources, dict):
         existing_sources.clear()
-        existing_sources.update(source_map)
+        existing_sources.update(new_source_map)
     else:
-        setattr(session, _SOURCES_ATTR, source_map)
+        setattr(session, _SOURCES_ATTR, new_source_map)
 
 
 def clear_gather_unreachable(session: Any) -> None:

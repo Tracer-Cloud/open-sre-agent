@@ -388,6 +388,46 @@ def test_session_core_clear_drops_gather_unreachable_carry() -> None:
     assert sources == {}
 
 
+def test_store_gather_unreachable_drops_recovered_tool_from_session() -> None:
+    """A tool absent from a later snapshot recovered and must not stay blocked.
+
+    Regression for #4988: ``store_gather_unreachable`` used to merge via
+    ``setdefault`` only, so a name once marked down was never removed even
+    after the breaker itself stopped reporting it as down.
+    """
+    session = SimpleNamespace()
+
+    # Arrange: first gather turn marks the tool unreachable.
+    store_gather_unreachable(
+        session,
+        tools={"query_grafana_metrics": "timeout"},
+        sources={"grafana": "timeout"},
+    )
+    assert load_gather_unreachable(session)[0] == {"query_grafana_metrics": "timeout"}
+
+    # Act: the tool succeeds on a later turn, so the fresh breaker snapshot no
+    # longer reports it (or its source) as down.
+    store_gather_unreachable(session, tools={}, sources={})
+
+    # Assert: the recovered tool and source are gone, not merely unchanged.
+    tools, sources = load_gather_unreachable(session)
+    assert tools == {}
+    assert sources == {}
+
+
+def test_store_gather_unreachable_keeps_first_reason_for_still_down_tool() -> None:
+    """A name still present in the snapshot keeps its original reason."""
+    session = SimpleNamespace()
+
+    store_gather_unreachable(session, tools={"query_grafana_metrics": "timeout"}, sources={})
+    store_gather_unreachable(
+        session, tools={"query_grafana_metrics": "different reason"}, sources={}
+    )
+
+    tools, _sources = load_gather_unreachable(session)
+    assert tools == {"query_grafana_metrics": "timeout"}
+
+
 def test_prior_source_success_keeps_later_timeout_tool_scoped() -> None:
     breaker = SourceCircuitBreaker()
     hooks = breaker.hooks()
