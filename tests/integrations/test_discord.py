@@ -80,13 +80,14 @@ def test_classify_validation_error_returns_none_and_reports() -> None:
     Pydantic v2 embeds the failing field's ``input_value`` in the
     ValidationError string, so forwarding the raw error would leak secrets.
     Discord's classify() passes the exception straight through to
-    ``report_classify_failure`` (integrations._validation_helpers), which is
-    responsible for the swap — assert on what actually reaches
-    ``report_exception``, one layer past the mocked-out call in older tests.
+    ``report_classify_failure`` (integrations._validation_helpers), which
+    delegates to ``report_exception`` (platform.observability.errors.boundary)
+    for the swap — assert on what actually reaches ``capture_exception``, one
+    layer past the mocked-out call in older tests.
     """
     secret_value = "leaked-non-hex-secret"
 
-    with patch("integrations._validation_helpers.report_exception") as mock_report:
+    with patch("platform.observability.errors.boundary.capture_exception") as mock_report:
         result = classify(
             {"bot_token": "some-token", "public_key": secret_value},
             record_id="rec-discord",

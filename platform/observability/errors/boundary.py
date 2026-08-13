@@ -46,9 +46,14 @@ def report_exception(
     # line of defense we shouldn't rely on exclusively. The wrapper keeps
     # `exc`'s `__traceback__` (but not `__cause__`/`__context__`, which would
     # print the raw text again as part of the chain) so logs and Sentry still
-    # point at the failing model/field.
+    # point at the failing model/field. Reuse the `integration` tag (every
+    # current caller sets one) for a human phrase instead of falling back to
+    # `message`'s tag-style text (e.g. "classify_failed: integration=... ")
+    # duplicated as the exception's own str().
     if isinstance(exc, ValidationError):
-        safe_exc = ValueError(message)
+        integration = (tags or {}).get("integration")
+        safe_text = f"{integration} config validation failed" if integration else message
+        safe_exc = ValueError(safe_text)
         safe_exc.__traceback__ = exc.__traceback__
         exc = safe_exc
     log_fn = getattr(logger, severity, logger.error)
