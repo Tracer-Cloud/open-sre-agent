@@ -735,3 +735,85 @@ def test_achieved_claim_does_not_false_complete_a_long_checklist() -> None:
     # Assert — the claim is ignored, and B..E are still outstanding.
     assert verdict.status == SessionGoalStatus.ACTIVE
     assert "checklist 0/5" in verdict.reason
+
+
+def test_pending_user_choice_outranks_an_achieved_claim_with_evidence() -> None:
+    """A queued choice gates the goal before any other rule is consulted.
+
+    The strongest possible achieve signal (claim + successful tool + a complete
+    checklist) must still lose to an unanswered question, or the session closes
+    a goal whose next step is waiting on the user.
+    """
+    from core.agent_harness.session.pending_choice import PendingUserChoice
+
+    # Arrange
+    session = SessionCore()
+    session.pending_user_choice = PendingUserChoice(
+        title="Which environment?", options=("staging", "production")
+    )
+    goal = SessionGoal(
+        condition="restart the service",
+        checklist=("Pick the environment",),
+        completed=frozenset({0}),
+    )
+    attach_session_goal(session, goal)
+
+    # Act
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Restarted. session_goal:achieved", executed=1, success=1),
+        session=session,
+    )
+
+    # Assert
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_USER_CHOICE
+
+
+def test_prior_turn_progress_blocks_the_untagged_same_turn_completion() -> None:
+    """The untagged shortcut is for a goal answered in one turn, not a resumed one.
+
+    Without a claim, a short checklist may auto-complete only when nothing was
+    done before this turn. A goal already carrying progress is mid-walkthrough,
+    so a turn that merely ran a tool must not close the remaining item.
+    """
+    # Arrange: same shape as the untagged same-turn case that does achieve,
+    # differing only in that item 0 was completed on an earlier turn.
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="how many windows users?",
+        checklist=("Query PostHog", "Report the number"),
+        completed=frozenset({0}),
+    )
+    attach_session_goal(session, goal)
+
+    # Act
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Still working on it.", executed=1, success=1),
+        session=session,
+    )
+
+    # Assert
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert "checklist 1/2" in verdict.reason
+
+
+def test_evidence_is_false_when_the_success_counts_are_not_numbers() -> None:
+    """A malformed count is absence of evidence, never a crash mid-turn.
+
+    ``executed_success_count`` and ``gather_success_count`` are read off a
+    duck-typed result, so a stub or a partially built turn can carry a
+    non-numeric value. Failing closed keeps a bad count from reading as proof.
+    """
+
+    class _BadCounts:
+        executed_success_count = "two"
+
+    class _BadResult:
+        action_result = _BadCounts()
+        gather_success_count = None
+        assistant_response_text = "done"
+
+    # Act / Assert
+    assert turn_has_session_goal_evidence(_BadResult()) is False
