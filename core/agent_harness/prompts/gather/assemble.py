@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from core.agent_harness.prompts.kernel.envelope import (
     PromptBlock,
+    PromptBlockId,
     PromptBlockKind,
     PromptEnvelope,
     PromptTier,
@@ -81,7 +82,7 @@ def build_gather_system_prompt_envelope(session: SessionState) -> PromptEnvelope
     """
     blocks = [
         PromptBlock(
-            id="gather-system-base",
+            id=PromptBlockId.GATHER_SYSTEM_BASE,
             kind=PromptBlockKind.SYSTEM,
             tier=PromptTier.STABLE,
             content=_GATHER_BASE,
@@ -92,7 +93,7 @@ def build_gather_system_prompt_envelope(session: SessionState) -> PromptEnvelope
     if vendor_fragments:
         blocks.append(
             PromptBlock(
-                id="gather-vendor-fragments",
+                id=PromptBlockId.GATHER_VENDOR_FRAGMENTS,
                 kind=PromptBlockKind.RULE,
                 tier=PromptTier.STABLE,
                 content=f"{vendor_fragments}\n",
@@ -106,7 +107,7 @@ def build_gather_system_prompt_envelope(session: SessionState) -> PromptEnvelope
     )
     blocks.append(
         PromptBlock(
-            id="gather-connected-integrations",
+            id=PromptBlockId.GATHER_CONNECTED_INTEGRATIONS,
             kind=PromptBlockKind.CONTEXT,
             tier=PromptTier.CONTEXT,
             content=f"Configured integrations in this session: {configured}.",
@@ -125,7 +126,7 @@ def build_gather_system_prompt_envelope(session: SessionState) -> PromptEnvelope
         )
         blocks.append(
             PromptBlock(
-                id="gather-prior-investigation",
+                id=PromptBlockId.GATHER_PRIOR_INVESTIGATION,
                 kind=PromptBlockKind.CONTEXT,
                 tier=PromptTier.VOLATILE,
                 content=(f"\n{rule}\n--- Prior investigation in this session ---\n{prior}\n"),

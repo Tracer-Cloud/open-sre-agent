@@ -50,6 +50,7 @@ from core.agent_harness.prompts.gather import (
 )
 from core.agent_harness.prompts.kernel import (
     PromptBlock,
+    PromptBlockId,
     PromptBlockKind,
     PromptEnvelope,
     PromptSurface,
@@ -75,6 +76,7 @@ __all__ = [
     "AssistantPromptParts",
     "AssistantTurnPrompt",
     "PromptBlock",
+    "PromptBlockId",
     "PromptBlockKind",
     "PromptEnvelope",
     "PromptSurface",
