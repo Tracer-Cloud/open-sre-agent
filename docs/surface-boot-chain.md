@@ -2,15 +2,17 @@
 
 OpenSRE can be reached in several ways — the `opensre` CLI, the interactive
 shell, the gateway daemon (chat channels), the gateway's web app, scheduled
-`cron` commands, and even a plain Python script embedding the agent. All of
-them start up the same way: each calls one function,
-`configure_process(<profile>)`, defined in
-[`bootstrap/process.py`](../bootstrap/process.py), before doing anything
-else. A surface's own code is only responsible for its channel and UX —
-rendering to a terminal, replying in chat, serving an HTTP route, parsing CLI
-arguments. None of them assemble their own startup sequence.
+`cron` commands, and even a plain Python script embedding the agent. Each of
+them starts up by running the same shared setup —
+`configure_process(<profile>)` in
+[`bootstrap/process.py`](../bootstrap/process.py) — rather than assembling
+its own startup sequence. A surface's own code is responsible only for its
+channel and UX (rendering to a terminal, replying in chat, serving an HTTP
+route, parsing CLI arguments) plus any prerequisites specific to that
+surface; some surfaces do a little of their own setup before or after the
+shared steps run (see "Where each surface calls it" below).
 
-## What `configure_process` actually does
+## What the shared setup does
 
 Startup is a short checklist of setup work that has to happen in the same
 order every time:
@@ -24,21 +26,22 @@ order every time:
    reports, cron jobs) knows how to run.
 5. **Log capability warnings** — flag anything the sandbox can't do in this
    environment.
-6. **Warm up the LLM client** — so the first real request isn't slowed down
-   by connection setup.
+6. **Preload the LLM client modules** — so a long-running process doesn't end
+   up mixing old and new versions of those modules after a later code
+   change.
 
-Not every surface needs every step. A `<profile>` is just a name for "the
-subset of this checklist a given surface needs" — the CLI needs far less
-than the gateway daemon does. Calling `configure_process` with a profile runs
-exactly those steps, in the order above, and it's safe to call more than
-once (later calls for the same surface are simply skipped).
+Not every surface needs every step. A profile is just a name for "the subset
+of this checklist a given surface needs" — the CLI needs far less than the
+gateway daemon does. Running the shared setup with a profile performs
+exactly those steps, in the order above, and running it again for a surface
+that's already started is a harmless no-op.
 
 ## The six profiles
 
 | Profile | What it sets up | Used by |
 | --- | --- | --- |
 | CLI | Just the environment. | The `opensre` command |
-| Gateway | Environment, error reporting, adapters, capability warnings, LLM warm-up. | The gateway daemon (chat channels) |
+| Gateway | Environment, error reporting, adapters, capability warnings, LLM preload. | The gateway daemon (chat channels) |
 | Web | Environment, error reporting, adapters. | The gateway's standalone web app |
 | Scheduler worker | Environment, error reporting, adapters, scheduler task runners. | The `opensre cron start` daemon |
 | Scheduled command | Environment, adapters, scheduler task runners. | One-off CLI commands that create, run, or dispatch scheduled work |
@@ -46,11 +49,16 @@ once (later calls for the same surface are simply skipped).
 
 ## Where each surface calls it
 
-- **CLI** — [`surfaces/cli/startup.py`](../surfaces/cli/startup.py) calls the
+- **CLI** — [`surfaces/cli/startup.py`](../surfaces/cli/startup.py) runs the
   CLI profile first, then handles CLI-only setup: its own error reporting
   (tolerant of a missing dependency during `opensre update`), terminal output
-  styling, and keyboard-interrupt handling. The interactive shell runs inside
-  this same already-started CLI process, so it doesn't start up again.
+  styling, and keyboard-interrupt handling. [`main.py`](../main.py), the
+  module-level entry point (`python main.py`), delegates straight into this
+  same CLI path — it does not use the embedded profile. (The embedded
+  profile only appears in `main.py`'s docstring, as an illustrative example
+  for someone embedding the agent in their own script.) The interactive
+  shell runs inside this same already-started CLI process, so it doesn't
+  start up again.
 - **Interactive shell's saved loops** — when a saved prompt loop needs its
   own background scheduler, it starts up with the scheduled-command profile
   in
@@ -58,24 +66,25 @@ once (later calls for the same surface are simply skipped).
   and
   [`surfaces/interactive_shell/command_registry/loops_cmds.py`](../surfaces/interactive_shell/command_registry/loops_cmds.py).
 - **Gateway daemon** — [`gateway/core/runtime/manager.py`](../gateway/core/runtime/manager.py)
-  sets up its own logging and credentials first, then starts up with the
-  gateway profile before connecting chat channels and the scheduler.
+  sets up its own logging, readiness state, and credentials first, then runs
+  the gateway profile before connecting chat channels and the scheduler.
 - **Gateway web app** — [`gateway/web/webapp.py`](../gateway/web/webapp.py)
-  starts up with the web profile as soon as the module loads, so both the
-  in-process gateway and a standalone web server have everything they need
-  before handling a request.
+  runs the web profile as soon as the module loads, so both the in-process
+  gateway and a standalone web server have everything they need before
+  handling a request.
 - **Scheduled/cron CLI commands** — one-off commands like `cron run` in
-  [`surfaces/cli/commands/cron.py`](../surfaces/cli/commands/cron.py),
-  [`sentry_digest.py`](../surfaces/cli/commands/sentry_digest.py), and
-  [`posthog_report.py`](../surfaces/cli/commands/posthog_report.py) start up
-  with the scheduled-command profile. The long-running `cron start` daemon
-  uses the scheduler-worker profile instead, since it needs its own error
-  reporting and only needs to register task runners once, not on every run.
-- **Embedded Python usage** — [`main.py`](../main.py) and
-  [`bootstrap/embedded.py`](../bootstrap/embedded.py) start up with the
-  embedded profile. This is also the pattern to follow if you're driving the
-  agent from your own Python script: call `configure_process` with the
-  embedded profile before your first request.
+  [`surfaces/cli/commands/cron.py`](../surfaces/cli/commands/cron.py) and
+  [`sentry_digest.py`](../surfaces/cli/commands/sentry_digest.py) run the
+  scheduled-command profile.
+  [`posthog_report.py`](../surfaces/cli/commands/posthog_report.py) checks
+  that the PostHog integration is configured first, then runs the same
+  profile. The long-running `cron start` daemon uses the scheduler-worker
+  profile instead, since it needs its own error reporting and only needs to
+  register task runners once, not on every run.
+- **Embedded Python usage** — [`bootstrap/embedded.py`](../bootstrap/embedded.py)
+  runs the embedded profile. This is also the pattern to follow if you're
+  driving the agent from your own Python script: run
+  `configure_process(EMBEDDED_PROFILE)` before your first request.
 
 ## Why it works this way
 
