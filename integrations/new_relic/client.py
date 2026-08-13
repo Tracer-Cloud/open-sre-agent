@@ -330,7 +330,7 @@ class NewRelicClient:
         # resolved incident as still open.
         nrql = (
             f"{_INCIDENTS_SELECT}{where_clause} "
-            f"SINCE {int(since_minutes)} minutes ago LIMIT {capped_limit} ORDER BY timestamp DESC"
+            f"SINCE {int(since_minutes)} minutes ago ORDER BY timestamp DESC LIMIT {capped_limit}"
         )
         outcome = self.run_nrql(nrql)
         # Callers detect truncation by comparing the raw row count against the

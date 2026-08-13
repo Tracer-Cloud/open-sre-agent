@@ -209,7 +209,7 @@ def test_query_incidents_orders_newest_first_so_a_cutoff_never_drops_the_close_r
     client.query_incidents(since_minutes=30, limit=10)
 
     sent_nrql = mock_http.post.call_args.kwargs["json"]["variables"]["nrql"]
-    assert sent_nrql.index("LIMIT 10") < sent_nrql.index("ORDER BY timestamp DESC")
+    assert sent_nrql.index("ORDER BY timestamp DESC") < sent_nrql.index("LIMIT 10")
 
 
 def test_query_incidents_reports_the_effective_limit_after_clamping(
