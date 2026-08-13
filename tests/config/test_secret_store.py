@@ -13,6 +13,7 @@ import os
 import stat
 from pathlib import Path
 
+import keyring
 import pytest
 
 from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
@@ -27,6 +28,7 @@ from config.secrets.store import (
     save_secret,
     secret_source,
 )
+from tests.shared.keyring_backend import MemoryKeyring
 
 _ENV_VAR = "OPENSRE_TEST_FALLBACK_TOKEN"
 
@@ -210,13 +212,24 @@ def test_logout_scrubs_the_keychain_even_when_local_storage_is_disabled(monkeypa
     intact while logout reported success, so unsetting the flag — or running an
     older release — restored access.
     """
-    # Arrange
-    deleted: list[str] = []
-    monkeypatch.setattr(os_keyring, "delete", deleted.append)
-    monkeypatch.setenv(OPENSRE_DISABLE_KEYRING_ENV, "1")
+    # Arrange — drive the real backend, not a stand-in for os_keyring.delete:
+    # the disable guard sits between them and is what this pins.
+    deleted: list[tuple[str, str]] = []
 
-    # Act
-    delete_secret(_ENV_VAR)
+    class _RecordingKeyring(MemoryKeyring):
+        def delete_password(self, service: str, username: str) -> None:
+            deleted.append((service, username))
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(_RecordingKeyring())
+    os_keyring.reset_keyring_state()
+    monkeypatch.setenv(OPENSRE_DISABLE_KEYRING_ENV, "1")
+    try:
+        # Act
+        delete_secret(_ENV_VAR)
+    finally:
+        keyring.set_keyring(previous)
+        os_keyring.reset_keyring_state()
 
     # Assert
-    assert deleted == [_ENV_VAR]
+    assert deleted == [("opensre.llm", _ENV_VAR)]

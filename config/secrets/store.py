@@ -20,12 +20,13 @@ import os
 from contextlib import suppress
 from dataclasses import dataclass
 
-from config.secrets import keychain_import, local_file, os_keyring
+from config.secrets import local_file, os_keyring
 from config.secrets.backend import (
     KeyringUnavailableError,
     KeyringUnavailableReason,
     SecretTier,
 )
+from config.secrets.keychain_import import import_keychain_secrets_once
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,7 @@ def lookup(env_var: str, *, default: str = "") -> SecretLookup:
     if os_keyring.keyring_is_disabled():
         return SecretLookup("", SecretTier.NONE)
 
-    keychain_import.import_keychain_secrets_once()
+    import_keychain_secrets_once()
     stored_value = local_file.get(env_var)
     if stored_value:
         return SecretLookup(stored_value, SecretTier.FALLBACK)

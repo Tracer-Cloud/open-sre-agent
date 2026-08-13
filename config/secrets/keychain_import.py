@@ -36,15 +36,15 @@ def _candidate_env_vars() -> tuple[str, ...]:
 
     Includes LLM provider API keys and integration secret env constants that
     share the same keyring service (Telegram, Slack, Sentry, …).
+
+    Reads API key names from :mod:`config.constants.llm` (a leaf) — never from
+    ``config.llm_auth``, which would import ``config.secrets.store`` and cycle.
     """
     import config.constants as constants
+    from config.constants.llm import OPEN_SRE_API_KEY_ENV_NAMES
     from config.env_key_sensitivity import is_sensitive_env_key
-    from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 
-    names: list[str] = []
-    for env in API_KEY_PROVIDER_ENVS.values():
-        if env:
-            names.append(str(env))
+    names: list[str] = list(OPEN_SRE_API_KEY_ENV_NAMES)
     for attr in dir(constants):
         if attr != "POSTHOG_CAPTURE_API_KEY" and not attr.endswith("_ENV"):
             continue

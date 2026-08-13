@@ -135,8 +135,14 @@ def delete(env_var: str) -> None:
     treats a failed keyring delete as non-fatal, so letting it mark the whole
     process unavailable would push every later read and write in the run onto
     the plaintext fallback because one logout could not reach the backend.
+
+    Nor does it honour ``OPENSRE_DISABLE_KEYRING``. That switch declines to
+    *store* secrets locally; refusing to delete on top of it left a revoked
+    credential in the keychain, recoverable by unsetting the flag. Removing a
+    secret is safe on a machine that has opted out of keeping any.
     """
-    _guard()
+    if _unavailable is not None:
+        raise _unavailable
     try:
         keyring.delete_password(KEYRING_SERVICE, env_var)
     except keyring.errors.PasswordDeleteError:
