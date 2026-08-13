@@ -170,7 +170,7 @@ def test_s3compat_check_public_access_returns_private() -> None:
     assert status.detail == ""
 
 
-def test_s3compat_check_public_access_no_policy_returns_private() -> None:
+def test_s3compat_check_public_access_no_policy_returns_unknown() -> None:
     # Arrange
     class _NoPolicyClient:
         def get_bucket_policy_status(self, Bucket: str) -> dict[str, Any]:  # noqa: ARG002
@@ -190,7 +190,8 @@ def test_s3compat_check_public_access_no_policy_returns_private() -> None:
     status = check_public_access(config, client=_NoPolicyClient())
 
     # Assert
-    assert status.exposure == BucketExposure.PRIVATE
+    assert status.exposure == BucketExposure.UNKNOWN
+    assert "no bucket policy" in status.detail
 
 
 @pytest.mark.parametrize(

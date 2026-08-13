@@ -157,7 +157,7 @@ def check_public_access(
                 BucketExposure.UNKNOWN, "missing the s3:GetBucketPolicyStatus permission"
             )
         if code == "NoSuchBucketPolicy":
-            return PublicAccessStatus(BucketExposure.PRIVATE)
+            return PublicAccessStatus(BucketExposure.UNKNOWN, "no bucket policy present")
         if code in (
             "MethodNotAllowed",
             "NotImplemented",
