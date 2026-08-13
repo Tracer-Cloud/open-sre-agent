@@ -259,6 +259,30 @@ class YandexCloudClient:
 
         return self._request(service, f"https://{host}{path}", path, query)
 
+    def post(
+        self,
+        service: str,
+        path: str,
+        body: dict[str, Any],
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Read via POST, for the few APIs whose reads take a request body.
+
+        Monitoring's metric read and Cloud Logging's reader are the two that
+        need this. It is not reachable from the generic tool - callers are the
+        curated per-service tools in this package, which name the exact endpoint
+        they talk to, so read-only stays a property of the client.
+        """
+        host = resolve_endpoint(service)
+        if host is None:
+            return self._failure(service, path, f"Unknown Yandex Cloud service '{service}'.")
+        rejected = _reject_path(path)
+        if rejected is not None:
+            return self._failure(service, path, f"Invalid path: {rejected}.")
+        return self._request(
+            service, f"https://{host}{path}", path, dict(params or {}), body=body, method="POST"
+        )
+
     def _request(
         self,
         service: str,

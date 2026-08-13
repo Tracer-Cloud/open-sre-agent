@@ -4,8 +4,25 @@ description: "Connect OpenSRE to a Yandex Cloud folder"
 ---
 
 OpenSRE reads a Yandex Cloud folder to investigate incidents in it. This page
-covers connecting the account; the tools that read metrics, logs and resources
-arrive in follow-up releases.
+covers connecting the account and what OpenSRE can read once connected.
+
+## What OpenSRE reads
+
+Once the folder is connected, an investigation can reach:
+
+| Area | What it answers |
+|---|---|
+| Monitoring | metric series for a query, and which metric names and labels exist |
+| Compute | which instances exist and which are stopped, plus serial console output |
+| Load balancers | which network or application balancer targets are unhealthy |
+| Everything else | any readable resource — container registry, DNS, KMS, Lockbox, YDB, certificates and the rest — looked up by name and read through the generic reader |
+
+The last row matters more than it looks: OpenSRE ships an index of every read
+endpoint the Yandex Cloud API exposes, so a service without a dedicated tool is
+still reachable. Cloud Logging and audit trails arrive in a follow-up release.
+
+OpenSRE never changes anything in your cloud. When an investigation concludes
+that something needs doing, it reports the exact `yc` command for you to run.
 
 ## What you need
 
