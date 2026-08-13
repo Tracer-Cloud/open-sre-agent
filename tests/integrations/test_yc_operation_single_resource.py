@@ -127,3 +127,41 @@ class TestFolderScope:
         )
 
         assert "folderId" not in backend.query
+
+
+class TestACollectionNestedUnderAResource:
+    """A folder scopes top-level collections only; a nested one is scoped by its parent.
+
+    Verified live against Yandex: ``/compute/v1/instances/{id}/operations`` with
+    ``folderId`` answers a bare ``404``, and the same path without it returns
+    the operation history. Paging is accepted either way, so only the folder has
+    to be withheld. This shape covers a large part of the API - cluster hosts,
+    node groups, disk and balancer operations - so getting it wrong hid all of
+    it behind a "resource does not exist" that was never true.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/compute/v1/instances/epd1/operations",
+            "/managed-postgresql/v1/clusters/c1/hosts",
+            "/managed-kubernetes/v1/clusters/c1/nodeGroups",
+            "/load-balancer/v1/networkLoadBalancers/n1/operations",
+        ],
+    )
+    def test_no_folder_is_added(self, path: str) -> None:
+        assert "folderId" not in _run(path)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/compute/v1/instances/epd1/operations",
+            "/managed-postgresql/v1/clusters/c1/hosts",
+        ],
+    )
+    def test_it_is_still_paged(self, path: str) -> None:
+        """Only the folder is rejected; withholding paging would truncate silently."""
+        assert is_collection_path(path)
+
+    def test_a_top_level_collection_still_gets_the_folder(self) -> None:
+        assert _run("/compute/v1/instances")["folderId"] == "b1gtest"

@@ -126,6 +126,25 @@ def is_collection_path(path: str) -> bool:
     return False
 
 
+def is_folder_scoped_collection(path: str) -> bool:
+    """Whether a folder is what scopes this collection, rather than a parent resource.
+
+    ``/compute/v1/instances`` lists everything in a folder, so it needs one.
+    ``/compute/v1/instances/{id}/operations`` is already scoped by the instance
+    named in the path, and Yandex answers a stray ``folderId`` there with the
+    same bare ``404`` it gives a single-resource read — so the operations of a
+    perfectly healthy instance come back as if the instance did not exist.
+
+    The distinction is one segment deep: a collection directly under the version
+    is folder-scoped, anything nested beneath a named resource is not.
+    """
+    segments = [segment for segment in path.split("/") if segment]
+    for index, segment in enumerate(segments):
+        if _VERSION_SEGMENT.fullmatch(segment):
+            return len(segments[index + 1 :]) == 1
+    return False
+
+
 def accepts_folder_scope(service: str) -> bool:
     """Whether *service* scopes its collections by ``folderId``.
 
@@ -448,6 +467,7 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "accepts_folder_scope",
     "is_collection_path",
+    "is_folder_scoped_collection",
     "MAX_LIST_ITEMS",
     "MAX_STRING_LENGTH",
     "YandexCloudClient",

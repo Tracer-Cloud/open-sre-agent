@@ -27,6 +27,7 @@ from integrations.yandex_cloud.rest_client import (
     DEFAULT_PAGE_SIZE,
     accepts_folder_scope,
     is_collection_path,
+    is_folder_scoped_collection,
 )
 
 SOURCE = "yandex_cloud"
@@ -128,9 +129,16 @@ def execute_yc_operation(
     # single-resource read, and Yandex reports that as a bare 404 — so adding
     # them unconditionally makes every existing resource look missing.
     collection = is_collection_path(path)
-    # A caller that passed cloudId is scoping the read some other way; adding a
-    # folder on top of it fails the same silent way.
-    wants_folder = collection and accepts_folder_scope(service) and "cloudId" not in query
+    # Paging is safe on any collection, but the folder only scopes the ones
+    # directly under the version: a nested collection is already scoped by the
+    # resource named in its path, and adding a folder there 404s the same silent
+    # way. A caller that passed cloudId is scoping the read some other way, so
+    # leave that alone too.
+    wants_folder = (
+        is_folder_scoped_collection(path)
+        and accepts_folder_scope(service)
+        and "cloudId" not in query
+    )
 
     if yc_backend is not None:
         folder_id = str(credentials.get("folder_id", "") or "")
