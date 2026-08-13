@@ -248,7 +248,7 @@ not a Mintlify docs-site page).
 | `OPENSRE_REMOTE_SYNC_PREFIX` | `opensre` | Key prefix, default `opensre`. Machines that should share history must use the same one | `config/constants/filestorage` |
 | `OPENSRE_REMOTE_SYNC_REGION` |  | Region override when the provider supports it (AWS) | `config/constants/filestorage` |
 | `OPENSRE_REMOTE_SYNC_PROFILE` |  | Named credentials profile, if opensre should not use your default (AWS) | `config/constants/filestorage` |
-| `OPENSRE_REMOTE_SYNC_EXCLUDE` |  | Comma-separated glob patterns to keep off the store. See [Exclude paths](#exclude-paths) in remote-sync.mdx | `config/constants/filestorage` |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE` | | Comma-separated glob patterns to keep off the store. See [Exclude paths](/configuration/remote-sync#exclude-paths) in remote-sync.mdx | `config/constants/filestorage` |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | `0` | Set to `1` to ignore your exclusions for one run and sync everything | `config/constants/filestorage` |
 | `BLOB_READ_WRITE_TOKEN` |  | Vercel Blob read-write token (when `provider=vercel`). Ambient; opensre never stores it | `config/constants/filestorage` |
 
