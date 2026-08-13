@@ -18,6 +18,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from pydantic import ValidationError
+
 from platform.observability.errors.sentry import capture_exception
 
 
@@ -36,6 +38,24 @@ def report_exception(
     Use at boundaries where an exception is intentionally swallowed (the
     function returns a degraded value to its caller).
     """
+    # `ValidationError.__str__` renders the rejected input inline via
+    # `input_value=...`, which for a model-level failure is the whole input
+    # mapping (secrets included). Swap in a message-only exception before it
+    # reaches either sink: local `exc_info` logging bypasses Sentry's
+    # `before_send` scrubber entirely, and Sentry's regex scrubber is a second
+    # line of defense we shouldn't rely on exclusively. The wrapper keeps
+    # `exc`'s `__traceback__` (but not `__cause__`/`__context__`, which would
+    # print the raw text again as part of the chain) so logs and Sentry still
+    # point at the failing model/field. Reuse the `integration` tag (every
+    # current caller sets one) for a human phrase instead of falling back to
+    # `message`'s tag-style text (e.g. "classify_failed: integration=... ")
+    # duplicated as the exception's own str().
+    if isinstance(exc, ValidationError):
+        integration = (tags or {}).get("integration")
+        safe_text = f"{integration} config validation failed" if integration else message
+        safe_exc = ValueError(safe_text)
+        safe_exc.__traceback__ = exc.__traceback__
+        exc = safe_exc
     log_fn = getattr(logger, severity, logger.error)
     # Some expected fallback paths (e.g. remote network probe timeouts) should
     # remain visible in logs without dumping a full traceback into the terminal UI.

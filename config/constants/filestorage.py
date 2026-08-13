@@ -36,6 +36,9 @@ REMOTE_SYNC_EXCLUDE_OFF_ENV = "OPENSRE_REMOTE_SYNC_EXCLUDE_OFF"
 # Same name Vercel documents for @vercel/blob / vercel CLI.
 BLOB_READ_WRITE_TOKEN_ENV = "BLOB_READ_WRITE_TOKEN"
 
+# Endpoint URL override for S3-compatible stores (MinIO, R2, Spaces, …).
+REMOTE_SYNC_ENDPOINT_URL_ENV = "OPENSRE_REMOTE_SYNC_ENDPOINT_URL"
+
 DEFAULT_REMOTE_SYNC_PREFIX = "opensre"
 DEFAULT_REMOTE_SYNC_PROVIDER = "aws"
 # Uploads run in parallel, capped per provider. This is the cap for a provider
@@ -50,6 +53,7 @@ __all__ = [
     "DEFAULT_REMOTE_SYNC_PREFIX",
     "DEFAULT_REMOTE_SYNC_PROVIDER",
     "REMOTE_SYNC_BUCKET_ENV",
+    "REMOTE_SYNC_ENDPOINT_URL_ENV",
     "REMOTE_SYNC_ENV",
     "REMOTE_SYNC_EXCLUDE_ENV",
     "REMOTE_SYNC_EXCLUDE_OFF_ENV",

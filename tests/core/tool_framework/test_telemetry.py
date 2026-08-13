@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel, ValidationError, model_validator
 
 from core.tool_framework.telemetry import report_run_error
 
@@ -123,6 +124,54 @@ def test_report_run_error_supports_warning_severity(
     assert error_records == [], "warning severity must not log at error level"
     warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert warning_records, "warning severity must produce a WARNING log record"
+
+
+class _SecretToolConfig(BaseModel):
+    api_key: str
+
+    @model_validator(mode="after")
+    def _reject(self) -> _SecretToolConfig:
+        # A model-level (not field-level) failure renders the *whole* input
+        # mapping via `input_value=...`, which is where a secret escapes.
+        raise ValueError("api_key rejected by policy")
+
+
+def test_report_run_error_validation_error_does_not_echo_secret(
+    captured_sentry_events: list[Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A model-level ValidationError's ``input_value`` can carry a secret field value.
+
+    ``message`` here is caller-built (``f"Tool {tool_name} failed: ..."``) and
+    must not interpolate ``str(exc)`` itself, or the report_exception scrub
+    (keyed off the exception, not the caller's message string) never runs on
+    the actual leaking text. Regression for a Greptile P1 finding on the
+    argocd/jira client-factory soft-fail-logging PR.
+    """
+    secret_api_key = "s3cr3t-tool-api-key"
+    try:
+        _SecretToolConfig.model_validate({"api_key": secret_api_key})
+    except ValidationError as exc:
+        validation_error: BaseException = exc
+    else:
+        raise AssertionError("expected ValidationError")
+
+    with caplog.at_level(logging.ERROR, logger="tools"):
+        report_run_error(
+            validation_error,
+            tool_name="configure_widget",
+            source="widget",
+            component="integrations.widget.tools",
+        )
+
+    assert secret_api_key not in caplog.text
+    assert "input_value" not in caplog.text
+
+    assert len(captured_sentry_events) == 1
+    captured_exc = captured_sentry_events[0].exc
+    assert not isinstance(captured_exc, ValidationError)
+    assert secret_api_key not in str(captured_exc)
+    assert "input_value" not in str(captured_exc)
 
 
 def test_report_run_error_uses_provided_logger(

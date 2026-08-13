@@ -18,6 +18,8 @@ def test_builtin_provider_matches_env_default() -> None:
     assert BuiltInProvider.AWS.value == "aws"
     assert BuiltInProvider.GCS.value == "gcs"
     assert BuiltInProvider.VERCEL.value == "vercel"
+    assert BuiltInProvider.AZURE.value == "azure"
+    assert BuiltInProvider.S3COMPAT.value == "s3compat"
 
 
 def test_syncable_roots_use_root_name_enum() -> None:

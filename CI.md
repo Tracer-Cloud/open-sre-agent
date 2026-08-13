@@ -1,6 +1,18 @@
-# CI Readiness — Mandatory Push/PR Harness
+# Local CI Readiness — Mandatory Pre-Push Harness
 
-This file is the **single source of truth** for local CI readiness before any push or PR.
+This file is the **single source of truth** for required local validation before
+any push or pull request. Repository-wide validation runs in GitHub Actions.
+Feature- or package-specific validation required by an applicable contributor
+guide supplements this harness and is intentionally not duplicated here.
+
+<!--
+Keep this document focused on required local checks and post-PR follow-through.
+Do not add optional commands, CI implementation details, or tool-specific
+procedures unless they change what contributors must do locally.
+Automated contributors must not invent or run additional local CI steps beyond
+the scoped checks below unless another applicable instruction or the user
+explicitly requires them.
+-->
 
 ## 0) Docs / process-only shortcut
 
@@ -93,56 +105,19 @@ runs the repository test suite in parallel shards.
 List the focused tests you ran in the PR description. CI is the authoritative
 repository-wide test result.
 
-## 4) Conditional checks
+## 8) Post-PR follow-through
 
-CI runs the fast registry smoke gate on every code change:
+Opening a pull request does not end the validation cycle. Follow it through until
+the repository's merge requirements are satisfied: required GitHub checks are
+green, actionable human or automated review feedback (including Greptile) is
+addressed, and resolved conversations are closed out.
 
-```bash
-make verify-integrations-smoke
-```
-
-If integration config, integration wiring, or related tools changed, also run the live check against your local store and environment:
-
-```bash
-make verify-integrations
-```
-
-## 5) Optional extra confidence
-
-You may run `make check` as a final pass, but it is heavier (`test-full`) than the required harness.
-
-## 6) Interactive-shell turn tests
-
-Interactive-shell live turn tests always run with live coverage enabled. Do not use deselection filters like `-k "not live_llm"`. Fix failures by improving planner/tool correctness or updating fixtures only when behavior changes are explicitly approved.
-
-For fast **local** iteration only, you can narrow the live suite with `--turn-select` (or the `TURN_SELECT` env var) without disabling live coverage:
-
-- `--turn-select=complex:N` runs the N most complex scenarios (multi-step plans, `runs > 1`, gather contracts, and `@live` integrations score highest).
-- `--turn-select=sample:N` runs a random N; add `--turn-select-seed` (or `TURN_SELECT_SEED`) for reproducibility.
-- `N` may be a count (`5`), a fraction (`0.1`), or a percentage (`10%`); a bare `complex`/`sample` defaults to 5%.
-
-```bash
-# Most complex five scenarios
-uv run python -m pytest tests/core/agent/test_turn_scenarios.py --turn-select=complex:5
-# Random ~5% sample, reproducible
-TURN_SELECT=sample:5% TURN_SELECT_SEED=7 uv run python -m pytest tests/core/agent/test_turn_scenarios.py
-```
-
-This is an iteration aid, not a substitute for full coverage: leave it unset for the pre-push/PR validation run, and never set it in CI (the sharded `turn-live` job runs every scenario).
-
-In CI, [`.github/workflows/interactive-shell-live.yml`](.github/workflows/interactive-shell-live.yml) runs two jobs on same-repo PRs and post-merge `main` pushes: a no-LLM `turn-checks` gate (deterministic command detection + fixture integrity, `-m "not live_llm"`) and the sharded `turn-live` job (8 shards, live coverage). The no-LLM gate is a fast guardrail, not a substitute for live coverage.
-
-`@live` gather scenarios **fail** (not skip) in GitHub Actions when integration credentials are missing; locally they may still skip. Natural-language investigation dispatch is **enabled** by default (`INTERACTIVE_SHELL_INVESTIGATION_ENABLED = True`). Investigation dispatch scenarios run in `turn-live`; if the flag is set to `False` for emergency rollback, those scenarios **skip** in live shards and `turn-checks` stays green. Require all `turn-checks` and `turn-live shard *` checks on `main` branch protection.
-
-## 7) CI-only tests
-
-Some paths require live infrastructure and are excluded from `make test-cov`:
-
-- Kubernetes / EKS scenarios (`tests/e2e/`)
-- Chaos Mesh workflows (`tests/chaos_engineering/`)
-- Docker-dependent Grafana stack tests
-
-Mark CI-only tests with the appropriate pytest marker or place them in the correct folder so they do not run locally by default.
+Use relevant built-in capabilities or locally installed skills, when available,
+for PR monitoring, CI diagnosis, and review remediation rather than duplicating
+tool-specific procedures in this document. Keep monitoring after each update;
+do not treat creating or updating the PR as task completion. Validate review
+suggestions before applying them, and rerun the appropriately scoped local
+checks before pushing a fix.
 
 ## Precedence
 

@@ -148,6 +148,8 @@ def _aware_utc(value: datetime) -> datetime:
 
 
 __all__ = [
+    "DEFAULT_PRIORITY_LIMIT",
+    "PRIORITY_WEIGHTS",
     "ScoreContribution",
     "WorkItemScore",
     "prioritize_work_items",
