@@ -87,8 +87,27 @@ def _first_target_group(balancer: dict[str, Any]) -> str:
     return str(attachments[0].get("targetGroupId", "")) if attachments else ""
 
 
+#: Where per-target health for an application balancer actually lives. Unlike
+#: the network balancer's ``:getTargetStates`` action, the application one is a
+#: nested read keyed by backend group and target group, so it needs the
+#: balancer's backend-group graph walked first — out of scope for a summary
+#: tool, but reachable through the generic reader.
+_ALB_TARGET_HEALTH_HINT = (
+    "not retrieved here; read it with execute_yc_operation on "
+    "/apploadbalancer/v1/loadBalancers/<id>/targetStates/"
+    "<backend_group_id>/<target_group_id>"
+)
+
+
 def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]], str, str]:
-    """Return application load balancers, an error, and the token for any further page."""
+    """Return application load balancers with their status, and the next-page token.
+
+    Per-target health is deliberately not fetched: the application balancer's
+    target-state read follows a nested path (see ``_ALB_TARGET_HEALTH_HINT``)
+    rather than the network balancer's action suffix, so listing the balancers
+    with their overall status is what this tool offers, and the pointer says
+    where to get the rest.
+    """
     listed = client.get(_ALB_SERVICE, _ALB_PATH, {"folderId": client.folder_id})
     if not listed.get("success"):
         return [], str(listed.get("error", "")), ""
@@ -96,23 +115,14 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
 
     balancers: list[dict[str, Any]] = []
     for balancer in (listed.get("data") or {}).get("loadBalancers") or []:
-        balancer_id = balancer.get("id", "")
-        states = client.get(_ALB_SERVICE, f"{_ALB_PATH}/{balancer_id}:getTargetStates")
         balancers.append(
             {
-                "id": balancer_id,
+                "id": balancer.get("id", ""),
                 "name": balancer.get("name", ""),
                 "type": TYPE_APPLICATION,
                 "status": balancer.get("status", ""),
                 "listeners": len(balancer.get("listeners") or []),
-                # Normalised like the network balancer so its unhealthy targets
-                # reach the aggregation; the raw response stays for the detail
-                # the flattened view drops.
-                "targets": _normalized_targets(states),
-                "target_states": (states.get("data") or {}) if states.get("success") else {},
-                "target_states_error": ""
-                if states.get("success")
-                else str(states.get("error", "")),
+                "target_health": _ALB_TARGET_HEALTH_HINT,
             }
         )
     return balancers, "", more
@@ -138,8 +148,8 @@ def _application_balancers(client: YandexCloudClient) -> tuple[list[dict[str, An
     ],
     requires=[],
     outputs={
-        "balancers": "each balancer with its status and target health",
-        "unhealthy_targets": "targets failing their health check, across all balancers",
+        "balancers": "each balancer with its status; network balancers also carry per-target health",
+        "unhealthy_targets": "targets failing their health check on network balancers; application balancers list status only, with a pointer to their nested target-state path",
         "count": "how many balancers were returned",
     },
     input_schema={

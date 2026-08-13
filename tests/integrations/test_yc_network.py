@@ -125,35 +125,39 @@ class TestAnIncompleteListSaysSo:
         assert "note" not in result
 
 
-class TestApplicationTargetsReachAggregation:
-    """An unhealthy application-balancer target must surface, not just network ones.
+class TestApplicationBalancersAreListedNotFabricated:
+    """Application target health follows a nested path this tool does not walk.
 
-    Both kinds answer getTargetStates with the same shape, so both feed the
-    unhealthy_targets summary. Reading only the network kind is how a failing
-    application backend goes unreported.
+    The network balancer's ``:getTargetStates`` action does not exist for the
+    application balancer, whose target states live under
+    ``/loadBalancers/{id}/targetStates/{backend_group}/{target_group}``. So the
+    tool lists application balancers with their status and points at the real
+    path rather than calling a URL the API does not serve.
     """
 
-    def test_an_unhealthy_alb_target_is_collected(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "integrations.yandex_cloud.rest_client.send_request",
-            _responder(
-                {
-                    "/load-balancer/v1/networkLoadBalancers": {"loadBalancers": []},
-                    ":getTargetStates": {
-                        "targetStates": [
-                            {"address": "10.1.0.1", "status": "HEALTHY"},
-                            {"address": "10.1.0.9", "status": "UNHEALTHY"},
-                        ]
-                    },
-                    "/apploadbalancer/v1/loadBalancers": {
+    def test_an_application_balancer_is_listed_with_a_pointer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        called: list[str] = []
+
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            called.append(url)
+            if "/apploadbalancer/v1/loadBalancers" in url:
+                return httpx.Response(
+                    200,
+                    json={
                         "loadBalancers": [{"id": "alb-1", "name": "ingress", "status": "ACTIVE"}]
                     },
-                }
-            ),
-        )
+                )
+            return httpx.Response(200, json={"loadBalancers": []})
 
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(type="application", **_CREDENTIALS)
 
-        assert len(result["unhealthy_targets"]) == 1
-        assert result["unhealthy_targets"][0]["address"] == "10.1.0.9"
-        assert result["unhealthy_targets"][0]["balancer"] == "ingress"
+        alb = result["balancers"][0]
+        assert alb["status"] == "ACTIVE"
+        assert "targetStates" in alb["target_health"]
+        # The tool must not invent per-target health by hitting a path the API
+        # does not serve for application balancers.
+        assert not any(":getTargetStates" in url for url in called)
+        assert result["unhealthy_targets"] == []
