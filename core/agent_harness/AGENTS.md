@@ -67,11 +67,9 @@ Empty SQL / vendor-query failures stay L1 (no L0 CTA). A metric gather that neve
 ran a live query still gets a vendor-registered draft query block (via
 `platform.harness_ports.register_metric_query_draft`) and one
 `/integrations setup …` line, then stops — the **unformed-metric floor**
-(`turns/metric_query_floor.py`: policy only). Cohort / signup identity
-markers and dialect live in integrations
-(`register_metric_cohort_goal_matcher`,
-`register_metric_cohort_unverified_detector`,
-`register_metric_cohort_resolver`).
+(`turns/metric_query_floor.py`). Product cohort / signup-retention identity
+is core policy (`turns/cohort_identity.py`); vendors supply dialect drafts and
+optional observation parsers (`register_metric_cohort_resolver`).
 
 **No keyword intent routing around the action agent.** Do not scan user text
 with regex/keywords to skip gather, attach goals, or bypass `execute_actions`.

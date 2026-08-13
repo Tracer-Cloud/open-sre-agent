@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from core.agent_harness.session.session_core import SessionCore
 from core.agent_harness.session_goal.confirm import build_session_goal_llm_evaluator
 from core.agent_harness.session_goal.evaluate import (
@@ -18,16 +16,6 @@ from core.agent_harness.session_goal.goal import (
 )
 from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from integrations.posthog_mcp.cohort_identity import register_posthog_mcp_cohort_identity
-from platform.harness_ports import clear_metric_query_drafts
-
-
-@pytest.fixture(autouse=True)
-def _register_posthog_cohort_identity() -> None:
-    clear_metric_query_drafts()
-    register_posthog_mcp_cohort_identity()
-    yield
-    clear_metric_query_drafts()
 
 
 def _result(

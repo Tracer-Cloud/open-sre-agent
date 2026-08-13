@@ -690,33 +690,30 @@ def preferred_evidence_sources_for(kind: str) -> tuple[str, ...]:
     return _preferred_evidence_sources.get(kind, ())
 
 
+def preferred_evidence_sources_by_kind() -> dict[str, tuple[str, ...]]:
+    """Return a copy of every kind → preferred service ids map."""
+    return {kind: ids for kind, ids in _preferred_evidence_sources.items() if ids}
+
+
 def clear_preferred_evidence_sources() -> None:
     _preferred_evidence_sources.clear()
 
 
 # ---------------------------------------------------------------------------
-# Metric query drafts + cohort identity (vendor-owned)
+# Metric query drafts + vendor cohort resolvers
 # ---------------------------------------------------------------------------
 #
-# Core decides *when* an unformed metric answer needs a draft fence + setup
-# slash. Draft text, which SessionGoals need cohort identity, and how to tell
-# an honest refuse from a live answer are vendor concerns — each analytics
-# package opts in at boot. With no registrations, core never takes a
-# cohort-specific path.
+# Core owns *when* an unformed metric answer needs a draft fence + setup slash
+# and *when* a SessionGoal is about people-cohort identity
+# (:mod:`core.agent_harness.turns.cohort_identity`). Draft text and how to
+# parse a vendor's observations for "cohort resolved" are integration-owned
+# and opt in here. With no draft registered, core uses a generic text fence.
 
 MetricCohortResolvedFn = Callable[[Any, str], bool]
 """``(evidence, reply) -> True`` when a vendor cohort is live-resolved."""
 
-MetricCohortGoalMatcherFn = Callable[[str], bool]
-"""``(goal_condition) -> True`` when this vendor's cohort draft path applies."""
-
-MetricCohortUnverifiedFn = Callable[[str], bool]
-"""``(reply) -> True`` when the reply reports that cohort identity is open."""
-
 _metric_query_drafts: dict[str, tuple[str, str | None]] = {}
 _metric_cohort_resolvers: dict[str, MetricCohortResolvedFn] = {}
-_metric_cohort_goal_matchers: list[MetricCohortGoalMatcherFn] = []
-_metric_cohort_unverified_detectors: list[MetricCohortUnverifiedFn] = []
 
 
 def register_metric_query_draft(
@@ -748,16 +745,6 @@ def register_metric_cohort_resolver(service_id: str, resolver: MetricCohortResol
     key = service_id.strip()
     if key:
         _metric_cohort_resolvers[key] = resolver
-
-
-def register_metric_cohort_goal_matcher(matcher: MetricCohortGoalMatcherFn) -> None:
-    """Register when a SessionGoal condition should use this vendor's cohort path."""
-    _metric_cohort_goal_matchers.append(matcher)
-
-
-def register_metric_cohort_unverified_detector(detector: MetricCohortUnverifiedFn) -> None:
-    """Register how this vendor detects an honest cohort-unverified refuse reply."""
-    _metric_cohort_unverified_detectors.append(detector)
 
 
 def metric_query_draft_for(
@@ -800,23 +787,9 @@ def metric_cohort_resolved_for(
     return None
 
 
-def metric_goal_needs_cohort_identity(condition: str) -> bool:
-    """True when any registered vendor says this SessionGoal needs cohort identity."""
-    text = condition or ""
-    return any(matcher(text) for matcher in _metric_cohort_goal_matchers)
-
-
-def metric_reply_reports_cohort_unverified(reply: str) -> bool:
-    """True when any registered vendor says the reply left cohort identity open."""
-    text = reply or ""
-    return any(detector(text) for detector in _metric_cohort_unverified_detectors)
-
-
 def clear_metric_query_drafts() -> None:
     _metric_query_drafts.clear()
     _metric_cohort_resolvers.clear()
-    _metric_cohort_goal_matchers.clear()
-    _metric_cohort_unverified_detectors.clear()
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ def _snapshot(*, connected: tuple[str, ...], known: bool = True) -> TurnSnapshot
     )
 
 
-def test_integration_guard_lists_setupable_ids_and_blocks_invented_analytics() -> None:
+def test_integration_guard_lists_setupable_ids_and_covered_evidence_kinds() -> None:
     harness_ports.set_setupable_integration_services(
         lambda: ("posthog_mcp", "grafana", "sentry_mcp")
     )
@@ -31,9 +31,11 @@ def test_integration_guard_lists_setupable_ids_and_blocks_invented_analytics() -
 
     assert "posthog_mcp" in text
     assert "Only these service ids are valid" in text
-    assert "mixpanel" in text.lower()  # named as forbidden example
-    assert "already covered" in text.lower()
-    assert "product analytics" in text.lower()
+    assert "Never invent a service id that is not in that list" in text
+    assert "mixpanel" not in text.lower()
+    assert "evidence kind `metric_read`" in text
+    assert "already connected" in text.lower()
+    assert "That kind is covered" in text
 
 
 def test_integration_guard_empty_when_integrations_unknown() -> None:

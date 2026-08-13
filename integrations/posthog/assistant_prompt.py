@@ -6,7 +6,7 @@ from ``integrations/harness_adapters.py``.
 
 from __future__ import annotations
 
-from integrations.posthog_mcp.cohort_identity import SIGNUP_EVENT_UNVERIFIED_MARK
+from core.agent_harness.turns.cohort_identity import COHORT_IDENTITY_UNVERIFIED_MARK
 
 
 def posthog_assistant_prompt_fragment() -> str:
@@ -21,7 +21,7 @@ def posthog_assistant_prompt_fragment() -> str:
         "never silently widen the window or present a failed query as zero. "
         "Signup / signed-up / retention-of-signups: never treat user_signed_in / "
         "login events as signup. If the signup event is unverified, say so with "
-        f"'{SIGNUP_EVENT_UNVERIFIED_MARK}' and draft HogQL that leaves the event "
+        f"'{COHORT_IDENTITY_UNVERIFIED_MARK}' and draft HogQL that leaves the event "
         "name as a placeholder — do not publish a retention % or signup count."
     )
 

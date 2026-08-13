@@ -2,17 +2,19 @@
 
 Live tools can be connected and still fail to form a count query (unknown
 event, schema-only probes). The answer must still include a labeled draft
-query block (vendor-registered dialect) and one ``/integrations setup …``
-line, then stop — never invent a number, never burn extra ``/goal`` turns.
+query block (vendor-registered dialect, else a generic fence) and one
+``/integrations setup …`` line, then stop — never invent a number, never burn
+extra ``/goal`` turns.
 
-When a registered vendor says the SessionGoal needs cohort identity and that
-identity is still open after live probes, those replies also get the vendor's
-cohort draft fence. Setup slash is omitted when the preferred analytics source
-is already connected.
+Product cohort / signup-retention SessionGoals
+(:mod:`core.agent_harness.turns.cohort_identity`) that leave identity open
+after live probes also get a vendor cohort draft when one is registered.
+Setup slash is omitted when the preferred analytics source is already
+connected.
 
-Vendor dialect, goal matchers, and unverified-reply detectors live in
-integrations and opt in via :mod:`platform.harness_ports` — this module stays
-source-agnostic.
+This policy applies for every preferred metric source — not a single vendor.
+Only the draft *text* and optional observation parsers are integration-owned
+via :mod:`platform.harness_ports`.
 """
 
 from __future__ import annotations
@@ -22,6 +24,10 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
+from core.agent_harness.turns.cohort_identity import (
+    goal_needs_cohort_identity,
+    reply_reports_cohort_unverified,
+)
 from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import EvidenceNeed, SetupCommandForSource
 from core.agent_harness.turns.gather_discovery_budget import is_live_metric_query_call
@@ -31,9 +37,7 @@ from core.agent_harness.turns.gather_observation import (
 )
 from platform.harness_ports import (
     metric_cohort_resolved_for,
-    metric_goal_needs_cohort_identity,
     metric_query_draft_for,
-    metric_reply_reports_cohort_unverified,
 )
 
 METRIC_UNFORMED_HANDOFF = "evidence_tier:metric_unformed"
@@ -134,7 +138,7 @@ def _cohort_identity_resolved(
         return resolved
     # No vendor resolver: an unverified reply keeps the floor; otherwise trust
     # a formed live query's answer.
-    return not metric_reply_reports_cohort_unverified(reply)
+    return not reply_reports_cohort_unverified(reply)
 
 
 def _session_goal_condition(session: Any | None) -> str:
@@ -162,16 +166,15 @@ def apply_unformed_metric_floor(
     """Append a draft query (+ setup when needed) for unformed metric answers.
 
     No-op for non-metric turns. For ordinary metrics, no-op when a live query
-    already ran. When a registered vendor marks the SessionGoal as needing
-    cohort identity and that identity is still open, still append a vendor
-    draft fence — even after candidate probes. Setup slash is skipped when the
-    preferred source is already connected.
+    already ran. When the SessionGoal needs cohort identity and that identity
+    is still open, still append a draft fence — even after candidate probes.
+    Setup slash is skipped when the preferred source is already connected.
     """
     if need.kind is not EvidenceKind.METRIC_READ:
         return response_text
     evidence = coerce_gathered_evidence(observation)
     condition = goal_condition if goal_condition is not None else _session_goal_condition(session)
-    cohort_goal = metric_goal_needs_cohort_identity(condition)
+    cohort_goal = goal_needs_cohort_identity(condition)
     formed = gather_formed_live_metric_query(
         evidence,
         metric_source_ids=(*need.preferred_sources, *need.connected),

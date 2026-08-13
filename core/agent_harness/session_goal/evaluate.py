@@ -24,10 +24,10 @@ claim, not proof. This module is the independent host check:
   ``executed_success_count`` at 0. Final-route identity alone
   (``cli_agent_fallback`` / summarize) is not evidence — unsupported fallbacks
   must not close the goal.
-* Host-owned goal whose reply reports cohort identity unverified (vendor-
-  registered refuse + draft path) → achieve without requiring gather
-  successes. Models often stop before a count query; staying ACTIVE forced a
-  redundant outer turn.
+* Host-owned goal whose reply reports cohort identity unverified (product
+  refuse + draft path) → achieve without requiring gather successes.
+  Models often stop before a count query; staying ACTIVE forced a redundant
+  outer turn.
 * ``achieved`` with no checklist on a handoff goal → require tool evidence, or
   stay active.
 * Hosts may wrap :func:`evaluate_session_goal` with an LLM confirm for the
@@ -48,9 +48,9 @@ from core.agent_harness.session_goal.goal import (
     attach_session_goal,
 )
 from core.agent_harness.session_goal.progress import is_session_goal_progress_paint
-from platform.harness_ports import (
-    metric_goal_needs_cohort_identity,
-    metric_reply_reports_cohort_unverified,
+from core.agent_harness.turns.cohort_identity import (
+    goal_needs_cohort_identity,
+    reply_reports_cohort_unverified,
 )
 
 # Standalone progress tag — same token shape as strip_session_goal_progress_tags.
@@ -259,8 +259,8 @@ def evaluate_session_goal(
             and not dispatched
             and bool(text.strip())
             and not is_session_goal_progress_paint(text)
-            and metric_goal_needs_cohort_identity(current.condition)
-            and metric_reply_reports_cohort_unverified(text)
+            and goal_needs_cohort_identity(current.condition)
+            and reply_reports_cohort_unverified(text)
         ):
             # Honest refuse on an attached cohort /goal: identity was the
             # deliverable (condition allows draft when a live % is impossible).

@@ -1,8 +1,8 @@
 """PostHog MCP owns HogQL draft fences and signup-event identity checks.
 
-Core's metric floor decides *when* to append a draft; this package supplies
-the PostHog dialect (HogQL) and how to tell a real signup event from a login
-stand-in in gather observations.
+Core's metric floor decides *when* to append a draft and when a SessionGoal
+needs cohort identity. This package supplies the PostHog dialect (HogQL) and
+how to tell a real signup event from a login stand-in in gather observations.
 """
 
 from __future__ import annotations
@@ -10,12 +10,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from core.agent_harness.turns.cohort_identity import reply_reports_cohort_unverified
 from core.agent_harness.turns.gather_observation import (
     coerce_gathered_evidence,
-)
-from integrations.posthog_mcp.cohort_identity import (
-    posthog_reply_reports_cohort_unverified,
-    register_posthog_mcp_cohort_identity,
 )
 from platform.harness_ports import (
     register_metric_cohort_resolver,
@@ -81,7 +78,7 @@ def _names_a_signup_event(event: str) -> bool:
 
 def posthog_signup_cohort_resolved(evidence: Any, reply: str) -> bool:
     """True when gather queried a named signup event and the reply is a live %."""
-    if posthog_reply_reports_cohort_unverified(reply):
+    if reply_reports_cohort_unverified(reply):
         return False
     gathered = coerce_gathered_evidence(evidence)
     if gathered is None:
@@ -94,14 +91,13 @@ def posthog_signup_cohort_resolved(evidence: Any, reply: str) -> bool:
 
 
 def register_posthog_mcp_metric_drafts() -> None:
-    """Opt PostHog MCP into the unformed-metric draft floor + cohort identity."""
+    """Opt PostHog MCP into the unformed-metric draft floor."""
     register_metric_query_draft(
         "posthog_mcp",
         count_draft=_DRAFT_HOGQL_COUNT,
         cohort_draft=_DRAFT_HOGQL_COHORT,
     )
     register_metric_cohort_resolver("posthog_mcp", posthog_signup_cohort_resolved)
-    register_posthog_mcp_cohort_identity()
 
 
 __all__ = [

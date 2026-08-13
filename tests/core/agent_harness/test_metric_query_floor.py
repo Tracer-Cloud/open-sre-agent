@@ -5,6 +5,10 @@ from __future__ import annotations
 import pytest
 
 from core.agent_harness.session_goal.goal import SessionGoal
+from core.agent_harness.turns.cohort_identity import (
+    goal_needs_cohort_identity,
+    reply_reports_cohort_unverified,
+)
 from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import EvidenceNeed, EvidenceTier
 from core.agent_harness.turns.gather_observation import GatheredEvidence
@@ -14,11 +18,7 @@ from core.agent_harness.turns.metric_query_floor import (
 )
 from integrations.grafana.metric_drafts import register_grafana_metric_drafts
 from integrations.posthog_mcp.metric_drafts import register_posthog_mcp_metric_drafts
-from platform.harness_ports import (
-    clear_metric_query_drafts,
-    metric_goal_needs_cohort_identity,
-    metric_reply_reports_cohort_unverified,
-)
+from platform.harness_ports import clear_metric_query_drafts
 
 
 @pytest.fixture(autouse=True)
@@ -194,8 +194,8 @@ def test_signup_goal_unverified_after_live_probes_gets_draft_without_reconnect()
             )
         },
     )()
-    assert metric_goal_needs_cohort_identity(session.session_goal.condition)
-    assert metric_reply_reports_cohort_unverified(reply)
+    assert goal_needs_cohort_identity(session.session_goal.condition)
+    assert reply_reports_cohort_unverified(reply)
     text = apply_unformed_metric_floor(
         reply,
         _need(connected=("posthog_mcp",)),
@@ -235,3 +235,36 @@ def test_signup_goal_verified_live_percent_skips_floor() -> None:
         session=session,
     )
     assert text == original
+
+
+def test_cohort_floor_applies_with_grafana_only_preferred_source() -> None:
+    """Product cohort policy is not PostHog-gated — any preferred source drafts."""
+    need = EvidenceNeed(
+        kind=EvidenceKind.METRIC_READ,
+        preferred_sources=("grafana",),
+        connected=("grafana",),
+        missing=(),
+        tier=EvidenceTier.L1,
+        required_for_authoritative=True,
+    )
+    reply = "signup event unverified — cannot provide a retention percentage."
+    session = type(
+        "S",
+        (),
+        {
+            "session_goal": SessionGoal(
+                condition="D7 retention for users who signed up last month",
+                max_outer_turns=4,
+                host_owned=True,
+            )
+        },
+    )()
+    text = apply_unformed_metric_floor(
+        reply,
+        need,
+        observation="Tool: query_grafana_metrics\nArguments: {}\nResult: []",
+        setup_command_for=lambda name: f"/integrations setup {name}",
+        session=session,
+    )
+    assert "```promql" in text
+    assert "/integrations setup" not in text
