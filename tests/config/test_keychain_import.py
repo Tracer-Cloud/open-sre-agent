@@ -20,6 +20,7 @@ def _isolated_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Suite conftest disables local persistence; this module must exercise it.
     monkeypatch.delenv(OPENSRE_DISABLE_KEYRING_ENV, raising=False)
     os_keyring.reset_keyring_state()
+    keychain_import.reset_import_state()
     monkeypatch.setattr(local_file, "store_path", lambda: tmp_path / "credentials.json")
     monkeypatch.setattr(keychain_import, "_marker_path", lambda: tmp_path / "keychain-imported")
     # Tests that need enumeration opt in; default off so CI never dumps the
@@ -228,6 +229,37 @@ def test_a_local_file_lock_timeout_leaves_the_import_pending(
     assert keychain_import._already_imported() is False
 
 
+def test_a_failed_local_keys_listing_leaves_the_import_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lock timeout on keys() must not finalize — dynamic local twins go unscanned."""
+    from filelock import Timeout
+
+    local_file.set("MY_CUSTOM_INTEGRATION_TOKEN", "sk-local")
+    deleted = _install_keychain(monkeypatch, {"MY_CUSTOM_INTEGRATION_TOKEN": "sk-stale"})
+
+    def _locked_keys() -> tuple[str, ...]:
+        raise Timeout("/tmp/credentials.json.lock")
+
+    monkeypatch.setattr(local_file, "keys", _locked_keys)
+
+    keychain_import.import_keychain_secrets_once()
+
+    assert keychain_import._already_imported() is False
+    assert "MY_CUSTOM_INTEGRATION_TOKEN" not in deleted
+
+
+def test_non_enumerable_platform_never_writes_the_permanent_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without username listing, finishing the constants scan is not completion."""
+    _install_keychain(monkeypatch, {"ANTHROPIC_API_KEY": "sk-ant-live"})
+
+    assert keychain_import.import_keychain_secrets_once() == ("ANTHROPIC_API_KEY",)
+    assert local_file.get("ANTHROPIC_API_KEY") == "sk-ant-live"
+    assert keychain_import._already_imported() is False
+
+
 def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     """Local copy alone must not complete migration while the OS entry remains."""
     from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
@@ -250,7 +282,7 @@ def test_a_failed_scrub_leaves_the_import_pending(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(keychain_import.os_keyring, "delete", lambda name: deleted.append(name))
     assert keychain_import.import_keychain_secrets_once() == ()
     assert "ANTHROPIC_API_KEY" in deleted
-    assert keychain_import._already_imported() is True
+    assert keychain_import._already_imported() is False
 
 
 def test_enumerated_dynamic_names_are_migrated(monkeypatch: pytest.MonkeyPatch) -> None:

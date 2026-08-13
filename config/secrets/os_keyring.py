@@ -153,28 +153,42 @@ def delete(env_var: str) -> None:
         raise _classify(exc) from exc
 
 
+def _is_secret_service_backend() -> bool:
+    try:
+        backend = _backend()
+    except Exception:
+        return False
+    return backend.__class__.__module__.startswith("keyring.backends.SecretService")
+
+
 def supports_username_enumeration() -> bool:
     """Whether this process can list account names under ``KEYRING_SERVICE``.
 
-    macOS Keychain + ``security dump-keychain`` (metadata only, no ``-d``) can
-    surface every generic-password account for our service — including names the
-    finite constants scan never knew about. Other backends have no portable list
-    API in ``keyring``.
+    macOS Keychain + ``security dump-keychain`` (metadata only, no ``-d``) and
+    Freedesktop Secret Service (search by service attribute) can surface every
+    account for our service — including names the finite constants scan never
+    knew about. Other backends have no portable list API in ``keyring``.
     """
-    if sys.platform != "darwin" or not _is_macos_backend():
-        return False
-    return shutil.which("security") is not None
+    if sys.platform == "darwin" and _is_macos_backend() and shutil.which("security"):
+        return True
+    return _is_secret_service_backend()
 
 
 def list_usernames() -> tuple[str, ...] | None:
     """Account names stored under ``KEYRING_SERVICE``, without reading secrets.
 
-    Returns ``None`` when enumeration is unsupported or the dump failed — the
+    Returns ``None`` when enumeration is unsupported or the listing failed — the
     one-time importer must not mark itself done on an enumerable platform when
     this is ``None``, or dynamically named leftovers stay recoverable forever.
     """
-    if not supports_username_enumeration():
-        return None
+    if sys.platform == "darwin" and _is_macos_backend():
+        return _list_macos_usernames()
+    if _is_secret_service_backend():
+        return _list_secret_service_usernames()
+    return None
+
+
+def _list_macos_usernames() -> tuple[str, ...] | None:
     security_bin = shutil.which("security")
     if security_bin is None:
         return None
@@ -191,6 +205,28 @@ def list_usernames() -> tuple[str, ...] | None:
     if result.returncode != 0:
         return None
     return _usernames_for_service(result.stdout, KEYRING_SERVICE)
+
+
+def _list_secret_service_usernames() -> tuple[str, ...] | None:
+    """List usernames for ``KEYRING_SERVICE`` via Secret Service attributes."""
+    from contextlib import closing
+
+    try:
+        backend = _backend()
+        scheme = backend.schemes[backend.scheme]
+        username_key = scheme["username"]
+        collection = backend.get_preferred_collection()
+        with closing(collection.connection):
+            items = collection.search_items(backend._query(KEYRING_SERVICE))
+            names: list[str] = []
+            for item in items:
+                attrs = item.get_attributes()
+                name = attrs.get(username_key) if isinstance(attrs, dict) else None
+                if isinstance(name, str) and name:
+                    names.append(name)
+            return tuple(dict.fromkeys(names))
+    except Exception:
+        return None
 
 
 def _usernames_for_service(dump_text: str, service: str) -> tuple[str, ...]:

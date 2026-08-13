@@ -26,7 +26,10 @@ from config.secrets.backend import (
     KeyringUnavailableReason,
     SecretTier,
 )
-from config.secrets.keychain_import import import_keychain_secrets_once
+from config.secrets.keychain_import import (
+    import_keychain_secrets_once,
+    import_named_keychain_secret,
+)
 
 
 @dataclass(frozen=True)
@@ -61,9 +64,19 @@ def lookup(env_var: str, *, default: str = "") -> SecretLookup:
         return SecretLookup("", SecretTier.NONE)
 
     import_keychain_secrets_once()
-    stored_value = local_file.get(env_var)
+    try:
+        stored_value = local_file.get(env_var)
+    except OSError:
+        # Contended credential file — treat as a miss for this call rather than
+        # aborting credential resolution / startup.
+        return SecretLookup("", SecretTier.NONE)
     if stored_value:
         return SecretLookup(stored_value, SecretTier.FALLBACK)
+    # Non-enumerable platforms never write the permanent import marker; a
+    # dynamic keychain-only name becomes visible the first time it is looked up.
+    migrated = import_named_keychain_secret(env_var)
+    if migrated:
+        return SecretLookup(migrated, SecretTier.FALLBACK)
     return SecretLookup("", SecretTier.NONE)
 
 

@@ -3,7 +3,9 @@
 Reads no longer consult the keychain for resolution, so secrets written by
 earlier versions would otherwise become invisible. This runs until it can
 finish a full probe of every candidate name, copies what it finds, deletes the
-keychain copies it migrated, and only then writes a marker.
+keychain copies it migrated, and only then writes a marker — and only when the
+platform can enumerate keychain usernames so dynamically named leftovers are
+not stranded.
 
 Only entries that :func:`config.secrets.os_keyring.item_exists` reports as
 present are read when that probe is definitive. When the probe is indeterminate
@@ -11,9 +13,11 @@ present are read when that probe is definitive. When the probe is indeterminate
 ``security`` still migrate. A locked or unreachable keychain leaves the marker
 unwritten so a later run can finish the move.
 
-On macOS, account names are also taken from a metadata-only keychain dump so
-dynamically named secrets (``record:…``, custom integration env vars) are not
-stranded after the finite constants scan finishes.
+On platforms that can enumerate (macOS dump, Secret Service search), account
+names are discovered so ``record:…`` and custom integration env vars are not
+stranded after the finite constants scan finishes. Elsewhere, known names are
+still migrated, the permanent marker is never written, and
+:func:`import_named_keychain_secret` covers a looked-up dynamic name on demand.
 """
 
 from __future__ import annotations
@@ -28,6 +32,17 @@ from config.secrets.backend import KeyringUnavailableError
 logger = logging.getLogger(__name__)
 
 _MARKER_FILENAME = "keychain-imported"
+
+# After a clean known-name pass on a non-enumerable platform, skip repeating the
+# full candidate scan in this process. The permanent marker is not written there;
+# :func:`import_named_keychain_secret` still migrates dynamic names on demand.
+_pass_attempted = False
+
+
+def reset_import_state() -> None:
+    """Forget the per-process pass flag (test hook)."""
+    global _pass_attempted
+    _pass_attempted = False
 
 
 def _marker_path() -> Path:
@@ -68,13 +83,23 @@ def _constant_candidate_env_vars() -> tuple[str, ...]:
     return tuple(dict.fromkeys(names))
 
 
-def _candidate_env_vars(*, discovered: tuple[str, ...] = ()) -> tuple[str, ...]:
-    """Union of known constants, local-file keys, and keychain-enumerated names."""
-    names: list[str] = list(_constant_candidate_env_vars())
+def _local_credential_names() -> tuple[str, ...] | None:
+    """Names in the local file, or ``None`` when the store could not be listed."""
     try:
-        names.extend(local_file.keys())
+        return local_file.keys()
     except OSError:
         logger.debug("Could not list local credential names", exc_info=True)
+        return None
+
+
+def _candidate_env_vars(
+    *,
+    discovered: tuple[str, ...] = (),
+    local_names: tuple[str, ...] = (),
+) -> tuple[str, ...]:
+    """Union of known constants, local-file keys, and keychain-enumerated names."""
+    names: list[str] = list(_constant_candidate_env_vars())
+    names.extend(local_names)
     names.extend(discovered)
     return tuple(dict.fromkeys(names))
 
@@ -140,63 +165,102 @@ def _read_keychain_value(env_var: str) -> tuple[str | None, bool]:
         return None, False
 
 
+def _migrate_one(env_var: str) -> tuple[str, bool]:
+    """Migrate or scrub one name. Returns ``(imported_value, ok)``.
+
+    ``ok`` is False when a lock/keychain failure means the pass must stay pending.
+    ``imported_value`` is non-empty only when a keychain secret was copied in.
+    """
+    try:
+        already_local = bool(local_file.get(env_var))
+    except OSError:
+        logger.debug("Could not read local credential for %s", env_var, exc_info=True)
+        return "", False
+    if already_local:
+        return "", _scrub_keychain(env_var)
+    value, ok = _read_keychain_value(env_var)
+    if not ok:
+        return "", False
+    if not value:
+        return "", True
+    try:
+        local_file.set(env_var, value)
+    except OSError:
+        logger.debug("Could not persist imported %s", env_var, exc_info=True)
+        return "", False
+    if not _scrub_keychain(env_var):
+        return value, False
+    return value, True
+
+
+def import_named_keychain_secret(env_var: str) -> str:
+    """Migrate one keychain secret by exact name. Never raises.
+
+    Used when the platform cannot enumerate usernames: a dynamic name absent
+    from the constants catalog becomes visible the first time something looks
+    it up, instead of staying stranded in the retired keychain tier.
+    """
+    if not env_var or os_keyring.keyring_is_disabled():
+        return ""
+    value, _ok = _migrate_one(env_var)
+    return value
+
+
 def import_keychain_secrets_once() -> tuple[str, ...]:
     """Copy keychain secrets into the local file. Returns the names imported.
 
-    Never raises. The marker is written only after every candidate was probed
-    **and** every keychain copy that needed scrubbing was deleted — a locked
-    keychain leaves the import pending so a later run can finish the scrub.
+    Never raises. The permanent marker is written only after every candidate was
+    probed, every keychain copy that needed scrubbing was deleted, **and** the
+    platform enumerated keychain usernames — otherwise a dynamically named
+    leftover would never be discovered after the marker lands.
 
-    When the platform can enumerate keychain usernames (macOS), a failed dump
-    also leaves the import pending: otherwise a dynamically named leftover
-    would never be discovered after the marker lands.
+    On non-enumerable platforms a clean known-name pass still sets a per-process
+    skip so lookups do not re-scan the catalog every time; named leftovers use
+    :func:`import_named_keychain_secret`.
     """
-    if _already_imported() or os_keyring.keyring_is_disabled():
+    global _pass_attempted
+    if _already_imported() or os_keyring.keyring_is_disabled() or _pass_attempted:
         return ()
 
     imported: list[str] = []
     complete = True
     discovered: tuple[str, ...] = ()
+    can_finalize = False
     if os_keyring.supports_username_enumeration():
         listed = os_keyring.list_usernames()
         if listed is None:
             complete = False
         else:
             discovered = listed
+            can_finalize = True
+    # else: cannot certify the keychain has no unknown names — never finalize.
 
-    for env_var in _candidate_env_vars(discovered=discovered):
-        try:
-            already_local = bool(local_file.get(env_var))
-        except OSError:
-            # Lock timeout / unreadable store — leave migration pending; never
-            # abort lookup/startup through this path.
-            logger.debug("Could not read local credential for %s", env_var, exc_info=True)
-            complete = False
-            continue
-        if already_local:
-            # Local file wins; still drop a stale keychain duplicate.
-            if not _scrub_keychain(env_var):
-                complete = False
-            continue
-        value, ok = _read_keychain_value(env_var)
+    local_names = _local_credential_names()
+    if local_names is None:
+        # Dropping dynamic local names would skip scrubbing their keychain twins.
+        complete = False
+        local_names = ()
+
+    for env_var in _candidate_env_vars(discovered=discovered, local_names=local_names):
+        value, ok = _migrate_one(env_var)
         if not ok:
             complete = False
             continue
-        if not value:
-            continue
-        try:
-            local_file.set(env_var, value)
-        except OSError:
-            logger.debug("Could not persist imported %s", env_var, exc_info=True)
-            complete = False
-            continue
-        imported.append(env_var)
-        if not _scrub_keychain(env_var):
-            complete = False
+        if value:
+            imported.append(env_var)
 
-    if complete:
+    if complete and can_finalize:
         _mark_imported()
+    if complete:
+        # Known-name pass finished cleanly. Non-enumerable platforms stay without
+        # a disk marker so a later release can still grow discovery; this process
+        # does not repeat the catalog scan.
+        _pass_attempted = True
     return tuple(imported)
 
 
-__all__ = ["import_keychain_secrets_once"]
+__all__ = [
+    "import_keychain_secrets_once",
+    "import_named_keychain_secret",
+    "reset_import_state",
+]

@@ -20,7 +20,11 @@ from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import resolve_for_request, save_api_key
 from config.secrets import keychain_import, local_file, os_keyring
-from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
+from config.secrets.backend import (
+    KeyringUnavailableError,
+    KeyringUnavailableReason,
+    SecretTier,
+)
 from config.secrets.store import (
     delete_secret,
     lookup,
@@ -40,6 +44,7 @@ def _local_storage_enabled(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv(_ENV_VAR, raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     os_keyring.reset_keyring_state()
+    keychain_import.reset_import_state()
     monkeypatch.setattr(local_file, "store_path", lambda: tmp_path / "credentials.json")
     # Do not migrate the developer's real keychain into the temp store.
     monkeypatch.setattr(keychain_import, "_already_imported", lambda: True)
@@ -92,9 +97,8 @@ def test_lookup_never_opens_the_os_keychain(monkeypatch) -> None:
     """The read path is what raised the macOS approval dialog on every launch."""
 
     # Arrange — finish the one-time import so lookup does not probe the keychain.
-    from config.secrets import keychain_import
-
     monkeypatch.setattr(keychain_import, "_already_imported", lambda: True)
+    monkeypatch.setattr(keychain_import, "import_named_keychain_secret", lambda _name: "")
 
     def _fail(env_var: str) -> str:
         raise AssertionError(f"the keychain was read for {env_var}")
@@ -105,6 +109,44 @@ def test_lookup_never_opens_the_os_keychain(monkeypatch) -> None:
     # Act / Assert
     assert lookup(_ENV_VAR).value == "sk-local"
     assert lookup("OPENSRE_TEST_ABSENT_TOKEN").value == ""
+
+
+def test_lookup_tolerates_a_credential_file_lock_timeout(monkeypatch) -> None:
+    """Post-import local_file.get must not raise through resolve/startup."""
+    from filelock import Timeout
+
+    monkeypatch.setattr(keychain_import, "import_keychain_secrets_once", lambda: ())
+    monkeypatch.setattr(keychain_import, "import_named_keychain_secret", lambda _name: "")
+
+    def _locked(_name: str) -> str:
+        raise Timeout("/tmp/credentials.json.lock")
+
+    monkeypatch.setattr(local_file, "get", _locked)
+
+    assert lookup(_ENV_VAR).value == ""
+    assert lookup(_ENV_VAR).tier == SecretTier.NONE
+
+
+def test_lookup_migrates_a_dynamic_keychain_name_on_demand(monkeypatch) -> None:
+    """Non-enumerable leftovers become visible when something asks for that name."""
+    dynamic = "MY_CUSTOM_INTEGRATION_TOKEN"
+    entries = {dynamic: "sk-dynamic"}
+    monkeypatch.setattr(keychain_import, "_already_imported", lambda: False)
+    monkeypatch.setattr(keychain_import, "import_keychain_secrets_once", lambda: ())
+    monkeypatch.setattr(os_keyring, "item_exists", lambda name: name in entries)
+    monkeypatch.setattr(os_keyring, "get", lambda name: entries.get(name, ""))
+    monkeypatch.setattr(os_keyring, "delete", lambda name: entries.pop(name, None))
+    # import_named_keychain_secret uses keychain_import.os_keyring
+    monkeypatch.setattr(keychain_import.os_keyring, "item_exists", lambda name: name in entries)
+    monkeypatch.setattr(keychain_import.os_keyring, "get", lambda name: entries.get(name, ""))
+    monkeypatch.setattr(keychain_import.os_keyring, "delete", lambda name: entries.pop(name, None))
+    monkeypatch.setattr(keychain_import.os_keyring, "keyring_is_disabled", lambda: False)
+
+    found = lookup(dynamic)
+
+    assert found.value == "sk-dynamic"
+    assert found.tier == SecretTier.FALLBACK
+    assert local_file.get(dynamic) == "sk-dynamic"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes")
