@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from integrations._validation_helpers import report_validation_failure
 from integrations.config_models import JiraIntegrationConfig
 from platform.observability.errors.service import capture_service_error
 
@@ -297,5 +298,8 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except Exception:
+    except Exception as exc:
+        report_validation_failure(
+            exc, logger=logger, integration="jira", method="make_client", include_traceback=True
+        )
         return None

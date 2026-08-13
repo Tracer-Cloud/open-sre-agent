@@ -159,7 +159,7 @@ class TestReportClassifyFailure:
         logged_exc = mock_log.warning.call_args.kwargs["exc_info"]
         assert not isinstance(logged_exc, ValidationError)
         assert secret_value not in str(logged_exc)
-        assert str(logged_exc) == "widget config validation failed"
+        assert str(logged_exc) == "classify_failed: integration=widget record_id=rec-1"
 
         captured_exc = mock_cap.call_args[0][0]
         assert not isinstance(captured_exc, ValidationError)
