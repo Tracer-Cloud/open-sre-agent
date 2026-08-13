@@ -638,3 +638,100 @@ def test_achieved_claim_does_not_false_complete_a_long_checklist() -> None:
     # Assert — the claim is ignored, and B..E are still outstanding.
     assert verdict.status == SessionGoalStatus.ACTIVE
     assert "checklist 0/5" in verdict.reason
+
+
+def test_session_pending_user_choice_returns_waiting_user_choice() -> None:
+    """When session has pending_user_choice set, evaluation returns ACTIVE with WAITING_USER_CHOICE reason."""
+    from core.agent_harness.session.session_core import SessionCore
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    session = SessionCore()
+    session.pending_user_choice = "some_value"
+
+    goal = SessionGoal(condition="test goal")
+    result = _result("any text", executed=1, success=1)
+
+    verdict = evaluate_session_goal(goal, result, session=session)
+
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_USER_CHOICE
+
+
+def test_long_checklist_claimed_no_evidence_returns_achieved_ignored_incomplete() -> None:
+    """For a long checklist (3+ items) with claimed achieved but no tool evidence, returns ACTIVE with achieved_ignored_incomplete reason."""
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    # Arrange — long checklist (5 items), claimed achieved, no tool evidence
+    goal = SessionGoal(condition="five step walkthrough", checklist=("A", "B", "C", "D", "E"))
+
+    # Act - no tool evidence (executed=0, success=0)
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Started with A. session_goal:achieved", executed=0, success=0),
+    )
+
+    # Assert — the claim is ignored due to no evidence, checklist progress shown
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.achieved_ignored_incomplete(0, 5, "A")
+
+
+def test_no_checklist_no_claimed_dispatched_returns_investigation_running() -> None:
+    """When there's no checklist, not claimed, but investigation dispatched, returns ACTIVE with INVESTIGATION_RUNNING reason."""
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+    from core.agent_harness.turns.turn_results import ToolCallingTurnResult
+
+    # Arrange - no checklist, not claimed, investigation dispatched
+    goal = SessionGoal(condition="test goal")  # empty checklist by default
+
+    # Act - investigation dispatched but not claimed
+    # Create a result with investigation_dispatched=True but no session_goal:achieved claim
+    action_result = ToolCallingTurnResult(
+        planned_count=1,
+        executed_count=1,
+        executed_success_count=1,
+        has_unhandled_clause=False,
+        handled=True,
+        investigation_dispatched=True,  # This is the key
+    )
+    result = TurnResult(
+        final_intent="cli_agent_handled",
+        action_result=action_result,
+        assistant_response_text="Dispatching investigation",  # No session_goal:achieved claim
+    )
+
+    verdict = evaluate_session_goal(goal, result)
+
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.INVESTIGATION_RUNNING
+
+
+def test_no_checklist_no_claimed_no_dispatched_host_owned_returns_waiting_host_signal() -> None:
+    """When there's no checklist, not claimed, no investigation dispatched, but host_owned=true, returns ACTIVE with WAITING_HOST_SIGNAL reason."""
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    # Arrange - no checklist, not claimed, no investigation dispatched, host_owned=True
+    goal = SessionGoal(condition="test goal", host_owned=True)  # empty checklist, host_owned=True
+
+    # Act - no investigation dispatched, not claimed
+    result = _result("some text", executed=0, success=0)  # No investigation dispatched, not claimed
+
+    verdict = evaluate_session_goal(goal, result)
+
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_HOST_SIGNAL
+
+
+def test_no_checklist_no_claimed_no_dispatched_not_host_owned_returns_waiting_tool_evidence() -> None:
+    """When there's no checklist, not claimed, no investigation dispatched, and not host_owned, returns ACTIVE with WAITING_TOOL_EVIDENCE reason."""
+    from core.agent_harness.session_goal.goal import SessionGoalReason
+
+    # Arrange - no checklist, not claimed, no investigation dispatched, host_owned=False
+    goal = SessionGoal(condition="test goal", host_owned=False)  # empty checklist, host_owned=False
+
+    # Act - no investigation dispatched, not claimed
+    result = _result("some text", executed=0, success=0)  # No investigation dispatched, not claimed
+
+    verdict = evaluate_session_goal(goal, result)
+
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_TOOL_EVIDENCE
