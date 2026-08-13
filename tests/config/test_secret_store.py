@@ -18,7 +18,7 @@ import pytest
 from config.constants.secrets import OPENSRE_DISABLE_KEYRING_ENV
 from config.llm_auth.credentials import delete as delete_provider_auth
 from config.llm_auth.credentials import resolve_for_request, save_api_key
-from config.secrets import local_file, os_keyring
+from config.secrets import keychain_import, local_file, os_keyring
 from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 from config.secrets.store import (
     delete_secret,
@@ -32,11 +32,15 @@ _ENV_VAR = "OPENSRE_TEST_FALLBACK_TOKEN"
 
 
 @pytest.fixture(autouse=True)
-def _local_storage_enabled(monkeypatch) -> None:
+def _local_storage_enabled(tmp_path: Path, monkeypatch) -> None:
     """Undo the suite-wide disable switch so the storage policy is exercised."""
     monkeypatch.delenv(OPENSRE_DISABLE_KEYRING_ENV, raising=False)
     monkeypatch.delenv(_ENV_VAR, raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     os_keyring.reset_keyring_state()
+    monkeypatch.setattr(local_file, "store_path", lambda: tmp_path / "credentials.json")
+    # Do not migrate the developer's real keychain into the temp store.
+    monkeypatch.setattr(keychain_import, "_already_imported", lambda: True)
 
 
 def _stored_contents() -> dict[str, str]:
@@ -85,7 +89,11 @@ def test_env_wins_over_the_stored_copy(monkeypatch) -> None:
 def test_lookup_never_opens_the_os_keychain(monkeypatch) -> None:
     """The read path is what raised the macOS approval dialog on every launch."""
 
-    # Arrange
+    # Arrange — finish the one-time import so lookup does not probe the keychain.
+    from config.secrets import keychain_import
+
+    monkeypatch.setattr(keychain_import, "_already_imported", lambda: True)
+
     def _fail(env_var: str) -> str:
         raise AssertionError(f"the keychain was read for {env_var}")
 
@@ -114,6 +122,18 @@ def test_delete_clears_the_stored_copy() -> None:
 
     assert resolve_secret(_ENV_VAR) == ""
     assert _ENV_VAR not in _stored_contents()
+
+
+def test_delete_also_scrubs_a_legacy_keychain_copy(monkeypatch) -> None:
+    """Migrated leftovers in the OS keychain must not survive logout."""
+    save_secret(_ENV_VAR, "sk-stored")
+    deleted: list[str] = []
+    monkeypatch.setattr(os_keyring, "delete", lambda name: deleted.append(name))
+
+    delete_secret(_ENV_VAR)
+
+    assert _ENV_VAR in deleted
+    assert resolve_secret(_ENV_VAR) == ""
 
 
 def test_provider_logout_clears_the_stored_copy(monkeypatch) -> None:

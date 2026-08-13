@@ -107,15 +107,18 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
 
 
 def delete_secret(env_var: str) -> None:
-    """Remove a stored secret.
+    """Remove a stored secret from the local file and any legacy keychain copy.
 
     Never raises for an absent entry — logout must not fail because what it was
-    clearing was already gone.
+    clearing was already gone. The keychain scrub covers credentials migrated
+    from older installs (and any leftover the one-time importer did not drop).
     """
-    # Cleared unconditionally: a copy written before the disable switch was set
-    # would otherwise survive a logout that reported success.
     with suppress(OSError):
         local_file.delete(env_var)
+    if os_keyring.keyring_is_disabled():
+        return
+    with suppress(KeyringUnavailableError, OSError, RuntimeError):
+        os_keyring.delete(env_var)
 
 
 def keyring_is_disabled() -> bool:
