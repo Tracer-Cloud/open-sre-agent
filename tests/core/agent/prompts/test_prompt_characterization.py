@@ -29,7 +29,6 @@ from typing import Any
 
 import pytest
 
-import config.runtime_metadata as runtime_metadata
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
@@ -312,7 +311,7 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
 
 def test_prompt_assembly_is_byte_identical(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        runtime_metadata, "capture_runtime_facts", lambda **_kw: dict(_FROZEN_STATIC)
+        "config.runtime_metadata.capture_runtime_facts", lambda **_kw: dict(_FROZEN_STATIC)
     )
     cases = _build_cases(tmp_path)
 
