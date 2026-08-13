@@ -22,7 +22,6 @@ import keyring.errors
 from config.constants.secrets import (
     KEYRING_SERVICE,
     OPENSRE_DISABLE_KEYRING_ENV,
-    OPENSRE_USE_KEYRING_ENV,
 )
 from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 
@@ -45,17 +44,6 @@ def reset_keyring_state() -> None:
 
 def keyring_is_disabled() -> bool:
     return os.getenv(OPENSRE_DISABLE_KEYRING_ENV, "").strip().lower() in _DISABLED_VALUES
-
-
-def keyring_writes_enabled() -> bool:
-    """Whether new secrets may be written to the OS keyring.
-
-    Default is off (env-file / fallback-file first). Set ``OPENSRE_USE_KEYRING=1``
-    to opt into keychain writes. Disable still wins over opt-in.
-    """
-    if keyring_is_disabled():
-        return False
-    return os.getenv(OPENSRE_USE_KEYRING_ENV, "").strip().lower() in _DISABLED_VALUES
 
 
 def _backend() -> object:
@@ -195,7 +183,6 @@ __all__ = [
     "get",
     "item_exists",
     "keyring_is_disabled",
-    "keyring_writes_enabled",
     "reset_keyring_state",
     "set",
 ]

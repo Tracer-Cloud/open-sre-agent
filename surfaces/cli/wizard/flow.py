@@ -925,8 +925,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     if credential_state == UNSAVED:
         # sync_provider_env pops every secret provider's api-key env; re-apply the
         # session-only value the user chose to continue with so the in-process shell
-        # handoff can read it. Secrets persist via the secret store (file-first by
-        # default; OS keyring only when OPENSRE_USE_KEYRING=1). A ``host`` value
+        # handoff can read it. Secrets persist via the secret store (the
+        # owner-only local credential file). A ``host`` value
         # normally goes straight to .env and never reaches this sink; it only lands
         # here when its .env write failed and the user picked "continue without
         # saving", where re-applying it to os.environ is exactly what is wanted.

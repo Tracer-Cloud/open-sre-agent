@@ -273,7 +273,11 @@ configuration on `self`, which diverged routing across surfaces.
   `build_agent`. Used by the action, evidence/gather, and investigation agents.
 - **Direct answer (no tools)** — `orchestrator.stream_answer`, one grounded
   text answer streamed via `client.invoke_stream` (the `StreamAnswerFn` seam).
-  It does **not** use `Agent`: no tool loop, no observe step.
+  It does **not** use `Agent`: no tool loop, no observe step. The host reaches
+  this path after action when `assistant_handoff` sets `requires_gather=false`
+  (pure docs/how-to/greeting chat, or action tools already answered) — gather
+  is skipped. Default `requires_gather=true` still runs the evidence gatherer
+  before `stream_answer` for live-data asks.
 
 A new agent is one shape or the other: if it calls tools it is the tool-calling
 shape; if it answers directly without tools it is the direct-answer shape.

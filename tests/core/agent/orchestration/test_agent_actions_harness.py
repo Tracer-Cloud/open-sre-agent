@@ -2197,6 +2197,50 @@ def test_run_turn_does_not_gather_after_the_action_turn_already_did_the_work() -
     assert answer_kwargs[0]["handoff_contents"]
 
 
+def test_run_turn_skips_gather_for_stream_only_conversational_handoff() -> None:
+    """Pure chat with ``requires_gather=false`` must not run the gather agent.
+
+    Docs/how-to/greeting turns need stream_answer only. Paying for a gather
+    ReAct loop is the latency tax vs Cursor/Codex on those asks. The action
+    planner signals stream-only via the typed handoff field — not user-text
+    keywords.
+    """
+    session = Session()
+    gather_calls: list[str] = []
+    answer_calls: list[dict[str, Any]] = []
+
+    def _execute(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(
+            planned_count=1,
+            executed_count=1,
+            executed_success_count=1,
+            has_unhandled_clause=False,
+            handled=True,
+            handoff_contents=("chat:greeting",),
+            handoff_requires_gather=False,
+        )
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        gather_calls.append(text)
+        return "Tool: should_not_run\nResult: unused"
+
+    def _answer(_text: str, request: AnswerRequest, **_kwargs: Any) -> None:
+        answer_calls.append({"handoff_contents": request.handoff_contents})
+        return None
+
+    run_turn(
+        "hi",
+        session,
+        execute_actions=_execute,
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(session, "hi"),
+    )
+
+    assert gather_calls == []
+    assert answer_calls == [{"handoff_contents": ("chat:greeting",)}]
+
+
 def test_run_turn_still_gathers_after_actions_when_the_handoff_did_not_opt_out() -> None:
     """Completed actions alone do not skip the gather — only an explicit opt-out does.
 

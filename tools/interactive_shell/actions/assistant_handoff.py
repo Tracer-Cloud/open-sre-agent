@@ -61,8 +61,9 @@ assistant_handoff_tool = RegisteredTool(
         "Use for informational, conversational, ambiguous, or non-actionable requests, "
         "including a bare pasted alert JSON/YAML/key-value blob or bare incident statement "
         "when the user did not explicitly ask to investigate, analyze, diagnose, RCA, or "
-        "root-cause it. For metric/count asks set evidence_kind=metric_read; for multi-step "
-        "continuation set session_goal (and optional session_goal_items)."
+        "root-cause it. For stream-only docs/how-to/greeting chat set requires_gather=false; "
+        "for metric/count asks set evidence_kind=metric_read (leave requires_gather true); "
+        "for multi-step continuation set session_goal (and optional session_goal_items)."
     ),
     input_schema=object_schema(
         properties={
@@ -111,11 +112,13 @@ assistant_handoff_tool = RegisteredTool(
             HandoffField.REQUIRES_GATHER: {
                 "type": "boolean",
                 "description": (
-                    "Whether the assistant needs a live evidence-gather pass before "
-                    "answering. Default true. Set false ONLY when this turn's tool "
-                    "work already produced everything the reply needs and the "
-                    "handoff merely explains that outcome — fetching fresh data "
-                    "would answer a different question."
+                    "Whether the assistant needs a live evidence-gather (tool) "
+                    "pass before answering. Default true for asks that need live "
+                    "integrations data. Set false for stream-only replies: pure "
+                    "docs/how-to/explain/greeting chat with no live evidence, OR "
+                    "when this turn's other tools already produced everything the "
+                    "reply needs. False skips the gather agent and goes straight "
+                    "to stream_answer."
                 ),
             },
         },

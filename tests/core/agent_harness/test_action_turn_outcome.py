@@ -95,8 +95,8 @@ def test_an_assistant_handoff_is_reported_but_not_counted_as_planned() -> None:
 def test_an_answer_only_handoff_opts_out_of_the_gather_pass() -> None:
     """``requires_gather=false`` on the handoff input reaches the turn result.
 
-    The router reads this flag to skip the live evidence-gather sweep when the
-    turn's own tool work already produced everything the reply needs.
+    The router skips gather for stream-only chat and for turns whose tools
+    already produced the reply evidence.
     """
     # Arrange
     harness = ActionExecutionHarness(
@@ -118,6 +118,30 @@ def test_an_answer_only_handoff_opts_out_of_the_gather_pass() -> None:
 
     # Assert
     assert result.handoff_contents == ("onboarding checks all passed",)
+    assert result.handoff_requires_gather is False
+
+
+def test_stream_only_conversational_handoff_opts_out_of_gather() -> None:
+    """Pure docs/greeting handoffs set ``requires_gather=false`` for stream_answer.
+
+    No other action tools ran; the host must still skip the gather agent so the
+    turn is action handoff → stream_answer only.
+    """
+    harness = ActionExecutionHarness(
+        llm=FakeActionLLM(
+            [
+                tool_response(
+                    "assistant_handoff",
+                    {"content": "chat:greeting", "requires_gather": False},
+                ),
+                no_tool_response(""),
+            ]
+        )
+    )
+
+    result = run_action_tool_turn("hi", Session(), harness.console, deps=harness.deps)
+
+    assert result.handoff_contents == ("chat:greeting",)
     assert result.handoff_requires_gather is False
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 import keyring
 from click.testing import CliRunner
 
-from config.constants.secrets import OPENSRE_USE_KEYRING_ENV
 from config.llm_credentials import resolve_env_credential
 from surfaces.cli.app import cli
 from surfaces.cli.llm_auth.service import AuthSetupResult
@@ -24,7 +23,7 @@ def _patch_auth_env(monkeypatch, tmp_path: Path) -> Path:
     return env_path
 
 
-def test_auth_login_deepseek_stores_keyring_not_env(monkeypatch, tmp_path: Path) -> None:
+def test_auth_login_deepseek_stores_secret_not_env(monkeypatch, tmp_path: Path) -> None:
     env_path = _patch_auth_env(monkeypatch, tmp_path)
 
     previous_backend = keyring.get_keyring()
@@ -83,15 +82,9 @@ def test_auth_status_provider_reports_metadata_without_keychain_verify(
         keyring.set_keyring(previous_backend)
 
 
-def test_auth_verify_provider_reports_keyring_source(monkeypatch, tmp_path: Path) -> None:
-    """Keyring-backed secrets still report ``keyring`` as their source.
-
-    Keyring writes are opt-in now (env/file first), so this opts in explicitly —
-    otherwise the login below lands in the fallback store and the keyring source
-    path goes untested. The default is covered by ``tests/config/test_secret_store.py``.
-    """
+def test_auth_verify_provider_reports_the_stored_source(monkeypatch, tmp_path: Path) -> None:
+    """`opensre auth verify` names the tier that actually holds the secret."""
     _patch_auth_env(monkeypatch, tmp_path)
-    monkeypatch.setenv(OPENSRE_USE_KEYRING_ENV, "1")
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
     try:
@@ -113,8 +106,8 @@ def test_auth_verify_provider_reports_keyring_source(monkeypatch, tmp_path: Path
         assert result.exit_code == 0, result.output
         assert "Provider : deepseek" in result.output
         assert "Status   : ok" in result.output
-        assert "Source   : keyring" in result.output
-        assert "secure local storage" in result.output
+        assert "Source   : fallback" in result.output
+        assert "local fallback credential store" in result.output
     finally:
         keyring.set_keyring(previous_backend)
 

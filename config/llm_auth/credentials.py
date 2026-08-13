@@ -390,21 +390,6 @@ def resolve_for_request(provider: str) -> CredentialResolution:
                 source=source,
                 detail=detail,
             )
-        if found.keyring_unreachable:
-            # The backend couldn't be reached (no D-Bus/Secret Service session,
-            # locked keychain) and no fallback copy exists — that is not evidence
-            # the credential is missing, so leave previously verified metadata
-            # alone instead of marking it stale.
-            return CredentialResolution(
-                provider=spec.value,
-                api_key="",
-                source=CredentialSource.UNKNOWN,
-                detail=(
-                    f"Could not reach the system keychain to check {spec.api_key_env}: "
-                    f"{found.keyring_error} Retry once the keychain is reachable."
-                ),
-            )
-
         detail = (
             f"Missing credential for LLM provider '{spec.value}'. Set {spec.api_key_env} "
             f"or run `opensre auth login {spec.value}`."

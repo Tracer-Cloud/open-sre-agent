@@ -330,10 +330,13 @@ def _gather_and_answer(
     preferred-source auth/config fails.
     """
     # Three cases skip the live gather loop:
-    # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
-    #    own tool work already produced what the reply needs, and a fresh sweep
-    #    would answer a different question (observed live: a completed CI
-    #    onboarding turn re-read GitHub issues/PRs as a status report).
+    # 1. Answer-only / stream-only handoffs (``requires_gather=false``): either
+    #    (a) pure conversational/docs/greeting chat that needs no live evidence,
+    #    so the host streams the reply without a gather tool loop, or (b) the
+    #    action turn's own tool work already produced what the reply needs and
+    #    a fresh sweep would answer a different question (observed live: a
+    #    completed CI onboarding turn re-read GitHub issues/PRs as a status
+    #    report). The action planner sets this flag — never user-text keywords.
     # 2. Retrospective follow-ups, which already have grounding in
     #    ``last_state`` (injected into the assistant prompt). Running the live
     #    gather loop for those turns is wasteful and often violates "do not

@@ -106,8 +106,6 @@ def test_status_bedrock_ignores_vertex_project_env(monkeypatch) -> None:
 def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
 
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
@@ -118,36 +116,25 @@ def test_resolve_env_credential_prefers_env_over_keyring(monkeypatch) -> None:
         keyring.set_keyring(previous_backend)
 
 
-def test_lookup_reports_the_keyring_tier(monkeypatch) -> None:
+def test_lookup_reports_the_stored_tier(monkeypatch) -> None:
     monkeypatch.setenv("GITLAB_ACCESS_TOKEN", "from-env")
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
 
-    previous_backend = keyring.get_keyring()
-    keyring.set_keyring(MemoryKeyring())
-    try:
-        llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-keyring")
-        monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
-        found = lookup("GITLAB_ACCESS_TOKEN")
-    finally:
-        keyring.set_keyring(previous_backend)
+    llm_credentials.save_keyring_secret("GITLAB_ACCESS_TOKEN", "from-store")
+    monkeypatch.delenv("GITLAB_ACCESS_TOKEN", raising=False)
+    found = lookup("GITLAB_ACCESS_TOKEN")
 
-    assert found.value == "from-keyring"
-    assert found.tier == "keyring"
-    assert found.keyring_unreachable is False
+    assert found.value == "from-store"
+    assert found.tier == "fallback"
 
 
-def test_backend_runtime_error_resolves_empty_but_flags_unreachable(monkeypatch) -> None:
+def test_a_broken_keychain_backend_cannot_affect_resolution(monkeypatch) -> None:
     """SecretService can raise bare RuntimeError when D-Bus is unset.
 
-    Resolution must not blow up, but the caller has to be able to tell this
-    apart from "the keychain says there is no such credential".
+    Resolution no longer consults the keychain, so a broken backend is not a
+    failure mode of reading a credential.
     """
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
-    # Use a name unlikely to be present in CI secrets / ambient env.
     env_var = "OPENSRE_TEST_MISSING_KEYRING_SECRET"
     monkeypatch.delenv(env_var, raising=False)
 
@@ -155,34 +142,26 @@ def test_backend_runtime_error_resolves_empty_but_flags_unreachable(monkeypatch)
         raise RuntimeError("Unable to initialize SecretService: DBUS unset")
 
     monkeypatch.setattr(os_keyring.keyring, "get_password", _boom)
+
     assert llm_credentials.resolve_env_credential(env_var) == ""
-    assert lookup(env_var).keyring_unreachable is True
+    assert lookup(env_var).tier == "none"
 
 
-def test_unmanaged_llm_api_key_source_reports_env_keyring_and_none(monkeypatch) -> None:
+def test_unmanaged_llm_api_key_source_reports_env_stored_and_none(monkeypatch) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("EXPERIMENTAL_API_KEY", raising=False)
 
-    previous_backend = keyring.get_keyring()
-    keyring.set_keyring(MemoryKeyring())
-    try:
-        assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
-        llm_credentials.save_keyring_secret("EXPERIMENTAL_API_KEY", "from-keyring")
-        assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "keyring"
-        monkeypatch.setenv("EXPERIMENTAL_API_KEY", "from-env")
-        assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"
-    finally:
-        keyring.set_keyring(previous_backend)
+    assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "none"
+    llm_credentials.save_keyring_secret("EXPERIMENTAL_API_KEY", "from-store")
+    assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "fallback"
+    monkeypatch.setenv("EXPERIMENTAL_API_KEY", "from-env")
+    assert llm_api_key_source("EXPERIMENTAL_API_KEY") == "env"
 
 
 def test_managed_llm_api_key_source_uses_metadata_without_reading_secret(
     monkeypatch, tmp_path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(os_keyring.sys, "platform", "darwin")
@@ -223,8 +202,6 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
     monkeypatch, tmp_path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(os_keyring.sys, "platform", "darwin")
@@ -246,8 +223,6 @@ def test_managed_missing_metadata_reports_none_without_reading_secret(
 
 def test_request_resolution_marks_deleted_keychain_metadata_stale(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     save_provider_auth_record(
@@ -279,8 +254,6 @@ def test_request_resolution_marks_deleted_keychain_metadata_stale(monkeypatch, t
 
 def test_llm_credential_record_round_trips_in_keyring(monkeypatch) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
 
     previous_backend = keyring.get_keyring()
     keyring.set_keyring(MemoryKeyring())
@@ -306,8 +279,6 @@ def test_get_keyring_setup_instructions_for_linux_without_gnome_keyring(monkeypa
     backend_class.__module__ = "keyring.backends.fail"
 
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
     monkeypatch.setattr(guidance.sys, "platform", "linux")
     monkeypatch.setattr(guidance.shutil, "which", lambda _name: None)
