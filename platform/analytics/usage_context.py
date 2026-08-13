@@ -44,7 +44,7 @@ SURFACE_TELEGRAM: Final[str] = UsageSurface.TELEGRAM.value
 SURFACE_DISCORD: Final[str] = UsageSurface.DISCORD.value
 SURFACE_BUZZ: Final[str] = UsageSurface.BUZZ.value
 
-CANONICAL_SURFACES: Final[frozenset[str]] = frozenset({s.value for s in UsageSurface})
+CANONICAL_SURFACES: Final[frozenset[str]] = frozenset({SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM, SURFACE_DISCORD, SURFACE_BUZZ})
 ORGANIZATION_GROUP_TYPE: Final[str] = "organization"
 
 _SURFACE: ContextVar[str | None] = ContextVar("analytics_surface", default=None)
