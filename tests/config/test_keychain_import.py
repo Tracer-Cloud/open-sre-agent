@@ -229,6 +229,26 @@ def test_a_local_file_lock_timeout_leaves_the_import_pending(
     assert keychain_import._already_imported() is False
 
 
+def test_import_tolerates_timeout_even_when_it_is_not_an_oserror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Migration must catch filelock.Timeout by name, not only OSError."""
+
+    class _OrphanTimeout(Exception):
+        pass
+
+    _install_keychain(monkeypatch, {"ANTHROPIC_API_KEY": "sk-ant-live"})
+    monkeypatch.setattr(local_file, "LOCAL_STORE_ERRORS", (OSError, _OrphanTimeout))
+
+    def _locked(_name: str) -> str:
+        raise _OrphanTimeout("/tmp/credentials.json.lock")
+
+    monkeypatch.setattr(local_file, "get", _locked)
+
+    assert keychain_import.import_keychain_secrets_once() == ()
+    assert keychain_import._already_imported() is False
+
+
 def test_a_failed_local_keys_listing_leaves_the_import_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

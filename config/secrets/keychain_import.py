@@ -31,6 +31,10 @@ from config.secrets.backend import KeyringUnavailableError
 
 logger = logging.getLogger(__name__)
 
+# Log messages here are fixed strings. The env var *name* is enough for CodeQL's
+# clear-text-logging rule to flag the sink (``*_SECRET``/``*_PASSWORD`` names
+# taint), and the traceback already identifies which step failed.
+
 _MARKER_FILENAME = "keychain-imported"
 
 # After a clean known-name pass on a non-enumerable platform, skip repeating the
@@ -87,7 +91,7 @@ def _local_credential_names() -> tuple[str, ...] | None:
     """Names in the local file, or ``None`` when the store could not be listed."""
     try:
         return local_file.keys()
-    except OSError:
+    except local_file.LOCAL_STORE_ERRORS:
         logger.debug("Could not list local credential names", exc_info=True)
         return None
 
@@ -135,10 +139,10 @@ def _scrub_keychain(env_var: str) -> bool:
     except KeyringUnavailableError as exc:
         if exc.reason == KeyringUnavailableReason.NO_BACKEND:
             return True
-        logger.debug("Keychain scrub failed for %s", env_var, exc_info=True)
+        logger.debug("Keychain scrub refused by the backend", exc_info=True)
         return False
     except (OSError, RuntimeError):
-        logger.debug("Keychain scrub failed for %s", env_var, exc_info=True)
+        logger.debug("Keychain scrub raised an unexpected error", exc_info=True)
         return False
     return True
 
@@ -152,7 +156,7 @@ def _read_keychain_value(env_var: str) -> tuple[str | None, bool]:
     try:
         exists = os_keyring.item_exists(env_var)
     except (OSError, RuntimeError, KeyringUnavailableError):
-        logger.debug("Keychain existence probe failed for %s", env_var, exc_info=True)
+        logger.debug("Keychain existence check failed", exc_info=True)
         return None, False
     if exists is False:
         return None, True
@@ -161,7 +165,7 @@ def _read_keychain_value(env_var: str) -> tuple[str | None, bool]:
     try:
         return os_keyring.get(env_var), True
     except (KeyringUnavailableError, OSError, RuntimeError):
-        logger.debug("Keychain read failed for %s", env_var, exc_info=True)
+        logger.debug("Keychain read failed", exc_info=True)
         return None, False
 
 
@@ -173,8 +177,8 @@ def _migrate_one(env_var: str) -> tuple[str, bool]:
     """
     try:
         already_local = bool(local_file.get(env_var))
-    except OSError:
-        logger.debug("Could not read local credential for %s", env_var, exc_info=True)
+    except local_file.LOCAL_STORE_ERRORS:
+        logger.debug("Could not read the local credential store", exc_info=True)
         return "", False
     if already_local:
         return "", _scrub_keychain(env_var)
@@ -185,8 +189,8 @@ def _migrate_one(env_var: str) -> tuple[str, bool]:
         return "", True
     try:
         local_file.set(env_var, value)
-    except OSError:
-        logger.debug("Could not persist imported %s", env_var, exc_info=True)
+    except local_file.LOCAL_STORE_ERRORS:
+        logger.debug("Could not persist an imported credential", exc_info=True)
         return "", False
     if not _scrub_keychain(env_var):
         return value, False

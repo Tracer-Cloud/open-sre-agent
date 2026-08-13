@@ -127,6 +127,39 @@ def test_lookup_tolerates_a_credential_file_lock_timeout(monkeypatch) -> None:
     assert lookup(_ENV_VAR).tier == SecretTier.NONE
 
 
+def test_lookup_tolerates_timeout_even_when_it_is_not_an_oserror(monkeypatch) -> None:
+    """Contention handling must name filelock.Timeout, not rely on OSError alone."""
+
+    class _OrphanTimeout(Exception):
+        """Stand-in that is *not* an OSError subclass."""
+
+    monkeypatch.setattr(keychain_import, "import_keychain_secrets_once", lambda: ())
+    monkeypatch.setattr(keychain_import, "import_named_keychain_secret", lambda _name: "")
+    monkeypatch.setattr(local_file, "LOCAL_STORE_ERRORS", (OSError, _OrphanTimeout))
+
+    def _locked(_name: str) -> str:
+        raise _OrphanTimeout("/tmp/credentials.json.lock")
+
+    monkeypatch.setattr(local_file, "get", _locked)
+
+    assert lookup(_ENV_VAR).value == ""
+    assert lookup(_ENV_VAR).tier == SecretTier.NONE
+
+
+def test_save_maps_a_lock_timeout_to_unavailable(monkeypatch) -> None:
+    from filelock import Timeout
+
+    def _locked(*_args: object, **_kwargs: object) -> None:
+        raise Timeout("/tmp/credentials.json.lock")
+
+    monkeypatch.setattr(local_file, "set", _locked)
+
+    with pytest.raises(KeyringUnavailableError) as excinfo:
+        save_secret(_ENV_VAR, "sk-headless")
+
+    assert excinfo.value.reason == KeyringUnavailableReason.NO_BACKEND
+
+
 def test_lookup_migrates_a_dynamic_keychain_name_on_demand(monkeypatch) -> None:
     """Non-enumerable leftovers become visible when something asks for that name."""
     dynamic = "MY_CUSTOM_INTEGRATION_TOKEN"
@@ -158,8 +191,10 @@ def test_the_credential_file_is_never_readable_beyond_its_owner() -> None:
     assert mode == 0o600
 
 
-def test_delete_clears_the_stored_copy() -> None:
+def test_delete_clears_the_stored_copy(monkeypatch) -> None:
     """Logout must not leave a copy that keeps resolving."""
+    # Isolate from a locked developer keychain; scrub success is covered elsewhere.
+    monkeypatch.setattr(os_keyring, "delete", lambda _name: None)
     save_secret(_ENV_VAR, "sk-stored")
 
     delete_secret(_ENV_VAR)
@@ -199,6 +234,7 @@ def test_delete_raises_when_the_keychain_scrub_fails(monkeypatch) -> None:
 def test_provider_logout_clears_the_stored_copy(monkeypatch) -> None:
     """Regression: `opensre auth logout` reported success while the key still worked."""
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(os_keyring, "delete", lambda _name: None)
     save_api_key("deepseek", "sk-headless")
     assert resolve_for_request("deepseek").api_key == "sk-headless"
 
@@ -253,7 +289,8 @@ def test_disabled_local_storage_reads_only_the_environment(monkeypatch) -> None:
     assert resolve_secret(_ENV_VAR) == "sk-from-env"
 
 
-def test_empty_value_clears_instead_of_storing() -> None:
+def test_empty_value_clears_instead_of_storing(monkeypatch) -> None:
+    monkeypatch.setattr(os_keyring, "delete", lambda _name: None)
     save_secret(_ENV_VAR, "sk-headless")
 
     save_secret(_ENV_VAR, "   ")

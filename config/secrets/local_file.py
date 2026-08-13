@@ -22,12 +22,19 @@ from contextlib import suppress
 from pathlib import Path
 
 from filelock import FileLock
+from filelock import Timeout as FileLockTimeout
 
 from config.constants.paths import host_home
 from config.constants.secrets import CREDENTIAL_FALLBACK_FILENAME
 
 _VERSION = 1
 _LOCK_TIMEOUT_SECONDS = 10.0
+
+# ``FileLock`` raises :class:`filelock.Timeout` when the finite wait expires.
+# That class subclasses ``TimeoutError`` / ``OSError`` today, but callers must
+# still name it: catching only ``OSError`` looks (and historically was) wrong,
+# and contention on get/set/keys must not abort migration or secret lookup.
+LOCAL_STORE_ERRORS: tuple[type[BaseException], ...] = (OSError, FileLockTimeout)
 
 
 def store_path() -> Path:
@@ -132,4 +139,4 @@ def delete(env_var: str) -> None:
         _write_unlocked(path, secrets)
 
 
-__all__ = ["delete", "get", "keys", "set", "store_path"]
+__all__ = ["LOCAL_STORE_ERRORS", "delete", "get", "keys", "set", "store_path"]

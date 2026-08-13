@@ -63,12 +63,13 @@ def lookup(env_var: str, *, default: str = "") -> SecretLookup:
     if os_keyring.keyring_is_disabled():
         return SecretLookup("", SecretTier.NONE)
 
-    import_keychain_secrets_once()
     try:
+        import_keychain_secrets_once()
         stored_value = local_file.get(env_var)
-    except OSError:
+    except local_file.LOCAL_STORE_ERRORS:
         # Contended credential file — treat as a miss for this call rather than
-        # aborting credential resolution / startup.
+        # aborting credential resolution / startup. Catch filelock.Timeout by
+        # name (via LOCAL_STORE_ERRORS), not only OSError.
         return SecretLookup("", SecretTier.NONE)
     if stored_value:
         return SecretLookup(stored_value, SecretTier.FALLBACK)
@@ -109,7 +110,7 @@ def save_secret(env_var: str, value: str) -> SecretSaveResult:
         )
     try:
         local_file.set(env_var, normalized)
-    except OSError as file_exc:
+    except local_file.LOCAL_STORE_ERRORS as file_exc:
         raise KeyringUnavailableError(
             f"Writing {env_var} to {local_file.store_path()} failed.",
             reason=KeyringUnavailableReason.NO_BACKEND,
@@ -128,7 +129,7 @@ def delete_secret(env_var: str) -> None:
     :class:`KeyringUnavailableError` — reporting logout success while an OS
     copy remains would let the credential be recovered.
     """
-    with suppress(OSError):
+    with suppress(*local_file.LOCAL_STORE_ERRORS):
         local_file.delete(env_var)
     try:
         os_keyring.delete(env_var)
