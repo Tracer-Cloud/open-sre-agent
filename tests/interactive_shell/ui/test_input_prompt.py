@@ -74,6 +74,22 @@ class TestPromptRefreshAutoSubmit:
         assert app.current_buffer.text == "/integrations setup sentry"
         assert app.current_buffer.submitted is True
 
+    def test_auto_command_defers_while_dispatch_active(self) -> None:
+        """``/goal set`` must not nest validate_and_handle inside the slash turn."""
+        session = Session()
+        app = _RefreshFakeApp()
+        wire_prompt_refresh(session, app, _RefreshFakeLoop())
+        session.terminal.dispatch_active = True
+        session.terminal.set_auto_command(
+            "How many Windows users in the last 7 days?"
+        )
+        assert app.current_buffer.submitted is False
+        assert session.terminal.pending_prompt_autosubmit is True
+        assert (
+            session.terminal.pending_prompt_default
+            == "How many Windows users in the last 7 days?"
+        )
+
     def test_plain_prefill_does_not_auto_submit(self) -> None:
         """A prefill without the auto-submit flag must wait for the user (Enter)."""
         session = Session()

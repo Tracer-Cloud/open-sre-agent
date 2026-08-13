@@ -103,6 +103,7 @@ class Session(SessionCore):
         self.terminal.submitted_turn_count = 0
         self.terminal.pending_prompt_default = None
         self.terminal.pending_prompt_autosubmit = False
+        self.terminal.dispatch_active = False
         self.terminal.exclusive_stdin_active = False
         self.terminal.background_mode_enabled = False
         self.terminal.background_investigations.clear()

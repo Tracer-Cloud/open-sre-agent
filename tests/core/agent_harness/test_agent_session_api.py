@@ -111,6 +111,18 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
     assert any(t.name.startswith("query_grafana") for t in grafana_tools)
 
 
+def test_start_does_not_inject_an_embedded_boot_step() -> None:
+    """CLI/gateway leave ``boot_process`` unset; ``start`` must not fill one in.
+
+    ``core`` may not import ``bootstrap``. Embedded hosts use
+    ``start_embedded_session`` (or pass an explicit boot step).
+    """
+    session = AgentSession.start(
+        SessionConfig(open_store=False, persistent_tasks=False)
+    )
+    assert session._config.boot_process is None
+
+
 def test_chat_is_the_public_verb(monkeypatch: Any) -> None:
     session = AgentSession.start()
     captured: list[str] = []

@@ -121,6 +121,8 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
     progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
     runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
+    # Blocks nested validate_and_handle from set_auto_command (e.g. /goal set).
+    runtime.session.terminal.dispatch_active = True
     # Expose this turn's spinner so investigation stages can animate phase labels.
     set_investigation_spinner(runtime.spinner)
     emit_thread_boundary(
@@ -145,6 +147,7 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     finally:
         set_investigation_spinner(None)
         runtime.session.terminal.exclusive_stdin_active = False
+        runtime.session.terminal.dispatch_active = False
         emit_thread_boundary(
             runtime.session.session_id,
             name="turn_boundary",

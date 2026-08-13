@@ -87,3 +87,25 @@ def test_count_gather_tool_successes_skips_unavailable() -> None:
     )
     # list_* roster probes do not count; unavailable does not count.
     assert count_gather_tool_successes(evidence) == 1
+
+
+def test_count_gather_tool_successes_falls_back_to_observation_blocks() -> None:
+    """Empty tool_results still counts Tool: blocks in the rendered observation."""
+    observation = (
+        "Tool: list_posthog_tools\nArguments: {}\nResult: []\n\n"
+        "Tool: call_posthog_tool\nArguments: {}\nResult: windows|272"
+    )
+    evidence = GatheredEvidence(observation=observation, tool_results=())
+    assert count_gather_tool_successes(evidence) == 1
+
+
+def test_count_gather_tool_successes_observation_fallback_skips_unavailable() -> None:
+    """Rendered ``tool_unavailable`` envelopes must not count as gather evidence."""
+    from core.tool_framework.utils.tool_availability import tool_unavailable
+
+    observation = (
+        "Tool: call_posthog_tool\nArguments: {}\nResult: "
+        f"{tool_unavailable('posthog', 'auth failed')}"
+    )
+    evidence = GatheredEvidence(observation=observation, tool_results=())
+    assert count_gather_tool_successes(evidence) == 0

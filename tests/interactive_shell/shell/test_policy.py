@@ -43,3 +43,9 @@ def test_empty_shell_input_is_deny() -> None:
     """Only genuinely empty input is rejected (input validation, not a guardrail)."""
     r = evaluate_shell_command("!")
     assert r.verdict == "deny"
+
+
+def test_nmap_cidr_is_allow_in_alpha() -> None:
+    """Alpha has no shell deny floor — a CIDR scan is not a policy exception."""
+    r = evaluate_shell_command("nmap -n -p 22 --open 10.0.0.0/24")
+    assert r.verdict == "allow"

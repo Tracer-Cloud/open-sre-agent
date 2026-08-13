@@ -28,13 +28,17 @@ def wire_prompt_refresh(
                 invalidate_prompt()
                 return
             if session.terminal.pending_prompt_autosubmit:
-                # Auto-submit an agent-queued interactive command so it dispatches
-                # through the normal exclusive-stdin path (the only place an
-                # interactive child process gets clean stdin). Note: pt_app.is_running
-                # under-reports while prompt_async awaits during a dispatch, so we do
-                # not gate on it; validate_and_handle works regardless. If the app is
-                # genuinely not accepting input, leave the prefill in place so the
-                # next prompt iteration picks it up via the before-prompt path.
+                # Mid-turn (e.g. ``/goal set`` → ``set_auto_command``): keep the
+                # queue and let the next ``read_prompt_text`` autosubmit. Calling
+                # ``validate_and_handle`` here nests a second ``execute_shell_turn``
+                # inside the slash turn and doubles the live PostHog answer.
+                if session.terminal.dispatch_active:
+                    invalidate_prompt()
+                    return
+                # Idle prompt: auto-submit so interactive setup/connect commands
+                # take the exclusive-stdin path without waiting for Enter.
+                # ``pt_app.is_running`` under-reports during some waits, so we do
+                # not gate on it here — ``dispatch_active`` is the nest guard.
                 session.terminal.pending_prompt_default = None
                 session.terminal.pop_pending_autosubmit()
                 buffer.text = pending

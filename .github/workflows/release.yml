@@ -384,6 +384,31 @@ jobs:
             exit 1
           fi
 
+      - name: Re-sign macOS onedir after post-build mutations
+        if: runner.os == 'macOS' && matrix.pyinstaller_mode == 'onedir'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Replacing/rewriting bundled dylibs (libssl align) invalidates the
+          # adhoc signature PyInstaller applied. Consumer Macs then SIGKILL the
+          # binary on first exec (exit 137, CODESIGNING / Invalid Page) even when
+          # CI runners still let --version through. Sign nested libs first, then
+          # the main binary — ``codesign --deep`` on the directory fails with
+          # "invalid resource directory" for this PyInstaller layout.
+          APP_DIR="./dist/opensre"
+          APP_BIN="${APP_DIR}/opensre"
+          if [ ! -f "$APP_BIN" ]; then
+            echo "No onedir binary at ${APP_BIN}; skip re-sign"
+            exit 0
+          fi
+          find "$APP_DIR" -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.so.*' \) -print0 \
+            | while IFS= read -r -d '' lib; do
+                codesign --force --sign - "$lib"
+              done
+          codesign --force --sign - "$APP_BIN"
+          codesign --verify --strict "$APP_BIN"
+          echo "Re-signed onedir libs + ${APP_BIN} (adhoc) after post-build mutations"
+
       - name: Smoke test binary (Unix)
         if: runner.os != 'Windows'
         shell: bash

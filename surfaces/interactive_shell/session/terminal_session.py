@@ -87,6 +87,13 @@ class TerminalSession:
     Inline picker/wizard slash commands must dispatch immediately during these
     turns instead of re-queueing via ``set_auto_command``, which would loop."""
 
+    dispatch_active: bool = False
+    """True while ``run_agent_turn`` is executing (any turn, not only exclusive-stdin).
+
+    ``set_auto_command`` must not ``validate_and_handle`` while this is set —
+    nesting another ``execute_shell_turn`` inside ``/goal set`` doubled the
+    PostHog answer before the outer turn finished."""
+
     background_mode_enabled: bool = False
     """Whether new investigations should run as session-local background tasks."""
 
