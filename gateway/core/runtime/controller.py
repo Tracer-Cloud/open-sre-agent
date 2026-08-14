@@ -1,6 +1,6 @@
 """Gateway process entrypoint and lifecycle owner.
 
-``GatewayManager`` is the composition root for the OpenSRE background agent:
+``GatewayController`` is the composition root for the OpenSRE background agent:
 logging + credential hydrate, then
 :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then
 assemble the turn handler and start components —
@@ -54,7 +54,7 @@ SlashPortsFactory = Callable[[], Any]
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
 
 
-class GatewayManager:
+class GatewayController:
     """Composition root and lifecycle handle for the running gateway process."""
 
     def __init__(
@@ -81,7 +81,7 @@ class GatewayManager:
             self.turn_gate = process_turn_gate()
         self._stopped = threading.Event()
 
-    def start_gateway(self, *, wait: bool = True) -> GatewayManager:
+    def start_gateway(self, *, wait: bool = True) -> GatewayController:
         """Credential hydrate, shared process boot, then channels + scheduler."""
         from bootstrap.process import GATEWAY_PROFILE, configure_process
 
@@ -242,10 +242,10 @@ class GatewayManager:
 
 
 _BARE_MANAGER_EXIT = (
-    "GatewayManager requires slash_ports_factory for production chat.\n"
+    "GatewayController requires slash_ports_factory for production chat.\n"
     "Start with: opensre gateway start\n"
     "        or: opensre gateway start --foreground\n"
-    "Unit tests may construct GatewayManager(...) directly.\n"
+    "Unit tests may construct GatewayController(...) directly.\n"
 )
 
 
@@ -253,21 +253,21 @@ def start_gateway(
     *,
     wait: bool = True,
     slash_ports_factory: SlashPortsFactory | None = None,
-) -> GatewayManager:
+) -> GatewayController:
     """Compatibility wrapper — requires ``slash_ports_factory`` (fail closed).
 
     Production boot goes through the CLI composition root
     (``opensre gateway start``), which injects headless slash ports. The
     gateway package must not import the surfaces layer, so bare
-    ``GatewayManager()`` here cannot wire them.
+    ``GatewayController()`` here cannot wire them.
     """
     if slash_ports_factory is None:
         raise SystemExit(_BARE_MANAGER_EXIT)
-    return GatewayManager(slash_ports_factory=slash_ports_factory).start_gateway(wait=wait)
+    return GatewayController(slash_ports_factory=slash_ports_factory).start_gateway(wait=wait)
 
 
 def main() -> None:
-    """Refuse bare manager main — same policy as ``python -m gateway``."""
+    """Refuse bare controller main — same policy as ``python -m gateway``."""
     raise SystemExit(_BARE_MANAGER_EXIT)
 
 

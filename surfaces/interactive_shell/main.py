@@ -8,7 +8,7 @@ import sys
 from rich.console import Console
 
 from config.repl_config import ReplConfig
-from core.agent_harness.session import SessionManager
+from core.agent_harness import SessionManager
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
 from surfaces.interactive_shell.runtime.startup.first_launch_github import (

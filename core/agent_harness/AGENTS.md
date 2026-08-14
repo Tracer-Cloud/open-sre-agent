@@ -199,7 +199,7 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`SessionManager.for_session`.
 - **gateway** — process boot is
   :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``);
-  `GatewayManager` stays lifecycle-only (credentials → process boot →
+  `GatewayController` stays lifecycle-only (credentials → process boot →
   transports). Per-chat session create/resolve stays on
   `gateway/core/storage/session/resolver.py::SessionResolver` →
   `SessionManager`. Turn dispatch uses `HeadlessAgent` via

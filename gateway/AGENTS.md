@@ -9,7 +9,7 @@ tests tree.
 |------|------|
 | Production entry (slash ports) | CLI: `opensre gateway start` / `--foreground` (composition root outside this package) |
 | Package main | `main.py` — **fails closed** (no slash-port glue; not a production entry) |
-| Composition root / process | `core/runtime/manager.py` (`GatewayManager`; inject `slash_ports_factory`) |
+| Composition root / process | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
 | Daemon pidfile / status | `core/runtime/daemon.py` |
 | Turn callback | `core/runtime/turn_handler.py` |
@@ -23,11 +23,11 @@ tests tree.
 | Discord start | `transports/discord/startup.py` (`start_discord_worker`) |
 | Buzz start | `transports/buzz/startup.py` (`start_buzz_worker`) |
 
-Bare `python -m gateway` and `manager.main()` / `start_gateway()` without
+Bare `python -m gateway` and `controller.main()` / `start_gateway()` without
 `slash_ports_factory` exit with a clear error. Unit tests may construct
-`GatewayManager(...)` directly (factory optional there).
+`GatewayController(...)` directly (factory optional there).
 
-## Lifecycle (`GatewayManager`)
+## Lifecycle (`GatewayController`)
 
 ```
 start_gateway()
@@ -46,7 +46,7 @@ start_gateway()
   transport. Daemon pidfile/status stays in `core/runtime/daemon.py` — do not
   fold the process daemon into a "scheduler" package.
 - `gateway.core` must not import `gateway.transports` / `gateway.web`; only
-  `manager.py` imports `gateway.startup`.
+  `controller.py` imports `gateway.startup`.
 - Peer transports and `web` must not import `gateway.startup`.
 
 ## Layout
@@ -56,7 +56,7 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 
 - `core/` — process and leaf infrastructure (`runtime`, `storage`,
   `billing`, `attachments`, `session`, `config`). No imports from transports
-  or `web`. Only `core/runtime/manager.py` imports `gateway.startup`.
+  or `web`. Only `core/runtime/controller.py` imports `gateway.startup`.
 - `startup.py` — starts/stops web + chat transports as one consumer set.
   Imports `web/` and each peer's `startup` only.
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
@@ -71,7 +71,7 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 ### Dependency rule (acyclic)
 
 ```
-core.manager  →  startup.py  →  transports.{telegram,slack,discord,buzz}.startup
+core.controller  →  startup.py  →  transports.{telegram,slack,discord,buzz}.startup
                            →  web
 peer transports · web  →  core leaves
 (peers never import each other, `gateway.startup`, or each other's packages)
@@ -87,7 +87,7 @@ flat by surface (do not nest a directory named after the Discord PyPI package).
   resolve session, build sink, then call the shared callback. Do not add a
   second production turn-handler class next to `GatewayTurnHandler`.
 - **Logging** is configured once at the gateway process level
-  (`configure_logging` in `GatewayManager.start_gateway`) — that is intentional.
+  (`configure_logging` in `GatewayController.start_gateway`) — that is intentional.
 - **No persistent gateway `Agent` instance.** Each inbound message gets a
   per-chat `Session` from `SessionResolver` and is handled by the shared
   headless dispatch path (`core.agent_harness.turns.headless_dispatch`).
@@ -99,7 +99,7 @@ flat by surface (do not nest a directory named after the Discord PyPI package).
   Do **not** precompute tools at process start; chat sessions carry their own
   integration context after `SessionResolver.resolve`.
 - Per-chat session lifecycle (create / resolve / rotate / restore) is owned by
-  `SessionResolver` → `SessionManager`, not by `GatewayManager`.
+  `SessionResolver` → `SessionManager`, not by `GatewayController`.
 
 ## Tenancy (principal / actor)
 
@@ -137,8 +137,8 @@ POST /investigate ──► try_acquire (busy → 503) ──► same gate
 InvestigationWorker ──► blocking acquire (already claimed) ──► same gate
 ```
 
-- Production chat capacity is on `GatewayTurnHandler(gate=manager.turn_gate)`.
-- `GatewayManager` and Path-2 share :func:`~gateway.core.runtime.concurrency.process_turn_gate`.
+- Production chat capacity is on `GatewayTurnHandler(gate=controller.turn_gate)`.
+- `GatewayController` and Path-2 share :func:`~gateway.core.runtime.concurrency.process_turn_gate`.
 - `ConcurrencyLimitedTurnHandler` is tests-only. Do not reintroduce it under
   `gateway/core/` — production uses `gate=` on `GatewayTurnHandler` only.
 - **Chat + Path-2:** HTTP `/investigate` busy-drops like chat; the investigation

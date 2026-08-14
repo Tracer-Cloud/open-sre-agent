@@ -211,22 +211,22 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     from gateway.startup import StartedGateway
 
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.gateway_startup.start_gateway",
+        "gateway.core.runtime.controller.gateway_startup.start_gateway",
         lambda **_kwargs: StartedGateway(),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.GatewayManager.start_scheduler",
+        "gateway.core.runtime.controller.GatewayController.start_scheduler",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.GatewayManager._publish_status",
+        "gateway.core.runtime.controller.GatewayController._publish_status",
         lambda *_args, **_kwargs: None,
     )
 
-    from gateway.core.runtime.manager import GatewayManager
+    from gateway.core.runtime.controller import GatewayController
 
-    GatewayManager().start_gateway(wait=False)
+    GatewayController().start_gateway(wait=False)
 
     # GATEWAY_PROFILE registers adapters at boot; scheduler runners come later,
     # when the scheduler stage starts.

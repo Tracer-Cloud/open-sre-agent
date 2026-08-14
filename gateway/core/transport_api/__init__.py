@@ -2,10 +2,10 @@
 
 In API-framework terms the gateway splits like this:
 
-* ``gateway/transports/<name>/`` — the controllers: platform ingress that
+* ``gateway/transports/<name>/`` — the ingress adapters: platform inbound that
   authorizes, resolves a session, builds a sink, and calls the turn handler.
-* ``gateway/core/middleware/`` — the shared per-turn steps every controller
-  runs (inbound decision, identity policy, approvals, stop/cancel, attention,
+* ``gateway/core/middleware/`` — the shared per-turn steps every ingress
+  adapter runs (inbound decision, identity policy, approvals, stop/cancel, attention,
   conversation locks, terminal outcome).
 * ``gateway/core/runtime/`` — the service layer: the turn handler bridging
   into the agent harness, and process plumbing.

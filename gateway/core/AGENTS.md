@@ -22,7 +22,7 @@ here.
 Shared process setup (env → Sentry → harness adapters → capability warnings →
 LLM preload) lives in
 :func:`bootstrap.process.configure_process` with ``GATEWAY_PROFILE``.
-`GatewayManager.start_gateway` is lifecycle-only after logging + credential
+`GatewayController.start_gateway` is lifecycle-only after logging + credential
 hydrate: configure process, compose **one** `GatewayTurnHandler(gate=…)`, then
 `start_channels()` (delegates to :func:`gateway.channels.start_channels`) and
 `start_scheduler()` (peer of the channels). Do not wrap the turn handler in a

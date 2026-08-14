@@ -1,4 +1,4 @@
-"""Tests for :mod:`gateway.core.runtime.manager` lifecycle behavior."""
+"""Tests for :mod:`gateway.core.runtime.controller` lifecycle behavior."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.core.runtime.manager import GatewayManager
+from gateway.core.runtime.controller import GatewayController
 from gateway.startup import StartedGateway, TransportHandle, TransportName
 
 
@@ -33,8 +33,8 @@ def test_start_surfaces_delegates_to_the_startup_module(
         captured["handler"] = handler
         return expected
 
-    monkeypatch.setattr("gateway.core.runtime.manager.gateway_startup.start_gateway", _boot)
-    manager = GatewayManager()
+    monkeypatch.setattr("gateway.core.runtime.controller.gateway_startup.start_gateway", _boot)
+    manager = GatewayController()
     handler = MagicMock(name="chat-handler")
     logger = logging.getLogger("test.manager.surfaces")
 
@@ -50,7 +50,7 @@ def test_start_surfaces_delegates_to_the_startup_module(
 
 def test_wait_blocks_until_stop_not_channel_worker_exit() -> None:
     """The unified daemon should not exit when a chat worker thread ends."""
-    manager = GatewayManager()
+    manager = GatewayController()
     worker_wait = MagicMock(return_value=True)
 
     class FakeWorker:
@@ -92,7 +92,7 @@ def test_manager_stop_never_touches_the_real_gateway_directory() -> None:
 
     real_gateway_dir = Path.home() / ".opensre" / "gateway"
 
-    GatewayManager().stop()
+    GatewayController().stop()
 
     assert real_gateway_dir not in daemon.GATEWAY_COMPONENTS_FILE.parents
     assert real_gateway_dir not in daemon.GATEWAY_PID_FILE.parents
@@ -113,7 +113,7 @@ def test_manager_reload_scheduler_refreshes_component_status(
         "platform.scheduler.runner.refresh_background_scheduler",
         _refresh,
     )
-    manager = GatewayManager()
+    manager = GatewayController()
     monkeypatch.setattr(
         manager,
         "_publish_status",

@@ -7,7 +7,7 @@ from typing import Self
 from prompt_toolkit import PromptSession
 from pydantic import BaseModel, ConfigDict, Field, InstanceOf, field_validator, model_validator
 
-from core.agent_harness.session import SessionManager
+from core.agent_harness import SessionManager
 from core.domain.alerts import inbox as _alert_inbox
 from platform.observability.trace.spans import set_session_trace_store
 from surfaces.interactive_shell.runtime.core.state import (

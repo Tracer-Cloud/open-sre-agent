@@ -9,12 +9,12 @@ from typing import Any
 
 import click
 
+from core.agent_harness import DefaultPromptContextProvider
 from core.agent_harness.grounding.diagnostics import (
     GroundingSource,
     log_grounding_cache_diagnostics,
 )
 from core.agent_harness.grounding.models import CacheStats
-from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 
 _logger = logging.getLogger(__name__)
 

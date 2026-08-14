@@ -2,7 +2,7 @@
 
 One package per inbound chat platform. Peers: **none imports another**.
 
-In API-framework terms, transports are the controllers: platform ingress that
+In API-framework terms, transports are the ingress adapters: platform inbound that
 authorizes, resolves a session, builds a sink, and calls the turn handler. The
 contract they implement is `gateway.core.transport_api`; the shared per-turn
 steps they compose are `gateway.core.middleware`; the facade that starts them
@@ -16,7 +16,7 @@ is `gateway/startup.py`.
 | `buzz/` | `startup.start_buzz_worker` |
 
 Composition of peers lives in `gateway/startup.py` (the transport registry
-plus web + chat start/stop), not here. `GatewayManager` only holds the opaque `ChannelsHandle`.
+plus web + chat start/stop), not here. `GatewayController` only holds the opaque `ChannelsHandle`.
 Transport-specific work (settings load, Discord readiness wait) stays in each
 package's `startup.py`.
 

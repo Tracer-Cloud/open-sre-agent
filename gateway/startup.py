@@ -5,7 +5,7 @@ registry and composes web + chat into a single running handle. Mirrors each
 transport's own ``startup.py`` one level up — those start one platform, this
 starts the gateway.
 
-Only the composition root (:class:`~gateway.core.runtime.manager.GatewayManager`)
+Only the composition root (:class:`~gateway.core.runtime.controller.GatewayController`)
 imports this module. Transports never import it back, and ``gateway.core``
 cannot (core must not depend on transports). The scheduler is not started
 here; the manager starts it as a peer.

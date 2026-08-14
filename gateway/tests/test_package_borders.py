@@ -5,7 +5,7 @@ Pinned rules (see ``gateway/AGENTS.md``):
 * Chat transports are peers — none imports another.
 * ``gateway.web`` never imports ``gateway.transports`` or ``gateway.startup``.
 * ``gateway.core`` never imports chat transports or ``gateway.web``.
-* Only ``gateway.core.runtime.manager`` may import ``gateway.startup``.
+* Only ``gateway.core.runtime.controller`` may import ``gateway.startup``.
 * ``gateway.transports.*`` never imports ``gateway.startup`` or ``gateway.web``.
 * ``gateway.startup`` may import peer ``*.startup`` (and ``gateway.web``); peers
   must not import channels.
@@ -35,7 +35,7 @@ def _discover_transport_packages() -> tuple[str, ...]:
 
 _TRANSPORTS = _discover_transport_packages()
 
-_CHANNELS_COMPOSER = "gateway/core/runtime/manager.py"
+_STARTUP_COMPOSER = "gateway/core/runtime/controller.py"
 
 _TRANSPORT_STARTUP_MODULES = frozenset(f"{package}.startup" for package in _TRANSPORTS)
 
@@ -98,18 +98,18 @@ def test_core_never_imports_chat_transports_or_web() -> None:
     assert offenders == [], "Core imported a surface directly:\n" + "\n".join(offenders)
 
 
-def test_only_manager_imports_channels_module() -> None:
+def test_only_the_controller_imports_the_startup_module() -> None:
     offenders: list[str] = []
     for path in _python_files("gateway.core"):
         rel = str(path.relative_to(REPO_ROOT))
         for name in _imported_modules(path):
-            names_channels = name == "gateway.startup" or name.startswith("gateway.startup.")
-            if names_channels and rel != _CHANNELS_COMPOSER:
+            names_startup = name == "gateway.startup" or name.startswith("gateway.startup.")
+            if names_startup and rel != _STARTUP_COMPOSER:
                 offenders.append(f"{rel} → {name}")
-    assert offenders == [], "Non-manager core imported gateway.startup:\n" + "\n".join(offenders)
+    assert offenders == [], "Non-controller core imported gateway.startup:\n" + "\n".join(offenders)
 
 
-def test_transports_never_import_channels_or_web() -> None:
+def test_transports_never_import_startup_or_web() -> None:
     offenders: list[str] = []
     for package in _TRANSPORTS:
         offenders.extend(_offenders(package, ("gateway.startup", "gateway.web")))
@@ -117,11 +117,11 @@ def test_transports_never_import_channels_or_web() -> None:
     offenders.extend(_offenders("gateway.transports", ("gateway.startup", "gateway.web")))
     # Deduplicate paths that appear both as package and via rglob of parent.
     offenders = sorted(set(offenders))
-    assert offenders == [], "Transport peer imported channels/web:\n" + "\n".join(offenders)
+    assert offenders == [], "Transport peer imported startup/web:\n" + "\n".join(offenders)
 
 
-def test_channels_only_imports_peer_startup_not_transport_internals() -> None:
-    """Channels may compose via ``*.startup``; deeper peer modules stay private."""
+def test_startup_only_imports_peer_startup_not_transport_internals() -> None:
+    """gateway/startup.py composes via ``*.startup``; deeper peer modules stay private."""
     offenders: list[str] = []
     for path in _python_files("gateway.startup"):
         rel = str(path.relative_to(REPO_ROOT))

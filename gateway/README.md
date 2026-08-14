@@ -13,10 +13,10 @@ transport-specific code.
 |---------------|---------------|-------------------|
 | **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
 | **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
-| **Composition root (impl)** | `gateway/core/runtime/manager.py` → `GatewayManager` | Injected `slash_ports_factory` from CLI; bare `manager.main` fails closed |
+| **Composition root (impl)** | `gateway/core/runtime/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
 | **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
-| **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayManager.start_surfaces` |
+| **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayController.start_surfaces` |
 | **Chat transport registry** | `gateway/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
@@ -35,7 +35,7 @@ gateway.core.runtime.daemon.start_gateway_daemon
 surfaces/cli/gateway_entry.py  (or Click foreground → same composition root)
         │  wires headless slash ports
         ▼
-gateway.core.runtime.manager.GatewayManager.start_gateway
+gateway.core.runtime.controller.GatewayController.start_gateway
         ├── start_surfaces()  →  gateway.startup.start_gateway
         │     ├── web/web_server  →  web/webapp:app
         │     └── startup.start_transports
@@ -139,8 +139,8 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 
-Then wire it in the composition root (`GatewayManager` in
-`gateway/core/runtime/manager.py`) beside the existing transports. Reuse the handler
+Then wire it in the composition root (`GatewayController` in
+`gateway/core/runtime/controller.py`) beside the existing transports. Reuse the handler
 from `GatewayTurnHandler(...)` as-is.
 
 **What you never change:** `GatewayTurnHandler`, `Agent`, prompts, tools.

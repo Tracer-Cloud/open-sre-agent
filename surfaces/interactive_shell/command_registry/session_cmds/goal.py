@@ -13,7 +13,7 @@ from dataclasses import replace
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 
-from core.agent_harness.session import SessionManager
+from core.agent_harness import SessionManager, format_session_goal_progress
 from core.agent_harness.session.terminal_access import (
     clear_pending_autosubmit,
     set_auto_command,
@@ -29,7 +29,6 @@ from core.agent_harness.session_goal.goal import (
     session_goal_is_attached,
     session_goal_is_paused,
 )
-from core.agent_harness.session_goal.progress import format_session_goal_progress
 from platform.common.evidence_compaction import truncate_message
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
