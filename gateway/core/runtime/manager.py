@@ -5,12 +5,12 @@ logging + credential hydrate, then
 :func:`bootstrap.process.configure_process` (``GATEWAY_PROFILE``), then
 assemble the turn handler and start components —
 
-* :meth:`start_channels` — web + chat transports via :mod:`gateway.channels`
+* :meth:`start_surfaces` — web + chat transports via :mod:`gateway.startup`
 * :meth:`start_scheduler` — peer of the consumer surfaces (cron / loops)
 
 Owns signals and ``stop``/``wait``. Component states go through
 :func:`gateway.core.runtime.daemon.write_component_status`. Channel start/stop
-lives in :mod:`gateway.channels`; turn dispatch lives in
+lives in :mod:`gateway.startup`; turn dispatch lives in
 :mod:`gateway.core.runtime.turn_handler` — not here.
 """
 
@@ -25,7 +25,7 @@ from typing import Any
 
 from rich.console import Console
 
-from gateway import channels as gateway_channels
+from gateway import startup as gateway_startup
 from gateway.core.config.logging_config import configure_logging
 from gateway.core.runtime.concurrency import (
     TurnConcurrencyGate,
@@ -65,7 +65,7 @@ class GatewayManager:
         turn_gate: TurnConcurrencyGate | None = None,
     ) -> None:
         self.logger: logging.Logger | None = None
-        self.channels: gateway_channels.ChannelsHandle | None = None
+        self.surfaces: gateway_startup.StartedGateway | None = None
         self.scheduler: Any = None
         self._scheduler_reload_thread: threading.Thread | None = None
         self.components: dict[str, str] = {}
@@ -100,7 +100,7 @@ class GatewayManager:
             gate=self.turn_gate,
         )
 
-        self.start_channels(logger=logger, handler=handler)
+        self.start_surfaces(logger=logger, handler=handler)
         self.start_scheduler(logger=logger)
         self._publish_status(logger)
         # Deploy health waits (EC2 Docker + AMI) match this line for Telegram
@@ -115,15 +115,15 @@ class GatewayManager:
             self.wait()
         return self
 
-    def start_channels(
+    def start_surfaces(
         self,
         *,
         logger: logging.Logger,
         handler: GatewayAgentCallback,
     ) -> None:
-        """Start web + every chat transport together (via :mod:`gateway.channels`)."""
-        self.channels = gateway_channels.start_channels(logger=logger, handler=handler)
-        self.components.update(self.channels.statuses)
+        """Start web + every chat transport together (via :mod:`gateway.startup`)."""
+        self.surfaces = gateway_startup.start_gateway(logger=logger, handler=handler)
+        self.components.update(self.surfaces.statuses)
 
     def start_scheduler(self, *, logger: logging.Logger) -> None:
         """Host the platform scheduler as a peer of the consumer channels."""
@@ -147,7 +147,7 @@ class GatewayManager:
             self.components["scheduler"] = f"running {task_count} scheduled task(s)"
         self._start_scheduler_reload_watcher(logger)
 
-    def stop(self, *, timeout: float = gateway_channels.DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
+    def stop(self, *, timeout: float = gateway_startup.DEFAULT_STOP_TIMEOUT_SECONDS) -> bool:
         """Shut down all components and return whether the chat workers stopped."""
         set_ready(False)
         self._stopped.set()
@@ -160,9 +160,9 @@ class GatewayManager:
         if self.scheduler is not None:
             self.scheduler.shutdown(wait=False)
             self.scheduler = None
-        if self.channels is not None:
-            stopped = self.channels.stop(timeout=timeout) and stopped
-            self.channels = None
+        if self.surfaces is not None:
+            stopped = self.surfaces.stop(timeout=timeout) and stopped
+            self.surfaces = None
         clear_component_status()
         return stopped
 

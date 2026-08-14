@@ -34,7 +34,7 @@ from core.agent_harness.session import SessionCore
 class TransportName(StrEnum):
     """Chat transports the gateway can serve.
 
-    Doubles as the key in :attr:`gateway.channels.ChannelsHandle.transports`
+    Doubles as the key in :attr:`gateway.startup.StartedGateway.transports`
     and in the component status map, so status keys and lookups cannot drift.
     Web is not a member: it is a channel but not a chat transport.
     """

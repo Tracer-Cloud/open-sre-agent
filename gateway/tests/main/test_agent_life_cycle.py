@@ -26,9 +26,9 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.channels import TransportName
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.manager import GatewayManager, start_gateway
+from gateway.startup import TransportName
 from gateway.transports.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
 )
@@ -43,7 +43,7 @@ from gateway.web.startup import WebStartup
 def _patch_non_telegram_components(monkeypatch) -> None:
     """Keep lifecycle tests focused on the Telegram worker: skip web/scheduler/pidfile."""
     monkeypatch.setattr(
-        "gateway.channels.compose.start_web_server",
+        "gateway.startup.start_web_server",
         lambda **_kwargs: WebStartup(server=None, status="skipped in lifecycle test"),
     )
     monkeypatch.setattr(GatewayManager, "start_scheduler", lambda *_args, **_kwargs: None)
@@ -53,11 +53,11 @@ def _patch_non_telegram_components(monkeypatch) -> None:
         raise GatewayConfigurationError("skipped in lifecycle test")
 
     monkeypatch.setattr(
-        "gateway.channels.chat.start_slack_worker",
+        "gateway.startup.start_slack_worker",
         _skip_transport,
     )
     monkeypatch.setattr(
-        "gateway.channels.chat.start_discord_worker",
+        "gateway.startup.start_discord_worker",
         _skip_transport,
     )
 
@@ -121,8 +121,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(gateway, GatewayManager)
     assert gateway.logger is logger
-    assert gateway.channels is not None
-    telegram = gateway.channels.transports.get(TransportName.TELEGRAM)
+    assert gateway.surfaces is not None
+    telegram = gateway.surfaces.transports.get(TransportName.TELEGRAM)
     assert telegram is not None
     assert telegram.worker is handle
     assert background_kwargs["settings"] is settings
@@ -292,11 +292,11 @@ def test_gateway_start_continues_without_telegram_configuration(monkeypatch) -> 
 
     gateway = GatewayManager().start_gateway(wait=False)
 
-    assert gateway.channels is not None
-    assert TransportName.TELEGRAM not in gateway.channels.transports
+    assert gateway.surfaces is not None
+    assert TransportName.TELEGRAM not in gateway.surfaces.transports
     assert gateway.components["telegram"].startswith("not configured")
     assert gateway.stop() is True
-    assert gateway.channels is None
+    assert gateway.surfaces is None
 
 
 def test_start_gateway_wrapper_delegates_to_gateway_instance(monkeypatch) -> None:

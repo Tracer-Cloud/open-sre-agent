@@ -3,11 +3,11 @@
 Pinned rules (see ``gateway/AGENTS.md``):
 
 * Chat transports are peers — none imports another.
-* ``gateway.web`` never imports ``gateway.transports`` or ``gateway.channels``.
+* ``gateway.web`` never imports ``gateway.transports`` or ``gateway.startup``.
 * ``gateway.core`` never imports chat transports or ``gateway.web``.
-* Only ``gateway.core.runtime.manager`` may import ``gateway.channels``.
-* ``gateway.transports.*`` never imports ``gateway.channels`` or ``gateway.web``.
-* ``gateway.channels`` may import peer ``*.startup`` (and ``gateway.web``); peers
+* Only ``gateway.core.runtime.manager`` may import ``gateway.startup``.
+* ``gateway.transports.*`` never imports ``gateway.startup`` or ``gateway.web``.
+* ``gateway.startup`` may import peer ``*.startup`` (and ``gateway.web``); peers
   must not import channels.
 """
 
@@ -87,12 +87,12 @@ def test_chat_transport_peers_never_import_each_other() -> None:
 
 
 def test_web_surface_never_imports_chat_transports_or_channels() -> None:
-    offenders = _offenders("gateway.web", (*_TRANSPORTS, "gateway.channels"))
+    offenders = _offenders("gateway.web", (*_TRANSPORTS, "gateway.startup"))
     assert offenders == [], "Web surface reached into transports/channels:\n" + "\n".join(offenders)
 
 
 def test_core_never_imports_chat_transports_or_web() -> None:
-    """Surfaces are composed via ``gateway.channels``, not from core leaves."""
+    """Surfaces are composed via ``gateway.startup``, not from core leaves."""
     banned = (*_TRANSPORTS, "gateway.web", "gateway.transports")
     offenders = _offenders("gateway.core", banned)
     assert offenders == [], "Core imported a surface directly:\n" + "\n".join(offenders)
@@ -103,18 +103,18 @@ def test_only_manager_imports_channels_module() -> None:
     for path in _python_files("gateway.core"):
         rel = str(path.relative_to(REPO_ROOT))
         for name in _imported_modules(path):
-            names_channels = name == "gateway.channels" or name.startswith("gateway.channels.")
+            names_channels = name == "gateway.startup" or name.startswith("gateway.startup.")
             if names_channels and rel != _CHANNELS_COMPOSER:
                 offenders.append(f"{rel} → {name}")
-    assert offenders == [], "Non-manager core imported gateway.channels:\n" + "\n".join(offenders)
+    assert offenders == [], "Non-manager core imported gateway.startup:\n" + "\n".join(offenders)
 
 
 def test_transports_never_import_channels_or_web() -> None:
     offenders: list[str] = []
     for package in _TRANSPORTS:
-        offenders.extend(_offenders(package, ("gateway.channels", "gateway.web")))
+        offenders.extend(_offenders(package, ("gateway.startup", "gateway.web")))
     # Also scan transports package root (no registry composer left there).
-    offenders.extend(_offenders("gateway.transports", ("gateway.channels", "gateway.web")))
+    offenders.extend(_offenders("gateway.transports", ("gateway.startup", "gateway.web")))
     # Deduplicate paths that appear both as package and via rglob of parent.
     offenders = sorted(set(offenders))
     assert offenders == [], "Transport peer imported channels/web:\n" + "\n".join(offenders)
@@ -123,7 +123,7 @@ def test_transports_never_import_channels_or_web() -> None:
 def test_channels_only_imports_peer_startup_not_transport_internals() -> None:
     """Channels may compose via ``*.startup``; deeper peer modules stay private."""
     offenders: list[str] = []
-    for path in _python_files("gateway.channels"):
+    for path in _python_files("gateway.startup"):
         rel = str(path.relative_to(REPO_ROOT))
         for name in _imported_modules(path):
             if not any(name == p or name.startswith(f"{p}.") for p in _TRANSPORTS):
@@ -310,7 +310,7 @@ def test_every_transport_package_is_registered_in_the_chat_table() -> None:
     row (the transport never starts) or the row without the package.
     """
     # Arrange / Act.
-    from gateway.channels.chat import TRANSPORTS
+    from gateway.startup import TRANSPORTS
 
     on_disk = {package.rsplit(".", 1)[-1] for package in _TRANSPORTS}
     registered = {spec.name.value for spec in TRANSPORTS}

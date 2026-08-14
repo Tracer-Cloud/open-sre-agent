@@ -8,20 +8,20 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.channels import ChannelsHandle, TransportHandle, TransportName
 from gateway.core.runtime.manager import GatewayManager
+from gateway.startup import StartedGateway, TransportHandle, TransportName
 
 
-def test_start_channels_delegates_to_channels_module(
+def test_start_surfaces_delegates_to_the_startup_module(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Manager stores an opaque ChannelsHandle; no per-transport fields."""
+    """Manager stores an opaque StartedGateway; no per-transport fields."""
     telegram = TransportHandle(
         TransportName.TELEGRAM,
         MagicMock(name="telegram"),
         "polling for messages",
     )
-    expected = ChannelsHandle(
+    expected = StartedGateway(
         web_server=MagicMock(name="web"),
         transports={TransportName.TELEGRAM: telegram},
         statuses={"web": "serving", TransportName.TELEGRAM: "polling for messages"},
@@ -33,14 +33,14 @@ def test_start_channels_delegates_to_channels_module(
         captured["handler"] = handler
         return expected
 
-    monkeypatch.setattr("gateway.core.runtime.manager.gateway_channels.start_channels", _boot)
+    monkeypatch.setattr("gateway.core.runtime.manager.gateway_startup.start_gateway", _boot)
     manager = GatewayManager()
     handler = MagicMock(name="chat-handler")
-    logger = logging.getLogger("test.manager.channels")
+    logger = logging.getLogger("test.manager.surfaces")
 
-    manager.start_channels(logger=logger, handler=handler)
+    manager.start_surfaces(logger=logger, handler=handler)
 
-    assert manager.channels is expected
+    assert manager.surfaces is expected
     assert captured["logger"] is logger
     assert captured["handler"] is handler
     assert manager.components[TransportName.TELEGRAM] == "polling for messages"
@@ -61,7 +61,7 @@ def test_wait_blocks_until_stop_not_channel_worker_exit() -> None:
             _ = timeout
             return True
 
-    manager.channels = ChannelsHandle(
+    manager.surfaces = StartedGateway(
         transports={
             TransportName.TELEGRAM: TransportHandle(
                 TransportName.TELEGRAM,
@@ -77,7 +77,7 @@ def test_wait_blocks_until_stop_not_channel_worker_exit() -> None:
 
     manager.stop()
     assert manager.wait(timeout=0.01) is True
-    assert manager.channels is None
+    assert manager.surfaces is None
 
 
 def test_manager_stop_never_touches_the_real_gateway_directory() -> None:

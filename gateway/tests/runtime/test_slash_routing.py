@@ -208,11 +208,11 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
         "platform.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
-    from gateway.channels import ChannelsHandle
+    from gateway.startup import StartedGateway
 
     monkeypatch.setattr(
-        "gateway.core.runtime.manager.gateway_channels.start_channels",
-        lambda **_kwargs: ChannelsHandle(),
+        "gateway.core.runtime.manager.gateway_startup.start_gateway",
+        lambda **_kwargs: StartedGateway(),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).
     monkeypatch.setattr(
