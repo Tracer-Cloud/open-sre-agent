@@ -267,7 +267,7 @@ def start_gateway(
 
 
 def main() -> None:
-    """Refuse bare manager main — same policy as :mod:`gateway.main`."""
+    """Refuse bare manager main — same policy as ``python -m gateway``."""
     raise SystemExit(_BARE_MANAGER_EXIT)
 
 

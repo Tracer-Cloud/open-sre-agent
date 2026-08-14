@@ -2,7 +2,7 @@
 
 Composition root: :mod:`gateway.core.runtime.manager` (``GatewayManager``).
 Production boot: ``opensre gateway start`` (CLI injects slash ports).
-Package ``python -m gateway.main`` and bare ``manager.main`` fail closed.
+Package ``python -m gateway`` and bare ``manager.main`` fail closed.
 Shared contracts: :mod:`gateway.core.transport_api`, :mod:`gateway.core.runtime.errors`.
 """
 

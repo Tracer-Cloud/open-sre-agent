@@ -2,7 +2,7 @@
 
 Gateway core machinery used by every surface. **Must not** import
 `gateway.transports.*` or `gateway.web` (surfaces). Channel composition lives
-in `gateway.channels`; only `runtime/manager.py` imports that module.
+in `gateway.startup`; only `runtime/manager.py` imports that module.
 Pinned by `gateway/tests/test_package_borders.py`.
 
 | Package | Role |

@@ -6,7 +6,7 @@ Prefer the ``opensre`` console script in normal use. This module exists so
 
 This covers the interactive shell, the landing page, and every one-shot
 subcommand. The gateway daemon is a separate process entry managed via
-``opensre gateway start`` (CLI wires slash ports). Bare ``python -m gateway.main``
+``opensre gateway start`` (CLI wires slash ports). Bare ``python -m gateway``
 fails closed — ``gateway`` and ``surfaces`` are peer packages that must not
 import each other.
 

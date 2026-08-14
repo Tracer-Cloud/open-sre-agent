@@ -1,7 +1,7 @@
 """Make the package executable: ``python -m surfaces.cli``.
 
 The CLI itself is defined in :mod:`surfaces.cli.app`. This module only launches
-it, matching ``gateway/main.py``.
+it, matching ``gateway/__main__.py``.
 """
 
 from __future__ import annotations

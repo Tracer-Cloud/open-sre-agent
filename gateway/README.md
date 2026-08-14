@@ -12,15 +12,15 @@ transport-specific code.
 | What you want | File / symbol | How it is started |
 |---------------|---------------|-------------------|
 | **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
-| **Package main** | `gateway/main.py` → `main()` | Fails closed — no slash-port glue |
+| **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
 | **Composition root (impl)** | `gateway/core/runtime/manager.py` → `GatewayManager` | Injected `slash_ports_factory` from CLI; bare `manager.main` fails closed |
 | **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
-| **Channels** | `gateway/channels/` → `start_channels` / `ChannelsHandle` | Called by `GatewayManager.start_channels` |
-| **Chat transport registry** | `gateway/channels/chat.py` → `start_transports` | Used by `gateway.channels.compose` |
-| **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via channels chat registry |
-| **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via channels chat registry |
-| **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via channels (includes readiness wait) |
+| **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayManager.start_surfaces` |
+| **Chat transport registry** | `gateway/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
+| **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
+| **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
+| **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
 | **Per-message turn** | `gateway/core/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
@@ -36,9 +36,9 @@ surfaces/cli/gateway_entry.py  (or Click foreground → same composition root)
         │  wires headless slash ports
         ▼
 gateway.core.runtime.manager.GatewayManager.start_gateway
-        ├── start_channels()  →  gateway.channels.start_channels
+        ├── start_surfaces()  →  gateway.startup.start_gateway
         │     ├── web/web_server  →  web/webapp:app
-        │     └── channels/chat.start_transports
+        │     └── startup.start_transports
         │           (telegram / slack / discord startup)
         └── start_scheduler()   # peer of channels, not a transport
 ```
