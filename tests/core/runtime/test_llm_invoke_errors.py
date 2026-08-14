@@ -150,7 +150,32 @@ def test_remediate_missing_credentials_without_provider_uses_placeholder() -> No
         "Incorrect API key provided: sk-abc. You can find your key at platform.openai.com.",
         "Error code: 429 - rate limit exceeded",
         "The LLM request timed out after 300s.",
+        # Rejected-key wrappers cite *_API_KEY env names; they must keep their
+        # real authentication message, never the no-key guidance.
+        "AuthenticationError: invalid x-api-key. Check your ANTHROPIC_API_KEY.",
+        "401 Unauthorized: the key from OPENAI_API_KEY was rejected.",
+        "API key expired. Renew the key stored in GEMINI_API_KEY.",
     ],
 )
 def test_remediate_missing_credentials_ignores_other_failures(message: str) -> None:
     assert remediate_missing_llm_credentials(message) is None
+
+
+def test_remediate_missing_credentials_matches_wrapper_requires_env_message() -> None:
+    text = remediate_missing_llm_credentials(
+        "LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set.",
+        provider="anthropic",
+    )
+
+    assert text is not None
+    assert "`/auth login anthropic`" in text
+
+
+def test_remediate_missing_credentials_matches_anthropic_absence_message() -> None:
+    text = remediate_missing_llm_credentials(
+        "Could not resolve authentication method. Expected either api_key or auth_token to be set.",
+        provider="anthropic",
+    )
+
+    assert text is not None
+    assert "`/auth login anthropic`" in text

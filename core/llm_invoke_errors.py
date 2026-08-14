@@ -106,12 +106,26 @@ _NOT_CONFIGURED_PATTERNS = (
 )
 _QUOTA_PATTERNS = ("429", "quota", "rate limit", "too many requests", "credit")
 # Provider-SDK phrasings for "no API key at all" (as opposed to an invalid one).
+# Absence phrasings only — never a bare env-var-name match: rejected-key errors
+# also cite *_API_KEY names and must keep their real authentication message.
 _MISSING_KEY_PATTERNS = (
     "missing credentials",
     "api key is not set",
     "missing api key",
     "no api key",
-    "_api_key",  # env-var mention, e.g. "set the OPENAI_API_KEY environment variable"
+    "could not resolve authentication method",  # anthropic SDK, key/token both unset
+    "to be set",  # opensre wrapper: "requires ANTHROPIC_API_KEY to be set"
+)
+# A message matching any of these describes a key that exists but was rejected.
+_REJECTED_KEY_VETO_PATTERNS = (
+    "invalid",
+    "incorrect",
+    "expired",
+    "revoked",
+    "401",
+    "403",
+    "unauthorized",
+    "forbidden",
 )
 _AUTH_PATTERNS = (
     "authentication",
@@ -135,6 +149,8 @@ def remediate_missing_llm_credentials(message: str, *, provider: str | None = No
     so callers fall back to their existing rendering.
     """
     text = message.lower()
+    if any(pattern in text for pattern in _REJECTED_KEY_VETO_PATTERNS):
+        return None
     if not any(pattern in text for pattern in _MISSING_KEY_PATTERNS):
         return None
     target = provider.strip() if provider else "<provider>"
