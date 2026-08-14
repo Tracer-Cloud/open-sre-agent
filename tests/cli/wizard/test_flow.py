@@ -5102,3 +5102,68 @@ def test_run_wizard_blank_llm_key_defers_setup_instead_of_ending(monkeypatch, tm
     assert saved_llm_keys == [], "nothing may be persisted for a blank key"
     assert validator_calls == [], "a blank key must not be sent to the provider"
     assert password_asks == 1, "the prompt must accept the blank answer, not re-ask"
+
+
+def test_run_wizard_blank_key_on_kept_provider_reports_deferred_not_keychain(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Keeping the saved provider and submitting a blank key defers honestly.
+
+    The summary must not claim the key is in the system keychain when the
+    keep-existing-provider branch received DEFERRED from the credential prompt.
+    """
+    # Arrange: openai already configured but with no stored key; user keeps it.
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, choices=None, default=None, **_kwargs):
+        m = MagicMock()
+        prompt = str(_args[0]) if _args else ""
+        m.ask.return_value = "skip" if "integration" in prompt.lower() else default
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = False  # "Change provider?" -> keep saved openai
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = ""  # the user has no key to hand
+        return m
+
+    def _load_saved_openai(_path):
+        return {
+            "wizard": {"mode": "quickstart"},
+            "targets": {
+                "local": {
+                    "provider": "openai",
+                    "model": "gpt-5.4-mini",
+                    "api_key_env": "OPENAI_API_KEY",
+                }
+            },
+        }
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(_ui, "load_local_config", _load_saved_openai)
+    monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: False)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
+    )
+
+    # Act
+    exit_code = flow.run_wizard()
+
+    # Assert: onboarding finishes, nothing persists, and the summary is honest.
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert saved_llm_keys == []
+    assert "not set yet" in output
+    assert "system keychain" not in output

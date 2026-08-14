@@ -883,7 +883,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     if credential_outcome == REPICK:
                         force_repick = True
                         continue
-                    if credential_outcome == UNVERIFIED:
+                    if credential_outcome == DEFERRED:
+                        credential_state = DEFERRED
+                    elif credential_outcome == UNVERIFIED:
                         credential_state = UNVERIFIED
                     elif credential_outcome == UNSAVED:
                         credential_state = UNSAVED
