@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from config.principal import StorageScope
-from core.agent_harness.session import SessionCore
+from core.agent_harness import SessionCore
 from gateway.core.middleware.inbound_decision import apply_inbound_decision
 from gateway.core.storage import SessionResolver
 from gateway.transports.telegram.inbound_security import InboundDecision

@@ -17,7 +17,7 @@ from config.constants.gateway import (
 )
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
-from core.agent_harness.session import SessionCore
+from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks

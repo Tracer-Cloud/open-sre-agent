@@ -11,8 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from core.agent_harness.session import SessionCore, SessionManager
-from core.agent_harness.session.integration_resolution import has_resolved_integrations
+from core.agent_harness import SessionCore, SessionManager, has_resolved_integrations
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.session.gateway_chat_context import inject_gateway_chat_context
 

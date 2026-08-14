@@ -27,8 +27,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
-from core.agent_harness.ports import OutputSink
-from core.agent_harness.session import SessionCore
+from core.agent_harness import OutputSink, SessionCore
 
 
 class TransportName(StrEnum):

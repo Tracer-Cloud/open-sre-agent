@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 
-from core.agent_harness.session import SessionCore
+from core.agent_harness import SessionCore
 from gateway.core.session import seed_session_history
 from integrations.slack.web_client import (
     fetch_channel_messages,

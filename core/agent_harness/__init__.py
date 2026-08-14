@@ -16,6 +16,7 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
     from core.agent_harness.harness import (
         AgentSession,
         ChatDispatcher,
@@ -23,14 +24,25 @@ if TYPE_CHECKING:
         SessionStartupResult,
     )
     from core.agent_harness.investigation_api import InvestigationResult
+    from core.agent_harness.ports import OutputSink
     from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+    from core.agent_harness.session import SessionCore, SessionManager
+    from core.agent_harness.session.integration_resolution import has_resolved_integrations
+    from core.agent_harness.session_goal.goal import SessionGoal
+    from core.agent_harness.session_goal.progress import (
+        format_session_goal_progress,
+        format_session_goal_status_line,
+    )
+    from core.agent_harness.session_goal.run_until import run_until_session_goal
     from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
     from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
     from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence
     from core.agent_harness.turns.evidence_driver import gather_tool_evidence as gather_evidence
+    from core.agent_harness.turns.gather_ports import GatherPorts
     from core.agent_harness.turns.headless_adapters import BufferOutputSink
     from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+    from core.agent_harness.turns.host_cancel import ensure_turn_cancel
     from core.agent_harness.turns.orchestrator import run_turn, stream_answer
     from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
     from core.agent_harness.turns.turn_snapshot import (
@@ -78,6 +90,33 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "stream_answer": ("core.agent_harness.turns.orchestrator", "stream_answer"),
     "ChatTurnBindings": ("core.agent_harness.turns.chat_api", "ChatTurnBindings"),
     "dispatch_chat_turn": ("core.agent_harness.turns.chat_api", "dispatch_chat_turn"),
+    # Host-facing session and goal surface (gateway and embedders).
+    "SessionCore": ("core.agent_harness.session", "SessionCore"),
+    "SessionManager": ("core.agent_harness.session", "SessionManager"),
+    "has_resolved_integrations": (
+        "core.agent_harness.session.integration_resolution",
+        "has_resolved_integrations",
+    ),
+    "SessionGoal": ("core.agent_harness.session_goal.goal", "SessionGoal"),
+    "run_until_session_goal": (
+        "core.agent_harness.session_goal.run_until",
+        "run_until_session_goal",
+    ),
+    "format_session_goal_progress": (
+        "core.agent_harness.session_goal.progress",
+        "format_session_goal_progress",
+    ),
+    "format_session_goal_status_line": (
+        "core.agent_harness.session_goal.progress",
+        "format_session_goal_status_line",
+    ),
+    "DefaultTurnAccounting": (
+        "core.agent_harness.accounting.turn_accounting",
+        "DefaultTurnAccounting",
+    ),
+    "GatherPorts": ("core.agent_harness.turns.gather_ports", "GatherPorts"),
+    "ensure_turn_cancel": ("core.agent_harness.turns.host_cancel", "ensure_turn_cancel"),
+    "OutputSink": ("core.agent_harness.ports", "OutputSink"),
 }
 
 
@@ -101,9 +140,15 @@ __all__ = [
     "ChatDispatcher",
     "ChatTurnBindings",
     "DefaultPromptContextProvider",
+    "DefaultTurnAccounting",
+    "GatherPorts",
     "HeadlessAgent",
     "InvestigationResult",
+    "OutputSink",
     "SessionConfig",
+    "SessionCore",
+    "SessionGoal",
+    "SessionManager",
     "SessionStartupResult",
     "ToolCallingDeps",
     "ToolCallingTurnResult",
@@ -112,8 +157,13 @@ __all__ = [
     "TurnSnapshotSource",
     "build_default_headless_agent",
     "dispatch_chat_turn",
+    "ensure_turn_cancel",
+    "format_session_goal_progress",
+    "format_session_goal_status_line",
     "gather_evidence",
     "gather_tool_evidence",
+    "has_resolved_integrations",
     "run_turn",
+    "run_until_session_goal",
     "stream_answer",
 ]
