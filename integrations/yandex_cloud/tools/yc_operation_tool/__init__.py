@@ -57,7 +57,7 @@ def _extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Read any Yandex Cloud resource through the REST API. Use for services "
         "without a dedicated tool — container registry, DNS, CDN, IAM, KMS, "
         "Lockbox, certificates, YDB, Data Transfer and the rest. Call "
-        "list_yc_services first if you are unsure of the service name or path. "
+        "find_yc_api first if you are unsure of the service name or path. "
         "Read-only: only list and get endpoints can be reached. When the "
         "investigation calls for a change, report the exact `yc` command for an "
         "operator to run rather than attempting it. Reaches Yandex Cloud "

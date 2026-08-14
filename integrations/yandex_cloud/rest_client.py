@@ -284,7 +284,7 @@ class YandexCloudClient:
             return self._failure(
                 service,
                 path,
-                f"Unknown Yandex Cloud service '{service}'. Call list_yc_services "
+                f"Unknown Yandex Cloud service '{service}'. Call find_yc_api "
                 "to see what is available.",
                 metadata={"unknown_service": True},
             )

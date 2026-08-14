@@ -229,3 +229,28 @@ class TestSyntheticBackend:
         assert result["data"] == {"stub": True}
         assert backend.calls[0][0] == "compute"
         assert backend.calls[0][2]["folderId"] == FOLDER
+
+
+class TestItNamesOnlyToolsThatExist:
+    """Naming a tool the tree does not ship hands the model a dead next step.
+
+    SKILL.md had the same class of bug and was fixed; the tool description and
+    the client's error text were missed because a documentation sweep does not
+    reach string literals in code.
+    """
+
+    def test_no_shipped_text_names_a_missing_tool(self) -> None:
+        from tools.registry import get_registered_tool_map
+
+        registered = set(get_registered_tool_map("investigation"))
+        tool = get_registered_tool_map()["execute_yc_operation"]
+        named = {
+            word.strip(".,'\"")
+            for word in tool.description.split()
+            if word.strip(".,'\"").startswith(
+                ("list_yc", "find_yc", "get_yc", "read_yc", "query_yc")
+            )
+        }
+
+        assert named, "the description should point at a discovery tool"
+        assert named <= registered, f"names tools that do not exist: {named - registered}"
