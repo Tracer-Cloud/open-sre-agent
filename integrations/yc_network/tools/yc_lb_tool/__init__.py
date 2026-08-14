@@ -95,20 +95,57 @@ _ALB_BACKEND_GROUP_PATH = "/apploadbalancer/v1/backendGroups"
 _MAX_VIRTUAL_HOST_PAGES: Final = 20
 
 
-def _alb_router_ids(balancer: dict[str, Any]) -> list[str]:
-    """Pull the HTTP router id out of every listener handler shape."""
-    ids: list[str] = []
+def _alb_handlers(balancer: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return every handler a listener can carry, whatever its shape.
+
+    A listener is http, tls or stream. The tls one nests a default handler and
+    any number of SNI handlers, and each of those is either an httpHandler or a
+    streamHandler. Missing a shape means the backends behind it are never
+    checked, so the shapes are enumerated rather than guessed at.
+    """
+    handlers: list[dict[str, Any]] = []
     for listener in balancer.get("listeners") or []:
-        for key in ("http", "tls"):
-            handler = listener.get(key) or {}
-            direct = (handler.get("handler") or {}).get("httpRouterId")
-            if direct:
-                ids.append(direct)
-            nested = ((handler.get("defaultHandler") or {}).get("httpHandler") or {}).get(
-                "httpRouterId"
-            )
-            if nested:
-                ids.append(nested)
+        http_handler = (listener.get("http") or {}).get("handler")
+        if http_handler:
+            handlers.append(http_handler)
+        stream_handler = (listener.get("stream") or {}).get("handler")
+        if stream_handler:
+            handlers.append(stream_handler)
+        tls = listener.get("tls") or {}
+        nested = [tls.get("defaultHandler")] + [
+            sni.get("handler") for sni in tls.get("sniHandlers") or []
+        ]
+        for entry in nested:
+            if not entry:
+                continue
+            for key in ("httpHandler", "streamHandler"):
+                inner = entry.get(key)
+                if inner:
+                    handlers.append(inner)
+    return handlers
+
+
+def _alb_router_ids(balancer: dict[str, Any]) -> list[str]:
+    """Router ids from every handler that routes over HTTP."""
+    ids = [
+        handler["httpRouterId"]
+        for handler in _alb_handlers(balancer)
+        if handler.get("httpRouterId")
+    ]
+    return sorted(set(ids))
+
+
+def _alb_listener_backend_group_ids(balancer: dict[str, Any]) -> list[str]:
+    """Backend groups a listener names directly.
+
+    A stream handler carries its backend group itself rather than going through
+    an HTTP router, so walking routers alone never reaches it.
+    """
+    ids = [
+        handler["backendGroupId"]
+        for handler in _alb_handlers(balancer)
+        if handler.get("backendGroupId")
+    ]
     return sorted(set(ids))
 
 
@@ -197,9 +234,12 @@ def _alb_target_health(
     targets: list[dict[str, Any]] = []
     errors: list[str] = []
     seen: set[str] = set()
-    backend_group_ids, router_error = _alb_backend_group_ids(client, _alb_router_ids(balancer))
+    routed_ids, router_error = _alb_backend_group_ids(client, _alb_router_ids(balancer))
     if router_error:
         errors.append(router_error)
+    # Stream handlers name their backend group on the listener, so they are
+    # merged in alongside the ones discovered through routers.
+    backend_group_ids = sorted(set(routed_ids) | set(_alb_listener_backend_group_ids(balancer)))
     for bg_id in backend_group_ids:
         group = client.get(_ALB_SERVICE, f"{_ALB_BACKEND_GROUP_PATH}/{bg_id}", page_size=None)
         if not group.get("success"):

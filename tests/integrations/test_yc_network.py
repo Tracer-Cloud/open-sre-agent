@@ -351,3 +351,96 @@ class TestVirtualHostPagingIsFollowed:
         assert "page-2" in seen_tokens, "the second page was never requested"
         # the unhealthy target lives behind the backend group on page two
         assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"])
+
+
+class TestEveryListenerShapeIsWalked:
+    """Listener shapes other than plain HTTP must not hide their backends.
+
+    Shapes taken from the API reference: http.handler.httpRouterId,
+    tls.defaultHandler.{httpHandler,streamHandler}, tls.sniHandlers[].handler.*,
+    and stream.handler.backendGroupId. HTTP handlers name a router; stream
+    handlers name a backend group directly and so never appear behind one.
+    """
+
+    def _walk(self, monkeypatch: pytest.MonkeyPatch, listener: dict[str, Any]) -> dict[str, Any]:
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            if "/apploadbalancer/v1/loadBalancers" in url and "targetStates" not in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "loadBalancers": [
+                            {
+                                "id": "alb-1",
+                                "name": "ingress",
+                                "status": "ACTIVE",
+                                "listeners": [listener],
+                            }
+                        ]
+                    },
+                )
+            for fragment, payload in _ALB_ROUTES.items():
+                if fragment in url and "loadBalancers" not in fragment:
+                    return httpx.Response(200, json=payload)
+            if "targetStates" in url:
+                return httpx.Response(
+                    200,
+                    json=_ALB_ROUTES[
+                        "/apploadbalancer/v1/loadBalancers/alb-1/targetStates/bg-1/tg-1"
+                    ],
+                )
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        return get_yc_lb_health(**_CREDENTIALS)
+
+    @pytest.mark.parametrize(
+        ("shape", "listener"),
+        [
+            (
+                "tls sni http handler",
+                {
+                    "tls": {
+                        "sniHandlers": [{"handler": {"httpHandler": {"httpRouterId": "router-1"}}}]
+                    }
+                },
+            ),
+            (
+                "tls default http handler",
+                {"tls": {"defaultHandler": {"httpHandler": {"httpRouterId": "router-1"}}}},
+            ),
+        ],
+    )
+    def test_a_router_behind_a_tls_handler_is_followed(
+        self, monkeypatch: pytest.MonkeyPatch, shape: str, listener: dict[str, Any]
+    ) -> None:
+        result = self._walk(monkeypatch, listener)
+
+        assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"]), shape
+
+    @pytest.mark.parametrize(
+        ("shape", "listener"),
+        [
+            ("stream listener", {"stream": {"handler": {"backendGroupId": "bg-1"}}}),
+            (
+                "tls default stream handler",
+                {"tls": {"defaultHandler": {"streamHandler": {"backendGroupId": "bg-1"}}}},
+            ),
+            (
+                "tls sni stream handler",
+                {
+                    "tls": {
+                        "sniHandlers": [{"handler": {"streamHandler": {"backendGroupId": "bg-1"}}}]
+                    }
+                },
+            ),
+        ],
+    )
+    def test_a_backend_group_named_on_the_listener_is_read(
+        self, monkeypatch: pytest.MonkeyPatch, shape: str, listener: dict[str, Any]
+    ) -> None:
+        """Stream handlers bypass the router entirely."""
+        result = self._walk(monkeypatch, listener)
+
+        assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"]), shape
