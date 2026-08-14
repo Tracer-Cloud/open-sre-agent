@@ -8,8 +8,10 @@ import pytest
 
 from core.llm_invoke_errors import (
     LLM_PROVIDER_FAILURE_KINDS,
+    ProviderFailureKind,
     _looks_like_timeout,
     classify_llm_invoke_failure,
+    classify_llm_provider_failure,
     classify_provider_error_kind,
     is_cli_timeout_error,
     remediate_missing_llm_credentials,
@@ -179,3 +181,56 @@ def test_remediate_missing_credentials_matches_anthropic_absence_message() -> No
 
     assert text is not None
     assert "`/auth login anthropic`" in text
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (_OPENAI_MISSING_KEY_MESSAGE, ProviderFailureKind.MISSING_KEY),
+        (
+            "Could not resolve authentication method. Expected either api_key "
+            "or auth_token to be set.",
+            ProviderFailureKind.MISSING_KEY,
+        ),
+        (
+            "AuthenticationError: invalid x-api-key. Check your ANTHROPIC_API_KEY.",
+            ProviderFailureKind.REJECTED_KEY,
+        ),
+        ("Anthropic authentication failed.", ProviderFailureKind.REJECTED_KEY),
+        ("Error code: 429 - too many requests", ProviderFailureKind.QUOTA),
+        ("Anthropic model 'claude-x' was not found.", ProviderFailureKind.NOT_CONFIGURED),
+        ("something unexpected exploded", ProviderFailureKind.PROVIDER_ERROR),
+    ],
+)
+def test_classify_llm_provider_failure_rule_order(
+    message: str, expected: ProviderFailureKind
+) -> None:
+    assert classify_llm_provider_failure(message) == expected
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        _OPENAI_MISSING_KEY_MESSAGE,
+        "Could not resolve authentication method. Expected either api_key or auth_token to be set.",
+        "LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set.",
+        "AuthenticationError: invalid x-api-key. Check your ANTHROPIC_API_KEY.",
+        "401 Unauthorized: the key from OPENAI_API_KEY was rejected.",
+        "Error code: 429 - rate limit exceeded",
+        "something unexpected exploded",
+    ],
+)
+def test_remediation_and_analytics_always_agree(message: str) -> None:
+    """One classification, two consumers: guidance fires iff analytics says not-configured-ish.
+
+    Regression: the split classifiers disagreed on Anthropic's absence message
+    (analytics said ``auth`` while the user saw missing-key guidance).
+    """
+    remediated = remediate_missing_llm_credentials(message) is not None
+    kind = classify_llm_provider_failure(message)
+    analytics = classify_provider_error_kind(message)
+
+    assert remediated == (kind is ProviderFailureKind.MISSING_KEY)
+    if remediated:
+        assert analytics == "not_configured"
+        assert analytics != "auth"
