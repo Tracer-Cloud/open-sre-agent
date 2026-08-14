@@ -113,7 +113,8 @@ def test_transports_never_import_startup_or_web() -> None:
     offenders: list[str] = []
     for package in _TRANSPORTS:
         offenders.extend(_offenders(package, ("gateway.startup", "gateway.web")))
-    # Also scan transports package root (no registry composer left there).
+    # Also scan the transports package root: the composer (startup.py) lives
+    # there now, and it too must never import gateway.startup or gateway.web.
     offenders.extend(_offenders("gateway.transports", ("gateway.startup", "gateway.web")))
     # Deduplicate paths that appear both as package and via rglob of parent.
     offenders = sorted(set(offenders))
