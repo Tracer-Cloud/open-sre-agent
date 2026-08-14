@@ -112,6 +112,10 @@ async def _poll_buzz_until_stopped(
                 ):
                     poller.acknowledge(event)
                     continue
+                # Registered before the task exists: a /stop later in this
+                # same batch must find the accepted turn, not "nothing".
+                turn_cancel = threading.Event()
+                resources.active_cancels.register(conversation_key(event), turn_cancel)
                 task = asyncio.create_task(
                     _dispatch_turn(
                         event,
@@ -124,6 +128,7 @@ async def _poll_buzz_until_stopped(
                         approvals=resources.approvals,
                         pending_approvals=resources.pending_approvals,
                         active_cancels=resources.active_cancels,
+                        turn_cancel=turn_cancel,
                         loop=loop,
                         handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                         logger=logger,
@@ -218,6 +223,7 @@ async def _dispatch_turn(
     approvals: ApprovalBroker,
     pending_approvals: PendingApprovals,
     active_cancels: ActiveTurnRegistry,
+    turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
     logger: logging.Logger,
@@ -251,6 +257,7 @@ async def _dispatch_turn(
             approvals=approvals,
             pending_approvals=pending_approvals,
             active_cancels=active_cancels,
+            turn_cancel=turn_cancel,
             loop=loop,
             handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
             on_handled=lambda: acknowledge(event),
@@ -262,6 +269,9 @@ async def _dispatch_turn(
             event.channel_id,
             exc_info=True,
         )
+    finally:
+        if turn_cancel is not None:
+            active_cancels.unregister(conversation_key(event), turn_cancel)
     acknowledge(event)
 
 

@@ -29,10 +29,12 @@ from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 class _FakeClient:
     def __init__(self) -> None:
         self.edits: list[str] = []
+        self.sent: list[str] = []
         self._msg = 0
 
     def send_message(self, *, channel: str, content: str) -> dict[str, Any]:
-        _ = (channel, content)
+        _ = channel
+        self.sent.append(content)
         self._msg += 1
         return {"success": True, "event_id": f"ev-{self._msg}"}
 
@@ -204,3 +206,76 @@ def test_a_normal_message_is_not_a_stop_command() -> None:
     )
 
     assert handled is False
+
+
+def test_stop_in_the_same_batch_finds_the_dispatched_but_unstarted_turn() -> None:
+    """Dispatch-time registration closes the create_task → track window."""
+    from gateway.transports.buzz.background import maybe_handle_stop_command
+    from gateway.transports.buzz.session_rotation import conversation_key
+
+    # Arrange — the poll loop accepted a message and registered its cancel
+    # Event, but the detached turn task has not run a single step yet
+    registry = ActiveTurnRegistry()
+    client = _FakeClient()
+    message = _event("hello")
+    accepted_cancel = threading.Event()
+    registry.register(conversation_key(message), accepted_cancel)
+
+    # Act — a /stop from the same poll batch is checked immediately
+    handled = maybe_handle_stop_command(_event("/stop"), active_cancels=registry, client=client)
+
+    # Assert — the accepted turn is cancelled; no "nothing to stop" reply
+    assert handled is True
+    assert accepted_cancel.is_set()
+    assert client.sent == []
+
+
+@pytest.mark.usefixtures("org_env")
+def test_cancelled_before_start_reports_stopped_without_running_the_agent() -> None:
+    """A turn whose dispatch-time cancel Event is already set never runs."""
+    from config.constants.gateway import USER_STOP_MESSAGE
+    from gateway.transports.buzz.session_rotation import conversation_key
+
+    # Arrange — /stop already cancelled the turn while it was queued
+    client = _FakeClient()
+    session = SessionCore(store=InMemorySessionStore())
+    registry = ActiveTurnRegistry()
+    message = _event()
+    turn_cancel = threading.Event()
+    registry.register(conversation_key(message), turn_cancel)
+    turn_cancel.set()
+    agent_calls: list[str] = []
+    acked: list[bool] = []
+
+    def agent_handler(text: str, _session: Any, _sink: Any, _logger: logging.Logger) -> None:
+        agent_calls.append(text)
+
+    # Act
+    async def _run() -> None:
+        executor = ThreadPoolExecutor(max_workers=1)
+        try:
+            await handle_polled_inbound_buzz_message(
+                message,
+                client=client,  # type: ignore[arg-type]
+                session_resolver=_FakeSessionResolver(session),  # type: ignore[arg-type]
+                settings=_settings(turn_timeout_seconds=5.0),
+                executor=executor,
+                chat_locks={},
+                turn_semaphore=asyncio.Semaphore(1),
+                approvals=ApprovalBroker(),
+                pending_approvals=PendingApprovals(),
+                active_cancels=registry,
+                turn_cancel=turn_cancel,
+                handle_callback_to_gateway_agent=agent_handler,
+                on_handled=lambda: acked.append(True),
+            )
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+
+    asyncio.run(_run())
+
+    # Assert — placeholder edited to the stopped copy, message acknowledged,
+    # agent never ran
+    assert agent_calls == []
+    assert client.edits == [USER_STOP_MESSAGE]
+    assert acked == [True]

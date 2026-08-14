@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import AbstractContextManager, nullcontext
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
@@ -39,11 +41,18 @@ async def handle_polled_inbound_buzz_message(
     approvals: ApprovalBroker,
     pending_approvals: PendingApprovals,
     active_cancels: ActiveTurnRegistry,
+    turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
     on_handled: Callable[[], None] | None = None,
 ) -> None:
     """Process one long-polled inbound Buzz mention/reply.
+
+    *turn_cancel* is the cancel Event the dispatcher registered in
+    *active_cancels* before scheduling this turn, so a ``/stop`` that lands
+    while the turn is still queued behind the conversation lock is honored
+    here without invoking the agent. Callers that pass ``None`` (direct
+    invocations) get a turn-local Event tracked for the turn's duration.
 
     *on_handled* fires on the executor thread the moment the turn body
     returns, not when the awaiting coroutine resumes. Shutdown cancels the
@@ -111,7 +120,7 @@ async def handle_polled_inbound_buzz_message(
         )
 
         event_loop = loop or asyncio.get_running_loop()
-        terminal = TerminalOutcomeArbiter()
+        terminal = TerminalOutcomeArbiter(cancel_event=turn_cancel)
         sink.turn_cancel = terminal.cancel_event
 
         def _on_turn_timeout() -> None:
@@ -154,13 +163,29 @@ async def handle_polled_inbound_buzz_message(
                 if on_handled is not None:
                     on_handled()
 
+        if turn_cancel is None:
+            registration: AbstractContextManager[None] = active_cancels.track(
+                key,
+                terminal.cancel_event,
+                on_user_stop=_on_user_stop,
+            )
+        else:
+            active_cancels.bind_user_stop(key, turn_cancel, _on_user_stop)
+            registration = nullcontext()
+
+        if terminal.cancel_event.is_set():
+            if terminal.claim():
+                try:
+                    sink.finalize(USER_STOP_MESSAGE)
+                except Exception:
+                    logger.debug("[buzz-gateway] user-stop finalize failed", exc_info=True)
+            if on_handled is not None:
+                on_handled()
+            return
+
         with terminal.timeout_after(settings.turn_timeout_seconds, _on_turn_timeout):
             try:
-                with active_cancels.track(
-                    key,
-                    terminal.cancel_event,
-                    on_user_stop=_on_user_stop,
-                ):
+                with registration:
                     await event_loop.run_in_executor(executor, _run_turn)
             except Exception:
                 logger.exception(
