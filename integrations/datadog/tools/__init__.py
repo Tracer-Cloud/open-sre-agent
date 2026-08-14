@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.tool_framework.metadata import EvidenceType, SideEffectLevel
@@ -500,7 +501,7 @@ def query_datadog_logs(
 
 # ======== from tools/datadog_metrics_tool/ ========
 
-"""Datadog metrics query tool (stub — implementation pending)."""
+"""Datadog metrics query tool."""
 
 
 from pydantic import BaseModel, Field
@@ -530,10 +531,8 @@ class QueryDatadogMetricsOutput(BaseModel):
     error: str | None = Field(default=None, description="Error details when unavailable.")
 
 
-def _metrics_is_available(_sources: dict[str, dict]) -> bool:
-    # Hidden from the planner until the Metrics API v2 implementation is complete.
-    # Re-enable availability once the stub below is replaced with a real Metrics API request.
-    return False
+def _metrics_is_available(sources: dict[str, dict]) -> bool:
+    return datadog_available_or_backend(sources)
 
 
 def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
@@ -541,9 +540,9 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     return {
         "metric_name": dd.get("metric_name", ""),
         "time_range_minutes": dd.get("time_range_minutes", 60),
-        "api_key": dd.get("api_key"),
-        "app_key": dd.get("app_key"),
-        "site": dd.get("site", "datadoghq.com"),
+        "query": dd.get("metric_query"),
+        "datadog_backend": dd.get("_backend"),
+        **_dd_creds(dd),
     }
 
 
@@ -567,7 +566,7 @@ def _metrics_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     anti_examples=["Use this tool for log content or deployment timeline evidence."],
     input_model=QueryDatadogMetricsInput,
     output_model=QueryDatadogMetricsOutput,
-    injected_params=("api_key", "app_key", "site"),
+    injected_params=("api_key", "app_key", "site", "datadog_backend"),
     is_available=_metrics_is_available,
     extract_params=_metrics_extract_params,
 )
@@ -575,22 +574,50 @@ def query_datadog_metrics(
     metric_name: str,
     time_range_minutes: int = 60,
     query: str | None = None,
+    api_key: str | None = None,
+    app_key: str | None = None,
+    site: str = "datadoghq.com",
+    datadog_backend: Any = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
-    """Query Datadog metrics for infrastructure and application performance data.
+    """Query Datadog metrics for infrastructure and application performance data."""
+    if datadog_backend is not None:
+        return cast(
+            "dict[str, Any]",
+            datadog_backend.query_metrics(
+                metric_name=metric_name,
+                time_range_minutes=time_range_minutes,
+                query=query,
+            ),
+        )
 
-    NOTE: This tool is a stub. A full implementation will query the Datadog
-    Metrics API (v2) to retrieve time-series data for pipeline performance,
-    host resource utilisation, and custom business metrics.
-    """
-    return tool_unavailable(
-        "datadog_metrics",
-        "DataDogMetricsTool is not yet implemented.",
-        metric_name=metric_name,
-        time_range_minutes=time_range_minutes,
-        query=query,
-        metrics=[],
-    )
+    client = make_client(api_key, app_key, site)
+    if not client:
+        return unavailable(
+            "datadog_metrics",
+            "metrics",
+            "Datadog integration not configured",
+            metric_name=metric_name,
+        )
+
+    end = datetime.now(UTC)
+    start = end - timedelta(minutes=time_range_minutes)
+    metric_query = query or f"avg:{metric_name}{{*}}"
+    result = client.query_metrics(metric_query, start=start, end=end)
+    if not result.get("success"):
+        return unavailable(
+            "datadog_metrics",
+            "metrics",
+            result.get("error", "Unknown error"),
+            metric_name=metric_name,
+        )
+
+    return {
+        "source": "datadog_metrics",
+        "available": True,
+        "metric_name": metric_name,
+        "metrics": result.get("series", []),
+    }
 
 
 # ======== from tools/datadog_monitors_tool/ ========
