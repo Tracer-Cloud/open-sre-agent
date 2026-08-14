@@ -40,10 +40,10 @@ gateway.core.runtime.manager.GatewayManager.start_gateway
         │     ├── web/web_server  →  web/webapp:app
         │     └── startup.start_transports
         │           (telegram / slack / discord startup)
-        └── start_scheduler()   # peer of channels, not a transport
+        └── start_scheduler()   # peer of the surfaces, not a transport
 ```
 
-Layout: `core/` (runtime, storage, …), `channels/` (consumer composer),
+Layout: `core/` (runtime, storage, …), `startup.py` (surface composer),
 `transports/` (slack, discord, telegram peers), and `web/` (web surface). See
 `AGENTS.md`.
 

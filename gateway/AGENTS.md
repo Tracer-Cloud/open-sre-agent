@@ -57,24 +57,24 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 - `core/` — process and leaf infrastructure (`runtime`, `storage`,
   `billing`, `attachments`, `session`, `config`). No imports from transports
   or `web`. Only `core/runtime/manager.py` imports `gateway.startup`.
-- `channels/` — starts/stops web + chat transports as one consumer set.
+- `startup.py` — starts/stops web + chat transports as one consumer set.
   Imports `web/` and each peer's `startup` only.
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
   settings, inbound worker, security, output sink, and `startup.py`. Peers
-  never import each other or `channels`/`web`; anything two need belongs in
+  never import each other or `gateway.startup`/`web`; anything two need belongs in
   `core/` (usually `gateway.core.runtime`).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
-  May import `core/`; must not import chat transports or `channels`.
+  May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding
   keyed by platform; delegates create / resolve / rotate to `SessionManager`.
 
 ### Dependency rule (acyclic)
 
 ```
-core.manager  →  channels  →  transports.{telegram,slack,discord}.startup
+core.manager  →  startup.py  →  transports.{telegram,slack,discord,buzz}.startup
                            →  web
 peer transports · web  →  core leaves
-(peers never import each other, channels, or each other's packages)
+(peers never import each other, `gateway.startup`, or each other's packages)
 ```
 
 Package DAG and peer isolation are pinned by border tests. Keep gateway tests
@@ -164,7 +164,7 @@ serialize on the pool’s per-session lock; different sessions stay concurrent
 under the capacity gate. Multi-turn scheduled loops should keep one agent for
 the loop; true one-shot digests may use `AgentSession.run_headless_turn`.
 
-## Host parity (channels)
+## Host parity (chat surfaces)
 
 Same turn engine for Slack / Telegram / Discord: ingress → `GatewayTurnHandler`
 → `SessionAgentPool` → `AgentSession.chat`. Web investigate is Path-2 (separate
