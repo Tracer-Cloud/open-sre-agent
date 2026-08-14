@@ -515,6 +515,7 @@ class QueryDatadogMetricsInput(BaseModel):
     )
     time_range_minutes: int = Field(
         default=60,
+        ge=1,
         description="Lookback window in minutes for metric retrieval.",
     )
     query: str | None = Field(
@@ -581,6 +582,14 @@ def query_datadog_metrics(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """Query Datadog metrics for infrastructure and application performance data."""
+    if time_range_minutes < 1:
+        return unavailable(
+            "datadog_metrics",
+            "metrics",
+            "time_range_minutes must be at least 1",
+            metric_name=metric_name,
+        )
+
     if datadog_backend is not None:
         return cast(
             "dict[str, Any]",

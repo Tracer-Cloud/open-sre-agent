@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import integrations.datadog.tools as datadog_tools
-from integrations.datadog.tools import query_datadog_metrics
 from tests.tools.conftest import BaseToolContract, mock_agent_state
 
 
@@ -29,11 +28,11 @@ class _FakeDatadogBackend:
 
 class TestDataDogMetricsToolContract(BaseToolContract):
     def get_tool_under_test(self):
-        return query_datadog_metrics.__opensre_registered_tool__
+        return datadog_tools.query_datadog_metrics.__opensre_registered_tool__
 
 
 def test_is_available_when_connected_or_backend_injected() -> None:
-    rt = query_datadog_metrics.__opensre_registered_tool__
+    rt = datadog_tools.query_datadog_metrics.__opensre_registered_tool__
     assert rt.is_available({"datadog": {"connection_verified": True}}) is True
     assert rt.is_available({"datadog": {"_backend": _FakeDatadogBackend()}}) is True
     assert rt.is_available({"datadog": {}}) is False
@@ -41,7 +40,7 @@ def test_is_available_when_connected_or_backend_injected() -> None:
 
 
 def test_extract_params_maps_fields() -> None:
-    rt = query_datadog_metrics.__opensre_registered_tool__
+    rt = datadog_tools.query_datadog_metrics.__opensre_registered_tool__
     sources = mock_agent_state()
     params = rt.extract_params(sources)
     assert "metric_name" in params
@@ -49,7 +48,7 @@ def test_extract_params_maps_fields() -> None:
 
 
 def test_run_returns_unavailable_without_credentials() -> None:
-    result = query_datadog_metrics(metric_name="system.cpu.user")
+    result = datadog_tools.query_datadog_metrics(metric_name="system.cpu.user")
     assert result["available"] is False
     assert result["metric_name"] == "system.cpu.user"
     assert result["metrics"] == []
@@ -85,7 +84,7 @@ def test_run_queries_all_metric_series(monkeypatch) -> None:
 
     monkeypatch.setattr(datadog_tools, "make_client", _make_client)
 
-    result = query_datadog_metrics(
+    result = datadog_tools.query_datadog_metrics(
         metric_name="system.cpu.user",
         api_key="api-key",
         app_key="app-key",
@@ -109,7 +108,7 @@ def test_run_preserves_explicit_query(monkeypatch) -> None:
 
     monkeypatch.setattr(datadog_tools, "make_client", _make_client)
 
-    result = query_datadog_metrics(
+    result = datadog_tools.query_datadog_metrics(
         metric_name="system.cpu.user",
         query="max:system.cpu.user{env:prod} by {host}",
         api_key="api-key",
@@ -121,7 +120,7 @@ def test_run_preserves_explicit_query(monkeypatch) -> None:
 
 
 def test_run_delegates_to_fixture_backend() -> None:
-    result = query_datadog_metrics(
+    result = datadog_tools.query_datadog_metrics(
         metric_name="system.cpu.user",
         time_range_minutes=15,
         query="avg:system.cpu.user{service:checkout}",
@@ -144,7 +143,7 @@ def test_run_returns_client_error_as_unavailable(monkeypatch) -> None:
 
     monkeypatch.setattr(datadog_tools, "make_client", _make_client)
 
-    result = query_datadog_metrics(
+    result = datadog_tools.query_datadog_metrics(
         metric_name="system.cpu.user",
         api_key="api-key",
         app_key="app-key",
@@ -155,7 +154,18 @@ def test_run_returns_client_error_as_unavailable(monkeypatch) -> None:
     assert result["error"] == "Datadog rate limit exceeded"
 
 
+def test_run_rejects_nonpositive_time_range() -> None:
+    result = datadog_tools.query_datadog_metrics(
+        metric_name="system.cpu.user",
+        time_range_minutes=0,
+    )
+
+    assert result["available"] is False
+    assert result["metrics"] == []
+    assert result["error"] == "time_range_minutes must be at least 1"
+
+
 def test_run_metadata() -> None:
-    rt = query_datadog_metrics.__opensre_registered_tool__
+    rt = datadog_tools.query_datadog_metrics.__opensre_registered_tool__
     assert rt.name == "query_datadog_metrics"
     assert rt.source == "datadog"
