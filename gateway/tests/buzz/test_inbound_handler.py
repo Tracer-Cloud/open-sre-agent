@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.transports.buzz.inbound_handler import handle_polled_inbound_buzz_message
 from gateway.transports.buzz.pending_approvals import PendingApprovals
@@ -46,6 +47,7 @@ def test_unauthorized_sender_never_invokes_the_callback() -> None:
                 turn_semaphore=asyncio.Semaphore(4),
                 approvals=ApprovalBroker(),
                 pending_approvals=PendingApprovals(),
+                active_cancels=ActiveTurnRegistry(),
                 handle_callback_to_gateway_agent=callback,
             )
         )

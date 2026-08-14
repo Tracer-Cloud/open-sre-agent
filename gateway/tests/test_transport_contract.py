@@ -60,13 +60,7 @@ _REQUIRED_CONCERNS: dict[str, str] = {
 #: the assertion below is exact equality, so closing a gap requires deleting
 #: its entry here, and nothing can be added for a new transport unnoticed.
 _KNOWN_GAPS: dict[str, frozenset[str]] = {
-    "buzz": frozenset(
-        {
-            "turn timeout setting",
-            "stop command handling",
-            "credit metering",
-        }
-    ),
+    "buzz": frozenset({"credit metering"}),
     "telegram": frozenset({"credit metering"}),
 }
 

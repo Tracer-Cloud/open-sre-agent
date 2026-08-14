@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.transports.buzz import background
 from gateway.transports.buzz.pending_approvals import PendingApprovals
@@ -197,6 +198,7 @@ def _dispatch_coroutine(event: BuzzInboundMessage, *, acknowledge: object) -> ob
         turn_semaphore=asyncio.Semaphore(4),
         approvals=ApprovalBroker(),
         pending_approvals=PendingApprovals(),
+        active_cancels=ActiveTurnRegistry(),
         loop=MagicMock(),
         handle_callback_to_gateway_agent=MagicMock(),
         logger=MagicMock(),

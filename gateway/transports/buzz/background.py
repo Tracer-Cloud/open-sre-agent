@@ -8,6 +8,8 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
+from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
+from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.runtime.polling_thread import PollingBackground, start_polling_background
 from gateway.core.storage import SessionResolver
@@ -21,6 +23,7 @@ from gateway.transports.buzz.runtime import (
     InitializeBuzzPollingRuntime,
     ShutdownBuzzPollingRuntime,
 )
+from gateway.transports.buzz.session_rotation import conversation_key
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
 
@@ -104,6 +107,11 @@ async def _poll_buzz_until_stopped(
                 if _resolve_if_approval_reply(event, resources, settings):
                     poller.acknowledge(event)
                     continue
+                if maybe_handle_stop_command(
+                    event, active_cancels=resources.active_cancels, client=resources.client
+                ):
+                    poller.acknowledge(event)
+                    continue
                 task = asyncio.create_task(
                     _dispatch_turn(
                         event,
@@ -115,6 +123,7 @@ async def _poll_buzz_until_stopped(
                         turn_semaphore=turn_semaphore,
                         approvals=resources.approvals,
                         pending_approvals=resources.pending_approvals,
+                        active_cancels=resources.active_cancels,
                         loop=loop,
                         handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                         logger=logger,
@@ -179,6 +188,24 @@ async def _drain_active_turns(
         )
 
 
+def maybe_handle_stop_command(
+    event: BuzzInboundMessage,
+    *,
+    active_cancels: ActiveTurnRegistry,
+    client: BuzzClient,
+) -> bool:
+    """Handle a `/stop` without starting a turn. Returns whether it was one.
+
+    A stop for a conversation with no running turn still consumes the message
+    — starting a turn for it would answer a cancellation with an agent reply.
+    """
+    if not is_stop_command(event.content):
+        return False
+    if not active_cancels.request_stop(conversation_key(event)):
+        client.send_message(channel=event.channel_id, content=NO_ACTIVE_TURN_MESSAGE)
+    return True
+
+
 async def _dispatch_turn(
     event: BuzzInboundMessage,
     *,
@@ -190,6 +217,7 @@ async def _dispatch_turn(
     turn_semaphore: asyncio.Semaphore,
     approvals: ApprovalBroker,
     pending_approvals: PendingApprovals,
+    active_cancels: ActiveTurnRegistry,
     loop: asyncio.AbstractEventLoop,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
     logger: logging.Logger,
@@ -222,6 +250,7 @@ async def _dispatch_turn(
             turn_semaphore=turn_semaphore,
             approvals=approvals,
             pending_approvals=pending_approvals,
+            active_cancels=active_cancels,
             loop=loop,
             handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
             on_handled=lambda: acknowledge(event),
