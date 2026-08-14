@@ -13,13 +13,15 @@ tests tree.
 | Channels (web + chat composer) | `channels/` (`start_channels` / `ChannelsHandle`) |
 | Daemon pidfile / status | `core/runtime/daemon.py` |
 | Turn callback | `core/runtime/turn_handler.py` |
-| Sink + callback contracts | `core/runtime/sink_protocol.py` |
+| Transport API (spec, worker, sink, callback) | `core/transport_api/` |
+| Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
 | Config / transport errors | `core/runtime/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
 | Web surface (FastAPI) | `web/webapp.py` (`app`) |
 | Chat registry (inside channels) | `channels/chat.py` (`start_transports` / `stop_transports`) |
 | Telegram start | `transports/telegram/startup.py` (`start_telegram_worker`) |
 | Slack start | `transports/slack/startup.py` (`start_slack_worker`) |
 | Discord start | `transports/discord/startup.py` (`start_discord_worker`) |
+| Buzz start | `transports/buzz/startup.py` (`start_buzz_worker`) |
 
 Bare `python -m gateway.main` and `manager.main()` / `start_gateway()` without
 `slash_ports_factory` exit with a clear error. Unit tests may construct

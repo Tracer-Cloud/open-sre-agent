@@ -17,7 +17,7 @@ from gateway.channels.chat import (
     start_transports,
     stop_transports,
 )
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.web.startup import start_web_server
 from gateway.web.web_server import WebAppServerHandle
 

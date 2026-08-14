@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 
 from gateway.core.runtime.polling_thread import PollingBackground
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.buzz.background import start_buzz_gateway_background
 from gateway.transports.buzz.runtime import (
     initialize_buzz_polling_runtime,

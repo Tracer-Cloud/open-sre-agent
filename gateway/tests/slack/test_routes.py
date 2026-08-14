@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 from fastapi.testclient import TestClient
 
-from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.transports.slack.settings import SlackGatewaySettings, SlackInboundTransport
 from gateway.transports.slack.transport.events_api.receiver import (
     SIGNATURE_HEADER,

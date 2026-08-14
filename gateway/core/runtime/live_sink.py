@@ -11,7 +11,7 @@ import threading
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-from gateway.core.runtime.sink_protocol import GatewaySink
+from gateway.core.transport_api import GatewaySink
 
 
 class LiveOutputSink:

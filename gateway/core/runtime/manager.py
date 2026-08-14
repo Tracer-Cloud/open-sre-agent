@@ -43,8 +43,8 @@ from gateway.core.runtime.daemon import (
 )
 from gateway.core.runtime.errors import GatewayConfigurationError
 from gateway.core.runtime.readiness import set_ready
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.transport_api import GatewayAgentCallback
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from config.principal import StorageScope
 from core.agent_harness.session import SessionCore
-from gateway.core.runtime.inbound_decision import apply_inbound_decision
+from gateway.core.middleware.inbound_decision import apply_inbound_decision
 from gateway.core.storage import SessionResolver
 from gateway.transports.buzz.inbound_security import InboundDecision
 from gateway.transports.buzz.settings import BuzzInboundMessage

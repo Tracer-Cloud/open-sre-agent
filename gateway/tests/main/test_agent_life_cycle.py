@@ -247,8 +247,8 @@ def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatc
     async def _run_message() -> None:
         executor = ThreadPoolExecutor(max_workers=1)
         try:
-            from gateway.core.runtime.active_turns import ActiveTurnRegistry
-            from gateway.core.runtime.approvals import ApprovalBroker
+            from gateway.core.middleware.active_turns import ActiveTurnRegistry
+            from gateway.core.middleware.approvals import ApprovalBroker
 
             await handle_polled_inbound_telegram_message(
                 TelegramInboundMessage(

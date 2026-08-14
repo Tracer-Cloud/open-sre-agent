@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.transports.buzz import background
 from gateway.transports.buzz.pending_approvals import PendingApprovals
 from gateway.transports.buzz.runtime import BuzzPollingRuntime

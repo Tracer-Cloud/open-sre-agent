@@ -8,7 +8,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
-from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
 from gateway.transports.buzz.pending_approvals import PendingApprovals

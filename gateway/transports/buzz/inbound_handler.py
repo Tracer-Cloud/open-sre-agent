@@ -8,9 +8,9 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from config.scope_context import bound_storage_scope
-from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.storage import SessionResolver
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.buzz.approvals import BuzzApprovalPrompter
 from gateway.transports.buzz.inbound_security import enforce_inbound_buzz_message_security
 from gateway.transports.buzz.output_sink import BuzzOutputSink

@@ -21,8 +21,8 @@ from core.agent_harness.turns.default_headless_agent import build_default_headle
 from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from gateway.core.runtime.live_sink import LiveOutputSink
-from gateway.core.runtime.sink_protocol import GatewaySink
 from gateway.core.runtime.status_messages import status_from_tool_start
+from gateway.core.transport_api import GatewaySink
 from tools.interactive_shell.subprocess_presenter import (
     headless_subprocess_presenter_factory,
 )

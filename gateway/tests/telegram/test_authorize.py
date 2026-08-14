@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.core.runtime.identity_policy import persist_policy_if_needed
+from gateway.core.middleware.identity_policy import persist_policy_if_needed
 from gateway.transports.telegram.inbound_security import (
     enforce_inbound_telegram_message_security,
 )
@@ -16,8 +16,8 @@ _SECURITY = "gateway.transports.telegram.inbound_security"
 @pytest.fixture
 def mock_integration_store():
     with (
-        patch("gateway.core.runtime.identity_policy.get_integration", return_value=None),
-        patch("gateway.core.runtime.identity_policy.upsert_instance") as upsert,
+        patch("gateway.core.middleware.identity_policy.get_integration", return_value=None),
+        patch("gateway.core.middleware.identity_policy.upsert_instance") as upsert,
     ):
         yield upsert
 

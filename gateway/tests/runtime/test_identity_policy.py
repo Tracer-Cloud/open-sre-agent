@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from gateway.core.runtime.identity_policy import (
+from gateway.core.middleware.identity_policy import (
     load_identity_policy,
     persist_policy_if_needed,
     save_identity_policy,

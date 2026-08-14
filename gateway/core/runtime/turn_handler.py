@@ -33,8 +33,8 @@ from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cance
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.session_agents import SessionAgentPool
-from gateway.core.runtime.sink_protocol import GatewaySink
 from gateway.core.runtime.status_messages import EMPTY_RESPONSE_MESSAGE
+from gateway.core.transport_api import GatewaySink
 from platform.analytics.cli import (
     capture_gateway_turn_completed,
     capture_gateway_turn_failed,

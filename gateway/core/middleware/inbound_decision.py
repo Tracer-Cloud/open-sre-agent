@@ -25,7 +25,7 @@ from typing import Protocol
 from config.constants.gateway import NEW_SESSION_MESSAGE, ROTATE_SESSION
 from config.principal import StorageScope
 from core.agent_harness.session import SessionCore
-from gateway.core.runtime.identity_policy import (
+from gateway.core.middleware.identity_policy import (
     persist_policy_if_needed,
 )
 from gateway.core.storage import SessionResolver

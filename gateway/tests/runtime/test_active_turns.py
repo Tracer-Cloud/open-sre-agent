@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from gateway.core.runtime.active_turns import (
+from gateway.core.middleware.active_turns import (
     ActiveTurnRegistry,
     is_stop_command,
 )

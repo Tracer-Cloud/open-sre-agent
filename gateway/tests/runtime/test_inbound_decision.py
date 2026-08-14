@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from config.constants.gateway import NEW_SESSION_MESSAGE, ROTATE_SESSION
 from config.principal import Actor, Principal, StorageScope
-from gateway.core.runtime.inbound_decision import apply_inbound_decision
+from gateway.core.middleware.inbound_decision import apply_inbound_decision
 from integrations.messaging_security import MessagingIdentityPolicy
 
 

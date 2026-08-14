@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from config.constants.gateway import ROTATE_SESSION
-from gateway.core.runtime.identity_policy import (
+from gateway.core.middleware.identity_policy import (
     load_identity_policy,
 )
 from integrations.messaging_security import (

@@ -12,8 +12,8 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage.session.binding_store import BindingStore
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
 from gateway.transports.slack.delivery.feedback import record_feedback_payload
 from gateway.transports.slack.processing.events import parse_events_api_payload

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 
 from gateway.core.runtime.polling_thread import PollingBackground
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.telegram.background import start_telegram_gateway_background
 from gateway.transports.telegram.runtime import (
     initialize_telegram_polling_runtime,

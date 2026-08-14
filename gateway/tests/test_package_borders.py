@@ -137,7 +137,7 @@ def test_channels_only_imports_peer_startup_not_transport_internals() -> None:
 
 
 def test_approvals_module_imports_no_transport() -> None:
-    path = REPO_ROOT / "gateway" / "core" / "runtime" / "approvals.py"
+    path = REPO_ROOT / "gateway" / "core" / "middleware" / "approvals.py"
     imported = _imported_modules(path)
     leaked = [n for n in imported if any(n == p or n.startswith(f"{p}.") for p in _TRANSPORTS)]
     assert leaked == [], f"approvals.py imports transports: {leaked}"

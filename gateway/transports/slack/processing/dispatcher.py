@@ -18,14 +18,14 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.runtime.active_turns import ActiveTurnRegistry, is_stop_command
-from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
-from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
-from gateway.core.runtime.conversation_locks import ConversationLockRegistry
-from gateway.core.runtime.inbound_decision import apply_inbound_decision
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
-from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
+from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
+from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
+from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
+from gateway.core.middleware.conversation_locks import ConversationLockRegistry
+from gateway.core.middleware.inbound_decision import apply_inbound_decision
+from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.client import (
     SlackMessagingClient,
     mark_turn_done,
