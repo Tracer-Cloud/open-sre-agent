@@ -180,9 +180,20 @@ def _print_verify_summary(
         style = WARNING if failed else HIGHLIGHT
         detail = "needs attention" if failed else "ok"
         repl_print(console, f"[{style}]{service} {detail}.[/]")
+        if failed:
+            repl_print(
+                console,
+                f"[{DIM}]Reconfigure with /integrations setup {service} — "
+                "the detail column above names what is missing.[/]",
+            )
         return
     if failed:
         repl_print(console, f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
+        repl_print(
+            console,
+            f"[{DIM}]Reconfigure with /integrations setup <service> — "
+            "the detail column above names what is missing.[/]",
+        )
     else:
         repl_print(console, f"[{HIGHLIGHT}]all integrations ok.[/]")
 

@@ -72,7 +72,7 @@ async def run_repl_async(
         else:
             # Fresh interactive start with no scheduled loops: offer the
             # suggested-loops picker before the prompt loop takes stdin.
-            offer_loop_suggestions(session)
+            offer_loop_suggestions(session, out)
 
         await InteractiveShellController(
             runtime_context,

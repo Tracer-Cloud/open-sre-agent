@@ -202,3 +202,37 @@ def test_ready_box_expands_to_console_width() -> None:
     ]
     assert lines
     assert max(len(line) for line in lines) == 120
+
+
+def test_identity_greeting_matches_first_run_state(monkeypatch: object) -> None:
+    """First run greets 'Welcome'; a returning install greets 'Welcome back'."""
+    # Arrange: fix the username so the assertion is exact.
+    monkeypatch.setattr(banner_module, "_get_username", lambda: "casey")
+
+    # Act
+    first = banner_module._build_identity_block(
+        "openai", "gpt-5.4-mini", trust_mode=False, first_run=True
+    ).plain
+    returning = banner_module._build_identity_block(
+        "openai", "gpt-5.4-mini", trust_mode=False, first_run=False
+    ).plain
+
+    # Assert
+    assert "Welcome casey!" in first
+    assert "Welcome back" not in first
+    assert "Welcome back casey!" in returning
+
+
+def test_ready_box_greets_first_run_without_welcome_back(monkeypatch: object) -> None:
+    # Arrange: a machine where the wizard has never completed.
+    monkeypatch.setattr(banner_module, "_is_first_run", lambda: True)
+    console_file = io.StringIO()
+    console = Console(file=console_file, force_terminal=False, highlight=False, width=120)
+
+    # Act
+    banner_module.render_ready_box(console)
+
+    # Assert
+    output = console_file.getvalue()
+    assert "Welcome" in output
+    assert "Welcome back" not in output

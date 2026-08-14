@@ -810,6 +810,8 @@ class TestIntegrationsCommand:
         console, buf = _capture()
         dispatch_slash("/integrations verify", Session(), console)
         assert "need attention" in buf.getvalue()
+        # The summary must name the fix, not just the count.
+        assert "/integrations setup" in buf.getvalue()
 
     def test_verify_all_ok(self, monkeypatch: object) -> None:
         monkeypatch.setattr(
@@ -3181,3 +3183,21 @@ class TestCliDelegatedCommands:
         assert session.history[-1]["ok"] is False
         assert delegated == []
         assert started == []
+
+
+def test_alerts_inactive_prints_enable_instructions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The inactive warning must say how to turn the listener on."""
+    # Arrange
+    import surfaces.interactive_shell.command_registry.alerts as alerts_module
+
+    monkeypatch.setattr(alerts_module, "get_current_inbox", lambda: None)
+    console, buf = _capture()
+
+    # Act
+    dispatch_slash("/alerts", Session(), console)
+
+    # Assert
+    output = buf.getvalue()
+    assert "not active" in output
+    assert "alert_listener_enabled" in output
+    assert "OPENSRE_ALERT_LISTENER_ENABLED" in output

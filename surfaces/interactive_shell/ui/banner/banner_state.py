@@ -146,7 +146,7 @@ def _build_ambient_right_column(session: object = None) -> Text:
         listener_line.append("active", style=SECONDARY)
         parts.append(listener_line)
     else:
-        parts.append(Text("○  not configured", style=DIM))
+        parts.append(Text("○  not configured — /alerts for setup", style=DIM))
 
     parts.append(Text("───", style=DIM))
 

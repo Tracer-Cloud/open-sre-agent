@@ -172,7 +172,8 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     assert "38;2;168;212;255" in written
     assert "185;237;175" not in written
     assert "opensre" in written
-    assert "Welcome back" in written
+    # Greeting wording varies by first-run state; only the salutation root is stable.
+    assert "Welcome" in written
     assert "\r\n" in written
     # REPL path must not emit bare \\n (causes double-spaced splash under patch_stdout).
     assert "\r" not in written.replace("\r\n", "")

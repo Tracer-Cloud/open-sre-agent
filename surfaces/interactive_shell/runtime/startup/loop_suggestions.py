@@ -26,17 +26,25 @@ from platform.analytics.cli import (
     capture_loop_suggestion_skipped,
 )
 from platform.analytics.source import is_test_run
+from platform.terminal.theme import DIM
 from surfaces.interactive_shell.ui.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
 )
 
 if TYPE_CHECKING:
+    from rich.console import Console
+
     from surfaces.interactive_shell.session import Session
 
 logger = logging.getLogger(__name__)
 
 _MENU_TITLE = "No loops scheduled yet — pick one to set up (Esc to skip)"
+_MENU_EXPLAINER = (
+    "Loops are scheduled check-ins that post a summary here each weekday. "
+    "Picking one runs a first pass now, then offers the schedule — nothing is "
+    "saved until you confirm. Manage them anytime with /loops."
+)
 
 OPTION_CI_CD = "ci_cd"
 OPTION_TASK_MANAGEMENT = "task_management"
@@ -101,7 +109,7 @@ def should_offer_loop_suggestions() -> bool:
     return _no_loops_configured()
 
 
-def offer_loop_suggestions(session: Session) -> None:
+def offer_loop_suggestions(session: Session, console: Console | None = None) -> None:
     """Show the picker and queue the chosen suggestion as the first turn.
 
     Never blocks startup: any unexpected failure is logged and the REPL
@@ -111,6 +119,8 @@ def offer_loop_suggestions(session: Session) -> None:
         if not should_offer_loop_suggestions():
             return
         capture_loop_suggestion_prompted()
+        if console is not None:
+            console.print(f"[{DIM}]{_MENU_EXPLAINER}[/]")
         selected = repl_choose_one(
             title=_MENU_TITLE,
             choices=[(suggestion.option, suggestion.label) for suggestion in LOOP_SUGGESTIONS],
