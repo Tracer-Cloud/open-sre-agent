@@ -6927,13 +6927,6 @@
    "package": "yandex.cloud.operation"
   },
   {
-   "service": "operation",
-   "path": "/operations/{operation_id}:cancel",
-   "rpc": "OperationService.Cancel",
-   "resource": "",
-   "package": "yandex.cloud.operation"
-  },
-  {
    "service": "organization-manager",
    "path": "/organization-manager/v1/external_groups",
    "rpc": "GroupService.ListExternal",

@@ -42,6 +42,34 @@ _ENUM_VALUE = re.compile(r"^\s*(\w+)\s*=\s*\d+;", re.MULTILINE)
 #: Paging is uniform across the API and adds nothing to a per-endpoint listing.
 _UNINTERESTING = frozenset({"page_size", "page_token", "folder_id", "cluster_id"})
 _GET = re.compile(r'get:\s*"([^"]+)"')
+#: A ``get:`` binding is not by itself proof that a method only reads.
+#: ``OperationService.Cancel`` is bound to GET ``/operations/{id}:cancel`` and
+#: cancelling a running operation is a mutation, so the verb has to be checked
+#: too or a write path lands in an index whose whole purpose is to hold none.
+_MUTATING_RPC_VERBS: Final = (
+    "Cancel",
+    "Create",
+    "Delete",
+    "Deploy",
+    "Disable",
+    "Enable",
+    "Move",
+    "Rebalance",
+    "Reset",
+    "Restart",
+    "Rollback",
+    "Start",
+    "Stop",
+    "Update",
+    "Upsert",
+)
+
+
+def _is_mutating(rpc_name: str) -> bool:
+    """Whether the method changes something, regardless of its HTTP binding."""
+    return any(rpc_name.startswith(verb) for verb in _MUTATING_RPC_VERBS)
+
+
 _PACKAGE = re.compile(r"^package\s+([\w.]+);", re.MULTILINE)
 _SERVICE = re.compile(r"^service\s+(\w+)\s*\{", re.MULTILINE)
 
@@ -180,6 +208,8 @@ def collect(cloudapi_root: Path) -> list[dict[str, Any]]:
             rpc_name, request_type, body = rpc_match.groups()
             get_match = _GET.search(body)
             if not get_match:
+                continue
+            if _is_mutating(rpc_name):
                 continue
             path = get_match.group(1)
             key = _endpoint_key(path, package)

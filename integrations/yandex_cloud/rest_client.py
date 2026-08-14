@@ -92,6 +92,14 @@ def close_pool() -> None:
             _pool = None
 
 
+#: Action suffixes that change something even though Yandex binds them to GET.
+#: ``/operations/{id}:cancel`` is the one that exists today: a plain GET there
+#: cancels a running operation. Read-only rests on the index carrying no write
+#: path, and this is the backstop for when one slips in anyway - the generator
+#: also drops mutating verbs, and a test asserts the index stays clean.
+_MUTATING_ACTIONS: Final = (":cancel", ":stop", ":start", ":restart", ":delete", ":move")
+
+
 def _reject_path(path: str) -> str | None:
     """Return why *path* is unusable, or None when it is fine."""
     if not path.startswith("/"):
@@ -100,7 +108,21 @@ def _reject_path(path: str) -> str | None:
         return "path must be a path, not a URL"
     if ".." in path:
         return "path must not contain '..'"
+    action = path.rsplit("/", 1)[-1]
+    lowered = action.lower()
+    for mutating in _MUTATING_ACTIONS:
+        if lowered.endswith(mutating):
+            return f"'{mutating}' changes state, and this integration only reads"
     return None
+
+
+def reject_path(path: str) -> str | None:
+    """Return why *path* may not be read, or None when it is fine.
+
+    Public so a caller that never reaches the client - the synthetic backend
+    path - can apply the same rule.
+    """
+    return _reject_path(path)
 
 
 def is_collection_path(path: str) -> bool:
@@ -467,6 +489,7 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "accepts_folder_scope",
     "is_collection_path",
+    "reject_path",
     "is_folder_scoped_collection",
     "MAX_LIST_ITEMS",
     "MAX_STRING_LENGTH",

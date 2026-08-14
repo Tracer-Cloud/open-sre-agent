@@ -165,3 +165,46 @@ class TestACollectionNestedUnderAResource:
 
     def test_a_top_level_collection_still_gets_the_folder(self) -> None:
         assert _run("/compute/v1/instances")["folderId"] == "b1gtest"
+
+
+class TestTheReaderRefusesStateChangingActions:
+    """Read-only has to survive a write path reaching the index by mistake.
+
+    Yandex binds OperationService.Cancel to GET, so "only GET" is not on its own
+    a guarantee. The generator drops mutating verbs and a test keeps the index
+    clean; this is the last line, in the client itself.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/operations/op-1:cancel",
+            "/managed-postgresql/v1/clusters/c-1:stop",
+            "/compute/v1/instances/i-1:restart",
+        ],
+    )
+    def test_a_mutating_action_is_refused(self, path: str) -> None:
+        tool = get_registered_tool_map()["execute_yc_operation"]
+        backend = _RecordingBackend()
+
+        result = tool.run(service="compute", path=path, yc_backend=backend, folder_id="b1gtest")
+
+        assert result.get("error")
+        assert "only reads" in result["error"]
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/compute/v1/instances/i-1:serialPortOutput",
+            "/load-balancer/v1/networkLoadBalancers/n-1:getTargetStates",
+            "/vpc/v1/addresses:byValue",
+        ],
+    )
+    def test_a_read_action_still_passes(self, path: str) -> None:
+        """The guard must not catch the read-shaped action suffixes we rely on."""
+        tool = get_registered_tool_map()["execute_yc_operation"]
+        backend = _RecordingBackend()
+
+        result = tool.run(service="compute", path=path, yc_backend=backend, folder_id="b1gtest")
+
+        assert not result.get("error")

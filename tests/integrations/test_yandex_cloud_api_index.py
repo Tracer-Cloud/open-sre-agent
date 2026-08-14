@@ -37,11 +37,54 @@ class TestTheIndexIsUsable:
         assert unreachable == []
 
     def test_it_holds_reads_only(self) -> None:
-        """The client refuses anything but GET, so a write path could only mislead."""
-        entries = json.loads(_INDEX_FILE.read_text(encoding="utf-8"))["endpoints"]
-        verbs = {entry["rpc"].rsplit(".", 1)[-1] for entry in entries}
+        """A get: binding is not proof a method only reads.
 
-        assert not {"Create", "Update", "Delete", "Start", "Stop"} & verbs
+        OperationService.Cancel is bound to GET /operations/{id}:cancel, so
+        filtering on the HTTP verb alone let a write path into an index whose
+        entire purpose is to hold none. The RPC name is checked as well, by
+        prefix: Yandex names mutations GetFoo/ListFoo versus CancelFoo, so a
+        prefix match catches CancelOperation as well as bare Cancel.
+        """
+        entries = json.loads(_INDEX_FILE.read_text(encoding="utf-8"))["endpoints"]
+        verbs = [entry["rpc"].rsplit(".", 1)[-1] for entry in entries]
+        mutating = [
+            verb
+            for verb in verbs
+            for prefix in (
+                "Cancel",
+                "Create",
+                "Delete",
+                "Deploy",
+                "Disable",
+                "Enable",
+                "Move",
+                "Rebalance",
+                "Reset",
+                "Restart",
+                "Rollback",
+                "Start",
+                "Stop",
+                "Update",
+                "Upsert",
+            )
+            if verb.startswith(prefix)
+        ]
+
+        assert mutating == []
+
+    def test_no_path_carries_a_mutating_action_suffix(self) -> None:
+        """The client would refuse these anyway; they must not be advertised either."""
+        entries = json.loads(_INDEX_FILE.read_text(encoding="utf-8"))["endpoints"]
+        offenders = [
+            entry["path"]
+            for entry in entries
+            if any(
+                entry["path"].rsplit("/", 1)[-1].lower().endswith(action)
+                for action in (":cancel", ":stop", ":start", ":restart", ":delete", ":move")
+            )
+        ]
+
+        assert offenders == []
 
     def test_paths_are_paths_not_urls(self) -> None:
         entries = json.loads(_INDEX_FILE.read_text(encoding="utf-8"))["endpoints"]

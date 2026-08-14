@@ -28,6 +28,7 @@ from integrations.yandex_cloud.rest_client import (
     accepts_folder_scope,
     is_collection_path,
     is_folder_scoped_collection,
+    reject_path,
 )
 
 SOURCE = "yandex_cloud"
@@ -124,6 +125,20 @@ def execute_yc_operation(
     **credentials: Any,
 ) -> dict[str, Any]:
     """Read a Yandex Cloud resource."""
+    # Checked here rather than only in the client: the synthetic-backend path
+    # never reaches the client, and a read-only guarantee that depends on which
+    # branch the call took is not a guarantee.
+    rejected = reject_path(path)
+    if rejected is not None:
+        return {
+            "success": False,
+            "service": service,
+            "path": path,
+            "data": None,
+            "error": f"Invalid path: {rejected}.",
+            "metadata": {},
+        }
+
     query: dict[str, Any] = dict(params or {})
     # Both of the things this tool fills in for the caller are rejected by a
     # single-resource read, and Yandex reports that as a bare 404 — so adding
