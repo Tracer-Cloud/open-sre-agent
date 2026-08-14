@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock
 
-from gateway import startup
 from gateway.core.transport_api import TransportName, TransportSpec
+from gateway.transports import startup
 
 
 def test_start_transports_skips_not_configured_and_failed(

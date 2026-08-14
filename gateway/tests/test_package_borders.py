@@ -120,20 +120,48 @@ def test_transports_never_import_startup_or_web() -> None:
     assert offenders == [], "Transport peer imported startup/web:\n" + "\n".join(offenders)
 
 
-def test_startup_only_imports_peer_startup_not_transport_internals() -> None:
-    """gateway/startup.py composes via ``*.startup``; deeper peer modules stay private."""
+def test_composers_only_import_peer_startup_not_transport_internals() -> None:
+    """Both composers reach transports only via ``*.startup`` modules.
+
+    ``gateway/startup.py`` composes web + chat through
+    ``gateway.transports.startup``; that module in turn may import only its
+    peers' ``startup`` submodules — deeper peer modules stay private.
+    """
+    composer_allowed = _TRANSPORT_STARTUP_MODULES | {"gateway.transports.startup"}
     offenders: list[str] = []
-    for path in _python_files("gateway.startup"):
-        rel = str(path.relative_to(REPO_ROOT))
-        for name in _imported_modules(path):
-            if not any(name == p or name.startswith(f"{p}.") for p in _TRANSPORTS):
-                continue
-            if name in _TRANSPORT_STARTUP_MODULES:
-                continue
-            offenders.append(f"{rel} → {name}")
-    assert offenders == [], "channels imported non-startup transport modules:\n" + "\n".join(
+    for source in ("gateway.startup", "gateway.transports.startup"):
+        for path in _python_files(source):
+            rel = str(path.relative_to(REPO_ROOT))
+            for name in _imported_modules(path):
+                if not any(name == p or name.startswith(f"{p}.") for p in _TRANSPORTS):
+                    continue
+                if name in composer_allowed:
+                    continue
+                offenders.append(f"{rel} → {name}")
+    assert offenders == [], "composer imported non-startup transport modules:\n" + "\n".join(
         offenders
     )
+
+
+def test_only_the_gateway_facade_imports_the_transport_composer() -> None:
+    """``gateway.transports.startup`` has exactly one consumer: gateway/startup.py.
+
+    A second importer would be a second place that starts workers — the exact
+    smear this split removed from the gateway package root.
+    """
+    offenders: list[str] = []
+    for path in _python_files("gateway"):
+        rel = str(path.relative_to(REPO_ROOT))
+        if rel in ("gateway/startup.py", "gateway/transports/startup.py"):
+            continue
+        if rel.startswith("gateway/tests/"):
+            # Tests build fixtures from the composer's types; only production
+            # code is barred from starting workers behind the facade's back.
+            continue
+        for name in _imported_modules(path):
+            if name == "gateway.transports.startup":
+                offenders.append(f"{rel} → {name}")
+    assert offenders == [], "worker init leaked past the facade:\n" + "\n".join(offenders)
 
 
 def test_approvals_module_imports_no_transport() -> None:
@@ -310,7 +338,7 @@ def test_every_transport_package_is_registered_in_the_chat_table() -> None:
     row (the transport never starts) or the row without the package.
     """
     # Arrange / Act.
-    from gateway.startup import TRANSPORTS
+    from gateway.transports.startup import TRANSPORTS
 
     on_disk = {package.rsplit(".", 1)[-1] for package in _TRANSPORTS}
     registered = {spec.name.value for spec in TRANSPORTS}

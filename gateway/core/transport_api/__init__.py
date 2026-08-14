@@ -9,8 +9,9 @@ In API-framework terms the gateway splits like this:
   conversation locks, terminal outcome).
 * ``gateway/core/runtime/`` — the service layer: the turn handler bridging
   into the agent harness, and process plumbing.
-* ``gateway/startup.py`` — the facade: the transport registry and the one
-  ``start_gateway`` entry the daemon calls.
+* ``gateway/startup.py`` — the facade: the one ``start_gateway`` entry the
+  daemon calls. The transport registry and worker start/stop loop live with
+  the transports (``gateway/transports/startup.py``).
 
 This package is the contract between them. A transport registers a
 :class:`TransportSpec`, its worker satisfies :class:`TransportWorker`, its sink

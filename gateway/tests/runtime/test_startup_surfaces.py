@@ -7,13 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.startup import (
-    ChatStartup,
-    StartedGateway,
-    TransportHandle,
-    TransportName,
-    start_gateway,
-)
+from gateway.core.transport_api import TransportName
+from gateway.startup import StartedGateway, start_gateway
+from gateway.transports.startup import ChatStartup, TransportHandle
 from gateway.web.startup import WebStartup
 
 

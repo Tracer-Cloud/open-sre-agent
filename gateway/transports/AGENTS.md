@@ -15,8 +15,10 @@ is `gateway/startup.py`.
 | `telegram/` | `startup.start_telegram_worker` |
 | `buzz/` | `startup.start_buzz_worker` |
 
-Composition of peers lives in `gateway/startup.py` (the transport registry
-plus web + chat start/stop), not here. `GatewayController` only holds the opaque `ChannelsHandle`.
+The registry and worker start/stop loop live in this package's own
+`startup.py` — the one module here allowed to import its peers (their
+`startup` submodules only). Web + chat composition stays in
+`gateway/startup.py`. `GatewayController` only holds the opaque `ChannelsHandle`.
 Transport-specific work (settings load, Discord readiness wait) stays in each
 package's `startup.py`.
 

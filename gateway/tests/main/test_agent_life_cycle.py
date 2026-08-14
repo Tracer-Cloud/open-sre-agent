@@ -28,7 +28,7 @@ from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.core.runtime.controller import GatewayController, start_gateway
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.startup import TransportName
+from gateway.core.transport_api import TransportName
 from gateway.transports.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,
 )
@@ -53,11 +53,11 @@ def _patch_non_telegram_components(monkeypatch) -> None:
         raise GatewayConfigurationError("skipped in lifecycle test")
 
     monkeypatch.setattr(
-        "gateway.startup.start_slack_worker",
+        "gateway.transports.startup.start_slack_worker",
         _skip_transport,
     )
     monkeypatch.setattr(
-        "gateway.startup.start_discord_worker",
+        "gateway.transports.startup.start_discord_worker",
         _skip_transport,
     )
 

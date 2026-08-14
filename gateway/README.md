@@ -17,7 +17,7 @@ transport-specific code.
 | **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
 | **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayController.start_surfaces` |
-| **Chat transport registry** | `gateway/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
+| **Chat transport registry** | `gateway/transports/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
 | **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
@@ -38,7 +38,7 @@ surfaces/cli/gateway_entry.py  (or Click foreground → same composition root)
 gateway.core.runtime.controller.GatewayController.start_gateway
         ├── start_surfaces()  →  gateway.startup.start_gateway
         │     ├── web/web_server  →  web/webapp:app
-        │     └── startup.start_transports
+        │     └── transports/startup.start_transports
         │           (telegram / slack / discord startup)
         └── start_scheduler()   # peer of the surfaces, not a transport
 ```

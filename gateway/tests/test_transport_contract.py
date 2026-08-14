@@ -80,7 +80,7 @@ def _package_source(transport: str) -> str:
 
 def test_the_registry_lists_every_discovered_transport() -> None:
     """A transport on disk but absent from ``TRANSPORTS`` never starts."""
-    from gateway.startup import TRANSPORTS
+    from gateway.transports.startup import TRANSPORTS
 
     registered = {spec.name for spec in TRANSPORTS}
     assert registered == set(_TRANSPORTS)

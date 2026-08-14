@@ -17,7 +17,8 @@ tests tree.
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
 | Config / transport errors | `core/runtime/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
 | Web surface (FastAPI) | `web/webapp.py` (`app`) |
-| Transport registry | `startup.py` (`TRANSPORTS` / `start_transports` / `stop_transports`) |
+| Transport registry + worker start/stop | `transports/startup.py` (`TRANSPORTS` / `start_transports`) |
+| Surface facade | `startup.py` (`start_gateway` / `StartedGateway`) |
 | Telegram start | `transports/telegram/startup.py` (`start_telegram_worker`) |
 | Slack start | `transports/slack/startup.py` (`start_slack_worker`) |
 | Discord start | `transports/discord/startup.py` (`start_discord_worker`) |
@@ -57,8 +58,9 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 - `core/` — process and leaf infrastructure (`runtime`, `storage`,
   `billing`, `attachments`, `session`, `config`). No imports from transports
   or `web`. Only `core/runtime/controller.py` imports `gateway.startup`.
-- `startup.py` — starts/stops web + chat transports as one consumer set.
-  Imports `web/` and each peer's `startup` only.
+- `startup.py` — the facade: web + chat as one consumer set via
+  `transports/startup.py` (which owns the registry and imports each peer's
+  `startup` only).
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
   settings, inbound worker, security, output sink, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
@@ -71,7 +73,7 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 ### Dependency rule (acyclic)
 
 ```
-core.controller  →  startup.py  →  transports.{telegram,slack,discord,buzz}.startup
+core.controller  →  startup.py  →  transports/startup.py  →  transports.{telegram,slack,discord,buzz}.startup
                            →  web
 peer transports · web  →  core leaves
 (peers never import each other, `gateway.startup`, or each other's packages)

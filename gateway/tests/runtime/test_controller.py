@@ -9,7 +9,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from gateway.core.runtime.controller import GatewayController
-from gateway.startup import StartedGateway, TransportHandle, TransportName
+from gateway.core.transport_api import TransportName
+from gateway.startup import StartedGateway
+from gateway.transports.startup import TransportHandle
 
 
 def test_start_surfaces_delegates_to_the_startup_module(
