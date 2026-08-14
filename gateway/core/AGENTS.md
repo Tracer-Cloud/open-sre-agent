@@ -2,12 +2,12 @@
 
 Gateway core machinery used by every surface. **Must not** import
 `gateway.transports.*` or `gateway.web` (surfaces). Channel composition lives
-in `gateway.startup`; only `runtime/manager.py` imports that module.
+in `gateway.startup`; only `runtime/controller.py` imports that module.
 Pinned by `gateway/tests/test_package_borders.py`.
 
 | Package | Role |
 |---------|------|
-| `runtime/` | Composition root (`manager`), turn handler, approvals, attention, daemon |
+| `runtime/` | Composition root (`controller`), turn handler, approvals, attention, daemon |
 | `storage/` | Session bindings + investigation stores |
 | `billing/` | Credits client |
 | `attachments/` | Attachment helpers |
@@ -26,7 +26,7 @@ LLM preload) lives in
 hydrate: configure process, compose **one** `GatewayTurnHandler(gate=…)`, then
 `start_channels()` (delegates to :func:`gateway.channels.start_channels`) and
 `start_scheduler()` (peer of the channels). Do not wrap the turn handler in a
-second handler class. Do not reintroduce a bootstrap essay in the manager.
+second handler class. Do not reintroduce a bootstrap essay in the controller.
 Scheduler runners register when the scheduler stage starts
 (:func:`bootstrap.adapters.install_scheduler_runners`).
 
