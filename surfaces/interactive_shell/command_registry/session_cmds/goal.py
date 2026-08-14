@@ -64,7 +64,7 @@ def _print_set_usage(console: Console) -> None:
 
 
 def _print_goal_usage(console: Console) -> None:
-    console.print(f"[{ERROR}]usage:[/] {_USAGE}")
+    console.print(f"[{ERROR}]usage:[/] {_rich_escape(_USAGE)}")
     console.print(f"[{DIM}]examples:[/]")
     for example, what in _COMMAND_EXAMPLES:
         console.print(f"  [{HIGHLIGHT}]{example}[/] [{DIM}]— {what}[/]")
