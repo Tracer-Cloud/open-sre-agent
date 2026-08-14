@@ -37,8 +37,8 @@ _WHERE_ELSE_LOGS_LIVE = (
     "back to metrics and cluster state. Kubernetes container logs are read with "
     "kubernetes_get_pod_logs. Serverless functions do log here by default, so "
     "for those an empty result is meaningful. Check the window too: "
-    "window_minutes counts back from now, and a past incident needs from_time "
-    "and to_time."
+    "window_minutes counts back from now, and a past incident needs since "
+    "and until."
 )
 
 _FILTER_HELP = (

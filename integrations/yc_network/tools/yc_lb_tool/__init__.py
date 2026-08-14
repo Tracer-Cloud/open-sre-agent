@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
@@ -89,6 +89,10 @@ def _first_target_group(balancer: dict[str, Any]) -> str:
 
 _ALB_HTTP_ROUTER_PATH = "/apploadbalancer/v1/httpRouters"
 _ALB_BACKEND_GROUP_PATH = "/apploadbalancer/v1/backendGroups"
+#: A router with more virtual hosts than this is pathological; the cap keeps a
+#: paging bug from turning one investigation into an unbounded read, and running
+#: into it is reported rather than passed off as a complete graph.
+_MAX_VIRTUAL_HOST_PAGES: Final = 20
 
 
 def _alb_router_ids(balancer: dict[str, Any]) -> list[str]:
@@ -123,16 +127,29 @@ def _alb_backend_group_ids(
     ids: list[str] = []
     errors: list[str] = []
     for router_id in router_ids:
-        resp = client.get(_ALB_SERVICE, f"{_ALB_HTTP_ROUTER_PATH}/{router_id}/virtualHosts")
-        if not resp.get("success"):
-            errors.append(f"router {router_id}: {resp.get('error', '')}")
-            continue
-        for vhost in (resp.get("data") or {}).get("virtualHosts") or []:
-            for route in vhost.get("routes") or []:
-                for proto in ("http", "grpc"):
-                    backend_group = (route.get(proto) or {}).get("route", {}).get("backendGroupId")
-                    if backend_group:
-                        ids.append(backend_group)
+        path = f"{_ALB_HTTP_ROUTER_PATH}/{router_id}/virtualHosts"
+        page_token = ""
+        # Every page is followed: a backend group reachable only from the second
+        # page would otherwise contribute no targets, and the result would still
+        # claim to be complete.
+        for _ in range(_MAX_VIRTUAL_HOST_PAGES):
+            resp = client.get(_ALB_SERVICE, path, page_token=page_token)
+            if not resp.get("success"):
+                errors.append(f"router {router_id}: {resp.get('error', '')}")
+                break
+            for vhost in (resp.get("data") or {}).get("virtualHosts") or []:
+                for route in vhost.get("routes") or []:
+                    for proto in ("http", "grpc"):
+                        backend_group = (
+                            (route.get(proto) or {}).get("route", {}).get("backendGroupId")
+                        )
+                        if backend_group:
+                            ids.append(backend_group)
+            page_token = str((resp.get("metadata") or {}).get("next_page_token", ""))
+            if not page_token:
+                break
+        else:
+            errors.append(f"router {router_id}: stopped after {_MAX_VIRTUAL_HOST_PAGES} pages")
     return sorted(set(ids)), "; ".join(errors)
 
 

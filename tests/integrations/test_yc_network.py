@@ -301,3 +301,53 @@ class TestAFailedGraphReadIsNotSilentHealth:
 
         assert result["unhealthy_targets"]
         assert "complete" not in result
+
+
+class TestVirtualHostPagingIsFollowed:
+    """A backend group reachable only from a later page must still be walked.
+
+    Reading one page and reporting complete is the same silent-truncation bug
+    as the balancer list had, one level deeper in the graph.
+    """
+
+    def test_a_second_page_of_virtual_hosts_is_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen_tokens: list[str] = []
+
+        def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            if "/virtualHosts" in url:
+                token = (kwargs.get("params") or {}).get("pageToken", "")
+                seen_tokens.append(token)
+                if not token:
+                    # first page points at a backend group with no targets
+                    return httpx.Response(
+                        200,
+                        json={
+                            "virtualHosts": [
+                                {"routes": [{"http": {"route": {"backendGroupId": "bg-empty"}}}]}
+                            ],
+                            "nextPageToken": "page-2",
+                        },
+                    )
+                return httpx.Response(
+                    200,
+                    json={
+                        "virtualHosts": [
+                            {"routes": [{"http": {"route": {"backendGroupId": "bg-1"}}}]}
+                        ]
+                    },
+                )
+            if "/backendGroups/bg-empty" in url:
+                return httpx.Response(200, json={"id": "bg-empty"})
+            for fragment, payload in _ALB_ROUTES.items():
+                if fragment in url:
+                    return httpx.Response(200, json=payload)
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert "page-2" in seen_tokens, "the second page was never requested"
+        # the unhealthy target lives behind the backend group on page two
+        assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"])

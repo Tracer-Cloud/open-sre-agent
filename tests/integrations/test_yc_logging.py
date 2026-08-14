@@ -207,3 +207,23 @@ class TestTheInstallHintIsRealisable:
         assert urlparse(captured["url"]).hostname == "logging.api.cloud.yandex.net"
         assert result["count"] == 1
         assert result["log_groups"][0]["id"] == "e23abc"
+
+
+class TestGuidanceNamesRealParameters:
+    """Advice that names arguments the tool does not take costs the agent a turn."""
+
+    def test_the_empty_result_advice_matches_the_schema(self) -> None:
+        from integrations.yc_logging.tools.yc_logs_tool import _WHERE_ELSE_LOGS_LIVE
+        from tools.registry import get_registered_tool_map
+
+        properties = set(
+            get_registered_tool_map("investigation")["read_yc_logs"].input_schema["properties"]
+        )
+        named = {
+            word.strip(".,'\"")
+            for word in _WHERE_ELSE_LOGS_LIVE.split()
+            if word.strip(".,'\"") in {"since", "until", "from_time", "to_time", "window_minutes"}
+        }
+
+        assert named, "the advice should name the window arguments"
+        assert named <= properties, f"names arguments the tool lacks: {named - properties}"
