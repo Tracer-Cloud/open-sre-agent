@@ -7,6 +7,7 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
+from config.scope_context import bound_storage_scope
 from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.core.storage import SessionResolver
@@ -14,6 +15,7 @@ from gateway.transports.buzz.approvals import BuzzApprovalPrompter
 from gateway.transports.buzz.inbound_security import enforce_inbound_buzz_message_security
 from gateway.transports.buzz.output_sink import BuzzOutputSink
 from gateway.transports.buzz.pending_approvals import PendingApprovals
+from gateway.transports.buzz.principal import PrincipalResolutionError, resolve_buzz_scope
 from gateway.transports.buzz.session_rotation import conversation_key, resolve_or_rotate_session
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
@@ -55,13 +57,26 @@ async def handle_polled_inbound_buzz_message(
         text=event.content,
         env_allowed_pubkeys=settings.allowed_pubkeys,
     )
-    async with user_lock, turn_semaphore:
-        session = resolve_or_rotate_session(
-            event,
-            decision,
-            session_resolver=session_resolver,
-            client=client,
+    try:
+        scope = resolve_buzz_scope(pubkey=event.pubkey)
+    except PrincipalResolutionError:
+        logger.error(
+            "[buzz-gateway] turn refused: unresolved principal pubkey=%s channel=%s",
+            event.pubkey,
+            event.channel_id,
+            exc_info=True,
         )
+        return
+
+    async with user_lock, turn_semaphore:
+        with bound_storage_scope(scope):
+            session = resolve_or_rotate_session(
+                event,
+                decision,
+                session_resolver=session_resolver,
+                client=client,
+                scope=scope,
+            )
         if session is None:
             return
 
@@ -95,10 +110,13 @@ async def handle_polled_inbound_buzz_message(
 
         def _run_turn() -> None:
             try:
-                with bound_usage_context(
-                    surface=SURFACE_BUZZ,
-                    session_id=session.session_id,
-                    user_id=event.pubkey or None,
+                with (
+                    bound_storage_scope(scope),
+                    bound_usage_context(
+                        surface=SURFACE_BUZZ,
+                        session_id=session.session_id,
+                        user_id=event.pubkey or None,
+                    ),
                 ):
                     handle_callback_to_gateway_agent(
                         event.content,

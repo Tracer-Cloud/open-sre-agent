@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from gateway.core.runtime.approvals import ApprovalBroker
-from gateway.transports.buzz import inbound_security
 from gateway.transports.buzz.inbound_handler import handle_polled_inbound_buzz_message
 from gateway.transports.buzz.pending_approvals import PendingApprovals
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
@@ -17,7 +16,9 @@ from integrations.buzz.client import BuzzClient
 @pytest.fixture(autouse=True)
 def _no_integration_store(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the identity-policy lookup off the developer's real integration store."""
-    monkeypatch.setattr(inbound_security, "get_integration", lambda *_a, **_kw: None)
+    from gateway.core.runtime import identity_policy
+
+    monkeypatch.setattr(identity_policy, "get_integration", lambda *_a, **_kw: None)
 
 
 def test_unauthorized_sender_never_invokes_the_callback() -> None:
