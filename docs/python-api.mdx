@@ -1,164 +1,125 @@
 ---
 title: "Python API"
 slug: "python-api"
-description: "Drive the OpenSRE agent in-process from your own Python code"
+description: "Embed and drive OpenSRE agent sessions programmatically from Python code"
 ---
 
-Use this when your Python code runs on the same machine as OpenSRE and you want
-agent answers without shelling out to the CLI. To call OpenSRE over the network
-instead, use the [HTTP API](/api).
+OpenSRE provides a decoupled Python API that allows developers to instantiate, configure, and drive agent turns programmatically from Python applications, web services, or custom scripts without relying on the interactive terminal surface.
 
-## Prerequisites
+The Python API lives under the `core.agent_harness` package and uses explicit port adapters for session state, tool execution, and LLM reasoning.
 
-The standalone CLI installer does not expose an importable package, so embed
-from a source checkout:
+## Core Concepts
 
-```bash
-git clone https://github.com/Tracer-Cloud/opensre.git
-cd opensre && make install
-```
+| Class / Entry Point | Import Path | Description |
+| --- | --- | --- |
+| `AgentHarness` | `core.agent_harness.harness` | Handles process environment loading, session initialization/resolution, and context setup. |
+| `HarnessConfig` | `core.agent_harness.harness` | Configuration object specifying environment loading, integration hydration, and session persistence options. |
+| `HeadlessAgent` | `core.agent_harness.turns.headless_dispatch` | Programmatic agent driver that executes full turns headlessly using provided ports. |
+| `SessionManager` | `core.agent_harness.session` | Manages session creation, resolution, storage, and lifecycle rotation. |
 
-Configure a provider once (`opensre onboard`) — the session API reuses the same
-config and credentials as the CLI. Run your script inside the checkout's
-environment with `uv run python your_script.py`.
+## Quick Start: Basic Headless Dispatch
 
-Register adapters before the first turn (tools and investigation):
+To execute a single turn programmatically using default in-memory adapters:
 
 ```python
-from bootstrap.process import EMBEDDED_PROFILE, configure_process
-
-configure_process(EMBEDDED_PROFILE)
-```
-
-## One API — chat and investigate
-
-Every surface uses the same two verbs:
-
-```python
-from bootstrap.process import EMBEDDED_PROFILE, configure_process
-from core.agent_harness import AgentSession
-
-configure_process(EMBEDDED_PROFILE)
-
-session = AgentSession.start()
-result = session.chat("why is checkout-api slow?")
-if result.answered:
-    print(result.primary_response_text)
-
-report = session.investigate({"alert_name": "HighLatency", "severity": "warning"})
-print(report.report)
-```
-
-Or the one-liner that wires the same boot step for you:
-
-```python
-from bootstrap.embedded import start_embedded_session
-
-session = start_embedded_session()
-```
-
-`AgentSession.start()` resolves the environment, opens a session, and attaches
-an agent with the standard ports — the same tools and prompts the interactive
-shell uses. It does **not** register adapters (``core`` may not import
-``bootstrap``); call ``configure_process`` first or use
-``start_embedded_session``. `investigate` does not require an attached chat
-agent; it uses the payload runner installed by `configure_process`.
-
-Always check `result.answered` before trusting chat text: when a turn fails (for
-example the LLM provider is unreachable), the error message itself lands in
-`result.primary_response_text`.
-
-### Internal seams (not for hosts)
-
-Chat hosts terminate at `dispatch_chat_turn` → `run_turn`. Investigation
-terminates at the installed payload runner (`run_investigation_payload`). Do not
-invent parallel public entrypoints.
-
-## A conversation
-
-Each `chat` call is one turn in the same session, so follow-ups see earlier
-context:
-
-```python
-session.chat("list unresolved Sentry issues from the last 24 hours")
-result = session.chat("which of those affect checkout?")
-```
-
-To resume a previous session instead of starting a new one, pass its ID:
-
-```python
-from core.agent_harness import AgentSession, SessionConfig
-
-session = AgentSession.start(SessionConfig(session_id="abc123"))
-```
-
-## Your own grounding context
-
-The agent builds its prompts from the session by default. To ground it your own
-way — a different system prompt, your own retrieved context — pass a provider:
-
-```python
-from core.agent_harness import AgentSession, SessionConfig
-
-session = AgentSession.start(SessionConfig(prompts=my_provider))
-```
-
-Omit it and the built-in provider applies
-(`core.agent_harness.DefaultPromptContextProvider`). A custom provider must
-satisfy `core.agent_harness.ports.PromptContextProvider`. The same `prompts=`
-argument is accepted by `build_default_headless_agent` on the custom-ports path
-below.
-
-## Custom output and ports
-
-`start()` buffers all output. To capture tool progress yourself — stream to a
-websocket, collect for a report — build the agent explicitly and pass your own
-sink:
-
-```python
-from core.agent_harness import (
-    AgentSession,
-    BufferOutputSink,
-    SessionConfig,
-    build_default_headless_agent,
+from core.agent_harness.turns.headless_dispatch import (
+    HeadlessAgent,
+    NullToolProvider,
+    StaticReasoningClientProvider,
 )
 
-session = AgentSession(SessionConfig())
-startup = session.startup()
-sink = BufferOutputSink()
-agent = build_default_headless_agent(
-    session=startup.session,
-    output=sink,
-    prompts=my_provider,  # optional — same port as SessionConfig.prompts
-)
-session.attach_agent(agent)
+class CustomReasoningClient:
+    def invoke_stream(self, prompt: str):
+        yield "OpenSRE investigation complete: All systems normal."
 
-session.chat("summarize open incidents")
-print(sink.lines)      # rendered output lines
-print(sink.streamed)   # streamed answer chunks
+# Instantiate a headless agent with null tools and custom reasoning provider
+agent = HeadlessAgent(
+    tools=NullToolProvider(),
+    reasoning=StaticReasoningClientProvider(client=CustomReasoningClient()),
+)
+
+# Dispatch a message programmatically
+result = agent.dispatch("Check system health status")
+print(result.assistant_response_text)
+# → "OpenSRE investigation complete: All systems normal."
 ```
 
-Any object implementing the `OutputSink` protocol
-(`core.agent_harness.ports.OutputSink`: `print`, `render_response_header`,
-`render_error`, `stream`) works in place of `BufferOutputSink`.
-`build_default_headless_agent` also accepts a custom logger, prompt surface,
-and tool observers — see its docstring for the full port list.
+## Session Harness and Integration Setup
 
-## Your own tools
-
-Register a package before the first tool lookup:
+For real-world usage where environment variables, integrations, and session storage are required, use `AgentHarness` to initialize the runtime before creating the agent driver:
 
 ```python
-from tools.registry import register_external_tool_package
-import my_agent_tools
+from core.agent_harness.harness import AgentHarness, HarnessConfig
+from core.agent_harness.turns.headless_dispatch import HeadlessAgent, NullToolProvider
 
-register_external_tool_package(my_agent_tools)
+# 1. Configure process environment loading and integration hydration
+config = HarnessConfig(
+    load_env=True,
+    hydrate_integrations=True,
+    warm_integrations=True,
+    persistent_tasks=True,
+)
+
+# 2. Run harness startup to initialize environment and session
+harness = AgentHarness(config)
+startup_result = harness.startup()
+session = startup_result.session
+
+# 3. Instantiate the headless agent tied to the initialized session
+agent = HeadlessAgent(
+    tools=NullToolProvider(),
+    session=session.store,
+    prompts=startup_result.prompts,
+)
+
+# 4. Programmatically run investigation turns
+turn_result = agent.dispatch("Investigate latency spike on payment-gateway service")
+
+if turn_result.assistant_response_text:
+    print(f"Agent Output: {turn_result.assistant_response_text}")
 ```
 
-Two gotchas:
+## Programmatic Session Management
 
-1. Declare tools with `surfaces=("action",)` (or include `"action"`). The
-   `@tool` default is `("investigation",)` only — the chat/Python-API action
-   loop will not see investigation-only tools.
-2. Tools may live in the package's `__init__.py` or in submodules; both are
-   scanned after registration.
+To create, resolve, or rotate persistent agent sessions programmatically:
+
+```python
+from core.agent_harness.session import SessionManager
+
+# Create a session manager instance
+session_manager = SessionManager()
+
+# Create a fresh session
+new_session = session_manager.create(
+    hydrate_integrations=True,
+    warm_integrations=False,
+)
+print(f"Created session ID: {new_session.session_id}")
+
+# Resume an existing session by ID
+resumed_session = session_manager.resolve(
+    new_session.session_id,
+    hydrate_integrations=True,
+    warm_integrations=True,
+)
+print(f"Resumed session ID: {resumed_session.session_id}")
+```
+
+## Error Handling and Result Inspection
+
+`agent.dispatch()` returns a `ShellTurnResult` containing detailed metadata about the executed turn:
+
+```python
+result = agent.dispatch("Analyze error rates in auth-service")
+
+# Inspect turn outcome
+if result.success:
+    print("Turn completed successfully.")
+    print("Answer:", result.assistant_response_text)
+else:
+    print("Turn encountered errors.")
+
+# Access execution metadata
+if result.action_result:
+    print("Actions Executed:", result.action_result.actions)
+```
