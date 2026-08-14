@@ -108,22 +108,32 @@ def _alb_router_ids(balancer: dict[str, Any]) -> list[str]:
     return sorted(set(ids))
 
 
-def _alb_backend_group_ids(client: YandexCloudClient, router_ids: list[str]) -> list[str]:
-    """Return the backend groups the balancer's routes point at.
+def _alb_backend_group_ids(
+    client: YandexCloudClient, router_ids: list[str]
+) -> tuple[list[str], str]:
+    """Return the backend groups the balancer's routes point at, and any read error.
 
     A route is either HTTP or gRPC, and each names its backend group under its
     own key. Reading only the HTTP form leaves a gRPC route's targets unchecked.
+
+    A failed router read is reported rather than swallowed: an unreadable graph
+    is indistinguishable from a balancer with no backends, and the difference is
+    "no unhealthy targets" versus "we could not tell".
     """
     ids: list[str] = []
+    errors: list[str] = []
     for router_id in router_ids:
         resp = client.get(_ALB_SERVICE, f"{_ALB_HTTP_ROUTER_PATH}/{router_id}/virtualHosts")
+        if not resp.get("success"):
+            errors.append(f"router {router_id}: {resp.get('error', '')}")
+            continue
         for vhost in (resp.get("data") or {}).get("virtualHosts") or []:
             for route in vhost.get("routes") or []:
                 for proto in ("http", "grpc"):
                     backend_group = (route.get(proto) or {}).get("route", {}).get("backendGroupId")
                     if backend_group:
                         ids.append(backend_group)
-    return sorted(set(ids))
+    return sorted(set(ids)), "; ".join(errors)
 
 
 def _alb_target_group_ids(backend_group: dict[str, Any]) -> list[str]:
@@ -170,7 +180,10 @@ def _alb_target_health(
     targets: list[dict[str, Any]] = []
     errors: list[str] = []
     seen: set[str] = set()
-    for bg_id in _alb_backend_group_ids(client, _alb_router_ids(balancer)):
+    backend_group_ids, router_error = _alb_backend_group_ids(client, _alb_router_ids(balancer))
+    if router_error:
+        errors.append(router_error)
+    for bg_id in backend_group_ids:
         group = client.get(_ALB_SERVICE, f"{_ALB_BACKEND_GROUP_PATH}/{bg_id}", page_size=None)
         if not group.get("success"):
             errors.append(f"backend group {bg_id}: {group.get('error', '')}")
@@ -306,6 +319,16 @@ def get_yc_lb_health(
         if not target.get("healthy", True)
     ]
 
+    # A balancer whose graph could not be read fully has no trustworthy target
+    # list, and an empty unhealthy_targets from it means "we could not tell",
+    # not "everything is healthy". Those per-balancer errors are promoted here
+    # rather than left where only a caller reading each balancer would see them.
+    unreadable = [
+        balancer.get("name") or balancer.get("id", "")
+        for balancer in balancers
+        if balancer.get("target_states_error")
+    ]
+
     result: dict[str, Any] = {
         "source": SOURCE,
         "available": True,
@@ -313,19 +336,30 @@ def get_yc_lb_health(
         "unhealthy_targets": unhealthy,
         "count": len(balancers),
     }
+
+    notes: list[str] = []
     if incomplete:
-        result["complete"] = False
-        result["note"] = (
+        notes.append(
             f"More {' and '.join(incomplete)} balancers exist than this page holds, so "
             "an absent target is not evidence of a healthy one. Narrow the read with "
             "type, or list the rest with execute_yc_operation."
         )
+    if unreadable:
+        notes.append(
+            f"Target health could not be read for {', '.join(unreadable)}, so an empty "
+            "unhealthy list is not evidence those targets are healthy. See "
+            "target_states_error on each balancer."
+        )
+    if incomplete or unreadable:
+        result["complete"] = False
     if errors and not balancers:
         result["available"] = False
         result["error"] = "; ".join(errors)
-    elif errors:
-        partial = "Partial results: " + "; ".join(errors)
-        result["note"] = f"{result['note']} {partial}" if incomplete else partial
+        return result
+    if errors:
+        notes.append("Partial results: " + "; ".join(errors))
+    if notes:
+        result["note"] = " ".join(notes)
     return result
 
 

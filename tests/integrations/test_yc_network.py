@@ -240,3 +240,64 @@ class TestApplicationTargetsReachAggregation:
         result = get_yc_lb_health(**_CREDENTIALS)
 
         assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"])
+
+
+class TestAFailedGraphReadIsNotSilentHealth:
+    """An unreadable balancer graph must not read as "nothing unhealthy".
+
+    The walk crosses three reads - virtual hosts, backend group, target states -
+    and any of them can fail. Treating a failure as an empty collection produces
+    an empty unhealthy_targets that looks like a clean bill of health.
+    """
+
+    def _responder_failing_at(self, failing_fragment: str) -> Any:
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            if failing_fragment in url:
+                return httpx.Response(500, json={"message": "boom"})
+            for fragment, payload in _ALB_ROUTES.items():
+                if fragment in url:
+                    return httpx.Response(200, json=payload)
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        return _request
+
+    @pytest.mark.parametrize(
+        "failing",
+        [
+            "/virtualHosts",
+            "/apploadbalancer/v1/backendGroups/bg-1",
+            "/targetStates/bg-1/tg-1",
+        ],
+    )
+    def test_a_failed_read_marks_the_result_incomplete(
+        self, monkeypatch: pytest.MonkeyPatch, failing: str
+    ) -> None:
+        monkeypatch.setattr(
+            "integrations.yandex_cloud.rest_client.send_request",
+            self._responder_failing_at(failing),
+        )
+
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert result["unhealthy_targets"] == []
+        assert result["complete"] is False
+        assert "not evidence" in result["note"]
+
+    def test_a_fully_readable_graph_is_not_flagged(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The warning must not fire when every read succeeded."""
+
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            for fragment, payload in _ALB_ROUTES.items():
+                if fragment in url:
+                    return httpx.Response(200, json=payload)
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert result["unhealthy_targets"]
+        assert "complete" not in result
