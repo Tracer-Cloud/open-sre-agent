@@ -127,11 +127,12 @@ def test_remediate_missing_credentials_rewrites_sdk_message_with_login_command()
     # Arrange / Act: the exact OpenAI SDK text a key-less shell turn surfaces.
     text = remediate_missing_llm_credentials(_OPENAI_MISSING_KEY_MESSAGE, provider="openai")
 
-    # Assert: actionable command first, provider detail preserved.
+    # Assert: in-shell commands first, terminal form and provider detail preserved.
     assert text is not None
     assert "No API key is set for openai" in text
+    assert "`/auth login openai`" in text
+    assert "`/onboard`" in text
     assert "`opensre auth login openai`" in text
-    assert "`opensre onboard`" in text
     assert "Missing credentials" in text
 
 
@@ -140,7 +141,7 @@ def test_remediate_missing_credentials_without_provider_uses_placeholder() -> No
 
     assert text is not None
     assert "No LLM API key is set" in text
-    assert "opensre auth login <provider>" in text
+    assert "/auth login <provider>" in text
 
 
 @pytest.mark.parametrize(

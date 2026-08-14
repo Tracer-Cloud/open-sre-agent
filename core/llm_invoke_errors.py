@@ -137,12 +137,11 @@ def remediate_missing_llm_credentials(message: str, *, provider: str | None = No
     text = message.lower()
     if not any(pattern in text for pattern in _MISSING_KEY_PATTERNS):
         return None
-    target = provider.strip() if provider else ""
-    login = f"opensre auth login {target}" if target else "opensre auth login <provider>"
-    subject = f"No API key is set for {target}" if target else "No LLM API key is set"
+    target = provider.strip() if provider else "<provider>"
+    subject = f"No API key is set for {target}" if provider else "No LLM API key is set"
     return (
-        f"{subject}. Run `{login}` to add one, "
-        f"or `opensre onboard` to rerun setup. "
+        f"{subject}. Run `/auth login {target}` to add one, or `/onboard` to rerun "
+        f"setup (from a terminal: `opensre auth login {target}`). "
         f"(Provider detail: {message.strip()})"
     )
 

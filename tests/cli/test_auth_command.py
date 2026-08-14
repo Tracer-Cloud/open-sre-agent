@@ -129,6 +129,9 @@ def test_auth_login_chatgpt_delegates_to_subscription_provider(monkeypatch, tmp_
     monkeypatch.setattr(
         "surfaces.cli.commands.auth.configure_cli_subscription_provider", _fake_configure
     )
+    monkeypatch.setattr(
+        "surfaces.cli.commands.auth.cli_subscription_install_error", lambda _profile: None
+    )
 
     result = CliRunner().invoke(
         cli,
@@ -138,6 +141,50 @@ def test_auth_login_chatgpt_delegates_to_subscription_provider(monkeypatch, tmp_
     assert result.exit_code == 0, result.output
     assert calls == [("chatgpt", False)]
     assert "Provider     : codex" in result.output
+
+
+def test_auth_login_missing_cli_fails_before_any_prompt(monkeypatch, tmp_path: Path) -> None:
+    """A missing vendor binary must fail immediately, not after the browser question."""
+    # Arrange
+    _patch_auth_env(monkeypatch, tmp_path)
+    install_hint = "Codex CLI not found on PATH. Install: npm i -g @openai/codex"
+    prompts: list[str] = []
+
+    def _record_setup_page(profile, *, enabled):
+        prompts.append(profile.name)
+
+    def _must_not_configure(**_kwargs):
+        raise AssertionError("configure must not run when the CLI is missing")
+
+    monkeypatch.setattr(
+        "surfaces.cli.commands.auth.cli_subscription_install_error",
+        lambda _profile: install_hint,
+    )
+    monkeypatch.setattr("surfaces.cli.commands.auth._maybe_open_setup_page", _record_setup_page)
+    monkeypatch.setattr(
+        "surfaces.cli.commands.auth.configure_cli_subscription_provider", _must_not_configure
+    )
+
+    # Act
+    result = CliRunner().invoke(cli, ["auth", "login", "chatgpt"])
+
+    # Assert: guidance shown, no setup-page prompt, no configure attempt.
+    assert result.exit_code != 0
+    assert install_hint in result.output
+    assert prompts == []
+
+
+def test_provider_chooser_defaults_to_the_configured_provider(monkeypatch) -> None:
+    """Bare `/auth login` must preselect the install's provider, not the first row."""
+    import config.config as config_module
+    from surfaces.cli.commands.auth import _configured_profile_name
+
+    monkeypatch.setattr(config_module, "get_configured_llm_provider", lambda: "openai")
+    assert _configured_profile_name() == "openai"
+
+    # An OAuth install stores the backend provider; it maps to its profile name.
+    monkeypatch.setattr(config_module, "get_configured_llm_provider", lambda: "codex")
+    assert _configured_profile_name() == "chatgpt"
 
 
 def test_auth_logout_deepseek_removes_keyring_secret(monkeypatch, tmp_path: Path) -> None:

@@ -1054,12 +1054,13 @@ def _run_action_turn(
             client=llm_client,
             error_text=error_text,
         )
+        from config.config import get_configured_llm_provider
         from core.agent_harness.accounting.token_accounting import resolve_provider_name
 
+        provider = resolve_provider_name(llm_client) if llm_client is not None else None
         display_text = (
             remediate_missing_llm_credentials(
-                error_text,
-                provider=resolve_provider_name(llm_client) if llm_client is not None else None,
+                error_text, provider=provider or get_configured_llm_provider()
             )
             or error_text
         )

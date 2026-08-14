@@ -169,10 +169,11 @@ def _stream_response(
             kind = "llm_timeout" if is_cli_timeout_error(exc) else "assistant_error"
             stage_turn_error(session, kind, str(exc))
             stage_turn_llm_failure(session, client=client)
+        from config.config import get_configured_llm_provider
         from core.agent_harness.accounting.token_accounting import resolve_provider_name
 
         remediation = remediate_missing_llm_credentials(
-            str(exc), provider=resolve_provider_name(client)
+            str(exc), provider=resolve_provider_name(client) or get_configured_llm_provider()
         )
         output.render_error(remediation or f"assistant failed: {exc}")
         return None
