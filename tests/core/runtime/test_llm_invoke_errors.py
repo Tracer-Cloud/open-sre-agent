@@ -12,6 +12,7 @@ from core.llm_invoke_errors import (
     classify_llm_invoke_failure,
     classify_provider_error_kind,
     is_cli_timeout_error,
+    remediate_missing_llm_credentials,
 )
 from integrations.llm_cli.errors import CLITimeoutError
 
@@ -113,3 +114,42 @@ def test_cli_auth_required_filters_none_remediation_fields() -> None:
     assert failure.remediation_steps == [
         "Run `opensre doctor` to verify CLI installation and auth.",
     ]
+
+
+_OPENAI_MISSING_KEY_MESSAGE = (
+    "Missing credentials. Please pass an `api_key`, `workload_identity`, "
+    "`admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` "
+    "environment variable."
+)
+
+
+def test_remediate_missing_credentials_rewrites_sdk_message_with_login_command() -> None:
+    # Arrange / Act: the exact OpenAI SDK text a key-less shell turn surfaces.
+    text = remediate_missing_llm_credentials(_OPENAI_MISSING_KEY_MESSAGE, provider="openai")
+
+    # Assert: actionable command first, provider detail preserved.
+    assert text is not None
+    assert "No API key is set for openai" in text
+    assert "`opensre auth login openai`" in text
+    assert "`opensre onboard`" in text
+    assert "Missing credentials" in text
+
+
+def test_remediate_missing_credentials_without_provider_uses_placeholder() -> None:
+    text = remediate_missing_llm_credentials(_OPENAI_MISSING_KEY_MESSAGE, provider=None)
+
+    assert text is not None
+    assert "No LLM API key is set" in text
+    assert "opensre auth login <provider>" in text
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Incorrect API key provided: sk-abc. You can find your key at platform.openai.com.",
+        "Error code: 429 - rate limit exceeded",
+        "The LLM request timed out after 300s.",
+    ],
+)
+def test_remediate_missing_credentials_ignores_other_failures(message: str) -> None:
+    assert remediate_missing_llm_credentials(message) is None

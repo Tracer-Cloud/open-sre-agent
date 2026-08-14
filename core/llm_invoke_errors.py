@@ -105,6 +105,14 @@ _NOT_CONFIGURED_PATTERNS = (
     "billing is not enabled",
 )
 _QUOTA_PATTERNS = ("429", "quota", "rate limit", "too many requests", "credit")
+# Provider-SDK phrasings for "no API key at all" (as opposed to an invalid one).
+_MISSING_KEY_PATTERNS = (
+    "missing credentials",
+    "api key is not set",
+    "missing api key",
+    "no api key",
+    "_api_key",  # env-var mention, e.g. "set the OPENAI_API_KEY environment variable"
+)
 _AUTH_PATTERNS = (
     "authentication",
     "unauthorized",
@@ -118,6 +126,25 @@ _AUTH_PATTERNS = (
     "api_key is invalid",
     "x-api-key",
 )
+
+
+def remediate_missing_llm_credentials(message: str, *, provider: str | None = None) -> str | None:
+    """Actionable replacement text when an LLM call failed for lack of any API key.
+
+    Returns ``None`` for every other failure (invalid key, quota, timeout, …)
+    so callers fall back to their existing rendering.
+    """
+    text = message.lower()
+    if not any(pattern in text for pattern in _MISSING_KEY_PATTERNS):
+        return None
+    target = provider.strip() if provider else ""
+    login = f"opensre auth login {target}" if target else "opensre auth login <provider>"
+    subject = f"No API key is set for {target}" if target else "No LLM API key is set"
+    return (
+        f"{subject}. Run `{login}` to add one, "
+        f"or `opensre onboard` to rerun setup. "
+        f"(Provider detail: {message.strip()})"
+    )
 
 
 def classify_provider_error_kind(message: str) -> str:
