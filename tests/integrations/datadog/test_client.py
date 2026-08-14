@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -106,6 +107,79 @@ def test_search_logs_generic_exception(client, mock_httpx_client):
 
     assert result["success"] is False
     assert result["error"] == "unexpected error"
+
+
+# -------------------------
+# query_metrics
+# -------------------------
+
+
+def test_query_metrics_preserves_all_series(client, mock_httpx_client):
+    mock_instance = MagicMock()
+    mock_instance.get.return_value = MagicMock(
+        json=lambda: {
+            "series": [
+                {
+                    "metric": "system.cpu.user",
+                    "scope": "host:web-1",
+                    "expression": "avg:system.cpu.user{*} by {host}",
+                    "pointlist": [
+                        [1_700_000_000_000, 42.5],
+                        [1_700_000_060_000, None],
+                    ],
+                },
+                {
+                    "metric": "system.cpu.user",
+                    "scope": "host:web-2",
+                    "expression": "avg:system.cpu.user{*} by {host}",
+                    "pointlist": [[1_700_000_000_000, 17.0]],
+                },
+            ]
+        },
+        raise_for_status=MagicMock(),
+    )
+    mock_httpx_client.return_value = mock_instance
+
+    result = client.query_metrics(
+        "avg:system.cpu.user{*} by {host}",
+        start=datetime(2023, 11, 14, 22, 0, tzinfo=UTC),
+        end=datetime(2023, 11, 14, 23, 0, tzinfo=UTC),
+    )
+
+    assert result["success"] is True
+    assert result["timestamps"] == ["2023-11-14T22:13:20Z"]
+    assert result["values"] == [42.5]
+    assert result["series"] == [
+        {
+            "metric": "system.cpu.user",
+            "scope": "host:web-1",
+            "expression": "avg:system.cpu.user{*} by {host}",
+            "points": [{"timestamp": "2023-11-14T22:13:20Z", "value": 42.5}],
+        },
+        {
+            "metric": "system.cpu.user",
+            "scope": "host:web-2",
+            "expression": "avg:system.cpu.user{*} by {host}",
+            "points": [{"timestamp": "2023-11-14T22:13:20Z", "value": 17.0}],
+        },
+    ]
+
+
+def test_query_metrics_empty_series_preserves_legacy_shape(client, mock_httpx_client):
+    mock_instance = MagicMock()
+    mock_instance.get.return_value = MagicMock(
+        json=lambda: {"series": []},
+        raise_for_status=MagicMock(),
+    )
+    mock_httpx_client.return_value = mock_instance
+
+    result = client.query_metrics(
+        "avg:system.cpu.user{*}",
+        start=datetime(2023, 11, 14, 22, 0, tzinfo=UTC),
+        end=datetime(2023, 11, 14, 23, 0, tzinfo=UTC),
+    )
+
+    assert result == {"success": True, "timestamps": [], "values": [], "series": []}
 
 
 # -------------------------
