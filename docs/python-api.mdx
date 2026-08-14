@@ -65,7 +65,7 @@ harness = AgentHarness(config)
 startup_result = harness.startup()
 session = startup_result.session
 
-# 3. Instantiate the headless agent tied to the initialized session
+# 3. Instantiate the headless agent tied to the initialized session store
 agent = HeadlessAgent(
     tools=NullToolProvider(),
     session=session.store,
@@ -107,19 +107,19 @@ print(f"Resumed session ID: {resumed_session.session_id}")
 
 ## Error Handling and Result Inspection
 
-`agent.dispatch()` returns a `ShellTurnResult` containing detailed metadata about the executed turn:
+`agent.dispatch()` returns a `TurnResult` dataclass containing detailed metadata about the executed turn:
 
 ```python
 result = agent.dispatch("Analyze error rates in auth-service")
 
-# Inspect turn outcome
-if result.success:
-    print("Turn completed successfully.")
-    print("Answer:", result.assistant_response_text)
-else:
-    print("Turn encountered errors.")
+# Inspect turn outcome using TurnResult properties
+if result.answered:
+    print("Turn answered successfully.")
+    print("Response:", result.primary_response_text)
+elif result.cancelled:
+    print("Turn execution was cancelled.")
 
-# Access execution metadata
-if result.action_result:
-    print("Actions Executed:", result.action_result.actions)
+# Access action-phase execution metadata
+action_res = result.action_result
+print(f"Actions planned: {action_res.planned_count}, executed: {action_res.executed_count}")
 ```
