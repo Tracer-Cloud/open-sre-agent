@@ -444,3 +444,88 @@ class TestEveryListenerShapeIsWalked:
         result = self._walk(monkeypatch, listener)
 
         assert any(t["address"] == "10.0.0.5" for t in result["unhealthy_targets"]), shape
+
+
+class TestOneBackendInTwoTargetGroups:
+    """The same IP can serve several target groups and fail in only one.
+
+    Collapsing records by address alone let a healthy reading from the first
+    group hide a failing one from the second, which is the difference between
+    "this backend is fine" and "this backend is failing for one route".
+    """
+
+    def test_a_failure_in_the_second_group_is_not_hidden(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        shared = "10.0.0.7"
+
+        def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
+            if "/load-balancer/v1/networkLoadBalancers" in url:
+                return httpx.Response(200, json={"loadBalancers": []})
+            if "targetStates/bg-1/tg-healthy" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "targetStates": [
+                            {
+                                "target": {"subnetId": "sn-a", "ipAddress": shared},
+                                "status": {"zoneStatuses": [{"status": "HEALTHY"}]},
+                            }
+                        ]
+                    },
+                )
+            if "targetStates/bg-1/tg-failing" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "targetStates": [
+                            {
+                                "target": {"subnetId": "sn-a", "ipAddress": shared},
+                                "status": {"zoneStatuses": [{"status": "UNHEALTHY"}]},
+                            }
+                        ]
+                    },
+                )
+            if "/apploadbalancer/v1/backendGroups/bg-1" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "id": "bg-1",
+                        "http": {
+                            "backends": [
+                                {"targetGroups": {"targetGroupIds": ["tg-healthy", "tg-failing"]}}
+                            ]
+                        },
+                    },
+                )
+            if "/virtualHosts" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "virtualHosts": [
+                            {"routes": [{"http": {"route": {"backendGroupId": "bg-1"}}}]}
+                        ]
+                    },
+                )
+            if "/apploadbalancer/v1/loadBalancers" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "loadBalancers": [
+                            {
+                                "id": "alb-1",
+                                "name": "ingress",
+                                "status": "ACTIVE",
+                                "listeners": [{"http": {"handler": {"httpRouterId": "router-1"}}}],
+                            }
+                        ]
+                    },
+                )
+            return httpx.Response(404, json={"message": f"no stub for {url}"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        failing = [t for t in result["unhealthy_targets"] if t["address"] == shared]
+        assert len(failing) == 1, "the unhealthy relationship was collapsed away"
+        assert failing[0]["target_group"] == "tg-failing"

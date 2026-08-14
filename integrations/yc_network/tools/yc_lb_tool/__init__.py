@@ -233,7 +233,7 @@ def _alb_target_health(
     """
     targets: list[dict[str, Any]] = []
     errors: list[str] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str, str]] = set()
     routed_ids, router_error = _alb_backend_group_ids(client, _alb_router_ids(balancer))
     if router_error:
         errors.append(router_error)
@@ -252,9 +252,15 @@ def _alb_target_health(
                 errors.append(f"targetStates {bg_id}/{tg_id}: {states.get('error', '')}")
                 continue
             for target in _alb_targets(states):
-                if target["address"] not in seen:
-                    seen.add(target["address"])
-                    targets.append(target)
+                # Keyed by the relationship, not the address alone: one backend
+                # can serve several target groups and be healthy in one while
+                # failing in another, and collapsing by IP would let the healthy
+                # record hide the failing one.
+                key = (bg_id, tg_id, target["address"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                targets.append({**target, "backend_group": bg_id, "target_group": tg_id})
     return targets, "; ".join(errors)
 
 
