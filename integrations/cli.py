@@ -217,13 +217,16 @@ def _setup_aws() -> None:
 
     def _ask_gate() -> RoleGateChoice | None:
         print(f"\n  {NO_AMBIENT_CREDENTIALS_NOTICE}\n")
+        print("  Your options:")
+        for number, option in enumerate(GATE_OPTIONS, start=1):
+            print(f"    {number}. {option.label}")
+            print(f"       {option.hint}")
+        print()
         picked = _select(
             GATE_QUESTION,
-            choices=[
-                questionary.Choice(f"{o.label} — {o.hint}", value=str(o.value))
-                for o in GATE_OPTIONS
-            ],
-            instruction="(use arrow keys)",
+            choices=[questionary.Choice(o.label, value=str(o.value)) for o in GATE_OPTIONS],
+            use_shortcuts=True,
+            instruction="(press 1-3, or use arrow keys and Enter)",
         )
         return None if picked is None else RoleGateChoice(picked)
 
@@ -604,9 +607,14 @@ def _run_spec_setup(
         # fatal error, and Ctrl+C is the way out.
         while True:
             value = _p(field.question, default=default, secret=field.secret)
-            if value or not spec.is_required(field, mode) or field.default:
-                break
-            print(f"  {field.label} is required. Enter a value, or press Ctrl+C to cancel.")
+            if not value and spec.is_required(field, mode) and not field.default:
+                print(f"  {field.label} is required. Enter a value, or press Ctrl+C to cancel.")
+                continue
+            problem = field.validate(value) if value and field.validate else None
+            if problem is not None:
+                print(f"  {problem}")
+                continue
+            break
         values[field.name] = value
 
     print(f"\n  Validating {spec.service} credentials...")

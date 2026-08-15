@@ -82,17 +82,23 @@ def configure_from_spec(
             default = _joined_values(
                 stored, separator=",", fallback=_string_value(stored, field.default)
             )
-            values[field.name] = _prompt_value(
-                field.question,
-                # A stored value wins over the spec's default, so re-running
-                # onboarding is a series of enters rather than a retype.
-                default=default,
-                secret=field.secret,
-                # Only reached when the field has no default to fall back on:
-                # _prompt_value substitutes the default before it consults this,
-                # so a defaulted field never re-prompts and never returns blank.
-                allow_empty=not spec.is_required(field, mode),
-            )
+            while True:
+                answer = _prompt_value(
+                    field.question,
+                    # A stored value wins over the spec's default, so re-running
+                    # onboarding is a series of enters rather than a retype.
+                    default=default,
+                    secret=field.secret,
+                    # Only reached when the field has no default to fall back on:
+                    # _prompt_value substitutes the default before it consults this,
+                    # so a defaulted field never re-prompts and never returns blank.
+                    allow_empty=not spec.is_required(field, mode),
+                )
+                problem = field.validate(answer) if answer and field.validate else None
+                if problem is None:
+                    break
+                _console.print(f"[{SECONDARY}]{problem}[/]")
+            values[field.name] = answer
         with _console.status(f"Validating {title} credentials...", spinner="dots"):
             outcome = apply_setup(spec, values)
         _render_integration_result(

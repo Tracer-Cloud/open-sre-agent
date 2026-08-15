@@ -104,3 +104,50 @@ def test_configure_first_prints_the_instruction_and_exits_zero(
     assert exit_info.value.code == 0
     assert any(gate.CONFIGURE_FIRST_INSTRUCTION in line for line in seen["printed"])
     assert seen["prompts"] == []
+
+
+def test_an_invalid_role_arn_is_asked_again_with_the_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A role ID pasted as the ARN is refused at the prompt, not by STS later."""
+    import dataclasses
+
+    import integrations.aws.setup as aws_setup
+
+    # Arrange — credentials present so the gate is silent; first ARN answer is the
+    # role's unique ID, second is a real ARN
+    monkeypatch.setattr(gate, "has_ambient_credentials", lambda: True)
+    verified: list[dict[str, Any]] = []
+
+    def _fake_verify(_source: str, config: dict[str, Any]) -> dict[str, str]:
+        verified.append(dict(config))
+        return {"status": "passed", "detail": "ok"}
+
+    monkeypatch.setattr(
+        aws_setup, "AWS_SETUP", dataclasses.replace(aws_setup.AWS_SETUP, verify=_fake_verify)
+    )
+    monkeypatch.setattr("integrations.setup_flow.upsert_integration", lambda *_a: None)
+    monkeypatch.setattr("integrations.setup_flow.sync_env_secret", lambda *_a: None)
+    monkeypatch.setattr("integrations.setup_flow.sync_env_values", lambda *_a, **_k: "/tmp/.env")
+    monkeypatch.setattr(
+        "integrations.setup_flow.push_webapp_org_integration", lambda *_a, **_k: None
+    )
+    seen = _script_cli(
+        monkeypatch,
+        mode_pick=gate.ROLE_MODE,
+        gate_pick=None,
+        answers=[
+            "us-east-1",
+            "AROAVYB3PA5RPMNFXNNJM",  # rejected
+            "arn:aws:iam::123456789012:role/OpenSREReadOnly",  # accepted
+            "",  # external id
+        ],
+    )
+
+    # Act
+    cli._setup_aws()
+
+    # Assert — the ARN prompt ran twice, the reason was printed, and setup went on
+    assert seen["prompts"].count("IAM Role ARN") == 2
+    assert any("unique ID" in line for line in seen["printed"])
+    assert verified and verified[0]["role_arn"] == "arn:aws:iam::123456789012:role/OpenSREReadOnly"

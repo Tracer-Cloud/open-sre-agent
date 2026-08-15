@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import boto3
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 
 from integrations.config_models import AWSIntegrationConfig
 from integrations.verification import register_verifier, result
@@ -73,6 +73,17 @@ def verify_aws(source: str, config: dict[str, Any]) -> dict[str, str]:
         # Only the role path reaches STS without explicit keys; static keys
         # would have been passed to the client and this error cannot arise.
         return result("aws", source, "failed", ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE)
+    except PartialCredentialsError as exc:
+        missing = exc.kwargs.get("cred_var", "one of the AWS_* variables")
+        return result(
+            "aws",
+            source,
+            "failed",
+            f"This shell has half a key pair in the environment: {missing} is not set. "
+            "The role is assumed with those base credentials, so set both "
+            "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or unset both and use an "
+            "`aws configure` profile), then run setup again.",
+        )
     except Exception as exc:
         return result("aws", source, "failed", f"AWS STS check failed: {exc}")
 

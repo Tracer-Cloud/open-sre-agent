@@ -146,6 +146,15 @@ class SetupField:
     example, whose config-model default is ``streamable-http``.
     """
 
+    validate: Callable[[str], str | None] | None = None
+    """Shape check applied to a non-empty answer at the prompt.
+
+    Returns an error message to show (the surface re-asks) or ``None`` when
+    the value is acceptable. For the checks the config model would only reject
+    later with a stack of validation errors — a role *ID* pasted where a role
+    *ARN* belongs.
+    """
+
     @property
     def question(self) -> str:
         """The text to prompt with."""

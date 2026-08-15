@@ -29,6 +29,45 @@ from config.constants.aws import (
 from integrations.aws.verifier import verify_aws
 from integrations.setup_flow import IntegrationSetupSpec, SetupField, SetupMode
 
+_ROLE_ARN_PREFIX = "arn:aws:iam::"
+_ROLE_ARN_EXAMPLE = "arn:aws:iam::123456789012:role/OpenSREReadOnly"
+
+
+_WHERE_TO_FIND = (
+    "Find it in the AWS console: IAM → Roles → pick the role → ARN (or `aws iam list-roles`)."
+)
+
+
+def validate_role_arn(value: str) -> str | None:
+    """Reject anything that is not an IAM *role* ARN — before STS is called.
+
+    Says what the answer was and what is needed instead: a user ARN, the
+    role's unique ID (``AROA…``), a bare role name, or something else. The
+    failure STS would give later is about credentials, not the ARN, so the
+    slip has to be caught here to be explainable.
+    """
+    text = value.strip()
+    if text.startswith(_ROLE_ARN_PREFIX) and ":role/" in text and not text.endswith(":role/"):
+        return None
+    if ":user/" in text:
+        return (
+            "That is an IAM *user* ARN. This option needs a *role* — an identity your user "
+            "assumes, not the user itself. If you only have a user, choose Access Key + Secret "
+            f"instead. A role ARN looks like {_ROLE_ARN_EXAMPLE}. {_WHERE_TO_FIND}"
+        )
+    if text.startswith("AROA"):
+        return (
+            "That is the role's unique ID, not its ARN. "
+            f"A role ARN looks like {_ROLE_ARN_EXAMPLE}. {_WHERE_TO_FIND}"
+        )
+    if "arn:" not in text and "/" not in text and " " not in text:
+        return (
+            f"That looks like a role *name*; the full ARN is needed, e.g. "
+            f"arn:aws:iam::<account-id>:role/{text}. {_WHERE_TO_FIND}"
+        )
+    return f"An IAM role ARN looks like {_ROLE_ARN_EXAMPLE}. {_WHERE_TO_FIND}"
+
+
 REGION_FIELD = "region"
 ROLE_ARN_FIELD = "role_arn"
 EXTERNAL_ID_FIELD = "external_id"
@@ -74,6 +113,7 @@ AWS_SETUP = IntegrationSetupSpec(
             label="IAM Role ARN",
             env_var=AWS_ROLE_ARN_ENV,
             required=False,
+            validate=validate_role_arn,
         ),
         SetupField(
             name=EXTERNAL_ID_FIELD,
@@ -126,6 +166,7 @@ AWS_SETUP = IntegrationSetupSpec(
 
 __all__ = [
     "ACCESS_KEY_ID_FIELD",
+    "validate_role_arn",
     "AWS_SETUP",
     "EXTERNAL_ID_FIELD",
     "REGION_FIELD",

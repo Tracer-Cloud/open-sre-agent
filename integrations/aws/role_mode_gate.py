@@ -34,9 +34,8 @@ class GateOption:
 
 
 NO_AMBIENT_CREDENTIALS_NOTICE = (
-    "IAM Role ARN is assumed with base AWS credentials already on this machine — "
-    f"{AMBIENT_SOURCES_HINT}. None were found, so validation would fail with "
-    '"Unable to locate credentials" before reaching your role.'
+    "No base AWS credentials found on this machine. A role is assumed *with* base "
+    f"credentials — {AMBIENT_SOURCES_HINT} — so this option cannot work here yet."
 )
 
 CONFIGURE_FIRST_INSTRUCTION = (
@@ -51,18 +50,18 @@ GATE_OPTIONS: tuple[GateOption, ...] = (
     GateOption(
         RoleGateChoice.USE_KEYS,
         "Use an access key + secret instead",
-        "Simplest on a laptop. The key needs the read-only policies from the AWS docs.",
+        "simplest on a laptop; the key needs the read-only policies from the AWS docs",
     ),
     GateOption(
         RoleGateChoice.CONFIGURE_FIRST,
-        "I'll configure base credentials in this shell first",
-        "Run `aws configure` (or export AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) for an "
-        "identity allowed sts:AssumeRole on the role, then re-run setup.",
+        "Configure base credentials first, then come back",
+        "run `aws configure` or export AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY for an "
+        "identity allowed sts:AssumeRole on the role, then re-run setup",
     ),
     GateOption(
         RoleGateChoice.CONTINUE_ROLE,
         "Continue with the role anyway",
-        "Only useful if OpenSRE will run on EC2/ECS/Lambda with an attached role.",
+        "only for OpenSRE running on EC2/ECS/Lambda with an attached role",
     ),
 )
 
