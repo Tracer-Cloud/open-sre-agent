@@ -91,7 +91,7 @@ def configure_from_spec(
                 # Only reached when the field has no default to fall back on:
                 # _prompt_value substitutes the default before it consults this,
                 # so a defaulted field never re-prompts and never returns blank.
-                allow_empty=not field.required,
+                allow_empty=not spec.is_required(field, mode),
             )
         with _console.status(f"Validating {title} credentials...", spinner="dots"):
             outcome = apply_setup(spec, values)

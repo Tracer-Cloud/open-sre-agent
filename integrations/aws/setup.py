@@ -112,11 +112,13 @@ AWS_SETUP = IntegrationSetupSpec(
             value="role",
             label="IAM Role ARN (assumed with your ambient AWS credentials)",
             fields=(ROLE_ARN_FIELD, EXTERNAL_ID_FIELD),
+            required_fields=(ROLE_ARN_FIELD,),
         ),
         SetupMode(
             value="keys",
             label="Access Key + Secret",
             fields=(ACCESS_KEY_ID_FIELD, SECRET_ACCESS_KEY_FIELD, SESSION_TOKEN_FIELD),
+            required_fields=(ACCESS_KEY_ID_FIELD, SECRET_ACCESS_KEY_FIELD),
         ),
     ),
     verify=_verify_aws_setup,

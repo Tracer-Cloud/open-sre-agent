@@ -167,7 +167,9 @@ _MODED_SPEC = setup_flow.IntegrationSetupSpec(
     ),
     mode_prompt="Auth method:",
     modes=(
-        setup_flow.SetupMode(value="token", label="Token", fields=("token",)),
+        setup_flow.SetupMode(
+            value="token", label="Token", fields=("token",), required_fields=("token",)
+        ),
         setup_flow.SetupMode(value="basic", label="Basic", fields=("user", "password")),
     ),
     verify=lambda _source, _config: {"status": "passed", "detail": "ok"},
@@ -209,3 +211,38 @@ def test_without_a_mode_gate_the_picked_mode_is_used_unchanged(
 
     # Assert
     assert [entry["label"] for entry in run.asked] == ["Demo token"]
+
+
+def test_a_field_required_by_the_chosen_mode_may_not_be_left_empty(
+    run: _Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Optional at spec level (unset in other modes), required within this mode.
+
+    AWS's role ARN: blank must be refused at the prompt, not surface later as a
+    config-model "requires either role_arn or credentials" validation error.
+    """
+    # Arrange — user picks "token"; the spec says token is required in that mode
+    monkeypatch.setattr(spec_configurator, "_choose", lambda *_a, **_k: "token")
+    run.answers = {"Demo token": "t"}
+
+    # Act
+    spec_configurator.configure_from_spec(_MODED_SPEC, title="Demo")
+
+    # Assert — the token prompt does not allow an empty answer
+    token_prompt = next(entry for entry in run.asked if entry["label"] == "Demo token")
+    assert token_prompt["allow_empty"] is False
+
+
+def test_the_same_field_stays_optional_when_another_mode_is_chosen(
+    run: _Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange — "basic" is chosen; its fields are optional at every level
+    monkeypatch.setattr(spec_configurator, "_choose", lambda *_a, **_k: "basic")
+    run.answers = {"Demo user": "u", "Demo password": "p"}
+
+    # Act
+    spec_configurator.configure_from_spec(_MODED_SPEC, title="Demo")
+
+    # Assert
+    asked = {entry["label"]: entry["allow_empty"] for entry in run.asked}
+    assert asked == {"Demo user": True, "Demo password": True}
