@@ -73,23 +73,16 @@ onboard
 #### Where credentials are saved
 
 OpenSRE keeps environment variables as the first lookup tier. When onboarding
-saves a credential, keyring writes are **opt-in**: by default the value is
-written to an owner-only fallback file under `~/.opensre/`, so first-run setup
-does not trigger an operating-system keychain prompt. The file is local to your
-user account and is created with owner-only permissions.
+saves a credential, the value is written to `~/.opensre/credentials.json`, so
+first-run setup does not trigger an operating-system keychain prompt. The file
+is local to your user account and is created with owner-only permissions.
 
-To prefer the system keychain for new writes, set the flag before onboarding:
+You can also provide a credential directly through your shell or project `.env`;
+environment values take precedence over the local store. Never commit real
+credentials to `.env` or source control.
 
-```bash
-export OPENSRE_USE_KEYRING=1
-opensre onboard
-```
-
-With that flag enabled, OpenSRE writes to the system keychain and uses the
-owner-only fallback file only when the keychain is unavailable. You can also
-provide a credential directly through your shell or project `.env`; environment
-values take precedence over both local stores. Never commit real credentials to
-`.env` or source control.
+To keep credentials out of that file entirely, set `OPENSRE_DISABLE_KEYRING=1`
+and export them in your shell instead.
 
 ### 4) Verify integration health
 

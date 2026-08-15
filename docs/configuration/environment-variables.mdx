@@ -7,22 +7,14 @@ All configuration options for OpenSRE can be set via environment variables. This
 
 ## Secret storage
 
-Environment variables are checked before OpenSRE's local stores. For credentials
-entered through `opensre onboard` or `opensre integrations setup`, writes to the
-system keychain are opt-in. Without `OPENSRE_USE_KEYRING`, OpenSRE writes the
-credential to an owner-only fallback file under `~/.opensre/`, which keeps the
-first-run path working without an OS keychain prompt.
+Environment variables are checked before OpenSRE's local store. Credentials
+entered through `opensre onboard` or `opensre integrations setup` are written to
+`~/.opensre/credentials.json` with owner-only (`0600`) permissions, which keeps
+the first-run path working without an OS keychain prompt.
 
-Set `OPENSRE_USE_KEYRING=1` before onboarding to prefer the system keychain:
-
-```bash
-OPENSRE_USE_KEYRING=1 opensre onboard
-```
-
-If the keychain cannot store the credential, OpenSRE falls back to the same
-owner-only local file. A value supplied in the process environment or a local
-`.env` file takes precedence when reading credentials. Keep `.env` out of source
-control and never commit real secrets.
+A value supplied in the process environment or a local `.env` file takes
+precedence when reading credentials. Keep `.env` out of source control and never
+commit real secrets.
 
 ## Remote sync
 
@@ -184,9 +176,9 @@ control and never commit real secrets.
 ## Credentials & Authentication
 
 Sensitive variables (`*_TOKEN`, `*_KEY`, `*_PASSWORD`, `*_SECRET`, and similar)
-resolve through `resolve_env_credential`: **process env first**, then the OS
-keyring, then the local fallback store described below. Wizard setup dual-writes
-many of these so a cleared `.env` still works locally.
+resolve through `resolve_env_credential`: **process env first**, then the local
+credential store described below. Wizard setup dual-writes many of these so a
+cleared `.env` still works locally.
 
 **Exceptions (never stored):** webhook and other `*_URL` values such as
 `SLACK_WEBHOOK_URL` and `ROCKETCHAT_WEBHOOK_URL` stay store / plain env only.
@@ -194,13 +186,16 @@ They may still embed secret tokens — do not log them unmasked.
 Set `OPENSRE_DISABLE_KEYRING=1` to skip local credential storage entirely; you
 then have to export every credential in your shell.
 
-### When there is no system keychain
+### Where stored credentials live
 
-Headless Linux, EC2 over SSH, Docker, and CI have no keyring backend, and a
-macOS login Keychain can be locked. Rather than failing setup, OpenSRE writes
-the credential to `~/.opensre/credentials.json` with owner-only (`0600`)
-permissions and tells you it did. Unlock or install a keychain and re-run the
-command to move the credential back into secure storage.
+OpenSRE writes the credential to `~/.opensre/credentials.json` with owner-only
+(`0600`) permissions and tells you it did. This is the same path on every
+platform, so headless Linux, EC2 over SSH, Docker, and CI need no keyring
+backend and macOS never raises a keychain prompt.
+
+Reads no longer consult the OS keychain. A credential saved by an earlier
+version is migrated into that file the first time it is looked up, and the
+keychain copy is removed.
 
 To keep credentials off disk entirely, set `OPENSRE_DISABLE_KEYRING=1` and
 export them in your shell instead.
