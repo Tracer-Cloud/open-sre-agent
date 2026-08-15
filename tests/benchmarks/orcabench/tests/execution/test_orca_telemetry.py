@@ -23,9 +23,22 @@ class _Response:
 
 
 class _Session:
-    def __init__(self) -> None:
+    def __init__(self, traces: list[dict[str, Any]] | None = None) -> None:
         self.get_calls: list[tuple[str, dict[str, Any]]] = []
         self.post_calls: list[tuple[str, dict[str, Any]]] = []
+        self._traces = traces or [
+            {
+                "traceID": "abc",
+                "spans": [
+                    {
+                        "spanID": "span-in-window",
+                        "operationName": "POST /checkout",
+                        "startTime": 1776772800000000,
+                        "duration": 1000,
+                    }
+                ],
+            }
+        ]
 
     def get(self, url: str, **kwargs: Any) -> _Response:
         self.get_calls.append((url, kwargs))
@@ -36,7 +49,7 @@ class _Session:
         if url.endswith("/api/services"):
             return _Response({"data": ["checkout", "frontend"]})
         if url.endswith("/api/traces") or "/api/traces/" in url:
-            return _Response({"data": [{"traceID": "abc", "spans": []}]})
+            return _Response({"data": self._traces})
         return _Response(
             {
                 "status": "success",
@@ -335,6 +348,93 @@ def test_trace_filters_and_trace_id_retrieval_reach_jaeger() -> None:
     assert search_params["maxDuration"] == "5s"
     assert session.get_calls[1][0].endswith("/api/traces/abc")
     assert exact["traces"][0]["traceID"] == "abc"
+    assert exact["traces"][0]["spans"][0]["spanID"] == "span-in-window"
+
+
+def test_trace_id_retrieval_filters_spans_outside_query_window() -> None:
+    session = _Session(
+        [
+            {
+                "traceID": "abc",
+                "duration": 7200000000,
+                "processes": {
+                    "p-before": {"serviceName": "before-service"},
+                    "p-inside": {"serviceName": "inside-service"},
+                    "p-after": {"serviceName": "after-service"},
+                },
+                "spans": [
+                    {
+                        "spanID": "before-window",
+                        "processID": "p-before",
+                        "startTime": 1776765600000000,
+                        "duration": 1000,
+                    },
+                    {
+                        "spanID": "inside-window",
+                        "processID": "p-inside",
+                        "startTime": 1776772800000000,
+                        "duration": 1000,
+                        "references": [
+                            {
+                                "refType": "CHILD_OF",
+                                "traceID": "abc",
+                                "spanID": "before-window",
+                            }
+                        ],
+                    },
+                    {
+                        "spanID": "after-window",
+                        "processID": "p-after",
+                        "startTime": 1776780000000000,
+                        "duration": 1000,
+                    },
+                ],
+            }
+        ]
+    )
+    backend = _backend(session)
+
+    result = backend.query_traces("", action="get_trace", trace_id="abc")
+
+    assert result["traces"] == [
+        {
+            "traceID": "abc",
+            "spans": [
+                {
+                    "spanID": "inside-window",
+                    "processID": "p-inside",
+                    "startTime": 1776772800000000,
+                    "duration": 1000,
+                    "references": [],
+                }
+            ],
+            "processes": {
+                "p-inside": {"serviceName": "inside-service"},
+            },
+        }
+    ]
+
+
+def test_trace_id_retrieval_returns_no_trace_when_no_spans_match_query_window() -> None:
+    session = _Session(
+        [
+            {
+                "traceID": "abc",
+                "spans": [
+                    {
+                        "spanID": "before-window",
+                        "startTime": 1776765600000000,
+                        "duration": 1000,
+                    }
+                ],
+            }
+        ]
+    )
+    backend = _backend(session)
+
+    result = backend.query_traces("", action="get_trace", trace_id="abc")
+
+    assert result["traces"] == []
 
 
 def test_rich_controls_and_source_attributes_survive_model_facing_bridge() -> None:

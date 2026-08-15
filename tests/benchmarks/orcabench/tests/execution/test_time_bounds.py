@@ -42,12 +42,24 @@ def test_openai_tool_schema_preserves_native_time_bounds_fields(tool_function) -
     assert registered.retrieval_controls.time_bounds is False
 
 
-def test_orca_log_and_trace_schemas_expose_rich_backend_controls() -> None:
+def test_orca_native_trace_schema_keeps_direct_trace_lookup_hidden() -> None:
+    [trace_tool] = _with_orca_time_bounds(
+        [query_grafana_traces.__opensre_registered_tool__],
+        tool_capability_mode="native",
+    )
+
+    assert "time_bounds" in trace_tool.input_schema["properties"]
+    assert "action" not in trace_tool.input_schema["properties"]
+    assert "trace_id" not in trace_tool.input_schema["properties"]
+
+
+def test_orca_terminus_parity_schemas_expose_rich_backend_controls() -> None:
     log_tool, trace_tool = _with_orca_time_bounds(
         [
             query_grafana_logs.__opensre_registered_tool__,
             query_grafana_traces.__opensre_registered_tool__,
-        ]
+        ],
+        tool_capability_mode="terminus_parity",
     )
 
     assert {"query", "sort_order", "cursor"} <= set(log_tool.input_schema["properties"])

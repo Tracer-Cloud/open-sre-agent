@@ -40,10 +40,11 @@ def test_host_config_import_does_not_eagerly_load_opensre_credentials() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_checked_in_config_is_native_and_model_route_is_explicit() -> None:
+def test_checked_in_benchmark_config_uses_terminus_parity_and_explicit_model() -> None:
     settings = BenchmarkSettings.from_yaml(_config_path())
 
     assert settings.mode == "native"
+    assert settings.tool_capability_mode == "terminus_parity"
     assert settings.profile == "benchmark"
     assert settings.model.harbor_model == "gradient_ai/openai-gpt-5.5"
     assert settings.model.opensre_model == "openai-gpt-5.5"
@@ -63,6 +64,7 @@ def test_smoke_config_is_unverified_and_defaults_to_gemini() -> None:
     settings = BenchmarkSettings.from_yaml(_smoke_config_path())
 
     assert settings.profile == "smoke"
+    assert settings.tool_capability_mode == "terminus_parity"
     assert settings.model.harbor_model == "gemini/gemini-3.5-flash-lite"
     assert settings.model.opensre_model == "gemini-3.5-flash-lite"
     assert settings.model.max_tokens == 16384
@@ -157,6 +159,29 @@ def test_config_rejects_unknown_fields() -> None:
 
     with pytest.raises(ValidationError, match="unexpected"):
         BenchmarkSettings.model_validate(raw)
+
+
+def test_config_rejects_unknown_tool_capability_mode() -> None:
+    raw = BenchmarkSettings().model_dump()
+    raw["tool_capability_mode"] = "shell"
+
+    with pytest.raises(ValidationError, match="tool_capability_mode"):
+        BenchmarkSettings.model_validate(raw)
+
+
+def test_tool_capability_mode_override_is_validated() -> None:
+    settings = BenchmarkSettings.from_yaml(_config_path()).with_tool_capability_mode_override(
+        "terminus_parity",
+    )
+
+    assert settings.tool_capability_mode == "terminus_parity"
+
+
+def test_tool_capability_mode_override_rejects_unknown_mode() -> None:
+    with pytest.raises(ValidationError, match="tool_capability_mode"):
+        BenchmarkSettings.from_yaml(_config_path()).with_tool_capability_mode_override(
+            "shell",
+        )
 
 
 def test_runtime_paths_must_be_absolute() -> None:

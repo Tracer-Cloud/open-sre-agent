@@ -41,11 +41,14 @@ class OpenSRENativeAgent(BaseInstalledAgent):
         benchmark_config_path: str | Path,
         bundle_path: str | Path,
         model_provider: str | None = None,
+        tool_capability_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
         self._benchmark_config_path = Path(benchmark_config_path).expanduser().resolve()
         self._bundle_path = Path(bundle_path).expanduser().resolve()
-        configured_settings = BenchmarkSettings.from_yaml(self._benchmark_config_path)
+        configured_settings = BenchmarkSettings.from_yaml(
+            self._benchmark_config_path
+        ).with_tool_capability_mode_override(tool_capability_mode)
         self._build_manifest = validate_bundle(self._bundle_path)
 
         configured_model = configured_settings.model.harbor_model

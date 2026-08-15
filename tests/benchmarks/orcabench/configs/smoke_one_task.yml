@@ -1,6 +1,9 @@
 schema_version: 1
 profile: smoke
 mode: native
+# native: keeps OpenSRE's typed investigation surface with only ORCA backend adaptations.
+# terminus_parity: also exposes lower-level ORCA/Grafana tools that Terminus can reach through shell commands.
+tool_capability_mode: terminus_parity
 
 model:
   harbor_model: gemini/gemini-3.5-flash-lite

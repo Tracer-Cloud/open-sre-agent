@@ -40,6 +40,8 @@ def build_mode(settings: RunnerSettings) -> ModeComponents:
             settings.benchmark.grafana,
             settings.benchmark.runtime.source_root,
         ),
-        investigation=NativeInvestigationRunner(),
+        investigation=NativeInvestigationRunner(
+            tool_capability_mode=settings.benchmark.tool_capability_mode,
+        ),
         report=NativeReportPolicy(),
     )

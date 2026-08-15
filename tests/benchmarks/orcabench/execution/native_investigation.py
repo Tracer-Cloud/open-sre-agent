@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from tests.benchmarks.orcabench.config import ToolCapabilityMode
+
 
 _TIME_SENSITIVE_GRAFANA_TOOLS = frozenset(
     {
@@ -69,8 +71,12 @@ def _orca_report_contract(state: dict[str, Any]) -> tuple[str, str]:
     )
 
 
-def _with_orca_time_bounds(tools: list[Any]) -> list[Any]:
-    """Expose native OpenSRE time controls only on ORCA's historical backend."""
+def _with_orca_time_bounds(
+    tools: list[Any],
+    *,
+    tool_capability_mode: ToolCapabilityMode = "native",
+) -> list[Any]:
+    """Adapt model-facing Grafana controls for ORCA's selected capability mode."""
     from copy import deepcopy
     from dataclasses import replace
 
@@ -85,7 +91,7 @@ def _with_orca_time_bounds(tools: list[Any]) -> list[Any]:
         input_schema = deepcopy(tool.input_schema)
         input_schema.setdefault("properties", {})["time_bounds"] = time_schema
         properties = input_schema["properties"]
-        if tool.name == "query_grafana_logs":
+        if tool.name == "query_grafana_logs" and tool_capability_mode == "terminus_parity":
             properties.update(
                 {
                     "query": {
@@ -104,7 +110,7 @@ def _with_orca_time_bounds(tools: list[Any]) -> list[Any]:
                     },
                 }
             )
-        elif tool.name == "query_grafana_traces":
+        elif tool.name == "query_grafana_traces" and tool_capability_mode == "terminus_parity":
             properties.update(
                 {
                     "action": {"type": "string", "enum": ["search", "get_trace"]},
@@ -225,6 +231,13 @@ def _terminal_orca_conclusion(state: dict[str, Any]) -> str:
 class NativeInvestigationRunner:
     """Bootstrap and invoke OpenSRE's public investigation capability once."""
 
+    def __init__(
+        self,
+        *,
+        tool_capability_mode: ToolCapabilityMode = "native",
+    ) -> None:
+        self._tool_capability_mode = tool_capability_mode
+
     def investigate(
         self,
         alert: str | dict[str, Any],
@@ -236,6 +249,8 @@ class NativeInvestigationRunner:
         from tools.investigation.capability import run_investigation
         from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
 
+        tool_capability_mode = self._tool_capability_mode
+
         class OrcaInvestigationAgent(ConnectedInvestigationAgent):
             """Native OpenSRE agent with the caller's ORCA task semantics."""
 
@@ -243,7 +258,10 @@ class NativeInvestigationRunner:
                 return _build_orca_investigation_system_prompt(state)
 
             def _filter_tools(self, tools: list[Any]) -> list[Any]:
-                return _with_orca_time_bounds(tools)
+                return _with_orca_time_bounds(
+                    tools,
+                    tool_capability_mode=tool_capability_mode,
+                )
 
             def _should_accept_conclusion(
                 self,

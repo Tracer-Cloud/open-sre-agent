@@ -1,6 +1,9 @@
 schema_version: 1
 profile: benchmark
 mode: native
+# native: keeps OpenSRE's typed investigation surface with only ORCA backend adaptations.
+# terminus_parity: also exposes lower-level ORCA/Grafana tools that Terminus can reach through shell commands.
+tool_capability_mode: terminus_parity
 
 model:
   harbor_model: gradient_ai/openai-gpt-5.5

@@ -11,6 +11,7 @@ from pathlib import Path
 from tests.benchmarks.orcabench.config import (
     BENCHMARK_PROVIDER_VALUES,
     BenchmarkSettings,
+    TOOL_CAPABILITY_MODE_VALUES,
 )
 from tests.benchmarks.orcabench.host.bundle import validate_bundle
 from tests.benchmarks.orcabench.host.snapshot import stage_snapshot
@@ -53,6 +54,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         help="Provider-native model ID; requires --provider",
+    )
+    parser.add_argument(
+        "--tool-capability-mode",
+        choices=TOOL_CAPABILITY_MODE_VALUES,
+        default=None,
+        help=(
+            "native uses OpenSRE's typed tools; terminus_parity also exposes "
+            "lower-level ORCA/Grafana tools Terminus can reach."
+        ),
     )
     parser.add_argument("--print-command", action="store_true")
     return parser
@@ -118,6 +128,8 @@ def build_harbor_command(
         f"bundle_path={bundle}",
         "--agent-kwarg",
         f"model_provider={settings.model.provider}",
+        "--agent-kwarg",
+        f"tool_capability_mode={settings.tool_capability_mode}",
     ]
     command.extend(
         _environment_flags("--agent-env", settings.model.required_environment_names)
@@ -163,7 +175,7 @@ def run_tasks(args: argparse.Namespace) -> int:
     settings = BenchmarkSettings.from_yaml(config_path).with_model_override(
         args.provider,
         args.model,
-    )
+    ).with_tool_capability_mode_override(args.tool_capability_mode)
     required_names = dict.fromkeys(
         settings.model.required_environment_names
         + settings.verifier.required_environment_names

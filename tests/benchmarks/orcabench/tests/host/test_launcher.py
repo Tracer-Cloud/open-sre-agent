@@ -95,6 +95,38 @@ def test_launcher_accepts_repeated_exact_task_names() -> None:
     assert _validate_exact_task_names(args.task_name) == ("orca-bench/a", "orca-bench/b")
 
 
+def test_launcher_uses_config_tool_capability_mode_by_default() -> None:
+    args = _parser().parse_args(
+        [
+            "--orca-repo",
+            "/orca",
+            "--bundle",
+            "/bundle",
+            "--task-name",
+            "orca-bench/a",
+        ]
+    )
+
+    assert args.tool_capability_mode is None
+
+
+def test_launcher_accepts_native_tool_capability_mode() -> None:
+    args = _parser().parse_args(
+        [
+            "--orca-repo",
+            "/orca",
+            "--bundle",
+            "/bundle",
+            "--task-name",
+            "orca-bench/a",
+            "--tool-capability-mode",
+            "native",
+        ]
+    )
+
+    assert args.tool_capability_mode == "native"
+
+
 def test_harbor_command_preserves_selected_task_names(tmp_path: Path) -> None:
     task_names = ("0123456789abcdef", "fedcba9876543210")
     command = build_harbor_command(
@@ -121,6 +153,7 @@ def test_harbor_command_preserves_selected_task_names(tmp_path: Path) -> None:
     assert "OPENAI_BASE_URL=${OPENAI_BASE_URL}" in command
     assert "--disable-verification" not in command
     assert "model_provider=openai" in command
+    assert "tool_capability_mode=terminus_parity" in command
     assert all(not argument.startswith("OPENAI_API_KEY=sk-") for argument in command)
 
 
@@ -186,6 +219,47 @@ def test_launcher_stages_once_and_starts_one_job_for_selected_tasks(
         for index, argument in enumerate(command)
         if argument == "--include-task-name"
     ) == ("orca-bench/a", "orca-bench/b")
+    assert "tool_capability_mode=terminus_parity" in command
+
+
+def test_launcher_tool_capability_mode_flag_overrides_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    orca_repo = tmp_path / "ORCA-bench"
+    orca_repo.mkdir()
+    (orca_repo / "job-config.yaml").touch()
+    bundle = tmp_path / "bundle"
+    snapshot_cache = tmp_path / "snapshot"
+    args = _parser().parse_args(
+        [
+            "--orca-repo",
+            str(orca_repo),
+            "--bundle",
+            str(bundle),
+            "--task-name",
+            "orca-bench/a",
+            "--config",
+            str(_smoke_config_path()),
+            "--tool-capability-mode",
+            "native",
+        ]
+    )
+    subprocess_calls: list[tuple[str, ...]] = []
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(launcher, "validate_bundle", lambda _: None)
+    monkeypatch.setattr(launcher, "stage_snapshot", lambda *_: snapshot_cache)
+    monkeypatch.setattr(
+        launcher.subprocess,
+        "run",
+        lambda command, **_: subprocess_calls.append(command)
+        or type("Result", (), {"returncode": 0})(),
+    )
+
+    assert run_tasks(args) == 0
+    assert len(subprocess_calls) == 1
+    assert "tool_capability_mode=native" in subprocess_calls[0]
 
 
 def test_openrouter_smoke_command_uses_its_key_and_disables_verification(

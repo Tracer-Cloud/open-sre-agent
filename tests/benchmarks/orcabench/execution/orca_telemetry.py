@@ -23,6 +23,105 @@ def _iso_utc(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _span_window_microseconds(span: dict[str, Any]) -> tuple[int, int] | None:
+    try:
+        start = int(span["startTime"])
+        duration = int(span["duration"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if start < 0 or duration < 0:
+        return None
+    return start, start + duration
+
+
+def _span_overlaps_window(
+    span: dict[str, Any],
+    *,
+    start_microseconds: int,
+    end_microseconds: int,
+) -> bool:
+    span_window = _span_window_microseconds(span)
+    if span_window is None:
+        return False
+    span_start, span_end = span_window
+    return span_start <= end_microseconds and span_end >= start_microseconds
+
+
+def _traces_in_window(
+    traces: Any,
+    *,
+    start_microseconds: int,
+    end_microseconds: int,
+) -> list[dict[str, Any]]:
+    if not isinstance(traces, list):
+        return []
+    bounded: list[dict[str, Any]] = []
+    for trace in traces:
+        if not isinstance(trace, dict):
+            continue
+        spans = trace.get("spans")
+        if not isinstance(spans, list):
+            continue
+        bounded_spans = [
+            span
+            for span in spans
+            if isinstance(span, dict)
+            and _span_overlaps_window(
+                span,
+                start_microseconds=start_microseconds,
+                end_microseconds=end_microseconds,
+            )
+        ]
+        if bounded_spans:
+            bounded.append(_bounded_trace(trace, bounded_spans))
+    return bounded
+
+
+def _bounded_trace(
+    trace: dict[str, Any],
+    spans: list[dict[str, Any]],
+) -> dict[str, Any]:
+    kept_span_ids = {
+        span["spanID"] for span in spans if isinstance(span.get("spanID"), str)
+    }
+    kept_process_ids = {
+        span["processID"] for span in spans if isinstance(span.get("processID"), str)
+    }
+    bounded_spans = [_span_with_bounded_references(span, kept_span_ids) for span in spans]
+    bounded: dict[str, Any] = {
+        "traceID": trace.get("traceID"),
+        "spans": bounded_spans,
+    }
+    processes = trace.get("processes")
+    if isinstance(processes, dict):
+        bounded["processes"] = {
+            process_id: process
+            for process_id, process in processes.items()
+            if process_id in kept_process_ids
+        }
+    warnings = trace.get("warnings")
+    if isinstance(warnings, list):
+        bounded["warnings"] = warnings
+    return bounded
+
+
+def _span_with_bounded_references(
+    span: dict[str, Any],
+    kept_span_ids: set[str],
+) -> dict[str, Any]:
+    bounded_span = dict(span)
+    references = span.get("references")
+    if isinstance(references, list):
+        bounded_span["references"] = [
+            reference
+            for reference in references
+            if isinstance(reference, dict)
+            and isinstance(reference.get("spanID"), str)
+            and reference["spanID"] in kept_span_ids
+        ]
+    return bounded_span
+
+
 class OrcaTelemetryBackend:
     """Expose ORCA's Prometheus, OpenSearch, and Jaeger through OpenSRE's backend API."""
 
@@ -313,7 +412,11 @@ class OrcaTelemetryBackend:
                 raise ValueError("trace_id is required for get_trace")
             payload = self._get(self.TRACES_UID, f"/api/traces/{trace_id}")
             return {
-                "traces": payload.get("data", []),
+                "traces": _traces_in_window(
+                    payload.get("data", []),
+                    start_microseconds=int(start_seconds * 1_000_000),
+                    end_microseconds=int(end_seconds * 1_000_000),
+                ),
                 "metrics": {},
                 "query_window": {"start": start, "end": end},
             }

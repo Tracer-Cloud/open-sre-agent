@@ -77,6 +77,18 @@ def test_custom_agent_resolves_runtime_gemini_model(tmp_path: Path) -> None:
     assert settings.model.required_environment_names == ("GEMINI_API_KEY",)
 
 
+def test_custom_agent_applies_tool_capability_mode_override(tmp_path: Path) -> None:
+    agent = OpenSRENativeAgent(
+        logs_dir=tmp_path / "logs",
+        model_name="gradient_ai/openai-gpt-5.5",
+        benchmark_config_path=_config_path(),
+        bundle_path=create_bundle(tmp_path),
+        tool_capability_mode="terminus_parity",
+    )
+
+    assert agent._runner_settings().benchmark.tool_capability_mode == "terminus_parity"
+
+
 def test_post_run_summary_populates_harbor_context(tmp_path: Path) -> None:
     logs_dir = tmp_path / "logs"
     agent = OpenSRENativeAgent(

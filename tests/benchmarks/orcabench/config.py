@@ -35,6 +35,11 @@ PROVIDER_ROUTES = {
     "groq": ProviderRoute(harbor_prefix="groq/"),
 }
 BENCHMARK_PROVIDER_VALUES = tuple(PROVIDER_ROUTES)
+ToolCapabilityMode = Literal["native", "terminus_parity"]
+TOOL_CAPABILITY_MODE_VALUES: tuple[ToolCapabilityMode, ...] = (
+    "native",
+    "terminus_parity",
+)
 
 
 class StrictFrozenModel(BaseModel):
@@ -172,6 +177,11 @@ class BenchmarkSettings(StrictFrozenModel):
     schema_version: Literal[1] = SCHEMA_VERSION
     profile: Literal["benchmark", "smoke"] = "benchmark"
     mode: Literal["native"] = "native"
+    # native: expose OpenSRE's typed investigation tools with only the ORCA
+    # backend adaptations required to reach benchmark telemetry/source.
+    # terminus_parity: additionally expose typed equivalents of lower-level
+    # ORCA tools Terminus can reach through shell/Grafana API.
+    tool_capability_mode: ToolCapabilityMode = "terminus_parity"
     model: ModelSettings = Field(default_factory=ModelSettings)
     verifier: VerifierSettings = Field(default_factory=VerifierSettings)
     grafana: GrafanaSettings = Field(default_factory=GrafanaSettings)
@@ -221,6 +231,18 @@ class BenchmarkSettings(StrictFrozenModel):
         )
         resolved_model = ModelSettings.model_validate(model_values)
         return self.model_copy(update={"model": resolved_model})
+
+    def with_tool_capability_mode_override(
+        self,
+        tool_capability_mode: str | None,
+    ) -> BenchmarkSettings:
+        """Return settings with one validated tool capability mode override."""
+        if tool_capability_mode is None:
+            return self
+        normalized_mode = tool_capability_mode.strip()
+        values = self.model_dump()
+        values["tool_capability_mode"] = normalized_mode
+        return BenchmarkSettings.model_validate(values)
 
     def with_harbor_model_override(
         self,
