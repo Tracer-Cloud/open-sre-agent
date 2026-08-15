@@ -19,7 +19,13 @@ def _static_pair_is_half_set() -> bool:
     return bool(os.environ.get(first)) != bool(os.environ.get(second))
 
 
-def base_session(*, region: str | None = None) -> Any:
+#: boto3 providers that reach the network: the ECS container-credentials
+#: endpoint and EC2 instance metadata (169.254.169.254). On a machine that is
+#: neither, they wait out connect timeouts before reporting "no credentials".
+_NETWORK_CREDENTIAL_PROVIDERS: tuple[str, ...] = ("container-role", "iam-role")
+
+
+def base_session(*, region: str | None = None, local_only: bool = False) -> Any:
     """A boto3 session for OpenSRE's own base identity, whatever supplies it.
 
     Order: a *complete* static pair resolved the OpenSRE way (process env, then
@@ -29,7 +35,12 @@ def base_session(*, region: str | None = None) -> Any:
     ``.env`` legitimately loads ``AWS_ACCESS_KEY_ID`` alone into the process;
     boto3 reads the pair as one unit and would raise ``PartialCredentialsError``
     on that lone id instead of falling through, so with a half-pair the ``env``
-    provider is dropped from the chain. Returns ``None`` when boto3 is missing.
+    provider is dropped from the chain.
+
+    *local_only* also drops the network providers (ECS / EC2 metadata). Use it
+    for a pre-check that must answer instantly — a setup prompt deciding
+    whether to warn — never for a real call, where an attached instance role
+    is exactly the credential to find. Returns ``None`` when boto3 is missing.
     """
     try:
         import boto3
@@ -47,10 +58,17 @@ def base_session(*, region: str | None = None) -> Any:
             aws_session_token=resolve_env_credential(AWS_SESSION_TOKEN_ENV) or None,
             region_name=region,
         )
-    if not _static_pair_is_half_set():
+    to_remove: list[str] = []
+    if _static_pair_is_half_set():
+        to_remove.append("env")
+    if local_only:
+        to_remove.extend(_NETWORK_CREDENTIAL_PROVIDERS)
+    if not to_remove:
         return boto3.session.Session(region_name=region)
     core = botocore.session.get_session()
-    core.get_component("credential_provider").remove("env")
+    resolver = core.get_component("credential_provider")
+    for name in to_remove:
+        resolver.remove(name)
     return boto3.session.Session(botocore_session=core, region_name=region)
 
 

@@ -230,13 +230,16 @@ def _setup_aws() -> None:
         )
         return None if picked is None else RoleGateChoice(picked)
 
+    def _leave_to_configure_credentials() -> NoReturn:
+        print(f"\n  {CONFIGURE_FIRST_INSTRUCTION}")
+        print("  Nothing was saved.")
+        sys.exit(0)
+
     def _gate(mode: str) -> str:
         try:
             return gate_role_mode(mode, ask=_ask_gate)
         except ConfigureCredentialsFirst:
-            print(f"\n  {CONFIGURE_FIRST_INSTRUCTION}")
-            print("  Nothing was saved.")
-            sys.exit(0)
+            _leave_to_configure_credentials()
 
     _run_spec_setup(AWS_SETUP, on_mode_chosen=_gate)
 

@@ -90,3 +90,60 @@ def test_nothing_anywhere_means_no_credentials(
 
     # Assert
     assert has_ambient_credentials() is False
+
+
+def _provider_names(session: object) -> list[str]:
+    resolver = session._session.get_component("credential_provider")  # type: ignore[attr-defined]
+    return [p.METHOD for p in resolver.providers]
+
+
+@pytest.mark.usefixtures("isolated_aws_env")
+def test_local_only_drops_the_network_credential_providers() -> None:
+    """The setup gate's pre-check must answer instantly on a laptop or behind a proxy.
+
+    boto3's chain ends with the ECS container endpoint and EC2 instance
+    metadata; on a machine that is neither, they wait out connect timeouts
+    (measured: ~4s with IMDS blackholed) before saying "no credentials". The
+    pre-check only decides whether to warn, so it looks at local sources only.
+    """
+    # Act
+    names = _provider_names(aws_env.base_session(local_only=True))
+
+    # Assert
+    assert "container-role" not in names
+    assert "iam-role" not in names
+    assert "shared-credentials-file" in names  # local sources stay
+
+
+@pytest.mark.usefixtures("isolated_aws_env")
+def test_the_default_session_keeps_the_full_chain_for_real_calls() -> None:
+    """On EC2/ECS the attached role *is* the credential; the STS call must find it."""
+    # Act
+    names = _provider_names(aws_env.base_session())
+
+    # Assert
+    assert "container-role" in names
+    assert "iam-role" in names
+
+
+def test_has_ambient_credentials_is_local_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange — record what base_session is asked for
+    seen: dict[str, object] = {}
+
+    class _NoCreds:
+        def get_credentials(self) -> None:
+            return None
+
+    def _fake_base_session(*, region: str | None = None, local_only: bool = False) -> _NoCreds:
+        seen["local_only"] = local_only
+        return _NoCreds()
+
+    monkeypatch.setattr(aws_env, "base_session", _fake_base_session)
+    from integrations.aws.credential_chain import has_ambient_credentials
+
+    # Act
+    result = has_ambient_credentials()
+
+    # Assert
+    assert result is False
+    assert seen == {"local_only": True}
