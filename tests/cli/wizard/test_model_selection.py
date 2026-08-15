@@ -121,6 +121,14 @@ class TestGpt56CatalogPresence:
         values = {option.value for option in PROVIDER_BY_VALUE["openrouter"].models}
         assert "openai/gpt-5.6-sol" in values
 
+    def test_trustedrouter_picker_uses_namespaced_ids(self) -> None:
+        # TrustedRouter rejects a bare model id ("gpt-5.4-mini"), so every
+        # quick-pick — routing policy or pinned vendor model — must be
+        # namespaced or onboarding writes a model the provider will refuse.
+        values = {option.value for option in PROVIDER_BY_VALUE["trustedrouter"].models}
+        assert values
+        assert all("/" in value for value in values), values
+
     def test_codex_picker_lists_sol(self) -> None:
         values = {option.value for option in PROVIDER_BY_VALUE["codex"].models}
         assert "gpt-5.6-sol" in values

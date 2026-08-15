@@ -39,6 +39,7 @@ def _get_provider_base_url(provider_value: str) -> str | None:
         return normalize_custom_base_url(os.getenv(CUSTOM_OPENAI_BASE_URL_ENV, "")) or None
     base_urls = {
         "openrouter": llm_config.OPENROUTER_BASE_URL,
+        "trustedrouter": llm_config.TRUSTEDROUTER_BASE_URL,
         "deepseek": llm_config.DEEPSEEK_BASE_URL,
         "gemini": llm_config.GEMINI_BASE_URL,
         "nvidia": llm_config.NVIDIA_BASE_URL,

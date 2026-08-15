@@ -21,6 +21,7 @@ from config.constants.llm import (
     NVIDIA_API_KEY_ENV,
     OPENAI_API_KEY_ENV,
     OPENROUTER_API_KEY_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
 )
 
 
@@ -99,6 +100,17 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
         classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="trustedrouter",
+        label="TrustedRouter",
+        credential_kind=CredentialKind.API_KEY,
+        api_key_env=TRUSTEDROUTER_API_KEY_ENV,
+        model_env="TRUSTEDROUTER_REASONING_MODEL",
+        legacy_model_env="TRUSTEDROUTER_MODEL",
+        toolcall_model_env="TRUSTEDROUTER_TOOLCALL_MODEL",
+        classification_model_env="TRUSTEDROUTER_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderSpec(

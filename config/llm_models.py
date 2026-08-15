@@ -46,6 +46,7 @@ DEFAULT_VERTEX_AI_LOCATION = "us-central1"
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+TRUSTEDROUTER_BASE_URL = "https://api.trustedrouter.com/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
@@ -74,6 +75,14 @@ PROVIDER_MODEL_DEFAULTS: dict[str, ProviderModelDefaults] = {
         classification="openrouter/auto",
         toolcall="openrouter/auto",
         base_url=OPENROUTER_BASE_URL,
+    ),
+    "trustedrouter": ProviderModelDefaults(
+        provider="trustedrouter",
+        settings_key="trustedrouter",
+        reasoning="trustedrouter/auto",
+        classification="trustedrouter/auto",
+        toolcall="trustedrouter/auto",
+        base_url=TRUSTEDROUTER_BASE_URL,
     ),
     "deepseek": ProviderModelDefaults(
         provider="deepseek",
@@ -190,6 +199,10 @@ OPENROUTER_REASONING_MODEL = _defaults("openrouter").reasoning
 OPENROUTER_CLASSIFICATION_MODEL = _defaults("openrouter").classification
 OPENROUTER_TOOLCALL_MODEL = _defaults("openrouter").toolcall
 
+TRUSTEDROUTER_REASONING_MODEL = _defaults("trustedrouter").reasoning
+TRUSTEDROUTER_CLASSIFICATION_MODEL = _defaults("trustedrouter").classification
+TRUSTEDROUTER_TOOLCALL_MODEL = _defaults("trustedrouter").toolcall
+
 DEEPSEEK_REASONING_MODEL = _defaults("deepseek").reasoning
 DEEPSEEK_CLASSIFICATION_MODEL = _defaults("deepseek").classification
 DEEPSEEK_TOOLCALL_MODEL = _defaults("deepseek").toolcall
@@ -235,6 +248,7 @@ DEFAULT_OLLAMA_MODEL = _defaults("ollama").reasoning
 ANTHROPIC_LLM_CONFIG = model_config_for("anthropic")
 OPENAI_LLM_CONFIG = model_config_for("openai")
 OPENROUTER_LLM_CONFIG = model_config_for("openrouter")
+TRUSTEDROUTER_LLM_CONFIG = model_config_for("trustedrouter")
 DEEPSEEK_LLM_CONFIG = model_config_for("deepseek")
 GROQ_LLM_CONFIG = model_config_for("groq")
 AZURE_OPENAI_LLM_CONFIG = model_config_for("azure-openai")
@@ -311,6 +325,11 @@ __all__ = [
     "OPENROUTER_TOOLCALL_MODEL",
     "PROVIDER_MODEL_DEFAULTS",
     "ProviderModelDefaults",
+    "TRUSTEDROUTER_BASE_URL",
+    "TRUSTEDROUTER_CLASSIFICATION_MODEL",
+    "TRUSTEDROUTER_LLM_CONFIG",
+    "TRUSTEDROUTER_REASONING_MODEL",
+    "TRUSTEDROUTER_TOOLCALL_MODEL",
     "VERTEX_AI_CLASSIFICATION_MODEL",
     "VERTEX_AI_LLM_CONFIG",
     "VERTEX_AI_REASONING_MODEL",

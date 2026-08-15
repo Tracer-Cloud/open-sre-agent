@@ -21,6 +21,8 @@ from config.llm_models import (
     OLLAMA_LLM_CONFIG,
     OPENROUTER_BASE_URL,
     OPENROUTER_LLM_CONFIG,
+    TRUSTEDROUTER_BASE_URL,
+    TRUSTEDROUTER_LLM_CONFIG,
     LLMModelConfig,
 )
 from core.llm.types import ModelType
@@ -57,6 +59,12 @@ OPENAI_COMPATIBLE_PROVIDERS: Final[dict[str, OpenAICompatProvider]] = {
         OPENROUTER_BASE_URL,
         "OPENROUTER_API_KEY",
         "openrouter",
+    ),
+    "trustedrouter": OpenAICompatProvider(
+        TRUSTEDROUTER_LLM_CONFIG,
+        TRUSTEDROUTER_BASE_URL,
+        "TRUSTEDROUTER_API_KEY",
+        "trustedrouter",
     ),
     "deepseek": OpenAICompatProvider(
         DEEPSEEK_LLM_CONFIG,

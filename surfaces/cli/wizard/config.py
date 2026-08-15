@@ -19,6 +19,7 @@ from config.config import (
     NVIDIA_REASONING_MODEL,
     OPENAI_REASONING_MODEL,
     OPENROUTER_REASONING_MODEL,
+    TRUSTEDROUTER_REASONING_MODEL,
     VERTEX_AI_REASONING_MODEL,
 )
 from config.constants.llm import (
@@ -202,6 +203,24 @@ OPENROUTER_MODELS = (
     ModelOption(value="minimax/minimax-m2", label="MiniMax M2 (via OpenRouter)"),
     ModelOption(value="deepseek/deepseek-v3.2", label="DeepSeek V3.2 (via OpenRouter)"),
     ModelOption(value="qwen/qwen-3.6-plus-preview", label="Qwen 3.6 Plus (via OpenRouter)"),
+)
+
+# Source: https://api.trustedrouter.com/v1/models
+# The ``trustedrouter/*`` ids are routing policies, not single models: each picks
+# an upstream per request and fails over. Concrete vendor ids pin one model.
+TRUSTEDROUTER_MODELS = (
+    ModelOption(value=TRUSTEDROUTER_REASONING_MODEL, label="TrustedRouter Auto (smart routing)"),
+    ModelOption(value="trustedrouter/fast", label="TrustedRouter Fast (low latency)"),
+    ModelOption(value="trustedrouter/cheap", label="TrustedRouter Cheap (lowest cost)"),
+    ModelOption(value="trustedrouter/zdr", label="TrustedRouter ZDR (zero-retention routes)"),
+    ModelOption(value="trustedrouter/e2e", label="TrustedRouter E2E (confidential compute)"),
+    ModelOption(value="trustedrouter/eu", label="TrustedRouter EU (EU-hosted routes)"),
+    ModelOption(value="anthropic/claude-opus-4-7", label="Claude Opus 4.7 (via TrustedRouter)"),
+    ModelOption(value="anthropic/claude-sonnet-4-6", label="Claude Sonnet 4.6 (via TrustedRouter)"),
+    ModelOption(value="openai/gpt-5.4-mini", label="GPT-5.4 mini (via TrustedRouter)"),
+    ModelOption(value="google/gemini-3.1-pro", label="Gemini 3.1 Pro (via TrustedRouter)"),
+    ModelOption(value="deepseek/deepseek-v4-pro", label="DeepSeek V4 Pro (via TrustedRouter)"),
+    ModelOption(value="z-ai/glm-4.7", label="GLM 4.7 (via TrustedRouter)"),
 )
 
 DEEPSEEK_MODELS = (
@@ -628,6 +647,19 @@ SUPPORTED_PROVIDERS = (
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
         classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderOption(
+        value="trustedrouter",
+        label="TrustedRouter",
+        group="Hosted providers",
+        api_key_env="TRUSTEDROUTER_API_KEY",
+        model_env="TRUSTEDROUTER_REASONING_MODEL",
+        default_model=TRUSTEDROUTER_REASONING_MODEL,
+        models=TRUSTEDROUTER_MODELS,
+        legacy_model_env="TRUSTEDROUTER_MODEL",
+        toolcall_model_env="TRUSTEDROUTER_TOOLCALL_MODEL",
+        classification_model_env="TRUSTEDROUTER_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderOption(
