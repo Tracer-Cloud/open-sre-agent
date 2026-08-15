@@ -19,12 +19,25 @@ ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE = (
 )
 
 
+def _base_sts_client(region: str) -> Any:
+    """STS client for OpenSRE's own base identity — the one that assumes the role.
+
+    Built from :func:`integrations.aws.env.base_session`, so a lone
+    ``AWS_ACCESS_KEY_ID`` loaded from ``.env`` (its secret lives in the keyring)
+    cannot block the profile / instance-role chain. Kept as one seam so tests
+    substitute a fake here and never reach STS.
+    """
+    from integrations.aws.env import base_session
+
+    return base_session(region=region).client("sts")
+
+
 def _build_sts_client(aws_config: AWSIntegrationConfig) -> tuple[Any, str, str]:
     region = aws_config.region
     role_arn = aws_config.role_arn
     external_id = aws_config.external_id
     if role_arn:
-        base_sts_client = boto3.client("sts", region_name=region)
+        base_sts_client = _base_sts_client(region)
         assume_role_args: dict[str, str] = {
             "RoleArn": role_arn,
             "RoleSessionName": "TracerIntegrationVerify",

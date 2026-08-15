@@ -552,13 +552,17 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Arn": "arn:aws:sts::123456789012:assumed-role/TracerReadOnly/TracerIntegrationVerify",
             }
 
-    def _fake_boto3_client(service_name: str, **kwargs: Any) -> Any:
+    def _fake_assumed_client(service_name: str, **kwargs: Any) -> Any:
         assert service_name == "sts"
-        if kwargs.get("aws_access_key_id"):
-            return _AssumedSTSClient()
-        return _BaseSTSClient()
+        assert kwargs.get("aws_access_key_id") == "ASIA_TEST"
+        return _AssumedSTSClient()
 
-    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_boto3_client)
+    # The base client (the identity that assumes the role) comes from one seam;
+    # the assumed client is built with the returned temporary keys.
+    monkeypatch.setattr(
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
+    )
+    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_assumed_client)
 
     result = _verify_aws(
         "local store",
@@ -587,12 +591,9 @@ def test_verify_aws_role_without_base_credentials_explains_the_prerequisite(
         def assume_role(self, **_kwargs: Any) -> dict[str, Any]:
             raise NoCredentialsError()
 
-    def _fake_boto3_client(service_name: str, **kwargs: Any) -> Any:
-        assert service_name == "sts"
-        assert "aws_access_key_id" not in kwargs
-        return _BaseSTSClient()
-
-    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_boto3_client)
+    monkeypatch.setattr(
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
+    )
 
     # Act
     result = _verify_aws(

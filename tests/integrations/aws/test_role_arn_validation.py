@@ -65,7 +65,7 @@ def test_partial_env_credentials_name_the_missing_variable(monkeypatch: pytest.M
             raise PartialCredentialsError(provider="env", cred_var="AWS_SECRET_ACCESS_KEY")
 
     monkeypatch.setattr(
-        "integrations.aws.verifier.boto3.client", lambda *_a, **_k: _BaseSTSClient()
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
     )
 
     result = verify_aws(

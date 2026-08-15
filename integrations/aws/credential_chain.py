@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import boto3
-
 # What each ambient source is, in the words a user needs to act on it.
 AMBIENT_SOURCES_HINT = (
     "environment keys (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY), "
@@ -18,8 +16,11 @@ def has_ambient_credentials() -> bool:
     A local lookup only — env, shared files, and the lazily-consulted instance
     metadata provider — so it never blocks setup on a network round trip.
     """
+    from integrations.aws.env import base_session
+
     try:
-        return boto3.session.Session().get_credentials() is not None
+        session = base_session()
+        return session is not None and session.get_credentials() is not None
     except Exception:
         return False
 
