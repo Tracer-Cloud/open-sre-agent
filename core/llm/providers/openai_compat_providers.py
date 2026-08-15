@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Final
 
-from config.constants.llm import CUSTOM_OPENAI_API_KEY_ENV
+from config.constants.llm import CUSTOM_OPENAI_API_KEY_ENV, TRUSTEDROUTER_API_KEY_ENV
 from config.llm_models import (
     CUSTOM_OPENAI_LLM_CONFIG,
     DEEPSEEK_BASE_URL,
@@ -63,7 +63,7 @@ OPENAI_COMPATIBLE_PROVIDERS: Final[dict[str, OpenAICompatProvider]] = {
     "trustedrouter": OpenAICompatProvider(
         TRUSTEDROUTER_LLM_CONFIG,
         TRUSTEDROUTER_BASE_URL,
-        "TRUSTEDROUTER_API_KEY",
+        TRUSTEDROUTER_API_KEY_ENV,
         "trustedrouter",
     ),
     "deepseek": OpenAICompatProvider(

@@ -30,6 +30,7 @@ from config.constants.llm import (
     CUSTOM_ANTHROPIC_BASE_URL_ENV,
     CUSTOM_OPENAI_API_KEY_ENV,
     CUSTOM_OPENAI_BASE_URL_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
 )
 from config.llm_auth.provider_catalog import CredentialKind, require_provider_spec
 from config.local_env import PROJECT_ROOT as PROJECT_ROOT
@@ -653,7 +654,7 @@ SUPPORTED_PROVIDERS = (
         value="trustedrouter",
         label="TrustedRouter",
         group="Hosted providers",
-        api_key_env="TRUSTEDROUTER_API_KEY",
+        api_key_env=TRUSTEDROUTER_API_KEY_ENV,
         model_env="TRUSTEDROUTER_REASONING_MODEL",
         default_model=TRUSTEDROUTER_REASONING_MODEL,
         models=TRUSTEDROUTER_MODELS,
