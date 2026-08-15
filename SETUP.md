@@ -138,6 +138,19 @@ uv run pytest -n auto -v \
 - Use **`uv run`** from the repo root.
 - Re-run **`uv sync --frozen --extra dev`**.
 
+### Boot capability warnings (`curl`, `shell`, `network`, `python` gaps)
+
+When OpenSRE boots, `boot_capability_warnings` runs lightweight runtime probes (checking system `PATH` tools and sandbox execution capabilities). If a capability is unavailable or restricted, it surfaces non-fatal boot warnings:
+
+| Boot Warning | Root Cause | Impact | Concrete Fix / Remediation |
+| :--- | :--- | :--- | :--- |
+| **`curl is not on PATH`** | The `curl` binary is missing from system `PATH`. | Sandboxed tools and HTTP health probes cannot run. | **macOS:** `brew install curl`<br />**Linux:** `sudo apt-get install -y curl`<br />**Windows:** `winget install cURL.cURL` |
+| **`no interactive shell (bash/sh) on PATH`** | Neither `bash` nor `sh` shell interpreter is found on `PATH`. | Subprocess execution and interactive shell actions cannot run. | **Linux:** `sudo apt-get install -y bash`<br />**macOS:** Ensure `/bin` is in `PATH`.<br />**Windows:** Install Git Bash (`winget install Git.Git`) or WSL. |
+| **`network egress is blocked for sandboxed code by default`** | Outbound network access is restricted by sandbox security policy by default. Setting `OPENSRE_ALLOW_NETWORK=1` updates the boot metadata fact, but sandbox code execution still isolates raw sockets by default. | Sandboxed scripts cannot make arbitrary outbound raw socket connections. | Set `export OPENSRE_ALLOW_NETWORK=1` (or add `OPENSRE_ALLOW_NETWORK=1` in `.env`) to update runtime metadata facts. For external communications, use configured integration clients (e.g. Datadog, Slack, Prometheus) rather than raw socket scripts in sandbox. |
+| **`python execution is unavailable in this environment`** | The sandbox probe failed to run test code via the running interpreter (`sys.executable`), or the OpenSRE temporary directory (`/tmp/opensre` or `%TEMP%\opensre`) is not writable. | Python-based tools and sandboxed script evaluation cannot run. | 1. Ensure the temporary directory is writable: `mkdir -p /tmp/opensre && chmod 700 /tmp/opensre`<br />2. Ensure the active Python environment is healthy and `sys.executable` can spawn subprocesses (`uv sync --frozen --extra dev` or `make install`). |
+| **`shell commands is unavailable in this environment`** | Sandbox cannot spawn a shell interpreter. | Shell-based investigation tools are disabled. | Ensure `bash` or `sh` is installed and has process execution permissions. |
+| **`file reading is unavailable in this environment`** | Process lacks read permission for the current working directory. | Agent cannot read local files or workspace context. | Ensure read permissions on the repository directory (`chmod -R u+r .`). |
+
 ### `opensre` does not pick up local code edits
 
 `make install` installs this repo in **editable** mode into `.venv`, but another **`opensre`** may appear earlier on **`PATH`** (installer binary, version manager, `~/.local/bin`, etc.).
