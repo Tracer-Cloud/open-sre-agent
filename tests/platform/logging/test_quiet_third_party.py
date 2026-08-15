@@ -46,3 +46,21 @@ def test_quiet_noisy_third_party_loggers_hides_mcp_schema_warnings() -> None:
     finally:
         mcp.setLevel(previous_mcp)
         client.setLevel(previous_client)
+
+
+def test_urllib3_connection_retries_stay_off_the_user_tty() -> None:
+    """urllib3 logs each retry at WARNING; the outcome is reported by the caller."""
+    from platform.logging.quiet_third_party import quiet_noisy_third_party_loggers
+
+    # Arrange
+    pool = logging.getLogger("urllib3.connectionpool")
+    previous = pool.level
+    try:
+        # Act
+        quiet_noisy_third_party_loggers()
+
+        # Assert — "Retrying (Retry(total=2, …))" is below the floor
+        assert pool.level == logging.ERROR
+        assert not pool.isEnabledFor(logging.WARNING)
+    finally:
+        pool.setLevel(previous)

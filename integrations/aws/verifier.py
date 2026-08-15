@@ -5,9 +5,18 @@ from __future__ import annotations
 from typing import Any
 
 import boto3
+from botocore.exceptions import NoCredentialsError
 
 from integrations.config_models import AWSIntegrationConfig
 from integrations.verification import register_verifier, result
+
+ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE = (
+    "IAM Role ARN is assumed with your ambient AWS credentials, and none were "
+    "found. Configure a base identity that may call sts:AssumeRole on the role "
+    "(AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, an `aws configure` profile, or "
+    "an attached instance/task role) and run setup again — or choose "
+    '"Access Key + Secret" instead.'
+)
 
 
 def _build_sts_client(aws_config: AWSIntegrationConfig) -> tuple[Any, str, str]:
@@ -60,6 +69,10 @@ def verify_aws(source: str, config: dict[str, Any]) -> dict[str, str]:
     try:
         sts_client, region, mode = _build_sts_client(aws_config)
         identity = sts_client.get_caller_identity()
+    except NoCredentialsError:
+        # Only the role path reaches STS without explicit keys; static keys
+        # would have been passed to the client and this error cannot arise.
+        return result("aws", source, "failed", ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE)
     except Exception as exc:
         return result("aws", source, "failed", f"AWS STS check failed: {exc}")
 

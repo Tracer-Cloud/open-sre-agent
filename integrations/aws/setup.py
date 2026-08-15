@@ -1,7 +1,10 @@
 """What AWS needs before it is considered configured.
 
 Auth is a picker (IAM role ARN *or* access key + secret). Region is always
-asked; the picker only scopes the auth fields. The either/or rule also lives
+asked; the picker only scopes the auth fields. The role mode assumes the role
+with the ambient boto3 credential chain (env keys, a shared profile, or an
+attached instance/task role) — it does not collect base credentials, so the
+label says so and the verifier explains what to configure when none exist. The either/or rule also lives
 on ``AWSIntegrationConfig`` (the model
 :func:`integrations.aws.verifier.verify_aws` validates against), so setup and
 health checks agree for any surface that skips the picker.
@@ -107,7 +110,7 @@ AWS_SETUP = IntegrationSetupSpec(
     modes=(
         SetupMode(
             value="role",
-            label="IAM Role ARN",
+            label="IAM Role ARN (assumed with your ambient AWS credentials)",
             fields=(ROLE_ARN_FIELD, EXTERNAL_ID_FIELD),
         ),
         SetupMode(

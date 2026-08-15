@@ -3,5 +3,10 @@
 from __future__ import annotations
 
 from platform.logging.quiet_third_party import quiet_noisy_third_party_loggers
+from platform.logging.shell_handler import ShellLogHandler, install_shell_log_handler
 
-__all__ = ["quiet_noisy_third_party_loggers"]
+__all__ = [
+    "ShellLogHandler",
+    "install_shell_log_handler",
+    "quiet_noisy_third_party_loggers",
+]

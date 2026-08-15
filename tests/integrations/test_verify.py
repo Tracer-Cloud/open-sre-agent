@@ -574,6 +574,42 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "123456789012" in result["detail"]
 
 
+def test_verify_aws_role_without_base_credentials_explains_the_prerequisite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Role ARN alone on a bare machine: say what to configure, not a raw boto3 error."""
+    from botocore.exceptions import NoCredentialsError
+
+    from integrations.aws.verifier import ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
+
+    # Arrange — no ambient credential chain, so assume_role cannot even be called
+    class _BaseSTSClient:
+        def assume_role(self, **_kwargs: Any) -> dict[str, Any]:
+            raise NoCredentialsError()
+
+    def _fake_boto3_client(service_name: str, **kwargs: Any) -> Any:
+        assert service_name == "sts"
+        assert "aws_access_key_id" not in kwargs
+        return _BaseSTSClient()
+
+    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_boto3_client)
+
+    # Act
+    result = _verify_aws(
+        "local store",
+        {
+            "role_arn": "arn:aws:iam::123456789012:role/opensre-setup-s3-access",
+            "region": "ap-south-1",
+        },
+    )
+
+    # Assert — actionable message; the raw "Unable to locate credentials" is not surfaced
+    assert result["status"] == "failed"
+    assert result["detail"] == ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
+    assert "sts:AssumeRole" in result["detail"]
+    assert "Access Key + Secret" in result["detail"]
+
+
 def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeTracerClient:
         def __init__(self, base_url: str, org_id: str, jwt_token: str) -> None:

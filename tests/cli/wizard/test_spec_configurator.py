@@ -150,3 +150,62 @@ def test_failed_verification_re_asks_instead_of_leaving_the_wizard(run: _Run) ->
     assert title == "Demo"
     # Three fields asked twice: the first round failed, the second succeeded.
     assert len(run.asked) == 6
+
+
+_MODED_SPEC = setup_flow.IntegrationSetupSpec(
+    service="demo-moded",
+    # Mode-gated fields are optional at the spec level (as every real moded
+    # spec declares them): the un-chosen mode's fields are cleared, not asked.
+    fields=(
+        setup_flow.SetupField(
+            name="token", label="Demo token", env_var="DEMO_TOKEN", required=False
+        ),
+        setup_flow.SetupField(name="user", label="Demo user", env_var="DEMO_USER", required=False),
+        setup_flow.SetupField(
+            name="password", label="Demo password", env_var="DEMO_PASSWORD", required=False
+        ),
+    ),
+    mode_prompt="Auth method:",
+    modes=(
+        setup_flow.SetupMode(value="token", label="Token", fields=("token",)),
+        setup_flow.SetupMode(value="basic", label="Basic", fields=("user", "password")),
+    ),
+    verify=lambda _source, _config: {"status": "passed", "detail": "ok"},
+)
+
+
+def test_mode_gate_can_steer_to_a_different_mode_before_fields_are_asked(
+    run: _Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A vendor may swap the picked mode when its prerequisite is missing."""
+    # Arrange — user picks "token"; the gate finds it unusable and steers to "basic"
+    monkeypatch.setattr(spec_configurator, "_choose", lambda *_a, **_k: "token")
+    gated_with: list[str] = []
+
+    def steer_to_basic(mode: str) -> str:
+        gated_with.append(mode)
+        return "basic"
+
+    run.answers = {"Demo user": "u", "Demo password": "p"}
+
+    # Act
+    spec_configurator.configure_from_spec(_MODED_SPEC, title="Demo", on_mode_chosen=steer_to_basic)
+
+    # Assert — the gate saw the picked mode; only the steered mode's fields were asked
+    assert gated_with == ["token"]
+    asked = [entry["label"] for entry in run.asked]
+    assert asked == ["Demo user", "Demo password"]
+
+
+def test_without_a_mode_gate_the_picked_mode_is_used_unchanged(
+    run: _Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(spec_configurator, "_choose", lambda *_a, **_k: "token")
+    run.answers = {"Demo token": "t"}
+
+    # Act
+    spec_configurator.configure_from_spec(_MODED_SPEC, title="Demo")
+
+    # Assert
+    assert [entry["label"] for entry in run.asked] == ["Demo token"]
