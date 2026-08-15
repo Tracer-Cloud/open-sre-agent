@@ -92,3 +92,42 @@ def test_a_real_bug_keeps_its_traceback() -> None:
     # Assert
     assert "Traceback" in output
     assert "KeyError" in output
+
+
+def _log_level(exc: Exception, *, method: str) -> int:
+    seen: list[logging.LogRecord] = []
+
+    class _Recorder(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            seen.append(record)
+
+    logger = logging.getLogger(f"test.service_error.level.{method}.{id(exc)}")
+    logger.handlers = [_Recorder()]
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+    capture_service_error(exc, logger=logger, integration="kubernetes", method=method)
+    assert len(seen) == 1
+    return seen[0].levelno
+
+
+def test_an_unreachable_service_is_a_warning_not_an_error() -> None:
+    """Severity agrees with the traceback rule: a stopped cluster is not a code fault.
+
+    The shell prints ERROR records to the user; a refused connection would then
+    surface as ``[kubernetes] probe_access failed`` on top of the integrations
+    table row that already reports it with a reason.
+    """
+    # Act
+    level = _log_level(_wrapped_connection_error(), method="probe_access")
+
+    # Assert
+    assert level == logging.WARNING
+
+
+def test_a_genuine_fault_is_still_an_error() -> None:
+    """Anything that is not unreachable / 429 / 5xx keeps ERROR and its stack."""
+    # Act
+    level = _log_level(_raised(KeyError("items")), method="list_pods")
+
+    # Assert
+    assert level == logging.ERROR
