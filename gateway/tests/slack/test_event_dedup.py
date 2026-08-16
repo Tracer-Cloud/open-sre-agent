@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from gateway.transports.slack.persistence.event_dedup import (
+from gateway.core.storage.events.slack_dedup import (
     PostgresSlackEventDeduplicator,
 )
 

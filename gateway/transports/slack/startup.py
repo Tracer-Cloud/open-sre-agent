@@ -62,7 +62,7 @@ def _build_deduplicator(logger: logging.Logger) -> SlackEventDeduplicator:
     """
     dsn = os.getenv("DATABASE_URL", "").strip()
     if dsn:
-        from gateway.transports.slack.persistence.event_dedup import (
+        from gateway.core.storage.events.slack_dedup import (
             PostgresSlackEventDeduplicator,
         )
 

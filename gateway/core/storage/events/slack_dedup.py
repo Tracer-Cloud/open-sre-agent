@@ -18,17 +18,14 @@ Selected when ``DATABASE_URL`` is set; requires the ``postgresql`` extra.
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
+from gateway.core.storage.postgres import PostgresDatabase
+
 logger = logging.getLogger("gateway")
 
-_POOL_MIN_CONNECTIONS = 1
-# Admission is one short statement per request; a small pool covers the
-# listener's concurrency without holding server connections open needlessly.
-_POOL_MAX_CONNECTIONS = 5
 
 # Slack stops retrying an event well inside this window, so a row older than
 # it can never match a live delivery. Kept as an interval rather than a sweep
@@ -64,35 +61,14 @@ ALTER TABLE slack_handled_events
 class PostgresSlackEventDeduplicator:
     """:class:`SlackEventDeduplicator` shared by every gateway replica."""
 
-    def __init__(self, dsn: str) -> None:
-        self._dsn = dsn
-        self._pool: Any = None
-        self._pool_lock = threading.Lock()
-        with self._connection() as conn, conn.cursor() as cursor:
-            cursor.execute(_SCHEMA)
-            cursor.execute(_MIGRATE_COMMITTED)
-
-    def _get_pool(self) -> Any:
-        with self._pool_lock:
-            if self._pool is None:
-                # Local import: the postgresql extra is optional.
-                from psycopg2.pool import ThreadedConnectionPool
-
-                self._pool = ThreadedConnectionPool(
-                    _POOL_MIN_CONNECTIONS, _POOL_MAX_CONNECTIONS, self._dsn
-                )
-            return self._pool
+    def __init__(self, dsn: str, *, database: PostgresDatabase | None = None) -> None:
+        self._db = database if database is not None else PostgresDatabase(dsn)
+        self._db.run_schema(_SCHEMA, _MIGRATE_COMMITTED)
 
     @contextmanager
     def _connection(self) -> Iterator[Any]:
-        """Yield a pooled connection; commit on success, roll back on error."""
-        pool = self._get_pool()
-        conn = pool.getconn()
-        try:
-            with conn:
-                yield conn
-        finally:
-            pool.putconn(conn)
+        with self._db.transaction() as conn:
+            yield conn
 
     def release(self, event_id: str) -> bool:
         """Drop a provisional claim whose turn never started.
