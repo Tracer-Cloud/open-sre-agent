@@ -31,15 +31,12 @@ _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 #: Harness submodules surfaces/ still imports directly. Shrink-only.
 _KNOWN_DEEP_IMPORTS = frozenset(
     {
-        "core.agent_harness.grounding.diagnostics",
-        "core.agent_harness.grounding.models",
         "core.agent_harness.llm_resolution",
         "core.agent_harness.ports",
         "core.agent_harness.prompts.rules",
         "core.agent_harness.prompts.skills.loader",
         "core.agent_harness.session.persistence.jsonl_store",
         "core.agent_harness.session.persistence.wal_recovery",
-        "core.agent_harness.session_goal.goal",
         "core.agent_harness.tools.tool_context",
         "core.agent_harness.tools.tool_provider",
         "core.agent_harness.turns",

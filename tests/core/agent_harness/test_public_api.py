@@ -22,11 +22,13 @@ PUBLIC_API = frozenset(
 
 SPI = frozenset(
     {
+        "CacheStats",
         "ChatTurnBindings",
         "DefaultErrorReporter",
         "DefaultPromptContextProvider",
         "DefaultRunRecordFactory",
         "DefaultTurnAccounting",
+        "GroundingSource",
         "LlmRunInfo",
         "MAX_GOAL_CONDITION_CHARS",
         "SessionGoal",
@@ -52,6 +54,8 @@ SPI = frozenset(
         "format_token_total",
         "has_resolved_integrations",
         "host_cancel_requested",
+        "list_action_skills",
+        "log_grounding_cache_diagnostics",
         "pop_turn_outcome_hint",
         "record_llm_turn",
         "resolve_integrations",
@@ -64,6 +68,7 @@ SPI = frozenset(
         "set_turn_outcome_hint",
         "stream_answer",
         "strip_session_goal_progress_tags",
+        "strip_shell_prompt_chrome",
         "trust_mode_enabled",
     }
 )

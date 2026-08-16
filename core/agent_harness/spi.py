@@ -4,8 +4,9 @@ Session-goal state, lifecycle, continuation and progress; session flags a host
 reads and sets around a turn (background and trust mode, terminal, auto-command,
 turn-outcome hints); per-turn and per-run accounting; the cancellation hook;
 chat-turn bindings and dispatch; turn-result types; the want-me-to closer;
-integration resolution; the built-in prompt provider a host extends; and the
-default session store and repository. Import-cheap: nothing here loads the agent
+integration resolution; grounding-cache observability; the action-skill
+catalog; the built-in prompt provider a host extends; and the default session
+store and repository. Import-cheap: nothing here loads the agent
 loop. Building and running the agent is :mod:`core.agent_harness.runtime`.
 """
 
@@ -19,7 +20,13 @@ from core.agent_harness.accounting.token_accounting import (
 )
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
+from core.agent_harness.grounding.diagnostics import (
+    GroundingSource,
+    log_grounding_cache_diagnostics,
+)
+from core.agent_harness.grounding.models import CacheStats
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+from core.agent_harness.prompts.skills.loader import list_action_skills
 from core.agent_harness.session import default_session_repo, default_session_store
 from core.agent_harness.session.integration_resolution import (
     has_resolved_integrations,
@@ -48,6 +55,7 @@ from core.agent_harness.session_goal.goal import (
     session_goal_is_attached,
     session_goal_is_paused,
     strip_session_goal_progress_tags,
+    strip_shell_prompt_chrome,
 )
 from core.agent_harness.session_goal.progress import (
     format_session_goal_progress,
@@ -66,11 +74,13 @@ from core.agent_harness.turns.turn_results import (
 __all__ = [
     "MAX_GOAL_CONDITION_CHARS",
     "WANT_ME_TO_MARKER",
+    "CacheStats",
     "ChatTurnBindings",
     "DefaultErrorReporter",
     "DefaultPromptContextProvider",
     "DefaultRunRecordFactory",
     "DefaultTurnAccounting",
+    "GroundingSource",
     "LlmRunInfo",
     "SessionGoal",
     "SessionGoalReason",
@@ -94,6 +104,8 @@ __all__ = [
     "format_token_total",
     "has_resolved_integrations",
     "host_cancel_requested",
+    "list_action_skills",
+    "log_grounding_cache_diagnostics",
     "pop_turn_outcome_hint",
     "record_llm_turn",
     "resolve_integrations",
@@ -106,5 +118,6 @@ __all__ = [
     "set_turn_outcome_hint",
     "stream_answer",
     "strip_session_goal_progress_tags",
+    "strip_shell_prompt_chrome",
     "trust_mode_enabled",
 ]
