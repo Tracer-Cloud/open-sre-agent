@@ -52,6 +52,7 @@ from core.agent_harness.prompts.grounding import (
 )
 from core.agent_harness.turns.action_driver import (
     ActionTurnRunner,
+    ToolCallingDeps,
 )
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
@@ -120,8 +121,10 @@ class HeadlessAgent:
         confirm_fn: ConfirmFn | None = None,
         is_tty: bool | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
+        deps: ToolCallingDeps | None = None,
     ) -> None:
         self._tools = tools
+        self._deps = deps
         self._session: SessionState = session if session is not None else InMemorySessionState()
         self._output: OutputSink = output if output is not None else BufferOutputSink()
         self._prompts: PromptContextProvider = (
@@ -149,6 +152,7 @@ class HeadlessAgent:
         return ActionTurnRunner(
             output=self._output,
             tools=self._tools,
+            deps=self._deps,
             error_reporter=self._error_reporter,
             tool_hooks=self._tool_hooks,
         )

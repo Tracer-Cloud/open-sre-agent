@@ -14,6 +14,7 @@ env — and does not build agents.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from io import StringIO
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,7 @@ from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.ports import (
+    ConfirmFn,
     OutputSink,
     PromptContextProvider,
     SubprocessPresenterFactory,
@@ -32,11 +34,16 @@ from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import (
     ActionObserverFactory,
     DefaultToolProvider,
+    InvestigationPortsFactory,
+    LlmProviderPortsFactory,
     SlashPortsFactory,
+    TaskCancelPortsFactory,
 )
+from core.agent_harness.turns.action_driver import ToolCallingDeps
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.execution import ToolExecutionHooks
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
@@ -95,6 +102,13 @@ def build_default_headless_agent(
     observer_factory: ActionObserverFactory | None = None,
     subprocess_presenter_factory: SubprocessPresenterFactory | None = None,
     slash_ports_factory: SlashPortsFactory | None = None,
+    investigation_ports_factory: InvestigationPortsFactory | None = None,
+    llm_provider_ports_factory: LlmProviderPortsFactory | None = None,
+    task_cancel_ports_factory: TaskCancelPortsFactory | None = None,
+    request_exit: Callable[[], None] | None = None,
+    deps: ToolCallingDeps | None = None,
+    tool_hooks: ToolExecutionHooks | None = None,
+    confirm_fn: ConfirmFn | None = None,
     prompts: PromptContextProvider | None = None,
     gather: GatherPorts | None = None,
     gather_enabled: bool = True,
@@ -127,9 +141,13 @@ def build_default_headless_agent(
         tools=DefaultToolProvider(
             session,
             console,
+            request_exit=request_exit,
             tool_action_logger=tool_action_logger or logger,
             observer_factory=observer_factory,
             subprocess_presenter_factory=_resolved_presenter_factory(subprocess_presenter_factory),
+            investigation_ports_factory=investigation_ports_factory,
+            llm_provider_ports_factory=llm_provider_ports_factory,
+            task_cancel_ports_factory=task_cancel_ports_factory,
             slash_ports_factory=slash_ports_factory,
         ),
         # ``is not None``, not ``or``: a provider defining __bool__ would be
@@ -149,6 +167,9 @@ def build_default_headless_agent(
             gather_max_iterations=gather_max_iterations,
         ),
         is_tty=is_tty,
+        confirm_fn=confirm_fn,
+        tool_hooks=tool_hooks,
+        deps=deps,
     )
 
 
