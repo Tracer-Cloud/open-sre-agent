@@ -1644,13 +1644,11 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
 def test_start_background_cli_task_echoes_command_markup_literally(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The ``$ <command>`` header must escape Rich markup, like every sibling echo.
+    """The ``$ <command>`` header must render Rich markup literally.
 
-    An alert payload carrying a bracketed path (``[/api/checkout]``) reads as a
-    closing tag and raises ``MarkupError`` before the task is even created, so the
-    subprocess never runs; a lowercase bracketed word (``[error]``) reads as an
-    opening tag and is silently swallowed, showing a command the user did not run.
+    ``[/api/checkout]`` raised ``MarkupError``; ``[error]`` was swallowed.
     """
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
 
     class _FakeProcess:
         returncode = 0
