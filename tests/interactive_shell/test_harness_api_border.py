@@ -31,22 +31,14 @@ _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 #: Harness submodules surfaces/ still imports directly. Shrink-only.
 _KNOWN_DEEP_IMPORTS = frozenset(
     {
-        "core.agent_harness.accounting.run_record",
-        "core.agent_harness.accounting.token_accounting",
-        "core.agent_harness.error_reporting",
         "core.agent_harness.grounding.diagnostics",
         "core.agent_harness.grounding.models",
         "core.agent_harness.llm_resolution",
         "core.agent_harness.ports",
         "core.agent_harness.prompts.rules",
         "core.agent_harness.prompts.skills.loader",
-        "core.agent_harness.session",
-        "core.agent_harness.session.integration_resolution",
         "core.agent_harness.session.persistence.jsonl_store",
         "core.agent_harness.session.persistence.wal_recovery",
-        "core.agent_harness.session.session_core",
-        "core.agent_harness.session.terminal_access",
-        "core.agent_harness.session.want_me_to",
         "core.agent_harness.session_goal.goal",
         "core.agent_harness.tools.tool_context",
         "core.agent_harness.tools.tool_provider",
@@ -55,11 +47,8 @@ _KNOWN_DEEP_IMPORTS = frozenset(
         "core.agent_harness.turns.default_reasoning_client",
         "core.agent_harness.turns.evidence_driver",
         "core.agent_harness.turns.gather_observation",
-        "core.agent_harness.turns.host_cancel",
-        "core.agent_harness.turns.orchestrator",
         "core.agent_harness.turns.transcript_compaction",
         "core.agent_harness.turns.turn_plan",
-        "core.agent_harness.turns.turn_results",
     }
 )
 

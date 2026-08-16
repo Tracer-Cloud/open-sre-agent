@@ -12,11 +12,7 @@ from dataclasses import dataclass
 
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
-from core.agent_harness.turns.turn_results import (
-    ToolCallingAccountingStatus,
-    ToolCallingTurnResult,
-    TurnResult,
-)
+from core.agent_harness.spi import ToolCallingAccountingStatus, ToolCallingTurnResult, TurnResult
 from platform.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder

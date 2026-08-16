@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentSession
+from core.agent_harness import AgentSession
 from platform.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)

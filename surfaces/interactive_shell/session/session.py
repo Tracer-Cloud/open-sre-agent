@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from core.agent_harness.session.session_core import SessionCore
+from core.agent_harness import SessionCore
 from core.domain.alerts.inbox import IncomingAlert
 from surfaces.interactive_shell.session.alert_inbox import SessionAlertInbox
 from surfaces.interactive_shell.session.terminal_session import TerminalSession

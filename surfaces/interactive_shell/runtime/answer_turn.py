@@ -8,13 +8,11 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
-from core.agent_harness.error_reporting import DefaultErrorReporter
-from core.agent_harness.ports import AnswerRequest, OutputSink
+from core.agent_harness import OutputSink
+from core.agent_harness.ports import AnswerRequest
+from core.agent_harness.spi import DefaultErrorReporter, DefaultRunRecordFactory
+from core.agent_harness.spi import stream_answer as core_stream_answer
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.orchestrator import (
-    stream_answer as core_stream_answer,
-)
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.session import Session

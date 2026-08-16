@@ -33,7 +33,7 @@ from platform.analytics.usage_context import SURFACE_CLI
 from platform.observability.errors.sentry import capture_exception
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import SessionCore
+    from core.agent_harness import SessionCore
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "terminal_action_execution_success_rate": """

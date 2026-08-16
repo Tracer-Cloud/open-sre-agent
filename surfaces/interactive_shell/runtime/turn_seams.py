@@ -13,7 +13,8 @@ from typing import Any, Protocol
 
 from rich.console import Console
 
-from core.agent_harness.ports import AnswerRequest, OutputSink
+from core.agent_harness import OutputSink
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.spi import ToolCallingTurnResult
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_plan import TurnPlan

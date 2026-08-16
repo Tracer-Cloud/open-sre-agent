@@ -11,9 +11,8 @@ from collections.abc import Callable
 from rich.console import Console
 
 from core.agent_harness import OutputSink
-from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.llm_resolution import default_llm_factory
-from core.agent_harness.spi import ToolCallingTurnResult
+from core.agent_harness.spi import DefaultErrorReporter, ToolCallingTurnResult
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import (
     ActionTurnRunner,

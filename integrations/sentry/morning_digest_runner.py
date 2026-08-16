@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.agent_harness.harness import AgentSession
+from core.agent_harness import AgentSession
 from core.agent_harness.session.integration_resolution import (
     merge_resolved_integrations,
     resolve_and_cache_integrations,
 )
-from core.agent_harness.turns.turn_results import TurnResult
+from core.agent_harness.spi import TurnResult
 from integrations.sentry.project_scope import (
     apply_sentry_project_scope,
     payload_project_slug,

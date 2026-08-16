@@ -14,21 +14,19 @@ from dataclasses import dataclass
 
 from rich.console import Console
 
-from core.agent_harness import AgentSession, SessionConfig
-from core.agent_harness.ports import AnswerRequest, OutputSink
-from core.agent_harness.session_goal.goal import (
-    SessionGoal,
-)
+from core.agent_harness import AgentSession, OutputSink, SessionConfig
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.spi import (
     ChatTurnBindings,
+    SessionGoal,
     ToolCallingTurnResult,
     TurnResult,
     dispatch_chat_turn,
     format_session_goal_progress,
+    host_cancel_requested,
     run_until_session_goal,
 )
 from core.agent_harness.turns.gather_observation import GatheredEvidence
-from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner

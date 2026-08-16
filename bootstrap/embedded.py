@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from bootstrap.process import EMBEDDED_PROFILE, configure_process
-from core.agent_harness.harness import AgentSession, SessionConfig
+from core.agent_harness import AgentSession, SessionConfig
 
 
 def embedded_boot_step() -> None:
