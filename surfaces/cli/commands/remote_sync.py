@@ -208,11 +208,11 @@ def _collect_setup_request(
 ) -> RemoteSyncSetupRequest:
     """Use flags when complete; otherwise prompt on a TTY.
 
-    ``encrypted`` is ``None`` when neither ``--encrypt`` nor ``--no-encrypt``
-    was given. Scripted runs take that as off, unchanged; an interactive run
-    asks, because otherwise the only way to learn the option exists is to read
-    ``--help``, and the cost of not knowing is a store of readable incident
-    history.
+    Supplying ``--provider`` and ``--bucket`` skips the questions about *those*
+    values; it does not make the run unattended. The encryption question is
+    therefore asked on both paths — see :func:`_resolve_encrypt` — because
+    otherwise the shortest documented way to set sync up is also the one that
+    never mentions the store will hold readable incident history.
     """
     flags_complete = provider is not None and bucket is not None and str(bucket).strip() != ""
     if flags_complete:
@@ -223,7 +223,7 @@ def _collect_setup_request(
             region=region or "",
             profile=profile or "",
             enabled=enabled,
-            encrypted=bool(encrypted),
+            encrypted=_resolve_encrypt(encrypted),
         )
 
     if not click.get_text_stream("stdin").isatty():
@@ -246,7 +246,7 @@ def _collect_setup_request(
     # are read: the provider's own fields, then the one security choice.
     region_value = _prompt_extra_field(RemoteSyncField.REGION, provider_value, region)
     profile_value = _prompt_extra_field(RemoteSyncField.PROFILE, provider_value, profile)
-    encrypted_value = encrypted if encrypted is not None else _prompt_encrypt()
+    encrypted_value = _resolve_encrypt(encrypted)
     return RemoteSyncSetupRequest(
         bucket=bucket_value,
         provider=provider_value,
@@ -256,6 +256,21 @@ def _collect_setup_request(
         enabled=enabled,
         encrypted=encrypted_value,
     )
+
+
+def _resolve_encrypt(encrypted: bool | None) -> bool:
+    """Settle the encryption choice: the flag, else ask, else off.
+
+    ``None`` means neither ``--encrypt`` nor ``--no-encrypt`` was given. A
+    terminal gets asked; a pipe or a CI job does not, because a question nobody
+    can answer would hang the run — those keep the old default and can state
+    the choice with the flag.
+    """
+    if encrypted is not None:
+        return encrypted
+    if not click.get_text_stream("stdin").isatty():
+        return False
+    return _prompt_encrypt()
 
 
 def _prompt_encrypt() -> bool:

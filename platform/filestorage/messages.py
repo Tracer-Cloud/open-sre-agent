@@ -139,7 +139,7 @@ def format_encryption_line(encryption: EncryptionStatus) -> str:
     if not encryption.configured:
         return (
             "Contents are NOT encrypted before upload. The store's operator can read "
-            "your sessions and memory — turn it on with `remote-sync setup`."
+            "your sessions and memory — turn it on by running `opensre remote-sync setup`."
         )
     return "Contents are encrypted before upload; this machine holds the key."
 

@@ -49,6 +49,12 @@ opensre remote-sync setup --provider azure --profile my-storage-account --bucket
 # /remote-sync setup --provider vercel --bucket opensre-remote-sync
 ```
 
+Every form above still asks one question — whether to
+[encrypt](#encryption) contents before upload — because the answer decides
+whether the store holds readable incident history. Passing `--encrypt` or
+`--no-encrypt` answers it up front. A run with no terminal (a pipe, a CI job)
+is never asked and defaults to off.
+
 ### Environment variables
 
 ```bash
@@ -393,21 +399,25 @@ it — your cloud provider, and anyone with access to the bucket — can read th
 Turn on encryption and contents are sealed on your machine first, under a key
 derived from a passphrase only you hold.
 
-`setup` asks, and prompts for the passphrase twice if you say yes:
+`setup` asks — whether you gave it `--provider`/`--bucket` or not — and prompts
+for the passphrase twice if you say yes:
 
 ```bash
-opensre remote-sync setup
+opensre remote-sync setup --provider aws --bucket my-opensre-bucket
 # ...
 # Encrypt contents [y/N]: y
 # Encryption passphrase: *********
+# Encryption passphrase (again): *********
 ```
 
 Then sync as usual. Object contents become unreadable without the passphrase;
 everything else about the command is unchanged.
 
-For scripted setups, `--encrypt` (or `--no-encrypt`) answers that question up
-front and skips the prompt — supply the passphrase in
-`OPENSRE_REMOTE_SYNC_PASSPHRASE`, since there is no terminal to type it into.
+Two cases skip the question. Passing `--encrypt` or `--no-encrypt` answers it up
+front, and a run with **no terminal** — a pipe, a CI job — is never asked and
+defaults to off. For an unattended run that should encrypt, pass `--encrypt` and
+put the passphrase in `OPENSRE_REMOTE_SYNC_PASSPHRASE`, since there is nowhere
+to type it.
 
 <Warning>
 **If you lose the passphrase, the store's contents are gone.** There is no

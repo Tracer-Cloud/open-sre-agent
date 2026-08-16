@@ -462,6 +462,48 @@ def test_setup_interactive_offers_encryption(
     assert saved["request"].encrypted is True
 
 
+def test_setup_asks_about_encryption_even_when_bucket_flags_are_given(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passing --provider/--bucket skips those questions, not this one.
+
+    It is the shortest path in the docs, so if it stayed silent the quickest
+    documented way to set sync up would also be the one that never mentions
+    the store will hold readable history.
+    """
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync._ensure_passphrase", lambda: None)
+    _set_interactive(monkeypatch)
+
+    result = runner.invoke(
+        remote_sync_command, ["setup", "--provider", "aws", "--bucket", "b"], input="y\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Encrypt contents" in result.output
+    assert saved["request"].encrypted is True
+
+
+def test_setup_does_not_ask_about_encryption_without_a_terminal(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CI job must not block on a question nobody is there to answer."""
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    # No _set_interactive: stdin is not a TTY under CliRunner by default.
+
+    result = runner.invoke(remote_sync_command, ["setup", "--provider", "aws", "--bucket", "b"])
+
+    assert result.exit_code == 0, result.output
+    assert "Encrypt contents" not in result.output
+    assert saved["request"].encrypted is False
+
+
 def test_setup_explicit_no_encrypt_is_not_asked_again(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
