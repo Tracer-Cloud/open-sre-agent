@@ -18,11 +18,12 @@ from config.constants.filestorage import (
     REMOTE_SYNC_REGION_ENV,
 )
 from platform.filestorage.config import RemoteSyncConfig
+from platform.filestorage.encryption.rotation import ReencryptReport
 from platform.filestorage.engine import SyncReport
 from platform.filestorage.enums import BucketExposure, SyncDirection
 from platform.filestorage.exclusions import ExclusionRules
 from platform.filestorage.exposure import PublicAccessStatus
-from platform.filestorage.operations import SyncRootStatus, SyncStatus
+from platform.filestorage.operations import EncryptionStatus, SyncRootStatus, SyncStatus
 from platform.filestorage.providers import credential_hint_for_provider
 from platform.filestorage.providers.registry import builtin_providers
 
@@ -127,6 +128,22 @@ def format_exposure_line(exposure: PublicAccessStatus) -> str:
     return f"Bucket access: could not confirm it is private{detail}."
 
 
+def format_encryption_line(encryption: EncryptionStatus) -> str:
+    """One line on whether contents are sealed, loudest when something is wrong.
+
+    A problem gets the same treatment as a public bucket: an operator who is
+    about to sync needs to read it, not skim past it.
+    """
+    if encryption.problem:
+        return f"WARNING: {encryption.problem}"
+    if not encryption.configured:
+        return (
+            "Contents are NOT encrypted before upload. The store's operator can read "
+            "your sessions and memory — turn it on with `remote-sync setup`."
+        )
+    return "Contents are encrypted before upload; this machine holds the key."
+
+
 def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     """Plain-text status lines for CLI, REPL, or gateway sinks (pure)."""
     if not status.enabled or status.config is None:
@@ -137,6 +154,8 @@ def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
     ]
     if status.exposure is not None:
         lines.append(format_exposure_line(status.exposure))
+    if status.encryption is not None:
+        lines.append(format_encryption_line(status.encryption))
     lines.append("Mirrored:")
     for root in status.roots:
         lines.append(f"  {root.name:<10} {root.path} ({root_state(root)})")
@@ -195,14 +214,45 @@ SETUP_DISABLED_CONFIRM = (
     "(stored provider/bucket kept for when you turn it back on)."
 )
 
+ROTATE_CONFIRM = (
+    "Passphrase rotated. The store's contents were not rewritten — only the key "
+    "protecting them was re-wrapped, so this took effect everywhere at once and "
+    "the old passphrase no longer opens anything."
+)
+
+#: Extracted rather than written inline in the list below: two adjacent string
+#: literals inside a list display are indistinguishable from a missing comma.
+_VERSIONED_BUCKET_NOTE = (
+    "If this bucket has versioning on, the superseded versions are still readable "
+    "with the old key — remove noncurrent versions yourself if that matters."
+)
+
+
+def format_reencrypt_lines(report: ReencryptReport, *, dry_run: bool = False) -> tuple[str, ...]:
+    """Result lines after a re-encrypt (pure)."""
+    heading = "Dry run" if dry_run else "Re-encrypted"
+    would = " would be" if dry_run else ""
+    lines = [
+        f"{heading} — {report.changed}{would} resealed under a new key, "
+        f"{report.already_current} already current."
+    ]
+    if report.adopted:
+        lines.append(f"{report.adopted} had never been encrypted and now are.")
+    if report.changed and not dry_run:
+        lines.append(_VERSIONED_BUCKET_NOTE)
+    return tuple(lines)
+
 
 __all__ = [
     "DISABLED_HELP",
     "NO_EXCLUSIONS_HELP",
+    "ROTATE_CONFIRM",
     "SETUP_DISABLED_CONFIRM",
     "direction_label",
+    "format_encryption_line",
     "format_exclusion_lines",
     "format_exposure_line",
+    "format_reencrypt_lines",
     "format_report_lines",
     "format_setup_lines",
     "format_status_lines",

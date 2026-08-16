@@ -85,6 +85,8 @@ export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob read-write token (when `provider=vercel`). Ambient; opensre never stores it |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE` | Comma-separated glob patterns to keep off the store. See [Exclude paths](#exclude-paths) |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | Set to `1` to ignore your exclusions for one run and sync everything |
+| `OPENSRE_REMOTE_SYNC_ENCRYPT` | Set to `1` to seal contents before upload. See [Encryption](#encryption) |
+| `OPENSRE_REMOTE_SYNC_PASSPHRASE` | The passphrase contents are sealed under. Needed on every machine sharing the store |
 
 Naming a bucket is not enough on its own — `OPENSRE_REMOTE_SYNC` has to be set
 too, so a bucket variable left over from another tool never starts uploading.
@@ -111,8 +113,8 @@ All surfaces share one remote-sync engine entry point:
 
 | Surface | How you invoke it |
 |---|---|
-| CLI | `opensre remote-sync status` / `sync` / `setup` |
-| Interactive shell | `/remote-sync status` / `sync` / `setup` |
+| CLI | `opensre remote-sync status` / `sync` / `setup` / `reencrypt` / `rotate-passphrase` |
+| Interactive shell | `/remote-sync status` / `sync` / `setup` / `reencrypt` |
 | Gateway (Telegram, and any unbound chat) | same slash command (`setup` needs flags; use CLI for prompts) |
 
 <Warning>
@@ -370,9 +372,10 @@ remote_sync:
 ## The store
 
 <Warning>
-Keep the store private. It holds your incident conversations and everything
-opensre has remembered about your systems. Prefer a private S3 bucket or a
-private Vercel Blob store — never a public one.
+Keep the store private. Unless you turn on [encryption](#encryption), it holds
+your incident conversations and everything opensre has remembered about your
+systems in readable form. Prefer a private S3 bucket or a private Vercel Blob
+store — never a public one.
 </Warning>
 
 `status` checks this for you on every built-in provider: the bucket policy
@@ -382,6 +385,119 @@ via the optional `VERCEL_API_TOKEN` above) — if any of them say public,
 instead of silently mirroring your history into it. Without the permission
 or credential the check needs, `status` shows "could not confirm it is
 private" instead of failing; it never blocks the rest of the command.
+
+## Encryption
+
+By default the store holds your sessions and memory as-is, so whoever operates
+it — your cloud provider, and anyone with access to the bucket — can read them.
+Turn on encryption and contents are sealed on your machine first, under a key
+derived from a passphrase only you hold.
+
+`setup` asks, and prompts for the passphrase twice if you say yes:
+
+```bash
+opensre remote-sync setup
+# ...
+# Encrypt contents [y/N]: y
+# Encryption passphrase: *********
+```
+
+Then sync as usual. Object contents become unreadable without the passphrase;
+everything else about the command is unchanged.
+
+For scripted setups, `--encrypt` (or `--no-encrypt`) answers that question up
+front and skips the prompt — supply the passphrase in
+`OPENSRE_REMOTE_SYNC_PASSPHRASE`, since there is no terminal to type it into.
+
+<Warning>
+**If you lose the passphrase, the store's contents are gone.** There is no
+recovery, no reset, and no copy of the key anywhere else — that is what makes it
+worth doing. Write it down somewhere you would still have after losing the
+laptop.
+</Warning>
+
+### On a second machine
+
+Same provider, store, and prefix as always, plus the same passphrase — that is
+the only extra thing you carry. Everything else it needs (the salt, the wrapped
+key) it reads from the store:
+
+```bash
+export OPENSRE_REMOTE_SYNC_ENCRYPT=1
+opensre remote-sync sync --pull-only   # asks for the passphrase if it has none
+```
+
+### Where the passphrase is kept
+
+Wherever your other opensre secrets go: `OPENSRE_REMOTE_SYNC_PASSPHRASE` if it
+is set in the environment, otherwise `~/.opensre/credentials.json`, an
+owner-only (`0600`) file in a `0700` directory.
+
+That file is **not** itself encrypted, which is deliberate: this passphrase
+protects the *remote* store from the party operating it, and anyone who can
+already read files in your home directory can read `~/.opensre/sessions/`
+directly. Encrypting it would not raise the bar it exists to raise.
+
+If you would rather nothing were written to disk, set
+`OPENSRE_DISABLE_KEYRING=1` — the environment variable then becomes the only
+source, and `setup` refuses rather than storing a passphrase it cannot keep.
+
+### Changing the passphrase
+
+```bash
+opensre remote-sync rotate-passphrase
+```
+
+Instant, whatever the size of the store: only the small key file is rewritten,
+not your history. The old passphrase stops working everywhere at once.
+
+### Encrypting a store you already have
+
+A store that already holds unencrypted sessions is not migrated quietly —
+turning encryption on gets you a refusal rather than a half-sealed store:
+
+```bash
+opensre remote-sync reencrypt          # seals everything already up there
+opensre remote-sync reencrypt --dry-run  # report first, change nothing
+```
+
+This re-uploads every object, so it costs a full push. Each object is
+overwritten in place, so the readable copy is replaced — **unless your bucket
+has versioning turned on**, in which case the old versions are still there and
+still readable. Remove noncurrent versions yourself if that matters.
+
+Use `reencrypt` to adopt encryption or to replace the key itself; use
+`rotate-passphrase` when it is the passphrase that changed.
+
+### When it refuses
+
+Encryption fails closed, always. None of these ever falls back to uploading
+readable history:
+
+| Situation | What happens |
+|---|---|
+| Encryption on, no passphrase available | Refused before anything moves |
+| Wrong passphrase | Refused; nothing uploaded or written |
+| Encryption on, store already holds readable objects | Refused — run `reencrypt` |
+| Encryption **off**, store is encrypted | Refused — turn it back on |
+| A stored object cannot be decrypted | That sync fails; your local file is left untouched |
+
+`opensre remote-sync status` reports all of these before you sync, so you find
+out from a status line rather than mid-transfer.
+
+### What encryption does not hide
+
+Contents only. Someone with access to the store still sees:
+
+- **object keys** — session ids, and your memory filenames, which are
+  descriptive (`prod-db-failover.md`)
+- **sizes** (each object is 49 bytes larger than its contents), **timestamps**,
+  and how often you sync
+
+Also worth being clear about: the conversations in those sessions were produced
+by sending the same content to your model provider. This keeps your incident
+history out of long-term storage that a third party can read — it is not
+end-to-end confidentiality for the underlying data.
 
 ## How conflicts resolve
 

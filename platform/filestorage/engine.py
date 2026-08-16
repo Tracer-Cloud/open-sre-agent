@@ -16,6 +16,19 @@ Uploads overlap, up to a cap the provider declares (see
 because a push is latency-bound: the laptop spends nearly all of it waiting on
 one round trip at a time. The concurrency is confined to the transfer half —
 see :func:`push` for why the two halves cannot be interleaved.
+
+An optional ``cipher`` seals payloads on the way out and opens them on the way
+in, so a store can hold no readable history. The engine knows only the
+:class:`~platform.filestorage.encryption.ports.Cipher` contract — never a key, and
+never ``cryptography`` — and behaves exactly as it did before when it is
+``None``. Two consequences are load-bearing rather than incidental:
+
+* every comparison against the store is made on **sealed** bytes, because that
+  is what the store's ETag is the tag of. This is why a cipher must seal
+  deterministically;
+* a download is opened **before** the local file is touched. The conflict rule
+  prefers the more recent write, so an object that cannot be opened would
+  otherwise overwrite good local history with unreadable bytes.
 """
 
 from __future__ import annotations
@@ -32,6 +45,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from config.constants.filestorage import DEFAULT_MAX_PARALLEL_UPLOADS
+from platform.filestorage.encryption.ports import Cipher
 from platform.filestorage.enums import SyncDirection
 from platform.filestorage.errors import RemoteSyncConfigError, UnsyncablePathError
 from platform.filestorage.exclusions import NO_EXCLUSIONS, ExclusionRules
@@ -170,6 +184,11 @@ def _modified_at(path: Path) -> datetime:
     return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
 
+def _outgoing(cipher: Cipher | None, key: str, data: bytes) -> bytes:
+    """What actually goes into the store for ``key`` — sealed, or ``data`` itself."""
+    return data if cipher is None else cipher.seal(key, data)
+
+
 def _write_atomically(target: Path, data: bytes) -> None:
     """Write through a temporary file in the same directory, then rename."""
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -193,6 +212,7 @@ def push(
     dry_run: bool = False,
     on_progress: ProgressCallback | None = None,
     max_parallel_uploads: int = DEFAULT_MAX_PARALLEL_UPLOADS,
+    cipher: Cipher | None = None,
 ) -> SyncReport:
     """Upload local files whose contents differ from the bucket.
 
@@ -261,18 +281,20 @@ def push(
         key, path = candidate
         if key in previewed_pulls:
             return _PushOutcome(key, _PushAction.SKIPPED)
-        data = path.read_bytes()
+        # Sealed here, not at the upload below, because every comparison that
+        # follows is against what the store actually holds.
+        payload = _outgoing(cipher, key, path.read_bytes())
         existing = by_key.get(key)
         if existing is not None:
-            if comparable_etag(existing) == content_tag(data):
+            if comparable_etag(existing) == content_tag(payload):
                 return _PushOutcome(key, _PushAction.SKIPPED)
             if existing.last_modified > _modified_at(path):
                 # The store holds the more recent write, so uploading would
                 # destroy it. Same rule pull applies in the other direction.
                 return _PushOutcome(key, _PushAction.KEPT_REMOTE)
         if not dry_run:
-            store.put_object(key, data)
-        return _PushOutcome(key, _PushAction.UPLOADED, len(data))
+            store.put_object(key, payload)
+        return _PushOutcome(key, _PushAction.UPLOADED, len(payload))
 
     def _record(outcome: _PushOutcome) -> None:
         if outcome.action is _PushAction.UPLOADED:
@@ -319,12 +341,17 @@ def pull(
     exclusions: ExclusionRules = NO_EXCLUSIONS,
     dry_run: bool = False,
     on_progress: ProgressCallback | None = None,
+    cipher: Cipher | None = None,
 ) -> SyncReport:
     """Download bucket objects missing locally, or newer than the local copy.
 
     Under ``dry_run`` nothing is fetched or written: the listing already has
     the size needed to report what would move, so previewing costs no request
     beyond the one listing call.
+
+    ``downloaded_bytes`` counts what crossed the wire, so a sealed object is
+    reported at its stored size — the same number ``dry_run`` reads off the
+    listing, and the same number the store bills for.
     """
     roots = roots if roots is not None else syncable_roots()
     result = report if report is not None else SyncReport()
@@ -348,7 +375,7 @@ def pull(
             result.excluded.add(obj.key)
             _report(obj.key, completed)
             continue
-        if not _should_download(obj, target):
+        if not _should_download(obj, target, cipher):
             result.skipped += 1
             _report(obj.key, completed)
             continue
@@ -357,8 +384,11 @@ def pull(
             result.downloaded.append(obj.key)
             _report(obj.key, completed)
             continue
-        data = store.get_object(obj.key)
-        result.downloaded_bytes += len(data)
+        payload = store.get_object(obj.key)
+        # Opened before the write, never after: an object that cannot be opened
+        # must not reach the local file, which still holds readable history.
+        data = payload if cipher is None else cipher.unseal(obj.key, payload)
+        result.downloaded_bytes += len(payload)
         _write_atomically(target, data)
         result.downloaded.append(obj.key)
         _report(obj.key, completed)
@@ -380,11 +410,18 @@ def _local_path_for(obj: RemoteObject, by_name: dict[str, SyncRoot]) -> Path | N
     return candidate
 
 
-def _should_download(obj: RemoteObject, target: Path) -> bool:
+def _should_download(obj: RemoteObject, target: Path, cipher: Cipher | None = None) -> bool:
+    """Whether the store's copy should replace the local one.
+
+    The local file is sealed before its tag is compared, because the store's
+    tag is of sealed bytes. That re-seal is why :class:`Cipher` must be
+    deterministic: a random nonce would make an unchanged file mismatch every
+    time, and every sync would re-download the whole tree.
+    """
     if not target.exists():
         return True
     tag = comparable_etag(obj)
-    if tag and tag == content_tag(target.read_bytes()):
+    if tag and tag == content_tag(_outgoing(cipher, obj.key, target.read_bytes())):
         return False
     # Both sides changed: the more recent write wins.
     return obj.last_modified > _modified_at(target)
@@ -399,40 +436,46 @@ def run_sync(
     dry_run: bool = False,
     on_progress: ProgressCallback | None = None,
     max_parallel_uploads: int = DEFAULT_MAX_PARALLEL_UPLOADS,
+    cipher: Cipher | None = None,
+    listing: list[RemoteObject] | None = None,
 ) -> SyncReport:
     """Move files in ``direction``. Both ways pulls first, so an offline edit wins.
 
     The listing is fetched once and shared: a pull changes local files, never
-    the bucket, so the push half can reuse it. ``dry_run`` previews the same
-    plan without writing anywhere, local or remote. ``on_progress``, when
-    given, is called once per key evaluated in the pull pass and then again
-    for the push pass — see :data:`ProgressCallback`. ``max_parallel_uploads``
-    caps concurrent uploads in the push pass; callers that built the store from
-    a config should pass the provider's own declared limit rather than rely on
+    the bucket, so the push half can reuse it. A caller that already listed the
+    store — the encryption gate has to, before any transfer — passes it in
+    rather than paying for a second one. ``dry_run`` previews the same plan
+    without writing anywhere, local or remote. ``on_progress``, when given, is
+    called once per key evaluated in the pull pass and then again for the push
+    pass — see :data:`ProgressCallback`. ``max_parallel_uploads`` caps
+    concurrent uploads in the push pass; callers that built the store from a
+    config should pass the provider's own declared limit rather than rely on
     the conservative default.
     """
     report = SyncReport()
-    listing = store.list_objects("")
+    objects = listing if listing is not None else store.list_objects("")
     if direction is not SyncDirection.PUSH:
         pull(
             store,
             roots=roots,
             report=report,
-            remote=listing,
+            remote=objects,
             exclusions=exclusions,
             dry_run=dry_run,
             on_progress=on_progress,
+            cipher=cipher,
         )
     if direction is not SyncDirection.PULL:
         push(
             store,
             roots=roots,
             report=report,
-            remote=listing,
+            remote=objects,
             exclusions=exclusions,
             dry_run=dry_run,
             on_progress=on_progress,
             max_parallel_uploads=max_parallel_uploads,
+            cipher=cipher,
         )
     return report
 

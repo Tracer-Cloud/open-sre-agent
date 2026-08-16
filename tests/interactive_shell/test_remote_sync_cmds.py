@@ -12,7 +12,7 @@ from rich.console import Console
 from platform.filestorage.config import RemoteSyncConfig
 from platform.filestorage.engine import SyncProgress, SyncReport
 from platform.filestorage.enums import SyncDirection, SyncRootName
-from platform.filestorage.errors import RemoteSyncConfigError
+from platform.filestorage.errors import MissingPassphraseError, RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.runtime import Session
@@ -205,6 +205,26 @@ def test_setup_disabled_says_off_without_a_sync_suggestion(
     assert "remote-sync sync" not in out
 
 
+def test_encryption_errors_reach_the_user_verbatim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unlike provider failures, these are our own actionable wording.
+
+    The generic handler is right for anything carrying vendor detail; it is
+    wrong here, because "your passphrase is missing" is the whole message and a
+    chat user has no log to go read instead.
+    """
+
+    def _boom(**_kwargs: object) -> SyncReport:
+        raise MissingPassphraseError("no passphrase is available on this machine")
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.command_registry.remote_sync_cmds.run_remote_sync",
+        _boom,
+    )
+    console, buf = _capture()
+    assert dispatch_slash("/remote-sync sync", Session(), console) is True
+    assert "no passphrase is available" in buf.getvalue()
+
+
 def test_sync_error_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(**_kwargs: object) -> SyncReport:
         raise RemoteSyncConfigError("bad flags")
@@ -249,7 +269,7 @@ def test_slash_command_metadata_for_planner() -> None:
     cmd = SLASH_COMMANDS["/remote-sync"]
     assert cmd.first_arg_completions is not None
     labels = {label for label, _hint in cmd.first_arg_completions}
-    assert labels == {"status", "sync", "setup"}
+    assert labels == {"status", "sync", "setup", "reencrypt"}
     assert any("setup" in note.lower() for note in (cmd.notes or ()))
     catalog = MCP_BY_COMMAND["/remote-sync"]
     assert "status" in catalog.llm_description

@@ -33,11 +33,14 @@ def test_direction_flags_resolve_to_enum() -> None:
     assert resolve_direction(pull_only=False, push_only=False) is SyncDirection.BOTH
 
 
-def test_remote_sync_subcommands_are_status_sync_setup() -> None:
+def test_remote_sync_subcommands_are_the_shared_verb_set() -> None:
     assert set(RemoteSyncSubcommand) == {
         RemoteSyncSubcommand.STATUS,
         RemoteSyncSubcommand.SYNC,
         RemoteSyncSubcommand.SETUP,
+        RemoteSyncSubcommand.ROTATE_PASSPHRASE,
+        RemoteSyncSubcommand.REENCRYPT,
     }
     assert RemoteSyncSubcommand("status") is RemoteSyncSubcommand.STATUS
     assert RemoteSyncSubcommand("setup") is RemoteSyncSubcommand.SETUP
+    assert RemoteSyncSubcommand("reencrypt") is RemoteSyncSubcommand.REENCRYPT

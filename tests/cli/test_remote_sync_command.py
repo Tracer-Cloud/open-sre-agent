@@ -342,8 +342,8 @@ def test_setup_interactive_skips_prompts_for_provider_without_extra_fields(
     monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
     _set_interactive(monkeypatch)
 
-    # bucket, provider, prefix — no region/profile prompts for vercel.
-    result = runner.invoke(remote_sync_command, ["setup"], input="my-bucket\nvercel\nopensre\n")
+    # bucket, provider, prefix, encrypt — no region/profile prompts for vercel.
+    result = runner.invoke(remote_sync_command, ["setup"], input="my-bucket\nvercel\nopensre\nn\n")
     assert result.exit_code == 0, result.output
 
     on_disk = yaml.safe_load((tmp_path / "config.yml").read_text(encoding="utf-8"))
@@ -360,13 +360,12 @@ def test_setup_interactive_prompts_for_provider_extra_fields(
     monkeypatch.setattr(paths_mod, "OPENSRE_HOME_DIR", tmp_path)
     _set_interactive(monkeypatch)
 
-    # bucket, provider, prefix, region, profile — RemoteSyncSetupRequest's
-    # keyword order, which Python evaluates left to right regardless of the
-    # order EXTRA_FIELDS declares them in.
+    # bucket, provider, prefix, region, profile, encrypt — the order the
+    # prompts are bound in, which is the order they are read on screen.
     result = runner.invoke(
         remote_sync_command,
         ["setup"],
-        input="my-bucket\naws\nopensre\nus-east-1\nmy-profile\n",
+        input="my-bucket\naws\nopensre\nus-east-1\nmy-profile\nn\n",
     )
     assert result.exit_code == 0, result.output
 
@@ -430,13 +429,56 @@ def test_setup_prompts_for_missing_flags_on_a_tty(
         "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
     )
     _set_interactive(monkeypatch)
-    # gcs declares no extra fields, so the wizard stops after bucket/provider/prefix.
-    result = runner.invoke(remote_sync_command, ["setup"], input="my-bucket\ngcs\nopensre\n")
+    # gcs declares no extra fields, so the wizard goes bucket/provider/prefix
+    # and then the one question every provider gets asked.
+    result = runner.invoke(remote_sync_command, ["setup"], input="my-bucket\ngcs\nopensre\nn\n")
     assert result.exit_code == 0
     request = saved["request"]
     assert request.provider == "gcs"
     assert request.bucket == "my-bucket"
     assert request.prefix == "opensre"
+    assert request.encrypted is False
+
+
+def test_setup_interactive_offers_encryption(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag is not the only way to find the option.
+
+    Someone who never reads ``--help`` would otherwise sync readable incident
+    history to a bucket without ever being told that was the choice they made.
+    """
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    monkeypatch.setattr("surfaces.cli.commands.remote_sync._ensure_passphrase", lambda: None)
+    _set_interactive(monkeypatch)
+
+    result = runner.invoke(remote_sync_command, ["setup"], input="my-bucket\ngcs\nopensre\ny\n")
+
+    assert result.exit_code == 0, result.output
+    assert "Encrypt contents" in result.output
+    assert saved["request"].encrypted is True
+
+
+def test_setup_explicit_no_encrypt_is_not_asked_again(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stated preference is not re-litigated by a prompt."""
+    saved: dict[str, RemoteSyncSetupRequest] = {}
+    monkeypatch.setattr(
+        "surfaces.cli.commands.remote_sync.save_remote_sync_settings", _save_config(saved)
+    )
+    _set_interactive(monkeypatch)
+
+    result = runner.invoke(
+        remote_sync_command, ["setup", "--no-encrypt"], input="my-bucket\ngcs\nopensre\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Encrypt contents" not in result.output
+    assert saved["request"].encrypted is False
 
 
 def test_setup_disabled_without_bucket_switches_off_without_setup_values(

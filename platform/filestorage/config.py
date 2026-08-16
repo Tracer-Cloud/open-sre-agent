@@ -20,6 +20,7 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
     REMOTE_SYNC_BUCKET_ENV,
+    REMOTE_SYNC_ENCRYPT_ENV,
     REMOTE_SYNC_ENV,
     REMOTE_SYNC_EXCLUDE_ENV,
     REMOTE_SYNC_EXCLUDE_OFF_ENV,
@@ -46,6 +47,11 @@ class RemoteSyncConfig:
     ``exclude`` narrows what mirrors. It cannot widen it: the credential
     deny-list is enforced separately, in
     :mod:`platform.filestorage.syncable`.
+
+    ``encrypted`` seals object contents under a passphrase-derived key before
+    upload. It has to agree with what the store already holds; a mismatch in
+    either direction fails the run rather than mixing readable and sealed
+    objects (see :mod:`platform.filestorage.encryption.resolver`).
     """
 
     bucket: str
@@ -54,6 +60,7 @@ class RemoteSyncConfig:
     region: str = ""
     profile: str = ""
     exclude: ExclusionRules = NO_EXCLUSIONS
+    encrypted: bool = False
 
     def key_for(self, relative_key: str) -> str:
         """Full object key for a path relative to the synced root."""
@@ -210,6 +217,23 @@ def _enabled(stored: Callable[[], dict[str, Any] | None]) -> bool:
     return _truthy(_validated_scalar(_required_stored(stored).get("enabled"), "enabled"))
 
 
+def _encrypted(stored: Callable[[], dict[str, Any] | None]) -> bool:
+    """Whether contents are sealed before upload.
+
+    An unreadable stored section reads as "off" here, matching every other
+    optional setting. That is safe in only one direction, and the direction it
+    is safe in is this one: the run then meets an encrypted store with
+    encryption off and is refused, rather than uploading readable history.
+    """
+    env = os.getenv(REMOTE_SYNC_ENCRYPT_ENV)
+    if env is not None and env.strip() != "":
+        return env.strip().lower() in _TRUTHY
+    section = stored()
+    if section is None:
+        return False
+    return _truthy(_validated_scalar(section.get("encrypted"), "encrypted"))
+
+
 def remote_sync_enabled() -> bool:
     """Whether sync is on in the environment or the stored settings file."""
     return _enabled(_lazy_stored())
@@ -243,6 +267,7 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
         region=_env_or_stored(REMOTE_SYNC_REGION_ENV, "region", stored),
         profile=_env_or_stored(REMOTE_SYNC_PROFILE_ENV, "profile", stored),
         exclude=_exclusions(stored),
+        encrypted=_encrypted(stored),
     )
 
 

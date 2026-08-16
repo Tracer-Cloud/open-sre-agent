@@ -40,11 +40,17 @@ from platform.filestorage.enums import (
     SyncRootName,
 )
 from platform.filestorage.errors import (
+    EncryptedStoreError,
+    MissingPassphraseError,
     OrgScopeNotSupportedError,
+    PlaintextStoreError,
     RemoteSyncConfigError,
+    RemoteSyncEncryptionError,
     RemoteSyncError,
     RemoteSyncUnavailableError,
+    UndecryptableObjectError,
     UnsyncablePathError,
+    WrongPassphraseError,
 )
 from platform.filestorage.exclusions import (
     NO_EXCLUSIONS,
@@ -62,9 +68,12 @@ from platform.filestorage.messages import (
     root_state,
 )
 from platform.filestorage.operations import (
+    EncryptionStatus,
     SyncRootStatus,
     SyncStatus,
     get_sync_status,
+    reencrypt_remote_store,
+    rotate_remote_sync_passphrase,
     run_remote_sync,
 )
 from platform.filestorage.ports import ObjectStore, RemoteObject
@@ -75,9 +84,16 @@ __all__ = [
     "NO_EXCLUSIONS",
     "NO_EXCLUSIONS_HELP",
     "BucketExposure",
+    "EncryptedStoreError",
+    "EncryptionStatus",
     "ExclusionRules",
+    "MissingPassphraseError",
     "OrgScopeNotSupportedError",
+    "PlaintextStoreError",
     "PublicAccessStatus",
+    "RemoteSyncEncryptionError",
+    "UndecryptableObjectError",
+    "WrongPassphraseError",
     "format_exclusion_lines",
     "format_exposure_line",
     "format_status_lines",
@@ -107,11 +123,13 @@ __all__ = [
     "parse_exclusions",
     "pull",
     "push",
+    "reencrypt_remote_store",
     "relative_key",
     "remote_sync_enabled",
     "resolve_direction",
     "resolved_roots",
     "root_state",
+    "rotate_remote_sync_passphrase",
     "run_remote_sync",
     "run_sync",
     "syncable_roots",

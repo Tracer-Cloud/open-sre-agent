@@ -45,6 +45,8 @@ class RemoteSyncSubcommand(StrEnum):
     STATUS = "status"
     SYNC = "sync"
     SETUP = "setup"
+    ROTATE_PASSPHRASE = "rotate-passphrase"
+    REENCRYPT = "reencrypt"
 
 
 class RemoteSyncField(StrEnum):
