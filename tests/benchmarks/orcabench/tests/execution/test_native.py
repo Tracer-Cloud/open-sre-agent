@@ -75,11 +75,42 @@ def test_native_connections_contain_telemetry_and_scoped_source_only(tmp_path: P
         "start": "2026-04-21T11:00:00Z",
         "end": "2026-04-21T13:00:00Z",
     }
+    assert grafana["_backend"].allowed_query_window == {
+        "start": "2026-04-21T11:00:00Z",
+        "end": "2026-04-21T13:00:00Z",
+    }
     flattened_keys = set(resolved["grafana"])
     assert flattened_keys.isdisjoint({"query", "start", "end", "task", "report"})
     assert resolved["local_source"] == {
         "root_path": str(source_root),
         "connection_verified": True,
+    }
+
+
+def test_terminus_parity_connections_allow_native_max_lookback(tmp_path: Path) -> None:
+    source_root = tmp_path / "opentelemetry-demo"
+    source_root.mkdir()
+    window = {
+        "since": "2026-04-21T11:00:00Z",
+        "until": "2026-04-21T13:00:00Z",
+    }
+
+    resolved = OrcaNativeConnections(
+        GrafanaSettings(),
+        source_root,
+        tool_capability_mode="terminus_parity",
+    ).build(
+        {"GRAFANA_URL": "http://frontend-proxy:8080/grafana/"},
+        window,
+    )
+
+    assert resolved["grafana"]["_backend"].query_window == {
+        "start": "2026-04-21T11:00:00Z",
+        "end": "2026-04-21T13:00:00Z",
+    }
+    assert resolved["grafana"]["_backend"].allowed_query_window == {
+        "start": "2026-04-14T13:00:00Z",
+        "end": "2026-04-21T13:00:00Z",
     }
 
 
@@ -196,7 +227,7 @@ def test_native_runner_uses_orca_guidance_agent_without_replacing_lifecycle(
 
     native_tool = query_grafana_metrics.__opensre_registered_tool__
     [orca_tool] = agent_class()._filter_tools([native_tool])
-    assert "time_bounds" in orca_tool.public_input_schema["properties"]
+    assert "time_bounds" not in orca_tool.public_input_schema["properties"]
     assert "time_bounds" not in native_tool.public_input_schema["properties"]
 
     agent = agent_class()

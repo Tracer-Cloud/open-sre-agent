@@ -27,7 +27,10 @@ from tests.benchmarks.orcabench.execution.native_investigation import (
 )
 def test_openai_tool_schema_preserves_native_time_bounds_fields(tool_function) -> None:
     registered = tool_function.__opensre_registered_tool__
-    [adapted] = _with_orca_time_bounds([registered])
+    [adapted] = _with_orca_time_bounds(
+        [registered],
+        tool_capability_mode="terminus_parity",
+    )
 
     [tool_spec] = build_openai_tool_specs([adapted])
 
@@ -48,9 +51,10 @@ def test_orca_native_trace_schema_keeps_direct_trace_lookup_hidden() -> None:
         tool_capability_mode="native",
     )
 
-    assert "time_bounds" in trace_tool.input_schema["properties"]
+    assert "time_bounds" not in trace_tool.input_schema["properties"]
     assert "action" not in trace_tool.input_schema["properties"]
     assert "trace_id" not in trace_tool.input_schema["properties"]
+    assert trace_tool.retrieval_controls.time_bounds is False
 
 
 def test_orca_terminus_parity_schemas_expose_rich_backend_controls() -> None:
@@ -62,6 +66,8 @@ def test_orca_terminus_parity_schemas_expose_rich_backend_controls() -> None:
         tool_capability_mode="terminus_parity",
     )
 
+    assert "time_bounds" in log_tool.input_schema["properties"]
+    assert "time_bounds" in trace_tool.input_schema["properties"]
     assert {"query", "sort_order", "cursor"} <= set(log_tool.input_schema["properties"])
     assert {
         "action",

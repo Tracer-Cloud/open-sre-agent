@@ -7,7 +7,7 @@ from tools.system.local_source import (
     read_local_source_file,
     search_local_source,
 )
-from tools.system.local_source.repository import MAX_READ_BYTES
+from tools.system.local_source.repository import MAX_READ_BYTES, READ_CHUNK_CHARS
 
 
 def _source(tmp_path: Path) -> Path:
@@ -95,6 +95,20 @@ def test_local_source_read_reports_truncation_at_native_boundary(tmp_path: Path)
     assert result["truncated_by"] == "line_limit"
 
 
+def test_local_source_read_does_not_report_line_limit_at_exact_boundary(
+    tmp_path: Path,
+) -> None:
+    root = _source(tmp_path)
+    path = root / "exact.txt"
+    path.write_text("\n".join(f"line {line}" for line in range(1, 401)), encoding="utf-8")
+
+    result = read_local_source_file(path="exact.txt", start_line=1, root_path=str(root))
+
+    assert result["end_line"] == 400
+    assert result["truncated"] is False
+    assert result["truncated_by"] is None
+
+
 def test_local_source_read_streams_without_materializing_entire_file(
     tmp_path: Path,
     monkeypatch,
@@ -132,3 +146,93 @@ def test_local_source_read_reports_byte_limit_for_huge_line(tmp_path: Path) -> N
     assert len(result["content"].encode("utf-8")) == MAX_READ_BYTES
     assert result["truncated"] is True
     assert result["truncated_by"] == "byte_limit"
+
+
+def test_local_source_read_uses_bounded_readline_chunks(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = _source(tmp_path)
+    target = root / "huge.txt"
+    target.write_text("x" * (MAX_READ_BYTES + 100), encoding="utf-8")
+    real_open = Path.open
+    read_sizes: list[int] = []
+
+    class GuardedReader:
+        def __init__(self, source):
+            self._source = source
+
+        def __enter__(self):
+            self._source.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._source.__exit__(*args)
+
+        def __iter__(self):
+            raise AssertionError("bounded source reads must not iterate full lines")
+
+        def readline(self, size: int = -1) -> str:
+            assert 0 < size <= READ_CHUNK_CHARS
+            read_sizes.append(size)
+            return self._source.readline(size)
+
+    def guarded_open(self: Path, *args, **kwargs):
+        opened = real_open(self, *args, **kwargs)
+        if self == target:
+            return GuardedReader(opened)
+        return opened
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+
+    result = read_local_source_file(path="huge.txt", root_path=str(root))
+
+    assert read_sizes
+    assert len(result["content"].encode("utf-8")) == MAX_READ_BYTES
+    assert result["truncated_by"] == "byte_limit"
+
+
+def test_local_source_read_discards_huge_skipped_lines_without_byte_truncation(
+    tmp_path: Path,
+) -> None:
+    root = _source(tmp_path)
+    path = root / "huge-prefix.txt"
+    path.write_text(
+        "x" * (MAX_READ_BYTES + 100) + "\nselected\n",
+        encoding="utf-8",
+    )
+
+    result = read_local_source_file(
+        path="huge-prefix.txt",
+        start_line=2,
+        end_line=2,
+        root_path=str(root),
+    )
+
+    assert result["content"] == "selected"
+    assert result["start_line"] == 2
+    assert result["end_line"] == 2
+    assert result["truncated"] is False
+    assert result["truncated_by"] is None
+
+
+def test_local_source_read_strips_crlf_split_across_bounded_chunks(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = _source(tmp_path)
+    path = root / "crlf.txt"
+    path.write_text("abc\r\nnext\r\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "tools.system.local_source.repository.READ_CHUNK_CHARS",
+        4,
+    )
+
+    result = read_local_source_file(
+        path="crlf.txt",
+        start_line=1,
+        end_line=2,
+        root_path=str(root),
+    )
+
+    assert result["content"] == "abc\nnext"

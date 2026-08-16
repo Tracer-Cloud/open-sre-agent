@@ -8,7 +8,10 @@ from integrations.opensre.grafana_backend_queries import (
     query_logs_from_backend,
     query_traces_from_backend,
 )
-from tests.benchmarks.orcabench.execution.orca_telemetry import OrcaTelemetryBackend
+from tests.benchmarks.orcabench.execution.orca_telemetry import (
+    OrcaTelemetryBackend,
+    OrcaTelemetryWindowPolicy,
+)
 
 
 class _Response:
@@ -93,13 +96,37 @@ class _Session:
 
 
 def _backend(session: _Session) -> OrcaTelemetryBackend:
+    start_time = "2026-04-21T11:00:00Z"
+    end_time = "2026-04-21T13:00:00Z"
     return OrcaTelemetryBackend(
         endpoint="http://frontend-proxy:8080/grafana",
         username="admin",
         password="admin",
         verify_ssl=True,
-        start_time="2026-04-21T11:00:00Z",
-        end_time="2026-04-21T13:00:00Z",
+        start_time=start_time,
+        end_time=end_time,
+        window_policy=OrcaTelemetryWindowPolicy.terminus_parity(
+            start_time=start_time,
+            end_time=end_time,
+        ),
+        session=session,  # type: ignore[arg-type]
+    )
+
+
+def _native_backend(session: _Session) -> OrcaTelemetryBackend:
+    start_time = "2026-04-21T11:00:00Z"
+    end_time = "2026-04-21T13:00:00Z"
+    return OrcaTelemetryBackend(
+        endpoint="http://frontend-proxy:8080/grafana",
+        username="admin",
+        password="admin",
+        verify_ssl=True,
+        start_time=start_time,
+        end_time=end_time,
+        window_policy=OrcaTelemetryWindowPolicy.native(
+            start_time=start_time,
+            end_time=end_time,
+        ),
         session=session,  # type: ignore[arg-type]
     )
 
@@ -168,6 +195,31 @@ def test_day_lookback_is_anchored_to_simulated_current_time() -> None:
     params = session.get_calls[0][1]["params"]
     assert params["start"] == 1776690000.0
     assert params["end"] == 1776776400.0
+
+
+def test_terminus_parity_rejects_bounds_before_allowed_window() -> None:
+    backend = _backend(_Session())
+
+    with pytest.raises(ValueError, match="allowed telemetry window"):
+        backend.query_timeseries(
+            "up",
+            time_bounds={
+                "start_time": "2026-04-13T12:59:59Z",
+                "end_time": "2026-04-21T13:00:00Z",
+            },
+        )
+
+
+def test_native_window_policy_ignores_model_selected_widening() -> None:
+    session = _Session()
+    backend = _native_backend(session)
+
+    backend.query_timeseries("up", time_bounds={"lookback_minutes": 1440})
+
+    params = session.get_calls[0][1]["params"]
+    assert params["start"] == 1776769200.0
+    assert params["end"] == 1776776400.0
+    assert backend.allowed_query_window == backend.query_window
 
 
 def test_end_only_preserves_the_default_window_width() -> None:

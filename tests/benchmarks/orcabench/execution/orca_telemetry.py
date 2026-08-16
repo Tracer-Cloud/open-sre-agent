@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
 
+from core.domain.types.incident_window import MAX_LOOKBACK_MINUTES
 from core.domain.types.retrieval import TimeBounds
 
 
@@ -21,6 +23,10 @@ _RELATIVE_TIME_RE = re.compile(r"^-(?P<amount>\d+)(?P<unit>[mhd])$")
 
 def _iso_utc(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _utc_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
 def _span_window_microseconds(span: dict[str, Any]) -> tuple[int, int] | None:
@@ -122,6 +128,46 @@ def _span_with_bounded_references(
     return bounded_span
 
 
+@dataclass(frozen=True)
+class OrcaTelemetryWindowPolicy:
+    """Separate OpenSRE's default query window from the benchmark access horizon."""
+
+    default_start_time: str
+    default_end_time: str
+    allowed_start_time: str
+    allowed_end_time: str
+    model_time_bounds: bool
+
+    @classmethod
+    def native(cls, *, start_time: str, end_time: str) -> "OrcaTelemetryWindowPolicy":
+        """Keep native mode bounded to OpenSRE's resolved incident window."""
+        return cls(
+            default_start_time=start_time,
+            default_end_time=end_time,
+            allowed_start_time=start_time,
+            allowed_end_time=end_time,
+            model_time_bounds=False,
+        )
+
+    @classmethod
+    def terminus_parity(
+        cls,
+        *,
+        start_time: str,
+        end_time: str,
+    ) -> "OrcaTelemetryWindowPolicy":
+        """Start with OpenSRE's default window but allow Terminus-like lookback."""
+        current = _utc_datetime(end_time)
+        allowed_start = current - timedelta(minutes=MAX_LOOKBACK_MINUTES)
+        return cls(
+            default_start_time=start_time,
+            default_end_time=end_time,
+            allowed_start_time=_iso_utc(allowed_start),
+            allowed_end_time=end_time,
+            model_time_bounds=True,
+        )
+
+
 class OrcaTelemetryBackend:
     """Expose ORCA's Prometheus, OpenSearch, and Jaeger through OpenSRE's backend API."""
 
@@ -138,15 +184,24 @@ class OrcaTelemetryBackend:
         verify_ssl: bool,
         start_time: str,
         end_time: str,
+        window_policy: OrcaTelemetryWindowPolicy | None = None,
         session: requests.Session | None = None,
     ) -> None:
         self._endpoint = endpoint.rstrip("/")
         self._auth = (username, password)
         self._verify = verify_ssl
-        self._start = start_time
-        self._end = end_time
-        self._start_seconds = _unix_seconds(start_time)
-        self._end_seconds = _unix_seconds(end_time)
+        self._window_policy = window_policy or OrcaTelemetryWindowPolicy.native(
+            start_time=start_time,
+            end_time=end_time,
+        )
+        self._start = self._window_policy.default_start_time
+        self._end = self._window_policy.default_end_time
+        self._start_seconds = _unix_seconds(self._start)
+        self._end_seconds = _unix_seconds(self._end)
+        self._allowed_start = self._window_policy.allowed_start_time
+        self._allowed_end = self._window_policy.allowed_end_time
+        self._allowed_start_seconds = _unix_seconds(self._allowed_start)
+        self._allowed_end_seconds = _unix_seconds(self._allowed_end)
         self._session = session or requests.Session()
 
     def _query_window(
@@ -154,7 +209,7 @@ class OrcaTelemetryBackend:
         time_bounds: dict[str, Any] | TimeBounds | None,
     ) -> tuple[str, str, float, float]:
         """Resolve OpenSRE's native time controls against ORCA's simulated clock."""
-        if time_bounds is None:
+        if time_bounds is None or not self._window_policy.model_time_bounds:
             return self._start, self._end, self._start_seconds, self._end_seconds
 
         bounds = TimeBounds.model_validate(time_bounds)
@@ -167,10 +222,15 @@ class OrcaTelemetryBackend:
             default_span = timedelta(seconds=self._end_seconds - self._start_seconds)
             start = end - default_span
 
-        current = datetime.fromtimestamp(self._end_seconds, tz=UTC)
-        if end > current:
+        allowed_start = datetime.fromtimestamp(self._allowed_start_seconds, tz=UTC)
+        allowed_end = datetime.fromtimestamp(self._allowed_end_seconds, tz=UTC)
+        if end > allowed_end:
             raise ValueError(
                 "Telemetry time bounds cannot extend past ORCA's simulated current time"
+            )
+        if start < allowed_start:
+            raise ValueError(
+                "Telemetry time bounds cannot start before ORCA's allowed telemetry window"
             )
         if start > end:
             raise ValueError("Telemetry time bounds require start_time <= end_time")
@@ -482,3 +542,7 @@ class OrcaTelemetryBackend:
     @property
     def query_window(self) -> dict[str, str]:
         return {"start": self._start, "end": self._end}
+
+    @property
+    def allowed_query_window(self) -> dict[str, str]:
+        return {"start": self._allowed_start, "end": self._allowed_end}

@@ -39,6 +39,7 @@ def build_mode(settings: RunnerSettings) -> ModeComponents:
         connections=OrcaNativeConnections(
             settings.benchmark.grafana,
             settings.benchmark.runtime.source_root,
+            tool_capability_mode=settings.benchmark.tool_capability_mode,
         ),
         investigation=NativeInvestigationRunner(
             tool_capability_mode=settings.benchmark.tool_capability_mode,

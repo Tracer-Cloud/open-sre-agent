@@ -89,8 +89,9 @@ def _with_orca_time_bounds(
             adapted.append(tool)
             continue
         input_schema = deepcopy(tool.input_schema)
-        input_schema.setdefault("properties", {})["time_bounds"] = time_schema
-        properties = input_schema["properties"]
+        properties = input_schema.setdefault("properties", {})
+        if tool_capability_mode == "terminus_parity":
+            properties["time_bounds"] = time_schema
         if tool.name == "query_grafana_logs" and tool_capability_mode == "terminus_parity":
             properties.update(
                 {
@@ -121,7 +122,9 @@ def _with_orca_time_bounds(
                     "max_duration": {"type": "string"},
                 }
             )
-        controls = tool.retrieval_controls.model_copy(update={"time_bounds": True})
+        controls = tool.retrieval_controls
+        if tool_capability_mode == "terminus_parity":
+            controls = controls.model_copy(update={"time_bounds": True})
         adapted.append(
             replace(
                 tool,
