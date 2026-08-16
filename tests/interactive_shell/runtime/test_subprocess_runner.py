@@ -1639,3 +1639,44 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
     assert start_calls, "background task starter was not invoked"
     assert "integrations" in start_calls[0]
     assert "list" in start_calls[0]
+
+
+def test_start_background_cli_task_echoes_command_markup_literally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``$ <command>`` header must escape Rich markup, like every sibling echo.
+
+    An alert payload carrying a bracketed path (``[/api/checkout]``) reads as a
+    closing tag and raises ``MarkupError`` before the task is even created, so the
+    subprocess never runs; a lowercase bracketed word (``[error]``) reads as an
+    opening tag and is silently swallowed, showing a command the user did not run.
+    """
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(_BACKGROUND_TASK_POPEN, lambda _command, **_kwargs: _FakeProcess())
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
+        _ImmediateThread,
+    )
+
+    display_command = 'opensre investigate --alert "[error] 5xx spike on [/api/checkout]"'
+    session = Session()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command=display_command,
+        argv_list=["python", "-m", "cli", "investigate"],
+        session=session,
+        console=console,
+    )
+
+    assert task is not None
+    assert f"$ {display_command}" in buf.getvalue().replace("\n", "")
