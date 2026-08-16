@@ -65,7 +65,7 @@ def test_constants_module_stays_a_leaf(module: str) -> None:
 
 
 def test_llm_env_var_names_are_the_infra_contract() -> None:
-    """Pin the Azure OpenAI connection env-var names to their exact strings."""
+    """Pin shared LLM env-var names to their exact strings."""
     # Arrange / Act
     from config.constants import llm
 
@@ -73,6 +73,20 @@ def test_llm_env_var_names_are_the_infra_contract() -> None:
     assert llm.AZURE_OPENAI_BASE_URL_ENV == "AZURE_OPENAI_BASE_URL"
     assert llm.AZURE_OPENAI_API_VERSION_ENV == "AZURE_OPENAI_API_VERSION"
     assert llm.AZURE_OPENAI_API_KEY_ENV == "AZURE_OPENAI_API_KEY"
+    assert llm.LLM_MAX_TOKENS_ENV == "LLM_MAX_TOKENS"
+    assert llm.LLM_TEMPERATURE_ENV == "LLM_TEMPERATURE"
+
+
+def test_shared_llm_env_var_names_are_re_exported() -> None:
+    """Callers may import shared LLM settings from the package root."""
+    # Arrange / Act
+    from config import constants
+
+    # Assert
+    assert constants.LLM_MAX_TOKENS_ENV == "LLM_MAX_TOKENS"
+    assert constants.LLM_TEMPERATURE_ENV == "LLM_TEMPERATURE"
+    assert "LLM_MAX_TOKENS_ENV" in constants.__all__
+    assert "LLM_TEMPERATURE_ENV" in constants.__all__
 
 
 def test_provider_catalog_and_wizard_share_the_same_azure_constants() -> None:
