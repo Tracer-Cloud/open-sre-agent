@@ -21,6 +21,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _FORBIDDEN_PREFIX = "core.agent_harness."
+#: Modules a host may import the harness through; anything else under the
+#: prefix is a deep import.
+_PUBLIC_DOORS = frozenset(
+    {"core.agent_harness", "core.agent_harness.spi", "core.agent_harness.runtime"}
+)
 _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
 
 #: Harness submodules surfaces/ still imports directly. Shrink-only.
@@ -81,17 +86,25 @@ def _deep_modules(tree: ast.AST) -> set[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found.update(
-                alias.name for alias in node.names if alias.name.startswith(_FORBIDDEN_PREFIX)
+                alias.name
+                for alias in node.names
+                if alias.name.startswith(_FORBIDDEN_PREFIX) and alias.name not in _PUBLIC_DOORS
             )
         elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and (node.module or "").startswith(_FORBIDDEN_PREFIX):
-                found.add(node.module)
+            module = node.module or ""
+            if (
+                node.level == 0
+                and module.startswith(_FORBIDDEN_PREFIX)
+                and module not in _PUBLIC_DOORS
+            ):
+                found.add(module)
         elif isinstance(node, ast.Call) and _call_name(node) in _DYNAMIC_IMPORTERS:
             for arg in node.args[:1]:
                 if (
                     isinstance(arg, ast.Constant)
                     and isinstance(arg.value, str)
                     and arg.value.startswith(_FORBIDDEN_PREFIX)
+                    and arg.value not in _PUBLIC_DOORS
                 ):
                     found.add(arg.value)
     return found
@@ -106,8 +119,8 @@ def test_surfaces_deep_imports_only_shrink() -> None:
     new = sorted(imported - _KNOWN_DEEP_IMPORTS)
     assert new == [], (
         f"surfaces/ grew new harness deep imports: {new}. Import the name from "
-        "core.agent_harness (curate it into the export table in "
-        "core/agent_harness/__init__.py if it is genuinely host-facing)."
+        "core.agent_harness (embedder API) or core.agent_harness.spi (host-adapter "
+        "API); curate it into the right door if it is genuinely public."
     )
     migrated = sorted(_KNOWN_DEEP_IMPORTS - imported)
     assert migrated == [], (

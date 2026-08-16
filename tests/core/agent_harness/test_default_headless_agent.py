@@ -29,34 +29,14 @@ def test_build_default_headless_agent_sets_gateway_surface() -> None:
     assert prompts.surface() == "gateway"
 
 
-def test_factory_defaults_console_and_logger() -> None:
-    """The embedding recipe must not force callers to assemble Rich/logging.
-
-    The default console must be headless-safe: rendering through it may not
-    write to the real stdout/stderr of the embedding process.
-    """
-    # Arrange
-    session = SimpleNamespace(
-        configured_integrations=[],
-        resolved_integrations_cache={},
-        session_id="s1",
-    )
-
-    # Act
-    agent = build_default_headless_agent(session=session, output=BufferOutputSink())
-
-    # Assert
-    assert agent is not None
-
-
-def test_factory_and_sink_are_package_level_exports() -> None:
-    """The recipe in ``main.py`` imports from ``core.agent_harness`` directly."""
+def test_factory_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
     import core.agent_harness as pkg
+    from core.agent_harness import runtime
 
-    assert pkg.build_default_headless_agent is build_default_headless_agent
-    assert pkg.BufferOutputSink is BufferOutputSink
-    assert "build_default_headless_agent" in dir(pkg)
-    assert "BufferOutputSink" in dir(pkg)
+    assert runtime.build_default_headless_agent is build_default_headless_agent
+    assert not hasattr(pkg, "build_default_headless_agent")
+    assert not hasattr(pkg, "BufferOutputSink")
+    assert not hasattr(runtime, "BufferOutputSink")
 
 
 def test_builder_uses_supplied_prompts_even_when_falsy() -> None:

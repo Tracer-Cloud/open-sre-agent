@@ -16,7 +16,8 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness import GatherPorts, HeadlessAgent, SessionCore, build_default_headless_agent
+from core.agent_harness import SessionCore
+from core.agent_harness.runtime import GatherPorts, HeadlessAgent, build_default_headless_agent
 from gateway.core.runtime.live_sink import LiveOutputSink
 from gateway.core.runtime.status_messages import status_from_tool_start
 from gateway.core.transport_api import GatewaySink

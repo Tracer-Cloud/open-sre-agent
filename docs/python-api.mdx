@@ -104,7 +104,7 @@ session = AgentSession.start(SessionConfig(prompts=my_provider))
 ```
 
 Omit it and the built-in provider applies
-(`core.agent_harness.DefaultPromptContextProvider`). A custom provider must
+(`core.agent_harness.spi.DefaultPromptContextProvider`). A custom provider must
 satisfy `core.agent_harness.ports.PromptContextProvider`. The same `prompts=`
 argument is accepted by `build_default_headless_agent` on the custom-ports path
 below.

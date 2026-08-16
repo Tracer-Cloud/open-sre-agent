@@ -307,39 +307,26 @@ def test_resume_config_reaches_session_manager() -> None:
     assert manager.resolve_calls[0]["session_id"] == "abc123"
 
 
-def test_every_exported_name_is_lazily_resolvable_and_type_checked() -> None:
-    """The three export lists in ``core.agent_harness`` must not drift apart.
+def test_every_advertised_name_is_a_plain_static_import() -> None:
+    """Each door's ``__all__`` names something imported at module level.
 
-    A public name lives in three places: ``_LAZY_EXPORTS`` (what ``__getattr__``
-    can resolve), ``__all__`` (what the package advertises), and the
-    ``TYPE_CHECKING`` block (what type checkers and static analysis can see).
-    ``DefaultPromptContextProvider`` was added to the first two but not the
-    third, so it resolved at runtime while reading as undefined to every static
-    tool looking at the package.
+    A plain re-export is visible to type checkers, IDEs, and readers alike; a
+    name that is only resolvable at runtime is not part of the API.
     """
-    # Arrange
     import ast
     from pathlib import Path
 
-    import core.agent_harness as harness
+    import core.agent_harness as root
+    import core.agent_harness.runtime as runtime
+    import core.agent_harness.spi as spi
 
-    source = Path(harness.__file__).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
-    type_checked: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.If) and getattr(node.test, "id", "") == "TYPE_CHECKING":
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.ImportFrom):
-                    type_checked.update(a.asname or a.name for a in stmt.names)
-
-    # Act
-    advertised = set(harness.__all__)
-    resolvable = set(harness.__dir__())
-
-    # Assert
-    assert advertised == resolvable, "__all__ and the lazy registry disagree"
-    assert advertised <= type_checked, (
-        f"advertised but absent from the TYPE_CHECKING block: {sorted(advertised - type_checked)}"
-    )
-    assert all(hasattr(harness, name) for name in advertised)
+    for door in (root, spi, runtime):
+        tree = ast.parse(Path(door.__file__).read_text(encoding="utf-8"))
+        imported: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                imported.update(alias.asname or alias.name for alias in node.names)
+        assert set(door.__all__) <= imported, (
+            f"{door.__name__}: advertised but not imported at module level: "
+            f"{sorted(set(door.__all__) - imported)}"
+        )

@@ -11,7 +11,7 @@ import inspect
 from typing import Any
 from unittest.mock import MagicMock
 
-from core.agent_harness import ActionTurnRunner
+from core.agent_harness.runtime import ActionTurnRunner
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
@@ -19,13 +19,15 @@ from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.session import Session
 
 
-def test_action_turn_runner_is_package_export() -> None:
+def test_action_turn_runner_is_exported_from_runtime_not_the_root() -> None:
     from core import agent_harness as pkg
+    from core.agent_harness import runtime
 
-    assert pkg.ActionTurnRunner is ActionTurnRunner
-    assert not hasattr(pkg, "run_action_turn")
-    assert not hasattr(pkg, "ActionRequest")
-    assert not hasattr(pkg, "execute_action_agent_turn")
+    assert runtime.ActionTurnRunner is ActionTurnRunner
+    assert not hasattr(pkg, "ActionTurnRunner")
+    assert not hasattr(runtime, "run_action_turn")
+    assert not hasattr(runtime, "ActionRequest")
+    assert not hasattr(runtime, "execute_action_agent_turn")
 
 
 def test_action_turn_runner_run_accepts_confirm_fn(monkeypatch: Any) -> None:

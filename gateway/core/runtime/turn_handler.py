@@ -20,13 +20,10 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness import (
-    AgentSession,
+from core.agent_harness import AgentSession, SessionConfig, SessionCore, SessionManager
+from core.agent_harness.spi import (
     DefaultTurnAccounting,
-    SessionConfig,
-    SessionCore,
     SessionGoal,
-    SessionManager,
     format_session_goal_progress,
     format_session_goal_status_line,
     run_until_session_goal,
