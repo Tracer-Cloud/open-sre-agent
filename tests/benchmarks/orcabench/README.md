@@ -4,7 +4,7 @@ orcabench/                           # OpenSRE integration for ORCA-Bench
 ├── __init__.py                         # Public benchmark package exports
 ├── config.py                           # Validated shared configuration and manifests
 ├── configs/                          # Checked-in experiment configurations
-│   ├── native_one_task.yml             # Scored Gradient AI one-task configuration
+│   ├── benchmark_one_task.yml          # Scored Gradient AI one-task benchmark configuration
 │   └── smoke_one_task.yml               # Unscored runtime-selectable one-task configuration
 ├── artifacts/                        # Redacted run-artifact schema and persistence
 │   ├── __init__.py                     # Public artifact exports

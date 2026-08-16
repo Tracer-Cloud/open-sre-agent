@@ -7,6 +7,7 @@ from tools.system.local_source import (
     read_local_source_file,
     search_local_source,
 )
+from tools.system.local_source.repository import MAX_READ_BYTES
 
 
 def _source(tmp_path: Path) -> Path:
@@ -63,6 +64,7 @@ def test_list_search_and_read_return_only_relative_bounded_source_evidence(
     assert read["start_line"] == 3
     assert read["end_line"] == 4
     assert read["truncated"] is False
+    assert read["truncated_by"] is None
 
 
 def test_local_source_rejects_parent_and_symlink_escape(tmp_path: Path) -> None:
@@ -90,3 +92,43 @@ def test_local_source_read_reports_truncation_at_native_boundary(tmp_path: Path)
     assert result["start_line"] == 1
     assert result["end_line"] == 400
     assert result["truncated"] is True
+    assert result["truncated_by"] == "line_limit"
+
+
+def test_local_source_read_streams_without_materializing_entire_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = _source(tmp_path)
+    path = root / "large.txt"
+    path.write_text("\n".join(f"line {line}" for line in range(1, 1000)), encoding="utf-8")
+
+    def fail_read_text(*_args, **_kwargs):
+        raise AssertionError("bounded source reads must stream instead of read_text")
+
+    monkeypatch.setattr(Path, "read_text", fail_read_text)
+
+    result = read_local_source_file(
+        path="large.txt",
+        start_line=10,
+        end_line=12,
+        root_path=str(root),
+    )
+
+    assert result["content"] == "line 10\nline 11\nline 12"
+    assert result["truncated"] is False
+    assert result["truncated_by"] is None
+
+
+def test_local_source_read_reports_byte_limit_for_huge_line(tmp_path: Path) -> None:
+    root = _source(tmp_path)
+    path = root / "huge.txt"
+    path.write_text("x" * (MAX_READ_BYTES + 100), encoding="utf-8")
+
+    result = read_local_source_file(path="huge.txt", start_line=1, root_path=str(root))
+
+    assert result["start_line"] == 1
+    assert result["end_line"] == 1
+    assert len(result["content"].encode("utf-8")) == MAX_READ_BYTES
+    assert result["truncated"] is True
+    assert result["truncated_by"] == "byte_limit"

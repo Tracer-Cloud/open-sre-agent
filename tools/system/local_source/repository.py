@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 MAX_READ_LINES = 400
+MAX_READ_BYTES = 64_000
 MAX_SEARCH_FILE_BYTES = 1_000_000
 
 
@@ -161,7 +162,7 @@ def read_file(
     start_line: int = 1,
     end_line: int = 0,
 ) -> dict[str, Any]:
-    """Read at most ``MAX_READ_LINES`` from one scoped source file."""
+    """Read a bounded slice from one scoped source file."""
     root = _root(root_path)
     target = _target(root, path)
     if not target.is_file():
@@ -171,13 +172,41 @@ def read_file(
     explicit_end = end_line if end_line >= effective_start else 0
     requested_end = explicit_end or effective_start + MAX_READ_LINES - 1
     effective_end = min(requested_end, effective_start + MAX_READ_LINES - 1)
+    selected: list[str] = []
+    content_bytes = 0
+    truncated_by: str | None = "line_limit" if requested_end > effective_end else None
+
     try:
-        lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
+        with target.open("r", encoding="utf-8", errors="replace") as source:
+            for line_number, raw_line in enumerate(source, start=1):
+                if line_number < effective_start:
+                    continue
+                if line_number > effective_end:
+                    if not explicit_end:
+                        truncated_by = "line_limit"
+                    break
+
+                line = raw_line.rstrip("\r\n")
+                separator_bytes = 1 if selected else 0
+                line_bytes = len(line.encode("utf-8"))
+                projected_bytes = content_bytes + separator_bytes + line_bytes
+                if projected_bytes > MAX_READ_BYTES:
+                    remaining_bytes = MAX_READ_BYTES - content_bytes - separator_bytes
+                    if remaining_bytes > 0:
+                        truncated = line.encode("utf-8")[:remaining_bytes].decode(
+                            "utf-8",
+                            errors="ignore",
+                        )
+                        selected.append(truncated)
+                    truncated_by = "byte_limit"
+                    break
+
+                selected.append(line)
+                content_bytes = projected_bytes
     except OSError as exc:
         raise LocalSourceError("path_unreadable") from exc
-    selected = lines[effective_start - 1 : effective_end]
+
     actual_end = effective_start + len(selected) - 1 if selected else effective_start - 1
-    truncated = (not explicit_end and effective_end < len(lines)) or requested_end > effective_end
     return {
         "source": "local_source",
         "available": True,
@@ -185,7 +214,8 @@ def read_file(
         "start_line": effective_start,
         "end_line": actual_end,
         "content": "\n".join(selected),
-        "truncated": truncated,
+        "truncated": truncated_by is not None,
+        "truncated_by": truncated_by,
     }
 
 

@@ -15,7 +15,7 @@ from tests.benchmarks.orcabench.config import (
 
 
 def _config_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "configs/native_one_task.yml"
+    return Path(__file__).resolve().parents[1] / "configs/benchmark_one_task.yml"
 
 
 def _smoke_config_path() -> Path:

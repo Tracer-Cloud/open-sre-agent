@@ -19,7 +19,7 @@ from tests.benchmarks.orcabench.tests._support import create_bundle
 
 
 def _config_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "configs/native_one_task.yml"
+    return Path(__file__).resolve().parents[2] / "configs/benchmark_one_task.yml"
 
 
 def test_custom_agent_is_real_harbor_installed_agent(tmp_path: Path) -> None:

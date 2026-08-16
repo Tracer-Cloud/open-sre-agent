@@ -42,7 +42,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=package_dir / "configs/native_one_task.yml",
+        default=package_dir / "configs/benchmark_one_task.yml",
     )
     parser.add_argument(
         "--cache-root",

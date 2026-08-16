@@ -26,7 +26,7 @@ def test_opensre_repo_root_contains_importable_tests_package() -> None:
 
 
 def _config_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "configs/native_one_task.yml"
+    return Path(__file__).resolve().parents[2] / "configs/benchmark_one_task.yml"
 
 
 def _smoke_config_path() -> Path:
