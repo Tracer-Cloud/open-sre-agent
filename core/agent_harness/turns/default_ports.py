@@ -30,6 +30,7 @@ from core.agent_harness.accounting.run_record import DefaultRunRecordFactory
 from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.ports import (
     ErrorReporter,
+    LlmFactory,
     OutputSink,
     PromptContextProvider,
     ReasoningClientProvider,
@@ -38,7 +39,6 @@ from core.agent_harness.ports import (
 )
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.action_driver import ToolCallingDeps
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
@@ -54,7 +54,7 @@ class DefaultPorts:
     ``console`` and ``logger`` feed only the defaults (tool rendering, tool
     action log, error reporting) and default to headless-safe instances;
     ``surface`` selects the prompt profile of the default prompt provider;
-    ``reporter`` replaces the default error reporter for every stage.
+    ``error_reporter`` replaces the default reporter for every stage.
     """
 
     session: SessionCore
@@ -63,7 +63,7 @@ class DefaultPorts:
     logger: logging.Logger | None = None
     surface: str | None = None
     #: A host's reporter for swallowed exceptions (the REPL adds Sentry); default logs.
-    reporter: ErrorReporter | None = None
+    error_reporter: ErrorReporter | None = None
 
     @cached_property
     def _console(self) -> Any:
@@ -78,8 +78,12 @@ class DefaultPorts:
         return self.logger if self.logger is not None else logging.getLogger("opensre")
 
     @cached_property
-    def error_reporter(self) -> ErrorReporter:
-        return self.reporter if self.reporter is not None else DefaultErrorReporter(self._logger)
+    def _error_reporter(self) -> ErrorReporter:
+        return (
+            self.error_reporter
+            if self.error_reporter is not None
+            else DefaultErrorReporter(self._logger)
+        )
 
     def tools(self) -> ToolProvider:
         """A bare :class:`DefaultToolProvider`; hosts pass their own configured one to :meth:`agent`."""
@@ -92,7 +96,7 @@ class DefaultPorts:
 
     def reasoning(self) -> ReasoningClientProvider:
         return DefaultReasoningClientProvider(
-            output=self.output, error_reporter=self.error_reporter, session=self.session
+            output=self.output, error_reporter=self._error_reporter, session=self.session
         )
 
     def run_factory(self) -> RunRecordFactory:
@@ -104,7 +108,7 @@ class DefaultPorts:
         tools: ToolProvider | None = None,
         prompts: PromptContextProvider | None = None,
         gather: GatherPorts | None = None,
-        deps: ToolCallingDeps | None = None,
+        llm_factory: LlmFactory | None = None,
     ) -> HeadlessAgent:
         """The agent on this family; each port a host passes replaces that default.
 
@@ -119,9 +123,9 @@ class DefaultPorts:
             prompts=prompts if prompts is not None else self.prompts(),
             reasoning=self.reasoning(),
             run_factory=self.run_factory(),
-            error_reporter=self.error_reporter,
+            error_reporter=self._error_reporter,
             gather=gather if gather is not None else GATHER_DISABLED,
-            deps=deps,
+            llm_factory=llm_factory,
         )
 
 

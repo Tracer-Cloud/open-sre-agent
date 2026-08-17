@@ -25,6 +25,10 @@ ToolEventObserver = Callable[[str, dict[str, Any]], None]
 # Confirmation prompt: given a summary, return the user's response string.
 ConfirmFn = Callable[[str], str]
 
+# Builds the LLM client the action runner drives; hosts and tests inject one
+# to replace the configured provider.
+LlmFactory = Callable[[], Any]
+
 
 @runtime_checkable
 class OutputSink(Protocol):
@@ -333,6 +337,8 @@ __all__ = [
     "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
+    "LlmFactory",
+    "OutputBindable",
     "OutputSink",
     "PromptContextProvider",
     "ReasoningClientProvider",

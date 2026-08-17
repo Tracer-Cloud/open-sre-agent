@@ -14,19 +14,18 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 
 from core.agent_harness import SessionManager
-from core.agent_harness.spi import (
+from core.agent_harness.spi.session_flags import clear_pending_autosubmit, set_auto_command
+from core.agent_harness.spi.session_goal import (
     MAX_GOAL_CONDITION_CHARS,
     SessionGoal,
     SessionGoalReason,
     SessionGoalStatus,
     attach_session_goal,
-    clear_pending_autosubmit,
     clear_session_goal,
     format_session_goal_progress,
     session_goal_is_active,
     session_goal_is_attached,
     session_goal_is_paused,
-    set_auto_command,
 )
 from platform.common.evidence_compaction import truncate_message
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT

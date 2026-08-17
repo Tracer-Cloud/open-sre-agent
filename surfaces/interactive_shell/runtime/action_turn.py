@@ -11,9 +11,10 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from core.agent_harness import OutputSink
-from core.agent_harness.spi import DefaultErrorReporter, ToolCallingTurnResult
-from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
+from core.agent_harness import OutputSink, ToolCallingTurnResult
+from core.agent_harness.ports import LlmFactory
+from core.agent_harness.spi.defaults import DefaultErrorReporter
+from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
@@ -52,7 +53,7 @@ def run_action_tool_turn(
     confirm_fn: Callable[[str], str] | None = None,
     is_tty: bool | None = None,
     request_exit: Callable[[], None] | None = None,
-    deps: ToolCallingDeps | None = None,
+    llm_factory: LlmFactory | None = None,
     turn_plan: TurnPlan | None = None,
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
@@ -65,7 +66,7 @@ def run_action_tool_turn(
     runner = ActionTurnRunner(
         output=sink,
         tools=shell_tool_provider(session, console, request_exit=request_exit),
-        deps=deps,
+        llm_factory=llm_factory,
         error_reporter=DefaultErrorReporter(),
         tool_hooks=tool_hooks,
     )

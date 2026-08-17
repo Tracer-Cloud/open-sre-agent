@@ -105,12 +105,11 @@ def test_omitting_prompts_keeps_the_built_in_context() -> None:
     assert type(harness.agent._prompts).__name__ == "DefaultPromptContextProvider"
 
 
-def test_default_prompt_provider_is_exported_from_spi() -> None:
-    from core.agent_harness import spi
+def test_default_prompt_provider_is_exported_from_spi_defaults() -> None:
     from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+    from core.agent_harness.spi import defaults
 
-    assert spi.DefaultPromptContextProvider is DefaultPromptContextProvider
-    assert "DefaultPromptContextProvider" in dir(spi)
+    assert defaults.DefaultPromptContextProvider is DefaultPromptContextProvider
 
 
 def test_builder_exposes_the_prompts_port() -> None:

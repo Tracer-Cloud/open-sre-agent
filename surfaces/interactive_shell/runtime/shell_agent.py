@@ -100,7 +100,7 @@ def build_shell_agent(
         session=session,
         output=resolve_output_sink(console, output),
         console=console,
-        reporter=ShellErrorReporter(),
+        error_reporter=ShellErrorReporter(),
     ).agent(
         tools=shell_tool_provider(session, console, request_exit=request_exit),
         prompts=shell_prompt_context_provider(session),

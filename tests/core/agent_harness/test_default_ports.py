@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from rich.console import Console
 
-from core.agent_harness.runtime import ToolCallingDeps, TurnBinding
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.default_ports import DefaultPorts
@@ -112,8 +112,8 @@ def test_primary_response_text_prefers_assistant() -> None:
     assert empty_assistant.primary_response_text == "from action"
 
 
-def test_default_ports_takes_the_hosts_tool_provider_and_forwards_runner_deps() -> None:
-    """A host varies the agent through its ``ToolProvider``; ``deps`` reach the runner.
+def test_default_ports_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> None:
+    """A host varies the agent through its ``ToolProvider``; ``llm_factory`` reaches the runner.
 
     ``tools`` is the bridge between the agent and a host's tool stack: the shell
     and gateway each configure a ``DefaultToolProvider`` and pass it in. Absent,
@@ -122,22 +122,27 @@ def test_default_ports_takes_the_hosts_tool_provider_and_forwards_runner_deps() 
     """
     from core.agent_harness.tools.tool_provider import DefaultToolProvider
 
-    # Arrange — a host-configured tool provider and runner ports.
+    # Arrange — a host-configured tool provider, an action LLM factory, and hooks.
     session = SessionCore(store=InMemorySessionStore())
     tools = DefaultToolProvider(session, Console(file=StringIO()))
-    deps = ToolCallingDeps()
+
+    def llm_factory() -> object:
+        return object()
+
     hooks = ToolExecutionHooks()
 
     # Act
-    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(tools=tools, deps=deps)
+    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(
+        tools=tools, llm_factory=llm_factory
+    )
     agent.bind_turn(TurnBinding(tool_hooks=hooks))
     bare = DefaultPorts(session=session, output=BufferOutputSink()).agent()
 
-    # Assert — the host's provider is used as-is; runner ports reach the runner;
-    # no ``tools`` yields a default provider.
+    # Assert — the host's provider is used as-is; the factory and hooks reach the
+    # runner; no ``tools`` yields a default provider.
     assert agent._tools is tools  # noqa: SLF001
     runner = agent._action_runner  # noqa: SLF001
-    assert runner.deps is deps
+    assert runner.llm_factory is llm_factory
     assert runner.tool_hooks is hooks
     assert isinstance(bare._tools, DefaultToolProvider)  # noqa: SLF001
 

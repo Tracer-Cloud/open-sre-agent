@@ -24,15 +24,20 @@ _FORBIDDEN_PREFIX = "core.agent_harness."
 #: Modules a host may import the harness through; anything else under the
 #: prefix is a deep import.
 _PUBLIC_DOORS = frozenset(
-    {"core.agent_harness", "core.agent_harness.spi", "core.agent_harness.runtime"}
+    {"core.agent_harness", "core.agent_harness.ports", "core.agent_harness.runtime"}
 )
 _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
+_SPI_ROLE_PREFIX = "core.agent_harness.spi."
+
+
+def _is_public_door(module: str) -> bool:
+    return module in _PUBLIC_DOORS or module.startswith(_SPI_ROLE_PREFIX)
+
 
 #: Harness submodules surfaces/ still imports directly. Shrink-only.
 _KNOWN_DEEP_IMPORTS = frozenset(
     {
         "core.agent_harness.llm_resolution",
-        "core.agent_harness.ports",
         "core.agent_harness.prompts.rules",
         "core.agent_harness.prompts.skills.loader",
         "core.agent_harness.session.persistence.jsonl_store",
@@ -70,14 +75,14 @@ def _deep_modules(tree: ast.AST) -> set[str]:
             found.update(
                 alias.name
                 for alias in node.names
-                if alias.name.startswith(_FORBIDDEN_PREFIX) and alias.name not in _PUBLIC_DOORS
+                if alias.name.startswith(_FORBIDDEN_PREFIX) and not _is_public_door(alias.name)
             )
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             if (
                 node.level == 0
                 and module.startswith(_FORBIDDEN_PREFIX)
-                and module not in _PUBLIC_DOORS
+                and not _is_public_door(module)
             ):
                 found.add(module)
         elif isinstance(node, ast.Call) and _call_name(node) in _DYNAMIC_IMPORTERS:
@@ -86,7 +91,7 @@ def _deep_modules(tree: ast.AST) -> set[str]:
                     isinstance(arg, ast.Constant)
                     and isinstance(arg.value, str)
                     and arg.value.startswith(_FORBIDDEN_PREFIX)
-                    and arg.value not in _PUBLIC_DOORS
+                    and not _is_public_door(arg.value)
                 ):
                     found.add(arg.value)
     return found

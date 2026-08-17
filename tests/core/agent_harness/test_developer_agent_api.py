@@ -310,19 +310,39 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
     name that is only resolvable at runtime is not part of the API.
     """
     import ast
+    import importlib
     from pathlib import Path
 
     import core.agent_harness as root
+    import core.agent_harness.ports as ports
     import core.agent_harness.runtime as runtime
-    import core.agent_harness.spi as spi
 
-    for door in (root, spi, runtime):
+    roles = [
+        importlib.import_module(f"core.agent_harness.spi.{r}")
+        for r in (
+            "session_goal",
+            "session_flags",
+            "cancel",
+            "accounting",
+            "prompt_chrome",
+            "integrations",
+            "grounding",
+            "defaults",
+        )
+    ]
+    for door in (root, ports, runtime, *roles):
         tree = ast.parse(Path(door.__file__).read_text(encoding="utf-8"))
-        imported: set[str] = set()
+        bound: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ImportFrom):
-                imported.update(alias.asname or alias.name for alias in node.names)
-        assert set(door.__all__) <= imported, (
-            f"{door.__name__}: advertised but not imported at module level: "
-            f"{sorted(set(door.__all__) - imported)}"
+                bound.update(alias.asname or alias.name for alias in node.names)
+            elif isinstance(node, ast.ClassDef | ast.FunctionDef):
+                bound.add(node.name)
+            elif isinstance(node, ast.Assign):
+                bound.update(t.id for t in node.targets if isinstance(t, ast.Name))
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                bound.add(node.target.id)
+        assert set(door.__all__) <= bound, (
+            f"{door.__name__}: advertised but not bound at module level: "
+            f"{sorted(set(door.__all__) - bound)}"
         )

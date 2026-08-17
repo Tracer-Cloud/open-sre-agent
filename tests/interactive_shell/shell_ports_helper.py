@@ -13,9 +13,9 @@ from rich.console import Console
 
 from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.runtime import DefaultPorts
-from core.agent_harness.spi import stream_answer
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory, gather_tool_evidence
 from core.agent_harness.turns.gather_observation import GatheredEvidence
+from core.agent_harness.turns.orchestrator import stream_answer
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
@@ -38,7 +38,7 @@ def answer_through_shell_ports(
         session=session,  # type: ignore[arg-type]
         output=ShellOutputSink(console),
         console=console,
-        reporter=ShellErrorReporter(),
+        error_reporter=ShellErrorReporter(),
     )
     return stream_answer(
         message,
@@ -47,7 +47,7 @@ def answer_through_shell_ports(
         prompts=shell_prompt_context_provider(session),
         reasoning=ports.reasoning(),
         run_factory=ports.run_factory(),
-        error_reporter=ports.error_reporter,
+        error_reporter=ports._error_reporter,  # noqa: SLF001
         request=request if request is not None else AnswerRequest(),
     )
 

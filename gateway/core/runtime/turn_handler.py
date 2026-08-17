@@ -22,8 +22,8 @@ from rich.console import Console
 
 from core.agent_harness import AgentSession, SessionConfig, SessionCore, SessionManager
 from core.agent_harness.runtime import TurnBinding
-from core.agent_harness.spi import (
-    DefaultTurnAccounting,
+from core.agent_harness.spi.accounting import DefaultTurnAccounting
+from core.agent_harness.spi.session_goal import (
     SessionGoal,
     format_session_goal_progress,
     format_session_goal_status_line,

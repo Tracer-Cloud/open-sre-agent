@@ -12,7 +12,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness import OutputSink
-from core.agent_harness.spi import DefaultErrorReporter, strip_session_goal_progress_tags
+from core.agent_harness.spi.defaults import DefaultErrorReporter
+from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.ui.streaming import (
     StreamPaintResult,

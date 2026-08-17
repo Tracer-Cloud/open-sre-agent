@@ -36,6 +36,7 @@ from core.agent_harness.ports import (
     ErrorReporter,
     EvidenceGatherer,
     ExecuteActions,
+    LlmFactory,
     OutputBindable,
     OutputSink,
     PromptContextProvider,
@@ -52,10 +53,7 @@ from core.agent_harness.prompts.grounding import (
     DefaultPromptContextProvider,
     supports_default_prompt_context,
 )
-from core.agent_harness.turns.action_driver import (
-    ActionTurnRunner,
-    ToolCallingDeps,
-)
+from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.gather_observation import GatheredEvidence
@@ -108,10 +106,10 @@ class HeadlessAgent:
         run_factory: RunRecordFactory | None = None,
         error_reporter: ErrorReporter | None = None,
         gather: GatherPorts | None = None,
-        deps: ToolCallingDeps | None = None,
+        llm_factory: LlmFactory | None = None,
     ) -> None:
         self._tools = tools
-        self._deps = deps
+        self._llm_factory = llm_factory
         self._session: SessionState = session if session is not None else InMemorySessionState()
         self._output: OutputSink = output if output is not None else BufferOutputSink()
         self._prompts: PromptContextProvider = (
@@ -141,7 +139,7 @@ class HeadlessAgent:
         return ActionTurnRunner(
             output=self._output,
             tools=self._tools,
-            deps=self._deps,
+            llm_factory=self._llm_factory,
             error_reporter=self._error_reporter,
             tool_hooks=self._tool_hooks,
         )

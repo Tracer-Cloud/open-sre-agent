@@ -23,11 +23,16 @@ _FORBIDDEN_PREFIX = "core.agent_harness."
 #: Modules a host may import the harness through; anything else under the
 #: prefix is a deep import.
 _PUBLIC_DOORS = frozenset(
-    {"core.agent_harness", "core.agent_harness.spi", "core.agent_harness.runtime"}
+    {"core.agent_harness", "core.agent_harness.ports", "core.agent_harness.runtime"}
 )
 
 #: Callables whose string argument names a module to import at runtime.
 _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
+_SPI_ROLE_PREFIX = "core.agent_harness.spi."
+
+
+def _is_public_door(module: str) -> bool:
+    return module in _PUBLIC_DOORS or module.startswith(_SPI_ROLE_PREFIX)
 
 
 def _gateway_sources() -> list[Path]:
@@ -54,7 +59,7 @@ def _submodule_imports(tree: ast.AST) -> list[str]:
             hits.extend(
                 f"import {alias.name}"
                 for alias in node.names
-                if alias.name.startswith(_FORBIDDEN_PREFIX) and alias.name not in _PUBLIC_DOORS
+                if alias.name.startswith(_FORBIDDEN_PREFIX) and not _is_public_door(alias.name)
             )
         elif isinstance(node, ast.ImportFrom):
             # ``level`` > 0 is a relative import and cannot name the harness.
@@ -62,7 +67,7 @@ def _submodule_imports(tree: ast.AST) -> list[str]:
             if (
                 node.level == 0
                 and module.startswith(_FORBIDDEN_PREFIX)
-                and module not in _PUBLIC_DOORS
+                and not _is_public_door(module)
             ):
                 hits.append(f"from {module} import …")
         elif isinstance(node, ast.Call) and _call_name(node) in _DYNAMIC_IMPORTERS:
@@ -71,7 +76,7 @@ def _submodule_imports(tree: ast.AST) -> list[str]:
                     isinstance(arg, ast.Constant)
                     and isinstance(arg.value, str)
                     and arg.value.startswith(_FORBIDDEN_PREFIX)
-                    and arg.value not in _PUBLIC_DOORS
+                    and not _is_public_door(arg.value)
                 ):
                     hits.append(f"import_module({arg.value!r})")
     return hits

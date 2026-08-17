@@ -255,7 +255,7 @@ def test_literal_slash_command_records_single_history_entry(
         "/model show",
         session,
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert result.handled is True

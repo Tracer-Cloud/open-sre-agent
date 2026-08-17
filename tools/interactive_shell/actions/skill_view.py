@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.prompts.skills.loader import load_skill_body
-from core.agent_harness.spi import list_action_skills
+from core.agent_harness.spi.grounding import list_action_skills
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,

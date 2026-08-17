@@ -15,15 +15,19 @@ from dataclasses import dataclass, replace
 
 from rich.console import Console
 
-from core.agent_harness import AgentSession, OutputSink, SessionConfig
-from core.agent_harness.ports import AnswerRequest
-from core.agent_harness.runtime import HeadlessAgent, TurnBinding
-from core.agent_harness.spi import (
-    SessionGoal,
+from core.agent_harness import (
+    AgentSession,
+    OutputSink,
+    SessionConfig,
     ToolCallingTurnResult,
     TurnResult,
+)
+from core.agent_harness.ports import AnswerRequest
+from core.agent_harness.runtime import HeadlessAgent, TurnBinding
+from core.agent_harness.spi.cancel import host_cancel_requested
+from core.agent_harness.spi.session_goal import (
+    SessionGoal,
     format_session_goal_progress,
-    host_cancel_requested,
     run_until_session_goal,
 )
 from core.agent_harness.turns.gather_observation import GatheredEvidence
