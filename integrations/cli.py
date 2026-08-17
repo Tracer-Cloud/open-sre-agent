@@ -339,6 +339,15 @@ def _github_browser_authorize() -> str | None:
     return token.access_token
 
 
+def _github_browser_auth_token() -> str:
+    """Authorize in the browser, falling back to manual token entry."""
+    token = _github_browser_authorize()
+    if token:
+        return token
+    print("  Falling back to manual token entry.")
+    return _p("GitHub PAT / auth token", secret=True)
+
+
 def _setup_github_auth_token(mode: str) -> str:
     """Resolve a GitHub MCP auth token, offering browser sign-in for remote modes."""
     if mode == "stdio":
@@ -365,10 +374,7 @@ def _setup_github_auth_token(mode: str) -> str:
     if auth_method == "none":
         return ""
     if auth_method == "browser":
-        token = _github_browser_authorize()
-        if token:
-            return token
-        print("  Falling back to manual token entry.")
+        return _github_browser_auth_token()
     return _p("GitHub PAT / auth token", secret=True)
 
 
@@ -453,25 +459,30 @@ def _setup_github() -> str | None:
     from integrations.github.setup import GITHUB_SETUP
     from integrations.setup_flow import apply_setup
 
-    print("  Connect OpenSRE to GitHub through the hosted GitHub MCP server.")
-    advanced = _confirm(
-        "Customize advanced settings (transport, server URL, toolsets, repo scope)?",
-        default=False,
+    print("  Connect OpenSRE to your GitHub repositories.")
+    setup_path = _select(
+        "How would you like to connect?",
+        choices=[
+            questionary.Choice("Sign in with GitHub (recommended)", value="recommended"),
+            questionary.Choice("Customize connection", value="customize"),
+        ],
+        default="recommended",
     )
-    if advanced is None:
+    if setup_path is None:
         print("\nAborted.")
         sys.exit(1)
+    customize = setup_path == "customize"
 
     credentials: dict[str, Any] = {}
     repo_view: str = "auto"
     repo_visibility: str = "any"
 
-    if advanced:
+    if customize:
         repo_view, repo_visibility = _github_advanced_setup(credentials)
     else:
         credentials["mode"] = DEFAULT_GITHUB_MCP_MODE
         credentials["url"] = DEFAULT_GITHUB_MCP_URL
-        credentials["auth_token"] = _setup_github_auth_token(DEFAULT_GITHUB_MCP_MODE)
+        credentials["auth_token"] = _github_browser_auth_token()
         credentials["toolsets"] = list(DEFAULT_GITHUB_MCP_TOOLSETS)
 
     print("\n  Validating GitHub MCP integration...")
@@ -486,7 +497,7 @@ def _setup_github() -> str | None:
         # Only the advanced path offers the verbose repo listing.
         level = (
             _prompt_github_repo_report_level()
-            if advanced
+            if customize
             else cast(GitHubMcpDisplayDetailLevel, "summary")
         )
         print()
