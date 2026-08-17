@@ -6,6 +6,7 @@ import threading
 from typing import Any
 
 from core.agent_harness.ports import ConsoleBindable, OutputBindable, SessionBindable
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_adapters import (
@@ -75,7 +76,7 @@ def test_headless_agent_bind_session_invokes_session_bindable() -> None:
 def test_headless_agent_bind_turn_console_invokes_console_bindable() -> None:
     tools = _SpyTools()
     agent = HeadlessAgent(tools=tools, session=InMemorySessionState())
-    agent.bind_turn(console="second")
+    agent.bind_turn(TurnBinding(console="second"))
     assert tools.consoles == ["second"]
 
 
@@ -101,7 +102,7 @@ def test_headless_agent_bind_turn_output_retargets_reasoning() -> None:
         output=first,
         reasoning=reasoning,
     )
-    agent.bind_turn(output=second)
+    agent.bind_turn(TurnBinding(output=second))
     reasoning._handle_unavailable(RuntimeError("boom"), context="test")
     assert "LLM client unavailable" in second.text
     assert first.text == ""

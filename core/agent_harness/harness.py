@@ -193,12 +193,13 @@ class AgentSession:
         (gateway pool, REPL) build through :class:`DefaultPorts` themselves and
         call :meth:`attach_agent` — they must not re-copy this wiring ad hoc.
         """
+        from core.agent_harness.ports import TurnBinding
         from core.agent_harness.turns.default_ports import DefaultPorts
 
         agent = DefaultPorts(
             session=session, output=output, console=console, logger=logger, surface=surface
         ).agent(tools=tools, prompts=prompts, gather=gather, deps=deps)
-        agent.bind_turn(is_tty=is_tty)
+        agent.bind_turn(TurnBinding(is_tty=is_tty))
         self.attach_agent(agent)
 
     @classmethod

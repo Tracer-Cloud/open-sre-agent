@@ -28,8 +28,6 @@ Example::
 
 from __future__ import annotations
 
-from typing import Any
-
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
     AnswerRequest,
@@ -48,6 +46,7 @@ from core.agent_harness.ports import (
     StreamAnswerFn,
     ToolProvider,
     TurnAccounting,
+    TurnBinding,
 )
 from core.agent_harness.prompts.grounding import (
     DefaultPromptContextProvider,
@@ -77,20 +76,6 @@ from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
-
-
-class _Unmentioned:
-    """Marks a port the caller did not mention, as distinct from one cleared.
-
-    ``bind_turn(output=...)`` must leave the hooks alone, but
-    ``bind_turn(tool_hooks=None)`` must clear them — the gateway passes ``None``
-    for a sink that has no approval hooks, and a pooled agent would otherwise
-    keep the previous sink's callback and send approvals to the wrong
-    conversation.
-    """
-
-
-_UNMENTIONED = _Unmentioned()
 
 
 class HeadlessAgent:
@@ -177,53 +162,32 @@ class HeadlessAgent:
             if isinstance(port, SessionBindable):
                 port.bind_session(session)
 
-    def bind_turn(
-        self,
-        *,
-        output: OutputSink | None = None,
-        accounting: TurnAccounting | None = None,
-        tool_hooks: ToolExecutionHooks | None | _Unmentioned = _UNMENTIONED,
-        session: SessionState | None = None,
-        console: Any | None = None,
-        confirm_fn: ConfirmFn | None | _Unmentioned = _UNMENTIONED,
-        is_tty: bool | None | _Unmentioned = _UNMENTIONED,
-    ) -> None:
-        """Swap turn-scoped ports so one agent can serve many turns.
+    def bind_turn(self, binding: TurnBinding) -> None:
+        """Bind the turn's ports and values; the whole binding replaces the previous one.
 
-        ``confirm_fn`` and ``is_tty`` are per-turn on an interactive host (the
-        REPL's cancellation-safe confirmation prompt); like ``tool_hooks``,
-        passing ``None`` clears them and omitting them leaves them alone.
-
-        Per-message accounting and (when provided) the current session object
-        are rebound each inbound message. ``console`` rebinds a
-        :class:`~core.agent_harness.ports.ConsoleBindable` tool provider so
-        cooperative cancel (``cancel_requested``) is per-turn.
-
-        Gateway keeps a stable ``LiveOutputSink`` on the pooled agent and
-        rebinds the outer transport sink via ``LiveOutputSink.bind`` — it does
-        not pass ``output=`` here. Hosts that replace the ``OutputSink`` object
-        itself must pass ``output=`` so :class:`~core.agent_harness.ports.OutputBindable`
-        ports (reasoning error rendering) follow the new sink.
+        Rebinding ``session`` retargets every :class:`SessionBindable` port;
+        ``console`` a :class:`ConsoleBindable` tool provider (cooperative cancel
+        is per-turn). A new ``output`` object retargets :class:`OutputBindable`
+        ports and, like a change of ``tool_hooks``, rebuilds the action runner
+        — an unchanged one keeps it. Gateway keeps a stable ``LiveOutputSink``
+        and rebinds the transport sink inside it, so it leaves ``output`` unset.
         """
-        if session is not None:
-            self.bind_session(session)
-        if console is not None and isinstance(self._tools, ConsoleBindable):
-            self._tools.bind_console(console)
+        if binding.session is not None:
+            self.bind_session(binding.session)
+        if binding.console is not None and isinstance(self._tools, ConsoleBindable):
+            self._tools.bind_console(binding.console)
         runner_changed = False
-        if output is not None:
-            self._output = output
+        if binding.output is not None and binding.output is not self._output:
+            self._output = binding.output
             if isinstance(self._reasoning, OutputBindable):
-                self._reasoning.bind_output(output)
+                self._reasoning.bind_output(binding.output)
             runner_changed = True
-        if accounting is not None:
-            self._accounting = accounting
-        if not isinstance(tool_hooks, _Unmentioned):
-            self._tool_hooks = tool_hooks
+        if binding.tool_hooks is not self._tool_hooks:
+            self._tool_hooks = binding.tool_hooks
             runner_changed = True
-        if not isinstance(confirm_fn, _Unmentioned):
-            self._confirm_fn = confirm_fn
-        if not isinstance(is_tty, _Unmentioned):
-            self._is_tty = is_tty
+        self._accounting = binding.accounting
+        self._confirm_fn = binding.confirm_fn
+        self._is_tty = binding.is_tty
         if runner_changed:
             self._action_runner = self._new_action_runner()
 
@@ -232,7 +196,7 @@ class HeadlessAgent:
 
         A prior turn's ``DefaultTurnAccounting`` (which captures that turn's
         prompt text) must not leak into the next ``dispatch`` when a host
-        forgets ``bind_turn(accounting=…)``.
+        binds a turn without accounting.
         """
         accounting = self._accounting
         self._accounting = None

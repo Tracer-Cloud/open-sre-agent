@@ -10,13 +10,13 @@ The injection contracts live in ``turn_seams``.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from rich.console import Console
 
 from core.agent_harness import AgentSession, OutputSink, SessionConfig
 from core.agent_harness.ports import AnswerRequest, ExecuteActions
-from core.agent_harness.runtime import HeadlessAgent
+from core.agent_harness.runtime import HeadlessAgent, TurnBinding
 from core.agent_harness.spi import (
     SessionGoal,
     ToolCallingTurnResult,
@@ -144,7 +144,7 @@ def execute_shell_turn(
         agent = build_shell_agent(
             session, console, output=resolved_output, request_exit=request_exit
         )
-    agent.bind_turn(
+    binding = TurnBinding(
         session=session,
         output=resolved_output,
         tool_hooks=tool_hooks,
@@ -152,6 +152,7 @@ def execute_shell_turn(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
     )
+    agent.bind_turn(binding)
     agent.bind_stages(
         execute_actions=execute_stage,
         answer=stages.answer,
@@ -163,7 +164,10 @@ def execute_shell_turn(
     def _chat(message: str) -> TurnResult:
         # Fresh accounting per outer iteration (nudge text changes each turn).
         agent.bind_turn(
-            accounting=ShellTurnAccounting(session=session, text=message, recorder=recorder)
+            replace(
+                binding,
+                accounting=ShellTurnAccounting(session=session, text=message, recorder=recorder),
+            )
         )
         return chat_host.chat(message, agent=agent)
 

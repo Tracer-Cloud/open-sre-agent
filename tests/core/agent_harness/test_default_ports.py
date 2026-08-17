@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from rich.console import Console
 
-from core.agent_harness.runtime import ToolCallingDeps
+from core.agent_harness.runtime import ToolCallingDeps, TurnBinding
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.default_ports import DefaultPorts
@@ -130,7 +130,7 @@ def test_default_ports_takes_the_hosts_tool_provider_and_forwards_runner_deps() 
 
     # Act
     agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(tools=tools, deps=deps)
-    agent.bind_turn(tool_hooks=hooks)
+    agent.bind_turn(TurnBinding(tool_hooks=hooks))
     bare = DefaultPorts(session=session, output=BufferOutputSink()).agent()
 
     # Assert — the host's provider is used as-is; runner ports reach the runner;

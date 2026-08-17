@@ -156,8 +156,7 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
 
     assert factory.call_count == 1
     assert agent.dispatch.call_count == 2
-    # One bind at build (is_tty) plus one per turn.
-    assert agent.bind_turn.call_count == 3
+    assert agent.bind_turn.call_count == 2
 
 
 def _fake_agent_pool(monkeypatch: pytest.MonkeyPatch) -> SessionAgentPool:

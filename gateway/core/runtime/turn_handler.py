@@ -21,6 +21,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness import AgentSession, SessionConfig, SessionCore, SessionManager
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.spi import (
     DefaultTurnAccounting,
     SessionGoal,
@@ -132,10 +133,13 @@ class GatewayTurnHandler:
                 if surface:
                     capture_gateway_turn_started(surface=surface)
                 agent.bind_turn(
-                    session=session,
-                    accounting=DefaultTurnAccounting(session, text),
-                    tool_hooks=getattr(sink, "tool_hooks", None),
-                    console=turn_console,
+                    TurnBinding(
+                        session=session,
+                        accounting=DefaultTurnAccounting(session, text),
+                        tool_hooks=getattr(sink, "tool_hooks", None),
+                        console=turn_console,
+                        is_tty=False,
+                    )
                 )
 
                 def _chat(message: str) -> Any:

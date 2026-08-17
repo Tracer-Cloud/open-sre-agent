@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.runtime import GatherPorts
+from core.agent_harness.runtime import GatherPorts, TurnBinding
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from tests.shared.default_ports_stub import default_ports_stub
 
@@ -78,7 +78,7 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
     assert built["prompts"] is prompts
     assert "message" not in built  # accounting is built at dispatch, not at construction
     assert built["gather"] == GatherPorts()
-    agent.bind_turn.assert_any_call(is_tty=False)
+    agent.bind_turn.assert_any_call(TurnBinding(is_tty=False))
     agent.dispatch.assert_called_once_with("summarize sentry")
 
 

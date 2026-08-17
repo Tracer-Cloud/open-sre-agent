@@ -11,7 +11,7 @@ import inspect
 from typing import Any
 from unittest.mock import MagicMock
 
-from core.agent_harness.runtime import ActionTurnRunner
+from core.agent_harness.runtime import ActionTurnRunner, TurnBinding
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
@@ -75,7 +75,7 @@ def test_bind_turn_rebuilds_action_runner_when_output_changes() -> None:
     before = agent._action_runner  # noqa: SLF001
     assert before.output is first
 
-    agent.bind_turn(output=second)
+    agent.bind_turn(TurnBinding(output=second))
     after = agent._action_runner  # noqa: SLF001
     assert after is not before
     assert after.output is second
@@ -86,7 +86,7 @@ def test_bind_turn_rebuilds_action_runner_when_tool_hooks_change() -> None:
     agent = HeadlessAgent(tools=NullToolProvider())
     before = agent._action_runner  # noqa: SLF001
 
-    agent.bind_turn(tool_hooks=hooks)
+    agent.bind_turn(TurnBinding(tool_hooks=hooks))
     after = agent._action_runner  # noqa: SLF001
     assert after is not before
     assert after.tool_hooks is hooks
@@ -95,7 +95,7 @@ def test_bind_turn_rebuilds_action_runner_when_tool_hooks_change() -> None:
 def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
     agent = HeadlessAgent(tools=NullToolProvider())
     before = agent._action_runner  # noqa: SLF001
-    agent.bind_turn(accounting=MagicMock())
+    agent.bind_turn(TurnBinding(accounting=MagicMock()))
     assert agent._action_runner is before  # noqa: SLF001
 
 
@@ -120,7 +120,7 @@ def test_shell_agent_keeps_core_runner_across_console_rebind() -> None:
     agent = build_shell_agent(Session(), first)
     before = agent._action_runner  # noqa: SLF001
 
-    agent.bind_turn(console=second)
+    agent.bind_turn(TurnBinding(console=second))
     after = agent._action_runner  # noqa: SLF001
 
     assert after is before
@@ -134,7 +134,7 @@ def test_shell_agent_rebuilds_runner_when_external_output_changes() -> None:
     agent = build_shell_agent(Session(), Console(file=MagicMock()))
     before = agent._action_runner  # noqa: SLF001
 
-    agent.bind_turn(output=BufferOutputSink())
+    agent.bind_turn(TurnBinding(output=BufferOutputSink()))
     after = agent._action_runner  # noqa: SLF001
 
     assert after is not before
@@ -153,33 +153,43 @@ def test_a_sink_without_hooks_clears_the_previous_sinks_hooks() -> None:
     # Arrange
     agent = HeadlessAgent(tools=NullToolProvider())
     approval_hooks = MagicMock()
-    agent.bind_turn(tool_hooks=approval_hooks)
+    agent.bind_turn(TurnBinding(tool_hooks=approval_hooks))
     assert agent._tool_hooks is approval_hooks  # noqa: SLF001
 
     # Act: the next turn's sink has no hooks.
-    agent.bind_turn(tool_hooks=None)
+    agent.bind_turn(TurnBinding(tool_hooks=None))
 
     # Assert
     assert agent._tool_hooks is None  # noqa: SLF001
 
 
-def test_omitting_hooks_leaves_them_attached() -> None:
-    """Rebinding only the sink must not silently drop the hooks.
+def test_a_binding_states_the_whole_turn_and_replace_carries_it_forward() -> None:
+    """A ``TurnBinding`` replaces the previous turn's values wholesale.
 
-    The mirror of the case above: callers that swap ``output`` alone rely on the
-    hooks surviving, so "not mentioned" and "explicitly cleared" cannot be the
-    same thing.
+    Nothing accumulates from an earlier binding — hooks not in this turn's
+    binding are gone. A host that rebinds mid-turn (the shell swaps accounting
+    per goal-loop iteration) does so with ``replace(binding, …)``, which
+    carries the turn's hooks and callback forward by construction.
     """
+    from dataclasses import replace
+
     # Arrange
     agent = HeadlessAgent(tools=NullToolProvider())
     approval_hooks = MagicMock()
-    agent.bind_turn(tool_hooks=approval_hooks)
+    confirm = MagicMock()
+    binding = TurnBinding(tool_hooks=approval_hooks, confirm_fn=confirm, is_tty=True)
+    agent.bind_turn(binding)
 
-    # Act
-    agent.bind_turn(output=BufferOutputSink())
+    # Act — a mid-turn rebind derived from the same binding keeps everything;
+    # a fresh binding without hooks drops them.
+    agent.bind_turn(replace(binding, accounting=MagicMock()))
+    kept = (agent._tool_hooks, agent._confirm_fn, agent._is_tty)  # noqa: SLF001
+    agent.bind_turn(TurnBinding(output=BufferOutputSink()))
 
     # Assert
-    assert agent._tool_hooks is approval_hooks  # noqa: SLF001
+    assert kept == (approval_hooks, confirm, True)
+    assert agent._tool_hooks is None  # noqa: SLF001
+    assert agent._confirm_fn is None  # noqa: SLF001
 
 
 def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None:

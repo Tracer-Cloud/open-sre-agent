@@ -163,7 +163,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["gather"], GatherPorts)
     assert ctor.kwargs["gather"].enabled is True
-    agent_cls.return_value.bind_turn.assert_any_call(is_tty=False)
+    turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
+    assert turn_binding.is_tty is False
     # The gateway hands the factory its configured tool provider (the bridge
     # between the agent and the host's tool stack), not loose port factories.
     tool_provider = ctor.kwargs["tools"]
@@ -181,8 +182,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "shell_run",
         "{'command': 'pwd'}",
     )
-    bind_kwargs = agent_cls.return_value.bind_turn.call_args.kwargs
-    assert isinstance(bind_kwargs["accounting"], DefaultTurnAccounting)
+    turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
+    assert isinstance(turn_binding.accounting, DefaultTurnAccounting)
 
 
 def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatch) -> None:

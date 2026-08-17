@@ -287,7 +287,7 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     sink.finalize.assert_not_called()
-    console = agent_cls.return_value.bind_turn.call_args.kwargs["console"]
+    console = agent_cls.return_value.bind_turn.call_args.args[0].console
     assert isinstance(console, CancelConsole)
     assert console.cancel_requested is True
 
@@ -300,7 +300,7 @@ def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
     sink = MagicMock()
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
-    console = agent_cls.return_value.bind_turn.call_args.kwargs["console"]
+    console = agent_cls.return_value.bind_turn.call_args.args[0].console
     assert isinstance(console, CancelConsole)
     assert console.cancel_requested is False
     assert isinstance(sink.turn_cancel, threading.Event)
@@ -315,7 +315,7 @@ def test_turn_handler_forwards_sink_tool_hooks_to_agent(monkeypatch: Any) -> Non
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), sink, logging.getLogger("test"))
     agent = agent_cls.return_value
-    assert agent.bind_turn.call_args.kwargs["tool_hooks"] is hooks
+    assert agent.bind_turn.call_args.args[0].tool_hooks is hooks
 
 
 def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> None:
@@ -329,7 +329,7 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
     handler("hi", SessionCore(store=InMemorySessionStore()), _BareSink(), logging.getLogger("test"))
     agent = agent_cls.return_value
-    assert agent.bind_turn.call_args.kwargs["tool_hooks"] is None
+    assert agent.bind_turn.call_args.args[0].tool_hooks is None
 
 
 def test_turn_handler_disables_unsupported_gateway_capabilities(monkeypatch: Any) -> None:

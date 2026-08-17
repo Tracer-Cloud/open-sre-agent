@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.harness import AgentSession, SessionConfig
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.turns.headless_dispatch import (
     HeadlessAgent,
     NullToolProvider,
@@ -72,7 +73,7 @@ def test_headless_bind_turn_swaps_output() -> None:
         reasoning=StaticReasoningClientProvider(client=_Echo()),
     )
     before_runner = agent._action_runner  # noqa: SLF001
-    agent.bind_turn(output=second)
+    agent.bind_turn(TurnBinding(output=second))
     assert agent._output is second  # noqa: SLF001
     assert agent._action_runner is not before_runner  # noqa: SLF001
     assert agent._action_runner.output is second  # noqa: SLF001

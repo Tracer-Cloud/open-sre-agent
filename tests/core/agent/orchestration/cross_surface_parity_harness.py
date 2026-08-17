@@ -16,6 +16,7 @@ from typing import Any, Literal
 from rich.console import Console
 
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
@@ -321,7 +322,7 @@ def _dispatch_turn(
         reasoning=DefaultReasoningClientProvider(output=output),
         gather=GatherPorts(enabled=gather_enabled),
     )
-    agent.bind_turn(accounting=NoopTurnAccounting())
+    agent.bind_turn(TurnBinding(accounting=NoopTurnAccounting()))
     return agent.dispatch(message)
 
 

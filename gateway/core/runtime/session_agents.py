@@ -135,7 +135,6 @@ class SessionAgentPool:
             ),
             gather=GatherPorts(),
         )
-        agent.bind_turn(is_tty=False)
         if session_id:
             self._agents[session_id] = agent
         return agent
