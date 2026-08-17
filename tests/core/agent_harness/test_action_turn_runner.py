@@ -12,12 +12,15 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from core.agent_harness.runtime import ActionTurnRunner, TurnBinding
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.port_families import HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
+from surfaces.interactive_shell.runtime.turn_seams import bind_injected_stages
 from surfaces.interactive_shell.session import Session
 
 
@@ -60,7 +63,7 @@ def test_action_turn_runner_run_accepts_confirm_fn(monkeypatch: Any) -> None:
     assert captured["is_tty"] is False
 
 
-def test_headless_dispatch_uses_bound_methods_not_nested_defs() -> None:
+def test_headless_agent_uses_bound_methods_not_nested_defs() -> None:
     source = inspect.getsource(HeadlessAgent.dispatch)
     assert "def execute_actions" not in source
     assert "def answer" not in source
@@ -121,7 +124,7 @@ def test_execute_shell_turn_adds_no_stage_of_its_own() -> None:
     assert "ShellActionRunner" not in source
 
     agent = build_shell_agent(Session(), Console(file=io.StringIO(), force_terminal=False))
-    ste._bind_injected_stages(  # noqa: SLF001
+    bind_injected_stages(
         agent,
         Session(),
         Console(file=io.StringIO()),
@@ -326,9 +329,8 @@ def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
     assert agent._execute_actions_override is not None  # noqa: SLF001
 
     # Act — turn 2 omits the seam; bind only, do not dispatch (needs an LLM).
-    from surfaces.interactive_shell.runtime import shell_turn_execution as ste
 
-    ste._bind_injected_stages(  # noqa: SLF001
+    bind_injected_stages(
         agent,
         Session(),
         console,
@@ -411,7 +413,7 @@ def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch
     loop the agent's *previous* session, goal state would be read from and
     written to a stale object.
     """
-    from core.agent_harness.turns import headless_dispatch
+    from core.agent_harness.turns import headless_agent
     from core.agent_harness.turns.headless_adapters import InMemorySessionState
     from core.agent_harness.turns.port_families import HeadlessPorts
 
@@ -421,7 +423,7 @@ def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch
         seen["session"] = session
         return SimpleNamespace(last_result=chat(message))
 
-    monkeypatch.setattr(headless_dispatch, "run_until_session_goal", _spy_loop)
+    monkeypatch.setattr(headless_agent, "run_until_session_goal", _spy_loop)
     previous = InMemorySessionState()
     current = InMemorySessionState()
     agent = HeadlessPorts(session=previous).agent(tools=NullToolProvider())
@@ -432,3 +434,45 @@ def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch
     agent.handle("hello", TurnBinding(session=current))
 
     assert seen["session"] is current
+
+
+def test_a_second_thread_cannot_start_a_turn_while_one_is_running() -> None:
+    """One agent serves one turn at a time; an overlapping turn raises, it does not interleave.
+
+    ``bind_turn`` mutates per-turn state, so two concurrent turns on one agent
+    would read each other's binding. The pool's per-session lock keeps this
+    from happening in the gateway; the agent now enforces it itself.
+    """
+    import threading
+
+    from core.agent_harness.runtime import AgentBusyError
+    from core.agent_harness.turns.port_families import HeadlessPorts
+
+    # Arrange — an action stage that blocks until the test releases it.
+    entered = threading.Event()
+    release = threading.Event()
+
+    def _blocking_execute(text: str, **_kw: Any) -> ToolCallingTurnResult:
+        entered.set()
+        release.wait(timeout=5)
+        return ToolCallingTurnResult(0, 0, 0, False, True)
+
+    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent.bind_stages(execute_actions=_blocking_execute)
+    first = threading.Thread(target=agent.handle, args=("one", TurnBinding()))
+
+    # Act — start turn one, then try turn two while it is mid-flight.
+    first.start()
+    assert entered.wait(timeout=5)
+    try:
+        with pytest.raises(AgentBusyError):
+            agent.handle("two", TurnBinding())
+        with pytest.raises(AgentBusyError):
+            agent.dispatch("two")
+    finally:
+        release.set()
+        first.join(timeout=5)
+
+    # Assert — once turn one finished, the agent takes a turn again.
+    agent.bind_stages(execute_actions=lambda _t, **_k: ToolCallingTurnResult(0, 0, 0, False, True))
+    assert agent.handle("three", TurnBinding()) is not None

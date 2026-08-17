@@ -1,27 +1,21 @@
-"""Compose one interactive-shell turn on the harness's ``HeadlessAgent``.
+"""One interactive-shell turn: build (or reuse) the shell agent, then ``handle``.
 
-The shell builds its agent on the default port family with its own ports
-(prompt provider, console sink, error reporter, gather progress and
-persistence, tool-provider port factories) and drives the agent's own stages.
-Only a caller that injects a whole stage (``execute_actions`` /
-``gather_evidence`` / ``answer_agent`` — the test seams typed in
-``turn_seams``) gets an adapter bound over it.
+The shell's ports are supplied by ``shell_agent``; the agent's own stages run.
+A test that injects a whole stage (``execute_actions`` / ``gather_evidence`` /
+``answer_agent``) goes through the seams in ``turn_seams``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 
 from rich.console import Console
 
 from core.agent_harness import (
     OutputSink,
-    ToolCallingTurnResult,
     TurnResult,
 )
-from core.agent_harness.ports import AnswerRequest, GatheredEvidence
-from core.agent_harness.runtime import HeadlessAgent, TurnBinding, TurnPlan
+from core.agent_harness.runtime import HeadlessAgent, TurnBinding
 from core.agent_harness.spi.cancel import host_cancel_requested
 from core.agent_harness.spi.session_goal import (
     SessionGoal,
@@ -35,109 +29,10 @@ from surfaces.interactive_shell.runtime.turn_seams import (
     AnswerShellQuestion,
     GatherEvidence,
     RunActionToolTurn,
+    bind_injected_stages,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
-
-
-@dataclass(frozen=True)
-class _InjectedActionStage:
-    """Adapts an injected ``RunActionToolTurn`` seam to the ``ExecuteActions`` protocol."""
-
-    seam: RunActionToolTurn
-    session: Session
-    console: Console
-    output: OutputSink
-    request_exit: Callable[[], None] | None
-    tool_hooks: ToolExecutionHooks | None
-
-    def execute_actions(
-        self,
-        text: str,
-        *,
-        confirm_fn: Callable[[str], str] | None = None,
-        is_tty: bool | None = None,
-        turn_plan: TurnPlan | None = None,
-    ) -> ToolCallingTurnResult:
-        return self.seam(
-            text,
-            self.session,
-            self.console,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-            request_exit=self.request_exit,
-            turn_plan=turn_plan,
-            output=self.output,
-            tool_hooks=self.tool_hooks,
-        )
-
-
-@dataclass(frozen=True)
-class _InjectedAnswerStage:
-    """Adapts an injected ``AnswerShellQuestion`` seam to the ``StreamAnswerFn`` protocol."""
-
-    seam: AnswerShellQuestion
-    session: Session
-    console: Console
-    output: OutputSink
-
-    def answer(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        return self.seam(text, self.session, self.console, output=self.output, request=request)
-
-
-@dataclass(frozen=True)
-class _InjectedGatherStage:
-    """Adapts an injected ``GatherEvidence`` seam to the ``EvidenceGatherer`` protocol."""
-
-    seam: GatherEvidence
-    session: Session
-    console: Console
-
-    def gather_evidence(
-        self, text: str, *, turn_plan: TurnPlan | None = None
-    ) -> str | GatheredEvidence | None:
-        resolved = turn_plan.resolved_integrations if turn_plan is not None else None
-        return self.seam(text, self.session, self.console, resolved_integrations=resolved)
-
-
-def _bind_injected_stages(
-    agent: HeadlessAgent,
-    session: Session,
-    console: Console,
-    output: OutputSink,
-    *,
-    execute_actions: RunActionToolTurn | None,
-    answer_agent: AnswerShellQuestion | None,
-    gather_evidence: GatherEvidence | None,
-    request_exit: Callable[[], None] | None,
-    tool_hooks: ToolExecutionHooks | None,
-) -> None:
-    """Bind an adapter over each injected seam (test-only); an omitted seam is the agent's own stage.
-
-    Stated whole per turn, like :class:`TurnBinding`: a stage injected on one
-    turn does not carry into the next, so a long-lived REPL agent never keeps
-    a test's fake stage by omission. A caller that wants a stage across turns
-    passes the seam on every call.
-    """
-    agent.bind_stages(
-        execute_actions=(
-            _InjectedActionStage(
-                execute_actions, session, console, output, request_exit, tool_hooks
-            ).execute_actions
-            if execute_actions is not None
-            else None
-        ),
-        answer=(
-            _InjectedAnswerStage(answer_agent, session, console, output).answer
-            if answer_agent is not None
-            else None
-        ),
-        gather_evidence=(
-            _InjectedGatherStage(gather_evidence, session, console).gather_evidence
-            if gather_evidence is not None
-            else None
-        ),
-    )
+from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 
 
 def execute_shell_turn(
@@ -177,7 +72,7 @@ def execute_shell_turn(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
     )
-    _bind_injected_stages(
+    bind_injected_stages(
         agent,
         session,
         console,

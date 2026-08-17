@@ -5,7 +5,7 @@ tool-calling loop (`core.agent.Agent` via `build_agent`) and the direct-answer
 path (`stream_answer` via the `StreamAnswerFn` seam in `ports.py`, no tools).
 It was extracted out of `interactive_shell` so the same harness can run the
 interactive terminal and be invoked headlessly via
-`agent_harness.turns.headless_dispatch`.
+`agent_harness.turns.headless_agent`.
 
 ## Host API (teach this)
 
@@ -151,7 +151,7 @@ subpackage. Default port implementations live with the concern they serve, not i
   - `evidence_driver.py` — bounded evidence-gather loop, via a
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
-  - `headless_dispatch.py` — headless programmatic entry point
+  - `headless_agent.py` — headless programmatic entry point
     (`HeadlessAgent`, built by a port family; `.handle(text, binding)` per message, `.dispatch` underneath)
     plus in-memory port adapters for
     API / test runs. `tools` is required — surfaces that want a text-only
@@ -211,7 +211,7 @@ to it instead of re-implementing bootstrap + persistence:
   :meth:`AgentSession.run_headless_turn` (or ``start`` + ``chat``).
   That is the same ``run_turn`` engine as the shell; do not reassemble
   ``BufferOutputSink`` + ``DefaultPorts`` in integrations.
-  Ephemeral in-memory sessions (``headless_dispatch.InMemorySessionState``)
+  Ephemeral in-memory sessions (``headless_adapters.InMemorySessionState``)
   bypass ``SessionManager`` by design when tests need no JSONL.
 
 `Session` (formerly `ReplSession`) is the in-memory session object used by every

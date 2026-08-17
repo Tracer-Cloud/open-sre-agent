@@ -14,12 +14,13 @@ from core.agent_harness.ports import TurnBinding
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.gather_ports import GatherPorts
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.headless_agent import AgentBusyError, HeadlessAgent
 from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
 from core.agent_harness.turns.turn_plan import TurnPlan
 
 __all__ = [
     "ActionTurnRunner",
+    "AgentBusyError",
     "DefaultPorts",
     "DefaultToolProvider",
     "GatherPorts",

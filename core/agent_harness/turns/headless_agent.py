@@ -1,34 +1,24 @@
-"""Headless programmatic entry point and in-memory port adapters.
+"""The agent a host runs turns on.
 
-This is the proof that the agent is decoupled from any terminal: a caller (an
-HTTP handler, a script, a test) can run a full turn with only a message. All the
-surface concerns are satisfied by the in-memory adapters below, but every
-dependency is injectable so a real surface can override any of them.
+Built by a port family (:mod:`core.agent_harness.turns.port_families`), then
+driven one message at a time::
 
-Example::
+    from core.agent_harness.runtime import HeadlessPorts, TurnBinding
+    from core.agent_harness.turns.headless_adapters import NullToolProvider
 
-    from core.agent_harness.turns.headless_dispatch import (
-        HeadlessAgent,
-        InMemorySessionState,
-        NullToolProvider,
-        StaticReasoningClientProvider,
-    )
+    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    result = agent.handle("hi there", TurnBinding())
+    print(result.primary_response_text)
 
-    class _Echo:
-        def invoke_stream(self, prompt):
-            yield "hello"
-
-    agent = HeadlessAgent(
-        tools=NullToolProvider(),
-        reasoning=StaticReasoningClientProvider(client=_Echo()),
-    )
-    result = agent.dispatch("hi there")
-    print(result.assistant_response_text)  # -> "hello"
+A host with real ports uses ``DefaultPorts`` the same way; the gateway and the
+interactive shell are both that program.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
@@ -59,22 +49,21 @@ from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_tu
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.gather_ports import GatherPorts
-from core.agent_harness.turns.headless_adapters import (
-    BufferOutputSink,
-    EmptyPromptContextProvider,
-    InMemorySessionState,
-    NoopErrorReporter,
-    NoopTurnAccounting,
-    NullToolProvider,
-    SimpleRunRecord,
-    SimpleRunRecordFactory,
-    StaticReasoningClientProvider,
-)
+from core.agent_harness.turns.headless_adapters import NoopTurnAccounting
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
+
+
+class AgentBusyError(RuntimeError):
+    """A second turn was started on an agent that is still handling one.
+
+    One agent serves one turn at a time: ``bind_turn`` mutates per-turn state,
+    so an overlapping turn would read another conversation's binding. Hosts
+    that pool agents hold one per logical session and serialize its turns.
+    """
 
 
 class HeadlessAgent:
@@ -89,7 +78,9 @@ class HeadlessAgent:
     Per message a host calls :meth:`handle` with a :class:`TurnBinding`; it
     binds the turn, dispatches, and continues while a session goal is
     attached. :meth:`dispatch` is the single-turn verb underneath; whole-stage
-    replacements for tests go through :meth:`bind_stages`.
+    replacements for tests go through :meth:`bind_stages`. One agent serves
+    one turn at a time — an overlapping :meth:`handle` or :meth:`dispatch`
+    raises :class:`AgentBusyError`.
     """
 
     def __init__(
@@ -122,44 +113,64 @@ class HeadlessAgent:
         self._execute_actions_override: ExecuteActions | None = None
         self._answer_override: StreamAnswerFn | None = None
         self._gather_override: EvidenceGatherer | None = None
+        # Reentrant so handle() may call dispatch() on the same thread; a second
+        # thread fails the non-blocking acquire and gets AgentBusyError.
+        self._turn_lock = threading.RLock()
         self._action_runner = self._new_action_runner()
 
-    def _new_action_runner(self) -> ActionTurnRunner:
-        return ActionTurnRunner(
-            output=self._output,
-            tools=self._tools,
-            llm_factory=self._llm_factory,
-            error_reporter=self._error_reporter,
-            tool_hooks=self._tool_hooks,
-        )
+    def handle(
+        self,
+        text: str,
+        binding: TurnBinding,
+        *,
+        accounting_factory: Callable[[str], TurnAccounting] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+        on_progress: Callable[[SessionGoal], None] | None = None,
+    ) -> TurnResult:
+        """Handle one inbound message: bind the turn, dispatch, continue while a session goal is attached.
 
-    def _ports(self) -> tuple[object, ...]:
-        """Every port this agent holds; rebinding asks each for the capability it needs."""
-        return (
-            self._tools,
-            self._prompts,
-            self._reasoning,
-            self._run_factory,
-            self._error_reporter,
-            self._gather_ports.on_progress,
-            self._gather_ports.persist,
-        )
-
-    def bind_session(self, session: SessionState) -> None:
-        """Retarget this agent at a freshly resolved session.
-
-        Gateway ``SessionManager.resolve`` returns a new ``SessionCore`` each
-        turn (same id, restored state). Cached agents must follow that object
-        so tools/prompts see current integrations and chat metadata.
-
-        Every port that implements :class:`~core.agent_harness.ports.SessionBindable`
-        is rebound; a session-aware port that lacks the protocol is a type/test
-        gap, not a runtime miss.
+        The one host loop — gateway and shell call this and nothing else per
+        message. ``binding`` states the whole turn; ``accounting_factory``
+        (message → accounting) is applied per outer turn because the goal loop
+        may dispatch several, each with different text; ``None`` uses the
+        default per-message accounting. ``cancel_requested`` is checked between
+        outer turns; ``on_progress`` receives the goal after each.
         """
-        self._session = session
-        for port in self._ports():
-            if isinstance(port, SessionBindable):
-                port.bind_session(session)
+
+        def _one_turn(message: str) -> TurnResult:
+            accounting = accounting_factory(message) if accounting_factory is not None else None
+            self.bind_turn(replace(binding, accounting=accounting))
+            return self.dispatch(message)
+
+        # The goal loop reads and writes goal state on the session this turn
+        # states, not on whatever the previous binding left behind.
+        session = binding.session if binding.session is not None else self._session
+        with self._one_turn_at_a_time():
+            return run_until_session_goal(
+                _one_turn,
+                session,
+                text,
+                cancel_requested=cancel_requested,
+                on_progress=on_progress,
+            ).last_result
+
+    def dispatch(self, message: str) -> TurnResult:
+        """Run one turn for ``message`` on the currently bound turn (see :meth:`handle`)."""
+        with self._one_turn_at_a_time():
+            return dispatch_chat_turn(
+                message,
+                self._session,
+                ChatTurnBindings(
+                    execute_actions=self._execute_actions_override or self._execute_actions,
+                    answer=self._answer_override or self._answer,
+                    gather=self._gather_override or self._gather,
+                    accounting=self._take_accounting(message),
+                    confirm_fn=self._confirm_fn,
+                    is_tty=self._is_tty,
+                    surface=self._prompts.surface(),
+                    output=self._output,
+                ),
+            )
 
     def bind_turn(self, binding: TurnBinding) -> None:
         """Bind the turn's ports and values; the whole binding replaces the previous one.
@@ -192,6 +203,47 @@ class HeadlessAgent:
         self._is_tty = binding.is_tty
         if runner_changed:
             self._action_runner = self._new_action_runner()
+
+    def bind_session(self, session: SessionState) -> None:
+        """Retarget this agent at a freshly resolved session.
+
+        Gateway ``SessionManager.resolve`` returns a new ``SessionCore`` each
+        turn (same id, restored state). Cached agents must follow that object
+        so tools/prompts see current integrations and chat metadata.
+
+        Every port that implements :class:`~core.agent_harness.ports.SessionBindable`
+        is rebound; a session-aware port that lacks the protocol is a type/test
+        gap, not a runtime miss.
+        """
+        self._session = session
+        for port in self._ports():
+            if isinstance(port, SessionBindable):
+                port.bind_session(session)
+
+    def bind_stages(
+        self,
+        *,
+        execute_actions: ExecuteActions | None = None,
+        answer: StreamAnswerFn | None = None,
+        gather_evidence: EvidenceGatherer | None = None,
+    ) -> None:
+        """Replace whole stages for the next dispatches; ``None`` restores the port-driven default.
+
+        The per-turn counterpart of the constructor's stage overrides, for a
+        long-lived agent that hosts many turns with different injected seams.
+        """
+        self._execute_actions_override = execute_actions
+        self._answer_override = answer
+        self._gather_override = gather_evidence
+
+    @contextmanager
+    def _one_turn_at_a_time(self) -> Iterator[None]:
+        if not self._turn_lock.acquire(blocking=False):
+            raise AgentBusyError("this agent is already handling a turn")
+        try:
+            yield
+        finally:
+            self._turn_lock.release()
 
     def _take_accounting(self, message: str) -> TurnAccounting:
         """Return turn accounting and clear the slot (consume-once).
@@ -255,84 +307,26 @@ class HeadlessAgent:
             is_cancelled=lambda: host_cancel_requested(self._output),
         )
 
-    def bind_stages(
-        self,
-        *,
-        execute_actions: ExecuteActions | None = None,
-        answer: StreamAnswerFn | None = None,
-        gather_evidence: EvidenceGatherer | None = None,
-    ) -> None:
-        """Replace whole stages for the next dispatches; ``None`` restores the port-driven default.
+    def _ports(self) -> tuple[object, ...]:
+        """Every port this agent holds; rebinding asks each for the capability it needs."""
+        return (
+            self._tools,
+            self._prompts,
+            self._reasoning,
+            self._run_factory,
+            self._error_reporter,
+            self._gather_ports.on_progress,
+            self._gather_ports.persist,
+        )
 
-        The per-turn counterpart of the constructor's stage overrides, for a
-        long-lived agent that hosts many turns with different injected seams.
-        """
-        self._execute_actions_override = execute_actions
-        self._answer_override = answer
-        self._gather_override = gather_evidence
-
-    def handle(
-        self,
-        text: str,
-        binding: TurnBinding,
-        *,
-        accounting_factory: Callable[[str], TurnAccounting] | None = None,
-        cancel_requested: Callable[[], bool] | None = None,
-        on_progress: Callable[[SessionGoal], None] | None = None,
-    ) -> TurnResult:
-        """Handle one inbound message: bind the turn, dispatch, continue while a session goal is attached.
-
-        The one host loop — gateway and shell call this and nothing else per
-        message. ``binding`` states the whole turn; ``accounting_factory``
-        (message → accounting) is applied per outer turn because the goal loop
-        may dispatch several, each with different text; ``None`` uses the
-        default per-message accounting. ``cancel_requested`` is checked between
-        outer turns; ``on_progress`` receives the goal after each.
-        """
-
-        def _one_turn(message: str) -> TurnResult:
-            accounting = accounting_factory(message) if accounting_factory is not None else None
-            self.bind_turn(replace(binding, accounting=accounting))
-            return self.dispatch(message)
-
-        # The goal loop reads and writes goal state on the session this turn
-        # states, not on whatever the previous binding left behind.
-        session = binding.session if binding.session is not None else self._session
-        return run_until_session_goal(
-            _one_turn,
-            session,
-            text,
-            cancel_requested=cancel_requested,
-            on_progress=on_progress,
-        ).last_result
-
-    def dispatch(self, message: str) -> TurnResult:
-        """Run one turn for ``message`` on the currently bound turn (see :meth:`handle`)."""
-        return dispatch_chat_turn(
-            message,
-            self._session,
-            ChatTurnBindings(
-                execute_actions=self._execute_actions_override or self._execute_actions,
-                answer=self._answer_override or self._answer,
-                gather=self._gather_override or self._gather,
-                accounting=self._take_accounting(message),
-                confirm_fn=self._confirm_fn,
-                is_tty=self._is_tty,
-                surface=self._prompts.surface(),
-                output=self._output,
-            ),
+    def _new_action_runner(self) -> ActionTurnRunner:
+        return ActionTurnRunner(
+            output=self._output,
+            tools=self._tools,
+            llm_factory=self._llm_factory,
+            error_reporter=self._error_reporter,
+            tool_hooks=self._tool_hooks,
         )
 
 
-__all__ = [
-    "BufferOutputSink",
-    "EmptyPromptContextProvider",
-    "HeadlessAgent",
-    "InMemorySessionState",
-    "NoopErrorReporter",
-    "NoopTurnAccounting",
-    "NullToolProvider",
-    "SimpleRunRecord",
-    "SimpleRunRecordFactory",
-    "StaticReasoningClientProvider",
-]
+__all__ = ["AgentBusyError", "HeadlessAgent"]

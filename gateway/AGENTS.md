@@ -92,7 +92,7 @@ flat by surface (do not nest a directory named after the Discord PyPI package).
   (`configure_logging` in `GatewayController.start_gateway`) — that is intentional.
 - **No persistent gateway `Agent` instance.** Each inbound message gets a
   per-chat `Session` from `SessionResolver` and is handled by the shared
-  headless dispatch path (`core.agent_harness.turns.headless_dispatch`).
+  headless dispatch path (`core.agent_harness.turns.headless_agent`).
 - The turn handler callback signature is exactly four arguments: `text`,
   `session`, `sink`, and `logger`. Do not reintroduce `chat_id` into this
   contract; the sink owns chat transport details.

@@ -136,6 +136,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
 RUNTIME = frozenset(
     {
         "ActionTurnRunner",
+        "AgentBusyError",
         "DefaultPorts",
         "DefaultToolProvider",
         "GatherPorts",

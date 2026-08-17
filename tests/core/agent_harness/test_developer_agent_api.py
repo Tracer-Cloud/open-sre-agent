@@ -23,7 +23,7 @@ from core.agent_harness.turns.headless_adapters import (
     NullToolProvider,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
@@ -99,7 +99,7 @@ def _unhandled_actions(*_args: Any, **_kwargs: Any) -> ToolCallingTurnResult:
 def stub_action_planner(monkeypatch: Any) -> None:
     """Keep the action planner off the network so Echo can answer."""
     monkeypatch.setattr(
-        "core.agent_harness.turns.headless_dispatch.ActionTurnRunner.run",
+        "core.agent_harness.turns.headless_agent.ActionTurnRunner.run",
         lambda _self, *_args, **_kwargs: _unhandled_actions(),
     )
 
