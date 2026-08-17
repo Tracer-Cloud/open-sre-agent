@@ -8,6 +8,15 @@ Use this when your Python code runs on the same machine as OpenSRE and you want
 agent answers without shelling out to the CLI. To call OpenSRE over the network
 instead, use the [HTTP API](/api).
 
+## OpenSRE as a teammate in your daily loop
+
+OpenSRE functions as an autonomous engineering teammate embedded directly into
+your daily operational workflows. Rather than treating the agent as an isolated
+chat interface, you can embed the Python API into scheduled cron jobs, CI/CD
+pipelines, and automated incident triage loops to perform recurring tasks —
+auditing repository health, triaging production alerts, and delivering digests
+to team channels like Slack, webhooks, or ticketing systems.
+
 ## Prerequisites
 
 The standalone CLI installer does not expose an importable package, so embed
@@ -30,6 +39,58 @@ from bootstrap.process import EMBEDDED_PROFILE, configure_process
 configure_process(EMBEDDED_PROFILE)
 ```
 
+## Daily engineering recipes
+
+### Recipe 1: Querying repository and workflow metrics
+
+Use `session.chat()` to query configured developer tools and observability
+sources (e.g. GitHub star velocity, PR backlog, deployment status):
+
+```python
+from bootstrap.process import EMBEDDED_PROFILE, configure_process
+from core.agent_harness import AgentSession
+
+# 1. Register tools and adapter plugins once per process
+configure_process(EMBEDDED_PROFILE)
+
+# 2. Start an in-process session connected to configured integrations
+session = AgentSession.start()
+
+# 3. Query repository trends or metrics (requires GitHub integration configured)
+result = session.chat("what's our GitHub star velocity over the last 7 days?")
+if not result.answered or result.cancelled or not result.primary_response_text:
+    raise RuntimeError(f"Turn failed: {result.primary_response_text or 'no response produced'}")
+
+print(result.primary_response_text)
+```
+
+### Recipe 2: Automated alert triage and root-cause analysis
+
+Use `session.investigate()` to pass a raw alert payload from your alertmanager,
+webhook, or monitoring system directly into OpenSRE's investigation pipeline:
+
+```python
+from bootstrap.process import EMBEDDED_PROFILE, configure_process
+from core.agent_harness import AgentSession
+
+# 1. Register tools and investigation adapters
+configure_process(EMBEDDED_PROFILE)
+
+# 2. Start an in-process session
+session = AgentSession.start()
+
+# 3. Triage and investigate a production alert payload
+alert_payload = {
+    "alert_name": "HighLatency",
+    "service": "checkout-api",
+    "severity": "warning",
+    "description": "p99 latency exceeded 1200ms in us-east-1",
+}
+
+report = session.investigate(alert_payload)
+print(report.report)
+```
+
 ## One API — chat and investigate
 
 Every surface uses the same two verbs:
@@ -42,7 +103,7 @@ configure_process(EMBEDDED_PROFILE)
 
 session = AgentSession.start()
 result = session.chat("why is checkout-api slow?")
-if result.answered:
+if result.answered and not result.cancelled:
     print(result.primary_response_text)
 
 report = session.investigate({"alert_name": "HighLatency", "severity": "warning"})
@@ -64,8 +125,9 @@ shell uses. It does **not** register adapters (``core`` may not import
 ``start_embedded_session``. `investigate` does not require an attached chat
 agent; it uses the payload runner installed by `configure_process`.
 
-Always check `result.answered` before trusting chat text: when a turn fails (for
-example the LLM provider is unreachable), the error message itself lands in
+Always check `result.answered` (and verify `not result.cancelled`) before
+trusting chat text: when a turn fails or is cancelled (for example the LLM
+provider is unreachable or times out), the failure details land in
 `result.primary_response_text`.
 
 ### Internal seams (not for hosts)
@@ -73,6 +135,38 @@ example the LLM provider is unreachable), the error message itself lands in
 Chat hosts terminate at `dispatch_chat_turn` → `run_turn`. Investigation
 terminates at the installed payload runner (`run_investigation_payload`). Do not
 invent parallel public entrypoints.
+
+## Unattended daily delivery and background loops
+
+For recurring daily workflows (such as scheduled morning digests or CI health
+checks), start an in-process session with live gathering enabled to query active
+integrations and forward findings to team channels:
+
+```python
+from bootstrap.process import EMBEDDED_PROFILE, configure_process
+from core.agent_harness import AgentSession
+from core.agent_harness.turns.gather_ports import GatherPorts
+
+configure_process(EMBEDDED_PROFILE)
+
+# Start session with live evidence gathering enabled for configured integrations
+session = AgentSession.start(gather=GatherPorts(enabled=True))
+
+result = session.chat("summarize critical alerts and deployment changes from the last 24h")
+if not result.answered or result.cancelled or not result.primary_response_text:
+    raise RuntimeError(f"Scheduled digest failed: {result.primary_response_text or 'no response produced'}")
+
+summary = result.primary_response_text
+# Forward summary to team notification webhooks (Slack, email, or ticketing)
+print("Delivering daily digest:\n", summary)
+```
+
+In the interactive shell, asynchronous investigations and automated notifications
+are managed via [`/background`](/background-investigations):
+- `/background on` enables async background investigation launches.
+- `/background notify set telegram` (or `email`, `rocketchat`, `buzz`) routes completed
+  RCA reports directly to your team's notification channels upon task completion.
+- `/background show <task_id>` inspects delivery status and findings.
 
 ## A conversation
 
