@@ -146,6 +146,18 @@ class HeadlessAgent:
             tool_hooks=self._tool_hooks,
         )
 
+    def _ports(self) -> tuple[object, ...]:
+        """Every port this agent holds; rebinding asks each for the capability it needs."""
+        return (
+            self._tools,
+            self._prompts,
+            self._reasoning,
+            self._run_factory,
+            self._error_reporter,
+            self._gather_ports.on_progress,
+            self._gather_ports.persist,
+        )
+
     def bind_session(self, session: SessionState) -> None:
         """Retarget this agent at a freshly resolved session.
 
@@ -153,36 +165,37 @@ class HeadlessAgent:
         turn (same id, restored state). Cached agents must follow that object
         so tools/prompts see current integrations and chat metadata.
 
-        Only ports that implement :class:`~core.agent_harness.ports.SessionBindable`
-        are rebound — silent ``getattr`` skips are avoided so a missing binder
-        on a session-aware default port is a type/test gap, not a runtime miss.
+        Every port that implements :class:`~core.agent_harness.ports.SessionBindable`
+        is rebound; a session-aware port that lacks the protocol is a type/test
+        gap, not a runtime miss.
         """
         self._session = session
-        for port in (self._tools, self._prompts, self._reasoning, self._run_factory):
+        for port in self._ports():
             if isinstance(port, SessionBindable):
                 port.bind_session(session)
 
     def bind_turn(self, binding: TurnBinding) -> None:
         """Bind the turn's ports and values; the whole binding replaces the previous one.
 
-        Rebinding ``session`` retargets every :class:`SessionBindable` port;
-        ``console`` every :class:`ConsoleBindable` port (tool provider for
-        cooperative cancel, gather progress renderer). A new ``output`` object retargets :class:`OutputBindable`
-        ports and, like a change of ``tool_hooks``, rebuilds the action runner
+        Rebinding ``session`` retargets every :class:`SessionBindable` port,
+        ``console`` every :class:`ConsoleBindable` port, and a new ``output``
+        object every :class:`OutputBindable` port; a new output or a change of
+        ``tool_hooks`` also rebuilds the action runner
         — an unchanged one keeps it. Gateway keeps a stable ``LiveOutputSink``
         and rebinds the transport sink inside it, so it leaves ``output`` unset.
         """
         if binding.session is not None:
             self.bind_session(binding.session)
         if binding.console is not None:
-            for port in (self._tools, self._gather_ports.on_progress):
+            for port in self._ports():
                 if isinstance(port, ConsoleBindable):
                     port.bind_console(binding.console)
         runner_changed = False
         if binding.output is not None and binding.output is not self._output:
             self._output = binding.output
-            if isinstance(self._reasoning, OutputBindable):
-                self._reasoning.bind_output(binding.output)
+            for port in self._ports():
+                if isinstance(port, OutputBindable):
+                    port.bind_output(binding.output)
             runner_changed = True
         if binding.tool_hooks is not self._tool_hooks:
             self._tool_hooks = binding.tool_hooks
