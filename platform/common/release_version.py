@@ -8,6 +8,8 @@ import os
 import re
 from http import HTTPStatus
 
+from config.constants import RELEASES_API_URL_ENV, UV_RUN_RECURSION_DEPTH_ENV
+
 MAIN_BUILD_RELEASE_URL = "https://github.com/Tracer-Cloud/opensre/releases/tag/main-build"
 _MAIN_BUILD_RELEASE_API = (
     "https://api.github.com/repos/Tracer-Cloud/opensre/releases/tags/main-build"
@@ -17,7 +19,7 @@ _MAIN_BUILD_SHA_SUFFIX = re.compile(r"\+main\.([0-9a-f]+)$", re.IGNORECASE)
 
 
 def _main_build_release_api_url() -> str:
-    return os.getenv("OPENSRE_RELEASES_API_URL", _MAIN_BUILD_RELEASE_API)
+    return os.getenv(RELEASES_API_URL_ENV, _MAIN_BUILD_RELEASE_API)
 
 
 def extract_main_build_version(release_body: str) -> str:
@@ -96,7 +98,7 @@ def development_install_doctor_version_detail(current: str) -> str | None:
     if is_editable_install():
         labels.append("editable install")
     # uv sets this on the Python process when invoked via `uv run …`.
-    if os.environ.get("UV_RUN_RECURSION_DEPTH") is not None:
+    if os.environ.get(UV_RUN_RECURSION_DEPTH_ENV) is not None:
         labels.append("uv run")
     if not labels:
         return None
