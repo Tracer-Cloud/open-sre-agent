@@ -1,9 +1,4 @@
-"""API-key persistence and its error type.
-
-Leaf module — imports nothing from ``surfaces.cli.wizard``, so ``wizard._ui`` can
-depend on it without re-forming the
-``_ui → service → validation → azure_openai → _ui`` import cycle.
-"""
+"""API-key persistence and its error type."""
 
 from __future__ import annotations
 

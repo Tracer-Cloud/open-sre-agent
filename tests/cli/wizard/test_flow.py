@@ -13,7 +13,7 @@ from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from integrations.llm_providers.env_sync import sync_provider_env
 from integrations.llm_providers.validation import ValidationResult
 from surfaces.cli.wizard import _ui, azure_openai, flow, llm_credential
-from surfaces.cli.wizard import store as wizard_store
+from config import setup_store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
 from surfaces.cli.wizard.configurators import dagster as _dagster_configurator
 from surfaces.cli.wizard.configurators import github as _github_configurator
@@ -1766,7 +1766,7 @@ def test_run_cli_llm_onboarding_abort_after_max_retries(monkeypatch) -> None:
 
 
 def test_credential_line_for_saved_summary_cli_codex() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from integrations.llm_providers import catalog as wizard_config
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
     assert (
@@ -1776,7 +1776,7 @@ def test_credential_line_for_saved_summary_cli_codex() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_claude_code() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from integrations.llm_providers import catalog as wizard_config
 
     claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
     assert llm_credential._credential_line_for_saved_summary(claude_code) == (
@@ -1785,7 +1785,7 @@ def test_credential_line_for_saved_summary_cli_claude_code() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from integrations.llm_providers import catalog as wizard_config
 
     gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
     assert llm_credential._credential_line_for_saved_summary(gemini_cli) == (
@@ -1794,7 +1794,7 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_copilot() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from integrations.llm_providers import catalog as wizard_config
 
     copilot = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "copilot")
     line = llm_credential._credential_line_for_saved_summary(copilot)
@@ -1806,7 +1806,7 @@ def test_credential_line_for_saved_summary_cli_copilot() -> None:
 
 
 def test_credential_line_for_saved_summary_anthropic() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from integrations.llm_providers import catalog as wizard_config
 
     anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
     assert llm_credential._credential_line_for_saved_summary(anthropic) == "system keychain"

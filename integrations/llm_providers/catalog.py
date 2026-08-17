@@ -1,4 +1,4 @@
-"""Wizard configuration metadata."""
+"""The setup-time LLM provider catalog: options, models, credential kinds and env names."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ class ModelOption:
 
 @dataclass(frozen=True)
 class ProviderOption:
-    """Wizard metadata for a supported LLM provider."""
+    """Setup metadata for a supported LLM provider."""
 
     value: str
     label: str

@@ -9,7 +9,6 @@ from integrations.llm_providers.catalog import (
     PROJECT_ROOT,
     SUPPORTED_PROVIDERS,
 )
-from surfaces.cli.wizard.flow import _onboarding_provider_options
 
 
 def test_project_env_path_defaults_to_repo_root() -> None:
@@ -56,13 +55,3 @@ def test_claude_fable_5_is_selectable_without_custom_models() -> None:
     # Defaults stay unchanged: Fable 5 is pricier and opt-in only.
     assert anthropic_values[0] != "claude-fable-5"
     assert claude_code_values[0] == ""
-
-
-def test_onboarding_provider_options_hide_openai_anthropic_oauth_backends() -> None:
-    """Onboarding presents OpenAI/Anthropic auth methods under the provider."""
-    values = [provider.value for provider in _onboarding_provider_options()]
-
-    assert "anthropic" in values
-    assert "openai" in values
-    assert "claude-code" not in values
-    assert "codex" not in values

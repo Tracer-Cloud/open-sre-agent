@@ -23,11 +23,6 @@ _SHELL_IMPORTS_FROM_CLI: frozenset[str] = frozenset(
     {
         # The shell documents the CLI's commands for the model.
         "surfaces.cli.app",
-        # Provider catalog, env sync and auth used by /model — belongs below both.
-        "integrations.llm_providers.catalog",
-        "integrations.llm_providers.env_sync",
-        "integrations.llm_providers.auth_profiles",
-        "integrations.llm_providers.auth_service",
     }
 )
 

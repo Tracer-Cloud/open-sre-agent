@@ -1,4 +1,4 @@
-"""Sync wizard LLM-provider choices into the project .env file.
+"""Sync LLM-provider choices into the project .env file.
 
 Generic ``.env`` / keyring writing lives in :mod:`config.env_file` so every
 setup surface shares one implementation. What stays here is the part that is
@@ -30,7 +30,7 @@ def sync_reasoning_model_env(
     model: str,
     env_path: Path | None = None,
 ) -> Path:
-    """Write reasoning model env vars to ``.env``, update runtime env, and sync wizard store."""
+    """Write reasoning model env vars to ``.env``, update runtime env, and sync the setup store."""
     values: dict[str, str] = {provider.model_env: model}
     if provider.legacy_model_env:
         values[provider.legacy_model_env] = model

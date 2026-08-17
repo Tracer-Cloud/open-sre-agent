@@ -110,7 +110,7 @@ def resolve_auth_profile(raw_name: str) -> ProviderAuthProfile:
 
 
 def provider_for_profile(profile: ProviderAuthProfile) -> ProviderOption:
-    """Return the wizard provider option for an auth profile."""
+    """Return the catalog provider option for an auth profile."""
     return PROVIDER_BY_VALUE[profile.provider_value]
 
 

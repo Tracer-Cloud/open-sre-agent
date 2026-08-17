@@ -1,7 +1,5 @@
 """Lazy OpenAI SDK client loader used for credential validation.
 
-Leaf module — imports nothing from ``surfaces.cli.wizard``, so both ``validation``
-and ``azure_openai`` can load the OpenAI client without forming an import cycle.
 The ``openai`` import is deferred so the SDK stays optional at module load.
 """
 

@@ -1,4 +1,4 @@
-"""CLI-owned LLM provider auth orchestration."""
+"""LLM provider setup: the provider catalog, credential validation, auth and .env sync shared by the CLI and the shell."""
 
 from integrations.llm_providers.auth_profiles import (
     ProviderAuthProfile,

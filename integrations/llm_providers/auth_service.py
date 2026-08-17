@@ -1,4 +1,4 @@
-"""Shared LLM auth setup operations for CLI, wizard, and REPL wrappers."""
+"""LLM auth setup operations: configure, verify, status and logout for a provider."""
 
 from __future__ import annotations
 
