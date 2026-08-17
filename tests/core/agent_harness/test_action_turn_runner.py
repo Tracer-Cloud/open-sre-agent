@@ -111,7 +111,7 @@ def test_execute_shell_turn_adds_no_stage_of_its_own() -> None:
 
     from rich.console import Console
 
-    import surfaces.interactive_shell.runtime.shell_turn_execution as ste
+    from surfaces.interactive_shell.runtime import shell_turn_execution as ste
     from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
     source = inspect.getsource(ste.execute_shell_turn)
@@ -394,7 +394,7 @@ def test_both_hosts_reach_the_agent_through_handle_only() -> None:
     import inspect
 
     import gateway.core.runtime.turn_handler as gateway_turn
-    import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn
+    from surfaces.interactive_shell.runtime import shell_turn_execution as shell_turn
 
     for module in (gateway_turn, shell_turn):
         source = inspect.getsource(module)
