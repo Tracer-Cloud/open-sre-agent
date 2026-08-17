@@ -12,10 +12,15 @@ from integrations.github.tools.ci_fix.context import CiFixContext
 from integrations.github.tools.ci_fix.gh import run_gh_json
 
 DEFAULT_CHECK_WAIT_SECONDS = 900
+DEFAULT_REGISTRATION_SECONDS = 60
 DEFAULT_POLL_INTERVAL_SECONDS = 10
 DEFAULT_SETTLE_SECONDS = 30
+DEFAULT_HEAD_PROPAGATION_SECONDS = 30
 
 _PR_CHECK_FIELDS = "headRefOid,statusCheckRollup"
+_WORKFLOW_RUN_FIELDS = "databaseId,status"
+_WORKFLOW_RUNS_KEY = "runs"
+_WORKFLOW_RUN_COMPLETED = "completed"
 _FAILED_CONCLUSIONS = frozenset(
     {
         "ACTION_REQUIRED",
@@ -38,6 +43,7 @@ class CheckState(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     TIMED_OUT = "timed_out"
+    SUPERSEDED = "superseded"
 
 
 @dataclass(frozen=True)
@@ -47,25 +53,35 @@ class CheckVerification:
     state: CheckState
     check_names: tuple[str, ...]
     failing_checks: tuple[str, ...] = ()
+    observed_head_sha: str = ""
 
 
 def wait_for_pr_checks(
     ctx: CiFixContext,
     *,
     github_token: str | None,
+    expected_head_sha: str,
     timeout_seconds: int = DEFAULT_CHECK_WAIT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
     settle_seconds: int = DEFAULT_SETTLE_SECONDS,
+    registration_seconds: int = DEFAULT_REGISTRATION_SECONDS,
+    head_propagation_seconds: int = DEFAULT_HEAD_PROPAGATION_SECONDS,
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> CheckVerification:
     """Poll until the fix commit's PR checks pass, fail, or time out."""
     repo = f"{ctx.owner}/{ctx.repo}"
-    deadline = monotonic() + max(0, timeout_seconds)
+    started_at = monotonic()
+    deadline = started_at + max(0, timeout_seconds)
     expected_skips = set(ctx.skipped_check_names)
+    actions_run_required = any(check.run_id or check.workflow_name for check in ctx.failing_checks)
+    required_external_checks = {
+        check.name for check in ctx.failing_checks if not check.run_id and not check.workflow_name
+    }
     last_names: tuple[str, ...] = ()
     terminal_signature: tuple[str, ...] = ()
     terminal_since: float | None = None
+    expected_head_seen_at: float | None = None
 
     while True:
         payload = run_gh_json(
@@ -78,12 +94,47 @@ def wait_for_pr_checks(
         last_names = tuple(_check_name(check) for check in checks)
         now = monotonic()
 
-        # GitHub can briefly return the pre-push rollup. It must never make the
-        # fresh fix look failed before the new head commit and its checks appear.
-        if head_sha and head_sha != ctx.head_sha and checks:
+        if head_sha == expected_head_sha:
+            if expected_head_seen_at is None:
+                expected_head_seen_at = now
+        elif head_sha and (
+            head_sha != ctx.head_sha
+            or expected_head_seen_at is not None
+            or now - started_at >= max(0, head_propagation_seconds)
+        ):
+            return CheckVerification(
+                state=CheckState.SUPERSEDED,
+                check_names=last_names,
+                observed_head_sha=head_sha,
+            )
+
+        # Give the exact commit's checks time to register, then settle only
+        # completed workflows. Workflow identities join the signature below so
+        # another run appearing during settlement resets the clock.
+        if head_sha == expected_head_sha:
+            workflows_complete, workflow_signature = _workflow_runs_state(
+                repo=repo,
+                github_token=github_token,
+                expected_head_sha=expected_head_sha,
+                require_run=actions_run_required,
+            )
+        else:
+            workflows_complete, workflow_signature = False, ()
+        external_checks_registered = required_external_checks.issubset(set(last_names))
+        registration_complete = (
+            expected_head_seen_at is not None
+            and now - expected_head_seen_at >= max(0, registration_seconds)
+        )
+        if (
+            head_sha == expected_head_sha
+            and checks
+            and workflows_complete
+            and external_checks_registered
+            and registration_complete
+        ):
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
-                signature = _check_signature(checks)
+                signature = _verification_signature(checks, workflow_signature)
                 if signature != terminal_signature:
                     terminal_signature = signature
                     terminal_since = now
@@ -116,6 +167,49 @@ def _check_rows(value: Any) -> list[dict[str, Any]]:
 
 def _check_name(check: dict[str, Any]) -> str:
     return str(check.get("name") or check.get("context") or "unnamed check")
+
+
+def _workflow_runs_state(
+    *,
+    repo: str,
+    github_token: str | None,
+    expected_head_sha: str,
+    require_run: bool,
+) -> tuple[bool, tuple[str, ...]]:
+    payload = run_gh_json(
+        [
+            "run",
+            "list",
+            "--commit",
+            expected_head_sha,
+            "--limit",
+            "100",
+            "--json",
+            _WORKFLOW_RUN_FIELDS,
+            "--jq",
+            f'{{"{_WORKFLOW_RUNS_KEY}": .}}',
+        ],
+        repo=repo,
+        github_token=github_token,
+    )
+    runs = _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
+    complete = (bool(runs) or not require_run) and all(
+        str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
+    )
+    signature = tuple(
+        sorted(
+            f"{run.get('databaseId') or 'unknown'}:{str(run.get('status') or '').strip().lower()}"
+            for run in runs
+        )
+    )
+    return complete, signature
+
+
+def _verification_signature(
+    checks: list[dict[str, Any]],
+    workflow_signature: tuple[str, ...],
+) -> tuple[str, ...]:
+    return (*_check_signature(checks), *(f"workflow:{item}" for item in workflow_signature))
 
 
 def _check_signature(checks: list[dict[str, Any]]) -> tuple[str, ...]:
@@ -157,7 +251,9 @@ __all__ = [
     "CheckState",
     "CheckVerification",
     "DEFAULT_CHECK_WAIT_SECONDS",
+    "DEFAULT_HEAD_PROPAGATION_SECONDS",
     "DEFAULT_POLL_INTERVAL_SECONDS",
+    "DEFAULT_REGISTRATION_SECONDS",
     "DEFAULT_SETTLE_SECONDS",
     "wait_for_pr_checks",
 ]

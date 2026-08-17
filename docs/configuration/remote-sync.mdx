@@ -1,52 +1,39 @@
 ---
 title: "Sync to your own object store"
-description: "Carry your conversations and memory between machines, using a store you own."
+description: "Copy sessions and memory between machines using an S3, GCS, Azure, or Vercel Blob store you own."
 ---
 
-opensre keeps everything on your laptop by default. Turn on remote sync and it
-also mirrors your conversation history and memory to an object store **you**
-own, so a second machine picks up where the first left off.
+By default OpenSRE keeps everything on your machine. Turn on remote sync to copy **conversations** and **memory** to a private store you own, so another laptop can continue where you left off.
 
-Your cloud credentials are read from the usual places — environment, profile,
-SSO session. opensre never stores them.
+Credentials and API keys stay local. You still run integration setup on each new machine.
 
-## What is mirrored
+| Copied | Not copied |
+| --- | --- | diff is large. 
+| `~/.opensre/sessions/` | Integration credentials |
+| `~/.opensre/memory/` | Model API keys |
 
-| | |
-|---|---|
-| Mirrored | `~/.opensre/sessions/` — your conversations |
-| Mirrored | `~/.opensre/memory/` — what opensre remembers |
-| **Never uploaded** | integration credentials and model API keys |
+<Warning>
+Use a **private** store. It can hold incident chats and system details.
+</Warning>
 
-Credentials stay on the machine. On a second laptop you run the integration
-setup again; everything else is already there.
-
-## Turn it on
-
-### Setup command (recommended)
-
-Writes `remote_sync` into `~/.opensre/config.yml`. Ambient credentials stay in
-the environment — opensre never stores them.
+## Setup
 
 ```bash
-# Interactive
+# Interactive (writes ~/.opensre/config.yml)
 opensre remote-sync setup
 
-# Non-interactive — AWS/S3
+# AWS / S3
 opensre remote-sync setup --provider aws --bucket my-opensre-bucket
 
-# Non-interactive — Google Cloud Storage (uses Application Default Credentials)
+# Google Cloud Storage (Application Default Credentials)
 opensre remote-sync setup --provider gcs --bucket my-opensre-bucket
 
-# Non-interactive — Vercel Blob (then set BLOB_READ_WRITE_TOKEN in the env)
+# Vercel Blob
 opensre remote-sync setup --provider vercel --bucket opensre-remote-sync
 export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 
-# Non-interactive — Azure Blob (uses ambient credentials via Azure CLI or env vars)
-opensre remote-sync setup --provider azure --profile my-storage-account --bucket my-container
-
-# Same from the shell (flags required; no interactive prompts on chat gateways)
-# /remote-sync setup --provider vercel --bucket opensre-remote-sync
+# Azure Blob (ambient Azure credentials)
+opensre remote-sync setup --provider azure --bucket my-container
 ```
 
 Every form above still asks one question — whether to
@@ -56,28 +43,16 @@ whether the store holds readable incident history. Passing `--encrypt` or
 is never asked and defaults to off.
 
 ### Environment variables
+Same flags work as `/remote-sync setup` in the interactive shell. On chat gateways, pass flags (no interactive prompts) — or use the CLI.
+
+Or set env vars yourself:
 
 ```bash
-# AWS/S3 (default)
 export OPENSRE_REMOTE_SYNC=1
 export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
-
-# Or Google Cloud Storage
-# export OPENSRE_REMOTE_SYNC=1
-# export OPENSRE_REMOTE_SYNC_PROVIDER=gcs
-# export OPENSRE_REMOTE_SYNC_BUCKET=my-opensre-bucket
-
-# Or Vercel Blob
-# export OPENSRE_REMOTE_SYNC=1
-# export OPENSRE_REMOTE_SYNC_PROVIDER=vercel
-# export OPENSRE_REMOTE_SYNC_BUCKET=opensre-remote-sync
-# export BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
-
-# Or Azure Blob
-# export OPENSRE_REMOTE_SYNC=1
-# export OPENSRE_REMOTE_SYNC_PROVIDER=azure
-# export OPENSRE_REMOTE_SYNC_PROFILE=my-storage-account
-# export OPENSRE_REMOTE_SYNC_BUCKET=my-container
+# optional:
+# export OPENSRE_REMOTE_SYNC_PROVIDER=aws   # default; also gcs, vercel, azure
+# export OPENSRE_REMOTE_SYNC_PREFIX=opensre # default
 ```
 
 | Variable | Description |
@@ -132,54 +107,61 @@ context root (`OPENSRE_CONTEXT_ROOT`); it does not need this.
 </Warning>
 
 ## Laptop vs Organization Storage
+A bucket name alone does nothing — you must also set `OPENSRE_REMOTE_SYNC=1` (or enable it via `opensre remote-sync setup`).
 
-On a laptop or unbound machine, OpenSRE stores data in `~/.opensre/`:
-- `~/.opensre/sessions/` — conversation history
-- `~/.opensre/memory/` — learned information
-- `~/.opensre/config.yml` — user configuration
-- `~/.opensre/integrations.json` — integration credentials
+| Variable | What it does |
+| --- | --- |
+| `OPENSRE_REMOTE_SYNC` | `1` / `true` turns sync on |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | `aws` (default), `gcs`, `vercel`, `azure`, or `s3compat` |
+| `OPENSRE_REMOTE_SYNC_BUCKET` | Bucket, container, or Blob store name (required when on) |
+| `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix (default `opensre`). Same prefix = shared history |
+| `OPENSRE_REMOTE_SYNC_REGION` | AWS region (AWS only) |
+| `OPENSRE_REMOTE_SYNC_PROFILE` | AWS profile name, or Azure storage account name when `provider=azure` |
+| `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` | Custom S3 endpoint when `provider=s3compat` (MinIO / R2 / Spaces) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token (Vercel only) |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE` | Comma-separated paths to skip (see below) |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | `1` ignores exclusions for one run |
 
-In organization-scoped deployments (like Slack team installations), the storage layout is different:
-- The organization's shared context is mounted at `OPENSRE_CONTEXT_ROOT` (e.g., `/workspace/memories`)
-- This volume is chrooted to a specific organization, so OpenSRE doesn't add its own org segment
-- Organization-wide data (like `integrations.json`) lives at the root of this mount
-- User-specific configuration (`config.yml`) remains in `~/.opensre/` on the local machine
-- Personal data (sessions, memory) is stored per-user under `users/<slack_user_id>/`
-- Without the mount, organization data nests under `~/.opensre/orgs/<organization_id>/` for multi-org testing
+Env vars override `~/.opensre/config.yml` for that run. `--region` / `--profile` only work with AWS and Azure (profile = storage account); setup rejects them for other providers.
 
-Because organization-scoped storage is already persistent and shared via the mounted volume, OpenSRE refuses remote sync for organization-scoped turns before any data is mirrored. Remote sync is designed for personal machines where data needs to be carried between devices.
+Every machine that should share history needs the **same provider, store, and prefix** (and for Vercel, a token for that store).
 
-Check what would move before moving it:
-
-```bash
-opensre remote-sync status
-# or, in the REPL / a chat that supports slash commands:
-# /remote-sync status
-```
-
-Then sync:
+## Sync
 
 ```bash
-opensre remote-sync sync
-opensre remote-sync sync --pull-only    # new machine, fetch only
-opensre remote-sync sync --push-only    # back up without pulling
+opensre remote-sync status          # what would move
+opensre remote-sync sync            # pull, then push
+opensre remote-sync sync --pull-only   # new machine: download only
+opensre remote-sync sync --push-only   # upload only
 ```
 
-On a terminal, a progress bar (`Pulling`/`Pushing`, a count of how many files
-are done, and the current file) shows a large `sessions/` tree moving instead
-of looking hung; piped or scripted output stays to the final summary line
-only. The interactive shell shows the same thing as a live-updating bar.
+In the shell: `/remote-sync status` and `/remote-sync sync`.
 
-## Exclude paths
+<Warning>
+Remote sync is for a **personal machine**. Org-bound Slack/Discord turns are refused — those already persist under the org context root.
+</Warning>
 
-By default every session and every memory file mirrors. Patterns hold some of
-them back:
+## Providers
+
+**AWS / S3** — private bucket. Uses your normal AWS credentials (`AWS_*`, profile, or SSO). Uploads use server-side encryption (`AES256`). Needs `s3:ListBucket`, `s3:GetObject`, and `s3:PutObject` on your prefix. Sync never deletes objects, so `s3:DeleteObject` is not required.
+
+**Google Cloud Storage** — private bucket. Set `OPENSRE_REMOTE_SYNC_PROVIDER=gcs`. Credentials come from Application Default Credentials (`gcloud auth application-default login`). Needs `storage.objects.list`, `storage.objects.get`, `storage.objects.create`, and `storage.objects.delete` (delete is required to replace an object even though sync never removes keys). A bucket-scoped `roles/storage.objectUser` binding covers all four.
+
+**Vercel Blob** — private store. Set `BLOB_READ_WRITE_TOKEN`. `OPENSRE_REMOTE_SYNC_BUCKET` is the store name/id for status.
+
+**Azure Blob Storage** — private container. Set `OPENSRE_REMOTE_SYNC_PROVIDER=azure`, `OPENSRE_REMOTE_SYNC_BUCKET` to the container name, and `OPENSRE_REMOTE_SYNC_PROFILE` to the storage account name. Auth uses ambient Azure credentials (`az login`, Managed Identity, or `AZURE_*`). The principal needs **Storage Blob Data Contributor** on the account (plain Contributor is not enough).
+
+**S3-compatible (MinIO / R2 / Spaces)** — set `OPENSRE_REMOTE_SYNC_PROVIDER=s3compat` and `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` to the custom endpoint (or `AWS_ENDPOINT_URL_S3`). Path-style addressing is enabled for MinIO. Use the same ambient S3 credentials as AWS.
+
+## Skip some paths
+
+By default every session and memory file syncs. To hold some back:
 
 ```bash
 export OPENSRE_REMOTE_SYNC_EXCLUDE='*.tmp,sessions/scratch-*'
 ```
 
-Or, to keep it between machines, in `~/.opensre/config.yml`:
+Or in `~/.opensre/config.yml`:
 
 ```yaml
 remote_sync:
@@ -188,12 +170,9 @@ remote_sync:
   exclude:
     - "*.tmp"
     - sessions/scratch-*
-    - memory/local-only
 ```
 
-When the environment variable holds patterns, it replaces the stored list for
-that run rather than adding to it. To sync everything once, including the paths
-you normally hold back:
+If the env var is set, it **replaces** the config list for that run (it does not merge). Clearing the env var to empty does **not** turn exclusions off — use this instead:
 
 ```bash
 OPENSRE_REMOTE_SYNC_EXCLUDE_OFF=1 opensre remote-sync sync
@@ -510,15 +489,14 @@ history out of long-term storage that a third party can read — it is not
 end-to-end confidentiality for the underlying data.
 
 ## How conflicts resolve
+Patterns match keys like `sessions/…` or `memory/…` (case-sensitive). `*` can cross folders. Excluded paths are skipped both ways (not uploaded, not downloaded). Patterns starting with `!` are rejected. Sync never deletes from the store.
 
-Sync pulls first, then pushes. A file that exists on only one side is copied to
-the other. When both sides changed the same file, the more recently written one
-wins.
+## Conflicts
 
-Nothing is ever deleted, on either side. A machine that has been offline for a
-month cannot erase work done elsewhere — worst case it re-uploads an old copy
-under the same name, and the newer one wins on the next sync.
+Sync pulls first, then pushes.
 
-Deleting a session or a memory on one machine does **not** remove it from the
-store or from your other machines. Delete it in the store too if you want it
-gone everywhere.
+- Only on one side → copied to the other
+- Both changed → newer write wins
+- Nothing is deleted on either side
+
+Deleting a session on one laptop does **not** remove it from the store or other machines. Delete the object in the store if you want it gone everywhere.

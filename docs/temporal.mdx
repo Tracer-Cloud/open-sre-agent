@@ -3,6 +3,8 @@ title: "Temporal"
 description: "Connect Temporal so OpenSRE can inspect workflow executions, event history, and worker health during investigations"
 ---
 
+## Overview
+
 OpenSRE queries Temporal's HTTP API to retrieve workflow executions, event history, task queue health, and namespace-level metrics — helping diagnose workflow failures, activity retries, and worker outages.
 
 <Note>
@@ -30,7 +32,15 @@ HTTP API listens on a **separate** port. On the dev server it is set with
 
 ## Setup
 
-### Option 1: Environment variables
+### Option 1: Interactive CLI
+
+```bash
+opensre integrations setup temporal
+```
+
+Prompts for HTTP API base URL, namespace, and optional API key.
+
+### Option 2: Environment variables
 
 ```bash
 export TEMPORAL_API_URL="http://localhost:7243"
@@ -38,9 +48,13 @@ export TEMPORAL_NAMESPACE="default"
 export TEMPORAL_API_KEY=""   # only if your deployment requires bearer auth
 ```
 
-### Option 2: Persistent store
+| Variable | Default | Description |
+| --- | --- | --- |
+| `TEMPORAL_API_URL` | — | **Required.** Temporal **HTTP API** base URL (`--http-port` listener, not gRPC `7233`) |
+| `TEMPORAL_NAMESPACE` | `default` | Namespace to query |
+| `TEMPORAL_API_KEY` | — | Optional bearer token (`Authorization: Bearer <key>`) |
 
-Add to `~/.opensre/integrations.json`:
+### Option 3: Persistent store
 
 ```json
 {
@@ -60,23 +74,11 @@ Add to `~/.opensre/integrations.json`:
 }
 ```
 
-| Field | Default | Description |
-| --- | --- | --- |
-| `base_url` | — | Temporal **HTTP API** base URL (the `--http-port` listener, not the gRPC `7233` port) |
-| `namespace` | `default` | Temporal namespace to query |
-| `api_key` | — | Bearer token, sent as `Authorization: Bearer <key>`. Leave empty for unauthenticated clusters |
+## Credentials
 
-## Self-hosted Temporal Server
-
-Set `base_url` to the frontend's HTTP API endpoint. Ensure the HTTP API is enabled —
-it is a distinct listener from the gRPC frontend (`frontend.httpPort` in static config,
-or `--http-port` on the dev server).
+Set `base_url` / `TEMPORAL_API_URL` to the frontend's HTTP API endpoint. Leave `api_key` empty for unauthenticated clusters.
 
 ### Quick local test with Docker
-
-The `temporalio/temporal` image bundles the CLI and an embedded dev server. Pin the
-HTTP port explicitly (it is random by default) and bind to all interfaces so it is
-reachable from the host:
 
 ```bash
 docker run --rm \
@@ -96,48 +98,48 @@ docker run --rm \
 | `8233` | Web UI (`http://localhost:8233`) |
 | `7243` | **HTTP API** — set this as `base_url` |
 
-Confirm the HTTP API is answering before configuring the integration:
+Confirm the HTTP API answers before configuring the integration:
 
 ```bash
 curl -s http://localhost:7243/api/v1/namespaces/default
 ```
 
-Then verify the integration end to end:
+## Investigation tools
+
+| Tool | What it does |
+| --- | --- |
+| `temporal_namespace_info` | Namespace state and workflow counts by status (Running, Failed, TimedOut) |
+| `temporal_workflows` | Recent executions with status, type, task queue, timing |
+| `temporal_workflow_history` | Event history for a specific execution |
+| `temporal_task_queue` | Active pollers and backlog stats (depth, add/dispatch rates) |
+
+### Typical investigation flow
+
+1. **Namespace info** — how many workflows are running vs failed?
+2. **Workflows** — filter to failed/timed-out executions; note workflow type and task queue
+3. **Workflow history** — which activity failed and why?
+4. **Task queue** — are workers polling? Is backlog growing?
+
+## Verify
 
 ```bash
 opensre integrations verify temporal
 ```
 
-## Investigation tools
-
-When OpenSRE investigates a Temporal-related alert, four diagnostic tools are available:
-
-| Tool | What it does |
-| --- | --- |
-| **Namespace info** | Retrieves namespace state and workflow execution counts grouped by status (Running, Failed, TimedOut) |
-| **Workflows** | Lists recent workflow executions with status, type, task queue, and timing |
-| **Workflow history** | Fetches the event history for a specific execution — shows the sequence of started, failed, and completed events |
-| **Task queue** | Describes a task queue's active pollers and backlog stats (queue depth, add/dispatch rates) |
-
-### Typical investigation flow
-
-1. **Namespace info** — get a high-level picture: how many workflows are running vs failed?
-2. **Workflows** — filter to failed/timed-out executions, identify the affected workflow type and task queue
-3. **Workflow history** — drill into a specific execution to find which activity failed and why
-4. **Task queue** — check if workers are polling and whether the queue has a growing backlog
+Verify probes `GET /api/v1/namespaces/{namespace}`.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| **Connection refused / protocol errors** | You may be pointing at the gRPC port. Use the HTTP API port (`--http-port`, e.g. `7243`), not `7233` |
-| **404 on `/api/v1/...`** | The HTTP API may not be enabled — confirm `--http-port` (dev) or `frontend.httpPort` (static config) is set |
-| **401 Unauthorized** | The cluster requires auth — set `api_key` to a valid bearer token |
-| **404 Namespace not found** | Confirm the `namespace` value matches exactly (case-sensitive) |
-| **Empty workflow list** | Workflows may have passed retention — check namespace retention settings |
+| **Connection refused / protocol errors** | You may be on the gRPC port — use the HTTP API port (`--http-port`, e.g. `7243`), not `7233` |
+| **404 on `/api/v1/...`** | Enable HTTP API (`--http-port` or `frontend.httpPort`) |
+| **401 Unauthorized** | Set `TEMPORAL_API_KEY` to a valid bearer token |
+| **404 Namespace not found** | Confirm `namespace` matches exactly (case-sensitive) |
+| **Empty workflow list** | Workflows may have passed retention — check namespace retention |
 | **No pollers on task queue** | Workers may be down — check worker deployment health |
 
-## Security best practices
+## Security
 
 - Use a **read-only API key** where your deployment supports scoped auth — OpenSRE never writes to Temporal.
 - Restrict network access to the HTTP API to trusted IPs.

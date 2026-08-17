@@ -5,7 +5,10 @@ description: "Cron-driven recurring reports to Telegram, Slack, Discord, Rocket.
 
 # Scheduled Deliveries
 
-OpenSRE can deliver recurring reports to messaging providers on a cron schedule. This enables daily reliability digests, weekly alert audits, synthetic test summaries, and custom investigations — all delivered automatically without manual CLI invocations.
+OpenSRE can deliver recurring reports to messaging providers on a cron
+schedule. Use it for daily reliability digests, weekly alert audits, synthetic
+test summaries, and custom investigations — delivered automatically without
+manual CLI runs.
 
 For human task reminders and proactive work check-ins, use `opensre work add
 --remind-at ...` or `opensre work schedule-checkin ...`. Those commands create
@@ -75,15 +78,18 @@ Delete a scheduled task by its ID.
 
 ### `opensre cron run <task_id>`
 
-Execute a task immediately (ad-hoc one-shot). Useful for debugging delivery without waiting for the next cron tick.
+Execute a task immediately (ad-hoc one-shot). Useful for debugging delivery
+without waiting for the next cron tick.
 
 ### `opensre cron logs <task_id>`
 
-Show execution history for a task (newest first). Displays start time, status, message ID, and any errors.
+Show execution history for a task (newest first). Displays start time, status,
+message ID, and any errors.
 
 ### `opensre cron start`
 
-Start the blocking scheduler daemon. Loads all enabled tasks and fires them according to their cron schedules. Blocks until `SIGINT` or `SIGTERM`.
+Start the blocking scheduler daemon. Loads all enabled tasks and fires them
+according to their cron schedules. Blocks until `SIGINT` or `SIGTERM`.
 
 ## Cron Syntax
 
@@ -94,45 +100,62 @@ Standard 5-field cron expressions:
 │ ┌───────────── hour (0-23)
 │ │ ┌───────────── day of month (1-31)
 │ │ │ ┌───────────── month (1-12)
-│ │ │ │ ┌───────────── day of week (0-6, Mon-Sun)
+│ │ │ │ ┌───────────── day of week (0-6, Mon–Sun)
 │ │ │ │ │
 * * * * *
 ```
 
+**Weekday numbering:** OpenSRE uses APScheduler 3.x `CronTrigger`, where
+**`0` = Monday** and **`6` = Sunday** (not the Unix cron convention where
+`0` is Sunday). Prefer `1-5` for weekdays to avoid confusion.
+
 Examples:
+
 - `0 9 * * 1-5` — weekdays at 09:00
 - `0 8 * * 1` — Mondays at 08:00
 - `*/30 * * * *` — every 30 minutes
 - `0 0 1 * *` — first day of each month at midnight
 
-Cron expressions are validated at `cron add` time using APScheduler's `CronTrigger`. Invalid expressions are rejected immediately.
+Cron expressions are validated at `cron add` time using APScheduler's
+`CronTrigger`. Invalid expressions are rejected immediately.
 
 ## Timezone Behavior
 
 - All fire times are internally converted to UTC for dedup consistency
-- The `--tz` option accepts any IANA timezone (e.g., `Europe/London`, `US/Eastern`)
-- DST transitions are handled correctly — the UTC-normalized dedup key ensures no duplicate or missed deliveries across clock changes
+- The `--tz` option accepts any IANA timezone (for example `Europe/London`,
+  `US/Eastern`)
+- DST transitions are handled correctly — the UTC-normalized dedup key
+  ensures no duplicate or missed deliveries across clock changes
 
 ## Dedup Semantics
 
-The scheduler uses a SQLite-backed claim store with a `UNIQUE(task_id, fire_time)` constraint:
+The scheduler uses a SQLite-backed claim store with a
+`UNIQUE(task_id, fire_time)` constraint:
 
-1. When a cron tick fires, `EVENT_JOB_SUBMITTED` captures `scheduled_run_times[0]` and the job uses that UTC-normalized `fire_time` for the claim key
+1. When a cron tick fires, `EVENT_JOB_SUBMITTED` captures
+   `scheduled_run_times[0]` and the job uses that UTC-normalized `fire_time`
+   for the claim key
 2. The executor attempts an `INSERT OR IGNORE` into the claim table
-3. If the insert succeeds (rowcount = 1), this instance won the claim and delivers
-4. If the insert is ignored (rowcount = 0), another instance already claimed it — skip
+3. If the insert succeeds (rowcount = 1), this instance won the claim and
+   delivers
+4. If the insert is ignored (rowcount = 0), another instance already claimed
+   it — skip
 
-This ensures exactly-once delivery even when multiple scheduler instances run concurrently (e.g., on a laptop and a hosted process).
+This ensures exactly-once delivery even when multiple scheduler instances run
+concurrently (for example on a laptop and a hosted process).
 
 ## Credential Resolution
 
 Credentials are resolved lazily at delivery time in this priority order:
 
 1. **Task params** — credentials stored in the task definition (not recommended)
-2. **Integration store** — `~/.opensre/integrations.json` (configured via `opensre integrations`)
-3. **Environment variables** — `TELEGRAM_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, `ROCKETCHAT_*`
+2. **Integration store** — `~/.opensre/integrations.json` (configured via
+   `opensre integrations`)
+3. **Environment variables** — `TELEGRAM_BOT_TOKEN`, `SLACK_BOT_TOKEN`,
+   `DISCORD_BOT_TOKEN`, `ROCKETCHAT_*`
 
-This means you don't need to pass credentials at `cron add` time — they're picked up from your existing integration configuration.
+You do not need to pass credentials at `cron add` time — they are picked up
+from your existing integration configuration.
 
 ## Task Kinds
 

@@ -3,53 +3,60 @@ title: "Background investigations"
 description: "Run investigations asynchronously in the interactive shell and receive RCA completion notifications."
 ---
 
-OpenSRE's interactive shell supports a **session-local background mode** for
-investigations.
+In the interactive shell, **background mode** runs investigations asynchronously
+so you can keep asking questions while an RCA finishes.
 
-When background mode is enabled:
+When background mode is on:
 
-- new investigations run asynchronously
-- the shell stays free for more questions and follow-ups
-- completed RCAs are tracked in-session
-- completion notifications can be sent to email (via the [`smtp`](/smtp) integration), Telegram (via the [`telegram`](/messaging/telegram) integration), Rocket.Chat (via the [`rocketchat`](/messaging/rocketchat) integration), Buzz (via the [`buzz`](/messaging/buzz) integration), or any combination
+- New investigations start in the background
+- The shell stays free for follow-up questions
+- Finished RCAs are tracked in the current session
+- Completion notifications can go to email ([SMTP](/smtp)), Telegram
+  ([Telegram](/messaging/telegram)), Rocket.Chat
+  ([Rocket.Chat](/messaging/rocketchat)), Buzz
+  ([Buzz](/messaging/buzz)), or any combination of those
 
 <Note>
-This first version is **session-local only**. If the REPL process exits,
-in-flight background jobs stop with it.
+This feature is **session-local**. If the REPL process exits, in-flight
+background jobs stop with it.
 </Note>
 
----
+This is not the hosted async HTTP API (`POST /api/investigations` and
+`OPENSRE_INVESTIGATION_WORKER`). For that path, see the [HTTP API](/api).
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `/background on` | Enable async investigation launches |
-| `/background off` | Return to normal foreground execution |
+| `/background on` | Turn on async investigation launches |
+| `/background off` | Return to normal foreground runs |
 | `/background status` | Show background mode, tracked job count, and active notify channels |
 | `/background list` | List tracked jobs |
-| `/background show <task_id>` | Show the RCA summary and the per-channel notification result for one job |
+| `/background show <task_id>` | Show the RCA summary and per-channel notification result for one job |
 | `/background use <task_id>` | Promote a completed job into the active follow-up context |
-| `/background notify list` | Show the channels a completed RCA is delivered to (default: **none**) |
-| `/background notify set <channel[,channel...]>` | Set completion channels — `email`, `telegram`, `rocketchat`, `buzz`, or a comma-separated combination |
+| `/background notify list` | Show where completed RCAs are delivered (default: **none**) |
+| `/background notify set <channel[,channel...]>` | Set completion channels — `email`, `telegram`, `rocketchat`, `buzz`, or a comma-separated list |
+| `/tasks` | List session tasks (including background investigations) |
+| `/cancel <task_id>` | Cancel a running background investigation |
 
----
+There is no `opensre background …` CLI command. Background mode is interactive
+shell only.
 
 ## Typical flow
 
-1. Start the interactive shell.
-2. Enable background mode:
+1. Start the interactive shell (`opensre`).
+2. Turn on background mode:
 
 ```text
 /background on
 ```
 
-3. Choose where the completed RCA is delivered. **Channels are empty by default — skip this and no
-   notification is sent:**
+3. Choose where the finished RCA is delivered. Channels start empty — if you
+   skip this step, no notification is sent:
 
 ```text
 /background notify set telegram    # or: email, rocketchat, buzz, or email,telegram
-/background notify list           # confirm
+/background notify list            # confirm
 ```
 
 4. Start an investigation:
@@ -60,57 +67,70 @@ in-flight background jobs stop with it.
 
 or paste a fresh alert in free text.
 
-5. Keep using the shell while the RCA runs.
+5. Keep using the shell while the RCA runs. You can check progress with
+   `/background list` or `/tasks`, and stop a run with `/cancel <task_id>`.
 6. When it completes:
-   - inspect it with `/background show <task_id>`
-   - adopt it into active follow-up context with `/background use <task_id>`
+   - Inspect it with `/background show <task_id>`
+   - Adopt it as active follow-up context with `/background use <task_id>`
 
----
+## What a completed job stores
 
-## RCA summary contents
+Each finished background job keeps:
 
-Completed background jobs store:
+- Root cause
+- Top analysis items
+- Recommended next steps
+- Internal stats:
+  - Tool call count
+  - Investigation loop count
+  - Validity score
 
-- root cause
-- top analysis items
-- recommended next steps
-- internal stats:
-  - tool call count
-  - investigation loop count
-  - validity score
-
----
+`/background show <task_id>` prints status, command, root cause, top analysis,
+next steps, and notify results. It does **not** print the internal stats table.
+Those stats are included in notification messages (email, Telegram, Rocket.Chat, Buzz)
+when a channel is configured.
 
 ## Completion notifications
 
-Notifications are **off by default** — pick your channels with `/background notify set`.
+Notifications are **off by default**. Set channels with
+`/background notify set`.
 
 | Channel | Delivered through | Set up with |
 | --- | --- | --- |
-| `email` | [`smtp`](/smtp) integration | `opensre integrations setup smtp` |
-| `telegram` | [`telegram`](/messaging/telegram) integration | `opensre integrations setup telegram` |
-| `rocketchat` | [`rocketchat`](/messaging/rocketchat) integration | `opensre integrations setup rocketchat` |
-| `buzz` | [`buzz`](/messaging/buzz) integration | `opensre integrations setup buzz` |
+| `email` | [SMTP](/smtp) integration | `opensre integrations setup smtp` |
+| `telegram` | [Telegram](/messaging/telegram) integration | `opensre integrations setup telegram` |
+| `rocketchat` | [Rocket.Chat](/messaging/rocketchat) integration | `opensre integrations setup rocketchat` |
+| `buzz` | [Buzz](/messaging/buzz) integration | `opensre integrations setup buzz` |
 
-All channels send the same summary — **Root cause**, **Top analysis**, **What to do next**, plus a
-short internal stats section. Telegram, Rocket.Chat, and Buzz messages are plain text and are capped at the 4,096-character
-limit.
+All channels send the same summary structure: **Root cause**, **Top analysis**,
+**What to do next**, plus a short internal stats section. Telegram, Rocket.Chat,
+and Buzz messages are plain text and are capped at the 4,096-character
+limit (sections may be shortened to fit). Email can carry a fuller version of
+the same content.
 
-Check what was actually delivered with `/background show <task_id>`: the `notify` row shows one
-result per channel — `sent`, `failed: <error>`, or a setup hint such as
-`missing telegram integration: TELEGRAM_BOT_TOKEN is not set.`
+Check what was delivered with `/background show <task_id>`. The `notify` row
+shows one result per channel — `sent`, `failed: <error>`, or a setup hint such
+as `missing telegram integration: TELEGRAM_BOT_TOKEN is not set.`
 
 <Note>
-A notification problem never fails the investigation. If a channel is unconfigured
-or delivery errors, the RCA still completes, stays in `/background list`, and can still be promoted with
-`/background use`.
+A notification problem never fails the investigation. If a channel is missing
+or delivery errors, the RCA still completes, stays in `/background list`, and
+can still be promoted with `/background use`.
 </Note>
 
----
+## Session lifecycle
 
-## Current v1 limits
+- Jobs are not saved across REPL restarts. Exiting the process stops in-flight
+  work and clears tracked jobs.
+- `/new` clears tracked jobs and turns background mode **off**. Notification
+  channel preferences are kept (like trust mode), until you change them with
+  `/background notify set`.
+- Completing a job does **not** automatically replace your active follow-up
+  context. Run `/background use <task_id>` to promote a finished RCA.
 
-- interactive shell only — there is no `opensre background …` CLI command
-- jobs are not persisted across REPL restarts
-- completion does not automatically replace your active follow-up context
-- you must run `/background use <task_id>` to promote a finished RCA
+## Current limits
+
+- Interactive shell only — no `opensre background …` CLI command
+- Jobs are not persisted across REPL restarts
+- Completion does not automatically replace your active follow-up context
+- You must run `/background use <task_id>` to promote a finished RCA

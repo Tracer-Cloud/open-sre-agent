@@ -1,33 +1,57 @@
 ---
 title: "Linux"
-description: "Install OpenSRE on a local Linux machine"
+description: "Install OpenSRE on a local Linux machine and run your first investigation."
 ---
 
-## 1. Install OpenSRE
+Install OpenSRE on Linux (laptop, desktop, or a local VM), set up your LLM and tools, then try a sample investigation.
+
+## 1. Install
 
 ```bash
 curl -fsSL https://install.opensre.com | bash
 ```
 
-The installer does not require `sudo`. It installs into a writable bin directory already on your `PATH` when possible; otherwise it uses `~/.local/bin` and prints how to update `PATH`.
+Or with Homebrew on Linux, if you use it:
 
-## 2. Onboard
+```bash
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
+```
+
+You usually don't need `sudo`. If `opensre` isn't found after install, open a new terminal or add the bin directory the installer printed (often `~/.local/bin`) to your PATH.
+
+In a normal interactive terminal, install may start onboard for you. To skip that:
+
+```bash
+curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
+```
+
+## 2. Set things up
 
 ```bash
 opensre onboard
 ```
 
-This configures your LLM provider and optional integrations. When you run the curl installer from an interactive terminal, onboarding starts automatically after install.
-
-## 3. Verify
+Pick an LLM, add a key, and connect any tools you want investigations to use. Then verify:
 
 ```bash
-opensre health
 opensre integrations verify
 ```
 
-## Next steps
+## 3. Try an investigation
 
-- [Quickstart](/quickstart) — run a sample investigation
-- [Local and on-prem setup](/install-local) — full local workflow
-- [Integrations overview](/integrations-overview)
+```bash
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Or chat with it in the shell:
+
+```bash
+opensre
+```
+
+## Next
+
+- [Quickstart](/quickstart) — full walkthrough with GIFs
+- [Install locally](/install-local) — shared VM / on-prem notes
+- [Integrations overview](/integrations-overview) — tool catalog

@@ -3,31 +3,22 @@ title: "Twilio SMS"
 description: "Deliver investigation findings via Twilio SMS as a standalone, independently configurable channel."
 ---
 
-OpenSRE's Twilio integration delivers investigation findings via **SMS**
-using the Twilio Messaging API. It is configured independently of the
-existing `whatsapp` integration, though both can share the same Twilio
-account credentials.
+## Overview
+
+OpenSRE's Twilio integration delivers investigation findings via **SMS** using the Twilio Messaging API. It is configured independently of the existing `whatsapp` integration, though both can share the same Twilio account credentials. Delivery-only — no gateway or pairing.
 
 <Note>
-WhatsApp delivery is owned entirely by the separate `whatsapp` integration
-(`opensre integrations setup whatsapp`) — see the [WhatsApp](/messaging/whatsapp)
-page. The `twilio` integration documented here is SMS-only. For voice
-paging on critical incidents, route through PagerDuty or Opsgenie, which
-provide voice escalation with proper acknowledgement.
+WhatsApp delivery is owned entirely by the separate `whatsapp` integration (`opensre integrations setup whatsapp`) — see the [WhatsApp](/messaging/whatsapp) page. The `twilio` integration documented here is SMS-only. For voice paging on critical incidents, route through PagerDuty or Opsgenie, which provide voice escalation with proper acknowledgement.
 </Note>
-
----
 
 ## Prerequisites
 
 - A Twilio account: [Sign up](https://www.twilio.com/try-twilio).
 - A Twilio-provisioned phone number **or** a Messaging Service SID.
 
----
+## Setup
 
-## Step 1: Configure the integration
-
-### Via CLI wizard (recommended)
+### Option 1: CLI wizard (recommended)
 
 ```bash
 opensre integrations setup twilio
@@ -37,13 +28,12 @@ You'll be prompted for:
 
 - **Twilio Account SID** (starts with `AC...`)
 - **Twilio Auth Token**
-- **Twilio SMS From number** (E.164, e.g. `+14155551234`) — or leave blank
-  and provide a **Messaging Service SID** (starts with `MG...`)
+- **Twilio SMS From number** (E.164, e.g. `+14155551234`) — or leave blank and provide a **Messaging Service SID** (starts with `MG...`)
 - optional **default recipient**
 
-### Via environment variables
+Twilio SMS is not in the onboard Incident & Comms menu — use this setup command. The service key is `twilio` (docs path `/messaging/twilio-sms`).
 
-Add to your `.env` file:
+### Option 2: Environment variables
 
 ```bash
 TWILIO_ACCOUNT_SID=AC...
@@ -55,56 +45,29 @@ TWILIO_SMS_MESSAGING_SERVICE_SID=
 TWILIO_SMS_DEFAULT_TO=+1234567890
 ```
 
-The `twilio` env-bootstrap activates when the account + token are set and
-an SMS sender (`TWILIO_SMS_FROM` or `TWILIO_SMS_MESSAGING_SERVICE_SID`) is
-present. The legacy `whatsapp` record is bootstrapped independently from
-`TWILIO_WHATSAPP_FROM`.
+| Variable | Description |
+| --- | --- |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID (shared with WhatsApp) |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token (shared with WhatsApp) |
+| `TWILIO_SMS_FROM` | SMS from number (XOR with Messaging Service SID) |
+| `TWILIO_SMS_MESSAGING_SERVICE_SID` | Messaging Service SID (XOR with from number) |
+| `TWILIO_SMS_DEFAULT_TO` | Default recipient for auto-delivery |
 
----
+The `twilio` env-bootstrap activates when the account + token are set and an SMS sender (`TWILIO_SMS_FROM` or `TWILIO_SMS_MESSAGING_SERVICE_SID`) is present. The legacy `whatsapp` record is bootstrapped independently from `TWILIO_WHATSAPP_FROM`.
 
-## Step 2: Verify
+## Credentials
 
-```bash
-opensre integrations verify twilio
-```
+1. Create or open a Twilio account.
+2. Provision a phone number **or** Messaging Service for SMS.
+3. Copy Account SID and Auth Token.
+4. Set exactly one SMS sender: `TWILIO_SMS_FROM` **or** `TWILIO_SMS_MESSAGING_SERVICE_SID` (enforced by the verifier).
+5. Set `TWILIO_SMS_DEFAULT_TO` for automatic delivery after investigations (reporting adapter).
 
-A passing verification confirms:
+## Investigation tools
 
-- The Twilio account credentials authenticate against the Twilio Account API.
-- The SMS channel is enabled and has a usable sender (`from_number` or
-  `messaging_service_sid`).
-
-Sample passing output:
-
-```
-twilio: passed — Connected to Twilio account My Company; SMS channel ready.
-```
-
-If the account authenticates but the SMS channel has no sender,
-verification returns `failed` with a message telling you to set a
-`from_number` or `messaging_service_sid`.
-
----
-
-## Step 3: Test with an investigation
-
-Trigger a real investigation against a bundled fixture:
-
-```bash
-opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
-
-When the investigation finishes, the RCA summary is truncated to the SMS
-body limit (1600 chars) and posted via the Twilio Messaging API to the
-configured recipient.
-
----
-
-## Programmatic notifications: `twilio_notify` tool
-
-When the Twilio integration is configured, the investigation planner
-exposes a `twilio_notify` tool. The tool sends a short notification body
-via SMS and returns the Twilio Message SID for traceability.
+| Tool | What it does |
+| --- | --- |
+| `twilio_notify` | Send a short SMS notification body; returns the Twilio Message SID |
 
 ```json
 {
@@ -116,11 +79,34 @@ via SMS and returns the Twilio Message SID for traceability.
 }
 ```
 
----
+### Test with an investigation
+
+```bash
+opensre investigate --input tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+When the investigation finishes, the RCA summary is truncated to the SMS body limit (1600 chars) and posted via the Twilio Messaging API to the configured recipient.
+
+## Verify
+
+```bash
+opensre integrations verify twilio
+```
+
+A passing verification confirms:
+
+- The Twilio account credentials authenticate against the Twilio Account API.
+- The SMS channel is enabled and has a usable sender (`from_number` or `messaging_service_sid`).
+
+Sample passing output:
+
+```
+twilio: passed — Connected to Twilio account My Company; SMS channel ready.
+```
+
+If the account authenticates but the SMS channel has no sender, verification returns `failed` with a message telling you to set a `from_number` or `messaging_service_sid`.
 
 ## Troubleshooting
-
-### `opensre integrations verify twilio` errors
 
 | Detail | Likely cause |
 | --- | --- |
@@ -128,13 +114,10 @@ via SMS and returns the Twilio Message SID for traceability.
 | `Missing auth_token` | `TWILIO_AUTH_TOKEN` is unset. |
 | `Twilio API check failed: 401` | The SID/token pair is invalid. |
 | `SMS channel is not ready` | No SMS sender — set `TWILIO_SMS_FROM` or `TWILIO_SMS_MESSAGING_SERVICE_SID`. |
+| SMS never arrives but verify passes | Confirm sender is provisioned for the destination country; recipient in E.164; trial accounts need verified caller IDs. Inspect Twilio Console Messages for error codes (`30007`, `21610`, etc.). |
 
-### SMS never arrives but verify passes
+## Security
 
-- Confirm `TWILIO_SMS_FROM` (or the Messaging Service SID) is provisioned
-  for the destination country.
-- Confirm the recipient is in E.164 format (`+14155550000`).
-- For trial accounts: the recipient must be a verified caller ID.
-- Inspect `Messages` in the Twilio Console for an error code; common
-  failures (`30007`, `21610`, etc.) are documented at
-  [twilio.com/docs/api/errors](https://www.twilio.com/docs/api/errors).
+- Treat Twilio auth tokens like passwords.
+- Prefer a dedicated Twilio project for OpenSRE.
+- Store credentials in `.env` or your secret manager — not in source control.

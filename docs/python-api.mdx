@@ -1,18 +1,18 @@
 ---
 title: "Python API"
 slug: "python-api"
-description: "Drive the OpenSRE agent in-process from your own Python code"
+description: "Drive the OpenSRE agent in-process from Python."
 ---
 
-Use this when your Python code runs on the same machine as OpenSRE and you want
-agent answers without shelling out to the CLI. To call OpenSRE over the network
-instead, use the [HTTP API](/api). To supply your own output sink, tools, prompts
-or error reporting and drive one agent across many turns, see
+Use the Python API when your code runs on the same machine as OpenSRE and you
+want agent responses without invoking the CLI. For network access, use the
+[HTTP API](/api). To supply your own output sink, tools, prompts, or error
+reporting and drive one agent across many turns, see
 [Hosting the Agent](/hosting-the-agent).
 
 ## Prerequisites
 
-The standalone CLI installer does not expose an importable package, so embed
+The standalone CLI installer does not provide an importable package. Install
 from a source checkout:
 
 ```bash
@@ -86,7 +86,7 @@ session.chat("list unresolved Sentry issues from the last 24 hours")
 result = session.chat("which of those affect checkout?")
 ```
 
-To resume a previous session instead of starting a new one, pass its ID:
+To resume an existing session, pass its ID:
 
 ```python
 from core.agent_harness import AgentSession, SessionConfig
@@ -94,10 +94,10 @@ from core.agent_harness import AgentSession, SessionConfig
 session = AgentSession.start(SessionConfig(session_id="abc123"))
 ```
 
-## Your own grounding context
+## Custom grounding context
 
-The agent builds its prompts from the session by default. To ground it your own
-way — a different system prompt, your own retrieved context — pass a provider:
+By default, the agent builds prompts from the session. To supply a custom system
+prompt or retrieved context, pass a provider:
 
 ```python
 from core.agent_harness import AgentSession, SessionConfig
@@ -105,17 +105,15 @@ from core.agent_harness import AgentSession, SessionConfig
 session = AgentSession.start(SessionConfig(prompts=my_provider))
 ```
 
-Omit it and the built-in provider applies
-(`core.agent_harness.spi.DefaultPromptContextProvider`). A custom provider must
-satisfy `core.agent_harness.ports.PromptContextProvider`. The same `prompts=`
-argument is accepted by `DefaultPorts.agent()` on the custom-ports path
-below.
+If omitted, `core.agent_harness.spi.defaults.DefaultPromptContextProvider` is
+used. A custom provider must implement
+`core.agent_harness.ports.PromptContextProvider`. The same `prompts=` argument
+is accepted by `DefaultPorts.agent()` on the custom-ports path below.
 
 ## Custom output and ports
 
-`start()` buffers all output. To capture tool progress yourself — stream to a
-websocket, collect for a report — build the agent explicitly and pass your own
-sink:
+`start()` buffers all output. To capture tool progress yourself (for example to
+stream to a websocket), build the agent and pass your own sink:
 
 ```python
 from core.agent_harness import AgentSession, SessionConfig
@@ -137,12 +135,12 @@ print(sink.streamed)   # streamed answer chunks
 
 Any object implementing the `OutputSink` protocol
 (`core.agent_harness.ports.OutputSink`: `print`, `render_response_header`,
-`render_error`, `stream`) works in place of `BufferOutputSink`.
-`DefaultPorts` also takes a custom logger, console and prompt surface; its
+`render_error`, `stream`) may replace `BufferOutputSink`.
+`DefaultPorts` also takes a custom logger, console, and prompt surface; its
 `agent()` takes your own tool provider (`tools=`, usually a configured
 `DefaultToolProvider`) and gather ports — see its docstring.
 
-## Your own tools
+## External tools
 
 Register a package before the first tool lookup:
 
@@ -153,10 +151,10 @@ import my_agent_tools
 register_external_tool_package(my_agent_tools)
 ```
 
-Two gotchas:
+Requirements:
 
 1. Declare tools with `surfaces=("action",)` (or include `"action"`). The
-   `@tool` default is `("investigation",)` only — the chat/Python-API action
-   loop will not see investigation-only tools.
-2. Tools may live in the package's `__init__.py` or in submodules; both are
-   scanned after registration.
+   `@tool` default is `("investigation",)` only; the chat and Python API action
+   loop does not load investigation-only tools.
+2. Tools may be defined in the package `__init__.py` or in submodules; both are
+   discovered after registration.

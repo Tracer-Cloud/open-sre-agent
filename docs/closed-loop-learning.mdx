@@ -5,7 +5,12 @@ description: "Turn production investigation misses into regression evals"
 
 # Closed-Loop Learning
 
-OpenSRE captures accuracy feedback after every investigation. When you mark a result as **partial** or **inaccurate**, it is classified into a triage taxonomy and recorded as a *miss*. The `opensre misses` command surface lets you review trends, track recurrence, and convert top misses into reproducible benchmark scenarios — closing the loop from production usage back into the eval suite.
+OpenSRE captures accuracy feedback after every investigation. When you mark a
+result as **partial** or **inaccurate**, it is classified into a triage
+taxonomy and recorded as a *miss*. The `opensre misses` command surface lets
+you review trends, track recurrence, and convert top misses into reproducible
+benchmark scenarios — closing the loop from production usage back into the
+eval suite.
 
 ## Quick reference
 
@@ -18,7 +23,9 @@ OpenSRE captures accuracy feedback after every investigation. When you mark a re
 
 ## How a miss is captured
 
-After every investigation the CLI shows the accuracy prompt. If you pick **partial** or **inaccurate** you'll be asked for a short note and a taxonomy bucket:
+After every investigation the CLI shows the accuracy prompt. If you pick
+**partial** or **inaccurate** you are asked for a short note and a taxonomy
+bucket:
 
 - **Retrieval gap** — the agent did not fetch the evidence it needed.
 - **Reasoning gap** — it had the evidence but drew the wrong conclusion.
@@ -26,7 +33,10 @@ After every investigation the CLI shows the accuracy prompt. If you pick **parti
 - **Routing/prompt failure** — the wrong tools or plan were selected.
 - **Unknown** — choose this only when none of the above clearly fit.
 
-The miss is written to `~/.opensre/misses.jsonl` and an `investigation_miss_classified` event is emitted to PostHog with the run provenance, taxonomy, and (when available) `user_id` / `org_id`. The original feedback record in `~/.opensre/feedback.jsonl` is untouched.
+The miss is written to `~/.opensre/misses.jsonl` and an
+`investigation_miss_classified` event is emitted to PostHog with the run
+provenance, taxonomy, and (when available) `user_id` / `org_id`. The original
+feedback record in `~/.opensre/feedback.jsonl` is untouched.
 
 ## Reviewing trends
 
@@ -41,11 +51,16 @@ opensre misses list --since 14d --taxonomy retrieval_gap
 opensre misses stats --since 30d --json
 ```
 
-`stats` reports the **count per taxonomy** and the **recurring `(alert_name, taxonomy)` pairs** (seen more than once). Recurring pairs are the strongest signal that a regression scenario is overdue.
+`stats` reports the **count per taxonomy** and the **recurring
+`(alert_name, taxonomy)` pairs** (seen more than once). Recurring pairs are
+the strongest signal that a regression scenario is overdue.
 
 ## Converting misses to regressions
 
-`opensre misses export` writes one scenario per recurring `(alert, taxonomy)` pair, ordered by how often it has recurred. The output uses the same benchmark scenario `alert.json` shape, so the benchmark runner consumes it without any adapter changes:
+`opensre misses export` writes one scenario per recurring
+`(alert, taxonomy)` pair, ordered by how often it has recurred. The output
+uses the same benchmark scenario `alert.json` shape, so the benchmark runner
+consumes it without any adapter changes:
 
 ```bash
 opensre misses export \
@@ -53,7 +68,14 @@ opensre misses export \
   --out tests/benchmarks/production_misses/
 ```
 
-Each case directory contains an `alert.json` whose `commonAnnotations.scoring_points` dict (`expected_root_cause`, `expected_category`, `miss_notes`) carries the rubric for grading — the same location `opensre investigate --evaluate` already reads from, and the same one `strip_scoring_points_from_alert` removes before the agent sees the alert. The `_meta` block carries non-rubric provenance (`miss_id`, `original_run_id`, `taxonomy`). Commit the directory under `tests/benchmarks/` and the next benchmark run will include the new regressions.
+Each case directory contains an `alert.json` whose
+`commonAnnotations.scoring_points` dict (`expected_root_cause`,
+`expected_category`, `miss_notes`) carries the rubric for grading — the same
+location `opensre investigate --evaluate` already reads from, and the same one
+`strip_scoring_points_from_alert` removes before the agent sees the alert. The
+`_meta` block carries non-rubric provenance (`miss_id`, `original_run_id`,
+`taxonomy`). Commit the directory under `tests/benchmarks/` and the next
+benchmark run will include the new regressions.
 
 ## Weekly triage workflow
 
@@ -65,17 +87,25 @@ Each case directory contains an `alert.json` whose `commonAnnotations.scoring_po
 | Run the benchmark workflow against the PR branch | Reviewer | Wednesday |
 | Track fix-rate week-over-week using PostHog `investigation_miss_classified` trends | Eng lead | Ongoing |
 
-PostHog dashboards built on `investigation_miss_classified` (grouped by `taxonomy` and `alert_name`) provide the week-over-week trend view referenced by the SLAs.
+PostHog dashboards built on `investigation_miss_classified` (grouped by
+`taxonomy` and `alert_name`) provide the week-over-week trend view referenced
+by the SLAs.
 
 ## Privacy
 
-Miss records live entirely on the engineer's machine in `~/.opensre/misses.jsonl`. To delete everything captured locally, remove the file.
+Miss records live entirely on the engineer's machine in
+`~/.opensre/misses.jsonl`. To delete everything captured locally, remove the
+file.
 
-The `investigation_miss_classified` PostHog event carries identifiers and structured metadata only:
+The `investigation_miss_classified` PostHog event carries identifiers and
+structured metadata only:
 
 - `miss_id`, `feedback_id`, `run_id`
-- `taxonomy`, `rating`, `has_detail` (boolean — whether a note was provided, never the note itself)
+- `taxonomy`, `rating`, `has_detail` (boolean — whether a note was provided,
+  never the note itself)
 - `alert_name`, `pipeline_name`, `root_cause_category`
 - Optional `user_id`, `org_id` when running on a hosted/JWT path
 
-The free-text note (`taxonomy_detail`) and the captured `root_cause` string are **never** sent to PostHog — they only exist in the local JSONL store, so removing `~/.opensre/misses.jsonl` removes them entirely.
+The free-text note (`taxonomy_detail`) and the captured `root_cause` string
+are **never** sent to PostHog — they only exist in the local JSONL store, so
+removing `~/.opensre/misses.jsonl` removes them entirely.

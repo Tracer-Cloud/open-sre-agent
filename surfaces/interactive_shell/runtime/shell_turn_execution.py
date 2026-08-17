@@ -20,14 +20,13 @@ from core.agent_harness import (
     ToolCallingTurnResult,
     TurnResult,
 )
-from core.agent_harness.ports import AnswerRequest
+from core.agent_harness.ports import AnswerRequest, GatheredEvidence
 from core.agent_harness.runtime import HeadlessAgent, TurnBinding
 from core.agent_harness.spi.cancel import host_cancel_requested
 from core.agent_harness.spi.session_goal import (
     SessionGoal,
     format_session_goal_progress,
 )
-from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
