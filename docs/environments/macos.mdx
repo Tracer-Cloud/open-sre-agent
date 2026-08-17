@@ -1,40 +1,57 @@
 ---
 title: "macOS"
-description: "Install OpenSRE on macOS"
+description: "Install OpenSRE on a Mac and run your first investigation."
 ---
 
-## 1. Install OpenSRE
+Install OpenSRE on macOS, set up your LLM and tools, then try a sample investigation.
+
+## 1. Install
+
+Pick one:
 
 ```bash
+# Homebrew
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
+
+# or one-line installer
 curl -fsSL https://install.opensre.com | bash
 ```
 
-Or with Homebrew:
+You usually don't need `sudo`. If the terminal says `opensre: command not found`, open a new window or add the path the installer printed (often `~/.local/bin`).
+
+In a normal interactive terminal, install may start onboard for you. To skip that:
 
 ```bash
-brew tap tracer-cloud/tap
-brew install tracer-cloud/tap/opensre
+curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 ```
 
-The installer does not require `sudo`. It installs into a writable bin directory already on your `PATH` when possible; otherwise it uses `~/.local/bin` and prints how to update `PATH`.
-
-## 2. Onboard
+## 2. Set things up
 
 ```bash
 opensre onboard
 ```
 
-This configures your LLM provider and optional integrations. When you run the curl installer from an interactive terminal, onboarding starts automatically after install.
-
-## 3. Verify
+You'll pick an LLM provider, paste a key, and can connect tools like Datadog, Grafana, or Slack. Then check they work:
 
 ```bash
-opensre health
 opensre integrations verify
 ```
 
-## Next steps
+## 3. Try an investigation
 
-- [Quickstart](/quickstart) — run a sample investigation
-- [Local and on-prem setup](/install-local) — full local workflow
-- [Integrations overview](/integrations-overview)
+```bash
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Or open the shell and describe what's going on:
+
+```bash
+opensre
+```
+
+## Next
+
+- [Quickstart](/quickstart) — same flow with GIFs
+- [Install locally](/install-local) — PATH notes, auto-onboard, on-prem tips
+- [Integrations overview](/integrations-overview) — connect more tools

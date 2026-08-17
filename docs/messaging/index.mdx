@@ -1,41 +1,48 @@
 ---
 title: "Messaging"
-description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, Rocket.Chat, WhatsApp, or Twilio SMS."
+description: "Deliver investigation findings and trigger investigations from Slack, Discord, Telegram, Rocket.Chat, WhatsApp, Twilio SMS, Buzz, or email (SMTP)."
 ---
 
-OpenSRE can deliver investigation findings — and accept investigation triggers — through six messaging platforms. Pick the one that matches where your team already responds to incidents.
+## Overview
 
-## Pick a platform
+OpenSRE can deliver investigation findings — and, on some platforms, accept investigation triggers — through messaging and email. Pick the channel where your team already responds to incidents.
+
+## Prerequisites
+
+- Admin or install rights on the platform you choose
+- An OpenSRE host that can reach the platform API (and run `opensre gateway start` for two-way chat)
+
+## Setup
 
 | Platform | Best for | Trigger investigations from chat? | Configured by | Setup time |
-|---|---|---|---|---|
-| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Socket Mode chat via `opensre gateway start` (+ webhook delivery) | `opensre integrations setup slack` | ~10 min |
+| --- | --- | --- | --- | --- |
+| [**Slack**](/messaging/slack) | Teams already paged in Slack channels | ✅ Socket Mode chat via `opensre gateway start` (+ webhook delivery) | `opensre integrations setup slack` or `opensre onboard` | ~10 min |
 | [**Discord**](/messaging/discord) | Communities and teams using Discord servers | ✅ Gateway chat + `/investigate` via `opensre gateway start` | `opensre onboard` or `opensre integrations setup discord` | ~10 min |
 | [**Telegram**](/messaging/telegram) | Mobile-first and on-call rotations | ✅ DM text chat via `opensre gateway start` | `opensre onboard` or `opensre integrations setup telegram` | ~5 min |
 | [**Rocket.Chat**](/messaging/rocketchat) | Self-hosted and open-source workspaces | ❌ delivery only | `opensre onboard` or `opensre integrations setup rocketchat` | ~5 min |
 | [**WhatsApp**](/messaging/whatsapp) | Mobile alerting via Twilio WhatsApp | ❌ delivery only | `opensre integrations setup whatsapp` | ~5 min |
 | [**Twilio SMS**](/messaging/twilio-sms) | SMS paging via Twilio (separate from WhatsApp) | ❌ delivery only | `opensre integrations setup twilio` | ~5 min |
+| [**Buzz**](/messaging/buzz) | Block Buzz / Nostr workspaces | ❌ delivery only | `opensre onboard` or `opensre integrations setup buzz` | ~5 min |
+| [**SMTP**](/smtp) | Background RCA completion email | ❌ email only | `opensre integrations setup smtp` | ~5 min |
 
-If you're not sure, start with Slack — it has the simplest setup. Pick Discord if you want chat-driven investigations with threaded follow-ups. Pick WhatsApp or Twilio SMS when your team already pages via Twilio.
+If you're not sure, start with Slack. Pick Discord if you want chat-driven investigations with threaded follow-ups. Pick WhatsApp or Twilio SMS when your team already pages via Twilio.
 
 You can configure more than one. Each is independent and uses its own credentials.
 
-## What every guide covers
+Two-way pairing (`opensre messaging pair|allow|revoke`) applies to **Telegram, Slack, and Discord** only.
 
-Each platform guide walks you through:
+## Credentials
 
-1. **Prerequisites** — what you need before you start (workspace/server admin rights, a phone number for Telegram, a Twilio account for WhatsApp, etc.).
-2. **Create the bot/app** — the platform-side setup (BotFather, Discord Developer Portal, Slack App).
+Each platform guide covers:
+
+1. **Prerequisites** — workspace/server admin rights, Twilio account, etc.
+2. **Create the bot/app** — BotFather, Discord Developer Portal, Slack App, etc.
 3. **Credentials** — the exact tokens, IDs, and keys to copy.
-4. **OpenSRE wizard** — the `opensre onboard` flow, what it asks for, and what it writes to `.env`.
+4. **OpenSRE setup** — `opensre integrations setup …` and/or `opensre onboard`.
 5. **Verify** — how to confirm delivery is working.
-6. **Troubleshooting** — common failures and how to read the error.
+6. **Troubleshooting** — common failures.
 
----
-
-## Common environment variables
-
-Discord and Telegram credentials can also be set directly in `.env` instead of (or alongside) the CLI configuration:
+### Common environment variables
 
 ```bash
 # Slack — webhook delivery and/or Socket Mode gateway
@@ -72,18 +79,55 @@ WHATSAPP_DEFAULT_TO=
 TWILIO_SMS_FROM=
 TWILIO_SMS_MESSAGING_SERVICE_SID=
 TWILIO_SMS_DEFAULT_TO=
+
+# Buzz
+BUZZ_RELAY_URL=
+BUZZ_PRIVATE_KEY=
+BUZZ_DEFAULT_CHANNEL=
+
+# SMTP (background email)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_FROM_ADDRESS=
+SMTP_DEFAULT_TO=
 ```
 
-After editing `.env`, run `opensre integrations verify <service>` (e.g. `opensre integrations verify telegram`, `opensre integrations verify whatsapp`, or `opensre integrations verify twilio`) to confirm the credentials work. Note that `opensre doctor` only inspects the integrations store (`~/.opensre/integrations.json`), so it does **not** detect env-var-only configurations like Telegram, WhatsApp, Twilio SMS, or Slack-via-`SLACK_WEBHOOK_URL`.
+## Investigation tools
 
----
+Platform-specific send/read tools and gateway behavior are documented on each page (for example `slack_send_message`, `telegram_send_message`, `buzz_send_message`, `twilio_notify`).
 
-## Re-running the wizard
+## Verify
 
-You can re-run the Discord wizard at any time to update credentials:
+After editing `.env` or the store, run:
+
+```bash
+opensre integrations verify <service>
+```
+
+Examples: `telegram`, `slack`, `whatsapp`, `twilio`, `buzz`, `smtp`.
+
+Note that `opensre doctor` only inspects the integrations store (`~/.opensre/integrations.json`), so it does **not** detect env-var-only configurations.
+
+### Re-running setup
 
 ```bash
 opensre onboard
+# or
+opensre integrations setup <service>
 ```
 
-Existing values are pre-populated, so you can press Enter to keep what you have. Slack, WhatsApp, and Twilio SMS use `opensre integrations setup slack`, `opensre integrations setup whatsapp`, and `opensre integrations setup twilio`. Telegram does not currently have a wizard step that persists credentials — use `.env` for Telegram (see [#1481](https://github.com/Tracer-Cloud/opensre/issues/1481)).
+Existing values are often pre-populated so you can press Enter to keep what you have. Slack, Telegram, Discord, Rocket.Chat, Buzz, WhatsApp, Twilio SMS, and SMTP each have a dedicated setup path as listed in the table above.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **Doctor misses env-only config** | Expected — use `opensre integrations verify <service>` |
+| **Gateway ignores chat** | Pairing/allow-list applies to Telegram, Slack, Discord only — see that platform's page |
+| **Not sure which platform** | Start with Slack webhook for delivery; add Socket Mode / Telegram later for two-way chat |
+
+## Security
+
+- Treat webhooks and bot tokens like passwords.
+- Prefer dedicated bot accounts and least-privilege scopes.
+- Store secrets in the integration store / OS keyring / secret manager — not in source control.

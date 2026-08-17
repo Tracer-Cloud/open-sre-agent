@@ -13,8 +13,8 @@ from rich.console import Console
 
 from core.agent_harness import OutputSink, ToolCallingTurnResult
 from core.agent_harness.ports import LlmFactory
+from core.agent_harness.runtime import ActionTurnRunner
 from core.agent_harness.spi.defaults import DefaultErrorReporter
-from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS

@@ -1,19 +1,19 @@
 ---
-title: 'Multi-instance integrations'
-description: 'Configure multiple accounts, regions, or clusters per provider'
+title: "Multi-instance integrations"
+description: "Configure multiple accounts, regions, or clusters for the same provider."
 ---
 
-## Overview
+Use multiple **named instances** when you have more than one of the same
+provider — for example prod and staging Grafana, two AWS accounts, or several
+Kubernetes clusters. Each instance can carry **tags** for filtering.
 
-Real deployments have multiple clusters, regions, teams, and accounts for the same provider — a prod and staging Grafana, two AWS accounts, three Kubernetes clusters. OpenSRE's integration model now supports multiple **named instances** per provider with **tags** for filtering, while remaining fully backward-compatible with existing single-instance configurations.
+Single-instance setups keep working. You do not need to change them.
 
-## Configuring multiple instances
+## Configure instances
 
-There are two ways to configure multi-instance integrations.
+### Environment variable
 
-### 1. Environment variable (JSON array)
-
-Set `<SERVICE>_INSTANCES` to a JSON array. Each entry can use either a nested `credentials` object or a flat shape.
+Set `<SERVICE>_INSTANCES` to a JSON array:
 
 ```bash
 export GRAFANA_INSTANCES='[
@@ -22,13 +22,27 @@ export GRAFANA_INSTANCES='[
 ]'
 ```
 
-Supported env vars: `GRAFANA_INSTANCES`, `DD_INSTANCES`, `HONEYCOMB_INSTANCES`, `CORALOGIX_INSTANCES`, `AWS_INSTANCES`, `ARGOCD_INSTANCES`.
+Supported variables:
 
-When `<SERVICE>_INSTANCES` is set, the legacy single-instance vars for that service (e.g. `GRAFANA_INSTANCE_URL`, `GRAFANA_READ_TOKEN`) are ignored. If the JSON is invalid the loader logs a warning and falls back to the legacy vars.
+| Variable | Provider |
+| --- | --- |
+| `GRAFANA_INSTANCES` | Grafana |
+| `DD_INSTANCES` | Datadog |
+| `GROUNDCOVER_INSTANCES` | Groundcover |
+| `HONEYCOMB_INSTANCES` | Honeycomb |
+| `CORALOGIX_INSTANCES` | Coralogix |
+| `AWS_INSTANCES` | AWS |
+| `ARGOCD_INSTANCES` | Argo CD |
+| `SPLUNK_INSTANCES` | Splunk |
 
-### 2. Store file (`~/.opensre/integrations.json`)
+When `<SERVICE>_INSTANCES` is set, the legacy single-instance variables for that
+service (for example `GRAFANA_INSTANCE_URL`, `GRAFANA_READ_TOKEN`) are ignored.
+If the JSON is invalid, OpenSRE logs a warning and falls back to the legacy
+variables.
 
-The store uses a v2 schema with multiple instances per record:
+### Store file
+
+You can also define instances in `~/.opensre/integrations.json` (schema v2):
 
 ```json
 {
@@ -47,73 +61,53 @@ The store uses a v2 schema with multiple instances per record:
 }
 ```
 
-v1 stores are migrated automatically on first load — no manual action needed.
+Older v1 store files are migrated automatically on first load.
 
-## Selecting a specific instance during an investigation
+If both the store and environment variables configure the same service, the
+**store takes precedence**. To use multi-instance env vars, remove that
+service from the store or add the instances in the store instead.
 
-### By alert hint (Grafana, shipping now)
+## Select an instance during an investigation
 
-Alerts can carry a `grafana_instance` hint — either at the top level of the raw alert payload, or inside `annotations`:
+### Alert hint (Grafana)
+
+Grafana alerts can include a `grafana_instance` field at the top level or in
+`annotations`:
 
 ```json
 {
   "alert_source": "grafana",
-  "grafana_instance": "staging",
-  ...
+  "grafana_instance": "staging"
 }
 ```
 
-When set, OpenSRE selects the matching instance. If the hint is absent or unknown, the default (first) instance is used.
+OpenSRE uses the matching instance when the hint is set. If it is missing or
+unknown, the default (first) instance is used.
 
-### Programmatic selectors
+### Default for other providers
 
-```python
-from integrations.selectors import (
-    get_default_instance,
-    get_instance_by_name,
-    get_instances_by_tag,
-    select_instance,
-)
+Other multi-instance providers use the default (first) instance unless a
+selector is applied in code. Extending alert-based selection beyond Grafana is
+planned.
 
-# Flat default (backward-compat shape)
-default = get_default_instance(resolved_integrations, "grafana")
+## Provider support
 
-# By name
-prod = get_instance_by_name(resolved_integrations, "grafana", "prod")
+| Provider | `*_INSTANCES` env | Alert-based selection |
+| --- | --- | --- |
+| Grafana | Yes | Yes (`grafana_instance`) |
+| Datadog | Yes | Default instance |
+| Groundcover | Yes | Default instance |
+| Honeycomb | Yes | Default instance |
+| Coralogix | Yes | Default instance |
+| AWS | Yes | Default instance |
+| Argo CD | Yes | Default instance |
+| Splunk | Yes | Default instance |
+| Others | — | Default instance |
 
-# By tag
-prod_cluster = get_instances_by_tag(resolved_integrations, "grafana", "env", "prod")
+## Limitations
 
-# Either
-picked = select_instance(resolved_integrations, "grafana", name="prod")
-picked = select_instance(resolved_integrations, "grafana", tags={"env": "staging"})
-```
-
-## Backward compatibility
-
-- v1 store files are migrated on load; version bumped from 1 to 2; structural fields (`id`, `service`, `status`) preserved at the top level
-- Legacy env vars (`GRAFANA_INSTANCE_URL`, `DD_API_KEY`, etc.) continue to work unchanged
-- `resolved_integrations[<service>]` still returns the flat config dict of the default (first) instance — no existing consumer code changes
-- A sibling key `_all_<service>_instances` is published only when multiple instances exist (or an instance has a non-default name)
-- Existing single-instance tests continue to pass without modification
-
-## Current end-to-end provider support
-
-| Provider | `<SERVICE>_INSTANCES` env | Classifier multi-instance | `detect_sources` selection |
-|---|---|---|---|
-| Grafana | ✅ | ✅ | ✅ (via `grafana_instance` hint) |
-| Datadog | ✅ | ✅ | Default instance only |
-| AWS | ✅ | ✅ | Default instance only |
-| Honeycomb | ✅ | ✅ | Default instance only |
-| Coralogix | ✅ | ✅ | Default instance only |
-| Argo CD | ✅ | ✅ | Default instance only |
-| Others | — | Default instance only | Default instance only |
-
-Providers without end-to-end selection fall back to the default (first) instance — identical behavior to before this feature.
-
-## Known limitations
-
-- Only Grafana honors an alert-provided `grafana_instance` hint in this release; extending per-provider selection is a follow-up.
-- Operators must configure multi-instance via env vars or direct JSON edit; the CLI wizard is not yet instance-aware.
-- `verify_integrations` currently validates only the default instance of a multi-instance record.
-- When both the store and env vars configure the same service, the store still wins (existing precedence). To use multi-instance env vars, either remove the store entry for that service or add instances via the store directly.
+- Only Grafana honors an alert-provided instance hint in this release.
+- The CLI setup wizard is not instance-aware yet. Configure multi-instance via
+  env vars or by editing the store JSON.
+- `opensre integrations verify` validates only the default instance of a
+  multi-instance record.

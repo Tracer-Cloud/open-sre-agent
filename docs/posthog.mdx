@@ -3,25 +3,23 @@ title: "PostHog"
 description: "Connect PostHog REST credentials so OpenSRE can verify access to your project"
 ---
 
+## Overview
+
 OpenSRE stores **your** PostHog project credentials for REST API access (project metadata and correlation during investigations). Configure with `opensre integrations setup posthog` or `POSTHOG_*` environment variables.
 
-<Info>
-  Looking for agent tools during investigations (analytics, feature flags, HogQL)? Use [PostHog (MCP)](/posthog-mcp) with `opensre integrations setup posthog_mcp`.
-</Info>
+This REST integration does **not** register investigation tools. For agent tools during investigations (analytics, feature flags, HogQL), use [PostHog (MCP)](/posthog-mcp).
 
-## PostHog in OpenSRE — quick guide
-
-| What you want | Use this | How to set it up |
+| What you want | Use | Setup |
 | --- | --- | --- |
-| Store PostHog REST credentials for your project | **PostHog** — this page | `opensre integrations setup posthog` or env vars (below) |
+| Store PostHog REST credentials for your project | **PostHog** (this page) | `opensre integrations setup posthog` or env vars below |
 | Let the agent explore PostHog during incidents | [PostHog (MCP)](/posthog-mcp) | `opensre integrations setup posthog_mcp` or onboarding wizard |
-| OpenSRE's own usage telemetry | Built-in product analytics | Controlled by `OPENSRE_NO_TELEMETRY` — not your PostHog project |
+| OpenSRE’s own product usage telemetry | Built-in analytics | Controlled by `OPENSRE_NO_TELEMETRY` — not your PostHog project |
 
 ## Prerequisites
 
 - A PostHog account (US, EU, or self-hosted)
 - Your PostHog **project ID**
-- A **personal API key** with read access to that project — see [PostHog's personal API keys docs](https://posthog.com/docs/api/personal-api-keys)
+- A **personal API key** with read access to that project — see [PostHog personal API keys](https://posthog.com/docs/api/personal-api-keys)
 
 ## Setup
 
@@ -43,14 +41,14 @@ On success, credentials are saved to your integration store and synced to `.env`
 
 ### Option 2: Environment variables
 
-Add credentials directly to your `.env` file:
-
 ```bash
 POSTHOG_PROJECT_ID=your_project_id
 POSTHOG_PERSONAL_API_KEY=phx_your_personal_api_key
 POSTHOG_BASE_URL=https://us.i.posthog.com           # optional — US SaaS default
 POSTHOG_TIMEOUT_SECONDS=15.0                        # optional
 ```
+
+## Credentials
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -59,9 +57,13 @@ POSTHOG_TIMEOUT_SECONDS=15.0                        # optional
 | `POSTHOG_BASE_URL` | `https://us.i.posthog.com` | API base URL (`https://eu.i.posthog.com` for EU, or your self-hosted origin) |
 | `POSTHOG_TIMEOUT_SECONDS` | `15.0` | HTTP timeout in seconds |
 
-## Verify
+Get the **project ID** from PostHog project settings. Create a **personal API key** (`phx_...`) with read access — see [PostHog personal API keys](https://posthog.com/docs/api/personal-api-keys).
 
-After saving your `.env`, confirm OpenSRE can reach your PostHog project:
+## Investigation tools
+
+This REST integration does **not** register investigation tools. For agent tools during investigations (analytics, feature flags, HogQL), use [PostHog (MCP)](/posthog-mcp).
+
+## Verify
 
 ```bash
 opensre integrations verify posthog

@@ -1,29 +1,27 @@
 ---
 title: "Trello"
-description: "Connect Trello so OpenSRE can view cards and boards during investigations and incident management"
+description: "Connect Trello so OpenSRE can create cards on boards during incident follow-up"
 ---
 
-When incidents happen, keeping everyone organized matters. OpenSRE connects to Trello so you can create incident cards, track investigation progress, and manage follow-up tasks — all without leaving your incident response workflow.
+## Overview
 
-## What you need
+When incidents happen, keeping everyone organized matters. OpenSRE can talk to the Trello API with an API key and token so you can create incident cards on a board and list you choose.
+
+<Note>
+Trello is configured via environment variables or the persistent store. There is currently no `opensre integrations setup trello` wizard, no `opensre integrations verify trello` target, and no registered investigation tool package — card creation is available through the Trello client helpers (`create_trello_card`) when you wire credentials yourself.
+</Note>
+
+## Prerequisites
 
 - A Trello account with access to the boards you want OpenSRE to use
 - A Trello API key and token
 - Optional board and list IDs for automatic card creation
 
-## Setting up Trello
+## Setup
 
-### Quick setup
+### Option 1: Environment variables
 
-```bash
-opensre integrations setup
-```
-
-Choose **Trello** and enter your API key and token when prompted.
-
-### Manual config: Environment variables
-
-Or add these to your `.env`:
+Add these to your `.env`:
 
 ```bash
 TRELLO_API_KEY=your_api_key
@@ -37,11 +35,11 @@ TRELLO_BASE_URL=https://api.trello.com/1
 | --- | --- | --- |
 | `TRELLO_API_KEY` | — | **Required.** Trello API key |
 | `TRELLO_TOKEN` | — | **Required.** Trello API token |
-| `TRELLO_BOARD_ID` | *(empty)* | Optional default board ID for card creation |
+| `TRELLO_BOARD_ID` | *(empty)* | Optional default board ID |
 | `TRELLO_LIST_ID` | *(empty)* | Optional default list ID for card creation |
 | `TRELLO_BASE_URL` | `https://api.trello.com/1` | Trello API base URL |
 
-### Persistent store
+### Option 2: Persistent store
 
 You can also save your Trello configuration to `~/.opensre/integrations.json`:
 
@@ -64,7 +62,9 @@ You can also save your Trello configuration to `~/.opensre/integrations.json`:
 }
 ```
 
-## Getting your API key and token
+## Credentials
+
+### Getting your API key and token
 
 1. Visit https://trello.com/app-key
 2. Copy your Trello API key
@@ -72,46 +72,73 @@ You can also save your Trello configuration to `~/.opensre/integrations.json`:
 4. Authorize access when prompted
 5. Store both values securely
 
-## Optional: Finding board and list IDs
+### Optional: Finding board and list IDs
 
 If you'd like OpenSRE to create cards in a specific location, you'll need the board and list IDs.
 
-### Using the API
+#### Using the API
 
 ```bash
 curl "https://api.trello.com/1/members/me/boards?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}"
 ```
 
-### Manual method
+#### Manual method
 
 1. Open the board in Trello
 2. Append `.json` to the board URL
 3. Search the response for the board ID
 4. Locate the desired list and copy its ID
 
-## Token longevity
+### Token longevity
 
 Trello tokens can be created with different expiration periods. When generating a token, choose an expiration period that aligns with your organization's security requirements.
 
 For long-lived OpenSRE integrations, consider using an appropriately scoped token and rotating it regularly according to your security policies.
 
-## Required permissions
+### Required permissions
 
 Your Trello token should have:
 
 - **read** — Allows OpenSRE to view boards, lists, and cards
 - **write** — Allows OpenSRE to create or update cards during investigations
 
-## Usage
+## Investigation tools
 
-Once configured, OpenSRE can:
+There is no registered Trello tool package in the investigation planner today. The integration library exposes:
 
-- Create Trello cards from investigation findings
+| Helper | What it does |
+| --- | --- |
+| `validate_trello_connection` | Connectivity probe (`GET /members/me`) |
+| `create_trello_card` | Create a card (`POST /cards`) — needs a `list_id` (argument or `TRELLO_LIST_ID`) |
+
+Set `TRELLO_LIST_ID` to the list where new cards should appear. If omitted, card creation requires the list ID at call time. `board_id` is stored for reference; card create uses the list ID.
+
+Once credentials are set, you can:
+
+- Create Trello cards from investigation findings (via the client helper)
 - Send incident titles and descriptions to a target list
 - Track follow-up tasks on your incident board
 
-Set `TRELLO_LIST_ID` to the list where new cards should appear. If omitted, card creation requires the list ID at investigation time.
+## Verify
 
-<Info>
-Trello does not currently support `opensre integrations verify trello`. Confirm your credentials during interactive setup or by creating a test card from an investigation.
-</Info>
+Trello does **not** currently support `opensre integrations verify trello`. Confirm credentials by calling the members probe (or creating a test card):
+
+```bash
+curl "https://api.trello.com/1/members/me?key=${TRELLO_API_KEY}&token=${TRELLO_TOKEN}"
+```
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **401 / unauthorized** | Regenerate the API key and token from https://trello.com/app-key |
+| **Card create fails without list** | Set `TRELLO_LIST_ID` or pass `list_id` to `create_trello_card` |
+| **Board not visible** | Confirm the token has access to that board |
+| **No Trello tools in investigation plan** | Expected today — there is no registered Trello investigation tool package yet |
+
+## Security
+
+- Scope the token to **read** and **write** only as needed.
+- Prefer a dedicated Trello account or token for OpenSRE.
+- Rotate tokens regularly according to your security policies.
+- Store credentials in `.env` or your secret manager — not in source control.

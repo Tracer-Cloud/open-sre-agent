@@ -1,77 +1,91 @@
 ---
 title: "Features"
-description: "What OpenSRE can do today"
+description: "What OpenSRE can do today — investigations, tools, shell, privacy, and more."
 ---
 
-## Investigation workflow
+## Highlights
 
-OpenSRE runs a structured RCA pipeline for each alert:
+<CardGroup cols={2}>
+  <Card title="Investigations" icon="magnifying-glass" href="/investigation-overview">
+    Alert in, root-cause write-up out — with evidence from your connected tools.
+  </Card>
+  <Card title="Integrations" icon="plug" href="/integrations-overview">
+    60+ tools across monitoring, incidents, cloud, code, chat, and data.
+  </Card>
+  <Card title="Interactive shell" icon="terminal" href="/interactive-shell-commands">
+    Describe incidents in plain English, or drive everything with slash commands.
+  </Card>
+  <Card title="Masking" icon="shield" href="/masking">
+    Hide pods, hosts, and account IDs from external models — restore them in your report.
+  </Card>
+  <Card title="Messaging" icon="comments" href="/messaging">
+    Deliver results to Slack, Discord, Telegram, and more.
+  </Card>
+  <Card title="APIs" icon="code" href="/api">
+    HTTP and Python APIs for alert intake and in-process agents.
+  </Card>
+</CardGroup>
 
-1. **Extract context** from the alert payload and connected integrations
-2. **Plan evidence collection** across logs, metrics, deploys, and dependencies
-3. **Test hypotheses** in a tool-calling loop until confidence is high enough to stop
-4. **Publish findings** as `problem.md`, `theory/hypothesis_*.md`, and `report.md` (or JSON with `--output`)
+## Full list
 
-**Try it:**
+**Investigations:**
 
-```bash
-opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
-```
+- Structured RCA pipeline — read the alert, gather evidence, test ideas, write a report
+- Local artifact files: `problem.md`, `theory/hypothesis_*.md`, and `report.md`
+- JSON export with `--output` for scripts and automation
+- Background investigations with notify when done (email, Telegram, Rocket.Chat) — [Background investigations](/background-investigations)
+- Investigate deployed services (Railway deploy status, logs, health, RCA) — [Remote runtime](/remote-runtime-investigation)
+- Closed-loop learning from misses — [Closed-loop learning](/closed-loop-learning)
 
-**Gotcha:** The investigation uses whatever integrations are connected at run time. Run `opensre integrations verify` before your first production alert.
+**Integrations:**
 
-See [Investigations overview](/investigation-overview).
+- 60+ tools across observability, incidents, cloud, code, messaging, databases, and workflows — [Integrations overview](/integrations-overview)
+- Setup and verify with `opensre onboard`, `opensre integrations setup`, and `opensre integrations verify`
+- Multi-instance providers for prod/staging pairs — [Multi-instance integrations](/multi-instance-integrations)
+- Bring-your-own LLM: Anthropic, OpenAI, Gemini, Ollama, Bedrock, OpenRouter, and more — [LLM providers](/llm-providers)
+- MCP connections from the shell (`/mcp`)
 
-## Integrations (60+ tools)
+**Interactive shell:**
 
-Connect observability, cloud, databases, incident management, messaging, and workflow systems so investigations query the same tools your engineers use.
+- Plain-language prompts that map to investigations and slash commands — [Assistant](/interactive-shell-assistant)
+- Full slash-command surface via `/help` — [Shell commands](/interactive-shell-commands)
+- Sessions you can list, resume, compact, and branch — [Sessions](/sessions)
+- Long-term memory across chats — [Memory](/memory)
+- Process watchdogs (`/watch`) to Telegram or Rocket.Chat
+- Local coding-agent fleet scan — [Fleet](/fleet)
+- Reasoning effort control (`/effort` or `OPENSRE_REASONING_EFFORT`)
 
-**Try it:**
+**Privacy and safety:**
 
-```bash
-opensre integrations setup
-opensre integrations verify datadog
-```
+- Reversible identifier masking before external LLM calls — [Masking](/masking)
+- Command-history privacy controls — [Interactive shell privacy](/interactive-shell-privacy)
+- Guardrails for hard-blocked secrets and PII
 
-**Config:** Credentials live in `.env` and `~/.opensre/integrations.json`. See [Environment variables](/configuration/environment-variables).
+**Messaging and automation:**
 
-**Gotcha:** [Multi-instance integrations](/multi-instance-integrations) use env vars like `DD_INSTANCES` or `GRAFANA_INSTANCES` for prod/staging pairs.
+- Chat delivery and triggers: Slack, Discord, Telegram, and more — [Messaging](/messaging)
+- Scheduled digests and recurring jobs — [Cron](/cron)
 
-See [Integrations overview](/integrations-overview).
+**APIs and deployment:**
 
-## Interactive shell
+- HTTP API for health, alert intake, and sync/async investigate — [HTTP API](/api)
+- Python API for in-process agents — [Python API](/python-api)
+- Local CLI, gateway daemon (`opensre gateway start`), or host on Railway / ECS / Vercel — [Deployment](/deployment)
+- Local and enterprise install paths — [Install](/install)
 
-The TTY REPL (`opensre` with no subcommand) supports plain-language incident descriptions, slash commands, session history, fleet monitoring, and scheduled deliveries.
+## Related
 
-**Try it:**
-
-```bash
-opensre
-# at the prompt:
-/help
-/verify datadog
-```
-
-**Config:** Set `LLM_PROVIDER` and the matching API key before starting. Use `/effort` (OpenAI/Codex) or `OPENSRE_REASONING_EFFORT` to tune reasoning depth.
-
-**Gotcha:** The action planner never denies a turn — describe compound requests in one message and it chains slash commands automatically.
-
-See [Interactive Shell Commands](/interactive-shell-commands).
-
-## Masking and safe sharing
-
-Reversible masking replaces sensitive infrastructure identifiers (pods, clusters, hostnames, account IDs) with stable placeholders before external LLM calls, then restores originals in user-facing output.
-
-**Try it:** Enable masking in onboarding or set the masking env vars documented on [Masking](/masking), then run an investigation and confirm placeholders appear in LLM-facing evidence but not in your local `report.md`.
-
-**Gotcha:** Command-history redaction is separate — see [Interactive Shell Privacy](/interactive-shell-privacy).
-
-## Remote runtime investigations
-
-Investigate deployed OpenSRE services by name. OpenSRE gathers live deployment status, recent logs, and health probes, then runs the standard RCA pipeline.
-
-**Try it:** From the REPL: `/remote list`, then describe the service you want to investigate.
-
-**Config:** Requires a configured remote runtime target. See [Remote runtime investigation](/remote-runtime-investigation).
-
-**Gotcha:** Remote investigations use the same integration catalog as local runs — connect observability tools first.
+<CardGroup cols={2}>
+  <Card title="Showcase" icon="photo-film" href="/showcase">
+    See a first run and sample investigation output.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install, onboard, and investigate in a few minutes.
+  </Card>
+  <Card title="How an investigation works" icon="diagram-project" href="/how-investigations-work">
+    Stage-by-stage walkthrough of the RCA pipeline.
+  </Card>
+  <Card title="Integrations overview" icon="plug" href="/integrations-overview">
+    Browse the full tool catalog by category.
+  </Card>
+</CardGroup>
