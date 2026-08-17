@@ -22,6 +22,7 @@ _CONTEXT = CiFixContext(
     head_branch="feat/fix-ci",
     head_sha="old-sha",
     check_names=("quality",),
+    skipped_check_names=(),
     failing_checks=(
         FailingCheck(
             name="quality",
@@ -126,6 +127,48 @@ def test_wait_for_pr_checks_does_not_pass_before_known_checks_register() -> None
     assert result.state is CheckState.PASSED
     assert result.check_names == ("quality", "tests")
     assert sleeps == [DEFAULT_POLL_INTERVAL_SECONDS]
+
+
+def test_wait_for_pr_checks_accepts_check_that_was_already_skipped() -> None:
+    context = replace(
+        _CONTEXT,
+        check_names=("quality", "windows test"),
+        skipped_check_names=("windows test",),
+    )
+    payload = {
+        "headRefOid": "new-sha",
+        "statusCheckRollup": [
+            {"name": "quality", "conclusion": "SUCCESS", "status": "COMPLETED"},
+            {"name": "windows test", "conclusion": "SKIPPED", "status": "COMPLETED"},
+        ],
+    }
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_pr_checks(context, github_token="tok")
+
+    assert result.state is CheckState.PASSED
+    assert result.failing_checks == ()
+
+
+def test_wait_for_pr_checks_rejects_newly_skipped_check() -> None:
+    payload = _rollup(
+        sha="new-sha",
+        name="quality",
+        conclusion="SKIPPED",
+        status="COMPLETED",
+    )
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_pr_checks(_CONTEXT, github_token="tok")
+
+    assert result.state is CheckState.FAILED
+    assert result.failing_checks == ("quality",)
 
 
 def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:

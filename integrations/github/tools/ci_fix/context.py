@@ -83,6 +83,7 @@ class CiFixContext:
     head_branch: str
     head_sha: str
     check_names: tuple[str, ...]
+    skipped_check_names: tuple[str, ...]
     failing_checks: tuple[FailingCheck, ...]
     task: str
 
@@ -179,6 +180,7 @@ def gather_ci_fix_context(
         head_branch=head_branch,
         head_sha=str(pr.get("headRefOid") or "").strip(),
         check_names=tuple(_check_name(item) for item in rollup),
+        skipped_check_names=tuple(_check_name(item) for item in rollup if _is_skipped(item)),
         failing_checks=checks,
         task="",
     )
@@ -317,6 +319,10 @@ def _is_failing_check(item: dict[str, Any]) -> bool:
 
 def _check_name(item: dict[str, Any]) -> str:
     return str(item.get("name") or item.get("context") or "unnamed check")
+
+
+def _is_skipped(item: dict[str, Any]) -> bool:
+    return str(item.get("conclusion") or "").strip().upper() == "SKIPPED"
 
 
 def _list_value(value: Any) -> list[dict[str, Any]]:

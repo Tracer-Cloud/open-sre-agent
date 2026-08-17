@@ -20,7 +20,6 @@ _FAILED_CONCLUSIONS = frozenset(
         "ACTION_REQUIRED",
         "CANCELLED",
         "FAILURE",
-        "SKIPPED",
         "STALE",
         "STARTUP_FAILURE",
         "TIMED_OUT",
@@ -29,6 +28,7 @@ _FAILED_CONCLUSIONS = frozenset(
 _FAILED_STATES = frozenset({"ERROR", "FAILURE", "FAILED"})
 _PASSED_CONCLUSIONS = frozenset({"NEUTRAL", "SUCCESS"})
 _PASSED_STATES = frozenset({"SUCCESS"})
+_SKIPPED_CONCLUSION = "SKIPPED"
 
 
 class CheckState(StrEnum):
@@ -61,6 +61,7 @@ def wait_for_pr_checks(
     repo = f"{ctx.owner}/{ctx.repo}"
     deadline = monotonic() + max(0, timeout_seconds)
     expected_names = set(ctx.check_names)
+    expected_skips = set(ctx.skipped_check_names)
     last_names: tuple[str, ...] = ()
 
     while True:
@@ -80,7 +81,11 @@ def wait_for_pr_checks(
         if head_sha and head_sha != ctx.head_sha and checks and expected_checks_started:
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
-                failing = tuple(_check_name(check) for check in checks if _check_failed(check))
+                failing = tuple(
+                    _check_name(check)
+                    for check in checks
+                    if _check_failed(check, expected_skips=expected_skips)
+                )
                 return CheckVerification(
                     state=CheckState.FAILED if failing else CheckState.PASSED,
                     check_names=last_names,
@@ -100,18 +105,24 @@ def _check_name(check: dict[str, Any]) -> str:
     return str(check.get("name") or check.get("context") or "unnamed check")
 
 
-def _check_failed(check: dict[str, Any]) -> bool:
+def _check_failed(check: dict[str, Any], *, expected_skips: set[str]) -> bool:
     conclusion = str(check.get("conclusion") or "").strip().upper()
     state = str(check.get("state") or "").strip().upper()
+    if conclusion == _SKIPPED_CONCLUSION:
+        return _check_name(check) not in expected_skips
     return conclusion in _FAILED_CONCLUSIONS or state in _FAILED_STATES
 
 
 def _check_is_terminal(check: dict[str, Any]) -> bool:
-    if _check_failed(check):
-        return True
     conclusion = str(check.get("conclusion") or "").strip().upper()
     state = str(check.get("state") or "").strip().upper()
-    return conclusion in _PASSED_CONCLUSIONS or state in _PASSED_STATES
+    return (
+        conclusion in _FAILED_CONCLUSIONS
+        or conclusion in _PASSED_CONCLUSIONS
+        or conclusion == _SKIPPED_CONCLUSION
+        or state in _FAILED_STATES
+        or state in _PASSED_STATES
+    )
 
 
 __all__ = [

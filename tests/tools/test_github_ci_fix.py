@@ -73,6 +73,7 @@ _CTX = CiFixContext(
     head_branch="feat/fix-ci",
     head_sha="abc123",
     check_names=("test (integrations-and-misc)", "quality"),
+    skipped_check_names=(),
     failing_checks=(
         FailingCheck(
             name="test (integrations-and-misc)",
@@ -135,6 +136,7 @@ def test_gather_ci_fix_context_builds_task_with_failing_logs() -> None:
     assert ctx.number == 4597
     assert ctx.head_branch == "feat/fix-ci"
     assert ctx.check_names == ("test (integrations-and-misc)", "quality")
+    assert ctx.skipped_check_names == ()
     assert ctx.failing_checks[0].name == "test (integrations-and-misc)"
     assert "pytest failed" in ctx.task
     assert "Head branch to edit and push: feat/fix-ci" in ctx.task
