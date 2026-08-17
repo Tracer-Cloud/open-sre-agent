@@ -113,7 +113,13 @@ def _bind_injected_stages(
     request_exit: Callable[[], None] | None,
     tool_hooks: ToolExecutionHooks | None,
 ) -> None:
-    """Bind an adapter over each injected seam (test-only); ``None`` keeps the agent's own stage."""
+    """Bind an adapter over each injected seam (test-only); an omitted seam is the agent's own stage.
+
+    Stated whole per turn, like :class:`TurnBinding`: a stage injected on one
+    turn does not carry into the next, so a long-lived REPL agent never keeps
+    a test's fake stage by omission. A caller that wants a stage across turns
+    passes the seam on every call.
+    """
     agent.bind_stages(
         execute_actions=(
             _InjectedActionStage(

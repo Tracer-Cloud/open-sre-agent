@@ -289,3 +289,54 @@ def test_shell_gather_progress_follows_the_turn_console_after_rebind() -> None:
     # Assert — the line went to the turn console, not the build console.
     assert "checking" in turn_console.file.getvalue()  # type: ignore[attr-defined]
     assert build_console.file.getvalue() == ""  # type: ignore[attr-defined]
+
+
+def test_a_stage_injected_on_one_turn_does_not_carry_into_the_next() -> None:
+    """Injected seams are stated whole per turn, like ``TurnBinding``.
+
+    On the long-lived REPL agent, a fake stage from an earlier turn must not
+    stay active when a later turn omits it — omission means "the agent's own
+    stage", never "whatever was bound before".
+    """
+    import io
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
+    from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+
+    # Arrange — a long-lived agent; turn 1 injects a fake action stage.
+    console = Console(file=io.StringIO(), force_terminal=False)
+    agent = build_shell_agent(Session(), console)
+
+    def _fake_execute(text: str, session: Any, console: Any, **_kw: Any) -> ToolCallingTurnResult:
+        return ToolCallingTurnResult(0, 0, 0, False, True, response_text="fake")
+
+    execute_shell_turn(
+        "turn one",
+        Session(),
+        console,
+        recorder=None,
+        agent=agent,
+        execute_actions=_fake_execute,
+        answer_agent=lambda *_a, **_k: None,
+    )
+    assert agent._execute_actions_override is not None  # noqa: SLF001
+
+    # Act — turn 2 omits the seam; bind only, do not dispatch (needs an LLM).
+    from surfaces.interactive_shell.runtime import shell_turn_execution as ste
+
+    ste._bind_injected_stages(  # noqa: SLF001
+        agent,
+        Session(),
+        console,
+        BufferOutputSink(),
+        execute_actions=None,
+        answer_agent=None,
+        gather_evidence=None,
+        request_exit=None,
+        tool_hooks=None,
+    )
+
+    # Assert — the agent is back on its own action stage.
+    assert agent._execute_actions_override is None  # noqa: SLF001
