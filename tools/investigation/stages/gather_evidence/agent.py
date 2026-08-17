@@ -10,8 +10,7 @@ from typing import Any, cast
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
 from core import RuntimeEventCallback, TupleEventCallback, execute_tools, summarise, tool_source
 from core.agent.goals import Goal, GoalObservation
-from core.agent_harness.agent_builder import AgentConfig, build_agent
-from core.agent_harness.llm_resolution import default_llm_factory
+from core.agent_harness.runtime import AgentConfig, build_agent, default_llm_factory
 from core.events import (
     AgentEndEvent,
     AgentStartEvent,

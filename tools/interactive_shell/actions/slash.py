@@ -7,9 +7,12 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import exclusive_stdin_active
-from core.agent_harness.spi.session_state import session_terminal, set_auto_command
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.spi.session_state import (
+    exclusive_stdin_active,
+    session_terminal,
+    set_auto_command,
+)
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,

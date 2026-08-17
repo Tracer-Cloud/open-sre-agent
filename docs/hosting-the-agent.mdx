@@ -11,16 +11,17 @@ progress, and drives one agent across many turns. The gateway (Slack, Discord,
 Telegram) and the interactive shell are both hosts, and they are the same
 program with different ports.
 
-## Three roles, four import doors
+## Four roles, five import doors
 
-Everything a host touches comes through four modules. Nothing else under
-`core.agent_harness` is public.
+Everything a host or tool author touches comes through five modules. Nothing
+else under `core.agent_harness` is public.
 
 | Role | You want to… | Import |
 | --- | --- | --- |
 | **Embed** | run turns with the standard ports | `core.agent_harness` — `AgentSession`, `SessionConfig`, `SessionCore`, `SessionManager`, `TurnResult`, `ToolCallingTurnResult`, `OutputSink` |
-| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner` |
+| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner`; also the ReAct engine the investigation pipeline shares (`AgentConfig`, `build_agent`, the default LLM factories) |
 | **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_state`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
+| **Write a tool** | implement an action tool | `core.agent_harness.tools` — `ActionToolContext`, `execute_with_action_context`, `capability_available_from_sources`, `HandoffField`, `EVIDENCE_KIND_VALUES` |
 | **Implement** | satisfy a protocol the harness calls | `core.agent_harness.ports` — `OutputSink`, `ToolProvider`, `PromptContextProvider`, `ReasoningClientProvider`, `RunRecordFactory`, `ErrorReporter`, `TurnAccounting`, `SessionState`, and the rebind mix-ins `ConsoleBindable` / `OutputBindable` / `SessionBindable` |
 
 ## The host loop

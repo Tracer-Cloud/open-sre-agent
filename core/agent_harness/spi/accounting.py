@@ -7,15 +7,19 @@ from core.agent_harness.accounting.token_accounting import (
     LlmRunInfo,
     format_token_total,
     record_llm_turn,
+    resolve_model_name,
+    resolve_provider_name,
 )
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.turns.turn_results import ToolCallingAccountingStatus
 
 __all__ = [
-    "SELF_RECORDING_ACTION_TOOL_NAMES",
     "DefaultTurnAccounting",
     "LlmRunInfo",
+    "SELF_RECORDING_ACTION_TOOL_NAMES",
     "ToolCallingAccountingStatus",
     "format_token_total",
     "record_llm_turn",
+    "resolve_model_name",
+    "resolve_provider_name",
 ]

@@ -15,88 +15,17 @@ the way an entry gets removed.
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
-from tests.shared.harness_doors import PUBLIC_DOORS
+from tests.shared.harness_doors import assert_ledger_only_shrinks, deep_harness_imports_under
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-_FORBIDDEN_PREFIX = "core.agent_harness."
-#: Modules a host may import the harness through; anything else under the
-#: prefix is a deep import.
-_DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
-
-
-def _is_public_door(module: str) -> bool:
-    return module in PUBLIC_DOORS
-
 
 #: Harness submodules surfaces/ still imports directly. Shrink-only — and now
 #: empty: every harness name surfaces/ uses comes through a door.
 _KNOWN_DEEP_IMPORTS: frozenset[str] = frozenset()
 
 
-def _surface_sources() -> list[Path]:
-    return [
-        path
-        for path in sorted((REPO_ROOT / "surfaces").rglob("*.py"))
-        if "__pycache__" not in path.parts
-    ]
-
-
-def _call_name(node: ast.Call) -> str:
-    func = node.func
-    if isinstance(func, ast.Attribute):
-        return func.attr
-    if isinstance(func, ast.Name):
-        return func.id
-    return ""
-
-
-def _deep_modules(tree: ast.AST) -> set[str]:
-    found: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            found.update(
-                alias.name
-                for alias in node.names
-                if alias.name.startswith(_FORBIDDEN_PREFIX) and not _is_public_door(alias.name)
-            )
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            if (
-                node.level == 0
-                and module.startswith(_FORBIDDEN_PREFIX)
-                and not _is_public_door(module)
-            ):
-                found.add(module)
-        elif isinstance(node, ast.Call) and _call_name(node) in _DYNAMIC_IMPORTERS:
-            for arg in node.args[:1]:
-                if (
-                    isinstance(arg, ast.Constant)
-                    and isinstance(arg.value, str)
-                    and arg.value.startswith(_FORBIDDEN_PREFIX)
-                    and not _is_public_door(arg.value)
-                ):
-                    found.add(arg.value)
-    return found
-
-
 def test_surfaces_deep_imports_only_shrink() -> None:
-    imported: set[str] = set()
-    for path in _surface_sources():
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        imported |= _deep_modules(tree)
-
-    new = sorted(imported - _KNOWN_DEEP_IMPORTS)
-    assert new == [], (
-        f"surfaces/ grew new harness deep imports: {new}. Import the name from "
-        "core.agent_harness (embedder API) or core.agent_harness.spi (host-adapter "
-        "API); curate it into the right door if it is genuinely public."
-    )
-    migrated = sorted(_KNOWN_DEEP_IMPORTS - imported)
-    assert migrated == [], (
-        f"surfaces/ no longer imports {migrated} directly — remove those entries "
-        "from _KNOWN_DEEP_IMPORTS so the ledger keeps shrinking."
-    )
+    imported = deep_harness_imports_under(REPO_ROOT / "surfaces")
+    assert_ledger_only_shrinks(imported, _KNOWN_DEEP_IMPORTS, tier="surfaces/")

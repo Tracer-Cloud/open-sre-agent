@@ -6,7 +6,7 @@ from functools import lru_cache
 from typing import Any
 
 from config.constants.paths import SYNTHETIC_SCENARIOS_DIR
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
