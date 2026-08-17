@@ -29,7 +29,11 @@ def _mock_github_setup_path(monkeypatch: pytest.MonkeyPatch, *, customize: bool)
     def _select(message: str, *_args: object, **_kwargs: object) -> object:
         if message == "How would you like to connect?":
             return "customize" if customize else "recommended"
-        return "auto"
+        if message == "Which repository view should we use to verify access?":
+            return "auto"
+        if message == "Filter repositories by visibility (best-effort)":
+            return "any"
+        raise AssertionError(f"Unexpected select prompt: {message}")
 
     monkeypatch.setattr("integrations.cli._select", _select)
 
