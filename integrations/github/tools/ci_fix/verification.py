@@ -13,6 +13,7 @@ from integrations.github.tools.ci_fix.gh import run_gh_json
 
 DEFAULT_CHECK_WAIT_SECONDS = 900
 DEFAULT_POLL_INTERVAL_SECONDS = 10
+DEFAULT_SETTLE_SECONDS = 30
 
 _PR_CHECK_FIELDS = "headRefOid,statusCheckRollup"
 _FAILED_CONCLUSIONS = frozenset(
@@ -54,15 +55,17 @@ def wait_for_pr_checks(
     github_token: str | None,
     timeout_seconds: int = DEFAULT_CHECK_WAIT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
+    settle_seconds: int = DEFAULT_SETTLE_SECONDS,
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> CheckVerification:
     """Poll until the fix commit's PR checks pass, fail, or time out."""
     repo = f"{ctx.owner}/{ctx.repo}"
     deadline = monotonic() + max(0, timeout_seconds)
-    expected_names = set(ctx.check_names)
     expected_skips = set(ctx.skipped_check_names)
     last_names: tuple[str, ...] = ()
+    terminal_signature: tuple[str, ...] = ()
+    terminal_since: float | None = None
 
     while True:
         payload = run_gh_json(
@@ -73,26 +76,36 @@ def wait_for_pr_checks(
         head_sha = str(payload.get("headRefOid") or "").strip()
         checks = _check_rows(payload.get("statusCheckRollup"))
         last_names = tuple(_check_name(check) for check in checks)
+        now = monotonic()
 
         # GitHub can briefly return the pre-push rollup. It must never make the
         # fresh fix look failed before the new head commit and its checks appear.
-        observed_names = set(last_names)
-        expected_checks_started = expected_names.issubset(observed_names)
-        if head_sha and head_sha != ctx.head_sha and checks and expected_checks_started:
+        if head_sha and head_sha != ctx.head_sha and checks:
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
-                failing = tuple(
-                    _check_name(check)
-                    for check in checks
-                    if _check_failed(check, expected_skips=expected_skips)
-                )
-                return CheckVerification(
-                    state=CheckState.FAILED if failing else CheckState.PASSED,
-                    check_names=last_names,
-                    failing_checks=failing,
-                )
+                signature = _check_signature(checks)
+                if signature != terminal_signature:
+                    terminal_signature = signature
+                    terminal_since = now
+                if terminal_since is not None and now - terminal_since >= max(0, settle_seconds):
+                    failing = tuple(
+                        _check_name(check)
+                        for check in checks
+                        if _check_failed(check, expected_skips=expected_skips)
+                    )
+                    return CheckVerification(
+                        state=CheckState.FAILED if failing else CheckState.PASSED,
+                        check_names=last_names,
+                        failing_checks=failing,
+                    )
+            else:
+                terminal_signature = ()
+                terminal_since = None
+        else:
+            terminal_signature = ()
+            terminal_since = None
 
-        if monotonic() >= deadline:
+        if now >= deadline:
             return CheckVerification(state=CheckState.TIMED_OUT, check_names=last_names)
         sleep(max(0, poll_interval_seconds))
 
@@ -103,6 +116,21 @@ def _check_rows(value: Any) -> list[dict[str, Any]]:
 
 def _check_name(check: dict[str, Any]) -> str:
     return str(check.get("name") or check.get("context") or "unnamed check")
+
+
+def _check_signature(checks: list[dict[str, Any]]) -> tuple[str, ...]:
+    signatures = (
+        "\x1f".join(
+            (
+                _check_name(check),
+                str(check.get("status") or ""),
+                str(check.get("conclusion") or ""),
+                str(check.get("state") or ""),
+            )
+        )
+        for check in checks
+    )
+    return tuple(sorted(signatures))
 
 
 def _check_failed(check: dict[str, Any], *, expected_skips: set[str]) -> bool:
@@ -130,5 +158,6 @@ __all__ = [
     "CheckVerification",
     "DEFAULT_CHECK_WAIT_SECONDS",
     "DEFAULT_POLL_INTERVAL_SECONDS",
+    "DEFAULT_SETTLE_SECONDS",
     "wait_for_pr_checks",
 ]

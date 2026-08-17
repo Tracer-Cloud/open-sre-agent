@@ -82,7 +82,6 @@ class CiFixContext:
     base_branch: str
     head_branch: str
     head_sha: str
-    check_names: tuple[str, ...]
     skipped_check_names: tuple[str, ...]
     failing_checks: tuple[FailingCheck, ...]
     task: str
@@ -179,7 +178,6 @@ def gather_ci_fix_context(
         base_branch=str(pr.get("baseRefName") or "").strip(),
         head_branch=head_branch,
         head_sha=str(pr.get("headRefOid") or "").strip(),
-        check_names=tuple(_check_name(item) for item in rollup),
         skipped_check_names=tuple(_check_name(item) for item in rollup if _is_skipped(item)),
         failing_checks=checks,
         task="",
