@@ -21,6 +21,7 @@ _CONTEXT = CiFixContext(
     base_branch="main",
     head_branch="feat/fix-ci",
     head_sha="old-sha",
+    known_check_names=("quality",),
     skipped_check_names=(),
     failing_checks=(
         FailingCheck(
@@ -62,6 +63,7 @@ def test_wait_for_pr_checks_ignores_stale_checks_then_waits_for_success() -> Non
         result = wait_for_pr_checks(
             _CONTEXT,
             github_token="tok",
+            expected_head_sha="new-sha",
             timeout_seconds=30,
             poll_interval_seconds=1,
             settle_seconds=0,
@@ -85,7 +87,12 @@ def test_wait_for_pr_checks_reports_terminal_failure() -> None:
         "integrations.github.tools.ci_fix.verification.run_gh_json",
         return_value=payload,
     ):
-        result = wait_for_pr_checks(_CONTEXT, github_token="tok", settle_seconds=0)
+        result = wait_for_pr_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            settle_seconds=0,
+        )
 
     assert result.state is CheckState.FAILED
     assert result.failing_checks == ("test (integrations-and-misc)",)
@@ -135,6 +142,7 @@ def test_wait_for_pr_checks_waits_for_terminal_rollup_to_settle() -> None:
         result = wait_for_pr_checks(
             _CONTEXT,
             github_token="tok",
+            expected_head_sha="new-sha",
             settle_seconds=2,
             sleep=sleeps.append,
             monotonic=lambda: next(elapsed),
@@ -162,7 +170,12 @@ def test_wait_for_pr_checks_accepts_check_that_was_already_skipped() -> None:
         "integrations.github.tools.ci_fix.verification.run_gh_json",
         return_value=payload,
     ):
-        result = wait_for_pr_checks(context, github_token="tok", settle_seconds=0)
+        result = wait_for_pr_checks(
+            context,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            settle_seconds=0,
+        )
 
     assert result.state is CheckState.PASSED
     assert result.failing_checks == ()
@@ -180,7 +193,12 @@ def test_wait_for_pr_checks_rejects_newly_skipped_check() -> None:
         "integrations.github.tools.ci_fix.verification.run_gh_json",
         return_value=payload,
     ):
-        result = wait_for_pr_checks(_CONTEXT, github_token="tok", settle_seconds=0)
+        result = wait_for_pr_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            settle_seconds=0,
+        )
 
     assert result.state is CheckState.FAILED
     assert result.failing_checks == ("quality",)
@@ -197,6 +215,7 @@ def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:
         result = wait_for_pr_checks(
             _CONTEXT,
             github_token="tok",
+            expected_head_sha="new-sha",
             timeout_seconds=10,
             poll_interval_seconds=1,
             sleep=lambda _seconds: None,
@@ -205,3 +224,61 @@ def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:
 
     assert result.state is CheckState.TIMED_OUT
     assert result.check_names == ()
+
+
+def test_wait_for_pr_checks_waits_for_late_known_check() -> None:
+    context = replace(
+        _CONTEXT,
+        known_check_names=("quality", "tests"),
+    )
+    responses = [
+        _rollup(sha="new-sha", name="quality", conclusion="SUCCESS", status="COMPLETED"),
+        _rollup(sha="new-sha", name="quality", conclusion="SUCCESS", status="COMPLETED"),
+        {
+            "headRefOid": "new-sha",
+            "statusCheckRollup": [
+                {"name": "quality", "conclusion": "SUCCESS", "status": "COMPLETED"},
+                {"name": "tests", "conclusion": "FAILURE", "status": "COMPLETED"},
+            ],
+        },
+    ]
+    elapsed = iter((0.0, 0.0, 31.0, 32.0))
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ):
+        result = wait_for_pr_checks(
+            context,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            settle_seconds=30,
+            sleep=lambda _seconds: None,
+            monotonic=lambda: next(elapsed),
+        )
+
+    assert result.state is CheckState.FAILED
+    assert result.failing_checks == ("tests",)
+
+
+def test_wait_for_pr_checks_rejects_unrelated_newer_head() -> None:
+    payload = _rollup(
+        sha="other-users-sha",
+        name="quality",
+        conclusion="SUCCESS",
+        status="COMPLETED",
+    )
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_pr_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="our-pushed-sha",
+            settle_seconds=0,
+        )
+
+    assert result.state.value == "superseded"
+    assert result.observed_head_sha == "other-users-sha"

@@ -38,6 +38,7 @@ class CheckState(StrEnum):
     PASSED = "passed"
     FAILED = "failed"
     TIMED_OUT = "timed_out"
+    SUPERSEDED = "superseded"
 
 
 @dataclass(frozen=True)
@@ -47,12 +48,14 @@ class CheckVerification:
     state: CheckState
     check_names: tuple[str, ...]
     failing_checks: tuple[str, ...] = ()
+    observed_head_sha: str = ""
 
 
 def wait_for_pr_checks(
     ctx: CiFixContext,
     *,
     github_token: str | None,
+    expected_head_sha: str,
     timeout_seconds: int = DEFAULT_CHECK_WAIT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
     settle_seconds: int = DEFAULT_SETTLE_SECONDS,
@@ -62,6 +65,7 @@ def wait_for_pr_checks(
     """Poll until the fix commit's PR checks pass, fail, or time out."""
     repo = f"{ctx.owner}/{ctx.repo}"
     deadline = monotonic() + max(0, timeout_seconds)
+    expected_names = set(ctx.known_check_names)
     expected_skips = set(ctx.skipped_check_names)
     last_names: tuple[str, ...] = ()
     terminal_signature: tuple[str, ...] = ()
@@ -76,11 +80,21 @@ def wait_for_pr_checks(
         head_sha = str(payload.get("headRefOid") or "").strip()
         checks = _check_rows(payload.get("statusCheckRollup"))
         last_names = tuple(_check_name(check) for check in checks)
+        observed_names = set(last_names)
         now = monotonic()
 
+        if head_sha and head_sha not in {ctx.head_sha, expected_head_sha}:
+            return CheckVerification(
+                state=CheckState.SUPERSEDED,
+                check_names=last_names,
+                observed_head_sha=head_sha,
+            )
+
         # GitHub can briefly return the pre-push rollup. It must never make the
-        # fresh fix look failed before the new head commit and its checks appear.
-        if head_sha and head_sha != ctx.head_sha and checks:
+        # fresh fix look failed before the exact pushed commit and all checks
+        # known from the prior head have registered.
+        known_checks_registered = expected_names.issubset(observed_names)
+        if head_sha == expected_head_sha and checks and known_checks_registered:
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
                 signature = _check_signature(checks)

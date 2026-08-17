@@ -19,6 +19,7 @@ from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.ci_fix.context import CiFixContext, gather_ci_fix_context
 from integrations.github.tools.ci_fix.errors import (
     ERR_CHECKS_FAILED,
+    ERR_CHECKS_SUPERSEDED,
     ERR_CHECKS_TIMEOUT,
     ERR_CONFIRMATION_DENIED,
     ERR_EXECUTION,
@@ -192,6 +193,22 @@ def with_push_output(
                 f"{failing}."
             ),
         }
+    if verification.state is CheckState.SUPERSEDED:
+        expected = push.head_sha[:12]
+        observed = verification.observed_head_sha[:12] or "another commit"
+        return {
+            **result,
+            "success": False,
+            "error_kind": ERR_CHECKS_SUPERSEDED,
+            "error": (
+                f"PR head changed from pushed commit {expected} to {observed} "
+                "before verification finished."
+            ),
+            "response_text": (
+                f"Pushed a CI fix to {push.branch_name}, but another commit replaced "
+                f"{expected} before its checks finished; verification stopped."
+            ),
+        }
     return {
         **result,
         "success": False,
@@ -283,7 +300,11 @@ def run_ci_fix(
     except GitHubCiFixError as exc:
         return push_error_output(output, exc)
     try:
-        verification = wait_for_pr_checks(ctx, github_token=github_token)
+        verification = wait_for_pr_checks(
+            ctx,
+            github_token=github_token,
+            expected_head_sha=push.head_sha,
+        )
     except GitHubCiFixError as exc:
         return {
             **push_error_output(output, exc),

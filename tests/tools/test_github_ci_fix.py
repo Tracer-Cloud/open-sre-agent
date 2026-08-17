@@ -24,8 +24,8 @@ from integrations.github.tools.ci_fix.errors import (
     ERR_UNSUPPORTED_PR_BRANCH,
     GitHubCiFixError,
 )
-from integrations.github.tools.ci_fix.runner import run_ci_fix, run_fix
-from integrations.github.tools.ci_fix.ship import PushResult
+from integrations.github.tools.ci_fix.runner import run_ci_fix, run_fix, with_push_output
+from integrations.github.tools.ci_fix.ship import PushResult, push_ci_fix
 from integrations.github.tools.ci_fix.tool import (
     _github_ci_fix_available,
     fix_github_pr_ci,
@@ -72,6 +72,7 @@ _CTX = CiFixContext(
     base_branch="main",
     head_branch="feat/fix-ci",
     head_sha="abc123",
+    known_check_names=("test (integrations-and-misc)", "quality"),
     skipped_check_names=(),
     failing_checks=(
         FailingCheck(
@@ -134,6 +135,7 @@ def test_gather_ci_fix_context_builds_task_with_failing_logs() -> None:
 
     assert ctx.number == 4597
     assert ctx.head_branch == "feat/fix-ci"
+    assert ctx.known_check_names == ("test (integrations-and-misc)", "quality")
     assert ctx.skipped_check_names == ()
     assert ctx.failing_checks[0].name == "test (integrations-and-misc)"
     assert "pytest failed" in ctx.task
@@ -213,6 +215,64 @@ def test_commit_message_skips_markdown_summary_heading() -> None:
     assert "FakePopen lacked pid" in subject
 
 
+def test_push_ci_fix_returns_exact_committed_head_sha() -> None:
+    coding_result = CodingResult(success=True, summary="Fix CI.", changed_files=["app.py"])
+
+    with (
+        patch("integrations.github.tools.ci_fix.ship.resolve_github_token", return_value="tok"),
+        patch("integrations.github.tools.ci_fix.ship.ensure_git_repo"),
+        patch(
+            "integrations.github.tools.ci_fix.ship.current_branch",
+            return_value="feat/fix-ci",
+        ),
+        patch(
+            "integrations.github.tools.ci_fix.ship._changed_since_baseline",
+            return_value=["app.py"],
+        ),
+        patch("integrations.github.tools.ci_fix.ship.commit_paths"),
+        patch(
+            "integrations.github.tools.ci_fix.ship._head_sha",
+            return_value="0123456789abcdef",
+        ) as head_sha,
+        patch("integrations.github.tools.ci_fix.ship.push_branch"),
+    ):
+        result = push_ci_fix(
+            "/workspace",
+            ctx=_CTX,
+            result=coding_result,
+            github_token="tok",
+        )
+
+    assert result.head_sha == "0123456789abcdef"
+    head_sha.assert_called_once_with("/workspace")
+
+
+def test_with_push_output_reports_superseded_commit() -> None:
+    output = {
+        "owner": "Tracer-Cloud",
+        "repo": "opensre",
+        "pr_number": 4597,
+        "success": True,
+    }
+    push = PushResult(
+        branch_name="feat/fix-ci",
+        head_sha="0123456789abcdef",
+        changed_files=["app.py"],
+    )
+    verification = CheckVerification(
+        state=CheckState.SUPERSEDED,
+        check_names=("quality",),
+        observed_head_sha="fedcba9876543210",
+    )
+
+    result = with_push_output(output, push, verification)
+
+    assert result["success"] is False
+    assert result["checks_state"] == "superseded"
+    assert result["error_kind"] == "checks_superseded"
+    assert "another commit replaced 0123456789ab" in result["response_text"]
+
+
 def test_gather_ci_fix_context_refuses_fork_branch() -> None:
     payload = {
         **_PR_PAYLOAD,
@@ -254,7 +314,11 @@ def test_run_fix_without_coding_agent_is_backend_neutral() -> None:
 
 @patch(
     "integrations.github.tools.ci_fix.runner.push_ci_fix",
-    return_value=PushResult(branch_name="feat/fix-ci", changed_files=["app.py"]),
+    return_value=PushResult(
+        branch_name="feat/fix-ci",
+        head_sha="new-sha",
+        changed_files=["app.py"],
+    ),
 )
 @patch(
     "integrations.github.tools.ci_fix.runner.wait_for_pr_checks",
@@ -305,12 +369,20 @@ def test_run_ci_fix_success_pushes_existing_pr_branch(
     )
     assert "checking out feat/fix-ci" in prompts[0]
     mock_push.assert_called_once()
-    mock_wait.assert_called_once_with(_CTX, github_token="tok")
+    mock_wait.assert_called_once_with(
+        _CTX,
+        github_token="tok",
+        expected_head_sha="new-sha",
+    )
 
 
 @patch(
     "integrations.github.tools.ci_fix.runner.push_ci_fix",
-    return_value=PushResult(branch_name="feat/fix-ci", changed_files=["app.py"]),
+    return_value=PushResult(
+        branch_name="feat/fix-ci",
+        head_sha="new-sha",
+        changed_files=["app.py"],
+    ),
 )
 @patch(
     "integrations.github.tools.ci_fix.runner.wait_for_pr_checks",
