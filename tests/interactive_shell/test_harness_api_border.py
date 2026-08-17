@@ -36,13 +36,11 @@ def _is_public_door(module: str) -> bool:
 _KNOWN_DEEP_IMPORTS = frozenset(
     {
         "core.agent_harness.llm_resolution",
-        "core.agent_harness.prompts.rules",
         "core.agent_harness.prompts.skills.loader",
         "core.agent_harness.session.persistence.jsonl_store",
         "core.agent_harness.session.persistence.wal_recovery",
         "core.agent_harness.tools.tool_context",
         "core.agent_harness.turns.action_driver",
-        "core.agent_harness.turns.gather_observation",
         "core.agent_harness.turns.transcript_compaction",
         "core.agent_harness.turns.turn_plan",
     }

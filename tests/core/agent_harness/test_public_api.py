@@ -102,7 +102,12 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
         }
     ),
     "prompt_chrome": frozenset(
-        {"WANT_ME_TO_MARKER", "closer_tail_from", "strip_shell_prompt_chrome"}
+        {
+            "WANT_ME_TO_MARKER",
+            "closer_tail_from",
+            "normalize_three_tier_spacing",
+            "strip_shell_prompt_chrome",
+        }
     ),
     "integrations": frozenset({"has_resolved_integrations", "resolve_integrations"}),
     "grounding": frozenset(
