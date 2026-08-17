@@ -291,10 +291,18 @@ class PostgresInvestigationRepository:
             return _row_to_record(row) if row else None
 
 
+def investigation_repository(database: PostgresDatabase | None) -> InvestigationRepository:
+    """Postgres-backed when the process has a database, else process-local."""
+    if database is None:
+        return InMemoryInvestigationRepository()
+    return PostgresInvestigationRepository(database)
+
+
 __all__ = [
     "InMemoryInvestigationRepository",
     "InvestigationRecord",
     "InvestigationStatus",
     "InvestigationRepository",
     "PostgresInvestigationRepository",
+    "investigation_repository",
 ]

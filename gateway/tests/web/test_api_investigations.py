@@ -196,7 +196,7 @@ def test_cancel_running_investigation_returns_current_status(client: TestClient)
         headers={"Authorization": "Bearer fake"},
     ).json()
     investigation_id = created["investigation_id"]
-    store = webapp.app.state.repositories.investigations
+    store = webapp.app.state.investigations
     # Drain leftovers from earlier tests sharing the process-local store.
     claimed = None
     for _ in range(32):

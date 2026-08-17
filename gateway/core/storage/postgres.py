@@ -13,10 +13,13 @@ still owns the bound.
 
 from __future__ import annotations
 
+import os
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
+
+from config.constants.gateway import DATABASE_URL_ENV
 
 _POOL_MIN_CONNECTIONS = 1
 # Stores issue one short statement per request; a small pool covers a
@@ -67,6 +70,12 @@ class PostgresDatabase:
         self._max_connections = max_connections
         self._pool: Any = None
         self._pool_lock = threading.Lock()
+
+    @classmethod
+    def from_env(cls, *, max_connections: int = _POOL_MAX_CONNECTIONS) -> PostgresDatabase | None:
+        """The process's database when ``DATABASE_URL`` is set, else ``None`` (process-local storage)."""
+        dsn = os.getenv(DATABASE_URL_ENV, "").strip()
+        return cls(dsn, max_connections=max_connections) if dsn else None
 
     def _get_pool(self) -> Any:
         with self._pool_lock:

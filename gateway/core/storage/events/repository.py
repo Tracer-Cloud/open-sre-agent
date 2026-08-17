@@ -197,10 +197,20 @@ class PostgresHandledSlackEventRepository:
             return True
 
 
+def handled_slack_event_repository(
+    database: PostgresDatabase | None,
+) -> HandledSlackEventRepository:
+    """Postgres-backed when the process has a database, else process-local (one replica only)."""
+    if database is None:
+        return InMemoryHandledSlackEventRepository()
+    return PostgresHandledSlackEventRepository(database)
+
+
 __all__ = [
     "ABANDONED_CLAIM_SECONDS",
     "HandledSlackEventRepository",
     "InMemoryHandledSlackEventRepository",
     "PostgresHandledSlackEventRepository",
     "RETENTION_MINUTES",
+    "handled_slack_event_repository",
 ]

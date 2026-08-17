@@ -1,8 +1,7 @@
 """Async investigation API — enqueue now, poll later (ALB-safe).
 
-The investigation repository comes from ``app.state.repositories``
-(:class:`~gateway.core.storage.repositories.Repositories`, built once when the
-app is created). Do not widen the public response shape without a schema bump.
+The investigation repository comes from ``app.state.investigations``, built
+once when the app is created (``investigation_repository(open_database())``). Do not widen the public response shape without a schema bump.
 """
 
 from __future__ import annotations
@@ -16,22 +15,22 @@ from pydantic import BaseModel, Field
 from gateway.core.runtime.security_audit import audit_security_action
 from gateway.core.storage.investigations.repository import (
     InvestigationRecord,
+    InvestigationRepository,
     InvestigationStatus,
 )
-from gateway.core.storage.repositories import Repositories
 from gateway.web.clerk_deps import ClerkClaims
 from gateway.web.worker import ensure_worker_started
 
 router = APIRouter(prefix="/api/investigations", tags=["investigations"])
 
 
-def _repositories(request: Request) -> Repositories:
-    """The process's repositories, placed on ``app.state`` when the app is built."""
-    repositories: Repositories = request.app.state.repositories
-    return repositories
+def _investigations(request: Request) -> InvestigationRepository:
+    """The process's investigation repository, placed on ``app.state`` when the app is built."""
+    repository: InvestigationRepository = request.app.state.investigations
+    return repository
 
 
-AppRepositories = Annotated[Repositories, Depends(_repositories)]
+Investigations = Annotated[InvestigationRepository, Depends(_investigations)]
 
 
 def _audit_investigation(
@@ -96,10 +95,10 @@ class GetInvestigationResponse(BaseModel):
 def create_investigation(
     body: CreateInvestigationRequest,
     claims: ClerkClaims,
-    repositories: AppRepositories,
+    investigations: Investigations,
 ) -> CreateInvestigationResponse:
     """Enqueue an investigation; the background worker runs the pipeline."""
-    store = repositories.investigations
+    store = investigations
     clerk_org_id = _require_org(claims.organization)
     trigger = {
         "raw_alert": body.raw_alert,
@@ -126,11 +125,11 @@ def create_investigation(
 def cancel_investigation(
     investigation_id: str,
     claims: ClerkClaims,
-    repositories: AppRepositories,
+    investigations: Investigations,
 ) -> GetInvestigationResponse | JSONResponse:
     """Cancel a queued investigation before the worker claims it."""
     clerk_org_id = _require_org(claims.organization)
-    store = repositories.investigations
+    store = investigations
     record = store.get(investigation_id)
     if record is None or record.clerk_org_id != clerk_org_id:
         return JSONResponse({"error": "not found"}, status_code=status.HTTP_404_NOT_FOUND)
@@ -157,7 +156,7 @@ def cancel_investigation(
 def get_investigation(
     investigation_id: str,
     claims: ClerkClaims,
-    repositories: AppRepositories,
+    investigations: Investigations,
 ) -> GetInvestigationResponse | JSONResponse:
     """Poll investigation status.
 
@@ -165,7 +164,7 @@ def get_investigation(
     reserved for presigned downloads and stays null until URL generation lands.
     """
     clerk_org_id = _require_org(claims.organization)
-    record = repositories.investigations.get(investigation_id)
+    record = investigations.get(investigation_id)
     if record is None:
         return JSONResponse({"error": "not found"}, status_code=status.HTTP_404_NOT_FOUND)
     if record.clerk_org_id != clerk_org_id:

@@ -1,4 +1,4 @@
-"""``Repositories`` is the one place that chooses storage and shares one database."""
+"""``open_database`` + the domain selectors: one migrated database per process, in-memory without a DSN."""
 
 from __future__ import annotations
 
@@ -9,15 +9,17 @@ from typing import Any
 import pytest
 
 from config.constants.gateway import DATABASE_URL_ENV
+from gateway.core.storage import open_database
 from gateway.core.storage.events.repository import (
     InMemoryHandledSlackEventRepository,
     PostgresHandledSlackEventRepository,
+    handled_slack_event_repository,
 )
 from gateway.core.storage.investigations.repository import (
     InMemoryInvestigationRepository,
     PostgresInvestigationRepository,
+    investigation_repository,
 )
-from gateway.core.storage.repositories import Repositories
 
 
 def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
@@ -67,11 +69,11 @@ def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
 def test_no_dsn_gives_process_local_repositories(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(DATABASE_URL_ENV, raising=False)
 
-    repositories = Repositories.from_env()
+    database = open_database()
 
-    assert repositories.shared is False
-    assert isinstance(repositories.investigations, InMemoryInvestigationRepository)
-    assert isinstance(repositories.handled_slack_events, InMemoryHandledSlackEventRepository)
+    assert database is None
+    assert isinstance(investigation_repository(database), InMemoryInvestigationRepository)
+    assert isinstance(handled_slack_event_repository(database), InMemoryHandledSlackEventRepository)
 
 
 def test_a_dsn_gives_postgres_repositories_over_one_shared_pool(
@@ -81,10 +83,10 @@ def test_a_dsn_gives_postgres_repositories_over_one_shared_pool(
     pools = _install_fake_psycopg2(monkeypatch)
     monkeypatch.setenv(DATABASE_URL_ENV, "postgresql://example/db")
 
-    repositories = Repositories.from_env()
+    database = open_database()
 
-    assert repositories.shared is True
-    assert isinstance(repositories.investigations, PostgresInvestigationRepository)
-    assert isinstance(repositories.handled_slack_events, PostgresHandledSlackEventRepository)
-    assert len(pools) == 1  # schema ran for both repositories through one pool
+    assert database is not None
+    assert isinstance(investigation_repository(database), PostgresInvestigationRepository)
+    assert isinstance(handled_slack_event_repository(database), PostgresHandledSlackEventRepository)
+    assert len(pools) == 1  # migrations ran for every table through one pool
     assert pools[0].dsn == "postgresql://example/db"

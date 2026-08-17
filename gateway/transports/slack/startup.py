@@ -13,8 +13,11 @@ import os
 from collections.abc import Callable, Mapping
 
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.core.storage.events.repository import HandledSlackEventRepository
-from gateway.core.storage.repositories import Repositories
+from gateway.core.storage import open_database
+from gateway.core.storage.events.repository import (
+    HandledSlackEventRepository,
+    handled_slack_event_repository,
+)
 from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.settings import (
@@ -58,9 +61,9 @@ def _build_handled_event_repository(logger: logging.Logger) -> HandledSlackEvent
     correct for exactly one replica — local development and single-instance
     deploys — and is warned about so it is never a silent choice.
     """
-    repositories = Repositories.from_env()
-    if repositories.shared:
-        return repositories.handled_slack_events
+    database = open_database()
+    if database is not None:
+        return handled_slack_event_repository(database)
     if not _env_flag(LOCAL_DEDUP_ENV):
         raise GatewayConfigurationError(
             "Slack Events API HTTP needs a shared event store: set DATABASE_URL. "
@@ -73,7 +76,7 @@ def _build_handled_event_repository(logger: logging.Logger) -> HandledSlackEvent
         "exactly one replica runs",
         LOCAL_DEDUP_ENV,
     )
-    return repositories.handled_slack_events
+    return handled_slack_event_repository(None)
 
 
 def _start_events_api_http(
