@@ -47,7 +47,6 @@ if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.session_goal.goal import SessionGoal
     from core.agent_harness.session_goal.run_until import SessionGoalRunResult
-    from core.agent_harness.turns.action_driver import ToolCallingDeps
     from core.agent_harness.turns.gather_ports import GatherPorts
     from core.agent_harness.turns.turn_results import TurnResult
 
@@ -181,7 +180,6 @@ class AgentSession:
         prompts: PromptContextProvider | None,
         tools: ToolProvider | None = None,
         gather: GatherPorts | None = None,
-        deps: ToolCallingDeps | None = None,
         console: Any | None = None,
         logger: logging.Logger | None = None,
         surface: str | None = None,
@@ -198,7 +196,7 @@ class AgentSession:
 
         agent = DefaultPorts(
             session=session, output=output, console=console, logger=logger, surface=surface
-        ).agent(tools=tools, prompts=prompts, gather=gather, deps=deps)
+        ).agent(tools=tools, prompts=prompts, gather=gather)
         agent.bind_turn(TurnBinding(is_tty=is_tty))
         self.attach_agent(agent)
 
@@ -233,7 +231,8 @@ class AgentSession:
         and before the agent is built. Remaining keyword arguments are the
         :class:`~core.agent_harness.turns.default_ports.DefaultPorts` fields
         (``console``, ``logger``, ``surface``), the ports its ``agent()`` takes
-        (``tools``, ``gather``, ``deps``) and ``is_tty``. Surfaces that need
+        (``tools``, ``gather``) and ``is_tty``; a host that injects runner ``deps``
+        builds through :class:`DefaultPorts` itself. Surfaces that need
         their own ports (a live gateway sink, a REPL console) build the agent
         themselves and call :meth:`attach_agent`.
         """
