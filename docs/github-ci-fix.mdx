@@ -40,7 +40,7 @@ the current PR CI is failing, fix and push
 4. It refuses fork PRs because it only pushes to branches in the same repository.
 5. After approval, it checks out the PR head branch and applies the fix.
 6. If files changed, it commits only the fix-run changes and pushes the PR branch.
-7. It verifies the exact pushed commit, waits for the known checks to register,
+7. It verifies the exact pushed commit, waits for checks from applicable workflows,
    and reports whether they passed, failed, were superseded by another push, or
    did not finish within 15 minutes.
 

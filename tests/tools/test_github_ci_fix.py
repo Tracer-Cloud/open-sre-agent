@@ -16,6 +16,7 @@ from integrations.coding_agent import CodingResult
 from integrations.github.tools.ci_fix.context import (
     CiFixContext,
     FailingCheck,
+    KnownCheck,
     gather_ci_fix_context,
     parse_pr_url,
 )
@@ -72,7 +73,10 @@ _CTX = CiFixContext(
     base_branch="main",
     head_branch="feat/fix-ci",
     head_sha="abc123",
-    known_check_names=("test (integrations-and-misc)", "quality"),
+    known_checks=(
+        KnownCheck(name="test (integrations-and-misc)", workflow_name="CI"),
+        KnownCheck(name="quality", workflow_name="CI"),
+    ),
     skipped_check_names=(),
     failing_checks=(
         FailingCheck(
@@ -135,7 +139,10 @@ def test_gather_ci_fix_context_builds_task_with_failing_logs() -> None:
 
     assert ctx.number == 4597
     assert ctx.head_branch == "feat/fix-ci"
-    assert ctx.known_check_names == ("test (integrations-and-misc)", "quality")
+    assert ctx.known_checks == (
+        KnownCheck(name="test (integrations-and-misc)", workflow_name="CI"),
+        KnownCheck(name="quality", workflow_name="CI"),
+    )
     assert ctx.skipped_check_names == ()
     assert ctx.failing_checks[0].name == "test (integrations-and-misc)"
     assert "pytest failed" in ctx.task

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest.mock import patch
 
-from integrations.github.tools.ci_fix.context import CiFixContext, FailingCheck
+from integrations.github.tools.ci_fix.context import CiFixContext, FailingCheck, KnownCheck
 from integrations.github.tools.ci_fix.verification import (
     DEFAULT_POLL_INTERVAL_SECONDS,
     CheckState,
@@ -21,7 +21,7 @@ _CONTEXT = CiFixContext(
     base_branch="main",
     head_branch="feat/fix-ci",
     head_sha="old-sha",
-    known_check_names=("quality",),
+    known_checks=(KnownCheck(name="quality", workflow_name="CI"),),
     skipped_check_names=(),
     failing_checks=(
         FailingCheck(
@@ -35,7 +35,14 @@ _CONTEXT = CiFixContext(
 )
 
 
-def _rollup(*, sha: str, name: str, conclusion: str, status: str) -> dict:
+def _rollup(
+    *,
+    sha: str,
+    name: str,
+    conclusion: str,
+    status: str,
+    workflow_name: str = "CI",
+) -> dict:
     return {
         "headRefOid": sha,
         "statusCheckRollup": [
@@ -43,6 +50,7 @@ def _rollup(*, sha: str, name: str, conclusion: str, status: str) -> dict:
                 "name": name,
                 "conclusion": conclusion,
                 "status": status,
+                "workflowName": workflow_name,
             }
         ],
     }
@@ -78,7 +86,7 @@ def test_wait_for_pr_checks_ignores_stale_checks_then_waits_for_success() -> Non
 def test_wait_for_pr_checks_reports_terminal_failure() -> None:
     payload = _rollup(
         sha="new-sha",
-        name="test (integrations-and-misc)",
+        name="quality",
         conclusion="FAILURE",
         status="COMPLETED",
     )
@@ -95,7 +103,7 @@ def test_wait_for_pr_checks_reports_terminal_failure() -> None:
         )
 
     assert result.state is CheckState.FAILED
-    assert result.failing_checks == ("test (integrations-and-misc)",)
+    assert result.failing_checks == ("quality",)
 
 
 def test_wait_for_pr_checks_waits_for_terminal_rollup_to_settle() -> None:
@@ -108,11 +116,13 @@ def test_wait_for_pr_checks_waits_for_terminal_rollup_to_settle() -> None:
                     "name": "quality",
                     "conclusion": "SUCCESS",
                     "status": "COMPLETED",
+                    "workflowName": "CI",
                 },
                 {
                     "name": "tests",
                     "conclusion": "SUCCESS",
                     "status": "COMPLETED",
+                    "workflowName": "CI",
                 },
             ],
         },
@@ -123,11 +133,13 @@ def test_wait_for_pr_checks_waits_for_terminal_rollup_to_settle() -> None:
                     "name": "quality",
                     "conclusion": "SUCCESS",
                     "status": "COMPLETED",
+                    "workflowName": "CI",
                 },
                 {
                     "name": "tests",
                     "conclusion": "SUCCESS",
                     "status": "COMPLETED",
+                    "workflowName": "CI",
                 },
             ],
         },
@@ -161,8 +173,18 @@ def test_wait_for_pr_checks_accepts_check_that_was_already_skipped() -> None:
     payload = {
         "headRefOid": "new-sha",
         "statusCheckRollup": [
-            {"name": "quality", "conclusion": "SUCCESS", "status": "COMPLETED"},
-            {"name": "windows test", "conclusion": "SKIPPED", "status": "COMPLETED"},
+            {
+                "name": "quality",
+                "conclusion": "SUCCESS",
+                "status": "COMPLETED",
+                "workflowName": "CI",
+            },
+            {
+                "name": "windows test",
+                "conclusion": "SKIPPED",
+                "status": "COMPLETED",
+                "workflowName": "CI",
+            },
         ],
     }
 
@@ -205,7 +227,7 @@ def test_wait_for_pr_checks_rejects_newly_skipped_check() -> None:
 
 
 def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:
-    payload = {"headRefOid": "old-sha", "statusCheckRollup": []}
+    payload = {"headRefOid": "new-sha", "statusCheckRollup": []}
     elapsed = iter((0.0, 0.0, 10.0))
 
     with patch(
@@ -229,20 +251,35 @@ def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:
 def test_wait_for_pr_checks_waits_for_late_known_check() -> None:
     context = replace(
         _CONTEXT,
-        known_check_names=("quality", "tests"),
+        known_checks=(
+            KnownCheck(name="quality", workflow_name="CI"),
+            KnownCheck(name="tests", workflow_name="CI"),
+        ),
     )
+    late_failure = {
+        "headRefOid": "new-sha",
+        "statusCheckRollup": [
+            {
+                "name": "quality",
+                "conclusion": "SUCCESS",
+                "status": "COMPLETED",
+                "workflowName": "CI",
+            },
+            {
+                "name": "tests",
+                "conclusion": "FAILURE",
+                "status": "COMPLETED",
+                "workflowName": "CI",
+            },
+        ],
+    }
     responses = [
         _rollup(sha="new-sha", name="quality", conclusion="SUCCESS", status="COMPLETED"),
         _rollup(sha="new-sha", name="quality", conclusion="SUCCESS", status="COMPLETED"),
-        {
-            "headRefOid": "new-sha",
-            "statusCheckRollup": [
-                {"name": "quality", "conclusion": "SUCCESS", "status": "COMPLETED"},
-                {"name": "tests", "conclusion": "FAILURE", "status": "COMPLETED"},
-            ],
-        },
+        late_failure,
+        late_failure,
     ]
-    elapsed = iter((0.0, 0.0, 31.0, 32.0))
+    elapsed = iter((0.0, 0.0, 31.0, 32.0, 62.0))
 
     with patch(
         "integrations.github.tools.ci_fix.verification.run_gh_json",
@@ -282,3 +319,90 @@ def test_wait_for_pr_checks_rejects_unrelated_newer_head() -> None:
 
     assert result.state.value == "superseded"
     assert result.observed_head_sha == "other-users-sha"
+
+
+def test_wait_for_pr_checks_rejects_original_head_restored_after_fix() -> None:
+    responses = [
+        _rollup(
+            sha="our-pushed-sha",
+            name="quality",
+            conclusion="",
+            status="IN_PROGRESS",
+        ),
+        _rollup(
+            sha="old-sha",
+            name="quality",
+            conclusion="FAILURE",
+            status="COMPLETED",
+        ),
+    ]
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ):
+        result = wait_for_pr_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="our-pushed-sha",
+            settle_seconds=0,
+            sleep=lambda _seconds: None,
+        )
+
+    assert result.state is CheckState.SUPERSEDED
+    assert result.observed_head_sha == "old-sha"
+
+
+def test_wait_for_pr_checks_rejects_original_head_after_propagation_grace() -> None:
+    payload = _rollup(
+        sha="old-sha",
+        name="quality",
+        conclusion="FAILURE",
+        status="COMPLETED",
+    )
+    elapsed = iter((0.0, 0.0, 31.0))
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_pr_checks(
+            _CONTEXT,
+            github_token="tok",
+            expected_head_sha="our-pushed-sha",
+            settle_seconds=0,
+            sleep=lambda _seconds: None,
+            monotonic=lambda: next(elapsed),
+        )
+
+    assert result.state is CheckState.SUPERSEDED
+    assert result.observed_head_sha == "old-sha"
+
+
+def test_wait_for_pr_checks_ignores_checks_from_inapplicable_prior_workflow() -> None:
+    context = replace(
+        _CONTEXT,
+        known_checks=(
+            KnownCheck(name="quality", workflow_name="CI"),
+            KnownCheck(name="deploy", workflow_name="Deploy"),
+        ),
+    )
+    payload = _rollup(
+        sha="new-sha",
+        name="quality",
+        conclusion="SUCCESS",
+        status="COMPLETED",
+    )
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_pr_checks(
+            context,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            settle_seconds=0,
+        )
+
+    assert result.state is CheckState.PASSED
