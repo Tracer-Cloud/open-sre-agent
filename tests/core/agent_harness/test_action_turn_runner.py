@@ -180,3 +180,48 @@ def test_omitting_hooks_leaves_them_attached() -> None:
 
     # Assert
     assert agent._tool_hooks is approval_hooks  # noqa: SLF001
+
+
+def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None:
+    """A rebound turn's ``confirm_fn`` / ``is_tty`` reach the action stage.
+
+    The REPL builds its agent once at startup (no confirm_fn) and rebinds it per
+    turn. If the turn's confirmation callback were not rebound, a mutating
+    ``cli_exec`` would fall back to blocking ``input()`` while prompt_toolkit
+    owns stdin.
+    """
+    import io
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
+    from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
+
+    # Arrange — agent built like the controller does: no confirm_fn, no is_tty.
+    seen: list[tuple[Any, Any]] = []
+
+    def _confirm(_prompt: str) -> str:
+        return "y"
+
+    def _spy_execute(text: str, session: Any, console: Any, **kwargs: Any) -> ToolCallingTurnResult:
+        seen.append((kwargs.get("confirm_fn"), kwargs.get("is_tty")))
+        return ToolCallingTurnResult(0, 0, 0, False, True)
+
+    console = Console(file=io.StringIO(), force_terminal=False)
+    agent = build_shell_agent(Session(), console)
+
+    # Act — one turn on the long-lived agent, with this turn's confirm_fn / tty.
+    execute_shell_turn(
+        "run something",
+        Session(),
+        console,
+        recorder=None,
+        confirm_fn=_confirm,
+        is_tty=True,
+        agent=agent,
+        execute_actions=_spy_execute,
+        answer_agent=lambda *_a, **_k: None,
+    )
+
+    # Assert — the action stage saw the turn's callback, not the construction-time None.
+    assert seen == [(_confirm, True)]

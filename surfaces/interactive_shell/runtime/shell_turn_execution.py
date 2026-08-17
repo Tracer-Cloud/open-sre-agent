@@ -152,7 +152,12 @@ def execute_shell_turn(
         )
     else:
         agent.bind_turn(
-            session=session, output=resolved_output, tool_hooks=tool_hooks, console=console
+            session=session,
+            output=resolved_output,
+            tool_hooks=tool_hooks,
+            console=console,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
         )
     agent.bind_stages(
         execute_actions=execute_stage,

@@ -194,8 +194,14 @@ class HeadlessAgent:
         tool_hooks: ToolExecutionHooks | None | _Unmentioned = _UNMENTIONED,
         session: SessionState | None = None,
         console: Any | None = None,
+        confirm_fn: ConfirmFn | None | _Unmentioned = _UNMENTIONED,
+        is_tty: bool | None | _Unmentioned = _UNMENTIONED,
     ) -> None:
         """Swap turn-scoped ports so one agent can serve many turns.
+
+        ``confirm_fn`` and ``is_tty`` are per-turn on an interactive host (the
+        REPL's cancellation-safe confirmation prompt); like ``tool_hooks``,
+        passing ``None`` clears them and omitting them leaves them alone.
 
         Per-message accounting and (when provided) the current session object
         are rebound each inbound message. ``console`` rebinds a
@@ -223,6 +229,10 @@ class HeadlessAgent:
         if not isinstance(tool_hooks, _Unmentioned):
             self._tool_hooks = tool_hooks
             runner_changed = True
+        if not isinstance(confirm_fn, _Unmentioned):
+            self._confirm_fn = confirm_fn
+        if not isinstance(is_tty, _Unmentioned):
+            self._is_tty = is_tty
         if runner_changed:
             self._action_runner = self._new_action_runner()
 
