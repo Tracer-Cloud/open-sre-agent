@@ -12,12 +12,13 @@ from integrations.github.tools.ci_fix.context import CiFixContext
 from integrations.github.tools.ci_fix.gh import run_gh_json
 
 DEFAULT_CHECK_WAIT_SECONDS = 900
+DEFAULT_REGISTRATION_SECONDS = 60
 DEFAULT_POLL_INTERVAL_SECONDS = 10
 DEFAULT_SETTLE_SECONDS = 30
 DEFAULT_HEAD_PROPAGATION_SECONDS = 30
 
 _PR_CHECK_FIELDS = "headRefOid,statusCheckRollup"
-_WORKFLOW_RUN_FIELDS = "status"
+_WORKFLOW_RUN_FIELDS = "databaseId,status"
 _WORKFLOW_RUNS_KEY = "runs"
 _WORKFLOW_RUN_COMPLETED = "completed"
 _FAILED_CONCLUSIONS = frozenset(
@@ -63,6 +64,7 @@ def wait_for_pr_checks(
     timeout_seconds: int = DEFAULT_CHECK_WAIT_SECONDS,
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
     settle_seconds: int = DEFAULT_SETTLE_SECONDS,
+    registration_seconds: int = DEFAULT_REGISTRATION_SECONDS,
     head_propagation_seconds: int = DEFAULT_HEAD_PROPAGATION_SECONDS,
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
@@ -105,25 +107,30 @@ def wait_for_pr_checks(
                 observed_head_sha=head_sha,
             )
 
-        # GitHub can briefly return the pre-push rollup, and jobs can register
-        # late while an applicable workflow is still running. Settle only after
-        # the exact commit's workflow runs have completed.
-        workflows_complete = head_sha == expected_head_sha and _workflow_runs_complete(
-            repo=repo,
-            github_token=github_token,
-            expected_head_sha=expected_head_sha,
-            require_run=actions_run_required,
-        )
+        # Give the exact commit's checks time to register, then settle only
+        # completed workflows. Workflow identities join the signature below so
+        # another run appearing during settlement resets the clock.
+        if head_sha == expected_head_sha:
+            workflows_complete, workflow_signature = _workflow_runs_state(
+                repo=repo,
+                github_token=github_token,
+                expected_head_sha=expected_head_sha,
+                require_run=actions_run_required,
+            )
+        else:
+            workflows_complete, workflow_signature = False, ()
         external_checks_registered = required_external_checks.issubset(set(last_names))
+        registration_complete = now - started_at >= max(0, registration_seconds)
         if (
             head_sha == expected_head_sha
             and checks
             and workflows_complete
             and external_checks_registered
+            and registration_complete
         ):
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
-                signature = _check_signature(checks)
+                signature = _verification_signature(checks, workflow_signature)
                 if signature != terminal_signature:
                     terminal_signature = signature
                     terminal_since = now
@@ -158,13 +165,13 @@ def _check_name(check: dict[str, Any]) -> str:
     return str(check.get("name") or check.get("context") or "unnamed check")
 
 
-def _workflow_runs_complete(
+def _workflow_runs_state(
     *,
     repo: str,
     github_token: str | None,
     expected_head_sha: str,
     require_run: bool,
-) -> bool:
+) -> tuple[bool, tuple[str, ...]]:
     payload = run_gh_json(
         [
             "run",
@@ -182,9 +189,23 @@ def _workflow_runs_complete(
         github_token=github_token,
     )
     runs = _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
-    return (bool(runs) or not require_run) and all(
+    complete = (bool(runs) or not require_run) and all(
         str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
     )
+    signature = tuple(
+        sorted(
+            f"{run.get('databaseId') or 'unknown'}:{str(run.get('status') or '').strip().lower()}"
+            for run in runs
+        )
+    )
+    return complete, signature
+
+
+def _verification_signature(
+    checks: list[dict[str, Any]],
+    workflow_signature: tuple[str, ...],
+) -> tuple[str, ...]:
+    return (*_check_signature(checks), *(f"workflow:{item}" for item in workflow_signature))
 
 
 def _check_signature(checks: list[dict[str, Any]]) -> tuple[str, ...]:
@@ -228,6 +249,7 @@ __all__ = [
     "DEFAULT_CHECK_WAIT_SECONDS",
     "DEFAULT_HEAD_PROPAGATION_SECONDS",
     "DEFAULT_POLL_INTERVAL_SECONDS",
+    "DEFAULT_REGISTRATION_SECONDS",
     "DEFAULT_SETTLE_SECONDS",
     "wait_for_pr_checks",
 ]
