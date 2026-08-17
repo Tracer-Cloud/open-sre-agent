@@ -38,6 +38,7 @@ from gateway.transports.telegram.settings import (
     TelegramInboundMessage,
 )
 from gateway.web.startup import WebStartup
+from tests.shared.default_ports_stub import default_ports_stub
 
 
 def _patch_non_telegram_components(monkeypatch) -> None:
@@ -104,8 +105,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        agent_cls,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(agent_cls)
     )
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
@@ -163,16 +163,13 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["gather"], GatherPorts)
     assert ctor.kwargs["gather"].enabled is True
-    assert ctor.kwargs["is_tty"] is False
-    assert ctor.kwargs["observer_factory"] is not None
-    tool_provider = DefaultToolProvider(
-        ctor.kwargs["session"],
-        ctor.kwargs["console"],
-        tool_action_logger=ctor.kwargs["logger"],
-        observer_factory=ctor.kwargs["observer_factory"],
-        subprocess_presenter_factory=ctor.kwargs.get("subprocess_presenter_factory"),
-        slash_ports_factory=ctor.kwargs.get("slash_ports_factory"),
-    )
+    agent_cls.return_value.bind_turn.assert_any_call(is_tty=False)
+    # The gateway hands the factory its configured tool provider (the bridge
+    # between the agent and the host's tool stack), not loose port factories.
+    tool_provider = ctor.kwargs["tools"]
+    assert isinstance(tool_provider, DefaultToolProvider)
+    assert tool_provider._session is session
+    assert tool_provider._tool_action_logger is logger
     assert tool_provider._precomputed_action_tools is None
     with patch.object(logger, "info") as mock_info:
         tool_provider.observer(message="hello")(

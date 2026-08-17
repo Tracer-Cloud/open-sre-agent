@@ -96,18 +96,20 @@ _UNMENTIONED = _Unmentioned()
 class HeadlessAgent:
     """Runs full agent turns headlessly from a fixed set of configured ports.
 
-    Construct once with the ports/dependencies, then call :meth:`dispatch` per
-    message. ``tools`` is required — a surface that genuinely wants a text-only
-    turn passes :class:`NullToolProvider` explicitly. Every other port defaults
-    to an in-memory headless adapter. ``reasoning`` defaults to "no client" (the
-    conversational assistant is skipped) so a turn runs with zero configuration;
-    inject a client to get an actual answer.
+    Construct once with the ports, then call :meth:`dispatch` per message.
+    ``tools`` is required — a surface that genuinely wants a text-only turn
+    passes :class:`NullToolProvider` explicitly. Every other port defaults to
+    the in-memory headless adapter from ``headless_adapters`` (the family a
+    script or test runs on with zero configuration); the product family is
+    :class:`~core.agent_harness.turns.default_ports.DefaultPorts`.
+
+    Per-turn values — session, output, accounting, hooks, ``confirm_fn``,
+    ``is_tty`` — are bound with :meth:`bind_turn`; whole-stage replacements
+    with :meth:`bind_stages`. Neither is a constructor concern.
 
     ``gather`` is a :class:`~core.agent_harness.turns.gather_ports.GatherPorts`
-    describing the evidence pass: whether it runs, its loop budget, and the
-    hooks a surface plugs in to stream progress and persist tool calls. It
-    defaults to ``GATHER_DISABLED`` because the pass reaches out to live
-    integrations — a caller opts in with ``GatherPorts()``.
+    describing the evidence pass. It defaults to ``GATHER_DISABLED`` because the
+    pass reaches out to live integrations — a caller opts in with ``GatherPorts()``.
     """
 
     def __init__(
@@ -119,25 +121,12 @@ class HeadlessAgent:
         prompts: PromptContextProvider | None = None,
         reasoning: ReasoningClientProvider | None = None,
         run_factory: RunRecordFactory | None = None,
-        accounting: TurnAccounting | None = None,
         error_reporter: ErrorReporter | None = None,
         gather: GatherPorts | None = None,
-        confirm_fn: ConfirmFn | None = None,
-        is_tty: bool | None = None,
-        tool_hooks: ToolExecutionHooks | None = None,
         deps: ToolCallingDeps | None = None,
-        execute_actions: ExecuteActions | None = None,
-        answer: StreamAnswerFn | None = None,
-        gather_evidence: EvidenceGatherer | None = None,
     ) -> None:
         self._tools = tools
         self._deps = deps
-        self._execute_actions_override: ExecuteActions | None = None
-        self._answer_override: StreamAnswerFn | None = None
-        self._gather_override: EvidenceGatherer | None = None
-        self.bind_stages(
-            execute_actions=execute_actions, answer=answer, gather_evidence=gather_evidence
-        )
         self._session: SessionState = session if session is not None else InMemorySessionState()
         self._output: OutputSink = output if output is not None else BufferOutputSink()
         self._prompts: PromptContextProvider = (
@@ -151,14 +140,16 @@ class HeadlessAgent:
         )
         self._reasoning = reasoning if reasoning is not None else StaticReasoningClientProvider()
         self._run_factory = run_factory if run_factory is not None else SimpleRunRecordFactory()
-        # None here defers to a per-message default in dispatch(): DefaultTurnAccounting
-        # needs the message, so it cannot be resolved once at construction.
-        self._accounting = accounting
         self._error_reporter = error_reporter if error_reporter is not None else NoopErrorReporter()
         self._gather_ports = gather if gather is not None else GATHER_DISABLED
-        self._confirm_fn = confirm_fn
-        self._is_tty = is_tty
-        self._tool_hooks = tool_hooks
+        # Turn-scoped state; see bind_turn / bind_stages.
+        self._accounting: TurnAccounting | None = None
+        self._confirm_fn: ConfirmFn | None = None
+        self._is_tty: bool | None = None
+        self._tool_hooks: ToolExecutionHooks | None = None
+        self._execute_actions_override: ExecuteActions | None = None
+        self._answer_override: StreamAnswerFn | None = None
+        self._gather_override: EvidenceGatherer | None = None
         self._action_runner = self._new_action_runner()
 
     def _new_action_runner(self) -> ActionTurnRunner:

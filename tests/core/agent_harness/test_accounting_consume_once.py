@@ -56,7 +56,8 @@ def test_dispatch_consumes_bound_accounting(monkeypatch: Any) -> None:
     _stub_dispatch(monkeypatch)
     session = SessionCore(store=InMemorySessionStore())
     first = _SpyAccounting("first")
-    agent = HeadlessAgent(tools=NullToolProvider(), session=session, accounting=first)
+    agent = HeadlessAgent(tools=NullToolProvider(), session=session)
+    agent.bind_turn(accounting=first)
     agent.dispatch("one")
     assert first.finalized == ["first"]
     agent.dispatch("two")

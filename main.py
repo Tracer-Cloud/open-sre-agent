@@ -44,7 +44,7 @@ process.
 provider is unreachable) the error message itself lands in
 ``primary_response_text``. Surfaces that need their own ports — a live gateway
 sink, a REPL console — build a ``HeadlessAgent`` (or
-``build_default_headless_agent``) and call ``attach_agent``, then ``chat``.
+``DefaultPorts(...).agent(...)``) and call ``attach_agent``, then ``chat``.
 
 Construct **one** agent per logical session (or scheduled loop), then many
 ``chat`` / ``investigate`` turns — do not rebuild every message. Gateway does

@@ -20,7 +20,7 @@ Custom ports (live gateway sink, REPL)::
 
     session = AgentSession(SessionConfig(load_env=False))
     session.startup()
-    session.attach_agent(build_default_headless_agent(session=…, output=sink, …))
+    session.attach_agent(DefaultPorts(session=…, output=sink).agent(tools=…))
     session.chat(text)                   # reuse the same agent across messages
 
 Gateway chat reuses one ``HeadlessAgent`` per session via ``SessionAgentPool``
@@ -34,6 +34,7 @@ context through :class:`SessionConfig`.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
@@ -42,10 +43,12 @@ from core.agent_harness.session import SessionManager
 
 if TYPE_CHECKING:
     from core.agent_harness.investigation_api import AlertInput, InvestigationResult
-    from core.agent_harness.ports import OutputSink, PromptContextProvider
+    from core.agent_harness.ports import OutputSink, PromptContextProvider, ToolProvider
     from core.agent_harness.session.session_core import SessionCore
     from core.agent_harness.session_goal.goal import SessionGoal
     from core.agent_harness.session_goal.run_until import SessionGoalRunResult
+    from core.agent_harness.turns.action_driver import ToolCallingDeps
+    from core.agent_harness.turns.gather_ports import GatherPorts
     from core.agent_harness.turns.turn_results import TurnResult
 
 
@@ -176,30 +179,27 @@ class AgentSession:
         session: SessionCore,
         output: OutputSink,
         prompts: PromptContextProvider | None,
-        message: str | None = None,
-        **agent_kwargs: Any,
+        tools: ToolProvider | None = None,
+        gather: GatherPorts | None = None,
+        deps: ToolCallingDeps | None = None,
+        console: Any | None = None,
+        logger: logging.Logger | None = None,
+        surface: str | None = None,
+        is_tty: bool | None = None,
     ) -> None:
-        """Attach the shared default headless port stack (one construction recipe).
+        """Attach the agent built on the default port family (one construction recipe).
 
         Used by :meth:`start` and :meth:`run_headless_turn`. Custom hosts
-        (gateway pool, REPL) still call :func:`build_default_headless_agent` or
-        assemble :class:`HeadlessAgent` and :meth:`attach_agent` themselves —
-        they must not re-copy this wiring ad hoc.
+        (gateway pool, REPL) build through :class:`DefaultPorts` themselves and
+        call :meth:`attach_agent` — they must not re-copy this wiring ad hoc.
         """
-        from core.agent_harness.turns.default_headless_agent import (
-            build_default_headless_agent,
-        )
+        from core.agent_harness.turns.default_ports import DefaultPorts
 
-        agent_kwargs.pop("message", None)
-        self.attach_agent(
-            build_default_headless_agent(
-                session=session,
-                output=output,
-                prompts=prompts,
-                message=message,
-                **agent_kwargs,
-            )
-        )
+        agent = DefaultPorts(
+            session=session, output=output, console=console, logger=logger, surface=surface
+        ).agent(tools=tools, prompts=prompts, gather=gather, deps=deps)
+        agent.bind_turn(is_tty=is_tty)
+        self.attach_agent(agent)
 
     @classmethod
     def start(
@@ -209,7 +209,6 @@ class AgentSession:
         output: OutputSink | None = None,
         prompts: PromptContextProvider | None = None,
         prepare_session: Callable[[SessionCore], None] | None = None,
-        message: str | None = None,
         **agent_kwargs: Any,
     ) -> AgentSession:
         """Return a session that is ready to :meth:`chat`.
@@ -230,12 +229,12 @@ class AgentSession:
         leave ``boot_process`` unset.
 
         ``prepare_session`` runs after session create (e.g. pin a project scope)
-        and before the agent is built. ``message`` is the first turn's text when
-        it is already known, for ports that size themselves to it. Remaining
-        keyword arguments reach
-        :func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`.
-        Surfaces that need their own ports (a live gateway sink, a REPL console)
-        build the agent themselves and call :meth:`attach_agent`.
+        and before the agent is built. Remaining keyword arguments are the
+        :class:`~core.agent_harness.turns.default_ports.DefaultPorts` fields
+        (``console``, ``logger``, ``surface``), the ports its ``agent()`` takes
+        (``tools``, ``gather``, ``deps``) and ``is_tty``. Surfaces that need
+        their own ports (a live gateway sink, a REPL console) build the agent
+        themselves and call :meth:`attach_agent`.
         """
         from core.agent_harness.turns.headless_adapters import BufferOutputSink
 
@@ -248,7 +247,6 @@ class AgentSession:
             session=startup.session,
             output=output if output is not None else BufferOutputSink(),
             prompts=prompts if prompts is not None else startup.prompts,
-            message=message,
             **agent_kwargs,
         )
         return agent_session
@@ -274,7 +272,6 @@ class AgentSession:
             config or SCHEDULED_RUN_CONFIG,
             output=output,
             prepare_session=prepare_session,
-            message=message,
             **agent_kwargs,
         ).chat(message)
 

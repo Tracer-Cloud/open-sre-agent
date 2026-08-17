@@ -18,6 +18,7 @@ from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
+from tests.shared.default_ports_stub import default_ports_stub
 
 
 @pytest.fixture(autouse=True)
@@ -59,8 +60,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        factory,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
     )
     return factory
 

@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
+from core.agent_harness.turns.default_ports import DefaultPorts
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
@@ -157,12 +157,12 @@ def test_follow_up_reuses_the_same_attached_agent(stub_action_planner: None) -> 
 def test_documented_custom_sink_path_captures_streamed_answer(
     stub_action_planner: None,
 ) -> None:
-    """``startup`` → ``build_default_headless_agent(output=…)`` → ``attach_agent``."""
+    """``startup`` → ``DefaultPorts(...).agent()`` → ``attach_agent``."""
     # Arrange
     harness = AgentSession(_headless_config())
     startup = harness.startup()
     sink = BufferOutputSink()
-    agent = build_default_headless_agent(session=startup.session, output=sink)
+    agent = DefaultPorts(session=startup.session, output=sink).agent()
     agent._tools = NullToolProvider()  # noqa: SLF001
     agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
     agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
@@ -198,7 +198,7 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
 
 
 def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
-    """The explicit ``build_default_headless_agent`` path must take ``prompts=``."""
+    """The explicit ``DefaultPorts.agent`` path must take ``prompts=``."""
     # Arrange
     harness = AgentSession(_headless_config())
     startup = harness.startup()
@@ -206,11 +206,7 @@ def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
     sink = BufferOutputSink()
 
     # Act
-    agent = build_default_headless_agent(
-        session=startup.session,
-        output=sink,
-        prompts=prompts,
-    )
+    agent = DefaultPorts(session=startup.session, output=sink).agent(prompts=prompts)
 
     # Assert — wired before any dispatch
     assert agent._prompts is prompts  # noqa: SLF001

@@ -142,23 +142,16 @@ def execute_shell_turn(
         ).execute_actions
     if agent is None:
         agent = build_shell_agent(
-            session,
-            console,
-            output=resolved_output,
-            request_exit=request_exit,
-            tool_hooks=tool_hooks,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
+            session, console, output=resolved_output, request_exit=request_exit
         )
-    else:
-        agent.bind_turn(
-            session=session,
-            output=resolved_output,
-            tool_hooks=tool_hooks,
-            console=console,
-            confirm_fn=confirm_fn,
-            is_tty=is_tty,
-        )
+    agent.bind_turn(
+        session=session,
+        output=resolved_output,
+        tool_hooks=tool_hooks,
+        console=console,
+        confirm_fn=confirm_fn,
+        is_tty=is_tty,
+    )
     agent.bind_stages(
         execute_actions=execute_stage,
         answer=stages.answer,

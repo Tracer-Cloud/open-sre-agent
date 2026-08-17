@@ -15,6 +15,7 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnRes
 from gateway.core.runtime.live_sink import LiveOutputSink
 from gateway.core.runtime.session_agents import SessionAgentPool
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from tests.shared.default_ports_stub import default_ports_stub
 
 
 @pytest.fixture(autouse=True)
@@ -78,8 +79,7 @@ def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> 
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        _fake_build,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(_fake_build)
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
     session = SessionCore(store=InMemorySessionStore())
@@ -98,8 +98,8 @@ def test_pool_builds_separate_agents_per_session(monkeypatch: pytest.MonkeyPatch
             self.bind_session = MagicMock()
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        lambda **kwargs: _FakeAgent(**kwargs),
+        "gateway.core.runtime.session_agents.DefaultPorts",
+        default_ports_stub(lambda **kwargs: _FakeAgent(**kwargs)),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
     a = SessionCore(store=InMemorySessionStore())
@@ -125,8 +125,8 @@ def test_pool_rebinds_current_session_on_cache_hit(monkeypatch: pytest.MonkeyPat
             self.session = session
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        lambda **kwargs: _FakeAgent(**kwargs),
+        "gateway.core.runtime.session_agents.DefaultPorts",
+        default_ports_stub(lambda **kwargs: _FakeAgent(**kwargs)),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
     first = SessionCore(store=InMemorySessionStore())
@@ -145,8 +145,7 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     agent.dispatch.return_value = _empty_result()
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        factory,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
     )
 
     session = SessionCore(store=InMemorySessionStore())
@@ -157,7 +156,8 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
 
     assert factory.call_count == 1
     assert agent.dispatch.call_count == 2
-    assert agent.bind_turn.call_count == 2
+    # One bind at build (is_tty) plus one per turn.
+    assert agent.bind_turn.call_count == 3
 
 
 def _fake_agent_pool(monkeypatch: pytest.MonkeyPatch) -> SessionAgentPool:
@@ -169,8 +169,8 @@ def _fake_agent_pool(monkeypatch: pytest.MonkeyPatch) -> SessionAgentPool:
             self.bind_session = MagicMock()
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        lambda **kwargs: _FakeAgent(**kwargs),
+        "gateway.core.runtime.session_agents.DefaultPorts",
+        default_ports_stub(lambda **kwargs: _FakeAgent(**kwargs)),
     )
     return SessionAgentPool(console=Console(force_terminal=False))
 

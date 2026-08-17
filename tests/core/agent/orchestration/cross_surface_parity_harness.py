@@ -33,6 +33,7 @@ from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
+from tests.shared.default_ports_stub import default_ports_stub
 
 Surface = Literal["shell", "headless", "gateway_handler"]
 
@@ -318,9 +319,9 @@ def _dispatch_turn(
         output=output,
         prompts=DefaultPromptContextProvider(session),
         reasoning=DefaultReasoningClientProvider(output=output),
-        accounting=NoopTurnAccounting(),
         gather=GatherPorts(enabled=gather_enabled),
     )
+    agent.bind_turn(accounting=NoopTurnAccounting())
     return agent.dispatch(message)
 
 
@@ -348,17 +349,25 @@ def _install_gateway_dispatch_spy(
     monkeypatch: Any,
     captured: list[TurnResult],
 ) -> None:
-    """Spy on the gateway pool's agent factory (not ``HeadlessAgent`` directly).
+    """Spy on the gateway pool's agent construction (not ``HeadlessAgent`` directly).
 
-    ``SessionAgentPool`` builds agents via ``build_default_headless_agent``; patching
-    the class name on ``session_agents`` no longer intercepts construction.
+    ``SessionAgentPool`` builds agents via ``DefaultPorts(...).agent(...)``; the
+    stub routes both halves through one ``build`` over the real family.
     """
-    from core.agent_harness.turns.default_headless_agent import (
-        build_default_headless_agent as real_build,
-    )
+    from core.agent_harness.turns.default_ports import DefaultPorts as real_ports
 
-    def _spy_build(**kwargs: Any) -> HeadlessAgent:
-        agent = real_build(**kwargs)
+    def _spy_build(
+        *,
+        session: Any,
+        output: Any,
+        console: Any = None,
+        logger: Any = None,
+        surface: Any = None,
+        **ports: Any,
+    ) -> HeadlessAgent:
+        agent = real_ports(
+            session=session, output=output, console=console, logger=logger, surface=surface
+        ).agent(**ports)
         original_dispatch = type(agent).dispatch
 
         def dispatch(message: str) -> TurnResult:
@@ -370,8 +379,7 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        _spy_build,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(_spy_build)
     )
 
 

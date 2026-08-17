@@ -14,9 +14,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness import OutputSink
-from core.agent_harness.runtime import GatherPorts, HeadlessAgent, build_default_headless_agent
-from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.execution import ToolExecutionHooks
+from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, GatherPorts, HeadlessAgent
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
 from surfaces.interactive_shell.runtime.background import runner as background_runner
@@ -64,18 +62,6 @@ def _observer_factory(session: Session, console: Console) -> Callable[[str], Any
     return observer_factory
 
 
-def _shell_port_factories(session: Session, console: Console) -> dict[str, Any]:
-    """The tool-provider port factories the shell supplies, keyed by factory kwarg."""
-    return {
-        "observer_factory": _observer_factory(session, console),
-        "subprocess_presenter_factory": _subprocess_presenter_factory,
-        "investigation_ports_factory": _investigation_ports_factory,
-        "llm_provider_ports_factory": repl_llm_provider_ports,
-        "task_cancel_ports_factory": repl_task_cancel_ports,
-        "slash_ports_factory": repl_slash_ports,
-    }
-
-
 def shell_tool_provider(
     session: Session,
     console: Console,
@@ -87,7 +73,12 @@ def shell_tool_provider(
         session,
         console,
         request_exit=request_exit,
-        **_shell_port_factories(session, console),
+        observer_factory=_observer_factory(session, console),
+        subprocess_presenter_factory=_subprocess_presenter_factory,
+        investigation_ports_factory=_investigation_ports_factory,
+        llm_provider_ports_factory=repl_llm_provider_ports,
+        task_cancel_ports_factory=repl_task_cancel_ports,
+        slash_ports_factory=repl_slash_ports,
     )
 
 
@@ -97,22 +88,14 @@ def build_shell_agent(
     *,
     output: OutputSink | None = None,
     request_exit: Callable[[], None] | None = None,
-    tool_hooks: ToolExecutionHooks | None = None,
-    confirm_fn: Callable[[str], str] | None = None,
-    is_tty: bool | None = None,
 ) -> HeadlessAgent:
-    """One shell agent; rebound per turn with ``bind_turn`` / ``bind_stages``."""
-    return build_default_headless_agent(
-        session=session,
-        output=resolve_output_sink(console, output),
-        console=console,
+    """One shell agent on the default port family; per-turn values come via ``bind_turn``."""
+    return DefaultPorts(
+        session=session, output=resolve_output_sink(console, output), console=console
+    ).agent(
+        tools=shell_tool_provider(session, console, request_exit=request_exit),
         prompts=shell_prompt_context_provider(session),
         gather=GatherPorts(),
-        request_exit=request_exit,
-        tool_hooks=tool_hooks,
-        confirm_fn=confirm_fn,
-        is_tty=is_tty,
-        **_shell_port_factories(session, console),
     )
 
 

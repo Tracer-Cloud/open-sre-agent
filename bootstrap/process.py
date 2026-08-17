@@ -8,7 +8,7 @@ Does **not** configure gateway or CLI logging — that stays with the surface
 composition root (``GatewayController.configure_logging``, CLI stderr).
 
 Does **not** construct :class:`~core.agent_harness.turns.headless_dispatch.HeadlessAgent`
-or run turns — that is ``build_default_headless_agent`` /
+or run turns — that is ``DefaultPorts.agent`` /
 :class:`~core.agent_harness.harness.AgentSession` after boot. Bootstrap and
 headless construction are separate layers, not duplicated stacks.
 """

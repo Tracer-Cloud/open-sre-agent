@@ -1,4 +1,4 @@
-"""Characterization for the shared default HeadlessAgent factory."""
+"""Characterization for ``DefaultPorts`` — the default port family and the agent built on it."""
 
 from __future__ import annotations
 
@@ -7,37 +7,38 @@ from types import SimpleNamespace
 
 from rich.console import Console
 
+from core.agent_harness.runtime import ToolCallingDeps
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
+from core.agent_harness.turns.default_ports import DefaultPorts
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
 
 
-def test_build_default_headless_agent_sets_gateway_surface() -> None:
+def test_default_ports_sets_gateway_surface() -> None:
     session = SimpleNamespace(
         configured_integrations=[],
         resolved_integrations_cache={},
         session_id="s1",
     )
-    agent = build_default_headless_agent(
+    agent = DefaultPorts(
         session=session,
         output=BufferOutputSink(),
         console=Console(force_terminal=False, file=StringIO()),
         logger=__import__("logging").getLogger("test"),
         surface="gateway",
-    )
+    ).agent()
     prompts = agent._prompts
     assert prompts.surface() == "gateway"
 
 
-def test_factory_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
+def test_default_ports_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
     import core.agent_harness as pkg
     from core.agent_harness import runtime
 
-    assert runtime.build_default_headless_agent is build_default_headless_agent
-    assert not hasattr(pkg, "build_default_headless_agent")
+    assert runtime.DefaultPorts is DefaultPorts
+    assert not hasattr(pkg, "DefaultPorts")
     assert not hasattr(pkg, "BufferOutputSink")
     assert not hasattr(runtime, "BufferOutputSink")
 
@@ -58,11 +59,7 @@ def test_builder_uses_supplied_prompts_even_when_falsy() -> None:
     supplied = _FalsyPrompts()
 
     # Act
-    agent = build_default_headless_agent(
-        session=session,
-        output=BufferOutputSink(),
-        prompts=supplied,  # type: ignore[arg-type]
-    )
+    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(prompts=supplied)
 
     # Assert
     assert agent._prompts is supplied  # noqa: SLF001
@@ -78,7 +75,7 @@ def test_builder_defaults_prompts_when_omitted() -> None:
     )
 
     # Act
-    agent = build_default_headless_agent(session=session, output=BufferOutputSink())
+    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent()
 
     # Assert
     assert type(agent._prompts).__name__ == "DefaultPromptContextProvider"  # noqa: SLF001
@@ -115,66 +112,34 @@ def test_primary_response_text_prefers_assistant() -> None:
     assert empty_assistant.primary_response_text == "from action"
 
 
-def test_factory_forwards_every_host_port_to_the_tool_provider_and_runner() -> None:
-    """A host with shell-shaped needs can build its agent through the factory.
+def test_default_ports_takes_the_hosts_tool_provider_and_forwards_runner_deps() -> None:
+    """A host varies the agent through its ``ToolProvider``; ``deps`` reach the runner.
 
-    ``DefaultToolProvider`` already accepted these ports; the factory now
-    forwards them, so a host no longer has to assemble the provider and the
-    action runner by hand to pass ``request_exit`` or its own investigation /
-    LLM-provider / task-cancel / slash port factories.
+    ``tools`` is the bridge between the agent and a host's tool stack: the shell
+    and gateway each configure a ``DefaultToolProvider`` and pass it in. Absent,
+    the family's bare default provider is used so a script can dispatch with
+    zero configuration.
     """
-    from core.agent_harness.turns.action_driver import ToolCallingDeps
+    from core.agent_harness.tools.tool_provider import DefaultToolProvider
 
-    seen: dict[str, object] = {}
-
-    def _investigation_ports() -> object:
-        seen["investigation"] = True
-        return object()
-
-    def _llm_provider_ports() -> object:
-        seen["llm_provider"] = True
-        return object()
-
-    def _task_cancel_ports() -> object:
-        seen["task_cancel"] = True
-        return object()
-
-    def _slash_ports() -> object:
-        seen["slash"] = True
-        return object()
-
-    def _request_exit() -> None:
-        seen["exit"] = True
-
-    deps = ToolCallingDeps(llm_factory=lambda *_a, **_k: None)
+    # Arrange — a host-configured tool provider and runner ports.
+    session = SessionCore(store=InMemorySessionStore())
+    tools = DefaultToolProvider(session, Console(file=StringIO()))
+    deps = ToolCallingDeps()
     hooks = ToolExecutionHooks()
 
     # Act
-    agent = build_default_headless_agent(
-        session=SessionCore(store=InMemorySessionStore()),
-        output=BufferOutputSink(),
-        request_exit=_request_exit,
-        investigation_ports_factory=_investigation_ports,
-        llm_provider_ports_factory=_llm_provider_ports,
-        task_cancel_ports_factory=_task_cancel_ports,
-        slash_ports_factory=_slash_ports,
-        deps=deps,
-        tool_hooks=hooks,
-        confirm_fn=lambda _prompt: "y",
-    )
+    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(tools=tools, deps=deps)
+    agent.bind_turn(tool_hooks=hooks)
+    bare = DefaultPorts(session=session, output=BufferOutputSink()).agent()
 
-    # Assert — the provider holds the host's port factories and exit hook; the
-    # runner holds the host's deps and hooks
-    provider = agent._tools  # noqa: SLF001
-    assert provider._request_exit is _request_exit  # noqa: SLF001
-    assert provider._investigation_ports_factory is _investigation_ports  # noqa: SLF001
-    assert provider._llm_provider_ports_factory is _llm_provider_ports  # noqa: SLF001
-    assert provider._task_cancel_ports_factory is _task_cancel_ports  # noqa: SLF001
-    assert provider._slash_ports_factory is _slash_ports  # noqa: SLF001
+    # Assert — the host's provider is used as-is; runner ports reach the runner;
+    # no ``tools`` yields a default provider.
+    assert agent._tools is tools  # noqa: SLF001
     runner = agent._action_runner  # noqa: SLF001
     assert runner.deps is deps
     assert runner.tool_hooks is hooks
-    assert agent._confirm_fn is not None  # noqa: SLF001
+    assert isinstance(bare._tools, DefaultToolProvider)  # noqa: SLF001
 
 
 def test_a_stage_override_replaces_only_that_stage() -> None:
@@ -195,12 +160,11 @@ def test_a_stage_override_replaces_only_that_stage() -> None:
             handled=True,
         )
 
-    # Act — only execute_actions is overridden
-    agent = build_default_headless_agent(
-        session=SessionCore(store=InMemorySessionStore()),
-        output=BufferOutputSink(),
-        execute_actions=_fake_execute,
-    )
+    # Act — only execute_actions is overridden, on the built agent
+    agent = DefaultPorts(
+        session=SessionCore(store=InMemorySessionStore()), output=BufferOutputSink()
+    ).agent()
+    agent.bind_stages(execute_actions=_fake_execute)
     result = agent.dispatch("hello")
 
     # Assert — the override ran and handled the turn; answer/gather defaults untouched

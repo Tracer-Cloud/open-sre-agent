@@ -13,7 +13,7 @@ Prefer `AgentSession.start()` / `start_embedded_session()` → `.chat` /
 `.investigate` — not free-function turn dumps. Construct one agent per logical
 session (or scheduled loop), then many turns — do not rebuild every message.
 Process boot (`configure_process`) and headless construction
-(`build_default_headless_agent`) are separate layers. `core` must not import
+(`DefaultPorts.agent`) are separate layers. `core` must not import
 `bootstrap`; embedded hosts use `bootstrap.embedded.start_embedded_session`.
 
 | Path | Call |
@@ -22,7 +22,7 @@ Process boot (`configure_process`) and headless construction
 | Happy path (already booted) | `AgentSession.start()` → repeated `.chat` / `.investigate` |
 | Embedded / script | `start_embedded_session()` → repeated `.chat` / `.investigate` |
 | Multi-step / keep-going | `start` / `start_embedded_session` → `.chat_until_goal(...)` (`SessionGoal` loop) |
-| Custom host | **`build_default_headless_agent(...)`** (only factory) → `attach_agent` once → many `.chat` |
+| Custom host | **`DefaultPorts(...).agent(...)`** (only construction seam) → `attach_agent` once → many `.chat` |
 | Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `run_until_session_goal` (same SessionGoal policy as shell) |
 | Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
 
@@ -79,7 +79,7 @@ schema fields first; content tags are decode fallback only. Legacy tag tuples
 and explicit host APIs remain for older readers. Checklist progress uses
 `session_goal:done=<index>` in replies.
 
-Do **not** duplicate the default port stack outside `build_default_headless_agent`.
+Do **not** duplicate the default port stack outside `DefaultPorts`.
 Shell uses a TTY `ChatDispatcher` (same `AgentSession.chat` / `run_turn`) —
 intentional, not a second headless factory. Do not reintroduce peer
 `bootstrap.adapters` copies under surfaces or gateway.
@@ -210,7 +210,7 @@ to it instead of re-implementing bootstrap + persistence:
 - **headless / scheduled** — non-TTY hosts use
   :meth:`AgentSession.run_headless_turn` (or ``start`` + ``chat``).
   That is the same ``run_turn`` engine as the shell; do not reassemble
-  ``BufferOutputSink`` + ``build_default_headless_agent`` in integrations.
+  ``BufferOutputSink`` + ``DefaultPorts`` in integrations.
   Ephemeral in-memory sessions (``headless_dispatch.InMemorySessionState``)
   bypass ``SessionManager`` by design when tests need no JSONL.
 
@@ -345,7 +345,7 @@ per-session lock). Different sessions stay concurrent under the capacity gate.
 | **`AgentSession`** + **`chat` / `investigate`** | **Public host API** — prefer in all new code |
 | **`HeadlessAgent`** + **`dispatch`** | Non-TTY `ChatDispatcher` (ports object); gateway / embedders / tests |
 | **`SessionAgentPool`** | Gateway: one headless agent per logical session across turns |
-| **`build_default_headless_agent`** | Factory for the standard port stack when a surface supplies its own sink |
+| **`DefaultPorts`** | The default port family for one session; `.agent(tools=…, prompts=…, gather=…)` builds the agent on it |
 | **`run_headless_turn`** | One-shot convenience for scheduler digests — not the multi-turn pattern |
 | **`dispatch_chat_turn`** | **Internal** seam over `run_turn` — adapters only |
 
