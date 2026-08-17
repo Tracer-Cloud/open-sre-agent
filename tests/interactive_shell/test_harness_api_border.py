@@ -18,20 +18,18 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests.shared.harness_doors import PUBLIC_DOORS
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _FORBIDDEN_PREFIX = "core.agent_harness."
 #: Modules a host may import the harness through; anything else under the
 #: prefix is a deep import.
-_PUBLIC_DOORS = frozenset(
-    {"core.agent_harness", "core.agent_harness.ports", "core.agent_harness.runtime"}
-)
 _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
-_SPI_ROLE_PREFIX = "core.agent_harness.spi."
 
 
 def _is_public_door(module: str) -> bool:
-    return module in _PUBLIC_DOORS or module.startswith(_SPI_ROLE_PREFIX)
+    return module in PUBLIC_DOORS
 
 
 #: Harness submodules surfaces/ still imports directly. Shrink-only.

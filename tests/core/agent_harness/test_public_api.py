@@ -19,6 +19,7 @@ import core.agent_harness as root
 import core.agent_harness.ports as ports
 import core.agent_harness.runtime as runtime
 import core.agent_harness.spi as spi_pkg
+from tests.shared.harness_doors import PUBLIC_DOORS, SPI_ROLES
 
 PUBLIC_API = frozenset(
     {
@@ -59,7 +60,7 @@ PORTS = frozenset(
     }
 )
 
-SPI_ROLES: dict[str, frozenset[str]] = {
+SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
     "session_goal": frozenset(
         {
             "MAX_GOAL_CONDITION_CHARS",
@@ -144,7 +145,7 @@ def test_ports_exports_exactly_its_list() -> None:
 
 
 def test_each_spi_role_exports_exactly_its_list() -> None:
-    for role, names in SPI_ROLES.items():
+    for role, names in SPI_ROLE_NAMES.items():
         module = importlib.import_module(f"core.agent_harness.spi.{role}")
         assert set(module.__all__) == names, role
 
@@ -152,7 +153,7 @@ def test_each_spi_role_exports_exactly_its_list() -> None:
 def test_the_spi_package_itself_exports_nothing() -> None:
     """Hosts import a role, never the grab bag."""
     assert not hasattr(spi_pkg, "__all__")
-    assert not any(hasattr(spi_pkg, n) for names in SPI_ROLES.values() for n in names)
+    assert not any(hasattr(spi_pkg, n) for names in SPI_ROLE_NAMES.values() for n in names)
 
 
 def test_runtime_exports_exactly_its_list() -> None:
@@ -160,14 +161,14 @@ def test_runtime_exports_exactly_its_list() -> None:
 
 
 def test_the_doors_do_not_overlap_except_where_stated() -> None:
-    all_spi = frozenset().union(*SPI_ROLES.values())
+    all_spi = frozenset().union(*SPI_ROLE_NAMES.values())
     assert PUBLIC_API & PORTS == API_PORTS_OVERLAP
     assert RUNTIME & PORTS == RUNTIME_PORTS_OVERLAP
     assert not (PUBLIC_API & all_spi)
     assert not (PUBLIC_API & RUNTIME)
     assert not (all_spi & RUNTIME)
     assert not (all_spi & PORTS)
-    roles = list(SPI_ROLES.values())
+    roles = list(SPI_ROLE_NAMES.values())
     for i, a in enumerate(roles):
         for b in roles[i + 1 :]:
             assert not (a & b)
@@ -178,12 +179,23 @@ def test_every_name_resolves_through_its_door() -> None:
         assert getattr(root, name) is not None
     for name in PORTS:
         assert getattr(ports, name) is not None
-    for role, names in SPI_ROLES.items():
+    for role, names in SPI_ROLE_NAMES.items():
         module = importlib.import_module(f"core.agent_harness.spi.{role}")
         for name in names:
             assert getattr(module, name) is not None
     for name in RUNTIME:
         assert getattr(runtime, name) is not None
+
+
+def test_the_border_door_list_matches_the_pinned_roles() -> None:
+    """The border tests allow exactly the roles this module pins — no prefix rule."""
+    assert frozenset(SPI_ROLE_NAMES) == SPI_ROLES
+    assert {
+        "core.agent_harness",
+        "core.agent_harness.ports",
+        "core.agent_harness.runtime",
+        *(f"core.agent_harness.spi.{r}" for r in SPI_ROLE_NAMES),
+    } == PUBLIC_DOORS
 
 
 def test_the_root_has_no_lazy_attribute_machinery() -> None:
@@ -192,7 +204,7 @@ def test_the_root_has_no_lazy_attribute_machinery() -> None:
 
 
 def test_root_ports_and_spi_do_not_load_the_agent_loop() -> None:
-    roles = ", ".join(f"core.agent_harness.spi.{r}" for r in SPI_ROLES)
+    roles = ", ".join(f"core.agent_harness.spi.{r}" for r in SPI_ROLE_NAMES)
     code = (
         f"import sys, core.agent_harness, core.agent_harness.ports, {roles}; "
         "print('core.agent.agent' in sys.modules, "

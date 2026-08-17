@@ -17,22 +17,20 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from tests.shared.harness_doors import PUBLIC_DOORS
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _FORBIDDEN_PREFIX = "core.agent_harness."
 #: Modules a host may import the harness through; anything else under the
 #: prefix is a deep import.
-_PUBLIC_DOORS = frozenset(
-    {"core.agent_harness", "core.agent_harness.ports", "core.agent_harness.runtime"}
-)
 
 #: Callables whose string argument names a module to import at runtime.
 _DYNAMIC_IMPORTERS = frozenset({"import_module", "__import__"})
-_SPI_ROLE_PREFIX = "core.agent_harness.spi."
 
 
 def _is_public_door(module: str) -> bool:
-    return module in _PUBLIC_DOORS or module.startswith(_SPI_ROLE_PREFIX)
+    return module in PUBLIC_DOORS
 
 
 def _gateway_sources() -> list[Path]:
@@ -95,3 +93,11 @@ def test_gateway_imports_the_harness_only_through_its_public_surface() -> None:
         "core.agent_harness instead (add it to the curated export table in "
         f"core/agent_harness/__init__.py if it is genuinely host-facing): {offenders}"
     )
+
+
+def test_an_internal_module_under_spi_is_not_a_door() -> None:
+    """Only the curated roles are public; a future ``spi/`` internal is a deep import."""
+    assert _is_public_door("core.agent_harness.spi.session_goal")
+    assert not _is_public_door("core.agent_harness.spi.internal_helper")
+    assert not _is_public_door("core.agent_harness.spi.session_goal.impl")
+    assert not _is_public_door("core.agent_harness.spi")
