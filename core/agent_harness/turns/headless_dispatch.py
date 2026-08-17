@@ -72,6 +72,7 @@ from core.agent_harness.turns.headless_adapters import (
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
 )
+from core.agent_harness.turns.host_cancel import host_cancel_requested
 from core.agent_harness.turns.orchestrator import stream_answer
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
@@ -131,12 +132,12 @@ class HeadlessAgent:
     ) -> None:
         self._tools = tools
         self._deps = deps
-        # A host or test may replace one stage outright; the others keep the
-        # port-driven default. Bound at dispatch so a later bind_turn still
-        # applies to the defaults.
-        self._execute_actions_override = execute_actions
-        self._answer_override = answer
-        self._gather_override = gather_evidence
+        self._execute_actions_override: ExecuteActions | None = None
+        self._answer_override: StreamAnswerFn | None = None
+        self._gather_override: EvidenceGatherer | None = None
+        self.bind_stages(
+            execute_actions=execute_actions, answer=answer, gather_evidence=gather_evidence
+        )
         self._session: SessionState = session if session is not None else InMemorySessionState()
         self._output: OutputSink = output if output is not None else BufferOutputSink()
         self._prompts: PromptContextProvider = (
@@ -273,8 +274,6 @@ class HeadlessAgent:
     ) -> str | GatheredEvidence | None:
         if not self._gather_ports.enabled:
             return None
-        from core.agent_harness.turns.host_cancel import host_cancel_requested
-
         if host_cancel_requested(self._output):
             return None
         resolved = turn_plan.resolved_integrations if turn_plan is not None else None

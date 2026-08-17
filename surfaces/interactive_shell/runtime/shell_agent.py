@@ -64,6 +64,18 @@ def _observer_factory(session: Session, console: Console) -> Callable[[str], Any
     return observer_factory
 
 
+def _shell_port_factories(session: Session, console: Console) -> dict[str, Any]:
+    """The tool-provider port factories the shell supplies, keyed by factory kwarg."""
+    return {
+        "observer_factory": _observer_factory(session, console),
+        "subprocess_presenter_factory": _subprocess_presenter_factory,
+        "investigation_ports_factory": _investigation_ports_factory,
+        "llm_provider_ports_factory": repl_llm_provider_ports,
+        "task_cancel_ports_factory": repl_task_cancel_ports,
+        "slash_ports_factory": repl_slash_ports,
+    }
+
+
 def shell_tool_provider(
     session: Session,
     console: Console,
@@ -75,12 +87,7 @@ def shell_tool_provider(
         session,
         console,
         request_exit=request_exit,
-        observer_factory=_observer_factory(session, console),
-        subprocess_presenter_factory=_subprocess_presenter_factory,
-        investigation_ports_factory=_investigation_ports_factory,
-        llm_provider_ports_factory=repl_llm_provider_ports,
-        task_cancel_ports_factory=repl_task_cancel_ports,
-        slash_ports_factory=repl_slash_ports,
+        **_shell_port_factories(session, console),
     )
 
 
@@ -95,23 +102,17 @@ def build_shell_agent(
     is_tty: bool | None = None,
 ) -> HeadlessAgent:
     """One shell agent; rebound per turn with ``bind_turn`` / ``bind_stages``."""
-    sink = resolve_output_sink(console, output)
     return build_default_headless_agent(
         session=session,
-        output=sink,
+        output=resolve_output_sink(console, output),
         console=console,
         prompts=shell_prompt_context_provider(session),
         gather=GatherPorts(),
-        observer_factory=_observer_factory(session, console),
-        subprocess_presenter_factory=_subprocess_presenter_factory,
-        investigation_ports_factory=_investigation_ports_factory,
-        llm_provider_ports_factory=repl_llm_provider_ports,
-        task_cancel_ports_factory=repl_task_cancel_ports,
-        slash_ports_factory=repl_slash_ports,
         request_exit=request_exit,
         tool_hooks=tool_hooks,
         confirm_fn=confirm_fn,
         is_tty=is_tty,
+        **_shell_port_factories(session, console),
     )
 
 

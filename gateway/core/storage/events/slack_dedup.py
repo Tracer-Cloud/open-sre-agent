@@ -18,9 +18,6 @@ Selected when ``DATABASE_URL`` is set; requires the ``postgresql`` extra.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
-from contextlib import contextmanager
-from typing import Any
 
 from gateway.core.storage.postgres import PostgresDatabase
 
@@ -65,11 +62,6 @@ class PostgresSlackEventDeduplicator:
         self._db = database if database is not None else PostgresDatabase(dsn)
         self._db.run_schema(_SCHEMA, _MIGRATE_COMMITTED)
 
-    @contextmanager
-    def _connection(self) -> Iterator[Any]:
-        with self._db.transaction() as conn:
-            yield conn
-
     def release(self, event_id: str) -> bool:
         """Drop a provisional claim whose turn never started.
 
@@ -80,7 +72,7 @@ class PostgresSlackEventDeduplicator:
         be reclaimed by a later ``claim``.
         """
         try:
-            with self._connection() as conn, conn.cursor() as cursor:
+            with self._db.transaction() as conn, conn.cursor() as cursor:
                 cursor.execute(
                     """
                     DELETE FROM slack_handled_events
@@ -101,7 +93,7 @@ class PostgresSlackEventDeduplicator:
     def confirm(self, event_id: str) -> bool:
         """Mark a provisional claim final after the turn has been queued."""
         try:
-            with self._connection() as conn, conn.cursor() as cursor:
+            with self._db.transaction() as conn, conn.cursor() as cursor:
                 cursor.execute(
                     """
                     UPDATE slack_handled_events
@@ -131,7 +123,7 @@ class PostgresSlackEventDeduplicator:
         dropping a real user message is worse than a possible duplicate.
         """
         try:
-            with self._connection() as conn, conn.cursor() as cursor:
+            with self._db.transaction() as conn, conn.cursor() as cursor:
                 cursor.execute(
                     """
                     DELETE FROM slack_handled_events

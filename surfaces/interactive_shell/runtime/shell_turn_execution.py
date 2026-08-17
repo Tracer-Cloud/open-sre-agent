@@ -10,11 +10,12 @@ The injection contracts live in ``turn_seams``.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from rich.console import Console
 
 from core.agent_harness import AgentSession, OutputSink, SessionConfig
-from core.agent_harness.ports import AnswerRequest, EvidenceGatherer, ExecuteActions, StreamAnswerFn
+from core.agent_harness.ports import AnswerRequest, ExecuteActions
 from core.agent_harness.runtime import HeadlessAgent
 from core.agent_harness.spi import (
     SessionGoal,
@@ -43,62 +44,63 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo, PromptRecorder
 
 
-def _bind_stage_seams(
-    session: Session,
-    console: Console,
-    output: OutputSink,
-    *,
-    execute_actions: RunActionToolTurn | None,
-    gather_evidence: GatherEvidence | None,
-    answer_agent: AnswerShellQuestion | None,
-    request_exit: Callable[[], None] | None,
-    tool_hooks: ToolExecutionHooks | None,
-) -> tuple[ExecuteActions | None, StreamAnswerFn, EvidenceGatherer]:
-    """Adapt the shell's ``(text, session, console, …)`` seams to the harness stage protocols.
+@dataclass(frozen=True)
+class _ShellStages:
+    """Adapts the shell's answer and gather seams to the harness stage protocols.
 
-    Returns ``(execute_actions, answer, gather_evidence)`` in the shapes
-    :class:`HeadlessAgent` accepts; ``None`` keeps the agent's port-driven
-    default for that stage. The shell's own gather and answer are always bound —
-    they render to the console and persist to the session — unless a caller
-    injects a replacement.
+    Bound methods are handed to :meth:`HeadlessAgent.bind_stages`; each closes
+    over the turn's session, console and output so the seam callables keep
+    their shell-shaped signatures (``turn_seams``).
     """
 
-    execute_stage: ExecuteActions | None = None
-    if execute_actions is not None:
+    session: Session
+    console: Console
+    output: OutputSink
+    answer_seam: AnswerShellQuestion
+    gather_seam: GatherEvidence
 
-        def execute_stage(  # noqa: E306
-            text: str,
-            *,
-            confirm_fn: Callable[[str], str] | None = None,
-            is_tty: bool | None = None,
-            turn_plan: TurnPlan | None = None,
-        ) -> ToolCallingTurnResult:
-            return execute_actions(
-                text,
-                session,
-                console,
-                confirm_fn=confirm_fn,
-                is_tty=is_tty,
-                request_exit=request_exit,
-                turn_plan=turn_plan,
-                output=output,
-                tool_hooks=tool_hooks,
-            )
+    def answer(self, text: str, request: AnswerRequest) -> LlmRunInfo | None:
+        return self.answer_seam(
+            text, self.session, self.console, output=self.output, request=request
+        )
 
-    answer = answer_agent or answer_shell_question
-
-    def answer_stage(text: str, request: AnswerRequest) -> LlmRunInfo | None:
-        return answer(text, session, console, output=output, request=request)
-
-    gather = gather_evidence or gather_integration_tool_evidence
-
-    def gather_stage(
-        text: str, *, turn_plan: TurnPlan | None = None
+    def gather_evidence(
+        self, text: str, *, turn_plan: TurnPlan | None = None
     ) -> str | GatheredEvidence | None:
         resolved = turn_plan.resolved_integrations if turn_plan is not None else None
-        return gather(text, session, console, resolved_integrations=resolved)
+        return self.gather_seam(text, self.session, self.console, resolved_integrations=resolved)
 
-    return execute_stage, answer_stage, gather_stage
+
+@dataclass(frozen=True)
+class _InjectedActionStage:
+    """Adapts an injected ``RunActionToolTurn`` seam to the ``ExecuteActions`` protocol."""
+
+    seam: RunActionToolTurn
+    session: Session
+    console: Console
+    output: OutputSink
+    request_exit: Callable[[], None] | None
+    tool_hooks: ToolExecutionHooks | None
+
+    def execute_actions(
+        self,
+        text: str,
+        *,
+        confirm_fn: Callable[[str], str] | None = None,
+        is_tty: bool | None = None,
+        turn_plan: TurnPlan | None = None,
+    ) -> ToolCallingTurnResult:
+        return self.seam(
+            text,
+            self.session,
+            self.console,
+            confirm_fn=confirm_fn,
+            is_tty=is_tty,
+            request_exit=self.request_exit,
+            turn_plan=turn_plan,
+            output=self.output,
+            tool_hooks=self.tool_hooks,
+        )
 
 
 def execute_shell_turn(
@@ -126,16 +128,18 @@ def execute_shell_turn(
     ``turn_seams``.
     """
     resolved_output = resolve_output_sink(console, output)
-    execute_stage, answer_stage, gather_stage = _bind_stage_seams(
-        session,
-        console,
-        resolved_output,
-        execute_actions=execute_actions,
-        gather_evidence=gather_evidence,
-        answer_agent=answer_agent,
-        request_exit=request_exit,
-        tool_hooks=tool_hooks,
+    stages = _ShellStages(
+        session=session,
+        console=console,
+        output=resolved_output,
+        answer_seam=answer_agent or answer_shell_question,
+        gather_seam=gather_evidence or gather_integration_tool_evidence,
     )
+    execute_stage: ExecuteActions | None = None
+    if execute_actions is not None:
+        execute_stage = _InjectedActionStage(
+            execute_actions, session, console, resolved_output, request_exit, tool_hooks
+        ).execute_actions
     if agent is None:
         agent = build_shell_agent(
             session,
@@ -151,16 +155,19 @@ def execute_shell_turn(
             session=session, output=resolved_output, tool_hooks=tool_hooks, console=console
         )
     agent.bind_stages(
-        execute_actions=execute_stage, answer=answer_stage, gather_evidence=gather_stage
+        execute_actions=execute_stage,
+        answer=stages.answer,
+        gather_evidence=stages.gather_evidence,
     )
+    # Shell already owns env/session boot; do not reload env per turn.
+    chat_host = AgentSession(SessionConfig(load_env=False))
 
     def _chat(message: str) -> TurnResult:
         # Fresh accounting per outer iteration (nudge text changes each turn).
         agent.bind_turn(
             accounting=ShellTurnAccounting(session=session, text=message, recorder=recorder)
         )
-        # Shell already owns env/session boot; do not reload env per turn.
-        return AgentSession(SessionConfig(load_env=False)).chat(message, agent=agent)
+        return chat_host.chat(message, agent=agent)
 
     def _on_progress(goal: SessionGoal) -> None:
         rendered = format_session_goal_progress(goal, session=session)
