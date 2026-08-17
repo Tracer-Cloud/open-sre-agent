@@ -184,7 +184,7 @@ def test_validate_provider_credentials_azure_not_found_lists_deployments(monkeyp
         lambda **_kwargs: _FakeOpenAIClient(RuntimeError("Error code: 404 - DeploymentNotFound")),
     )
     monkeypatch.setattr(
-        "surfaces.cli.wizard.azure_openai.list_azure_openai_deployments",
+        "integrations.llm_providers.azure_validation.list_azure_openai_deployments",
         lambda **_kwargs: ["gpt-4.1-mini"],
     )
     monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")

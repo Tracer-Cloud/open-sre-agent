@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 
 import integrations.setup_flow as _setup_flow
+from config import setup_store as wizard_store
 from config.secrets.store import SecretSaveResult
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from integrations.llm_providers.env_sync import sync_provider_env
 from integrations.llm_providers.validation import ValidationResult
 from surfaces.cli.wizard import _ui, azure_openai, flow, llm_credential
-from config import setup_store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
 from surfaces.cli.wizard.configurators import dagster as _dagster_configurator
 from surfaces.cli.wizard.configurators import github as _github_configurator
