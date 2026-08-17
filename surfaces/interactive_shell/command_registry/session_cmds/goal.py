@@ -13,18 +13,16 @@ from dataclasses import replace
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 
-from core.agent_harness import SessionManager, format_session_goal_progress
-from core.agent_harness.session.terminal_access import (
-    clear_pending_autosubmit,
-    set_auto_command,
-)
-from core.agent_harness.session_goal.goal import (
+from core.agent_harness import SessionManager
+from core.agent_harness.spi.session_flags import clear_pending_autosubmit, set_auto_command
+from core.agent_harness.spi.session_goal import (
     MAX_GOAL_CONDITION_CHARS,
     SessionGoal,
     SessionGoalReason,
     SessionGoalStatus,
     attach_session_goal,
     clear_session_goal,
+    format_session_goal_progress,
     session_goal_is_active,
     session_goal_is_attached,
     session_goal_is_paused,

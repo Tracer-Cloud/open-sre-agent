@@ -6,10 +6,14 @@ the type without reaching through the turn machinery.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from core.agent_harness.ports import ToolEventObserver
-from core.agent_harness.turns.evidence_driver import PersistToolCalls
+
+#: Persists the tool calls a gather pass made: ``[(tool_call, result), ...]``.
+PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,4 +42,4 @@ class GatherPorts:
 GATHER_DISABLED = GatherPorts(enabled=False)
 
 
-__all__ = ["GATHER_DISABLED", "GatherPorts"]
+__all__ = ["GATHER_DISABLED", "GatherPorts", "PersistToolCalls"]

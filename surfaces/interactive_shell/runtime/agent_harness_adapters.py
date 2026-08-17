@@ -1,7 +1,7 @@
-"""Interactive-shell output adapter implementing :mod:`core.agent_harness.ports`.
+"""Interactive-shell adapters for :mod:`core.agent_harness.ports`: the console sink and error reporter.
 
-This module owns terminal rendering only. Shared action-tool, reasoning-client,
-run-record, and error-reporting providers live in :mod:`core.agent_harness`.
+Shared action-tool, reasoning-client and run-record providers live in
+:mod:`core.agent_harness`.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness import OutputSink
-from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
+from core.agent_harness.spi.defaults import DefaultErrorReporter
+from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from surfaces.interactive_shell.ui.streaming import (
     StreamPaintResult,
@@ -22,6 +23,7 @@ from surfaces.interactive_shell.ui.streaming import (
     stream_to_console,
     stream_to_console_state,
 )
+from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 
 
 class ShellOutputSink:
@@ -128,4 +130,20 @@ def resolve_output_sink(console: Console, output: OutputSink | None) -> OutputSi
     return ShellOutputSink(console)
 
 
-__all__ = ["ShellOutputSink", "resolve_output_sink"]
+class ShellErrorReporter:
+    """:class:`~core.agent_harness.ports.ErrorReporter` for the REPL: debug log plus Sentry.
+
+    Swallowed boundary exceptions (gather, answer, tool errors) are logged like
+    the default reporter and forwarded to :func:`report_exception`, which
+    filters expected failures before capturing.
+    """
+
+    def __init__(self) -> None:
+        self._log = DefaultErrorReporter()
+
+    def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
+        self._log.report(exc, context=context, expected=expected)
+        report_exception(exc, context=context, expected=expected)
+
+
+__all__ = ["ShellErrorReporter", "ShellOutputSink", "resolve_output_sink"]

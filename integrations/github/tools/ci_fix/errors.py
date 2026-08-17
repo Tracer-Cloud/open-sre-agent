@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 ERR_CONFIRMATION_DENIED = "confirmation_denied"
+ERR_CHECKS_FAILED = "checks_failed"
+ERR_CHECKS_TIMEOUT = "checks_timeout"
 ERR_EXECUTION = "execution_error"
 ERR_GH_UNAVAILABLE = "github_cli_unavailable"
 ERR_GITHUB_TOKEN = "github_token_missing"

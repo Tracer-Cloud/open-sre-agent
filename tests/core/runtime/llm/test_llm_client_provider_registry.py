@@ -24,6 +24,7 @@ _OPENAI_COMPATIBLE_PROVIDERS = OPENAI_COMPATIBLE_PROVIDERS
 def test_registry_entries_are_well_formed() -> None:
     assert set(_OPENAI_COMPATIBLE_PROVIDERS) == {
         "openrouter",
+        "trustedrouter",
         "deepseek",
         "gemini",
         "nvidia",

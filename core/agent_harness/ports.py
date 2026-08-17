@@ -17,12 +17,17 @@ from typing import Any, Protocol, runtime_checkable
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.domain.types.tools import ToolSurface
+from core.execution import ToolExecutionHooks
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
 
 # Confirmation prompt: given a summary, return the user's response string.
 ConfirmFn = Callable[[str], str]
+
+# Builds the LLM client the action runner drives; hosts and tests inject one
+# to replace the configured provider.
+LlmFactory = Callable[[], Any]
 
 
 @runtime_checkable
@@ -302,6 +307,27 @@ class TurnAccounting(Protocol):
         raise NotImplementedError
 
 
+@dataclass(frozen=True, slots=True)
+class TurnBinding:
+    """Everything a host binds on an agent for one turn, stated whole.
+
+    A binding replaces the previous turn's values rather than layering on
+    them, so a host cannot inherit another conversation's hooks or callback
+    by omission. ``session`` and ``output`` are identity ports: ``None`` keeps
+    the agent's current one. Every other field is the turn's value — ``None``
+    means "none this turn" (no approval hooks, no confirmation callback, tty
+    unknown), not "leave alone".
+    """
+
+    session: SessionState | None = None
+    output: OutputSink | None = None
+    accounting: TurnAccounting | None = None
+    tool_hooks: ToolExecutionHooks | None = None
+    console: Any | None = None
+    confirm_fn: ConfirmFn | None = None
+    is_tty: bool | None = None
+
+
 __all__ = [
     "AnswerRequest",
     "StreamAnswerFn",
@@ -311,6 +337,8 @@ __all__ = [
     "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
+    "LlmFactory",
+    "OutputBindable",
     "OutputSink",
     "PromptContextProvider",
     "ReasoningClientProvider",
@@ -322,6 +350,7 @@ __all__ = [
     "ToolProvider",
     "ToolRegistry",
     "TurnAccounting",
+    "TurnBinding",
 ]
 
 

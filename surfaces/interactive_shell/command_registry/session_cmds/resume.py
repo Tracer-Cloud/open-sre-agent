@@ -38,7 +38,7 @@ def _record_resume_slash(
 
 def _interactive_resume_menu(session: Session, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     entries = [
         e for e in default_session_repo().load_recent(10) if e["session_id"] != session.session_id
@@ -155,7 +155,7 @@ def _lookup_resume_session_data(
     console: Console,
 ) -> dict | None:
     """Resolve a session to resume by ID prefix or name substring."""
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     repo = default_session_repo()
     data = repo.load_session(prefix)

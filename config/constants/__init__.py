@@ -162,6 +162,7 @@ from config.constants.llm import (
     AZURE_OPENAI_API_KEY_ENV,
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
+    LLM_PROVIDER_ENV,
     OPENSRE_LLM_NATIVE_STRUCTURED_OUTPUT_ENV,
 )
 from config.constants.mariadb import (
@@ -321,6 +322,7 @@ from config.constants.slack import (
     SLACK_APP_TOKEN_ENV,
     SLACK_BOT_TOKEN_ENV,
     SLACK_FILE_HOST_SUFFIXES,
+    SLACK_WEBHOOK_URL_ENV,
 )
 from config.constants.slash_commands import (
     INTEGRATIONS_SETUP_COMMAND,
@@ -367,7 +369,11 @@ from config.constants.twilio import (
     TWILIO_WHATSAPP_FROM_ENV,
     WHATSAPP_DEFAULT_TO_ENV,
 )
-from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
+from config.constants.vercel import (
+    VERCEL_API_TOKEN_ENV,
+    VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV,
+    VERCEL_TEAM_ID_ENV,
+)
 from config.constants.work_items import OPENSRE_WORK_ITEMS_DIR_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
 from config.constants.yandex_cloud import (
@@ -512,6 +518,7 @@ __all__ = [
     "KUBECONFIG_CONTEXT_ENV",
     "KUBECONFIG_NAMESPACE_ENV",
     "KUBECONFIG_PATH_ENV",
+    "LLM_PROVIDER_ENV",
     "MACHINE_SECRET_ENV",
     "MARIADB_DATABASE_ENV",
     "MARIADB_HOST_ENV",
@@ -627,6 +634,7 @@ __all__ = [
     "SIGNOZ_URL_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
+    "SLACK_WEBHOOK_URL_ENV",
     "SLACK_FILE_HOST_SUFFIXES",
     "SLACK_LINK_RE",
     "SMTP_DEFAULT_TO_ENV",
@@ -658,6 +666,7 @@ __all__ = [
     "USERS_DIR_NAME",
     "UnsafePathSegmentError",
     "VERCEL_API_TOKEN_ENV",
+    "VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV",
     "VERCEL_TEAM_ID_ENV",
     "WEBAPP_URL_ENV",
     "WHATSAPP_DEFAULT_TO_ENV",

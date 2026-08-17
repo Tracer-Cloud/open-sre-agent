@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import trust_mode_enabled
+from core.agent_harness.spi.session_flags import trust_mode_enabled
 from platform.analytics.cli import capture_repl_execution_policy_decision
 from platform.analytics.provider import Properties
 from platform.terminal.theme import DIM, WARNING

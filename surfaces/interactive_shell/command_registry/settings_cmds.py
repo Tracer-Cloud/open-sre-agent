@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
+from config.constants.llm import LLM_PROVIDER_ENV
 from config.llm_reasoning_effort import (
     REASONING_EFFORT_OPTIONS,
     ReasoningEffort,
@@ -82,7 +83,7 @@ def _cmd_trust(session: Session, console: Console, args: list[str]) -> bool:
 
 def _cmd_effort(session: Session, console: Console, args: list[str]) -> bool:
     settings = repl_data.load_llm_settings()
-    provider = str(getattr(settings, "provider", os.getenv("LLM_PROVIDER", "anthropic")))
+    provider = str(getattr(settings, "provider", os.getenv(LLM_PROVIDER_ENV, "anthropic")))
     reasoning_model = ""
     if settings is not None:
         reasoning_model, _toolcall_model = resolve_provider_models(settings, provider)

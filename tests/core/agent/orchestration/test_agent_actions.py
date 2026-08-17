@@ -35,7 +35,7 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "surfaces.interactive_shell.runtime.action_turn.default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
 execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 

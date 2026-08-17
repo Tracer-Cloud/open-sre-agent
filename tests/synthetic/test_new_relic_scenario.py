@@ -135,7 +135,10 @@ def test_planner_discovers_and_invokes_new_relic_alerts_through_the_real_loop() 
     }
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker", return_value=MagicMock()
         ),

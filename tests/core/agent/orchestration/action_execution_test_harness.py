@@ -8,7 +8,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.turns.action_driver import ToolCallingDeps
+from core.agent_harness.ports import LlmFactory
 from core.llm.types import AgentLLMResponse, ToolCall
 
 
@@ -67,8 +67,8 @@ class ActionExecutionHarness:
         return Console(file=self.console_buffer, force_terminal=False, highlight=False, width=100)
 
     @property
-    def deps(self) -> ToolCallingDeps:
-        return ToolCallingDeps(llm_factory=lambda: self.llm)
+    def llm_factory(self) -> LlmFactory:
+        return lambda: self.llm
 
 
 def tool_response(name: str, args: dict[str, Any] | None = None) -> AgentLLMResponse:

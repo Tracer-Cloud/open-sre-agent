@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.harness import AgentSession, SessionConfig
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.turns.headless_dispatch import (
-    HeadlessAgent,
     NullToolProvider,
     StaticReasoningClientProvider,
 )
+from core.agent_harness.turns.port_families import HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -66,13 +67,11 @@ def test_headless_bind_turn_swaps_output() -> None:
 
     first = BufferOutputSink()
     second = BufferOutputSink()
-    agent = HeadlessAgent(
-        tools=NullToolProvider(),
-        output=first,
-        reasoning=StaticReasoningClientProvider(client=_Echo()),
-    )
+    agent = HeadlessPorts(
+        output=first, reasoning=StaticReasoningClientProvider(client=_Echo())
+    ).agent(tools=NullToolProvider())
     before_runner = agent._action_runner  # noqa: SLF001
-    agent.bind_turn(output=second)
+    agent.bind_turn(TurnBinding(output=second))
     assert agent._output is second  # noqa: SLF001
     assert agent._action_runner is not before_runner  # noqa: SLF001
     assert agent._action_runner.output is second  # noqa: SLF001

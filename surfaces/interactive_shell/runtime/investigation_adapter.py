@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast
 
 from rich.console import Console
 
-from core.agent_harness.session.terminal_access import background_mode_enabled
+from core.agent_harness.spi.session_flags import background_mode_enabled
 from core.domain.stream import StreamEvent
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session

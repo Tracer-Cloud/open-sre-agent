@@ -5,11 +5,13 @@ Exercised against a fake cursor rather than a live database.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
 
-from gateway.transports.slack.persistence.event_dedup import (
+from gateway.core.storage.events.slack_dedup import (
     PostgresSlackEventDeduplicator,
 )
 
@@ -104,24 +106,34 @@ class _FakeConnection:
         return None
 
 
+class _FakeDatabase:
+    """Stands in for ``PostgresDatabase``: no schema run, one fake connection per transaction."""
+
+    def __init__(self, rows: dict[str, bool], *, fail: bool, fail_on: str | None) -> None:
+        self._rows = rows
+        self._fail = fail
+        self._fail_on = fail_on
+
+    def run_schema(self, *_statements: str) -> None:
+        return None
+
+    @contextmanager
+    def transaction(self) -> Iterator[_FakeConnection]:
+        yield _FakeConnection(self._rows, fail=self._fail, fail_on=self._fail_on)
+
+
 def _deduplicator(
     rows: dict[str, bool] | None = None,
     *,
     fail: bool = False,
     fail_on: str | None = None,
 ) -> PostgresSlackEventDeduplicator:
-    """Build one without touching psycopg2 or running the schema."""
+    """Build one over a fake database, so no psycopg2 and no schema run."""
     store = rows if rows is not None else {}
-    dedup = PostgresSlackEventDeduplicator.__new__(PostgresSlackEventDeduplicator)
-
-    from contextlib import contextmanager
-
-    @contextmanager
-    def _connection() -> Any:
-        yield _FakeConnection(store, fail=fail, fail_on=fail_on)
-
-    dedup._connection = _connection  # type: ignore[method-assign]
-    return dedup
+    return PostgresSlackEventDeduplicator(
+        "postgresql://unused",
+        database=_FakeDatabase(store, fail=fail, fail_on=fail_on),  # type: ignore[arg-type]
+    )
 
 
 def test_first_delivery_is_claimed_and_the_confirmed_retry_is_refused() -> None:

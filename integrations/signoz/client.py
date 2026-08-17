@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import math
 from datetime import UTC, datetime, timedelta
+from http import HTTPStatus
 from typing import Any, cast
 
 import httpx
@@ -174,7 +175,7 @@ class SigNozClient:
             return (parsed if isinstance(parsed, dict) else {}), None
         except httpx.HTTPStatusError as err:
             message = _extract_http_error_message(err)
-            if err.response.status_code == 404:
+            if err.response.status_code == HTTPStatus.NOT_FOUND:
                 return None, f"404: {message or 'not found'}"
             return None, message
         except Exception as err:

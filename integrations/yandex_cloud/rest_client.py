@@ -82,16 +82,6 @@ def send_request(method: str, url: str, **kwargs: Any) -> httpx.Response:
     return _pooled_client().request(method, url, **kwargs)
 
 
-def close_pool() -> None:
-    """Close the pooled client and its connections."""
-    global _pool
-
-    with _pool_lock:
-        if _pool is not None:
-            _pool.close()
-            _pool = None
-
-
 def _reject_path(path: str) -> str | None:
     """Return why *path* is unusable, or None when it is fine."""
     if not path.startswith("/"):

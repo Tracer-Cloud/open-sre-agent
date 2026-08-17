@@ -21,7 +21,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
@@ -38,6 +37,8 @@ from gateway.transports.telegram.settings import (
     TelegramInboundMessage,
 )
 from gateway.web.startup import WebStartup
+from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.fake_agent import attach_real_handle
 
 
 def _patch_non_telegram_components(monkeypatch) -> None:
@@ -89,6 +90,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     logger = logging.getLogger("gateway.lifecycle.test")
     handle = MagicMock()
     agent_cls = MagicMock()
+    attach_real_handle(agent_cls.return_value)
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
@@ -104,8 +106,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        agent_cls,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(agent_cls)
     )
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
@@ -163,16 +164,14 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["gather"], GatherPorts)
     assert ctor.kwargs["gather"].enabled is True
-    assert ctor.kwargs["is_tty"] is False
-    assert ctor.kwargs["observer_factory"] is not None
-    tool_provider = DefaultToolProvider(
-        ctor.kwargs["session"],
-        ctor.kwargs["console"],
-        tool_action_logger=ctor.kwargs["logger"],
-        observer_factory=ctor.kwargs["observer_factory"],
-        subprocess_presenter_factory=ctor.kwargs.get("subprocess_presenter_factory"),
-        slash_ports_factory=ctor.kwargs.get("slash_ports_factory"),
-    )
+    turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
+    assert turn_binding.is_tty is False
+    # The gateway hands the factory its configured tool provider (the bridge
+    # between the agent and the host's tool stack), not loose port factories.
+    tool_provider = ctor.kwargs["tools"]
+    assert isinstance(tool_provider, DefaultToolProvider)
+    assert tool_provider._session is session
+    assert tool_provider._tool_action_logger is logger
     assert tool_provider._precomputed_action_tools is None
     with patch.object(logger, "info") as mock_info:
         tool_provider.observer(message="hello")(
@@ -184,8 +183,10 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "shell_run",
         "{'command': 'pwd'}",
     )
-    bind_kwargs = agent_cls.return_value.bind_turn.call_args.kwargs
-    assert isinstance(bind_kwargs["accounting"], DefaultTurnAccounting)
+    # The host passes no accounting: the agent's default per-message accounting
+    # (DefaultTurnAccounting) applies — pinned in test_default_accounting_is_resolved_fresh_per_message.
+    turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
+    assert turn_binding.accounting is None
 
 
 def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatch) -> None:

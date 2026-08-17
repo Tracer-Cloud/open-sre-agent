@@ -13,10 +13,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import (
-    session_terminal,
-    set_turn_outcome_hint,
-)
+from core.agent_harness.spi.session_flags import session_terminal, set_turn_outcome_hint
 from surfaces.interactive_shell.command_registry.suggestions import closest_choice
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session, TaskKind

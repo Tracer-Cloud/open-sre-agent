@@ -39,8 +39,8 @@ from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
 from core.agent_harness.prompts.rules import normalize_three_tier_spacing
-from core.agent_harness.session.want_me_to import WANT_ME_TO_MARKER, closer_tail_from
-from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
+from core.agent_harness.spi.prompt_chrome import WANT_ME_TO_MARKER, closer_tail_from
+from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
 from surfaces.interactive_shell.ui.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,

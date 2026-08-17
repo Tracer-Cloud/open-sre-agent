@@ -208,7 +208,7 @@ from config.constants.servicenow import (
     SERVICENOW_PASSWORD_ENV,
     SERVICENOW_USERNAME_ENV,
 )
-from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV
+from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV, SLACK_WEBHOOK_URL_ENV
 from config.constants.smtp import (
     SMTP_DEFAULT_TO_ENV,
     SMTP_FROM_ADDRESS_ENV,
@@ -271,7 +271,6 @@ from integrations.config_models import (
     DatadogIntegrationConfig,
     DiscordBotConfig,
     GrafanaIntegrationConfig,
-    GroundcoverIntegrationConfig,
     HelmIntegrationConfig,
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
@@ -301,6 +300,7 @@ from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
 from integrations.gitlab import classify as _classify_gitlab
 from integrations.grafana import classify as _classify_grafana
 from integrations.groundcover import classify as _classify_groundcover
+from integrations.groundcover.config import GroundcoverIntegrationConfig
 from integrations.helm import classify as _classify_helm
 from integrations.honeycomb import classify as _classify_honeycomb
 from integrations.honeycomb.config import HoneycombIntegrationConfig
@@ -1411,7 +1411,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
 
     slack_bot_token = resolve_env_credential(SLACK_BOT_TOKEN_ENV)
-    slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    slack_webhook_url = os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip()
     if slack_bot_token or slack_webhook_url:
         slack_credentials = {
             "webhook_url": slack_webhook_url,
@@ -2346,10 +2346,10 @@ def resolve_effective_integrations(
             effective["slack"] = _effective_entry("local store", slack_config)
     else:
         slack_config = _slack_effective_config(
-            webhook_url=os.getenv("SLACK_WEBHOOK_URL", "").strip(),
+            webhook_url=os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip(),
             bot_token=resolve_env_credential(SLACK_BOT_TOKEN_ENV),
             app_token=resolve_env_credential(SLACK_APP_TOKEN_ENV),
-            webhook_label="SLACK_WEBHOOK_URL",
+            webhook_label=SLACK_WEBHOOK_URL_ENV,
         )
         if slack_config:
             effective["slack"] = _effective_entry("local env", slack_config)

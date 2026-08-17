@@ -2,7 +2,7 @@
 
 Keeps agent construction out of :class:`GatewayTurnHandler` so the handler
 stays a thin dispatch/finalize orchestrator. Construction goes through
-:func:`~core.agent_harness.turns.default_headless_agent.build_default_headless_agent`
+:meth:`~core.agent_harness.turns.port_families.DefaultPorts.agent`
 once per session — not a second port-wiring stack.
 """
 
@@ -16,7 +16,8 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness import GatherPorts, HeadlessAgent, SessionCore, build_default_headless_agent
+from core.agent_harness import SessionCore
+from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, GatherPorts, HeadlessAgent
 from gateway.core.runtime.live_sink import LiveOutputSink
 from gateway.core.runtime.status_messages import status_from_tool_start
 from gateway.core.transport_api import GatewaySink
@@ -117,17 +118,22 @@ class SessionAgentPool:
             return cached
 
         observer = _ToolStatusObserver(live_sink)
-        agent = build_default_headless_agent(
+        agent = DefaultPorts(
             session=session,
             output=live_sink,
             console=self._console,
             logger=logger,
             surface="gateway",
-            observer_factory=lambda _message: observer,
-            subprocess_presenter_factory=headless_subprocess_presenter_factory,
-            slash_ports_factory=self._slash_ports_factory,
+        ).agent(
+            tools=DefaultToolProvider(
+                session,
+                self._console,
+                tool_action_logger=logger,
+                observer_factory=lambda _message: observer,
+                subprocess_presenter_factory=headless_subprocess_presenter_factory,
+                slash_ports_factory=self._slash_ports_factory,
+            ),
             gather=GatherPorts(),
-            is_tty=False,
         )
         if session_id:
             self._agents[session_id] = agent

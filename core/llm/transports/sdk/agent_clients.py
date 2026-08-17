@@ -538,6 +538,7 @@ def _openai_max_token_kwarg(model: str) -> str:
 _PROVIDER_LABEL_OVERRIDES = {
     "OPENAI_API_KEY": "OpenAI",
     "OPENROUTER_API_KEY": "OpenRouter",
+    "TRUSTEDROUTER_API_KEY": "TrustedRouter",
     "MINIMAX_API_KEY": "MiniMax",
 }
 

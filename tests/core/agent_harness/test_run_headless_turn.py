@@ -1,7 +1,7 @@
 """Characterization: ``AgentSession.run_headless_turn`` is the scheduled-runner stack.
 
 Scheduled digests must not reassemble session + BufferOutputSink +
-``build_default_headless_agent`` locally. This pins the shared API wiring.
+``DefaultPorts`` locally. This pins the shared API wiring.
 """
 
 from __future__ import annotations
@@ -12,7 +12,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
+from core.agent_harness.runtime import GatherPorts, TurnBinding
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
+from tests.shared.default_ports_stub import default_ports_stub
 
 
 def _answered(text: str) -> TurnResult:
@@ -54,8 +56,8 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
             return SessionStartupResult(session=session, prompts=prompts)
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.default_headless_agent.build_default_headless_agent",
-        _fake_build,
+        "core.agent_harness.turns.port_families.DefaultPorts",
+        default_ports_stub(_fake_build),
     )
     monkeypatch.setattr(
         "core.agent_harness.turns.headless_adapters.BufferOutputSink",
@@ -66,7 +68,7 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
         "summarize sentry",
         config=SessionConfig(load_env=False, open_store=False),
         logger=MagicMock(),
-        gather_enabled=True,
+        gather=GatherPorts(),
         is_tty=False,
     )
 
@@ -74,9 +76,9 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
     assert built["session"] is session
     assert built["output"] is sink
     assert built["prompts"] is prompts
-    assert built["message"] == "summarize sentry"
-    assert built["gather_enabled"] is True
-    assert built["is_tty"] is False
+    assert "message" not in built  # accounting is built at dispatch, not at construction
+    assert built["gather"] == GatherPorts()
+    agent.bind_turn.assert_any_call(TurnBinding(is_tty=False))
     agent.dispatch.assert_called_once_with("summarize sentry")
 
 
@@ -103,8 +105,8 @@ def test_run_headless_turn_prepare_session_runs_before_agent_build(
             return SessionStartupResult(session=session, prompts=None)
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.default_headless_agent.build_default_headless_agent",
-        _fake_build,
+        "core.agent_harness.turns.port_families.DefaultPorts",
+        default_ports_stub(_fake_build),
     )
     monkeypatch.setattr(
         "core.agent_harness.turns.headless_adapters.BufferOutputSink",

@@ -43,7 +43,7 @@ control and never commit real secrets.
 
 | Variable | Default | Description | Module |
 |----------|---------|-------------|--------|
-| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `azure-openai`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`, `grok-cli`, `pi`) | `config` |
+| `LLM_PROVIDER` | `anthropic` | Primary LLM provider (`anthropic`, `openai`, `openrouter`, `trustedrouter`, `deepseek`, `gemini`, `nvidia`, `minimax`, `groq`, `azure-openai`, `bedrock`, `ollama`, `codex`, `claude-code`, `cursor`, `gemini-cli`, `antigravity-cli`, `opencode`, `kimi`, `copilot`, `grok-cli`, `pi`) | `config` |
 | `LLM_MAX_TOKENS` | `4096` | Maximum tokens for LLM responses | `config` |
 | `OPENSRE_LLM_TRANSPORT` | `sdk` | LLM transport for API providers: `sdk` (native SDKs) or `litellm` | `core/llm/transport_mode` |
 
@@ -68,6 +68,14 @@ control and never commit real secrets.
 | `OPENROUTER_MODEL` | | Shared model for all tasks | `config` |
 | `OPENROUTER_REASONING_MODEL` | | Override model for reasoning | `config` |
 | `OPENROUTER_TOOLCALL_MODEL` | | Override model for tool calling | `config` |
+
+### TrustedRouter
+| Variable | Default | Description | Module |
+|----------|---------|-------------|--------|
+| `TRUSTEDROUTER_API_KEY` | | API key for TrustedRouter | `llm_credentials` |
+| `TRUSTEDROUTER_MODEL` | | Shared model for all tasks | `config` |
+| `TRUSTEDROUTER_REASONING_MODEL` | | Override model for reasoning | `config` |
+| `TRUSTEDROUTER_TOOLCALL_MODEL` | | Override model for tool calling | `config` |
 
 ### DeepSeek
 | Variable | Default | Description | Module |
@@ -513,6 +521,7 @@ When not specified, classification models fall back to reasoning models or provi
 | `ANTHROPIC_CLASSIFICATION_MODEL` | | Anthropic classification model |
 | `OPENAI_CLASSIFICATION_MODEL` | | OpenAI classification model |
 | `OPENROUTER_CLASSIFICATION_MODEL` | | OpenRouter classification model |
+| `TRUSTEDROUTER_CLASSIFICATION_MODEL` | | TrustedRouter classification model |
 | `DEEPSEEK_CLASSIFICATION_MODEL` | | DeepSeek classification model |
 | `GEMINI_CLASSIFICATION_MODEL` | | Gemini classification model |
 | `NVIDIA_CLASSIFICATION_MODEL` | | NVIDIA classification model |

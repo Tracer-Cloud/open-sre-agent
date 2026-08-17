@@ -6,8 +6,8 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import display_reasoning_effort
-from core.agent_harness.accounting.token_accounting import format_token_total
-from core.agent_harness.session.terminal_access import trust_mode_enabled
+from core.agent_harness.spi.accounting import format_token_total
+from core.agent_harness.spi.session_flags import trust_mode_enabled
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.grounding.cli_reference import session_cli_reference
 from surfaces.interactive_shell.runtime import Session

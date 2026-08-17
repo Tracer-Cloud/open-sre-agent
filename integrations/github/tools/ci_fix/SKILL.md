@@ -17,11 +17,12 @@ Rules:
 - If no repo is named, omit `owner` and `repo`; the tool uses the current
   checkout's GitHub origin.
 - The tool inspects failing GitHub Actions checks, fixes the local checkout,
-  commits, and pushes to the PR's existing head branch. It does not open a new PR.
+  commits, pushes to the PR's existing head branch, and waits for the checks
+  triggered by that push. It does not open a new PR.
 - Fork PR branches are refused by the tool because OpenSRE only pushes to
   branches in the same repository.
 - The tool owns CI log inspection, fix execution, branch checkout, commit, and
-  push. Do not run a raw `gh` workflow around it.
+  push plus post-push check verification. Do not run a raw `gh` workflow around it.
 - If the tool returns `response_text`, output exactly that text and stop.
 - If no fix is produced, keep the reply to one short line from `error`; do not
   say "next steps", add numbered options, list example commands, or ask a broad

@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.turns.default_headless_agent import build_default_headless_agent
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
@@ -25,6 +24,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -110,11 +110,11 @@ def _controlled_agent(
     prompts: Any | None = None,
 ) -> tuple[HeadlessAgent, Any]:
     sink = output if output is not None else BufferOutputSink()
-    agent = HeadlessAgent(
+    agent = HeadlessPorts(
+        output=sink, reasoning=StaticReasoningClientProvider(client=_EchoClient())
+    ).agent(
         tools=NullToolProvider(),
-        output=sink,
         prompts=prompts if prompts is not None else EmptyPromptContextProvider(),
-        reasoning=StaticReasoningClientProvider(client=_EchoClient()),
         gather=GATHER_DISABLED,
     )
     return agent, sink
@@ -157,12 +157,12 @@ def test_follow_up_reuses_the_same_attached_agent(stub_action_planner: None) -> 
 def test_documented_custom_sink_path_captures_streamed_answer(
     stub_action_planner: None,
 ) -> None:
-    """``startup`` → ``build_default_headless_agent(output=…)`` → ``attach_agent``."""
+    """``startup`` → ``DefaultPorts(...).agent()`` → ``attach_agent``."""
     # Arrange
     harness = AgentSession(_headless_config())
     startup = harness.startup()
     sink = BufferOutputSink()
-    agent = build_default_headless_agent(session=startup.session, output=sink)
+    agent = DefaultPorts(session=startup.session, output=sink).agent()
     agent._tools = NullToolProvider()  # noqa: SLF001
     agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
     agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
@@ -198,7 +198,7 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
 
 
 def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
-    """The explicit ``build_default_headless_agent`` path must take ``prompts=``."""
+    """The explicit ``DefaultPorts.agent`` path must take ``prompts=``."""
     # Arrange
     harness = AgentSession(_headless_config())
     startup = harness.startup()
@@ -206,11 +206,7 @@ def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
     sink = BufferOutputSink()
 
     # Act
-    agent = build_default_headless_agent(
-        session=startup.session,
-        output=sink,
-        prompts=prompts,
-    )
+    agent = DefaultPorts(session=startup.session, output=sink).agent(prompts=prompts)
 
     # Assert — wired before any dispatch
     assert agent._prompts is prompts  # noqa: SLF001
@@ -307,39 +303,46 @@ def test_resume_config_reaches_session_manager() -> None:
     assert manager.resolve_calls[0]["session_id"] == "abc123"
 
 
-def test_every_exported_name_is_lazily_resolvable_and_type_checked() -> None:
-    """The three export lists in ``core.agent_harness`` must not drift apart.
+def test_every_advertised_name_is_a_plain_static_import() -> None:
+    """Each door's ``__all__`` names something imported at module level.
 
-    A public name lives in three places: ``_LAZY_EXPORTS`` (what ``__getattr__``
-    can resolve), ``__all__`` (what the package advertises), and the
-    ``TYPE_CHECKING`` block (what type checkers and static analysis can see).
-    ``DefaultPromptContextProvider`` was added to the first two but not the
-    third, so it resolved at runtime while reading as undefined to every static
-    tool looking at the package.
+    A plain re-export is visible to type checkers, IDEs, and readers alike; a
+    name that is only resolvable at runtime is not part of the API.
     """
-    # Arrange
     import ast
+    import importlib
     from pathlib import Path
 
-    import core.agent_harness as harness
+    import core.agent_harness as root
+    import core.agent_harness.ports as ports
+    import core.agent_harness.runtime as runtime
 
-    source = Path(harness.__file__).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
-    type_checked: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.If) and getattr(node.test, "id", "") == "TYPE_CHECKING":
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.ImportFrom):
-                    type_checked.update(a.asname or a.name for a in stmt.names)
-
-    # Act
-    advertised = set(harness.__all__)
-    resolvable = set(harness.__dir__())
-
-    # Assert
-    assert advertised == resolvable, "__all__ and the lazy registry disagree"
-    assert advertised <= type_checked, (
-        f"advertised but absent from the TYPE_CHECKING block: {sorted(advertised - type_checked)}"
-    )
-    assert all(hasattr(harness, name) for name in advertised)
+    roles = [
+        importlib.import_module(f"core.agent_harness.spi.{r}")
+        for r in (
+            "session_goal",
+            "session_flags",
+            "cancel",
+            "accounting",
+            "prompt_chrome",
+            "integrations",
+            "grounding",
+            "defaults",
+        )
+    ]
+    for door in (root, ports, runtime, *roles):
+        tree = ast.parse(Path(door.__file__).read_text(encoding="utf-8"))
+        bound: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                bound.update(alias.asname or alias.name for alias in node.names)
+            elif isinstance(node, ast.ClassDef | ast.FunctionDef):
+                bound.add(node.name)
+            elif isinstance(node, ast.Assign):
+                bound.update(t.id for t in node.targets if isinstance(t, ast.Name))
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                bound.add(node.target.id)
+        assert set(door.__all__) <= bound, (
+            f"{door.__name__}: advertised but not bound at module level: "
+            f"{sorted(set(door.__all__) - bound)}"
+        )

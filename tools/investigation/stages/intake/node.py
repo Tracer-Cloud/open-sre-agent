@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any, cast
 
+from core.agent_harness.llm_resolution import default_reasoning_llm_factory
 from core.domain.alerts.extraction import (
     AlertDetails,
     build_alert_details_model,
@@ -16,7 +17,6 @@ from core.domain.alerts.extraction import (
     make_problem_md,
 )
 from core.domain.types.incident_window import resolve_incident_window
-from core.llm.factory import LLMRole, get_llm
 from core.state import InvestigationState
 from platform.observability import (
     debug_print,
@@ -163,7 +163,7 @@ def _extract_alert_details(state: InvestigationState) -> AlertDetails:
     text = format_raw_alert(raw_alert)
     prompt = _EXTRACT_PROMPT.format(text=text)
 
-    llm = get_llm(LLMRole.REASONING)
+    llm = default_reasoning_llm_factory()
     try:
         details = cast(
             AlertDetails,

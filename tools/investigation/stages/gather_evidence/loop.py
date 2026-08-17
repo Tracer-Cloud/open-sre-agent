@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any
 
 from config.constants.investigation import (
     INVESTIGATION_TOOL_CACHE_MAX_CHARS,
     INVESTIGATION_TOOL_CACHE_MAX_ENTRIES,
     MAX_INVESTIGATION_LOOPS,
+)
+from core.execution import (
+    BeforeToolCallResult,
+    ToolExecutionHooks,
+    ToolExecutionRequest,
+    ToolExecutionResult,
 )
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import LLMInvokeFailure
@@ -146,6 +153,149 @@ def duplicate_call_result(tool_call: ToolCall, cached: CachedToolResult) -> dict
             max_chars=_MAX_CACHED_RESULT_CHARS,
         ),
     }
+
+
+class InvestigationLoopController:
+    """Preserve investigation-specific replay and stagnation policy around ``Agent.run``."""
+
+    def __init__(
+        self,
+        *,
+        stagnation_nudge: str,
+        checkpoint_nudge: str,
+        max_stagnant_iterations: int,
+    ) -> None:
+        self._cache = InvestigationToolCallCache()
+        self._stagnation_nudge = stagnation_nudge
+        self._checkpoint_nudge = checkpoint_nudge
+        self._max_stagnant_iterations = max_stagnant_iterations
+        self._queue_message: Callable[[str], None] | None = None
+        self._iteration = 0
+        self._duplicate_calls: dict[str, CachedToolResult] = {}
+        self._suppressed_calls: set[tuple[str, str]] = set()
+        self._duplicate_payloads: dict[tuple[str, str], dict[str, Any]] = {}
+        self._call_iterations: dict[str, int] = {}
+        self._call_order: dict[str, int] = {}
+        self._results_by_order: dict[int, tuple[ToolCall, Any]] = {}
+        self._next_call_order = 0
+        self._lock = Lock()
+        self._checkpoint_sent = False
+        self._stagnant_iterations = 0
+        self.force_conclusion = False
+        self.executed_hypotheses: list[dict[str, Any]] = []
+        self.current_evidence: dict[str, Any] = {}
+
+    def bind_queue_message(self, queue_message: Callable[[str], None]) -> None:
+        """Bind the shared agent's steering seam after construction."""
+        self._queue_message = queue_message
+
+    def begin_iteration(self, iteration: int) -> None:
+        """Record the runtime iteration used by the next requested tool batch."""
+        self._iteration = iteration
+
+    def record_seed(self, tool_call: ToolCall, result: Any) -> None:
+        """Make a seed result eligible for duplicate replay in the shared loop."""
+        self._cache.store(tool_call_signature(tool_call), result, loop_iteration=-1)
+
+    def hooks(self) -> ToolExecutionHooks:
+        """Return execution hooks that suppress duplicate investigation calls."""
+        return ToolExecutionHooks(
+            before_tool_batch=self._before_batch,
+            before_tool_call=self._before_call,
+            after_tool_call=self._after_call,
+        )
+
+    def is_duplicate(self, tool_call_id: str) -> bool:
+        """Return whether the current run suppressed ``tool_call_id``."""
+        return tool_call_id in self._duplicate_calls
+
+    def was_suppressed(self, tool_call: ToolCall) -> bool:
+        """Return whether ``tool_call`` was suppressed at any point in this run."""
+        return (tool_call.id, tool_call_signature(tool_call)) in self._suppressed_calls
+
+    def duplicate_payload(self, tool_call: ToolCall) -> dict[str, Any] | None:
+        """Return the historical replay payload for a suppressed call."""
+        return self._duplicate_payloads.get((tool_call.id, tool_call_signature(tool_call)))
+
+    def fresh_results(self) -> list[tuple[ToolCall, Any]]:
+        """Return newly executed tool results in provider request order."""
+        return [self._results_by_order[index] for index in sorted(self._results_by_order)]
+
+    def iteration_for(self, tool_call_id: str) -> int:
+        """Return the loop iteration associated with a requested tool call."""
+        return self._call_iterations.get(tool_call_id, self._iteration)
+
+    def _before_batch(self, tool_calls: Sequence[ToolCall]) -> None:
+        duplicate_calls: dict[str, CachedToolResult] = {}
+        fresh_names: list[str] = []
+        for tool_call in tool_calls:
+            self._call_iterations[tool_call.id] = self._iteration
+            self._call_order[tool_call.id] = self._next_call_order
+            self._next_call_order += 1
+            cached = self._cache.lookup(tool_call_signature(tool_call))
+            if cached is None:
+                fresh_names.append(tool_call.name)
+            else:
+                duplicate_calls[tool_call.id] = cached
+        self._duplicate_calls = duplicate_calls
+        self._suppressed_calls.update(
+            (tool_call.id, tool_call_signature(tool_call))
+            for tool_call in tool_calls
+            if tool_call.id in duplicate_calls
+        )
+        self.executed_hypotheses.append(
+            {
+                "hypothesis": f"Agent iteration {self._iteration}",
+                "actions": fresh_names,
+                "loop_iteration": self._iteration,
+            }
+        )
+        if fresh_names:
+            self._stagnant_iterations = 0
+            return
+        self._stagnant_iterations += 1
+        if self._queue_message is not None:
+            self._queue_message(self._stagnation_nudge)
+        if self._stagnant_iterations >= self._max_stagnant_iterations:
+            self.force_conclusion = True
+
+    def _before_call(self, request: ToolExecutionRequest) -> BeforeToolCallResult | None:
+        cached = self._duplicate_calls.get(request.tool_call.id)
+        if cached is None:
+            return None
+        payload = duplicate_call_result(request.tool_call, cached)
+        with self._lock:
+            self._duplicate_payloads[
+                (request.tool_call.id, tool_call_signature(request.tool_call))
+            ] = payload
+        return BeforeToolCallResult(
+            blocked=True,
+            reason=json.dumps(payload, default=str),
+            details=payload,
+            metadata={"suppressed_duplicate": True},
+        )
+
+    def _after_call(
+        self,
+        request: ToolExecutionRequest,
+        result: ToolExecutionResult,
+    ) -> None:
+        with self._lock:
+            payload = result.compat_payload()
+            self._cache.store(
+                tool_call_signature(request.tool_call),
+                payload,
+                loop_iteration=self.iteration_for(request.tool_call.id),
+            )
+            self._results_by_order[self._call_order[request.tool_call.id]] = (
+                request.tool_call,
+                payload,
+            )
+            self.current_evidence[request.tool_call.name] = payload
+            if self._iteration == 0 and not self._checkpoint_sent:
+                self._checkpoint_sent = True
+                if self._queue_message is not None:
+                    self._queue_message(self._checkpoint_nudge)
 
 
 def degraded_investigation_from_llm_failure(

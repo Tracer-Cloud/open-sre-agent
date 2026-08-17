@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 
+from config.constants.llm import LLM_PROVIDER_ENV
 from core.agent_harness.llm_resolution import resolve_provider_models
 
 
@@ -22,7 +23,7 @@ def detect_provider_model() -> tuple[str, str]:
     except Exception:
         return ("unknown", "unknown")
 
-    provider = settings.provider or os.getenv("LLM_PROVIDER", "anthropic")
+    provider = settings.provider or os.getenv(LLM_PROVIDER_ENV, "anthropic")
     reasoning_model, _toolcall_model = resolve_provider_models(settings, provider)
     return (provider, reasoning_model)
 

@@ -123,6 +123,23 @@ def test_should_accept_nudges_until_ceiling() -> None:
     assert nudge is None
 
 
+def test_should_accept_uses_goal_specific_nudge() -> None:
+    goal = Goal(
+        description="investigate",
+        success_criteria="root cause named",
+        verify=lambda _observation: False,
+        nudge=lambda observation: f"Need more evidence after lap {observation.iteration + 1}.",
+    )
+
+    assert should_accept_with_goal(
+        goal,
+        final_text="not yet",
+        evidence_count=1,
+        iteration=0,
+        max_iterations=3,
+    ) == (False, "Need more evidence after lap 1.")
+
+
 def test_no_goal_always_accepts() -> None:
     assert should_accept_with_goal(
         None,

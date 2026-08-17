@@ -34,6 +34,7 @@ from core.agent_harness.turns.gather_observation import (
     GatheredEvidence,
     tool_results_from_executed,
 )
+from core.agent_harness.turns.gather_ports import PersistToolCalls
 from core.agent_harness.turns.gather_unreachable import (
     load_gather_unreachable,
     store_gather_unreachable,
@@ -71,7 +72,6 @@ _MAX_PER_TOOL_CHARS = 4_000
 
 # A persistence sink for gathered tool calls: ``persist(executed)`` where
 # ``executed`` is a list of ``(tool_call, output)`` pairs.
-PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 
 
 class GatherAgentFactory(Protocol):

@@ -1,10 +1,10 @@
-"""Gather integration evidence for a conversational shell answer.
+"""The shell's gather ports: console progress lines and session persistence.
 
-The bounded think -> call-tools -> observe loop lives in the decoupled
-:func:`core.agent_harness.turns.evidence_driver.gather_tool_evidence`. This module is the terminal adapter:
-it renders each gathering step to the console and persists the gathered tool
-calls into the shell's session storage, then hands the collected observation back
-to :func:`interactive_shell.runtime.answer_turn.answer_shell_question`.
+The bounded think -> call-tools -> observe loop is the harness's
+:func:`core.agent_harness.turns.evidence_driver.gather_tool_evidence`, driven by
+:class:`HeadlessAgent`. This module supplies the two ports a REPL plugs into it
+as a :class:`~core.agent_harness.turns.gather_ports.GatherPorts`: a
+console-bound progress renderer and a persister into the shell's session store.
 """
 
 from __future__ import annotations
@@ -16,12 +16,9 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.turns import evidence_driver
-from core.agent_harness.turns.evidence_driver import GatherAgentFactory
-from core.agent_harness.turns.gather_observation import GatheredEvidence
+from core.agent_harness.runtime import GatherPorts
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from tools.registry import resolve_tool_activity_labels
 
 # Cap so a chatty tool result can't blow up persistence writes.
@@ -50,13 +47,6 @@ _GATHER_INPUT_HINT_KEYS: tuple[str, ...] = (
     "to",
     "time_range",
 )
-
-
-class _ShellGatherErrorReporter:
-    """Minimal :class:`core.agent_harness.ports.ErrorReporter` over ``report_exception``."""
-
-    def report(self, exc: BaseException, *, context: str, expected: bool = False) -> None:
-        report_exception(exc, context=context, expected=expected)
 
 
 def _truncate_hint(text: str, *, max_len: int = 48) -> str:
@@ -108,17 +98,6 @@ def _format_gathering_progress_line(
     return f"· checking {safe_display}…"
 
 
-def _resolve_gather_integrations(
-    session: Session,
-    message: str,
-    resolved_integrations: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Resolve gather integrations through the decoupled agent helper."""
-    return evidence_driver._resolve_gather_integrations(  # noqa: SLF001
-        session, message, resolved_integrations=resolved_integrations
-    )
-
-
 def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
@@ -131,7 +110,7 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
     Arguments and results are redacted and bounded before writing; failures are
     swallowed so logging never breaks the turn.
     """
-    from core.agent_harness.session import default_session_store
+    from core.agent_harness.spi.defaults import default_session_store
     from platform.observability.trace.redaction import redact_sensitive
 
     store = default_session_store()
@@ -154,53 +133,46 @@ def _persist_tool_calls(session: Session, executed: list[tuple[Any, Any]]) -> No
             )
 
 
-def gather_integration_tool_evidence(
-    message: str,
-    session: Session,
-    console: Console,
-    *,
-    agent_factory: GatherAgentFactory | None = None,
-    resolved_integrations: dict[str, Any] | None = None,
-) -> str | GatheredEvidence | None:
-    """Run a bounded tool-calling loop and return collected evidence, or None.
+class ShellGatherProgress:
+    """Prints one dim line per gather tool call to the turn's console.
 
-    Returns :class:`~core.agent_harness.turns.gather_observation.GatheredEvidence`
-    (or legacy observation text) when at least one tool was executed; otherwise
-    ``None`` so the caller falls back to the normal text-only answer.
-    ``resolved_integrations`` is the turn's resolved view; it is forwarded so the
-    gather phase reuses it instead of resolving again.
+    :class:`~core.agent_harness.ports.ConsoleBindable`: the REPL streams each
+    turn through a fresh spinner-aware console, so ``bind_turn`` retargets it.
+    Keyed by display source (PostHog), not MCP method name — ``list_*`` and
+    ``call_*`` otherwise both print identical ``· checking Posthog…`` lines.
     """
-    # Key by display source (PostHog), not MCP method name — ``list_*`` and
-    # ``call_*`` otherwise both print identical ``· checking Posthog…`` lines.
-    source_call_counts: dict[str, int] = {}
 
-    def on_progress(kind: str, data: dict[str, Any]) -> None:
+    def __init__(self, console: Console) -> None:
+        self._console = console
+        self._source_call_counts: dict[str, int] = {}
+
+    def bind_console(self, console: Any) -> None:
+        self._console = console
+        self._source_call_counts = {}
+
+    def __call__(self, kind: str, data: dict[str, Any]) -> None:
         if kind == "tool_start":
             name = str(data.get("name", "")).strip() or "tool"
             source, _label = resolve_tool_activity_labels(name)
             count_key = source.strip() or name
-            source_call_counts[count_key] = source_call_counts.get(count_key, 0) + 1
+            self._source_call_counts[count_key] = self._source_call_counts.get(count_key, 0) + 1
             line = _format_gathering_progress_line(
                 name,
                 data.get("input"),
-                repeat_index=source_call_counts[count_key],
+                repeat_index=self._source_call_counts[count_key],
             )
-            console.print(f"[{DIM}]{line}[/]")
+            self._console.print(f"[{DIM}]{line}[/]")
         elif kind == "gather_cancelled":
-            console.print(f"[{DIM}]· gathering cancelled[/]")
+            self._console.print(f"[{DIM}]· gathering cancelled[/]")
+
+
+def shell_gather_ports(session: Session, console: Console) -> GatherPorts:
+    """The REPL's gather phase: live progress on ``console``, tool calls persisted to ``session``."""
 
     def persist(executed: list[tuple[Any, Any]]) -> None:
         _persist_tool_calls(session, executed)
 
-    return evidence_driver.gather_tool_evidence(
-        message,
-        session,
-        on_progress=on_progress,
-        persist=persist,
-        error_reporter=_ShellGatherErrorReporter(),
-        agent_factory=agent_factory,
-        resolved_integrations=resolved_integrations,
-    )
+    return GatherPorts(on_progress=ShellGatherProgress(console), persist=persist)
 
 
-__all__ = ["gather_integration_tool_evidence"]
+__all__ = ["ShellGatherProgress", "shell_gather_ports"]

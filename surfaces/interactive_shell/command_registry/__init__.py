@@ -10,7 +10,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.session.terminal_access import pop_turn_outcome_hint, session_terminal
+from core.agent_harness.spi.session_flags import pop_turn_outcome_hint, session_terminal
 from surfaces.interactive_shell.command_registry.agents import COMMANDS as AGENTS_COMMANDS
 from surfaces.interactive_shell.command_registry.alerts import COMMANDS as ALERTS_COMMANDS
 from surfaces.interactive_shell.command_registry.background_cmds import (

@@ -13,8 +13,8 @@ from typing import Any, Protocol
 
 from rich.console import Console
 
-from core.agent_harness import ToolCallingTurnResult
-from core.agent_harness.ports import AnswerRequest, OutputSink
+from core.agent_harness import OutputSink, ToolCallingTurnResult
+from core.agent_harness.ports import AnswerRequest
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_plan import TurnPlan
 from core.execution import ToolExecutionHooks
@@ -25,8 +25,8 @@ from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
 class RunActionToolTurn(Protocol):
     """Action-selection seam driven by ``execute_shell_turn``.
 
-    ``deps`` is intentionally not part of the contract: ``execute_shell_turn``
-    never injects it, and the default adapter supplies its own LLM factory.
+    ``llm_factory`` is intentionally not part of the contract: ``execute_shell_turn``
+    never injects it, and the default adapter supplies its own.
     """
 
     def __call__(

@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session import default_session_repo
+from core.agent_harness.spi.defaults import default_session_repo
 from surfaces.interactive_shell.command_registry.investigation import (
     render_investigation_report,
     write_investigation_export,

@@ -17,7 +17,7 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness import ensure_turn_cancel
+from core.agent_harness.spi.cancel import ensure_turn_cancel
 
 # Set on the wrapper itself; everything else is proxied to the wrapped console.
 _OWN_ATTRIBUTES = frozenset({"_output", "_cancel_event"})

@@ -9,10 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.session.terminal_access import (
-    background_mode_enabled,
-    session_terminal,
-)
+from core.agent_harness.spi.session_flags import background_mode_enabled, session_terminal
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -162,7 +159,7 @@ def _validate_save_args(args: list[str]) -> str | None:
 
 def _stage_investigation_turn_telemetry(session: Session, outcome: InvestigationOutcome) -> None:
     """Stage LLM run metadata and structured errors for this turn's recorder flush."""
-    from core.agent_harness.accounting.token_accounting import LlmRunInfo, record_llm_turn
+    from core.agent_harness.spi.accounting import LlmRunInfo, record_llm_turn
 
     if outcome.llm_input_tokens or outcome.llm_output_tokens:
         record_llm_turn(

@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
+from config.constants.llm import LLM_PROVIDER_ENV
 from surfaces.interactive_shell.command_registry.model.switching import (
     _provider_allows_custom_models,
     restore_default_model,
@@ -31,7 +32,7 @@ _ROOT = "/model"  # breadcrumb root label
 def _provider_menu_choices() -> list[tuple[str, str]]:
     from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
 
-    current_provider = (os.getenv("LLM_PROVIDER", "anthropic") or "anthropic").strip().lower()
+    current_provider = (os.getenv(LLM_PROVIDER_ENV, "anthropic") or "anthropic").strip().lower()
     options: list[tuple[str, str]] = []
     for provider in SUPPORTED_PROVIDERS:
         suffix = "*" if provider.value == current_provider else ""
@@ -318,7 +319,7 @@ def _cmd_model(session: Session, console: Console, args: list[str]) -> bool:
             console.print(f"[{DIM}]usage:[/] /model restore [provider]")
             session.mark_latest(ok=False, kind="slash")
             return True
-        provider_name = args[1] if len(args) == 2 else os.getenv("LLM_PROVIDER", "anthropic")
+        provider_name = args[1] if len(args) == 2 else os.getenv(LLM_PROVIDER_ENV, "anthropic")
         restored = restore_default_model(provider_name, console)
         if not restored:
             session.mark_latest(ok=False, kind="slash")

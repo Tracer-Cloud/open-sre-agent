@@ -66,7 +66,8 @@ empty plan.
 ### 4. The ReAct loop — the core evidence-gathering agent
 
 `ConnectedInvestigationAgent.run()` in
-`tools/investigation/stages/gather_evidence/agent.py`. Before the
+`tools/investigation/stages/gather_evidence/agent.py` configures the shared
+`core.agent.Agent` runtime. Before the
 model's first turn: the tool set is narrowed to a hard cap
 (`select_investigation_tools`, `MAX_AGENT_TOOL_SCHEMAS = 32`) using the plan
 from stage 3 if present, otherwise alert-source relevance ranking. A handful

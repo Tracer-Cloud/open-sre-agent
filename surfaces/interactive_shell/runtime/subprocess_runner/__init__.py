@@ -4,8 +4,9 @@ Pure subprocess execution, planning, and orchestration for shell / synthetic /
 Claude Code / opensre CLI action tools live under ``tools.interactive_shell``
 (``subprocess/``, ``shell/``, ``synthetic/``, ``implementation/``, ``cli/``).
 This package keeps Rich relay helpers in ``task_streaming``, the REPL presenter
-in ``repl_presenter``, and backward-compatible surface adapters such as
-``opensre_cli_runner`` for slash parity and legacy test monkeypatch paths.
+in ``repl_presenter``, and the surface adapter ``opensre_cli_runner`` for slash
+parity. Tests and callers import canonical names from
+``tools.interactive_shell.cli`` rather than underscore aliases here.
 
 Shell command execution lives in ``tools.interactive_shell.shell`` (parsing,
 policy, ``execute_shell_command``, and the ``run_shell_command`` / ``run_cd`` /
@@ -44,19 +45,11 @@ from pathlib import Path
 
 from .background_task_executor import start_background_cli_task
 from .opensre_cli_runner import (
-    _INTERACTIVE_OPENSRE_COMMAND_PATHS,
-    _OPENSRE_BLOCKED_SUBCOMMANDS,
     OpensreCommandClass,
     OpensreExecutionMode,
     OpensreExecutionPlan,
     OpensreRunOutcome,
     OpensreRunResult,
-    _build_opensre_execution_plan,
-    _classify_opensre_command,
-    _is_interactive_wizard,
-    _opensre_confirmation_reason,
-    _run_opensre_foreground,
-    _run_opensre_foreground_streaming,
     build_opensre_cli_argv,
     print_interactive_wizard_handoff,
     run_opensre_cli_command,
@@ -95,25 +88,17 @@ __all__ = [
     "OpensreRunOutcome",
     "OpensreRunResult",
     "Path",
-    "_INTERACTIVE_OPENSRE_COMMAND_PATHS",
     "_MAX_COMMAND_OUTPUT_CHARS",
     "_MIN_SUBPROCESS_TERMINAL_WIDTH",
-    "_OPENSRE_BLOCKED_SUBCOMMANDS",
     "_SYNTHETIC_DIAG_CHARS",
     "_SYNTHETIC_POLL_SECONDS",
     "_TASK_OUTPUT_JOIN_TIMEOUT_SECONDS",
     "_TASK_OUTPUT_PREFIX_WIDTH",
-    "_classify_opensre_command",
-    "_build_opensre_execution_plan",
     "_console_file_is_tty",
-    "_is_interactive_wizard",
     "_join_task_output_streams",
-    "_opensre_confirmation_reason",
     "_print_task_output_line",
     "_pump_task_pty",
     "_pump_task_stream",
-    "_run_opensre_foreground",
-    "_run_opensre_foreground_streaming",
     "_should_use_pty",
     "_start_task_output_streams",
     "_subprocess_env_with_aligned_width",

@@ -77,6 +77,22 @@ class DefaultToolProvider:
         self._console = console
         self._tool_context = None
 
+    def _resolved_presenter_factory(self) -> SubprocessPresenterFactory | None:
+        """The host's presenter factory, else the one registered at process boot.
+
+        Without the fallback the default port stack has no presenter, so
+        ``shell_run`` refuses every call and the agent degrades into describing
+        a plan it cannot run. A host factory always wins.
+        """
+        if self._subprocess_presenter_factory is not None:
+            return self._subprocess_presenter_factory
+        import platform.harness_ports as harness_ports
+
+        registered: SubprocessPresenterFactory | None = (
+            harness_ports.get_subprocess_presenter_factory()
+        )
+        return registered
+
     def action_tools(
         self,
         *,
@@ -85,8 +101,9 @@ class DefaultToolProvider:
         resolved_integrations: dict[str, Any] | None = None,
     ) -> list[Any]:
         subprocess_presenter = None
-        if self._subprocess_presenter_factory is not None:
-            subprocess_presenter = self._subprocess_presenter_factory(
+        presenter_factory = self._resolved_presenter_factory()
+        if presenter_factory is not None:
+            subprocess_presenter = presenter_factory(
                 self._session,
                 self._console,
                 confirm_fn,

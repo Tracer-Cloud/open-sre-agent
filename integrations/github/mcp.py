@@ -652,12 +652,6 @@ def _tool_result_to_dict(result: types.CallToolResult) -> dict[str, Any]:
     }
 
 
-async def _list_tools_async(config: GitHubMCPConfig) -> list[types.Tool]:
-    async with _open_github_mcp_session(config) as session:
-        result = await session.list_tools()
-        return list(result.tools)
-
-
 def _tool_defs(tools: Sequence[types.Tool]) -> list[dict[str, Any]]:
     """Normalize MCP tool objects into the dicts the probe planners consume."""
 
@@ -669,12 +663,6 @@ def _tool_defs(tools: Sequence[types.Tool]) -> list[dict[str, Any]]:
         }
         for tool in tools
     ]
-
-
-def list_github_mcp_tools(config: GitHubMCPConfig) -> list[dict[str, Any]]:
-    """List available tools from a GitHub MCP server."""
-
-    return _tool_defs(_run_async(_list_tools_async(config)))
 
 
 async def _call_tool_on_session(

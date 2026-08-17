@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import (
+from core.agent_harness.spi.session_flags import (
     background_investigations,
     background_mode_enabled,
     background_notification_channels,

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.session.pending_choice import PendingUserChoice
-from core.agent_harness.session.terminal_access import session_terminal, set_auto_command
+from core.agent_harness.spi.session_flags import session_terminal, set_auto_command
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     execute_with_action_context,

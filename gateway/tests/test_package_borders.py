@@ -252,7 +252,7 @@ def test_concurrency_limited_handler_stays_out_of_production_gateway() -> None:
 def test_production_gateway_never_subclasses_core_agent() -> None:
     """Wave D4: gateway hosts HeadlessAgent; it must not own a core.agent.Agent subclass.
 
-    Chat turns reuse SessionAgentPool → build_default_headless_agent. A production
+    Chat turns reuse SessionAgentPool → DefaultPorts.agent. A production
     ``class …(Agent)`` under gateway/ would be a second brain beside the harness.
     """
     offenders: list[str] = []

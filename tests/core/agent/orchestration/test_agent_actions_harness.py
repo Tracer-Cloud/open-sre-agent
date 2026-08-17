@@ -19,7 +19,6 @@ from core.agent_harness.session.pending_offer import first_pending_offer
 from core.agent_harness.turns.action_driver import (
     ActionTurnPlan,
     ActionTurnRunner,
-    ToolCallingDeps,
     _build_action_agent,
     _turn_resolved_integrations,
 )
@@ -99,7 +98,7 @@ def test_execute_with_harness_runs_slash_tool_call(monkeypatch) -> None:
         "check health",
         session,
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert result.handled is True
@@ -141,7 +140,7 @@ def test_slash_invoke_suppresses_hallucinated_success_closing(monkeypatch) -> No
         "yes do that health check",
         Session(),
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     console_text = harness.console_buffer.getvalue()
@@ -176,7 +175,7 @@ def test_generic_registered_action_tool_result_marks_turn_handled() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("send a fake message", Session(), is_tty=False)
 
     assert result.handled is True
@@ -219,7 +218,7 @@ def test_generic_cli_style_stdout_is_printed_for_user() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("list issues", Session(), is_tty=False)
 
     assert result.handled is True
@@ -260,7 +259,7 @@ def test_action_final_text_is_streamed_as_user_facing_response() -> None:
     result = ActionTurnRunner(
         output=sink,
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("run the scan and report", Session(), is_tty=False)
 
     assert result.handled is True
@@ -305,7 +304,7 @@ def test_tool_response_text_overrides_chatty_final_text() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("fix security issues", Session(), is_tty=False)
 
     assert result.handled is True
@@ -377,7 +376,7 @@ def test_multi_step_shell_chain_shows_grounded_closing_summary() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(_fake_shell_run_tool()),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("run 2 sequential steps updating a running total", Session(), is_tty=False)
 
     assert result.handled is True
@@ -404,7 +403,7 @@ def test_single_shell_run_keeps_model_closing_suppressed() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(_fake_shell_run_tool()),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("check disk usage", Session(), is_tty=False)
 
     assert result.handled is True
@@ -472,7 +471,7 @@ def test_discover_then_act_slash_chain_shows_grounded_closing_summary() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(_fake_slash_invoke_tool()),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run("remove the existing cron loops", Session(), is_tty=False)
 
     assert result.handled is True
@@ -551,7 +550,7 @@ def test_action_turn_allows_interleaved_slash_repeat() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "check health, list integrations, then check health again",
         Session(),
@@ -621,7 +620,7 @@ def test_action_turn_suppresses_identical_single_slash_repeat() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "run /health and then run /health again",
         Session(),
@@ -691,7 +690,7 @@ def test_action_turn_suppresses_identical_single_shell_repeat() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "print the working directory twice",
         Session(),
@@ -757,7 +756,7 @@ def test_action_turn_suppresses_duplicate_cli_exec() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "please run opensre integrations verify --dry-run",
         Session(),
@@ -834,7 +833,7 @@ def test_action_turn_suppresses_third_identical_cli_exec_after_blocked_replay() 
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "please run opensre integrations verify --dry-run",
         Session(),
@@ -902,7 +901,7 @@ def test_action_turn_allows_cli_exec_retry_after_failure() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "please run opensre integrations verify --dry-run",
         Session(),
@@ -989,7 +988,7 @@ def test_action_turn_suppresses_duplicate_slash_invoke_pair() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "check the health of my opensre and then show me all connected services",
         Session(),
@@ -1065,7 +1064,7 @@ def test_action_turn_suppresses_a_third_identical_slash_pair() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "check the health of my opensre and then show me all connected services",
         Session(),
@@ -1161,7 +1160,7 @@ def test_action_turn_mixed_replay_and_new_action_enters_snapshot() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "check health and integrations, then health again with remote, then remote",
         Session(),
@@ -1256,7 +1255,7 @@ def test_action_turn_mixed_batch_allows_later_standalone_of_suppressed_member() 
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "check health and integrations, then health with remote, then health again",
         Session(),
@@ -1339,7 +1338,7 @@ def test_action_turn_same_multi_command_batch_twice_is_out_of_scope() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "run /health and /integrations list, then run that same pair again",
         Session(),
@@ -1376,7 +1375,7 @@ def test_literal_slash_command_dispatches_deterministically_without_llm(
         "/sessions",
         session,
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert result.handled is True
@@ -1408,7 +1407,7 @@ def test_literal_slash_command_forwards_args_without_llm(monkeypatch) -> None:
         "/login chatgpt",
         Session(),
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert result.handled is True
@@ -1430,7 +1429,7 @@ def test_natural_language_still_routes_through_action_agent(monkeypatch) -> None
         "log me in please",
         Session(),
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert harness.llm.invocations == 1
@@ -1448,7 +1447,7 @@ def test_execute_with_harness_hands_off_handoff_only_tool_call() -> None:
         "half actionable prompt",
         Session(),
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert result.handled is False
@@ -1469,7 +1468,7 @@ def test_local_llama_handoff_populates_handoff_contents() -> None:
         "please connect to local llama",
         Session(),
         harness.console,
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     )
 
     assert result.handled is False
@@ -1829,7 +1828,7 @@ def test_execute_with_harness_handles_llm_unavailable() -> None:
         "action agent outage",
         session,
         Console(force_terminal=False),
-        deps=ToolCallingDeps(llm_factory=_raise),
+        llm_factory=_raise,
     )
 
     assert result.handled is True
@@ -1850,7 +1849,7 @@ def test_llm_build_failure_on_conversational_input_stages_llm_failure() -> None:
         "hi",
         session,
         Console(force_terminal=False),
-        deps=ToolCallingDeps(llm_factory=_raise),
+        llm_factory=_raise,
     )
 
     assert session.terminal.pop_pending_turn_error() == ("action_agent_error", message)
@@ -1879,7 +1878,7 @@ def test_llm_invoke_failure_on_conversational_input_stages_attempted_model() -> 
         "hi",
         session,
         Console(force_terminal=False),
-        deps=ToolCallingDeps(llm_factory=lambda: client),
+        llm_factory=lambda: client,
     )
 
     assert session.terminal.pop_pending_turn_error() == ("action_agent_error", error)
@@ -1915,7 +1914,7 @@ def test_missing_key_invoke_failure_answers_with_login_guidance() -> None:
         "good morning",
         session,
         Console(force_terminal=False),
-        deps=ToolCallingDeps(llm_factory=_MissingKeyLLM),
+        llm_factory=_MissingKeyLLM,
     )
 
     # Assert: the user sees the remediation; telemetry keeps the raw error.
@@ -1952,7 +1951,7 @@ def test_missing_key_guidance_names_configured_provider_when_client_has_no_label
         "good morning",
         session,
         Console(force_terminal=False),
-        deps=ToolCallingDeps(llm_factory=_AnonymousFailingLLM),
+        llm_factory=_AnonymousFailingLLM,
     )
 
     # Assert
@@ -1987,7 +1986,7 @@ def test_llm_invoke_failure_uses_built_client_without_second_factory_call() -> N
         "hi",
         session,
         Console(force_terminal=False),
-        deps=ToolCallingDeps(llm_factory=_factory),
+        llm_factory=_factory,
     )
 
     assert factory_calls == 1
@@ -2042,7 +2041,7 @@ def test_stream_failure_stages_llm_error_and_identity() -> None:
 
 def test_build_action_agent_returns_action_turn_plan() -> None:
     llm = FakeActionLLM([no_tool_response()])
-    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    llm_factory = lambda: llm  # noqa: E731
     session = Session()
 
     plan = _build_action_agent(
@@ -2051,7 +2050,7 @@ def test_build_action_agent_returns_action_turn_plan() -> None:
         agent_tools=[],
         turn_snapshot=None,
         resolved_integrations={},
-        deps=deps,
+        llm_factory=llm_factory,
         tool_hooks=None,
         tool_resources={},
         observer=lambda *_args, **_kwargs: None,
@@ -2068,7 +2067,7 @@ def test_build_action_agent_keeps_conversation_out_of_system() -> None:
 
     marker = "zzmarker-harness-conversation-must-not-be-system"
     llm = FakeActionLLM([no_tool_response()])
-    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    llm_factory = lambda: llm  # noqa: E731
     snapshot = TurnSnapshot(
         text="follow up",
         conversation_messages=(("user", marker),),
@@ -2085,7 +2084,7 @@ def test_build_action_agent_keeps_conversation_out_of_system() -> None:
         agent_tools=[],
         turn_snapshot=snapshot,
         resolved_integrations={},
-        deps=deps,
+        llm_factory=llm_factory,
         tool_hooks=None,
         tool_resources={},
         observer=lambda *_args, **_kwargs: None,
@@ -2102,7 +2101,7 @@ def test_build_action_agent_system_identical_across_conversation_growth() -> Non
     from core.agent_harness.turns.turn_snapshot import TurnSnapshot
 
     llm = FakeActionLLM([no_tool_response()])
-    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    llm_factory = lambda: llm  # noqa: E731
 
     def _plan(messages: list[tuple[str, str]]) -> ActionTurnPlan:
         return _build_action_agent(
@@ -2119,7 +2118,7 @@ def test_build_action_agent_system_identical_across_conversation_growth() -> Non
                 reasoning_effort=None,
             ),
             resolved_integrations={},
-            deps=deps,
+            llm_factory=llm_factory,
             tool_hooks=None,
             tool_resources={},
             observer=lambda *_args, **_kwargs: None,
@@ -2135,14 +2134,14 @@ def test_build_action_agent_system_identical_across_conversation_growth() -> Non
 def test_bang_shell_bypass_does_not_use_action_envelope() -> None:
     """Explicit !shell must keep the short static system, not the action envelope."""
     llm = FakeActionLLM([no_tool_response()])
-    deps = ToolCallingDeps(llm_factory=lambda: llm)
+    llm_factory = lambda: llm  # noqa: E731
     plan = _build_action_agent(
         message="!echo hello",
         session=Session(),
         agent_tools=[],
         turn_snapshot=None,
         resolved_integrations={},
-        deps=deps,
+        llm_factory=llm_factory,
         tool_hooks=None,
         tool_resources={},
         observer=lambda *_args, **_kwargs: None,
@@ -2450,7 +2449,7 @@ def test_action_turn_suppresses_partial_replay_of_a_succeeded_batch() -> None:
     result = ActionTurnRunner(
         output=_OutputSink(harness.console),
         tools=_GenericActionToolProvider(tool),
-        deps=harness.deps,
+        llm_factory=harness.llm_factory,
     ).run(
         "check the health of my opensre and then show me all connected services",
         Session(),

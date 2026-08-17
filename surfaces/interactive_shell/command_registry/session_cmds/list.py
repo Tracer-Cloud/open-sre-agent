@@ -23,7 +23,7 @@ from surfaces.interactive_shell.ui.components.time_format import (
 def _cmd_sessions(session: Session, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     entries = default_session_repo().load_recent(20)
     if not entries:

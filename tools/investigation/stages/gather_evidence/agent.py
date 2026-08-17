@@ -1,29 +1,36 @@
-"""ReAct investigation agent — the core think → call tools → observe loop."""
+"""Investigation orchestration over the shared tool-calling ``Agent`` runtime."""
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
-from core import (
-    RuntimeEventCallback,
-    TupleEventCallback,
-    context_budget_ceiling_for_model,
-    enforce_context_budget,
-    estimate_message_tokens,
-    execute_tools,
-    summarise,
-    system_and_tools_overhead,
-    tool_source,
+from core import RuntimeEventCallback, TupleEventCallback, execute_tools, summarise, tool_source
+from core.agent.goals import Goal, GoalObservation
+from core.agent_harness.agent_builder import AgentConfig, build_agent
+from core.agent_harness.llm_resolution import default_llm_factory
+from core.events import (
+    AgentEndEvent,
+    AgentStartEvent,
+    ProviderRequestEndEvent,
+    RuntimeEvent,
+    ToolExecutionEndEvent,
+    ToolExecutionStartEvent,
+    TurnStartEvent,
+    runtime_event_from_tuple,
+    tuple_payload_from_event,
 )
-from core.agent.mixins import EventEmitterMixin, ToolFilterMixin
-from core.llm.factory import LLMRole, get_llm
 from core.llm.types import ToolCall
 from core.llm_invoke_errors import classify_llm_invoke_failure
-from core.messages import MessageMapper
+from core.messages import MessageMapper, RuntimeMessage, ToolResultRuntimeMessage
+from core.provider import ProviderHooks, ProviderRequest
 from core.state import InvestigationState
 from core.state.evidence import EvidenceEntry
+from core.tool_framework.registered_tool import RegisteredTool
+from core.types import RuntimeTool
 from platform.observability import debug_print
 from platform.observability import get_progress_tracker as get_tracker
 from platform.observability.trace.redaction import (
@@ -37,10 +44,8 @@ from tools.investigation.stages.gather_evidence.incident_command import (
     incident_command_conclusion_complete,
 )
 from tools.investigation.stages.gather_evidence.loop import (
-    InvestigationToolCallCache,
+    InvestigationLoopController,
     degraded_investigation_from_llm_failure,
-    duplicate_call_result,
-    tool_call_signature,
 )
 from tools.investigation.stages.gather_evidence.prompt import (
     build_investigation_system_prompt,
@@ -59,21 +64,36 @@ from tools.investigation.stages.gather_evidence.tools import (
 
 logger = logging.getLogger(__name__)
 
-
-def _mark_messages(messages: list[dict[str, Any]], key: str) -> None:
-    for msg in messages:
-        msg[key] = True
+LlmFactory = Callable[[], Any]
 
 
-class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
-    """ReAct loop scoped to the tools enabled by connected integrations.
+@dataclass
+class _ConclusionState:
+    nudge: str | None = None
 
-    Owns a specialised investigation ``run()`` — seed calls, evidence collection,
-    duplicate detection, and stagnation handling — assembling its config (LLM,
-    tools, prompt, resolved integrations) inline from ``state``. Uses two agent
-    hooks: :class:`~core.agent.mixins.EventEmitterMixin` for event dispatch and
-    :class:`~core.agent.mixins.ToolFilterMixin` for tool narrowing.
+
+@dataclass
+class _RuntimeState:
+    controller: InvestigationLoopController
+    tracker: Any
+    tool_context: dict[str, Any]
+    evidence_entries: list[EvidenceEntry]
+    loops_completed: int = 0
+    last_messages: list[RuntimeMessage] | None = None
+
+
+class ConnectedInvestigationAgent:
+    """Run the investigation policy through ``AgentConfig`` and ``build_agent``.
+
+    Seed evidence, tool selection, duplicate suppression, and conclusion policy
+    remain investigation-owned; the think -> call-tools -> observe loop is the
+    shared :class:`core.agent.Agent` implementation.
     """
+
+    def __init__(self, *, llm_factory: LlmFactory | None = None) -> None:
+        self._llm_factory = llm_factory
+        self._on_tuple_event: TupleEventCallback | None = None
+        self._on_runtime_event: RuntimeEventCallback | None = None
 
     def _should_accept_conclusion(
         self,
@@ -82,14 +102,7 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         iteration: int,  # noqa: ARG002 — used by overrides
         final_text: str = "",
     ) -> tuple[bool, str | None]:
-        """Decide what to do when the LLM stops requesting tools.
-
-        Reject once when the final text omits required incident-command markers,
-        so the model reformats before diagnose parses the conclusion.
-
-        Override in subclasses (e.g. :class:`CLIBackedInvestigationAgent`) to
-        nudge the model back into tool calls before accepting a conclusion.
-        """
+        """Accept complete incident-command output, nudging incomplete output once."""
         last_text = final_text or getattr(self, "_last_assistant_text", "") or ""
         if (
             last_text.strip()
@@ -101,39 +114,70 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         return True, None
 
     def _build_system_prompt(self, state: dict[str, Any]) -> str:
-        """Produce the LLM system prompt from an augmented state dict.
-
-        Extension point for bench harnesses that need to swap the prompt body
-        without reimplementing the state/tool_context merge.
-        """
+        """Produce the investigation system prompt from augmented state."""
         return build_investigation_system_prompt(state)
 
-    def _record_tool_start(self, tc: ToolCall) -> None:
-        redacted = redact_tool_view(tc.input)
-        self._redacted_inputs[tc.id] = redacted.tool_input
-        self._tracker.record_tool_start(tc.name, redacted.tool_input, event_key=tc.id)
-        self._emit("tool_start", tool_event_payload(tc, redacted=redacted))
+    def _filter_tools[RuntimeToolT: RuntimeTool](
+        self, tools: list[RuntimeToolT]
+    ) -> list[RuntimeToolT]:
+        """Return the tools exposed to the investigation; subclasses may narrow them."""
+        return tools
 
-    def _redacted_view(self, tc: ToolCall, output: Any) -> RedactedToolView:
-        """Pair the output with the input redaction already done at tool start.
+    def _dispatch_runtime(self, event: RuntimeEvent) -> None:
+        if self._on_runtime_event is not None:
+            try:
+                self._on_runtime_event(event)
+            except Exception:  # noqa: BLE001 - observers must not break investigations
+                logger.debug("runtime investigation observer failed", exc_info=True)
+        payload = tuple_payload_from_event(event)
+        if payload is not None and self._on_tuple_event is not None:
+            try:
+                self._on_tuple_event(*payload)
+            except Exception:  # noqa: BLE001 - observers must not break investigations
+                logger.debug("tuple investigation observer failed", exc_info=True)
 
-        Redaction deep-copies the whole payload, and a tool's input is walked
-        once when the call is announced. Re-walking it to attach the output
-        doubles that work on every tool call in the loop.
-        """
-        tool_input = self._redacted_inputs.pop(tc.id, None)
-        if tool_input is None:
-            return redact_tool_view(tc.input, output)
-        return RedactedToolView(tool_input=tool_input, output=redact_sensitive(output))
+    def _dispatch_tuple(self, kind: str, data: dict[str, Any]) -> None:
+        event = runtime_event_from_tuple(kind, data)
+        if event is not None:
+            self._dispatch_runtime(event)
+        elif self._on_tuple_event is not None:
+            try:
+                self._on_tuple_event(kind, data)
+            except Exception:  # noqa: BLE001 - observers must not break investigations
+                logger.debug("tuple investigation observer failed", exc_info=True)
 
-    def _record_tool_end(self, tc: ToolCall, output: Any, *, redacted: RedactedToolView) -> None:
+    def _record_seed_start(self, tool_call: ToolCall) -> RedactedToolView:
+        redacted = redact_tool_view(tool_call.input)
+        self._tracker.record_tool_start(
+            tool_call.name,
+            redacted.tool_input,
+            event_key=tool_call.id,
+        )
+        self._dispatch_tuple("tool_start", tool_event_payload(tool_call, redacted=redacted))
+        return redacted
+
+    def _record_seed_end(
+        self,
+        tool_call: ToolCall,
+        output: Any,
+        *,
+        redacted_input: RedactedToolView,
+    ) -> RedactedToolView:
+        redacted = RedactedToolView(
+            tool_input=redacted_input.tool_input,
+            output=redact_sensitive(output),
+        )
         self._tracker.record_tool_end(
-            tc.name,
+            tool_call.name,
             redacted.output,
-            event_key=tc.id,
+            event_key=tool_call.id,
             tool_input=redacted.tool_input,
         )
-        self._emit("tool_end", tool_event_payload(tc, output=output, redacted=redacted))
+        self._dispatch_tuple(
+            "tool_end",
+            tool_event_payload(tool_call, output=output, redacted=redacted),
+        )
+        return redacted
 
     def run(
         self,
@@ -141,47 +185,41 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
         on_event: TupleEventCallback | None = None,
         on_runtime_event: RuntimeEventCallback | None = None,
     ) -> dict[str, Any]:
-        """Run the full investigation. Returns a dict of state updates."""
+        """Run one investigation and return partial state updates."""
         self._on_tuple_event = on_event
         self._on_runtime_event = on_runtime_event
         self._tracker = get_tracker()
-        #: Redacted tool inputs from tool_start, consumed when the output lands.
-        self._redacted_inputs: dict[str, Any] = {}
         self._tracker.start("investigation_agent", "Running investigation agent loop")
 
         state_dict = cast(dict[str, Any], state)
         resolved = dict(state.get("resolved_integrations") or {})
-        available_tools = list(self._filter_tools(get_available_tools(resolved)))
+        available_tools = list(self._filter_tools(list(get_available_tools(resolved))))
         tools = list(select_investigation_tools(available_tools, state_dict))
         tool_context = build_connected_tool_context(resolved, tools)
         tool_by_name = {tool.name: tool for tool in tools}
-
         if not tools:
             logger.warning("No tools available for investigation")
 
-        llm = get_llm(LLMRole.AGENT)
-        msg_mapper = MessageMapper(llm)
-        tool_schemas = llm.tool_schemas(tools)
-
+        llm = (self._llm_factory or default_llm_factory)()
         prompt_state = {**state_dict, **tool_context}
         system = self._build_system_prompt(prompt_state)
         alert_text = format_alert_context(prompt_state, tools)
         messages: list[dict[str, Any]] = [{"role": "user", "content": alert_text}]
-
-        prompt_tokens = estimate_message_tokens(messages, system=system, tools=tool_schemas)
-        logger.debug(
-            "[agent] first-turn prompt budget: ~%d tokens (%d tool schemas from %d available)",
-            prompt_tokens,
-            len(tool_schemas),
-            len(available_tools),
-        )
-
         evidence: dict[str, Any] = {}
         evidence_entries: list[EvidenceEntry] = []
-        executed_hypotheses: list[dict[str, Any]] = []
-        tool_call_cache = InvestigationToolCallCache()
+        controller = InvestigationLoopController(
+            stagnation_nudge=STAGNATION_NUDGE,
+            checkpoint_nudge=POST_TRIAGE_CHECKPOINT,
+            max_stagnant_iterations=MAX_STAGNANT_ITERATIONS,
+        )
+        runtime_state = _RuntimeState(
+            controller=controller,
+            tracker=self._tracker,
+            tool_context=tool_context,
+            evidence_entries=evidence_entries,
+        )
 
-        self._emit(
+        self._dispatch_tuple(
             "agent_start",
             {
                 "tool_count": len(tools),
@@ -189,259 +227,328 @@ class ConnectedInvestigationAgent(EventEmitterMixin, ToolFilterMixin):
                 "available_action_names": tool_context["available_action_names"],
             },
         )
-
-        seed_calls = build_seed_calls(state_dict, tools, llm)
-        if seed_calls:
-            logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
-            for tc in seed_calls:
-                self._record_tool_start(tc)
-            executed_hypotheses.append(
-                {
-                    "hypothesis": "Seed primary integration tools",
-                    "actions": [tc.name for tc in seed_calls],
-                    "loop_iteration": -1,
-                }
-            )
-            seed_results = execute_tools(seed_calls, tools, resolved)
-            seed_msgs = msg_mapper.to_tool_result_provider_messages(seed_calls, seed_results)
-
-            seed_assistant_msg = msg_mapper.to_synthetic_assistant_provider_message(seed_calls)
-            _mark_messages([seed_assistant_msg, *seed_msgs], "_opensre_seed")
-            messages.append(seed_assistant_msg)
-            messages.extend(seed_msgs)
-
-            for tc, output in zip(seed_calls, seed_results):
-                tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=-1)
-                redacted = self._redacted_view(tc, output)
-                merge_tool_evidence(evidence, tc.name, output, tc.input, redacted=redacted)
-                evidence_entries.append(
-                    EvidenceEntry(
-                        key=tc.name,
-                        data=redacted.output,
-                        tool_name=tc.name,
-                        tool_args=redacted.tool_input,
-                        source=tool_source(tool_by_name, tc.name),
-                        loop_iteration=-1,
-                    )
-                )
-                self._record_tool_end(tc, output, redacted=redacted)
-                debug_print(f"[seed:{tc.name}] → {summarise(output)}")
-
-        # Expose planned tools and live evidence to _should_accept_conclusion overrides.
-        # Both are set before the loop so they're always initialised; evidence is a
-        # reference to the same mutable dict the loop populates, so overrides always
-        # see the current state without an extra assignment inside the loop body.
-        # Only track names that exist in the tool schema the LLM actually receives —
-        # hallucinated or expired names would otherwise cause futile nudge cycles.
-        _available_tool_names = {t.name for t in tools}
-        self._planned_actions: list[str] = [
-            str(name)
-            for name in (state_dict.get("planned_actions") or [])
-            if str(name).strip() and str(name) in _available_tool_names
-        ]
-        self._current_evidence: dict[str, Any] = evidence
-
-        context_ceiling = context_budget_ceiling_for_model(getattr(llm, "_model", None))
-        full_overhead = system_and_tools_overhead(system, tool_schemas)
-        system_only_overhead = system_and_tools_overhead(system, None)
-        stagnant_iterations = 0
-        force_conclusion = False
-        self._last_assistant_text = ""
-        self._conclusion_format_nudged = False
-        self._post_triage_checkpoint_sent = False
-        loops_completed = 0
-        for iteration in range(MAX_INVESTIGATION_LOOPS):
-            logger.debug("[agent] iteration=%d", iteration)
-            self._emit("llm_start", {"iteration": iteration})
-            active_tool_schemas: list[dict[str, Any]] = [] if force_conclusion else tool_schemas
-            active_overhead = system_only_overhead if force_conclusion else full_overhead
-            enforce_context_budget(
-                messages, fixed_overhead_tokens=active_overhead, ceiling=context_ceiling
-            )
-            try:
-                response = llm.invoke(messages, system=system, tools=active_tool_schemas)
-
-            except Exception as err:
-                failure = classify_llm_invoke_failure(err)
-                if failure is None:
-                    raise
-                return degraded_investigation_from_llm_failure(
-                    failure,
-                    err=err,
-                    tracker=self._tracker,
-                    _emit=self._emit,
-                    evidence=evidence,
-                    evidence_entries=evidence_entries,
-                    messages=messages,
-                    executed_hypotheses=executed_hypotheses,
-                    tool_context=tool_context,
-                    investigation_loop_count=loops_completed,
-                )
-
-            loops_completed = iteration + 1
-
-            messages.append(msg_mapper.to_assistant_provider_message(response))
-            self._last_assistant_text = str(getattr(response, "content", "") or "")
-
-            if not response.has_tool_calls:
-                accept, nudge = self._should_accept_conclusion(
-                    evidence_count=len(evidence_entries),
-                    iteration=iteration,
-                )
-                if accept:
-                    logger.debug("[agent] no tool calls — done after %d iterations", iteration + 1)
-                    break
-                if nudge is None:
-                    raise ValueError(
-                        f"{type(self).__name__}._should_accept_conclusion returned "
-                        "(False, None) — a nudge string is required when rejecting "
-                        "the conclusion, otherwise the LLM will loop on an unchanged "
-                        "message history until MAX_INVESTIGATION_LOOPS."
-                    )
-                messages.append({"role": "user", "content": nudge})
-                continue
-
-            cached_entries = [
-                tool_call_cache.lookup(tool_call_signature(tc)) for tc in response.tool_calls
-            ]
-            duplicate_flags = [cached is not None for cached in cached_entries]
-            fresh_calls = [
-                tc
-                for tc, cached in zip(response.tool_calls, cached_entries, strict=True)
-                if cached is None
-            ]
-            for tc in fresh_calls:
-                self._record_tool_start(tc)
-
-            executed_hypotheses.append(
-                {
-                    "hypothesis": f"Agent iteration {iteration}",
-                    "actions": [tc.name for tc in fresh_calls],
-                    "loop_iteration": iteration,
-                }
-            )
-
-            fresh_results = iter(execute_tools(fresh_calls, tools, resolved) if fresh_calls else [])
-            results: list[Any] = []
-            for tc, cached_entry in zip(response.tool_calls, cached_entries, strict=True):
-                if cached_entry is not None:
-                    results.append(duplicate_call_result(tc, cached_entry))
-                    continue
-                output = next(fresh_results)
-                tool_call_cache.store(tool_call_signature(tc), output, loop_iteration=iteration)
-                results.append(output)
-
-            tool_result_messages = msg_mapper.to_tool_result_provider_messages(
-                response.tool_calls, results
-            )
-            if duplicate_flags and all(duplicate_flags):
-                _mark_messages([messages[-1], *tool_result_messages], "_opensre_duplicate_result")
-            messages.extend(tool_result_messages)
-
-            for tc, output, is_dup in zip(response.tool_calls, results, duplicate_flags):
-                if is_dup:
-                    debug_print(f"[{tc.name}] → duplicate call suppressed")
-                    continue
-                redacted = self._redacted_view(tc, output)
-                merge_tool_evidence(evidence, tc.name, output, tc.input, redacted=redacted)
-                evidence_entries.append(
-                    EvidenceEntry(
-                        key=tc.name,
-                        data=redacted.output,
-                        tool_name=tc.name,
-                        tool_args=redacted.tool_input,
-                        source=tool_source(tool_by_name, tc.name),
-                        loop_iteration=iteration,
-                    )
-                )
-                self._record_tool_end(tc, output, redacted=redacted)
-                debug_print(f"[{tc.name}] → {summarise(output)}")
-
-            if iteration == 0 and fresh_calls and not self._post_triage_checkpoint_sent:
-                messages.append({"role": "user", "content": POST_TRIAGE_CHECKPOINT})
-                self._post_triage_checkpoint_sent = True
-
-            if fresh_calls:
-                stagnant_iterations = 0
-            else:
-                stagnant_iterations += 1
-                if messages and messages[-1].get("role") == "user":
-                    last_content = messages[-1]["content"]
-                    if isinstance(last_content, list):
-                        last_content.append({"type": "text", "text": STAGNATION_NUDGE})
-                    else:
-                        messages[-1]["content"] = f"{last_content}\n\n{STAGNATION_NUDGE}"
-                else:
-                    messages.append({"role": "user", "content": STAGNATION_NUDGE})
-                if stagnant_iterations >= MAX_STAGNANT_ITERATIONS:
-                    logger.warning(
-                        "[agent] %d consecutive duplicate-only iterations — forcing "
-                        "tool-free conclusion before MAX_INVESTIGATION_LOOPS",
-                        stagnant_iterations,
-                    )
-                    force_conclusion = True
-        else:
-            logger.warning(
-                "[agent] hit MAX_INVESTIGATION_LOOPS=%d without finishing",
-                MAX_INVESTIGATION_LOOPS,
-            )
-
-        self._emit(
-            "agent_end",
-            {
-                "evidence_count": len(evidence_entries),
-                "message_count": len(messages),
-                "investigation_loop_count": loops_completed,
-                "investigation_iteration_cap": MAX_INVESTIGATION_LOOPS,
-            },
+        self._run_seed_calls(
+            state_dict=state_dict,
+            llm=llm,
+            tools=tools,
+            resolved=resolved,
+            tool_by_name=tool_by_name,
+            controller=controller,
+            messages=messages,
+            evidence=evidence,
+            evidence_entries=evidence_entries,
         )
 
+        available_tool_names = {tool.name for tool in tools}
+        self._planned_actions = [
+            str(name)
+            for name in (state_dict.get("planned_actions") or [])
+            if str(name).strip() and str(name) in available_tool_names
+        ]
+        self._current_evidence = controller.current_evidence
+        for name, value in evidence.items():
+            if name != "tool_outputs":
+                self._current_evidence[name] = value
+        self._last_assistant_text = ""
+        self._conclusion_format_nudged = False
+
+        conclusion_state = _ConclusionState()
+        goal = self._build_goal(conclusion_state)
+        on_shared_event = self._build_runtime_observer(runtime_state)
+        provider_hooks = self._build_provider_hooks(runtime_state)
+        config = AgentConfig(
+            llm=llm,
+            system=system,
+            tools=tuple(tools),
+            resolved_integrations=resolved,
+            max_iterations=MAX_INVESTIGATION_LOOPS,
+            tool_hooks=controller.hooks(),
+            provider_hooks=provider_hooks,
+            on_runtime_event=on_shared_event,
+            goal=goal,
+        )
+        shared_agent = build_agent(config)
+        controller.bind_queue_message(shared_agent.steer)
+
+        try:
+            run_result = shared_agent.run(messages)
+        except Exception as err:
+            failure = classify_llm_invoke_failure(err)
+            if failure is None:
+                raise
+            self._merge_fresh_results(
+                controller,
+                evidence=evidence,
+                evidence_entries=evidence_entries,
+                tool_by_name=tool_by_name,
+            )
+            partial_messages = self._provider_messages(
+                llm,
+                runtime_state.last_messages or [],
+                controller,
+            )
+            return degraded_investigation_from_llm_failure(
+                failure,
+                err=err,
+                tracker=self._tracker,
+                _emit=self._dispatch_tuple,
+                evidence=evidence,
+                evidence_entries=evidence_entries,
+                messages=partial_messages,
+                executed_hypotheses=controller.executed_hypotheses,
+                tool_context=tool_context,
+                investigation_loop_count=runtime_state.loops_completed,
+            )
+
+        self._merge_fresh_results(
+            controller,
+            evidence=evidence,
+            evidence_entries=evidence_entries,
+            tool_by_name=tool_by_name,
+        )
+        provider_messages = self._provider_messages(llm, run_result.messages, controller)
         self._tracker.complete(
             "investigation_agent",
             fields_updated=["evidence", "evidence_entries", "agent_messages"],
-            message=f"evidence:{len(evidence_entries)} messages:{len(messages)}",
+            message=f"evidence:{len(evidence_entries)} messages:{len(provider_messages)}",
         )
-
         updates = {
             "evidence": evidence,
-            "evidence_entries": [e.model_dump() for e in evidence_entries],
-            "agent_messages": messages,
-            "executed_hypotheses": executed_hypotheses,
-            "investigation_loop_count": loops_completed,
+            "evidence_entries": [entry.model_dump() for entry in evidence_entries],
+            "agent_messages": provider_messages,
+            "executed_hypotheses": controller.executed_hypotheses,
+            "investigation_loop_count": run_result.llm_iterations_used,
             "investigation_iteration_cap": MAX_INVESTIGATION_LOOPS,
         }
         updates.update(tool_context)
         return updates
+
+    def _build_goal(self, state: _ConclusionState) -> Goal:
+        def _verify(observation: GoalObservation) -> bool:
+            self._last_assistant_text = observation.final_text
+            accept, nudge = self._should_accept_conclusion(
+                evidence_count=len(self._current_evidence),
+                iteration=observation.iteration,
+                final_text=observation.final_text,
+            )
+            if not accept and nudge is None:
+                raise ValueError(
+                    f"{type(self).__name__}._should_accept_conclusion returned "
+                    "(False, None) — a nudge string is required when rejecting "
+                    "the conclusion."
+                )
+            state.nudge = nudge
+            return accept
+
+        def _nudge(_observation: GoalObservation) -> str:
+            if state.nudge is None:
+                raise ValueError("Investigation conclusion was rejected without a nudge.")
+            return state.nudge
+
+        return Goal(
+            description="complete the investigation",
+            success_criteria="the investigation-specific conclusion policy accepts the answer",
+            verify=_verify,
+            nudge=_nudge,
+        )
+
+    def _build_runtime_observer(
+        self,
+        state: _RuntimeState,
+    ) -> RuntimeEventCallback:
+        def _observe(event: RuntimeEvent) -> None:
+            if isinstance(event, AgentStartEvent):
+                return
+            if isinstance(event, TurnStartEvent):
+                state.controller.begin_iteration(event.iteration)
+            elif isinstance(event, ProviderRequestEndEvent):
+                state.loops_completed = max(state.loops_completed, event.iteration + 1)
+            elif isinstance(event, ToolExecutionStartEvent):
+                if state.controller.is_duplicate(event.tool_call_id):
+                    return
+                state.tracker.record_tool_start(
+                    event.tool_name,
+                    event.args,
+                    event_key=event.tool_call_id,
+                )
+            elif isinstance(event, ToolExecutionEndEvent):
+                if state.controller.is_duplicate(event.tool_call_id):
+                    return
+                state.tracker.record_tool_end(
+                    event.tool_name,
+                    event.result,
+                    event_key=event.tool_call_id,
+                    tool_input=event.args,
+                )
+                debug_print(f"[{event.tool_name}] → {summarise(event.result)}")
+            elif isinstance(event, AgentEndEvent):
+                event = replace(
+                    event,
+                    data={
+                        **event.data,
+                        "evidence_count": len(state.controller.fresh_results())
+                        + len(state.evidence_entries),
+                        "investigation_loop_count": state.loops_completed,
+                        "investigation_iteration_cap": MAX_INVESTIGATION_LOOPS,
+                    },
+                )
+            self._dispatch_runtime(event)
+
+        return _observe
+
+    @staticmethod
+    def _build_provider_hooks(state: _RuntimeState) -> ProviderHooks:
+        def _capture(messages: Sequence[RuntimeMessage]) -> Sequence[RuntimeMessage]:
+            state.last_messages = list(messages)
+            return messages
+
+        def _force_conclusion(request: ProviderRequest) -> ProviderRequest:
+            if not state.controller.force_conclusion:
+                return request
+            logger.warning(
+                "[agent] repeated duplicate-only iterations — forcing tool-free conclusion"
+            )
+            return replace(request, tools=[])
+
+        return ProviderHooks(
+            transform_messages=_capture,
+            before_provider_request=_force_conclusion,
+        )
+
+    def _run_seed_calls(
+        self,
+        *,
+        state_dict: dict[str, Any],
+        llm: Any,
+        tools: list[RegisteredTool],
+        resolved: dict[str, Any],
+        tool_by_name: Mapping[str, RegisteredTool],
+        controller: InvestigationLoopController,
+        messages: list[dict[str, Any]],
+        evidence: dict[str, Any],
+        evidence_entries: list[EvidenceEntry],
+    ) -> None:
+        seed_calls = build_seed_calls(state_dict, tools, llm)
+        if not seed_calls:
+            return
+        logger.debug("[agent] seeding %d primary tool calls before LLM loop", len(seed_calls))
+        redacted_inputs = [self._record_seed_start(tool_call) for tool_call in seed_calls]
+        controller.executed_hypotheses.append(
+            {
+                "hypothesis": "Seed primary integration tools",
+                "actions": [tool_call.name for tool_call in seed_calls],
+                "loop_iteration": -1,
+            }
+        )
+        seed_results = execute_tools(seed_calls, tools, resolved)
+        mapper = MessageMapper(llm)
+        seed_assistant = mapper.to_synthetic_assistant_provider_message(seed_calls)
+        seed_messages = mapper.to_tool_result_provider_messages(seed_calls, seed_results)
+        for message in [seed_assistant, *seed_messages]:
+            message["_opensre_seed"] = True
+        messages.extend([seed_assistant, *seed_messages])
+
+        for tool_call, output, redacted_input in zip(
+            seed_calls,
+            seed_results,
+            redacted_inputs,
+            strict=True,
+        ):
+            controller.record_seed(tool_call, output)
+            redacted = self._record_seed_end(
+                tool_call,
+                output,
+                redacted_input=redacted_input,
+            )
+            merge_tool_evidence(
+                evidence,
+                tool_call.name,
+                output,
+                tool_call.input,
+                redacted=redacted,
+            )
+            evidence_entries.append(
+                EvidenceEntry(
+                    key=tool_call.name,
+                    data=redacted.output,
+                    tool_name=tool_call.name,
+                    tool_args=redacted.tool_input,
+                    source=tool_source(tool_by_name, tool_call.name),
+                    loop_iteration=-1,
+                )
+            )
+            debug_print(f"[seed:{tool_call.name}] → {summarise(output)}")
+
+    @staticmethod
+    def _merge_fresh_results(
+        controller: InvestigationLoopController,
+        *,
+        evidence: dict[str, Any],
+        evidence_entries: list[EvidenceEntry],
+        tool_by_name: Mapping[str, RegisteredTool],
+    ) -> None:
+        for tool_call, output in controller.fresh_results():
+            redacted = redact_tool_view(tool_call.input, output)
+            merge_tool_evidence(
+                evidence,
+                tool_call.name,
+                output,
+                tool_call.input,
+                redacted=redacted,
+            )
+            evidence_entries.append(
+                EvidenceEntry(
+                    key=tool_call.name,
+                    data=redacted.output,
+                    tool_name=tool_call.name,
+                    tool_args=redacted.tool_input,
+                    source=tool_source(tool_by_name, tool_call.name),
+                    loop_iteration=controller.iteration_for(tool_call.id),
+                )
+            )
+
+    @staticmethod
+    def _provider_messages(
+        llm: Any,
+        messages: Sequence[RuntimeMessage],
+        controller: InvestigationLoopController,
+    ) -> list[dict[str, Any]]:
+        mapper = MessageMapper(llm)
+        provider_messages: list[dict[str, Any]] = []
+        for message in messages:
+            metadata = dict(getattr(message, "metadata", {}) or {})
+            tool_calls = tuple(getattr(message, "tool_calls", ()) or ())
+            if tool_calls and all(controller.was_suppressed(call) for call in tool_calls):
+                metadata["_opensre_duplicate_result"] = True
+            if isinstance(message, ToolResultRuntimeMessage) and metadata.get(
+                "_opensre_duplicate_result"
+            ):
+                duplicate_payloads = [controller.duplicate_payload(call) for call in tool_calls]
+                rendered = mapper.to_tool_result_provider_messages(
+                    list(tool_calls),
+                    [payload for payload in duplicate_payloads if payload is not None],
+                )
+            else:
+                rendered = mapper.to_provider_messages([message])
+            for provider_message in rendered:
+                provider_messages.append({**provider_message, **metadata})
+        return provider_messages
 
 
 InvestigationAgent = ConnectedInvestigationAgent
 
 
 def get_investigation_agent_class() -> type[ConnectedInvestigationAgent]:
-    """Return the investigation agent class appropriate for the current LLM provider.
-
-    Callers that need a fixed class (e.g. bench harness, integration tests) should
-    pass an explicit ``agent_class`` to the pipeline rather than calling this.
-    """
+    """Return the investigation policy appropriate for the active agent LLM."""
     from core.llm.transports.sdk.agent_clients import CLIBackedAgentClient
 
-    if isinstance(get_llm(LLMRole.AGENT), CLIBackedAgentClient):
+    if isinstance(default_llm_factory(), CLIBackedAgentClient):
         return CLIBackedInvestigationAgent
     return ConnectedInvestigationAgent
 
 
 class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
-    """Investigation agent for CLI-backed LLMs (Codex, Claude Code CLI, etc.).
-
-    CLI models receive the full conversation history flattened into a single
-    text prompt per invoke. They tend to emit a plain-text final answer as
-    soon as they see accumulated tool results, exiting the ReAct loop before
-    all planned tools have been called.
-
-    This subclass overrides the conclusion hook to nudge the model to call
-    every planned tool before accepting its final answer. The outer
-    MAX_INVESTIGATION_LOOPS cap still bounds worst-case runtime.
-    """
+    """Require CLI-backed models to call every planned tool before concluding."""
 
     def _should_accept_conclusion(
         self,
@@ -452,22 +559,12 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
     ) -> tuple[bool, str | None]:
         planned = getattr(self, "_planned_actions", [])
         evidence = getattr(self, "_current_evidence", None)
-
-        if not planned or evidence is None:
+        if not planned or evidence is None or iteration >= MAX_INVESTIGATION_LOOPS - 2:
             return super()._should_accept_conclusion(
                 evidence_count=evidence_count,
                 iteration=iteration,
                 final_text=final_text,
             )
-
-        # Leave room for a final text-only iteration after the nudge fires.
-        if iteration >= MAX_INVESTIGATION_LOOPS - 2:
-            return super()._should_accept_conclusion(
-                evidence_count=evidence_count,
-                iteration=iteration,
-                final_text=final_text,
-            )
-
         uncalled = [name for name in planned if name not in evidence]
         if not uncalled:
             return super()._should_accept_conclusion(
@@ -475,9 +572,15 @@ class CLIBackedInvestigationAgent(ConnectedInvestigationAgent):
                 iteration=iteration,
                 final_text=final_text,
             )
-
-        tool_list = ", ".join(uncalled)
         return False, (
-            f"You have not yet called these planned investigation tools: {tool_list}. "
+            f"You have not yet called these planned investigation tools: {', '.join(uncalled)}. "
             "Call them now using the JSON tool_calls format before writing your final answer."
         )
+
+
+__all__ = [
+    "CLIBackedInvestigationAgent",
+    "ConnectedInvestigationAgent",
+    "InvestigationAgent",
+    "get_investigation_agent_class",
+]

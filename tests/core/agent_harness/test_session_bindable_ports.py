@@ -6,6 +6,7 @@ import threading
 from typing import Any
 
 from core.agent_harness.ports import ConsoleBindable, OutputBindable, SessionBindable
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.headless_adapters import (
@@ -16,8 +17,8 @@ from core.agent_harness.turns.headless_adapters import (
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.host_cancel import ensure_turn_cancel
+from core.agent_harness.turns.port_families import HeadlessPorts
 
 
 class _SpyTools:
@@ -67,15 +68,15 @@ def test_headless_agent_bind_session_invokes_session_bindable() -> None:
     first = InMemorySessionState(session_id="a")
     second = InMemorySessionState(session_id="b")
     tools = _SpyTools()
-    agent = HeadlessAgent(tools=tools, session=first)
+    agent = HeadlessPorts(session=first).agent(tools=tools)
     agent.bind_session(second)
     assert tools.sessions == [second]
 
 
 def test_headless_agent_bind_turn_console_invokes_console_bindable() -> None:
     tools = _SpyTools()
-    agent = HeadlessAgent(tools=tools, session=InMemorySessionState())
-    agent.bind_turn(console="second")
+    agent = HeadlessPorts(session=InMemorySessionState()).agent(tools=tools)
+    agent.bind_turn(TurnBinding(console="second"))
     assert tools.consoles == ["second"]
 
 
@@ -95,13 +96,10 @@ def test_headless_agent_bind_turn_output_retargets_reasoning() -> None:
     first = BufferOutputSink()
     second = BufferOutputSink()
     reasoning = DefaultReasoningClientProvider(output=first)
-    agent = HeadlessAgent(
-        tools=NullToolProvider(),
-        session=InMemorySessionState(),
-        output=first,
-        reasoning=reasoning,
+    agent = HeadlessPorts(session=InMemorySessionState(), output=first, reasoning=reasoning).agent(
+        tools=NullToolProvider()
     )
-    agent.bind_turn(output=second)
+    agent.bind_turn(TurnBinding(output=second))
     reasoning._handle_unavailable(RuntimeError("boom"), context="test")
     assert "LLM client unavailable" in second.text
     assert first.text == ""

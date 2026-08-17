@@ -167,7 +167,9 @@ def test_count_loaded_skills_survives_loader_failure(monkeypatch: object) -> Non
     real_import = builtins.__import__
 
     def _fail_skills_loader(name: str, *args: object, **kwargs: object) -> object:
-        if name == "core.agent_harness.prompts.skills.loader":
+        # The banner reaches the loader through the harness SPI; fail the import
+        # whichever door it comes through so the guard is about the loader, not the path.
+        if name in ("core.agent_harness.prompts.skills.loader", "core.agent_harness.spi.grounding"):
             raise ImportError("simulated heavy import failure")
         return real_import(name, *args, **kwargs)
 
