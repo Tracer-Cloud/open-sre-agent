@@ -28,6 +28,9 @@ Example::
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
+
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.ports import (
     AnswerRequest,
@@ -49,15 +52,13 @@ from core.agent_harness.ports import (
     TurnAccounting,
     TurnBinding,
 )
-from core.agent_harness.prompts.grounding import (
-    DefaultPromptContextProvider,
-    supports_default_prompt_context,
-)
+from core.agent_harness.session_goal.goal import SessionGoal
+from core.agent_harness.session_goal.run_until import run_until_session_goal
 from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
 from core.agent_harness.turns.evidence_driver import gather_tool_evidence
 from core.agent_harness.turns.gather_observation import GatheredEvidence
-from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
+from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -77,54 +78,42 @@ from core.execution import ToolExecutionHooks
 
 
 class HeadlessAgent:
-    """Runs full agent turns headlessly from a fixed set of configured ports.
+    """Runs agent turns from a fixed set of ports; built by a port family.
 
-    Construct once with the ports, then call :meth:`dispatch` per message.
-    ``tools`` is required — a surface that genuinely wants a text-only turn
-    passes :class:`NullToolProvider` explicitly. Every other port defaults to
-    the in-memory headless adapter from ``headless_adapters`` (the family a
-    script or test runs on with zero configuration); the product family is
-    :class:`~core.agent_harness.turns.default_ports.DefaultPorts`.
+    Every port is required here — the two families supply them:
+    :class:`~core.agent_harness.turns.port_families.HeadlessPorts` (in-memory;
+    scripts and tests) and :class:`~core.agent_harness.turns.port_families.DefaultPorts`
+    (the product defaults; gateway and shell). Hosts do not call this
+    constructor.
 
-    Per-turn values — session, output, accounting, hooks, ``confirm_fn``,
-    ``is_tty`` — are bound with :meth:`bind_turn`; whole-stage replacements
-    with :meth:`bind_stages`. Neither is a constructor concern.
-
-    ``gather`` is a :class:`~core.agent_harness.turns.gather_ports.GatherPorts`
-    describing the evidence pass. It defaults to ``GATHER_DISABLED`` because the
-    pass reaches out to live integrations — a caller opts in with ``GatherPorts()``.
+    Per message a host calls :meth:`handle` with a :class:`TurnBinding`; it
+    binds the turn, dispatches, and continues while a session goal is
+    attached. :meth:`dispatch` is the single-turn verb underneath; whole-stage
+    replacements for tests go through :meth:`bind_stages`.
     """
 
     def __init__(
         self,
         *,
         tools: ToolProvider,
-        session: SessionState | None = None,
-        output: OutputSink | None = None,
-        prompts: PromptContextProvider | None = None,
-        reasoning: ReasoningClientProvider | None = None,
-        run_factory: RunRecordFactory | None = None,
-        error_reporter: ErrorReporter | None = None,
-        gather: GatherPorts | None = None,
+        session: SessionState,
+        output: OutputSink,
+        prompts: PromptContextProvider,
+        reasoning: ReasoningClientProvider,
+        run_factory: RunRecordFactory,
+        error_reporter: ErrorReporter,
+        gather: GatherPorts,
         llm_factory: LlmFactory | None = None,
     ) -> None:
         self._tools = tools
         self._llm_factory = llm_factory
-        self._session: SessionState = session if session is not None else InMemorySessionState()
-        self._output: OutputSink = output if output is not None else BufferOutputSink()
-        self._prompts: PromptContextProvider = (
-            prompts
-            if prompts is not None
-            else (
-                DefaultPromptContextProvider(self._session)
-                if supports_default_prompt_context(self._session)
-                else EmptyPromptContextProvider()
-            )
-        )
-        self._reasoning = reasoning if reasoning is not None else StaticReasoningClientProvider()
-        self._run_factory = run_factory if run_factory is not None else SimpleRunRecordFactory()
-        self._error_reporter = error_reporter if error_reporter is not None else NoopErrorReporter()
-        self._gather_ports = gather if gather is not None else GATHER_DISABLED
+        self._session: SessionState = session
+        self._output: OutputSink = output
+        self._prompts: PromptContextProvider = prompts
+        self._reasoning = reasoning
+        self._run_factory = run_factory
+        self._error_reporter = error_reporter
+        self._gather_ports = gather
         # Turn-scoped state; see bind_turn / bind_stages.
         self._accounting: TurnAccounting | None = None
         self._confirm_fn: ConfirmFn | None = None
@@ -282,8 +271,40 @@ class HeadlessAgent:
         self._answer_override = answer
         self._gather_override = gather_evidence
 
+    def handle(
+        self,
+        text: str,
+        binding: TurnBinding,
+        *,
+        accounting_factory: Callable[[str], TurnAccounting] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+        on_progress: Callable[[SessionGoal], None] | None = None,
+    ) -> TurnResult:
+        """Handle one inbound message: bind the turn, dispatch, continue while a session goal is attached.
+
+        The one host loop — gateway and shell call this and nothing else per
+        message. ``binding`` states the whole turn; ``accounting_factory``
+        (message → accounting) is applied per outer turn because the goal loop
+        may dispatch several, each with different text; ``None`` uses the
+        default per-message accounting. ``cancel_requested`` is checked between
+        outer turns; ``on_progress`` receives the goal after each.
+        """
+
+        def _one_turn(message: str) -> TurnResult:
+            accounting = accounting_factory(message) if accounting_factory is not None else None
+            self.bind_turn(replace(binding, accounting=accounting))
+            return self.dispatch(message)
+
+        return run_until_session_goal(
+            _one_turn,
+            self._session,
+            text,
+            cancel_requested=cancel_requested,
+            on_progress=on_progress,
+        ).last_result
+
     def dispatch(self, message: str) -> TurnResult:
-        """Run one full turn for ``message`` via the common chat host API."""
+        """Run one turn for ``message`` on the currently bound turn (see :meth:`handle`)."""
         return dispatch_chat_turn(
             message,
             self._session,

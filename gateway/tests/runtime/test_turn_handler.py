@@ -19,6 +19,7 @@ from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
 from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.fake_agent import fake_agent
 
 
 @pytest.fixture(autouse=True)
@@ -42,8 +43,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     """
     from core.agent_harness.tools.tool_provider import DefaultToolProvider
 
-    agent = MagicMock()
-    agent.dispatch.return_value = result
+    agent = fake_agent(dispatch_result=result)
     factory = MagicMock()
 
     def _build(**kwargs: Any) -> MagicMock:

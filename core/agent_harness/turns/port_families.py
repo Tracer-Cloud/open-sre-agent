@@ -1,16 +1,17 @@
-"""The product's default port family for one session, and the agent built on it.
+"""The two port families an agent is built on: in-memory and product defaults.
 
-**This is the single headless construction seam.** Gateway ``SessionAgentPool``,
-the REPL and ``AgentSession.start`` all build through :meth:`DefaultPorts.agent`
-— they are not parallel stacks. A host varies the agent through its ports: it
-passes its own :class:`~core.agent_harness.ports.ToolProvider` (usually a
-configured :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`),
-prompt provider and gather ports; reasoning, run records and error reporting
-are this family's and are not host-configurable.
+**This is the single construction seam.** :class:`HeadlessPorts` is the
+in-memory family (scripts, tests, a turn with zero configuration);
+:class:`DefaultPorts` is the product family (gateway ``SessionAgentPool``, the
+REPL, ``AgentSession.start``). Both build through ``.agent(...)``; hosts never
+call :class:`HeadlessAgent` directly. A host varies the agent through the ports
+it passes to ``agent()`` — its :class:`~core.agent_harness.ports.ToolProvider`
+(usually a configured :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`),
+prompt provider and gather ports; the family owns the rest.
 
-Per-turn values (``confirm_fn``, ``is_tty``, hooks, accounting, stage overrides)
-are bound on the agent with :meth:`HeadlessAgent.bind_turn` /
-:meth:`HeadlessAgent.bind_stages`.
+Per-message values are bound on the agent with :meth:`HeadlessAgent.handle`
+(a :class:`~core.agent_harness.ports.TurnBinding`); whole-stage replacements
+for tests with :meth:`HeadlessAgent.bind_stages`.
 
 Process boot (``configure_process``) is a **different layer** — adapters and
 env — and does not build agents.
@@ -35,16 +36,79 @@ from core.agent_harness.ports import (
     PromptContextProvider,
     ReasoningClientProvider,
     RunRecordFactory,
+    SessionState,
     ToolProvider,
 )
-from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+from core.agent_harness.prompts.grounding import (
+    DefaultPromptContextProvider,
+    supports_default_prompt_context,
+)
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
+from core.agent_harness.turns.headless_adapters import (
+    BufferOutputSink,
+    EmptyPromptContextProvider,
+    InMemorySessionState,
+    NoopErrorReporter,
+    SimpleRunRecordFactory,
+    StaticReasoningClientProvider,
+)
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore
+
+
+@dataclass(frozen=True)
+class HeadlessPorts:
+    """The in-memory family: a turn runs with zero configuration.
+
+    ``session`` defaults to an in-memory state, ``output`` to a buffer sink,
+    ``reasoning`` to "no client" (the conversational assistant is skipped) —
+    inject a client to get an answer. ``tools`` is required on ``agent()``: a
+    text-only turn passes :class:`~core.agent_harness.turns.headless_adapters.NullToolProvider`
+    explicitly.
+    """
+
+    session: SessionState | None = None
+    output: OutputSink | None = None
+    reasoning: ReasoningClientProvider | None = None
+
+    @cached_property
+    def _session(self) -> SessionState:
+        return self.session if self.session is not None else InMemorySessionState()
+
+    @cached_property
+    def _output(self) -> OutputSink:
+        return self.output if self.output is not None else BufferOutputSink()
+
+    def prompts(self) -> PromptContextProvider:
+        if supports_default_prompt_context(self._session):
+            return DefaultPromptContextProvider(self._session)
+        return EmptyPromptContextProvider()
+
+    def agent(
+        self,
+        *,
+        tools: ToolProvider,
+        prompts: PromptContextProvider | None = None,
+        gather: GatherPorts | None = None,
+        llm_factory: LlmFactory | None = None,
+    ) -> HeadlessAgent:
+        return HeadlessAgent(
+            tools=tools,
+            session=self._session,
+            output=self._output,
+            prompts=prompts if prompts is not None else self.prompts(),
+            reasoning=(
+                self.reasoning if self.reasoning is not None else StaticReasoningClientProvider()
+            ),
+            run_factory=SimpleRunRecordFactory(),
+            error_reporter=NoopErrorReporter(),
+            gather=gather if gather is not None else GATHER_DISABLED,
+            llm_factory=llm_factory,
+        )
 
 
 @dataclass(frozen=True)
@@ -129,4 +193,4 @@ class DefaultPorts:
         )
 
 
-__all__ = ["DefaultPorts"]
+__all__ = ["DefaultPorts", "HeadlessPorts"]

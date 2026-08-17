@@ -19,40 +19,44 @@ Everything a host touches comes through four modules. Nothing else under
 | Role | You want to… | Import |
 | --- | --- | --- |
 | **Embed** | run turns with the standard ports | `core.agent_harness` — `AgentSession`, `SessionConfig`, `SessionCore`, `SessionManager`, `TurnResult`, `ToolCallingTurnResult`, `OutputSink` |
-| **Host** | build one agent from your ports, bind it per turn | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner` |
+| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner` |
 | **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_flags`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
 | **Implement** | satisfy a protocol the harness calls | `core.agent_harness.ports` — `OutputSink`, `ToolProvider`, `PromptContextProvider`, `ReasoningClientProvider`, `RunRecordFactory`, `ErrorReporter`, `TurnAccounting`, `SessionState`, and the rebind mix-ins `ConsoleBindable` / `OutputBindable` / `SessionBindable` |
 
 ## The host loop
 
-Build once, bind per turn, dispatch:
+Build once, then one call per inbound message:
 
 ```python
 from core.agent_harness.runtime import DefaultPorts, GatherPorts, TurnBinding
 
 # 1. Build — the default port family for this session, plus your ports.
 agent = DefaultPorts(
-    session=session,           # a SessionCore from AgentSession / SessionManager
-    output=my_sink,            # your OutputSink
-    error_reporter=my_reporter # optional; default logs at debug
+    session=session,            # a SessionCore from AgentSession / SessionManager
+    output=my_sink,             # your OutputSink
+    error_reporter=my_reporter, # optional; default logs at debug
 ).agent(
-    tools=my_tool_provider,    # optional; a configured DefaultToolProvider or your own
-    prompts=my_prompts,        # optional; default grounding provider
-    gather=GatherPorts(),      # opt in to the evidence pass; default is disabled
+    tools=my_tool_provider,     # optional; a configured DefaultToolProvider or your own
+    prompts=my_prompts,         # optional; default grounding provider
+    gather=GatherPorts(),       # opt in to the evidence pass; default is disabled
 )
 
-# 2. Bind — state the whole turn. Nothing carries over from the previous turn.
-agent.bind_turn(TurnBinding(
-    session=session,           # None keeps the current session
-    accounting=my_accounting,  # optional; default accounts per message
-    tool_hooks=approval_hooks, # None means "no hooks this turn"
-    console=turn_console,      # for cooperative cancel and progress lines
-    confirm_fn=ask_user,       # None means "no confirmation callback"
-    is_tty=False,
-))
-
-# 3. Dispatch.
-result = agent.dispatch(text)
+# 2. Handle — state the whole turn; the agent binds it, dispatches, and keeps
+#    going while a session goal is attached. Nothing carries over from the
+#    previous message.
+result = agent.handle(
+    text,
+    TurnBinding(
+        session=session,           # None keeps the current session
+        tool_hooks=approval_hooks, # None means "no hooks this turn"
+        console=turn_console,      # for cooperative cancel and progress lines
+        confirm_fn=ask_user,       # None means "no confirmation callback"
+        is_tty=False,
+    ),
+    accounting_factory=None,       # message -> TurnAccounting; None = default per message
+    cancel_requested=lambda: cancel.is_set(),
+    on_progress=render_goal_progress,
+)
 ```
 
 `DefaultPorts` holds what does not vary per host — reasoning client, run
@@ -61,11 +65,17 @@ inputs those defaults need (`console`, `logger`, `surface`). Every port you pass
 to `agent()` replaces that default. `TurnBinding` is a value, not a set of
 keyword arguments: a field you omit is *this turn's value* (no hooks, no
 callback), never "leave alone", so a pooled agent cannot inherit another
-conversation's hooks by omission.
+conversation's hooks by omission. `handle` is the only per-message call a host
+makes; `dispatch` (one engine turn) sits underneath it.
+
+The in-memory family is `HeadlessPorts` — a script or test says
+`HeadlessPorts().agent(tools=NullToolProvider())` and has an agent with zero
+configuration. There is one construction verb, `<family>.agent(...)`; hosts do
+not call `HeadlessAgent(...)` directly.
 
 ## The same loop in the two shipped hosts
 
-The gateway keeps one agent per logical session and rebinds it per inbound
+The gateway keeps one agent per logical session and calls `handle` per inbound
 message:
 
 ```python
@@ -74,11 +84,15 @@ agent = DefaultPorts(session=session, output=live_sink, console=console, logger=
                               observer_factory=…, subprocess_presenter_factory=…, slash_ports_factory=…),
     gather=GatherPorts(),
 )
-agent.bind_turn(TurnBinding(session=session, accounting=DefaultTurnAccounting(session, text),
-                            tool_hooks=sink.tool_hooks, console=turn_console, is_tty=False))
+result = agent.handle(
+    text,
+    TurnBinding(session=session, tool_hooks=sink.tool_hooks, console=turn_console, is_tty=False),
+    cancel_requested=cancel.is_set,
+    on_progress=post_status_line,
+)
 ```
 
-The interactive shell builds one agent at startup and rebinds it per prompt:
+The interactive shell builds one agent at startup and calls `handle` per prompt:
 
 ```python
 agent = DefaultPorts(session=session, output=ShellOutputSink(console), console=console,
@@ -87,10 +101,18 @@ agent = DefaultPorts(session=session, output=ShellOutputSink(console), console=c
     prompts=shell_prompt_context_provider(session),
     gather=shell_gather_ports(session, console),   # console progress lines + session persistence
 )
+result = agent.handle(
+    text,
+    TurnBinding(session=session, output=sink, tool_hooks=hooks, console=console, confirm_fn=ask, is_tty=tty),
+    accounting_factory=lambda message: ShellTurnAccounting(session, message, recorder),
+    cancel_requested=lambda: host_cancel_requested(sink),
+    on_progress=print_checklist,
+)
 ```
 
 Neither host replaces a stage of the agent (action selection, evidence
-gathering, answering). They differ only in ports.
+gathering, answering) and neither writes its own turn loop. They differ only in
+ports and in what they do with the result.
 
 ## What you implement vs what you call
 
@@ -111,8 +133,8 @@ gathering, answering). They differ only in ports.
 - **One agent per logical session; one turn at a time on it.** `bind_turn`
   mutates per-turn state; the gateway holds a per-session lock across
   `dispatch`. Do not share one agent between concurrent turns.
-- **State the whole turn.** Build a fresh `TurnBinding` per turn; to change one
-  field mid-turn use `dataclasses.replace(binding, …)`.
+- **State the whole turn.** Build a fresh `TurnBinding` per message and pass it
+  to `handle`; do not call `bind_turn`/`dispatch` yourself.
 - **Bind on the worker thread you dispatch from.** Storage scope is a
   `ContextVar`; if you hand the turn to a thread pool, wrap it with
   `config.scope_context.in_current_scope` on the calling thread.

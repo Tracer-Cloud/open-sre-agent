@@ -16,10 +16,11 @@ from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnRes
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
 from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.fake_agent import fake_agent
 
 
 def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    agent = MagicMock()
+    agent = fake_agent()
     agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_handled",
         action_result=ToolCallingTurnResult(
@@ -70,7 +71,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 def test_gateway_turn_handler_does_not_finalize_answered_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    agent = MagicMock()
+    agent = fake_agent()
     agent.dispatch.return_value = TurnResult(
         final_intent="cli_agent_fallback",
         action_result=ToolCallingTurnResult(0, 0, 0, False, False),

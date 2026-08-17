@@ -10,8 +10,8 @@ from rich.console import Console
 from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from core.agent_harness.turns.default_ports import DefaultPorts
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
+from core.agent_harness.turns.port_families import DefaultPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
 

@@ -26,6 +26,7 @@ from core.agent_harness.turns.headless_dispatch import (
     HeadlessAgent,
     NoopTurnAccounting,
 )
+from core.agent_harness.turns.port_families import HeadlessPorts
 from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
@@ -310,16 +311,15 @@ def _dispatch_turn(
     gather_enabled: bool = True,
 ) -> TurnResult:
     output = BufferOutputSink()
-    agent = HeadlessAgent(
+    agent = HeadlessPorts(
+        session=session, output=output, reasoning=DefaultReasoningClientProvider(output=output)
+    ).agent(
         tools=DefaultToolProvider(
             session,
             console(),
             slash_ports_factory=headless_slash_ports,
         ),
-        session=session,
-        output=output,
         prompts=DefaultPromptContextProvider(session),
-        reasoning=DefaultReasoningClientProvider(output=output),
         gather=GatherPorts(enabled=gather_enabled),
     )
     agent.bind_turn(TurnBinding(accounting=NoopTurnAccounting()))
@@ -355,7 +355,7 @@ def _install_gateway_dispatch_spy(
     ``SessionAgentPool`` builds agents via ``DefaultPorts(...).agent(...)``; the
     stub routes both halves through one ``build`` over the real family.
     """
-    from core.agent_harness.turns.default_ports import DefaultPorts as real_ports
+    from core.agent_harness.turns.port_families import DefaultPorts as real_ports
 
     def _spy_build(
         *,

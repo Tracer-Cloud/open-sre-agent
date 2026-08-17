@@ -125,6 +125,7 @@ RUNTIME = frozenset(
         "DefaultToolProvider",
         "GatherPorts",
         "HeadlessAgent",
+        "HeadlessPorts",
         "TurnBinding",
     }
 )

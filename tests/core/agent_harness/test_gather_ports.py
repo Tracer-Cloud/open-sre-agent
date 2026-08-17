@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from core.agent_harness.turns.gather_ports import GatherPorts
+from core.agent_harness.turns.port_families import HeadlessPorts
 
 
 class _Session:
@@ -70,9 +71,8 @@ class TestAgentForwardsThePorts:
         def _persist(_executed: list[tuple[Any, Any]]) -> None:
             return None
 
-        agent = headless_dispatch.HeadlessAgent(
+        agent = HeadlessPorts(session=headless_dispatch.InMemorySessionState()).agent(
             tools=headless_dispatch.NullToolProvider(),
-            session=headless_dispatch.InMemorySessionState(),
             gather=GatherPorts(on_progress=_on_progress, persist=_persist, max_iterations=9),
         )
 
@@ -94,9 +94,8 @@ class TestAgentForwardsThePorts:
 
         monkeypatch.setattr(headless_dispatch, "gather_tool_evidence", _never)
 
-        agent = headless_dispatch.HeadlessAgent(
+        agent = HeadlessPorts(session=headless_dispatch.InMemorySessionState()).agent(
             tools=headless_dispatch.NullToolProvider(),
-            session=headless_dispatch.InMemorySessionState(),
             gather=GatherPorts(enabled=False),
         )
 

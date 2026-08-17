@@ -11,14 +11,12 @@ Only a caller that injects a whole stage (``execute_actions`` /
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from rich.console import Console
 
 from core.agent_harness import (
-    AgentSession,
     OutputSink,
-    SessionConfig,
     ToolCallingTurnResult,
     TurnResult,
 )
@@ -28,7 +26,6 @@ from core.agent_harness.spi.cancel import host_cancel_requested
 from core.agent_harness.spi.session_goal import (
     SessionGoal,
     format_session_goal_progress,
-    run_until_session_goal,
 )
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_plan import TurnPlan
@@ -161,7 +158,7 @@ def execute_shell_turn(
     output: OutputSink | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
 ) -> TurnResult:
-    """Execute one submitted interactive-shell turn via :meth:`AgentSession.chat`.
+    """Execute one submitted interactive-shell turn via :meth:`HeadlessAgent.handle`.
 
     Pass a long-lived ``agent`` (the REPL builds one at startup and rebinds it
     per turn) so the tool stack is not rebuilt every turn; without one, an agent
@@ -182,7 +179,6 @@ def execute_shell_turn(
         confirm_fn=confirm_fn,
         is_tty=is_tty,
     )
-    agent.bind_turn(binding)
     _bind_injected_stages(
         agent,
         session,
@@ -194,18 +190,6 @@ def execute_shell_turn(
         request_exit=request_exit,
         tool_hooks=tool_hooks,
     )
-    # Shell already owns env/session boot; do not reload env per turn.
-    chat_host = AgentSession(SessionConfig(load_env=False))
-
-    def _chat(message: str) -> TurnResult:
-        # Fresh accounting per outer iteration (nudge text changes each turn).
-        agent.bind_turn(
-            replace(
-                binding,
-                accounting=ShellTurnAccounting(session=session, text=message, recorder=recorder),
-            )
-        )
-        return chat_host.chat(message, agent=agent)
 
     def _on_progress(goal: SessionGoal) -> None:
         rendered = format_session_goal_progress(goal, session=session)
@@ -213,16 +197,16 @@ def execute_shell_turn(
             # Checklist uses ``[x]`` / ``[ ]`` — Rich markup must stay off.
             console.print(rendered, markup=False)
 
-    # Always one action-agent turn first. Session-goal loop continues only when that
-    # turn (or a prior turn) attached a SessionGoal via structured handoff /
-    # explicit host attach — never via user-text keyword detection.
-    return run_until_session_goal(
-        _chat,
-        session,
+    def _accounting(message: str) -> ShellTurnAccounting:
+        return ShellTurnAccounting(session=session, text=message, recorder=recorder)
+
+    return agent.handle(
         text,
+        binding,
+        accounting_factory=_accounting,
         cancel_requested=lambda: host_cancel_requested(resolved_output),
         on_progress=_on_progress,
-    ).last_result
+    )
 
 
 __all__ = ["execute_shell_turn"]

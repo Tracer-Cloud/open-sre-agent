@@ -21,7 +21,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
@@ -39,6 +38,7 @@ from gateway.transports.telegram.settings import (
 )
 from gateway.web.startup import WebStartup
 from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.fake_agent import attach_real_handle
 
 
 def _patch_non_telegram_components(monkeypatch) -> None:
@@ -90,6 +90,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     logger = logging.getLogger("gateway.lifecycle.test")
     handle = MagicMock()
     agent_cls = MagicMock()
+    attach_real_handle(agent_cls.return_value)
     signal_calls: list[tuple[int, Any]] = []
     background_kwargs: dict[str, Any] = {}
 
@@ -182,8 +183,10 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
         "shell_run",
         "{'command': 'pwd'}",
     )
+    # The host passes no accounting: the agent's default per-message accounting
+    # (DefaultTurnAccounting) applies — pinned in test_default_accounting_is_resolved_fresh_per_message.
     turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
-    assert isinstance(turn_binding.accounting, DefaultTurnAccounting)
+    assert turn_binding.accounting is None
 
 
 def test_polled_telegram_message_reaches_start_gateway_agent_callback(monkeypatch) -> None:

@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.turns.default_ports import DefaultPorts
 from core.agent_harness.turns.gather_ports import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
@@ -25,6 +24,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -110,11 +110,11 @@ def _controlled_agent(
     prompts: Any | None = None,
 ) -> tuple[HeadlessAgent, Any]:
     sink = output if output is not None else BufferOutputSink()
-    agent = HeadlessAgent(
+    agent = HeadlessPorts(
+        output=sink, reasoning=StaticReasoningClientProvider(client=_EchoClient())
+    ).agent(
         tools=NullToolProvider(),
-        output=sink,
         prompts=prompts if prompts is not None else EmptyPromptContextProvider(),
-        reasoning=StaticReasoningClientProvider(client=_EchoClient()),
         gather=GATHER_DISABLED,
     )
     return agent, sink

@@ -122,7 +122,7 @@ def test_builder_exposes_the_prompts_port() -> None:
     # Arrange
     import inspect
 
-    from core.agent_harness.turns.default_ports import DefaultPorts
+    from core.agent_harness.turns.port_families import DefaultPorts
 
     # Act / Assert
     assert "prompts" in inspect.signature(DefaultPorts.agent).parameters

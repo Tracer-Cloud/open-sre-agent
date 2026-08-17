@@ -56,7 +56,7 @@ def test_run_headless_turn_wires_startup_sink_and_dispatch(
             return SessionStartupResult(session=session, prompts=prompts)
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.default_ports.DefaultPorts",
+        "core.agent_harness.turns.port_families.DefaultPorts",
         default_ports_stub(_fake_build),
     )
     monkeypatch.setattr(
@@ -105,7 +105,7 @@ def test_run_headless_turn_prepare_session_runs_before_agent_build(
             return SessionStartupResult(session=session, prompts=None)
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.default_ports.DefaultPorts",
+        "core.agent_harness.turns.port_families.DefaultPorts",
         default_ports_stub(_fake_build),
     )
     monkeypatch.setattr(

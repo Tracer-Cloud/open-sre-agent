@@ -192,7 +192,7 @@ class AgentSession:
         call :meth:`attach_agent` — they must not re-copy this wiring ad hoc.
         """
         from core.agent_harness.ports import TurnBinding
-        from core.agent_harness.turns.default_ports import DefaultPorts
+        from core.agent_harness.turns.port_families import DefaultPorts
 
         agent = DefaultPorts(
             session=session, output=output, console=console, logger=logger, surface=surface
@@ -234,7 +234,7 @@ class AgentSession:
 
         ``prepare_session`` runs after session create (e.g. pin a project scope)
         and before the agent is built. ``console``, ``logger`` and ``surface``
-        are the :class:`~core.agent_harness.turns.default_ports.DefaultPorts`
+        are the :class:`~core.agent_harness.turns.port_families.DefaultPorts`
         fields; ``tools`` and ``gather`` the ports its ``agent()`` takes;
         ``is_tty`` is bound on the first turn. A host that needs more (its own
         sink, prompts, error reporter, an action ``llm_factory``) builds through

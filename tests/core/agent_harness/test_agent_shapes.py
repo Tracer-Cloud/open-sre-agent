@@ -10,6 +10,7 @@ from core.agent_harness.ports import ExecuteActions, StreamAnswerFn
 from core.agent_harness.turns.headless_adapters import NullToolProvider
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
+from core.agent_harness.turns.port_families import HeadlessPorts
 
 
 def _accept_answer(answer: StreamAnswerFn) -> StreamAnswerFn:
@@ -23,13 +24,13 @@ def _accept_execute_actions(driver: ExecuteActions) -> ExecuteActions:
 def test_stream_answer_matches_stream_answer_fn_seam() -> None:
     # stream_answer takes session/output/prompts first; the bound seam is thinner.
     # Pin that HeadlessAgent._answer matches the Protocol shape run_turn uses.
-    agent = HeadlessAgent(tools=NullToolProvider())
+    agent = HeadlessPorts().agent(tools=NullToolProvider())
     accepted = _accept_answer(agent._answer)
     assert accepted.__func__ is HeadlessAgent._answer
 
 
 def test_headless_agent_execute_actions_matches_execute_actions_seam() -> None:
-    agent = HeadlessAgent(tools=NullToolProvider())
+    agent = HeadlessPorts().agent(tools=NullToolProvider())
     # Bound methods are new objects per access; the seam is the underlying function.
     accepted = _accept_execute_actions(agent._execute_actions)
     assert accepted.__func__ is HeadlessAgent._execute_actions

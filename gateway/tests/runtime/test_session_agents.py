@@ -16,6 +16,7 @@ from gateway.core.runtime.live_sink import LiveOutputSink
 from gateway.core.runtime.session_agents import SessionAgentPool
 from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.fake_agent import fake_agent
 
 
 @pytest.fixture(autouse=True)
@@ -141,8 +142,7 @@ def test_pool_rebinds_current_session_on_cache_hit(monkeypatch: pytest.MonkeyPat
 
 
 def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.MonkeyPatch) -> None:
-    agent = MagicMock()
-    agent.dispatch.return_value = _empty_result()
+    agent = fake_agent(dispatch_result=_empty_result())
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
         "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
