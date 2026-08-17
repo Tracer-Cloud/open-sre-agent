@@ -80,7 +80,7 @@ class RunManifest(ArtifactModel):
 
     schema_version: Literal[1] = 1
     profile: Literal["benchmark", "smoke"] = "benchmark"
-    mode: Literal["native"] = "native"
+    tool_capability_mode: Literal["native", "terminus_parity"]
     status: RunStatus
     integration_version: str
     opensre_commit: str

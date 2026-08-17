@@ -149,7 +149,7 @@ class OpenSRENativeAgent(BaseInstalledAgent):
     def populate_context_post_run(self, context: AgentContext) -> None:
         """Backfill Harbor metadata after it makes mounted logs host-readable."""
         metadata: dict[str, Any] = {
-            "mode": "native",
+            "tool_capability_mode": self._benchmark_settings.tool_capability_mode,
             "profile": self._benchmark_settings.profile,
             "opensre_commit": self._build_manifest.opensre_commit,
         }

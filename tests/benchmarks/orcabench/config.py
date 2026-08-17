@@ -172,15 +172,10 @@ class RuntimeSettings(StrictFrozenModel):
 
 
 class BenchmarkSettings(StrictFrozenModel):
-    """Checked-in, secret-free settings for a native ORCA-Bench experiment."""
+    """Checked-in, secret-free settings for an OpenSRE ORCA-Bench experiment."""
 
     schema_version: Literal[1] = SCHEMA_VERSION
     profile: Literal["benchmark", "smoke"] = "benchmark"
-    mode: Literal["native"] = "native"
-    # native: expose OpenSRE's typed investigation tools with only the ORCA
-    # backend adaptations required to reach benchmark telemetry/source.
-    # terminus_parity: additionally expose typed equivalents of lower-level
-    # ORCA tools Terminus can reach through shell/Grafana API.
     tool_capability_mode: ToolCapabilityMode = "terminus_parity"
     model: ModelSettings = Field(default_factory=ModelSettings)
     verifier: VerifierSettings = Field(default_factory=VerifierSettings)

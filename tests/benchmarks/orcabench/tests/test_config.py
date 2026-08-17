@@ -43,7 +43,6 @@ def test_host_config_import_does_not_eagerly_load_opensre_credentials() -> None:
 def test_checked_in_benchmark_config_uses_terminus_parity_and_explicit_model() -> None:
     settings = BenchmarkSettings.from_yaml(_config_path())
 
-    assert settings.mode == "native"
     assert settings.tool_capability_mode == "terminus_parity"
     assert settings.profile == "benchmark"
     assert settings.model.harbor_model == "gradient_ai/openai-gpt-5.5"

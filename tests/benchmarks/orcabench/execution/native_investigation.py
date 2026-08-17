@@ -1,4 +1,4 @@
-"""Unmodified OpenSRE investigation lifecycle used by the native ORCA mode."""
+"""OpenSRE investigation lifecycle used by the ORCA benchmark harness."""
 
 from __future__ import annotations
 

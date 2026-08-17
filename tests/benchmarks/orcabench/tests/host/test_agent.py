@@ -121,6 +121,7 @@ def test_post_run_summary_populates_harbor_context(tmp_path: Path) -> None:
     assert context.n_output_tokens == 300
     assert context.n_cache_tokens == 400
     assert context.metadata is not None
+    assert context.metadata["tool_capability_mode"] == "terminus_parity"
     assert context.metadata["llm_calls"] == 8
     assert context.metadata["report_sha256"] == "a" * 64
     assert context.metadata["cache_creation_tokens"] == 100
@@ -139,7 +140,7 @@ def test_missing_post_run_summary_is_nonfatal(tmp_path: Path) -> None:
 
     assert context.n_input_tokens is None
     assert context.metadata is not None
-    assert context.metadata["mode"] == "native"
+    assert context.metadata["tool_capability_mode"] == "terminus_parity"
 
 
 def test_invalid_post_run_summary_is_nonfatal(tmp_path: Path) -> None:
@@ -161,6 +162,7 @@ def test_invalid_post_run_summary_is_nonfatal(tmp_path: Path) -> None:
 
     assert context.n_input_tokens is None
     assert context.metadata is not None
+    assert context.metadata["tool_capability_mode"] == "terminus_parity"
     assert "llm_calls" not in context.metadata
 
 

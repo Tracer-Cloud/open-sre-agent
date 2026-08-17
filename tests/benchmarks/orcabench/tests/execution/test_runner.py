@@ -200,7 +200,7 @@ def test_runner_marks_incomplete_investigation_failed_without_writing_report(
         investigate=lambda *_args, **_kwargs: failure_state,
         build_payload=NativeInvestigationRunner().build_payload,
     )
-    mode = SimpleNamespace(
+    components = SimpleNamespace(
         connections=SimpleNamespace(build=lambda *_args, **_kwargs: {}),
         investigation=investigation,
         report=SimpleNamespace(write=lambda *_args, **_kwargs: b"unexpected"),
@@ -211,7 +211,7 @@ def test_runner_marks_incomplete_investigation_failed_without_writing_report(
     )
     monkeypatch.setattr(runner, "wait_for_path", lambda *_args: None)
     monkeypatch.setattr(runner, "configure_native_environment", lambda *_args: None)
-    monkeypatch.setattr(runner, "build_mode", lambda *_args: mode)
+    monkeypatch.setattr(runner, "build_mode", lambda *_args: components)
     monkeypatch.setattr(runner, "parse_orca_task_context", lambda *_args: task_context)
     monkeypatch.setattr(runner, "check_grafana", lambda *_args: {"status": "ready"})
 

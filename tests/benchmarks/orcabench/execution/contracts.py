@@ -1,12 +1,9 @@
-"""Small variation-point contracts for current and future ORCA execution modes."""
+"""Small variation-point contracts for ORCA execution collaborators."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Protocol
-
-from tests.benchmarks.orcabench.config import RunnerSettings
-
 
 class ConnectionProvider(Protocol):
     def build(
@@ -32,15 +29,4 @@ class InvestigationRunner(Protocol):
 
 class ReportPolicy(Protocol):
     def write(self, payload: dict[str, Any], destination: Path) -> bytes:
-        """Persist the selected mode's report and return the exact written bytes."""
-
-
-class ExecutionMode(Protocol):
-    settings: RunnerSettings
-    connections: ConnectionProvider
-    investigation: InvestigationRunner
-    report: ReportPolicy
-
-    @property
-    def name(self) -> str:
-        """Return the stable execution-mode name."""
+        """Persist the selected report and return the exact written bytes."""

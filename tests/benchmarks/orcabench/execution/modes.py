@@ -1,4 +1,4 @@
-"""Execution-mode composition without mode conditionals in the runner."""
+"""OpenSRE native execution composition without runner conditionals."""
 
 from __future__ import annotations
 
@@ -18,23 +18,18 @@ from tests.benchmarks.orcabench.execution.native_report import NativeReportPolic
 
 
 @dataclass(frozen=True)
-class ModeComponents:
-    """Concrete collaborators selected for one execution mode."""
+class ExecutionComponents:
+    """Concrete collaborators for the OpenSRE native execution path."""
 
     settings: RunnerSettings
     connections: ConnectionProvider
     investigation: InvestigationRunner
     report: ReportPolicy
 
-    @property
-    def name(self) -> str:
-        """Return the configured stable mode name."""
-        return self.settings.benchmark.mode
 
-
-def build_mode(settings: RunnerSettings) -> ModeComponents:
-    """Compose the requested mode; unsupported modes fail during settings validation."""
-    return ModeComponents(
+def build_mode(settings: RunnerSettings) -> ExecutionComponents:
+    """Compose the OpenSRE native runner with the configured tool surface."""
+    return ExecutionComponents(
         settings=settings,
         connections=OrcaNativeConnections(
             settings.benchmark.grafana,

@@ -124,6 +124,7 @@ def _manifest(
     model = settings.benchmark.model
     return RunManifest(
         profile=settings.benchmark.profile,
+        tool_capability_mode=settings.benchmark.tool_capability_mode,
         status=RunStatus.RUNNING,
         integration_version=settings.integration_version,
         opensre_commit=settings.build.opensre_commit,
@@ -178,10 +179,10 @@ def run(config_path: Path, instruction_path: Path) -> int:
 
         configure_native_environment(settings)
         grafana_endpoint = os.environ.get("GRAFANA_URL", "").strip()
-        mode = build_mode(settings)
+        components = build_mode(settings)
         task_context = parse_orca_task_context(instruction)
         incident_window = task_context.incident_window()
-        integrations = mode.connections.build(dict(os.environ), incident_window)
+        integrations = components.connections.build(dict(os.environ), incident_window)
         health = check_grafana(
             grafana_endpoint,
             settings.benchmark.grafana,
@@ -241,20 +242,20 @@ def run(config_path: Path, instruction_path: Path) -> int:
         set_detailed_usage_hook(collect_usage)
         set_model_call_attempt_hook(collect_model_call_attempt)
         try:
-            state = mode.investigation.investigate(
+            state = components.investigation.investigate(
                 task_context.investigation_alert(),
                 integrations,
                 incident_window,
             )
             writer.write_json("state.json", state)
             writer.write_jsonl("evidence.jsonl", list(state.get("evidence_entries") or []))
-            payload = mode.investigation.build_payload(state)
+            payload = components.investigation.build_payload(state)
         finally:
             set_model_call_attempt_hook(None)
             set_detailed_usage_hook(None)
 
         writer.write_json("payload.json", payload)
-        report_bytes = mode.report.write(payload, runtime.report_path)
+        report_bytes = components.report.write(payload, runtime.report_path)
         writer.write_bytes("report.md", report_bytes)
         writer.write_jsonl("usage.jsonl", usage_events)
         writer.write_jsonl("model-calls.jsonl", model_call_attempts)

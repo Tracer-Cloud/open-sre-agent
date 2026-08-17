@@ -27,7 +27,7 @@ orcabench/                           # OpenSRE integration for ORCA-Bench
 │   ├── contracts.py                    # Mode variation-point protocols
 │   ├── environment.py                  # Readiness and OpenSRE environment setup
 │   ├── health.py                       # Real Grafana readiness check
-│   ├── modes.py                        # Execution-mode composition
+│   ├── modes.py                        # Native execution composition
 │   ├── native_connection.py            # Connection-only Grafana bridge
 │   ├── native_investigation.py         # Native OpenSRE investigation lifecycle
 │   ├── native_report.py                # Exact native report persistence
@@ -60,6 +60,11 @@ provider-native model ID to be selected at launch. Supply both options together:
 The benchmark route reuses OpenSRE's provider catalog. Currently allowed routes are
 `openai`, `openrouter`, `nvidia`, `gemini`, and `groq`; their existing OpenSRE
 credential variables are forwarded without embedding secret values in the command.
+
+This harness always invokes OpenSRE through its native investigation loop. The
+checked-in configs record `tool_capability_mode: terminus_parity`, which means
+the run uses Terminus-parity evidence access for a fair ORCA-Bench comparison
+against Terminus 2.
 
 The launcher accepts one or more exact `--task-name` values. Repeating the option
 stages the snapshot once and creates one sequential Harbor job; Harbor still runs
