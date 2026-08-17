@@ -93,7 +93,7 @@ def test_existing_command_observation_skips_gather() -> None:
     calls, fake_answer = _record_answer()
 
     def _should_not_run(*_a: Any, **_k: Any) -> str:
-        raise AssertionError("gather_integration_tool_evidence must not run on the summarize path")
+        raise AssertionError("the gather stage must not run on the summarize path")
 
     def _handled_with_observation(
         _text: str,

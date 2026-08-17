@@ -53,7 +53,8 @@ class DefaultPorts:
 
     ``console`` and ``logger`` feed only the defaults (tool rendering, tool
     action log, error reporting) and default to headless-safe instances;
-    ``surface`` selects the prompt profile of the default prompt provider.
+    ``surface`` selects the prompt profile of the default prompt provider;
+    ``reporter`` replaces the default error reporter for every stage.
     """
 
     session: SessionCore
@@ -61,6 +62,8 @@ class DefaultPorts:
     console: Any | None = None
     logger: logging.Logger | None = None
     surface: str | None = None
+    #: A host's reporter for swallowed exceptions (the REPL adds Sentry); default logs.
+    reporter: ErrorReporter | None = None
 
     @cached_property
     def _console(self) -> Any:
@@ -76,7 +79,7 @@ class DefaultPorts:
 
     @cached_property
     def error_reporter(self) -> ErrorReporter:
-        return DefaultErrorReporter(self._logger)
+        return self.reporter if self.reporter is not None else DefaultErrorReporter(self._logger)
 
     def tools(self) -> ToolProvider:
         """A bare :class:`DefaultToolProvider`; hosts pass their own configured one to :meth:`agent`."""

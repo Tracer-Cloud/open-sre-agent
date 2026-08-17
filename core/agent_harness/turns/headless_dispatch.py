@@ -166,16 +166,18 @@ class HeadlessAgent:
         """Bind the turn's ports and values; the whole binding replaces the previous one.
 
         Rebinding ``session`` retargets every :class:`SessionBindable` port;
-        ``console`` a :class:`ConsoleBindable` tool provider (cooperative cancel
-        is per-turn). A new ``output`` object retargets :class:`OutputBindable`
+        ``console`` every :class:`ConsoleBindable` port (tool provider for
+        cooperative cancel, gather progress renderer). A new ``output`` object retargets :class:`OutputBindable`
         ports and, like a change of ``tool_hooks``, rebuilds the action runner
         — an unchanged one keeps it. Gateway keeps a stable ``LiveOutputSink``
         and rebinds the transport sink inside it, so it leaves ``output`` unset.
         """
         if binding.session is not None:
             self.bind_session(binding.session)
-        if binding.console is not None and isinstance(self._tools, ConsoleBindable):
-            self._tools.bind_console(binding.console)
+        if binding.console is not None:
+            for port in (self._tools, self._gather_ports.on_progress):
+                if isinstance(port, ConsoleBindable):
+                    port.bind_console(binding.console)
         runner_changed = False
         if binding.output is not None and binding.output is not self._output:
             self._output = binding.output

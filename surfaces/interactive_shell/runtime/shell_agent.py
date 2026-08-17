@@ -1,9 +1,11 @@
-"""Build the interactive shell's agent through the harness factory.
+"""Build the interactive shell's agent on the default port family.
 
 The shell's ports: its prompt provider (CLI catalog + repo grounding), its
-console-bound output sink, its rendered-progress and persisted-tool-calls
-gather ports, and the tool-provider port factories (subprocess presenter,
-investigation launch, LLM provider, task cancel, slash commands).
+console-bound output sink, its Sentry-forwarding error reporter, its gather
+ports (console progress lines, tool calls persisted to the session), and the
+tool-provider port factories (subprocess presenter, investigation launch, LLM
+provider, task cancel, slash commands). Answering, gathering and action
+execution are the agent's own; the shell adds no stage of its own.
 """
 
 from __future__ import annotations
@@ -14,10 +16,14 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness import OutputSink
-from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, GatherPorts, HeadlessAgent
+from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, HeadlessAgent
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
-from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
+from surfaces.interactive_shell.runtime.agent_harness_adapters import (
+    ShellErrorReporter,
+    resolve_output_sink,
+)
 from surfaces.interactive_shell.runtime.background import runner as background_runner
+from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_ports
 from surfaces.interactive_shell.runtime.investigation_adapter import (
     repl_investigation_launch_ports,
 )
@@ -91,11 +97,14 @@ def build_shell_agent(
 ) -> HeadlessAgent:
     """One shell agent on the default port family; per-turn values come via ``bind_turn``."""
     return DefaultPorts(
-        session=session, output=resolve_output_sink(console, output), console=console
+        session=session,
+        output=resolve_output_sink(console, output),
+        console=console,
+        reporter=ShellErrorReporter(),
     ).agent(
         tools=shell_tool_provider(session, console, request_exit=request_exit),
         prompts=shell_prompt_context_provider(session),
-        gather=GatherPorts(),
+        gather=shell_gather_ports(session, console),
     )
 
 

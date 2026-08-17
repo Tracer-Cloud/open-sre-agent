@@ -99,15 +99,40 @@ def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
     assert agent._action_runner is before  # noqa: SLF001
 
 
-def test_execute_shell_turn_binds_stages_through_the_harness_agent() -> None:
-    """The shell drives its turn on ``HeadlessAgent`` and binds injected stages via ``bind_stages``."""
+def test_execute_shell_turn_adds_no_stage_of_its_own() -> None:
+    """The shell drives the agent's own answer/gather/action stages by default.
+
+    Answering and gathering are configured by the shell's ports (prompts, sink,
+    reporter, gather progress/persist), not replaced. Only an injected test
+    seam gets an adapter bound over it.
+    """
+    import io
+
+    from rich.console import Console
+
     import surfaces.interactive_shell.runtime.shell_turn_execution as ste
+    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
     source = inspect.getsource(ste.execute_shell_turn)
     assert "build_shell_agent" in source
-    assert "bind_stages" in source
     assert "_ShellTurnBindings" not in source
     assert "ShellActionRunner" not in source
+
+    agent = build_shell_agent(Session(), Console(file=io.StringIO(), force_terminal=False))
+    ste._bind_injected_stages(  # noqa: SLF001
+        agent,
+        Session(),
+        Console(file=io.StringIO()),
+        BufferOutputSink(),
+        execute_actions=None,
+        answer_agent=None,
+        gather_evidence=None,
+        request_exit=None,
+        tool_hooks=None,
+    )
+    assert agent._execute_actions_override is None  # noqa: SLF001
+    assert agent._answer_override is None  # noqa: SLF001
+    assert agent._gather_override is None  # noqa: SLF001
 
 
 def test_shell_agent_keeps_core_runner_across_console_rebind() -> None:
@@ -235,3 +260,32 @@ def test_long_lived_shell_agent_receives_each_turns_confirm_fn_and_tty() -> None
 
     # Assert — the action stage saw the turn's callback, not the construction-time None.
     assert seen == [(_confirm, True)]
+
+
+def test_shell_gather_progress_follows_the_turn_console_after_rebind() -> None:
+    """The shell's gather progress renderer is a ConsoleBindable port the agent rebinds.
+
+    The REPL streams every turn through a fresh spinner-aware console. Progress
+    lines printed to the build-time console would land on the wrong stream, so
+    ``bind_turn(console=…)`` must retarget the gather progress port too.
+    """
+    import io
+
+    from rich.console import Console
+
+    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
+
+    # Arrange — agent built on one console, turn bound to another.
+    build_console = Console(file=io.StringIO(), force_terminal=False)
+    turn_console = Console(file=io.StringIO(), force_terminal=False)
+    agent = build_shell_agent(Session(), build_console)
+    agent.bind_turn(TurnBinding(console=turn_console))
+
+    # Act — the gather phase reports a tool start.
+    on_progress = agent._gather_ports.on_progress  # noqa: SLF001
+    assert on_progress is not None
+    on_progress("tool_start", {"name": "query_grafana_metrics", "input": {"query": "up"}})
+
+    # Assert — the line went to the turn console, not the build console.
+    assert "checking" in turn_console.file.getvalue()  # type: ignore[attr-defined]
+    assert build_console.file.getvalue() == ""  # type: ignore[attr-defined]

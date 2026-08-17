@@ -559,7 +559,7 @@ def run_oracle_once(case: ScenarioCase, monkeypatch: pytest.MonkeyPatch) -> Orac
     patch_execution_boundary(monkeypatch, executed)
 
     # Record which registered tools fire during the conversational
-    # gather_integration_tool_evidence pass. Both gather_integration_tool_evidence and the action agent
+    # gather pass. Both the gather stage and the action agent
     # create Agent instances and call .run(), so patch Agent.run on the class
     # and ignore the interactive-shell action-agent tool surface.
     import core.agent as _agent_mod
