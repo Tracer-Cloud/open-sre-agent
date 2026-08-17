@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from integrations.llm_providers.catalog import (
+from surfaces.shared.llm_setup.catalog import (
     ANTHROPIC_MODELS,
     CLAUDE_CODE_MODELS,
     PROJECT_ENV_PATH,

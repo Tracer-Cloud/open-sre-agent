@@ -6,8 +6,8 @@ import keyring
 from click.testing import CliRunner
 
 from config.llm_credentials import resolve_env_credential
-from integrations.llm_providers.auth_service import AuthSetupResult
 from surfaces.cli.app import cli
+from surfaces.shared.llm_setup.auth_service import AuthSetupResult
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -16,7 +16,7 @@ def _patch_auth_env(monkeypatch, tmp_path: Path) -> Path:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
-    monkeypatch.setattr("integrations.llm_providers.env_sync.PROJECT_ENV_PATH", env_path)
+    monkeypatch.setattr("surfaces.shared.llm_setup.env_sync.PROJECT_ENV_PATH", env_path)
     monkeypatch.setattr("config.setup_store.get_store_path", lambda: tmp_path / "opensre.json")
     return env_path
 

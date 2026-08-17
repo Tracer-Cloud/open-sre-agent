@@ -21,7 +21,7 @@ from config.env_file import (
     write_env_lines,
 )
 from config.llm_auth.auth_method import LLM_AUTH_METHOD_ENV
-from integrations.llm_providers.catalog import ProviderOption, WizardCredentialKind
+from surfaces.shared.llm_setup.catalog import ProviderOption, WizardCredentialKind
 
 
 def sync_reasoning_model_env(
@@ -123,7 +123,7 @@ def sync_provider_env(
     Removes stale keys from other providers and every API-key line. Secrets are
     stored in the system keyring, not in ``.env``.
     """
-    from integrations.llm_providers.catalog import SUPPORTED_PROVIDERS
+    from surfaces.shared.llm_setup.catalog import SUPPORTED_PROVIDERS
 
     resolved_model_provider = model_provider or provider
     target_path = env_path or PROJECT_ENV_PATH

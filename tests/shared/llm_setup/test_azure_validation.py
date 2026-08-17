@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from integrations.llm_providers import azure_validation
+from surfaces.shared.llm_setup import azure_validation
 
 
 def test_format_validation_failure_lists_deployments(monkeypatch: pytest.MonkeyPatch) -> None:

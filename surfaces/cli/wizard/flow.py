@@ -30,13 +30,6 @@ from config.setup_store import get_store_path, save_local_config
 from core.llm.providers.azure_openai import is_azure_openai_provider
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
-from integrations.llm_providers.catalog import (
-    PROVIDER_BY_VALUE,
-    SUPPORTED_PROVIDERS,
-    ProviderOption,
-    WizardCredentialKind,
-)
-from integrations.llm_providers.env_sync import sync_provider_env
 from platform.terminal.theme import (
     ERROR,
     GLYPH_ERROR,
@@ -89,6 +82,13 @@ from surfaces.cli.wizard.llm_credential import (
     _provider_choice_label,
 )
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
+from surfaces.shared.llm_setup.catalog import (
+    PROVIDER_BY_VALUE,
+    SUPPORTED_PROVIDERS,
+    ProviderOption,
+    WizardCredentialKind,
+)
+from surfaces.shared.llm_setup.env_sync import sync_provider_env
 
 WIZARD_TOTAL_STEPS = 4
 logger = logging.getLogger(__name__)

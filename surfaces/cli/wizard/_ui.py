@@ -23,12 +23,6 @@ from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import get_keyring_setup_instructions, save_keyring_secret
 from config.setup_store import get_store_path, load_local_config
 from config.version import get_opensre_version
-from integrations.llm_providers.catalog import (
-    PROVIDER_BY_VALUE,
-    ProviderOption,
-    WizardCredentialKind,
-)
-from integrations.llm_providers.persist import AuthSetupError, persist_api_key_secret
 from integrations.store import get_integration
 from platform.terminal.theme import (
     BG,
@@ -46,6 +40,12 @@ from platform.terminal.theme import (
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.prompts import select as select_prompt
+from surfaces.shared.llm_setup.catalog import (
+    PROVIDER_BY_VALUE,
+    ProviderOption,
+    WizardCredentialKind,
+)
+from surfaces.shared.llm_setup.persist import AuthSetupError, persist_api_key_secret
 
 _console = Console(
     highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
@@ -270,7 +270,7 @@ def _choose_model(
 ) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
-    Choices come from the curated config in ``integrations/llm_providers/catalog.py``.
+    Choices come from the curated config in ``surfaces/shared/llm_setup/catalog.py``.
     A saved model that isn't in the curated list is preserved as ``current``
     so re-running the wizard never silently drops a user's prior pick, and an
     "Enter custom model ID" escape hatch is always available.

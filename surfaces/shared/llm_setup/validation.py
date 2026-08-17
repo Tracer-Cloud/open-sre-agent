@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from integrations.llm_providers.catalog import ProviderOption
-from integrations.llm_providers.openai_client import load_openai_client
-from integrations.llm_providers.validation_result import ValidationResult
+from surfaces.shared.llm_setup.catalog import ProviderOption
+from surfaces.shared.llm_setup.openai_client import load_openai_client
+from surfaces.shared.llm_setup.validation_result import ValidationResult
 
 Anthropic: Any | None = None
 AnthropicAuthError: type[Exception] | None = None
@@ -70,7 +70,7 @@ def _check_ollama(host: str, model: str) -> ValidationResult:
             detail=f"Cannot reach Ollama at {host}. Is it running? Try: ollama serve\n({err})",
         )
     available = [m["name"] for m in r.json().get("models", [])]
-    from integrations.llm_providers.ollama import normalize_model_tag
+    from surfaces.shared.llm_setup.ollama import normalize_model_tag
 
     normalized_model = normalize_model_tag(model)
     base_name = model.split(":")[0]
@@ -122,7 +122,7 @@ def validate_provider_credentials(
         return _check_ollama(host=api_key, model=model)
 
     if provider.value == "azure-openai":
-        from integrations.llm_providers.azure_validation import (
+        from surfaces.shared.llm_setup.azure_validation import (
             validate_credentials as validate_azure_credentials,
         )
 

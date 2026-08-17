@@ -9,11 +9,11 @@ import pytest
 from rich.console import Console
 
 import config.setup_store as wizard_store
-import integrations.llm_providers.env_sync as env_sync
-from integrations.llm_providers.catalog import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
+import surfaces.shared.llm_setup.env_sync as env_sync
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
 from surfaces.interactive_shell.session import Session
+from surfaces.shared.llm_setup.catalog import PROJECT_ENV_PATH, PROJECT_ROOT, PROVIDER_BY_VALUE
 
 
 def _capture() -> tuple[Console, io.StringIO]:

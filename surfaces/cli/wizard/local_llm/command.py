@@ -8,9 +8,6 @@ from rich.console import Console
 from config.config import DEFAULT_OLLAMA_HOST
 from config.env_file import sync_env_values
 from config.setup_store import get_store_path, save_local_config
-from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
-from integrations.llm_providers.env_sync import sync_provider_env
-from integrations.llm_providers.validation import _check_ollama
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT, WARNING
 from surfaces.cli.wizard.local_llm.hardware import detect_hardware, recommend_model
 from surfaces.cli.wizard.local_llm.ollama import (
@@ -22,6 +19,9 @@ from surfaces.cli.wizard.local_llm.ollama import (
     start_server,
     wait_for_server,
 )
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+from surfaces.shared.llm_setup.env_sync import sync_provider_env
+from surfaces.shared.llm_setup.validation import _check_ollama
 
 _console = Console()
 

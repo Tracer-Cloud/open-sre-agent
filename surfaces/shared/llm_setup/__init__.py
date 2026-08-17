@@ -1,11 +1,11 @@
 """LLM provider setup: the provider catalog, credential validation, auth and .env sync shared by the CLI and the shell."""
 
-from integrations.llm_providers.auth_profiles import (
+from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     iter_auth_profiles,
     resolve_auth_profile,
 )
-from integrations.llm_providers.auth_service import (
+from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     AuthStatus,
     configure_api_key_provider,

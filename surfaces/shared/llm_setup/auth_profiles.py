@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from integrations.llm_providers.catalog import (
+from surfaces.shared.llm_setup.catalog import (
     PROVIDER_BY_VALUE,
     SUPPORTED_PROVIDERS,
     ProviderOption,

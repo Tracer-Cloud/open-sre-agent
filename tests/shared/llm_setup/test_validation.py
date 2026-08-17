@@ -5,8 +5,8 @@ import pytest
 from anthropic import AuthenticationError as AnthropicAuthError
 from openai import AuthenticationError as OpenAIAuthError
 
-from integrations.llm_providers.catalog import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS
-from integrations.llm_providers.validation import (
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS
+from surfaces.shared.llm_setup.validation import (
     _get_provider_base_url,
     validate_provider_credentials,
 )
@@ -29,9 +29,9 @@ def _preload_sdk_error_classes(monkeypatch) -> None:
     branch and make monkeypatches of ``Anthropic`` / ``OpenAI`` reliable.
     """
     monkeypatch.setattr(
-        "integrations.llm_providers.validation.AnthropicAuthError", AnthropicAuthError
+        "surfaces.shared.llm_setup.validation.AnthropicAuthError", AnthropicAuthError
     )
-    monkeypatch.setattr("integrations.llm_providers.openai_client.OpenAIAuthError", OpenAIAuthError)
+    monkeypatch.setattr("surfaces.shared.llm_setup.openai_client.OpenAIAuthError", OpenAIAuthError)
 
 
 class _FakeAnthropicTextBlock:
@@ -107,7 +107,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_anthropic_key(mon
         body=None,
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.validation.Anthropic",
+        "surfaces.shared.llm_setup.validation.Anthropic",
         lambda **_kwargs: _FakeAnthropicClient(auth_error),
     )
 
@@ -123,7 +123,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_anthropic_key(mon
 
 def test_validate_provider_credentials_returns_success_for_valid_anthropic_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "integrations.llm_providers.validation.Anthropic",
+        "surfaces.shared.llm_setup.validation.Anthropic",
         lambda **_kwargs: _FakeAnthropicClient(_FakeAnthropicResponse("OpenSRE ready")),
     )
 
@@ -147,7 +147,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
         body=None,
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.openai_client.OpenAI",
+        "surfaces.shared.llm_setup.openai_client.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(auth_error),
     )
 
@@ -163,7 +163,7 @@ def test_validate_provider_credentials_returns_failure_for_bad_openai_key(monkey
 
 def test_validate_provider_credentials_returns_success_for_valid_openai_key(monkeypatch) -> None:
     monkeypatch.setattr(
-        "integrations.llm_providers.openai_client.OpenAI",
+        "surfaces.shared.llm_setup.openai_client.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(_FakeOpenAIResponse("OpenSRE ready")),
     )
 
@@ -180,11 +180,11 @@ def test_validate_provider_credentials_returns_success_for_valid_openai_key(monk
 
 def test_validate_provider_credentials_azure_not_found_lists_deployments(monkeypatch) -> None:
     monkeypatch.setattr(
-        "integrations.llm_providers.openai_client.OpenAI",
+        "surfaces.shared.llm_setup.openai_client.OpenAI",
         lambda **_kwargs: _FakeOpenAIClient(RuntimeError("Error code: 404 - DeploymentNotFound")),
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.azure_validation.list_azure_openai_deployments",
+        "surfaces.shared.llm_setup.azure_validation.list_azure_openai_deployments",
         lambda **_kwargs: ["gpt-4.1-mini"],
     )
     monkeypatch.setenv("AZURE_OPENAI_BASE_URL", "https://example.openai.azure.com")
@@ -292,7 +292,7 @@ def test_validate_custom_anthropic_probes_the_override_endpoint(monkeypatch) -> 
             return type("R", (), {"content": []})()
 
     monkeypatch.setattr(
-        "integrations.llm_providers.validation._load_anthropic_client",
+        "surfaces.shared.llm_setup.validation._load_anthropic_client",
         lambda: (_FakeAnthropic, Exception),
     )
     provider = PROVIDER_BY_VALUE["custom-anthropic"]

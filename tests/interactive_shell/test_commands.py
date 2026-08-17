@@ -1077,7 +1077,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
         from surfaces.interactive_shell.command_registry.model import command as model_cmd
 
         env_path = tmp_path / ".env"
@@ -1144,7 +1144,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
@@ -1180,7 +1180,7 @@ class TestModelCommand:
         """If prompt-safe status has no credential path, /model set must not
         touch .env or os.environ."""
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
@@ -1221,7 +1221,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1246,7 +1246,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1270,7 +1270,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         store_path = self._redirect_wizard_store(monkeypatch, tmp_path)
@@ -1298,7 +1298,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1323,7 +1323,7 @@ class TestModelCommand:
         persisted verbatim and then silently fail availability checks. It must be
         normalized to ``gpt-5.5`` instead."""
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
         from surfaces.interactive_shell.command_registry import switch_reasoning_model
 
         env_path = tmp_path / ".env"
@@ -1348,7 +1348,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1375,7 +1375,7 @@ class TestModelCommand:
     ) -> None:
         """`/model set <provider> [model] --toolcall-model <m>` must persist both."""
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1402,7 +1402,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1428,7 +1428,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
@@ -1448,7 +1448,7 @@ class TestModelCommand:
         """Reviewer ask: a missing flag value must say *which* flag, not just
         echo the generic usage line."""
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1468,7 +1468,7 @@ class TestModelCommand:
     ) -> None:
         """`/model toolcall set <m>` must persist only the toolcall env var."""
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         env_path = tmp_path / ".env"
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", env_path)
@@ -1504,7 +1504,7 @@ class TestModelCommand:
     ) -> None:
         """Providers without a separate toolcall model (codex/claude-code/gemini-cli/ollama)
         must not silently accept toolcall overrides."""
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")
@@ -1519,7 +1519,7 @@ class TestModelCommand:
         tmp_path: Path,
     ) -> None:
         self._patch_llm(monkeypatch)
-        import integrations.llm_providers.env_sync as env_sync
+        import surfaces.shared.llm_setup.env_sync as env_sync
 
         monkeypatch.setattr(env_sync, "PROJECT_ENV_PATH", tmp_path / ".env")
         monkeypatch.setattr("config.env_file.PROJECT_ENV_PATH", tmp_path / ".env")

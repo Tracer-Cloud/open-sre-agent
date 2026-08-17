@@ -89,8 +89,8 @@ def switch_llm_provider(
     toolcall_model: str | None = None,
 ) -> bool:
     from config.llm_auth.credentials import status as credential_status
-    from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
-    from integrations.llm_providers.env_sync import sync_provider_env
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.env_sync import sync_provider_env
 
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)
@@ -151,8 +151,8 @@ def switch_llm_provider(
                 f"[bold]opensre auth login {provider.value}[/bold][{DIM}].[/]"
             )
             return False
-        from integrations.llm_providers.auth_profiles import resolve_auth_profile
-        from integrations.llm_providers.auth_service import (
+        from surfaces.shared.llm_setup.auth_profiles import resolve_auth_profile
+        from surfaces.shared.llm_setup.auth_service import (
             AuthSetupError,
             configure_api_key_provider,
         )
@@ -246,7 +246,7 @@ def switch_toolcall_model(
 ) -> bool:
     """Set the toolcall model for the active (or named) provider."""
     from config.env_file import sync_env_values
-    from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     raw_name = provider_name if provider_name else os.getenv(LLM_PROVIDER_ENV, "anthropic")
     resolved_name = (raw_name or "anthropic").strip().lower()
@@ -291,8 +291,8 @@ def switch_reasoning_model(
     provider_name: str | None = None,
 ) -> bool:
     """Set the reasoning model for the active (or named) provider."""
-    from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
-    from integrations.llm_providers.env_sync import sync_reasoning_model_env
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.env_sync import sync_reasoning_model_env
 
     raw_name = provider_name if provider_name else os.getenv(LLM_PROVIDER_ENV, "anthropic")
     resolved_name = (raw_name or "anthropic").strip().lower()
@@ -331,7 +331,7 @@ def switch_reasoning_model(
 
 def restore_default_model(provider_name: str, console: Console) -> bool:
     """Reset a provider to its configured default reasoning model."""
-    from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)

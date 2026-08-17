@@ -13,12 +13,17 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from integrations.llm_providers.auth_profiles import (
+from platform.terminal.prompt_support import (
+    QUESTIONARY_QMARK,
+    questionary_prompt_style,
+)
+from platform.terminal.theme import BOLD_BRAND, ERROR, HIGHLIGHT, SECONDARY, WARNING
+from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     iter_auth_profiles,
     resolve_auth_profile,
 )
-from integrations.llm_providers.auth_service import (
+from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     cli_subscription_install_error,
     configure_api_key_provider,
@@ -27,11 +32,6 @@ from integrations.llm_providers.auth_service import (
     provider_status,
     verify_provider,
 )
-from platform.terminal.prompt_support import (
-    QUESTIONARY_QMARK,
-    questionary_prompt_style,
-)
-from platform.terminal.theme import BOLD_BRAND, ERROR, HIGHLIGHT, SECONDARY, WARNING
 
 
 def _provider_choices() -> str:

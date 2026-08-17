@@ -26,19 +26,19 @@ from config.llm_auth.records import (
 )
 from config.secrets.backend import KeyringUnavailableError
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
-from integrations.llm_providers.auth_profiles import (
+from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     provider_for_profile,
     resolve_auth_profile,
 )
-from integrations.llm_providers.catalog import (
+from surfaces.shared.llm_setup.catalog import (
     PROVIDER_BY_VALUE,
     ProviderOption,
     WizardCredentialKind,
 )
-from integrations.llm_providers.env_sync import sync_provider_env
-from integrations.llm_providers.persist import AuthSetupError, persist_api_key_secret
-from integrations.llm_providers.validation import validate_provider_credentials
+from surfaces.shared.llm_setup.env_sync import sync_provider_env
+from surfaces.shared.llm_setup.persist import AuthSetupError, persist_api_key_secret
+from surfaces.shared.llm_setup.validation import validate_provider_credentials
 
 
 @dataclass(frozen=True)

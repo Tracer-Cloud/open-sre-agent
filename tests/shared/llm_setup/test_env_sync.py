@@ -9,8 +9,8 @@ import pytest
 from config.env_file import is_sensitive_env_key, sync_env_secret, sync_env_values
 from config.llm_credentials import resolve_env_credential
 from config.setup_store import load_local_config
-from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
-from integrations.llm_providers.env_sync import (
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+from surfaces.shared.llm_setup.env_sync import (
     sync_provider_env,
     sync_reasoning_model_env,
 )

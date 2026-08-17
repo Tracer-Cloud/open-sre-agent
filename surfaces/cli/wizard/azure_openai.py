@@ -24,7 +24,7 @@ from surfaces.cli.wizard._ui import (
 )
 
 if TYPE_CHECKING:
-    from integrations.llm_providers.catalog import ProviderOption
+    from surfaces.shared.llm_setup.catalog import ProviderOption
 
 
 def endpoint_env(provider: ProviderOption) -> dict[str, str]:

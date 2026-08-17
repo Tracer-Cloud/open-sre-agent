@@ -13,8 +13,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from integrations.llm_providers.catalog import ProviderOption
     from surfaces.cli.wizard._ui import Choice
+    from surfaces.shared.llm_setup.catalog import ProviderOption
 
 CUSTOM_ENDPOINT_SELECTION = "__custom-api-endpoint__"
 _CUSTOM_PROVIDER_VALUES = frozenset(("custom-openai", "custom-anthropic"))

@@ -9,8 +9,8 @@ from core.llm.providers.azure_openai import (
     normalize_azure_openai_base_url,
     resolve_azure_openai_api_version,
 )
-from integrations.llm_providers.openai_client import load_openai_client
-from integrations.llm_providers.validation_result import ValidationResult
+from surfaces.shared.llm_setup.openai_client import load_openai_client
+from surfaces.shared.llm_setup.validation_result import ValidationResult
 
 
 def format_validation_failure(

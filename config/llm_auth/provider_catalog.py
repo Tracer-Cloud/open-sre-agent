@@ -29,10 +29,10 @@ class CredentialKind(StrEnum):
     """How a provider proves its identity to the LLM backend.
 
     Kept distinct from the wizard's onboarding vocabulary
-    (:class:`integrations.llm_providers.catalog.WizardCredentialKind`): the two share
+    (:class:`surfaces.shared.llm_setup.catalog.WizardCredentialKind`): the two share
     ``api_key``/``cli`` but the wizard's ``host``/``none`` map to this enum's
     ``local``/``ambient``. Do not merge them — see the ``WIZARD_TO_CATALOG_KIND``
-    translation in ``integrations/llm_providers/catalog.py``.
+    translation in ``surfaces/shared/llm_setup/catalog.py``.
     """
 
     #: A user-supplied API key stored by OpenSRE (keyring/.env).

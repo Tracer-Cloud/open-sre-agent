@@ -13,14 +13,14 @@ from config.llm_credentials import resolve_env_credential
 from config.secrets.os_keyring import reset_keyring_state
 from integrations.llm_cli.base import CLIProbe
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
-from integrations.llm_providers.auth_profiles import ProviderAuthProfile, resolve_auth_profile
-from integrations.llm_providers.auth_service import (
+from surfaces.shared.llm_setup.auth_profiles import ProviderAuthProfile, resolve_auth_profile
+from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     configure_api_key_provider,
     configure_cli_subscription_provider,
 )
-from integrations.llm_providers.catalog import ModelOption, ProviderOption
-from integrations.llm_providers.validation import ValidationResult
+from surfaces.shared.llm_setup.catalog import ModelOption, ProviderOption
+from surfaces.shared.llm_setup.validation import ValidationResult
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -55,7 +55,7 @@ def test_configure_deepseek_api_key_stores_secret_and_nonsecret_env(
         lambda: tmp_path / "opensre.json",
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.auth_service.validate_provider_credentials",
+        "surfaces.shared.llm_setup.auth_service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="ok"),
     )
 
@@ -99,7 +99,7 @@ def test_configure_api_key_reports_the_fallback_tier_it_actually_used(
         lambda: tmp_path / "opensre.json",
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.auth_service.validate_provider_credentials",
+        "surfaces.shared.llm_setup.auth_service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="ok"),
     )
 
@@ -130,7 +130,7 @@ def test_configure_api_key_does_not_store_when_validation_fails(
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "integrations.llm_providers.auth_service.validate_provider_credentials",
+        "surfaces.shared.llm_setup.auth_service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=False, detail="rejected"),
     )
 
@@ -205,7 +205,7 @@ def test_configure_cli_subscription_syncs_provider(
         allow_custom_models=True,
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.auth_service.provider_for_profile",
+        "surfaces.shared.llm_setup.auth_service.provider_for_profile",
         lambda _profile: fake_provider,
     )
 
@@ -255,7 +255,7 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
         allow_custom_models=True,
     )
     monkeypatch.setattr(
-        "integrations.llm_providers.auth_service.provider_for_profile",
+        "surfaces.shared.llm_setup.auth_service.provider_for_profile",
         lambda _profile: fake_provider,
     )
     oauth_calls: list[object] = []
@@ -269,7 +269,7 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
         )
 
     monkeypatch.setattr(
-        "integrations.llm_providers.auth_service.run_codex_oauth_login", _fake_codex_oauth_login
+        "surfaces.shared.llm_setup.auth_service.run_codex_oauth_login", _fake_codex_oauth_login
     )
 
     previous_backend = keyring.get_keyring()

@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 import httpx
 
 from config.config import DEFAULT_OLLAMA_HOST
-from integrations.llm_providers.ollama import normalize_model_tag
 from platform.terminal.theme import DIM, WARNING
+from surfaces.shared.llm_setup.ollama import normalize_model_tag
 
 if TYPE_CHECKING:
     from rich.console import Console
