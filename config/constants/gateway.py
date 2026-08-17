@@ -5,6 +5,8 @@ ATTACHMENT_MAX_TOTAL_CHARS = 120_000
 CREDITS_DENIED_MESSAGE = "Out of credits — top up in the OpenSRE console."
 DEFAULT_MAX_CONVERSATION_LOCKS = 1024
 NEW_SESSION_MESSAGE = "Started a new session."
+#: Inbound-decision reply sentinel: rotate the session instead of replying.
+ROTATE_SESSION = "__ROTATE_SESSION__"
 NO_ACTIVE_TURN_MESSAGE = "Nothing running to stop."
 TURN_ERROR_MESSAGE = "Something went wrong on that request."
 TURN_TIMEOUT_MESSAGE = "This is taking longer than expected. Please try again."
@@ -17,6 +19,7 @@ __all__ = [
     "CREDITS_DENIED_MESSAGE",
     "DEFAULT_MAX_CONVERSATION_LOCKS",
     "NEW_SESSION_MESSAGE",
+    "ROTATE_SESSION",
     "NO_ACTIVE_TURN_MESSAGE",
     "TURN_ERROR_MESSAGE",
     "TURN_TIMEOUT_MESSAGE",

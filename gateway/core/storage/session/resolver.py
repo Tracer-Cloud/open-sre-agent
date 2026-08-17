@@ -11,8 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from core.agent_harness.session import SessionCore, SessionManager
-from core.agent_harness.session.integration_resolution import has_resolved_integrations
+from core.agent_harness import SessionCore, SessionManager, has_resolved_integrations
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.session.gateway_chat_context import inject_gateway_chat_context
 
@@ -106,13 +105,16 @@ class SessionResolver:
         *,
         user_id: str,
         chat_id: str,
-        principal: Principal | None = None,
-        actor: Actor | str | None = None,
+        principal: Principal | None,
+        actor: Actor | str | None,
     ) -> SessionCore:
         """Return a hydrated session for the platform conversation key ``user_id``.
 
-        Chat transports pass an org ``principal`` and platform ``actor``. Omitting
-        them keeps legacy empty principal/actor binding keys (CLI / pre-scope rows).
+        Chat transports pass an org ``principal`` and platform ``actor``. Both are
+        required arguments on purpose: they defaulted to ``None`` and a transport
+        that forgot them shipped with scoped binding silently degraded to legacy
+        empty-key rows. A caller that genuinely means the legacy key passes
+        ``None`` explicitly.
         """
         existing = self._lookup_or_adopt_session_id(
             user_id=user_id,
@@ -157,10 +159,14 @@ class SessionResolver:
         *,
         user_id: str,
         chat_id: str,
-        principal: Principal | None = None,
-        actor: Actor | str | None = None,
+        principal: Principal | None,
+        actor: Actor | str | None,
     ) -> SessionCore:
-        """Flush the current session file and start a new binding."""
+        """Flush the current session file and start a new binding.
+
+        ``principal``/``actor`` are required for the same reason as
+        :meth:`resolve` — explicit ``None`` for legacy keys, never by omission.
+        """
         from core.domain.memory import gateway_memory_enabled
 
         existing = self._lookup_or_adopt_session_id(

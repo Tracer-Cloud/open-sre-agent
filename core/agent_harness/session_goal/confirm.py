@@ -16,10 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.closed_llm_verdict import (
-    ClosedGoalVerdict,
-    invoke_closed_goal_verdict,
-)
+from core.agent_harness.closed_llm_verdict import invoke_closed_goal_verdict
 from core.agent_harness.session_goal.evaluate import (
     evaluate_session_goal,
     session_goal_reply_text,
@@ -31,9 +28,6 @@ from core.agent_harness.session_goal.goal import (
     attach_session_goal,
 )
 from core.llm.types import AgentLLMClient
-
-# Backward-compatible name for the closed schema (tests / docs).
-SessionGoalConfirmVerdict = ClosedGoalVerdict
 
 _REVIEW_SYSTEM = (
     "You review whether an session goal is met.\n"
@@ -114,6 +108,5 @@ def build_session_goal_llm_evaluator(llm: AgentLLMClient):
 
 
 __all__ = [
-    "SessionGoalConfirmVerdict",
     "build_session_goal_llm_evaluator",
 ]

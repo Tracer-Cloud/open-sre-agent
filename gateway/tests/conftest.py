@@ -16,7 +16,7 @@ ensure_project_platform_package()
 def _isolate_gateway_runtime_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Keep every gateway test off the developer's real ``~/.opensre/gateway``.
 
-    ``GatewayManager.stop()`` clears the component status file, and
+    ``GatewayController.stop()`` clears the component status file, and
     ``start_gateway`` rewrites the pidfile. Both resolve through module globals
     captured at import time, so the root ``OPENSRE_HOME_DIR`` override does not
     reach them: a unit test that merely constructs a manager and stops it

@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
+from surfaces.cli.wizard.config import (
+    PROVIDER_BY_VALUE,
+    SUPPORTED_PROVIDERS,
+    ProviderOption,
+    WizardCredentialKind,
+)
 
 AuthKind = Literal["api_key", "cli_subscription"]
 
@@ -70,7 +75,7 @@ _SUBSCRIPTION_PROFILES: tuple[ProviderAuthProfile, ...] = (
 def _api_key_profiles() -> tuple[ProviderAuthProfile, ...]:
     profiles: list[ProviderAuthProfile] = []
     for provider in SUPPORTED_PROVIDERS:
-        if provider.credential_kind != "api_key":
+        if provider.credential_kind != WizardCredentialKind.API_KEY:
             continue
         profiles.append(
             ProviderAuthProfile(

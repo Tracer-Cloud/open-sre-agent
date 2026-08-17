@@ -10,7 +10,7 @@ Subpackages:
 * ``config/`` — logging and gateway config helpers
 
 Must not import ``gateway.transports.*`` or ``gateway.web`` (surfaces).
-Sole exception: :mod:`gateway.core.runtime.manager`, the composition root,
+Sole exception: :mod:`gateway.core.runtime.controller`, the composition root,
 which wires the transports and the web surface together.
 """
 

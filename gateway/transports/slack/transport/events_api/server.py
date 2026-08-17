@@ -25,7 +25,7 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.runtime.errors import GatewayTransportFailedError
 from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
 from gateway.transports.slack.delivery.feedback import record_feedback_payload
@@ -85,7 +85,7 @@ class SlackHttpServerHandle:
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Stop serving and report whether the listener thread ended in time.
 
-        Signature matches ``gateway.channels.chat.TransportWorker`` so the
+        Signature matches ``gateway.startup.TransportWorker`` so the
         composition root can hold either inbound transport in one handle.
         """
         self.gate.accepting = False  # refuse first; the thread may outlive the join

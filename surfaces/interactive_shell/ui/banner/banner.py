@@ -193,12 +193,13 @@ def _format_cwd(path: str) -> str:
     return path
 
 
-def _build_identity_block(provider: str, model: str, *, trust_mode: bool) -> Text:
+def _build_identity_block(provider: str, model: str, *, trust_mode: bool, first_run: bool) -> Text:
     """Left column: mascot · blank · greeting · blank · identity line (all left-aligned)."""
     logo = _build_logo_mark()
 
     greeting = Text()
-    greeting.append(f"Welcome back {_get_username()}!", style=f"bold {TEXT}")
+    salutation = "Welcome" if first_run else "Welcome back"
+    greeting.append(f"{salutation} {_get_username()}!", style=f"bold {TEXT}")
 
     # Single flowing line: model · tier · workspace
     cwd = _format_cwd(os.getcwd())
@@ -272,8 +273,9 @@ def build_ready_panel(
     panel_title.append(" · ", style=DIM)
     panel_title.append(f"v{version} ", style=BRAND)
 
-    left = _build_identity_block(provider, model, trust_mode=trust_mode)
-    if _is_first_run():
+    first_run = _is_first_run()
+    left = _build_identity_block(provider, model, trust_mode=trust_mode, first_run=first_run)
+    if first_run:
         right = Text("\n").join(
             [
                 _build_notes_block("Tips for getting started", _TIPS),

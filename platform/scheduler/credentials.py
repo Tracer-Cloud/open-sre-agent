@@ -26,7 +26,7 @@ from config.constants.rocketchat import (
     ROCKETCHAT_SERVER_URL_ENV,
     ROCKETCHAT_USER_ID_ENV,
 )
-from config.constants.slack import SLACK_BOT_TOKEN_ENV
+from config.constants.slack import SLACK_BOT_TOKEN_ENV, SLACK_WEBHOOK_URL_ENV
 from config.constants.telegram import TELEGRAM_BOT_TOKEN_ENV, TELEGRAM_DEFAULT_CHAT_ID_ENV
 from config.llm_credentials import resolve_env_credential
 from platform.scheduler.loop_constants import LOOP_TELEGRAM_CHAT_ID_PARAM
@@ -81,7 +81,7 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
     store_webhook = _get_integration_credential("slack", "webhook_url").strip()
     if store_webhook:
         return {"webhook_url": store_webhook}
-    env_webhook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    env_webhook = os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip()
     if env_webhook:
         return {"webhook_url": env_webhook}
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from gateway.core.runtime.errors import GatewayTransportFailedError
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.discord.background import (
     DiscordGatewayBackground,
     start_discord_gateway_background,

@@ -70,7 +70,7 @@ def test_slack_package_never_imports_discord() -> None:
 def test_shared_approval_module_imports_no_transport() -> None:
     """The extracted broker must not depend on the transports that use it."""
     # Arrange
-    shared = REPO_ROOT / "gateway" / "core" / "runtime" / "approvals.py"
+    shared = REPO_ROOT / "gateway" / "core" / "middleware" / "approvals.py"
 
     # Act
     imported = _imported_modules(shared)

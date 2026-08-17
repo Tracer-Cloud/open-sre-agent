@@ -1,12 +1,12 @@
-"""Characterization for the chat-transport registry in gateway.channels.chat."""
+"""Characterization for the chat-transport registry in gateway.startup."""
 
 from __future__ import annotations
 
 import logging
 from unittest.mock import MagicMock
 
-from gateway.channels import chat
-from gateway.channels.chat import TransportName
+from gateway.core.transport_api import TransportName, TransportSpec
+from gateway.transports import startup
 
 
 def test_start_transports_skips_not_configured_and_failed(
@@ -34,16 +34,16 @@ def test_start_transports_skips_not_configured_and_failed(
         raise GatewayTransportFailedError("startup timeout")
 
     monkeypatch.setattr(
-        chat,
+        startup,
         "TRANSPORTS",
         (
-            chat.TransportSpec(TransportName.TELEGRAM, _telegram, "polling for messages"),
-            chat.TransportSpec(TransportName.SLACK, _slack, "connected via socket mode"),
-            chat.TransportSpec(TransportName.DISCORD, _discord, "connected via gateway"),
+            TransportSpec(TransportName.TELEGRAM, _telegram, "polling for messages"),
+            TransportSpec(TransportName.SLACK, _slack, "connected via socket mode"),
+            TransportSpec(TransportName.DISCORD, _discord, "connected via gateway"),
         ),
     )
 
-    started = chat.start_transports(
+    started = startup.start_transports(
         logger=logging.getLogger("test.chat"),
         handler=MagicMock(),
     )
@@ -61,10 +61,10 @@ def test_stop_transports_stops_every_handle() -> None:
     w2 = MagicMock()
     w2.stop.return_value = False
     handles = [
-        chat.TransportHandle(TransportName.TELEGRAM, w1, "polling"),
-        chat.TransportHandle(TransportName.SLACK, w2, "connected"),
+        startup.TransportHandle(TransportName.TELEGRAM, w1, "polling"),
+        startup.TransportHandle(TransportName.SLACK, w2, "connected"),
     ]
 
-    assert chat.stop_transports(handles=handles, timeout=1.5) is False
+    assert startup.stop_transports(handles=handles, timeout=1.5) is False
     w1.stop.assert_called_once_with(timeout=1.5)
     w2.stop.assert_called_once_with(timeout=1.5)

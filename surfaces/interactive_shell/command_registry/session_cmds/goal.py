@@ -13,7 +13,7 @@ from dataclasses import replace
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 
-from core.agent_harness.session import SessionManager
+from core.agent_harness import SessionManager, format_session_goal_progress
 from core.agent_harness.session.terminal_access import (
     clear_pending_autosubmit,
     set_auto_command,
@@ -29,16 +29,44 @@ from core.agent_harness.session_goal.goal import (
     session_goal_is_attached,
     session_goal_is_paused,
 )
-from core.agent_harness.session_goal.progress import format_session_goal_progress
 from platform.common.evidence_compaction import truncate_message
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 
-_GOAL_SUBCOMMANDS = frozenset(
-    {"show", "status", "set", "clear", "unset", "pause", "resume", "edit"}
+_USAGE = "/goal [show|set|pause|resume|edit|clear|help]  or  /goal <condition>"
+# A condition is plain prose describing the state to reach or the request to
+# finish; flags come before it. First entry doubles as the empty-state example.
+_SET_EXAMPLES: tuple[str, ...] = (
+    "/goal set gateway p95 latency back under 500ms",
+    "/goal set find out why checkout returns 502s and post the root cause",
+    "/goal set --max-turns 10 fix the failing morning-report delivery to Slack",
 )
-_USAGE = "/goal [show|set|pause|resume|edit|clear]  or  /goal <condition>"
+_EDIT_EXAMPLE = "/goal edit also confirm the fix reached prod-eu-42"
+
+# One example per subcommand, shown on the generic usage path.
+_COMMAND_EXAMPLES: tuple[tuple[str, str], ...] = (
+    ("/goal", "show the active goal and its progress"),
+    (_SET_EXAMPLES[0], "start working toward a condition"),
+    ("/goal pause", "hold the goal without losing it"),
+    ("/goal resume", "continue a paused goal"),
+    (_EDIT_EXAMPLE, "replace the condition, keep progress"),
+    ("/goal clear", "drop the goal"),
+)
 _HELP_FOOTER = "/goal · pause · resume · edit · clear"
+
+
+def _print_set_usage(console: Console) -> None:
+    console.print(f"[{ERROR}]usage:[/] /goal set [--max-turns N] <condition>")
+    console.print(f"[{DIM}]examples:[/]")
+    for example in _SET_EXAMPLES:
+        console.print(f"  [{HIGHLIGHT}]{example}[/]")
+
+
+def _print_goal_usage(console: Console) -> None:
+    console.print(f"[{ERROR}]usage:[/] {_rich_escape(_USAGE)}")
+    console.print(f"[{DIM}]examples:[/]")
+    for example, what in _COMMAND_EXAMPLES:
+        console.print(f"  [{HIGHLIGHT}]{example}[/] [{DIM}]— {what}[/]")
 
 
 def _persist_goal_state(session: Session) -> None:
@@ -55,7 +83,8 @@ def _show(session: Session, console: Console) -> bool:
     goal = getattr(session, "session_goal", None)
     if not isinstance(goal, SessionGoal) or not session_goal_is_attached(session):
         console.print(
-            f"[{DIM}]no active goal.[/] Set one with [{HIGHLIGHT}]/goal set <condition>[/]."
+            f"[{DIM}]no active goal.[/] Set one with [{HIGHLIGHT}]/goal set <condition>[/] "
+            f"[{DIM}]— e.g.[/] [{HIGHLIGHT}]{_SET_EXAMPLES[0]}[/]"
         )
         return True
     console.print(format_session_goal_progress(goal, session=session), markup=False)
@@ -71,14 +100,14 @@ def _set(session: Session, console: Console, args: list[str]) -> bool:
             try:
                 max_turns = max(1, int(rest.pop(0)))
             except ValueError:
-                console.print(f"[{ERROR}]usage:[/] /goal set [--max-turns N] <condition>")
+                _print_set_usage(console)
                 return True
         else:
             console.print(f"[{ERROR}]unknown flag:[/] {_rich_escape(flag)}")
             return True
     condition = " ".join(rest).strip()
     if not condition:
-        console.print(f"[{ERROR}]usage:[/] /goal set [--max-turns N] <condition>")
+        _print_set_usage(console)
         return True
     goal = SessionGoal(
         condition=condition,
@@ -159,6 +188,7 @@ def _edit(session: Session, console: Console, args: list[str]) -> bool:
     condition = " ".join(args).strip()
     if not condition:
         console.print(f"[{ERROR}]usage:[/] /goal edit <condition>")
+        console.print(f"[{DIM}]e.g.[/] [{HIGHLIGHT}]{_EDIT_EXAMPLE}[/]")
         return True
     condition = truncate_message(condition, MAX_GOAL_CONDITION_CHARS)
     edited = replace(goal, condition=condition)
@@ -204,8 +234,8 @@ def _cmd_goal(session: Session, console: Console, args: list[str]) -> bool:
         return _edit(session, console, args[1:])
     if sub in {"clear", "unset"}:
         return _clear(session, console)
+    if sub == "help":
+        _print_goal_usage(console)
+        return True
     # ``/goal <condition>`` is sugar for ``/goal set <condition>``.
-    if sub not in _GOAL_SUBCOMMANDS:
-        return _set(session, console, args)
-    console.print(f"[{ERROR}]usage:[/] {_USAGE}")
-    return True
+    return _set(session, console, args)

@@ -454,22 +454,48 @@ def test_failed_verification_exits_without_saving(
 
 
 @pytest.mark.parametrize(("module", "attr", "handler"), _CASES)
-def test_blank_required_field_exits_before_the_next_prompt(
+def test_blank_required_field_is_asked_again_not_fatal(
     monkeypatch: pytest.MonkeyPatch, run: _Run, module: Any, attr: str, handler: Any
 ) -> None:
-    """Fail on the field that is blank, not after working through the rest."""
+    """A blank required answer re-asks that field; it never exits the setup.
+
+    An empty answer at an interactive prompt is a normal thing to type, not an
+    error to bail on — bailing left the user with "X is required", a non-zero
+    exit, and no way forward but starting over. Ctrl+C is the way out.
+    """
     spec = getattr(module, attr)
     prompted = _prompted(spec)
     first_required = next((f for f in prompted if f.required and not f.default), None)
     if first_required is None:
         pytest.skip(f"{spec.service} has no required prompted field without a default")
-    _install(monkeypatch, module, attr, run, blank=first_required.name)
 
-    with pytest.raises(SystemExit):
-        handler()
+    # Arrange — script the prompts: every field answered normally, except the
+    # required one is answered blank first and with the real value on re-ask.
+    def _fake_verify(_source: str, config: dict[str, Any]) -> dict[str, str]:
+        run.verified.append(dict(config))
+        return {"status": "passed", "detail": "ok"}
 
-    assert len(run.asked) == 1 + [f.name for f in prompted].index(first_required.name)
-    assert (run.verified, run.store) == ([], [])
+    monkeypatch.setattr(module, attr, dataclasses.replace(spec, verify=_fake_verify))
+    answers = _ANSWERS[spec.service]
+    queue: list[str] = []
+    for field in prompted:
+        if field.name == first_required.name:
+            queue.append("")
+        queue.append(answers[field.name])
+
+    def _fake_p(label: str, default: str = "", secret: bool = False) -> str:
+        run.asked.append((label, default, secret))
+        return queue.pop(0)
+
+    monkeypatch.setattr(cli, "_p", _fake_p)
+
+    # Act
+    handler()
+
+    # Assert — asked twice (blank, then real), then verified and saved
+    labels = [label for label, _default, _secret in run.asked]
+    assert labels.count(first_required.question) == 2
+    assert run.verified and run.store
 
 
 # --- Mode-picker integrations (Slack, Alertmanager, OpenSearch) ----------------

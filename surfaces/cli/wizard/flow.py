@@ -54,7 +54,12 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
+from surfaces.cli.wizard.config import (
+    PROVIDER_BY_VALUE,
+    SUPPORTED_PROVIDERS,
+    ProviderOption,
+    WizardCredentialKind,
+)
 from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_URL,
@@ -71,6 +76,7 @@ from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.llm_credential import (
     CANCEL,
+    DEFERRED,
     OK,
     REPICK,
     UNSAVED,
@@ -804,8 +810,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
         if change_provider:
             if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
-                "cli",
-                "none",
+                WizardCredentialKind.CLI,
+                WizardCredentialKind.NONE,
             ):
                 credential_outcome, model = _prompt_validated_llm_credential(
                     provider,
@@ -818,7 +824,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 if credential_outcome == REPICK:
                     force_repick = True
                     continue
-                if credential_outcome == UNVERIFIED:
+                if credential_outcome == DEFERRED:
+                    # No key to hand: finish onboarding with the provider chosen
+                    # and nothing persisted, rather than ending the wizard.
+                    credential_state = DEFERRED
+                elif credential_outcome == UNVERIFIED:
                     credential_state = UNVERIFIED
                 elif credential_outcome == UNSAVED:
                     credential_state = UNSAVED
@@ -836,8 +846,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 os.environ.update(azure_env)
         else:
             if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
-                "cli",
-                "none",
+                WizardCredentialKind.CLI,
+                WizardCredentialKind.NONE,
             ):
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
@@ -845,7 +855,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # migrate a stale legacy ``api_key`` value into it — that would leak a
                 # secret-shaped value into .env and point the runtime at a bogus host. Fall
                 # through to the host prompt instead.
-                if not has_api_key and legacy_api_key and provider.credential_kind != "host":
+                if (
+                    not has_api_key
+                    and legacy_api_key
+                    and provider.credential_kind != WizardCredentialKind.HOST
+                ):
                     migration_outcome = _persist_llm_credential_with_recovery(
                         provider, legacy_api_key, session_env_sink=session_env_sink
                     )
@@ -869,7 +883,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     if credential_outcome == REPICK:
                         force_repick = True
                         continue
-                    if credential_outcome == UNVERIFIED:
+                    if credential_outcome == DEFERRED:
+                        credential_state = DEFERRED
+                    elif credential_outcome == UNVERIFIED:
                         credential_state = UNVERIFIED
                     elif credential_outcome == UNSAVED:
                         credential_state = UNSAVED
@@ -885,7 +901,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider_extra_env = azure_env
             os.environ.update(azure_env)
 
-        if model_provider.credential_kind == "cli":
+        if model_provider.credential_kind == WizardCredentialKind.CLI:
             cli_out = _run_cli_llm_onboarding(
                 model_provider,
                 display_label=(

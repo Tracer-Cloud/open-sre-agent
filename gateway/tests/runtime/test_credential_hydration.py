@@ -18,12 +18,12 @@ from config.constants.tenancy import (
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
 )
+from gateway.core.runtime.controller import GatewayController
 from gateway.core.runtime.credential_hydration import (
     CredentialHydrationConfig,
     GatewayCredentialHydrator,
 )
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.core.runtime.manager import GatewayManager
 from integrations import store
 from integrations.credentials_api import IntegrationStoreV2
 
@@ -291,7 +291,7 @@ def test_manager_fails_closed_with_generic_error() -> None:
         # The fake only needs hydrate(); cast keeps the factory signature honest.
         return cast(GatewayCredentialHydrator, BrokenHydrator())
 
-    manager = GatewayManager(credential_hydrator_factory=_broken_hydrator)
+    manager = GatewayController(credential_hydrator_factory=_broken_hydrator)
 
     with pytest.raises(GatewayConfigurationError, match="hydration failed"):
         manager._load_credentials(logging.getLogger("test"))

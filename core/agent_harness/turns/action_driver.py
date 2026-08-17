@@ -58,6 +58,7 @@ from core.execution import (
 )
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from core.llm_invoke_errors import remediate_missing_llm_credentials
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
@@ -1053,11 +1054,21 @@ def _run_action_turn(
             client=llm_client,
             error_text=error_text,
         )
-        _render_tool_calling_error(args.output, error_text)
-        _persist_tool_calling_error(session, message, error_text)
+        from config.config import get_configured_llm_provider
+        from core.agent_harness.accounting.token_accounting import resolve_provider_name
+
+        provider = resolve_provider_name(llm_client) if llm_client is not None else None
+        display_text = (
+            remediate_missing_llm_credentials(
+                error_text, provider=provider or get_configured_llm_provider()
+            )
+            or error_text
+        )
+        _render_tool_calling_error(args.output, display_text)
+        _persist_tool_calling_error(session, message, display_text)
         session.record("cli_agent", message, ok=False)
         return ToolCallingTurnResult(
-            0, 0, 0, True, True, response_text=error_text, accounting_status="not_run"
+            0, 0, 0, True, True, response_text=display_text, accounting_status="not_run"
         )
 
     counts = _count_turn(result, session, history_start)

@@ -18,6 +18,7 @@ from config.constants.llm import (
     AZURE_OPENAI_BASE_URL_ENV,
     CUSTOM_ANTHROPIC_BASE_URL_ENV,
     CUSTOM_OPENAI_BASE_URL_ENV,
+    LLM_PROVIDER_ENV,
     normalize_anthropic_base_url,
     normalize_custom_base_url,
 )
@@ -308,7 +309,7 @@ PROVIDER_VERTEX_AI: LLMProvider = "vertex-ai"
 def get_configured_llm_provider() -> str:
     """Return the active LLM provider from env/project .env."""
     bootstrap_opensre_env(override=False)
-    return os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic"
+    return os.getenv(LLM_PROVIDER_ENV, "anthropic").strip().lower() or "anthropic"
 
 
 def get_llm_provider_api_key_env(provider: str | None = None) -> str | None:

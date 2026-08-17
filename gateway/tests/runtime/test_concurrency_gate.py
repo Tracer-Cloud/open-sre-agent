@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -161,7 +162,7 @@ def test_path2_sync_investigate_busy_drops_when_gate_full(
 
     client = TestClient(webapp.app)
     resp = client.post("/investigate", json={"raw_alert": {"alert_name": "x"}})
-    assert resp.status_code == 503
+    assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert "capacity" in resp.json()["error"].lower()
     gate.release()
     reset_process_turn_gate_for_tests()

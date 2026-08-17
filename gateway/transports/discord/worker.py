@@ -13,10 +13,10 @@ from dataclasses import replace
 import discord
 
 from config.constants.investigation import ALERT_TEMPLATE_CHOICES
-from gateway.core.runtime.approvals import ApprovalBroker
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.discord.approvals import handle_component_interaction
 from gateway.transports.discord.dispatcher import DiscordTurnDispatcher
 from gateway.transports.discord.events import (

@@ -8,11 +8,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
-from gateway.core.runtime.active_turns import ActiveTurnRegistry
-from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
-from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
+from gateway.core.middleware.active_turns import ActiveTurnRegistry
+from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
+from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.telegram.approvals import TelegramApprovalPrompter
 from gateway.transports.telegram.inbound_security import (
     enforce_inbound_telegram_message_security,

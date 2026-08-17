@@ -41,7 +41,7 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption
+from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption, WizardCredentialKind
 from surfaces.cli.wizard.endpoint_prompt import (
     ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
@@ -51,8 +51,8 @@ from surfaces.cli.wizard.validation import ValidationResult, validate_provider_c
 #: What became of the credential the wizard just collected. ``unsaved`` outranks
 #: ``unverified``: a credential that never landed anywhere is the more urgent thing
 #: to say on the summary screen.
-CredentialState = Literal["ok", "unverified", "unsaved"]
-CredentialOutcome = Literal["ok", "unverified", "unsaved", "repick", "cancel"]
+CredentialState = Literal["ok", "unverified", "unsaved", "deferred"]
+CredentialOutcome = Literal["ok", "unverified", "unsaved", "deferred", "repick", "cancel"]
 
 # Recovery/outcome vocabulary. These are the byte-identical string values the wizard
 # menus, ``_choose`` defaults, and ``run_wizard`` branches all resolve against; named
@@ -68,6 +68,10 @@ CONTINUE_UNSAVED: Final = "continue_unsaved"
 OK: Final = "ok"
 UNSAVED: Final = "unsaved"
 UNVERIFIED: Final = "unverified"
+#: The user has no key to hand. Onboarding finishes; the key is added later with
+#: ``opensre auth login <provider>`` or the provider env var. One value for both
+#: the prompt outcome and the recorded state, as with ``unsaved``/``unverified``.
+DEFERRED: Final = "deferred"
 
 _LLM_CREDENTIAL_MAX_ATTEMPTS = 10  # mirrors _run_cli_llm_onboarding's retry budget
 
@@ -113,14 +117,16 @@ def _credential_line_for_saved_summary(
         if provider.value == "openai":
             return "OpenAI OAuth tokens (Codex CLI)"
         return f"{_provider_choice_label(provider)} OAuth session"
-    if provider.credential_kind == "host":
+    if provider.credential_kind == WizardCredentialKind.HOST:
         # A ``host`` credential (e.g. the Ollama host URL) is written to the project
         # ``.env`` by ``_persist_llm_credential``, never the keyring — the summary must
         # name .env, not the system keychain, in both the verified and unverified cases.
         if credential_state == UNVERIFIED:
             return "project .env (unverified)"
         return "project .env"
-    if provider.credential_kind != "cli":
+    if provider.credential_kind != WizardCredentialKind.CLI:
+        if credential_state == DEFERRED:
+            return f"not set yet — run `opensre auth login {provider.value}` when you have a key"
         if credential_state == UNSAVED:
             return "not saved — re-enter next run"
         if credential_state == UNVERIFIED:
@@ -135,7 +141,7 @@ def _credential_line_for_saved_summary(
 def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
     """Persist one prompted credential where the runtime will actually read it.
 
-    ``credential_kind == "host"`` values (e.g. the Ollama host URL) are plain
+    ``credential_kind == WizardCredentialKind.HOST`` values (e.g. the Ollama host URL) are plain
     runtime configuration, not secrets: the runtime resolves them from the
     environment only, never the keyring, so they belong in the project ``.env``.
     Everything else keeps the keyring path.
@@ -145,7 +151,7 @@ def _persist_llm_credential(provider: ProviderOption, value: str) -> bool:
     (permission denied, read-only fs, full disk) fails soft exactly like a keyring
     failure — it never propagates and crashes onboarding (#3591).
     """
-    if provider.credential_kind == "host":
+    if provider.credential_kind == WizardCredentialKind.HOST:
         try:
             sync_env_values({provider.api_key_env: value})
         except OSError as exc:
@@ -249,7 +255,7 @@ def _persist_llm_credential_with_recovery(
     why this is also correct at the legacy-key migration site, where there is no
     prompt to return to.
 
-    Reachable for ``credential_kind == "host"`` only when the ``.env`` write fails:
+    Reachable for ``credential_kind == WizardCredentialKind.HOST`` only when the ``.env`` write fails:
     ``_persist_llm_credential`` returns ``False`` on an ``OSError`` write error, so the
     host lands on the same recovery menu the keyring path uses (#3591). A successful
     host write returns ``True`` and never reaches this menu.
@@ -353,15 +359,22 @@ def _prompt_validated_llm_credential(
     for _attempt in range(_LLM_CREDENTIAL_MAX_ATTEMPTS):
         try:
             value = _prompt_value(
-                f"{credential_display} ({env_key})",
+                f"{credential_display} ({env_key}) — leave blank to set up later",
                 # Only a ``host`` credential may be pre-filled. _prompt_value returns the
                 # default on empty input, and a secret provider's credential_default is a
                 # placeholder (Azure's is an endpoint URL) — offering it would let a bare
                 # Enter persist a URL as the API key.
-                default=provider.credential_default if provider.credential_kind == "host" else "",
+                default=provider.credential_default
+                if provider.credential_kind == WizardCredentialKind.HOST
+                else "",
                 secret=provider.credential_secret,
+                # A blank answer is "I do not have this yet", not a mistake to
+                # re-prompt: this was the only step that could end onboarding.
+                allow_empty=provider.credential_kind != WizardCredentialKind.HOST,
                 back_on_cancel=True,
             )
+            if not value:
+                return DEFERRED, model
         except WizardBack:  # must precede KeyboardInterrupt: WizardBack subclasses it
             return REPICK, model
         except KeyboardInterrupt:

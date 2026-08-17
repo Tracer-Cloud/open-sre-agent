@@ -19,7 +19,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from gateway.core.runtime.approvals import (
+from gateway.core.middleware.approvals import (
     MAX_APPROVAL_WAIT_SECONDS,
     ApprovalBroker,
     arguments_preview,

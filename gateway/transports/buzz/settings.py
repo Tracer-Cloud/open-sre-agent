@@ -35,6 +35,7 @@ class GatewaySettings(StrictConfigModel):
     # so turns return promptly, and anything slower is re-delivered next start
     # rather than waited on.
     shutdown_drain_seconds: float = Field(default=5.0, gt=0)
+    turn_timeout_seconds: float = Field(default=240.0, gt=0)
     auto_start_enabled: bool = True
 
 
@@ -55,6 +56,7 @@ class BuzzGatewayEnv(BaseSettings):
     gateway_poll_interval_seconds: float = Field(default=15.0, gt=0)
     gateway_max_concurrent: int = Field(default=4, ge=1)
     gateway_stream_edit_interval_seconds: float = Field(default=1.5, gt=0)
+    gateway_turn_timeout_seconds: float = Field(default=240.0, gt=0)
     gateway_auto_start: bool = True
 
     @field_validator("allowed_pubkeys", mode="before")
@@ -155,6 +157,7 @@ def load_gateway_settings() -> GatewaySettings:
             allowed_pubkeys=choose_allowed_pubkeys(env, credentials),
             poll_interval_seconds=env.gateway_poll_interval_seconds,
             stream_edit_interval_seconds=env.gateway_stream_edit_interval_seconds,
+            turn_timeout_seconds=env.gateway_turn_timeout_seconds,
             max_concurrent_turns=env.gateway_max_concurrent,
             auto_start_enabled=env.gateway_auto_start,
         )

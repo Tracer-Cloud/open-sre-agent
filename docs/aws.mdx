@@ -8,7 +8,7 @@ OpenSRE uses AWS to map your environment: Lambda functions, EKS clusters, S3 buc
 ## Prerequisites
 
 - AWS account with IAM permissions
-- Either a role ARN (recommended) or static access keys
+- Either a role ARN (recommended) or static access keys. A role ARN is *assumed* using your ambient AWS credentials — environment keys, an `aws configure` profile, or an attached instance/task role — so one of those must exist on the machine running OpenSRE
 
 ## Setup
 
@@ -48,6 +48,9 @@ AWS_REGION=us-east-1
 
 <Info>
 Either `AWS_ROLE_ARN` or `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` is required.
+`AWS_ROLE_ARN` alone is not enough on a laptop: the role is assumed with whatever
+credentials boto3 finds (env keys, `~/.aws/credentials`, or an instance/task role), and
+that identity needs `sts:AssumeRole` on the role.
 </Info>
 
 ## IAM permissions
@@ -104,6 +107,7 @@ Detail: Authenticated via assume-role in us-east-1 as arn:aws:iam::123456789012:
 
 | Symptom | Fix |
 | --- | --- |
+| **Unable to locate credentials** (role ARN setup) | You chose IAM Role ARN but nothing on this machine has base AWS credentials. The setup wizard detects this when you pick the role option and offers to switch to Access Key + Secret, or to pause while you run `aws configure` / export `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` for an identity allowed to assume the role. If you set `AWS_ROLE_ARN` by hand instead of through the wizard, provide one of those base credentials |
 | **AccessDenied on STS** | Ensure the caller has `sts:AssumeRole` permission on the target role |
 | **InvalidClientTokenId** | Check that `AWS_ACCESS_KEY_ID` is correct and the key is active |
 | **Could not connect to endpoint** | Check `AWS_REGION` and network connectivity |

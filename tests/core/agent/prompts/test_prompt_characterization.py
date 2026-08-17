@@ -45,6 +45,30 @@ _SNAPSHOT_PATH = Path(__file__).with_name("prompt_characterization_snapshot.json
 
 _CLI_REFERENCE_TEXT = "=== opensre --help ===\nUsage: opensre [OPTIONS] COMMAND [ARGS]...\n"
 _AGENTS_MD_TEXT = "=== AGENTS.md (root) ===\nrepo map body\n"
+# Frozen host facts. The action prompt now carries the static runtime block, and
+# real values (hostname, kubeconfig path, scratchpad dir) would bake this
+# developer's machine into a snapshot every other machine then fails.
+_FROZEN_STATIC: dict[str, object] = {
+    "opensre_version": "0.1",
+    "opensre_build": "test",
+    "runtime_env": "development",
+    "os_family": "Linux",
+    "tz_name": "UTC",
+    "python_version": "3.14.0",
+    "pid": 1,
+    "ppid": 0,
+    "tools": {},
+    "kubeconfig": "",
+    "hostname": "test-host",
+    "scratchpad_dir": "/tmp/opensre-test",
+    "cloud_provider": "",
+    "cloud_region": "",
+    "workspace_repo": "Tracer-Cloud/opensre",
+    "network_egress": "",
+    "shell_available": True,
+    "capability_warnings": (),
+}
+
 # Frozen live facts so the late runtime block stays byte-stable in the snapshot.
 _FROZEN_RUNTIME: dict[str, object] = {
     "now_iso": "2026-07-29T12:00:00+00:00",
@@ -285,7 +309,10 @@ def _build_cases(tmp_path: Path) -> dict[str, str]:
     return cases
 
 
-def test_prompt_assembly_is_byte_identical(tmp_path: Path) -> None:
+def test_prompt_assembly_is_byte_identical(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "config.runtime_metadata.capture_runtime_facts", lambda **_kw: dict(_FROZEN_STATIC)
+    )
     cases = _build_cases(tmp_path)
 
     if os.environ.get("UPDATE_PROMPT_SNAPSHOT") == "1":

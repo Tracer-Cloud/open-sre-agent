@@ -24,6 +24,21 @@ owner-only local file. A value supplied in the process environment or a local
 `.env` file takes precedence when reading credentials. Keep `.env` out of source
 control and never commit real secrets.
 
+## Remote sync
+
+| Variable | Description |
+|---|---|
+| `OPENSRE_REMOTE_SYNC` | Master switch. Set to `1` to enable remote sync. Nothing uploads until enabled. |
+| `OPENSRE_REMOTE_SYNC_PROVIDER` | Backend name. Default `aws`. Built-in: `aws`, `gcs`, `vercel`, `azure`, `s3compat`. |
+| `OPENSRE_REMOTE_SYNC_BUCKET` | Your store name (S3/GCS bucket, Vercel store id, Azure container, or S3-compatible endpoint bucket). Required when enabled. |
+| `OPENSRE_REMOTE_SYNC_PREFIX` | Key prefix inside the store. Default `opensre`. Machines must use same prefix to share history. |
+| `OPENSRE_REMOTE_SYNC_ENDPOINT_URL` | Endpoint URL override for S3-compatible stores (for example MinIO, R2, Spaces, or other custom S3-compatible backends). |
+| `OPENSRE_REMOTE_SYNC_REGION` | Region override when supported by provider (AWS). |
+| `OPENSRE_REMOTE_SYNC_PROFILE` | Named credentials profile (AWS/Azure) to use instead of default. |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE` | Comma-separated glob patterns to exclude from sync (e.g. `*.tmp,sessions/scratch-*`). |
+| `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | Set to `1` to ignore exclusions for a single run and sync everything. |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read-write token (ambient; opensre never stores it). |
+
 ## LLM Providers
 
 | Variable | Default | Description | Module |

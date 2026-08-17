@@ -47,6 +47,10 @@ class BuzzOutputSink:
         edit_interval_seconds: float = 1.5,
         tool_hooks: object | None = None,
     ) -> None:
+        # Set per turn by the host cancel plumbing; declared here so the sink
+        # cooperates with cancellation like every other transport's, instead of
+        # relying on ``ensure_turn_cancel`` patching the attribute on.
+        self.turn_cancel: threading.Event | None = None
         self._client = client
         self._channel_id = channel_id
         self._edit_interval = edit_interval_seconds

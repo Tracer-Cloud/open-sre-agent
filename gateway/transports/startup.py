@@ -1,27 +1,32 @@
-"""Uniform start/stop contract for chat transports.
+"""The transport registry and the one loop that starts and stops the workers.
 
-Owned by :mod:`gateway.channels` (the consumer composer). Peer packages under
-``gateway.transports`` expose ``startup.start_*_worker`` only — they do not
-compose each other. Anything specific to one transport (readiness waits,
-settings shapes) stays in that transport's ``startup`` module.
+Owned by the transports group: worker initialization belongs next to the
+platforms it initializes, not at the gateway package root. Every transport is
+started in one pass — there is no per-transport start order — and a transport
+without credentials is skipped, not an error.
 
-A transport that is not configured is not an error: the gateway runs with
-whichever transports have credentials.
+This is the only module in the package allowed to import its peers, and only
+their ``startup`` submodules. Importing one platform package never loads this
+module, so peer isolation (one platform ≠ four SDK stacks) is preserved.
+Composed by :func:`gateway.startup.start_gateway`; nothing else imports this.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import StrEnum
-from typing import Any, Protocol
 
 from gateway.core.runtime.errors import (
     GatewayConfigurationError,
     GatewayTransportFailedError,
 )
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import (
+    GatewayAgentCallback,
+    TransportName,
+    TransportSpec,
+    TransportWorker,
+)
 from gateway.transports.buzz.startup import start_buzz_worker
 from gateway.transports.discord.startup import start_discord_worker
 from gateway.transports.slack.startup import start_slack_worker
@@ -31,38 +36,12 @@ from gateway.transports.telegram.startup import start_telegram_worker
 DEFAULT_STOP_TIMEOUT_SECONDS = 8.0
 
 
-class TransportName(StrEnum):
-    """Chat transports the gateway can serve.
-
-    Doubles as the key in :attr:`gateway.channels.ChannelsHandle.transports`
-    and in the component status map, so status keys and lookups cannot drift.
-    Web is not a member: it is a channel but not a chat transport.
-    """
-
-    TELEGRAM = "telegram"
-    SLACK = "slack"
-    DISCORD = "discord"
-    BUZZ = "buzz"
-
-
-class TransportWorker(Protocol):
-    """Background worker owning one transport's connection."""
-
-    def stop(self, *, timeout: float = ...) -> bool:
-        """Stop the worker and return whether it shut down within ``timeout``."""
-
-
-# Each transport's startup returns its worker plus its own settings object.
-TransportStarter = Callable[..., tuple[TransportWorker, Any]]
-
-
-@dataclass(frozen=True)
-class TransportSpec:
-    """How to start one transport and what to report once it is running."""
-
-    name: TransportName
-    start: TransportStarter
-    running_status: str
+TRANSPORTS: tuple[TransportSpec, ...] = (
+    TransportSpec(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
+    TransportSpec(TransportName.SLACK, start_slack_worker, "inbound connected"),
+    TransportSpec(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
+    TransportSpec(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
+)
 
 
 @dataclass(frozen=True)
@@ -84,14 +63,6 @@ class ChatStartup:
 
     handles: list[TransportHandle]
     statuses: dict[TransportName, str]
-
-
-TRANSPORTS: tuple[TransportSpec, ...] = (
-    TransportSpec(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
-    TransportSpec(TransportName.SLACK, start_slack_worker, "inbound connected"),
-    TransportSpec(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
-    TransportSpec(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
-)
 
 
 def start_transports(
@@ -145,9 +116,6 @@ __all__ = [
     "TRANSPORTS",
     "ChatStartup",
     "TransportHandle",
-    "TransportName",
-    "TransportSpec",
-    "TransportWorker",
     "start_transports",
     "stop_transports",
 ]

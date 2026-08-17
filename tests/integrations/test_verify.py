@@ -552,13 +552,17 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Arn": "arn:aws:sts::123456789012:assumed-role/TracerReadOnly/TracerIntegrationVerify",
             }
 
-    def _fake_boto3_client(service_name: str, **kwargs: Any) -> Any:
+    def _fake_assumed_client(service_name: str, **kwargs: Any) -> Any:
         assert service_name == "sts"
-        if kwargs.get("aws_access_key_id"):
-            return _AssumedSTSClient()
-        return _BaseSTSClient()
+        assert kwargs.get("aws_access_key_id") == "ASIA_TEST"
+        return _AssumedSTSClient()
 
-    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_boto3_client)
+    # The base client (the identity that assumes the role) comes from one seam;
+    # the assumed client is built with the returned temporary keys.
+    monkeypatch.setattr(
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
+    )
+    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_assumed_client)
 
     result = _verify_aws(
         "local store",
@@ -572,6 +576,39 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["status"] == "passed"
     assert "assume-role" in result["detail"]
     assert "123456789012" in result["detail"]
+
+
+def test_verify_aws_role_without_base_credentials_explains_the_prerequisite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Role ARN alone on a bare machine: say what to configure, not a raw boto3 error."""
+    from botocore.exceptions import NoCredentialsError
+
+    from integrations.aws.verifier import ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
+
+    # Arrange — no ambient credential chain, so assume_role cannot even be called
+    class _BaseSTSClient:
+        def assume_role(self, **_kwargs: Any) -> dict[str, Any]:
+            raise NoCredentialsError()
+
+    monkeypatch.setattr(
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
+    )
+
+    # Act
+    result = _verify_aws(
+        "local store",
+        {
+            "role_arn": "arn:aws:iam::123456789012:role/opensre-setup-s3-access",
+            "region": "ap-south-1",
+        },
+    )
+
+    # Assert — actionable message; the raw "Unable to locate credentials" is not surfaced
+    assert result["status"] == "failed"
+    assert result["detail"] == ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
+    assert "sts:AssumeRole" in result["detail"]
+    assert "Access Key + Secret" in result["detail"]
 
 
 def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> None:

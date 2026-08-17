@@ -11,7 +11,7 @@ import logging
 
 from core.agent_harness.session import SessionCore
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback, GatewaySink
+from gateway.core.transport_api import GatewayAgentCallback, GatewaySink
 
 
 class ConcurrencyLimitedTurnHandler:

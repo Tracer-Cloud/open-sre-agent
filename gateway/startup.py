@@ -1,8 +1,12 @@
-"""Start and stop the full consumer channel set: web + chat transports.
+"""Start and stop everything the gateway serves users through.
 
-The composition root (:class:`~gateway.core.runtime.manager.GatewayManager`)
-calls :func:`start_channels` and keeps only the returned handle. The scheduler
-is not a channel; the manager starts it as a peer after this module returns.
+The facade the process controller calls: one :func:`start_gateway` that brings
+up the web server and every chat transport together and returns the running
+handle. Worker initialization lives with the transports
+(:mod:`gateway.transports.startup`); this module only composes.
+
+Only :class:`~gateway.core.runtime.controller.GatewayController` imports this
+module, and only this module imports ``gateway.transports.startup``.
 """
 
 from __future__ import annotations
@@ -10,14 +14,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from gateway.channels.chat import (
+from gateway.core.transport_api import GatewayAgentCallback, TransportName
+from gateway.transports.startup import (
     DEFAULT_STOP_TIMEOUT_SECONDS,
     TransportHandle,
-    TransportName,
     start_transports,
     stop_transports,
 )
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
 from gateway.web.startup import start_web_server
 from gateway.web.web_server import WebAppServerHandle
 
@@ -29,8 +32,8 @@ _WEB_COMPONENT = "web"
 
 
 @dataclass
-class ChannelsHandle:
-    """Running consumer channels: optional web server, chat transports, statuses."""
+class StartedGateway:
+    """The running gateway: optional web server, chat transports, statuses."""
 
     web_server: WebAppServerHandle | None = None
     transports: dict[TransportName, TransportHandle] = field(default_factory=dict)
@@ -46,11 +49,11 @@ class ChannelsHandle:
         return stopped
 
 
-def start_channels(
+def start_gateway(
     *,
     logger: logging.Logger,
     handler: GatewayAgentCallback,
-) -> ChannelsHandle:
+) -> StartedGateway:
     """Start web and every chat transport together.
 
     Missing chat credentials skip that transport (``not configured``); readiness
@@ -61,7 +64,7 @@ def start_channels(
     statuses: dict[str, str] = {_WEB_COMPONENT: web.status}
     for name, status in chat.statuses.items():
         statuses[name] = status
-    return ChannelsHandle(
+    return StartedGateway(
         web_server=web.server,
         transports={handle.name: handle for handle in chat.handles},
         statuses=statuses,
@@ -69,7 +72,8 @@ def start_channels(
 
 
 __all__ = [
+    "DEFAULT_STOP_TIMEOUT_SECONDS",
     "WEB_STOP_TIMEOUT_SECONDS",
-    "ChannelsHandle",
-    "start_channels",
+    "StartedGateway",
+    "start_gateway",
 ]

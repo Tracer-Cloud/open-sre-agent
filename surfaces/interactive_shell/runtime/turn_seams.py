@@ -13,10 +13,10 @@ from typing import Any, Protocol
 
 from rich.console import Console
 
+from core.agent_harness import ToolCallingTurnResult
 from core.agent_harness.ports import AnswerRequest, OutputSink
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_plan import TurnPlan
-from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo

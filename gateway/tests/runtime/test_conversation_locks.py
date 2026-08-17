@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from gateway.core.runtime.conversation_locks import ConversationLockRegistry
+from gateway.core.middleware.conversation_locks import ConversationLockRegistry
 
 _THREAD_TIMEOUT_SECONDS = 1.0
 _BLOCKED_CHECK_SECONDS = 0.05

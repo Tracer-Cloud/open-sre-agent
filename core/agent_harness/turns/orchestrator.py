@@ -90,7 +90,7 @@ from core.agent_harness.turns.turn_route import (
     routing_input_from_result,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from core.llm_invoke_errors import is_cli_timeout_error
+from core.llm_invoke_errors import is_cli_timeout_error, remediate_missing_llm_credentials
 from platform.harness_ports import preferred_evidence_sources_for
 from platform.observability.trace.spans import component_span, emit_route
 
@@ -169,7 +169,13 @@ def _stream_response(
             kind = "llm_timeout" if is_cli_timeout_error(exc) else "assistant_error"
             stage_turn_error(session, kind, str(exc))
             stage_turn_llm_failure(session, client=client)
-        output.render_error(f"assistant failed: {exc}")
+        from config.config import get_configured_llm_provider
+        from core.agent_harness.accounting.token_accounting import resolve_provider_name
+
+        remediation = remediate_missing_llm_credentials(
+            str(exc), provider=resolve_provider_name(client) or get_configured_llm_provider()
+        )
+        output.render_error(remediation or f"assistant failed: {exc}")
         return None
     return run_factory.build(
         client=client,

@@ -20,21 +20,23 @@ from typing import Any
 
 from rich.console import Console
 
-from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.session import SessionCore, SessionManager
-from core.agent_harness.session_goal.goal import SessionGoal
-from core.agent_harness.session_goal.progress import (
+from core.agent_harness import (
+    AgentSession,
+    DefaultTurnAccounting,
+    SessionConfig,
+    SessionCore,
+    SessionGoal,
+    SessionManager,
     format_session_goal_progress,
     format_session_goal_status_line,
+    run_until_session_goal,
 )
-from core.agent_harness.session_goal.run_until import run_until_session_goal
 from gateway.core.runtime.cancel_console import CancelConsole, ensure_turn_cancel
 from gateway.core.runtime.capability_policy import ensure_gateway_capability_policy
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
 from gateway.core.runtime.session_agents import SessionAgentPool
-from gateway.core.runtime.sink_protocol import GatewaySink
 from gateway.core.runtime.status_messages import EMPTY_RESPONSE_MESSAGE
+from gateway.core.transport_api import GatewaySink
 from platform.analytics.cli import (
     capture_gateway_turn_completed,
     capture_gateway_turn_failed,

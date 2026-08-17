@@ -8,7 +8,7 @@ import sys
 from rich.console import Console
 
 from config.repl_config import ReplConfig
-from core.agent_harness.session import SessionManager
+from core.agent_harness import SessionManager
 from surfaces.interactive_shell.controller import InteractiveShellController
 from surfaces.interactive_shell.runtime.context import create_repl_runtime_context
 from surfaces.interactive_shell.runtime.startup.first_launch_github import (
@@ -35,7 +35,7 @@ async def run_repl_async(
 ) -> int:
     """Run the shell on an existing event loop and return its exit code."""
     from platform.analytics.cli import identify_saved_github_username
-    from platform.logging import quiet_noisy_third_party_loggers
+    from platform.logging import install_shell_log_handler, quiet_noisy_third_party_loggers
 
     # Keep MCP schema-cache warnings / httpx chatter off the transcript —
     # progress is soft status lines, not library WARNINGs.
@@ -44,6 +44,10 @@ async def run_repl_async(
 
     cfg = config or ReplConfig.load()
     out = console or _DEFAULT_CONSOLE
+    # WARNING+ records print through the shell console, so one emitted from a
+    # probe thread while a status spinner animates lands whole above it instead
+    # of racing the spinner's redraw on the tty and staircasing what follows.
+    install_shell_log_handler(lambda: out)
     pt_session = build_prompt_session()
     runtime_context = create_repl_runtime_context(pt_session=pt_session)
     session = runtime_context.session
@@ -72,7 +76,7 @@ async def run_repl_async(
         else:
             # Fresh interactive start with no scheduled loops: offer the
             # suggested-loops picker before the prompt loop takes stdin.
-            offer_loop_suggestions(session)
+            offer_loop_suggestions(session, out)
 
         await InteractiveShellController(
             runtime_context,

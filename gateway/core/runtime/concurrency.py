@@ -70,7 +70,7 @@ class TurnConcurrencyGate:
 def process_turn_gate() -> TurnConcurrencyGate:
     """Return the process-wide gate (lazy from ``OPENSRE_SIZE_PROFILE``).
 
-    :class:`GatewayManager` installs its gate here so chat and Path-2 share one
+    :class:`GatewayController` installs its gate here so chat and Path-2 share one
     semaphore in a full gateway process. Standalone ``WEB_PROFILE`` web creates
     the gate on first investigate/worker use.
     """

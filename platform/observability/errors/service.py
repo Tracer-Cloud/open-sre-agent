@@ -62,15 +62,18 @@ def capture_service_error(
     extras: dict[str, Any] | None = None,
     include_traceback: bool | None = None,
 ) -> None:
-    severity = "warning" if _is_transient_vendor_error(exc) else "error"
+    # An unreachable service is an operational fact, not a fault in our code —
+    # the same fact that already drops the traceback below decides severity:
+    # a refused connection or timeout is a warning, like a 5xx, not an error.
+    unreachable = _is_service_unreachable(exc)
+    severity = "warning" if unreachable or _is_transient_vendor_error(exc) else "error"
     merged_extras: dict[str, Any] = dict(extras) if extras else {}
     merged_extras.pop("surface", None)
     merged_extras["method"] = method
-    # An unreachable service is an operational fact, not a fault in our code:
-    # the stack is 60 lines of HTTP client internals and drowns the shell. Keep
+    # The stack is 60 lines of HTTP client internals and drowns the shell. Keep
     # it for anything else, where the stack points at the actual bug.
     if include_traceback is None:
-        include_traceback = not _is_service_unreachable(exc)
+        include_traceback = not unreachable
     report_exception(
         exc,
         logger=logger,

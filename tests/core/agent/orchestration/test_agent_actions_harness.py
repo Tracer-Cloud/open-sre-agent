@@ -1889,6 +1889,77 @@ def test_llm_invoke_failure_on_conversational_input_stages_attempted_model() -> 
     assert staged.provider == "bedrock"
 
 
+def test_missing_key_invoke_failure_answers_with_login_guidance() -> None:
+    """A key-less turn must reply with the auth-login command, not raw SDK text."""
+    # Arrange: the exact OpenAI SDK message a deferred-key install surfaces.
+    error = (
+        "Missing credentials. Please pass an `api_key`, `workload_identity`, "
+        "`admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` "
+        "environment variable."
+    )
+
+    class _MissingKeyLLM:
+        _model = "gpt-5.4-mini"
+        _provider_label = "OpenAI"
+
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    session = Session()
+
+    # Act
+    result = run_action_tool_turn(
+        "good morning",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_MissingKeyLLM),
+    )
+
+    # Assert: the user sees the remediation; telemetry keeps the raw error.
+    assert "`/auth login openai`" in result.response_text
+    assert "No API key is set for openai" in result.response_text
+    assert session.terminal.pop_pending_turn_error() == ("action_agent_error", error)
+
+
+def test_missing_key_guidance_names_configured_provider_when_client_has_no_label(
+    monkeypatch,
+) -> None:
+    """A client with no provider label falls back to the configured provider name."""
+    # Arrange: same SDK message, but the failing client exposes no identity.
+    error = (
+        "Missing credentials. Please pass an `api_key`, `workload_identity`, "
+        "`admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` "
+        "environment variable."
+    )
+
+    class _AnonymousFailingLLM:
+        def tool_schemas(self, _tools: list[Any]) -> list[dict[str, Any]]:
+            return []
+
+        def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+            raise RuntimeError(error)
+
+    import config.config as config_module
+
+    monkeypatch.setattr(config_module, "get_configured_llm_provider", lambda: "openai")
+    session = Session()
+
+    # Act
+    result = run_action_tool_turn(
+        "good morning",
+        session,
+        Console(force_terminal=False),
+        deps=ToolCallingDeps(llm_factory=_AnonymousFailingLLM),
+    )
+
+    # Assert
+    assert "`/auth login openai`" in result.response_text
+    assert "<provider>" not in result.response_text
+
+
 def test_llm_invoke_failure_uses_built_client_without_second_factory_call() -> None:
     """Invoke-time failure must stage identity from the client that actually failed."""
     error = "Bedrock model unavailable"

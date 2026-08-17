@@ -14,6 +14,8 @@ from __future__ import annotations
 import os
 import sys
 
+from config.constants.slack import SLACK_WEBHOOK_URL_ENV
+
 # Output-format return values. Use these constants in callers instead
 # of the bare strings so a future rename happens in one place.
 OUTPUT_FORMAT_RICH = "rich"
@@ -25,7 +27,6 @@ OUTPUT_FORMAT_NONE = "none"
 # and make ``grep`` for "who reads TRACER_OUTPUT_FORMAT" trivial.
 _ENV_OUTPUT_FORMAT = "TRACER_OUTPUT_FORMAT"
 _ENV_NO_COLOR = "NO_COLOR"
-_ENV_SLACK_WEBHOOK = "SLACK_WEBHOOK_URL"
 
 
 def get_output_format() -> str:
@@ -41,6 +42,6 @@ def get_output_format() -> str:
         return fmt
     if os.getenv(_ENV_NO_COLOR) is not None:
         return OUTPUT_FORMAT_TEXT
-    if os.getenv(_ENV_SLACK_WEBHOOK):
+    if os.getenv(SLACK_WEBHOOK_URL_ENV):
         return OUTPUT_FORMAT_TEXT
     return OUTPUT_FORMAT_RICH if sys.stdout.isatty() else OUTPUT_FORMAT_TEXT

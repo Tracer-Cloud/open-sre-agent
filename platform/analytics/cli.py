@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Final
 from uuid import uuid4
 
 from config.constants.investigation import MAX_INVESTIGATION_LOOPS
+from config.constants.llm import LLM_PROVIDER_ENV
 from platform.analytics.events import Event
 from platform.analytics.investigation_loop import (
     begin_investigation_loop_metrics_scope,
@@ -197,7 +198,7 @@ def _investigation_started_properties(
         "interactive": interactive,
         "evaluate_requested": evaluate_requested,
     }
-    llm_provider = _string_value(os.getenv("LLM_PROVIDER"))
+    llm_provider = _string_value(os.getenv(LLM_PROVIDER_ENV))
     llm_model = _string_value(os.getenv("ANTHROPIC_MODEL")) or _string_value(
         os.getenv("OPENAI_MODEL")
     )

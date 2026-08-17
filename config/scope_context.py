@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from config.principal import Principal, StorageScope
+from config.principal import StorageScope
 
 _CURRENT_SCOPE: ContextVar[StorageScope | None] = ContextVar("opensre_storage_scope", default=None)
 
@@ -33,10 +33,4 @@ def current_scope() -> StorageScope | None:
     return _CURRENT_SCOPE.get()
 
 
-def current_principal() -> Principal | None:
-    """Return the principal for this turn, or None when unbound."""
-    scope = _CURRENT_SCOPE.get()
-    return None if scope is None else scope.principal
-
-
-__all__ = ["bound_storage_scope", "current_principal", "current_scope"]
+__all__ = ["bound_storage_scope", "current_scope"]

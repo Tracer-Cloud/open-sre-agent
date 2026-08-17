@@ -18,7 +18,9 @@ from typing import Any
 from rich import box
 from rich.console import Console
 from rich.markup import escape
+from rich.segment import Segment
 from rich.table import Table
+from rich.text import Text
 
 import platform.terminal.theme as ui_theme
 
@@ -64,18 +66,32 @@ def _normalize_repl_line_endings(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\n", "\r\n")
 
 
-def _console_retains_output(console: Console) -> bool:
-    """True when the console keeps its own copy of what it prints.
+def _console_is_capturing(console: Console) -> bool:
+    """True inside an open ``capture()`` block, where output must not reach the file."""
+    return console._buffer_index > 0
 
-    ``record`` and an open ``capture()`` both buffer inside the ``Console``
-    object rather than at its file, so the direct ``sys.stdout`` write below
-    would be invisible to them even though the console targets stdout.
+
+def _feed_record_buffer(console: Console, plain_text: str) -> None:
+    """Append text the direct-stdout path wrote so ``export_text`` still sees it.
+
+    Every slash command runs under ``capture_console_segment``, which turns on
+    ``record`` so the analytics transcript gets a plain-text copy of what was
+    printed. That must not push tables onto the row-by-row ``console.print``
+    path — under ``patch_stdout(raw=True)`` each row is a bare ``\\n`` and the
+    table staircases across the screen. Recording is fed here instead.
     """
-    return bool(console.record) or console._buffer_index > 0
+    if not console.record:
+        return
+    # A delegating console (StreamingConsole) exports from the console it
+    # renders through; the record buffer that matters lives on that one.
+    owner = getattr(console, "_output", None) or console
+    with owner._record_buffer_lock:
+        owner._record_buffer.append(Segment(plain_text))
 
 
 def _write_repl_tty_buffered(
     *,
+    console: Console,
     width: int,
     leading_blank: bool,
     render_to_buffer: Callable[[Console], None],
@@ -89,15 +105,24 @@ def _write_repl_tty_buffered(
         width=width,
     )
     render_to_buffer(buf_console)
-    rendered = _normalize_repl_line_endings(buf.getvalue())
+    styled = buf.getvalue()
+    rendered = _normalize_repl_line_endings(styled)
     if leading_blank:
         rendered = "\r\n" + rendered
+    # Start at column zero regardless of where the previous writer (a status
+    # spinner's teardown, a wrapped log line) left the cursor; otherwise the
+    # first row begins mid-line and the rows below inherit the offset.
+    # Start at column zero regardless of where the previous writer (a status
+    # spinner's teardown, a wrapped log line) left the cursor; otherwise the
+    # first row begins mid-line and the rows below inherit the offset.
+    rendered = "\r" + rendered
     token = _REPL_OUTPUT_PREPARED.set(True)
     try:
         sys.stdout.write(rendered)
         sys.stdout.flush()
     finally:
         _REPL_OUTPUT_PREPARED.reset(token)
+    _feed_record_buffer(console, Text.from_ansi(styled).plain)
 
 
 def print_repl_table(console: Console, table: Table, *, width: int | None = None) -> None:
@@ -117,8 +142,9 @@ def print_repl_table(console: Console, table: Table, *, width: int | None = None
     """
     leading_blank = width is None
     width = width if width is not None else _prepare_tty_for_rich(console)
-    if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_is_capturing(console):
         _write_repl_tty_buffered(
+            console=console,
             width=width,
             leading_blank=leading_blank,
             render_to_buffer=lambda buf_console: buf_console.print(table),
@@ -141,8 +167,9 @@ def print_repl_json(console: Console, json_str: str) -> None:
     sequence being left in stdin by a prompt_toolkit toolbar flush.
     """
     width = _prepare_tty_for_rich(console)
-    if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_is_capturing(console):
         _write_repl_tty_buffered(
+            console=console,
             width=width,
             leading_blank=True,
             render_to_buffer=lambda buf_console: buf_console.print_json(json_str),
@@ -213,7 +240,7 @@ def repl_render_launch_poster(
     """Render splash + welcome panel using REPL-safe CRLF writes."""
     from surfaces.interactive_shell.ui.terminal_ui import render_terminal_ui
 
-    if console.file is sys.stdout and sys.stdout.isatty() and not _console_retains_output(console):
+    if console.file is sys.stdout and sys.stdout.isatty() and not _console_is_capturing(console):
         width = _prepare_tty_for_rich(console)
         buf = io.StringIO()
         buf_console = Console(
@@ -227,6 +254,7 @@ def repl_render_launch_poster(
         render_terminal_ui(buf_console, session=session, first_run=False)
         prefix = _theme_notice_line(theme_notice) if theme_notice else ""
         _repl_write_buffer(prefix + buf.getvalue())
+        _feed_record_buffer(console, Text.from_ansi(buf.getvalue()).plain)
         return
 
     if theme_notice:

@@ -8,10 +8,15 @@ from contextlib import contextmanager
 
 
 class TerminalOutcomeArbiter:
-    """Let only the first terminal path update a turn's external state."""
+    """Let only the first terminal path update a turn's external state.
 
-    def __init__(self) -> None:
-        self.cancel_event = threading.Event()
+    ``cancel_event`` may be supplied by the caller when the Event already
+    exists — e.g. registered for ``/stop`` at dispatch time, before the turn
+    started — so cancellation requested before construction is not lost.
+    """
+
+    def __init__(self, cancel_event: threading.Event | None = None) -> None:
+        self.cancel_event = cancel_event if cancel_event is not None else threading.Event()
         self._lock = threading.Lock()
         self._claimed = False
 

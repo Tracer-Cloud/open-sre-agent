@@ -17,7 +17,6 @@ from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
-    _is_interactive_wizard,
     _pump_task_pty,
     _pump_task_stream,
     read_diag,
@@ -28,6 +27,7 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
 )
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import make_repl_presenter
 from surfaces.interactive_shell.session import Session
+from tools.interactive_shell.cli import is_interactive_wizard
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
@@ -1446,7 +1446,7 @@ def test_is_interactive_wizard_classifies_command_paths(tokens: list[str], expec
     Adding a new interactive command later should be a one-line set entry —
     this test pins the current set + the case-insensitive lookup behavior.
     """
-    assert _is_interactive_wizard(tokens) is expected
+    assert is_interactive_wizard(tokens) is expected
 
 
 def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(

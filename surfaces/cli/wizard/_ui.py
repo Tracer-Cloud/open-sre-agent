@@ -37,7 +37,7 @@ from platform.terminal.theme import (
     WARNING,
 )
 from surfaces.cli.llm_auth.persist import AuthSetupError, persist_api_key_secret
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
+from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption, WizardCredentialKind
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.prompts import select as select_prompt
@@ -121,8 +121,12 @@ def _local_defaults() -> dict[str, str | bool | None]:
     api_key_env = _string_value(
         local.get("api_key_env"), api_key_provider.api_key_env if api_key_provider else ""
     )
-    is_cli = bool(raw_provider_option and raw_provider_option.credential_kind == "cli")
-    is_host = bool(api_key_provider and api_key_provider.credential_kind == "host")
+    is_cli = bool(
+        raw_provider_option and raw_provider_option.credential_kind == WizardCredentialKind.CLI
+    )
+    is_host = bool(
+        api_key_provider and api_key_provider.credential_kind == WizardCredentialKind.HOST
+    )
     is_oauth_backend = bool(raw_provider_value and raw_provider_value != provider_value)
     raw_auth_method = local.get("auth_method")
     auth_method = (

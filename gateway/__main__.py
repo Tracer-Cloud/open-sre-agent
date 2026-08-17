@@ -1,4 +1,4 @@
-"""Package entry for the OpenSRE messaging gateway.
+"""Package guard for the OpenSRE messaging gateway.
 
 This module is intentionally **not** a production composition root: slash-command
 ports are wired by the CLI composition root outside this package. Starting here
@@ -10,7 +10,7 @@ Production: ``opensre gateway start`` / ``opensre gateway start --foreground``.
 from __future__ import annotations
 
 _BARE_MAIN_EXIT = (
-    "python -m gateway.main has no slash-port glue and is not a production entry.\n"
+    "python -m gateway has no slash-port glue and is not a production entry.\n"
     "Start the gateway with: opensre gateway start\n"
     "                  or: opensre gateway start --foreground\n"
 )

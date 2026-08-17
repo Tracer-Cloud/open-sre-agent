@@ -13,7 +13,7 @@ import os
 from collections.abc import Callable, Mapping
 
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.settings import (
     SlackGatewaySettings,

@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 
+from config.constants.llm import LLM_PROVIDER_ENV
+
 LLM_AUTH_METHOD_ENV = "LLM_AUTH_METHOD"
 
 
@@ -54,7 +56,7 @@ def canonical_llm_provider(provider: str) -> str:
 
 def get_configured_llm_auth_method(provider: str | None = None) -> LLMAuthMethod:
     """Return the active auth method from env, with legacy CLI compatibility."""
-    normalized_provider = (provider or os.getenv("LLM_PROVIDER") or "").strip().lower()
+    normalized_provider = (provider or os.getenv(LLM_PROVIDER_ENV) or "").strip().lower()
     if normalized_provider in OAUTH_PROVIDER_BY_BACKEND_PROVIDER:
         return OAUTH_AUTH_METHOD
     return normalize_llm_auth_method(os.getenv(LLM_AUTH_METHOD_ENV))

@@ -16,7 +16,7 @@ import pytest
 from mcp import types
 
 import integrations.groundcover.client as gc_client
-from integrations.config_models import GroundcoverIntegrationConfig
+from integrations.groundcover.config import GroundcoverIntegrationConfig
 
 
 def _config(**overrides: Any) -> GroundcoverIntegrationConfig:

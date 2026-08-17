@@ -7,9 +7,9 @@ import logging
 import threading
 
 from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
-from gateway.core.runtime.active_turns import is_stop_command
+from gateway.core.middleware.active_turns import is_stop_command
 from gateway.core.runtime.polling_thread import PollingBackground, start_polling_background
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.telegram.approvals import handle_callback_query
 from gateway.transports.telegram.inbound_handler import (
     handle_polled_inbound_telegram_message,

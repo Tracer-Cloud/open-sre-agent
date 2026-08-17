@@ -16,6 +16,8 @@ from typing import Final
 
 # --- Connection env-var names ------------------------------------------------
 
+LLM_PROVIDER_ENV: Final[str] = "LLM_PROVIDER"
+
 AZURE_OPENAI_BASE_URL_ENV: Final[str] = "AZURE_OPENAI_BASE_URL"
 AZURE_OPENAI_API_VERSION_ENV: Final[str] = "AZURE_OPENAI_API_VERSION"
 AZURE_OPENAI_API_KEY_ENV: Final[str] = "AZURE_OPENAI_API_KEY"

@@ -25,6 +25,7 @@ from surfaces.cli.llm_auth.providers import (
 )
 from surfaces.cli.llm_auth.service import (
     AuthSetupError,
+    cli_subscription_install_error,
     configure_api_key_provider,
     configure_cli_subscription_provider,
     logout_provider,
@@ -50,6 +51,17 @@ def _provider_choice(profile: ProviderAuthProfile) -> questionary.Choice:
     return questionary.Choice(f"{profile.name} ({profile.label})", value=profile.name)
 
 
+def _configured_profile_name() -> str | None:
+    """The auth-profile name matching the install's active LLM provider, if any."""
+    from config.config import get_configured_llm_provider
+
+    configured = get_configured_llm_provider()
+    for profile in iter_auth_profiles():
+        if configured == profile.provider_value or configured in profile.all_names:
+            return profile.name
+    return None
+
+
 def _prompt_provider() -> ProviderAuthProfile:
     choices: list[questionary.Choice | questionary.Separator] = [
         questionary.Separator(" "),
@@ -66,9 +78,19 @@ def _prompt_provider() -> ProviderAuthProfile:
         _provider_choice(profile) for profile in iter_auth_profiles() if profile.kind == "api_key"
     )
 
+    configured = _configured_profile_name()
+    default = next(
+        (
+            choice
+            for choice in choices
+            if isinstance(choice, questionary.Choice) and choice.value == configured
+        ),
+        None,
+    )
     provider = questionary.select(
         "Choose a provider:",
         choices=choices,
+        default=default,
         qmark=QUESTIONARY_QMARK,
         style=questionary_prompt_style(),
         instruction="(use arrow keys)",
@@ -184,6 +206,10 @@ def auth_login(
                 validate=validate,
             )
         else:
+            install_error = cli_subscription_install_error(profile)
+            if install_error:
+                # Fail before the browser question — it cannot fix a missing binary.
+                raise AuthSetupError(install_error)
             _maybe_open_setup_page(profile, enabled=open_browser)
             result = configure_cli_subscription_provider(
                 profile=profile,
