@@ -81,7 +81,7 @@ def wait_for_pr_checks(
     last_names: tuple[str, ...] = ()
     terminal_signature: tuple[str, ...] = ()
     terminal_since: float | None = None
-    expected_head_seen = False
+    expected_head_seen_at: float | None = None
 
     while True:
         payload = run_gh_json(
@@ -95,10 +95,11 @@ def wait_for_pr_checks(
         now = monotonic()
 
         if head_sha == expected_head_sha:
-            expected_head_seen = True
+            if expected_head_seen_at is None:
+                expected_head_seen_at = now
         elif head_sha and (
             head_sha != ctx.head_sha
-            or expected_head_seen
+            or expected_head_seen_at is not None
             or now - started_at >= max(0, head_propagation_seconds)
         ):
             return CheckVerification(
@@ -120,7 +121,10 @@ def wait_for_pr_checks(
         else:
             workflows_complete, workflow_signature = False, ()
         external_checks_registered = required_external_checks.issubset(set(last_names))
-        registration_complete = now - started_at >= max(0, registration_seconds)
+        registration_complete = (
+            expected_head_seen_at is not None
+            and now - expected_head_seen_at >= max(0, registration_seconds)
+        )
         if (
             head_sha == expected_head_sha
             and checks
