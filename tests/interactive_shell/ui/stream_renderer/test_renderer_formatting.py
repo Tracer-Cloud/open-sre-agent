@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from surfaces.cli.ui.renderer.formatting import (
+from surfaces.interactive_shell.ui.stream_renderer.formatting import (
     format_prior_tools_clause,
     investigation_llm_progress_hint,
 )

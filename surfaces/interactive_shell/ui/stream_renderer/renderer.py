@@ -13,7 +13,14 @@ from core.domain.stream import StreamEvent
 from platform.analytics.cli import capture_investigation_lifecycle_event
 from platform.analytics.events import Event
 from platform.observability.trace.redaction import format_json_preview
-from surfaces.cli.ui.renderer.constants import (
+from surfaces.interactive_shell.ui.output import (
+    ProgressTracker,
+    _fmt_timing,
+    _repl_progress_active,
+    get_output_format,
+    register_tool_detail_toggle,
+)
+from surfaces.interactive_shell.ui.stream_renderer.constants import (
     _DIAGNOSE_NODE,
     _HIDDEN_PROGRESS_NODES,
     _NODE_END_KINDS,
@@ -21,24 +28,20 @@ from surfaces.cli.ui.renderer.constants import (
     _TOKEN_STREAM_KIND,
     _render_source,
 )
-from surfaces.cli.ui.renderer.diagnose import _DiagnoseStreamRenderer
-from surfaces.cli.ui.renderer.formatting import (
+from surfaces.interactive_shell.ui.stream_renderer.diagnose import _DiagnoseStreamRenderer
+from surfaces.interactive_shell.ui.stream_renderer.formatting import (
     _validity_score_percent,
     investigation_llm_progress_hint,
 )
-from surfaces.cli.ui.renderer.reasoning import reasoning_text
-from surfaces.cli.ui.renderer.terminal import _print_connection_banner, _print_info
-from surfaces.cli.ui.renderer.tools import (
+from surfaces.interactive_shell.ui.stream_renderer.reasoning import reasoning_text
+from surfaces.interactive_shell.ui.stream_renderer.terminal import (
+    _print_connection_banner,
+    _print_info,
+)
+from surfaces.interactive_shell.ui.stream_renderer.tools import (
     _tool_event_key,
     _tool_input,
     _tool_output,
-)
-from surfaces.interactive_shell.ui.output import (
-    ProgressTracker,
-    _fmt_timing,
-    _repl_progress_active,
-    get_output_format,
-    register_tool_detail_toggle,
 )
 from tools.registry import resolve_tool_activity_labels, resolve_tool_display_name
 

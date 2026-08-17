@@ -7,11 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from surfaces.cli.investigation.payload import (
-    bundled_demo_alert_path,
-    load_file,
-    resolve_alert_path,
-)
+from surfaces.cli.investigation.payload import load_file
+from surfaces.shared.demo_alert import bundled_demo_alert_path, resolve_alert_path
 
 
 def test_bundled_demo_alert_fixture_exists() -> None:

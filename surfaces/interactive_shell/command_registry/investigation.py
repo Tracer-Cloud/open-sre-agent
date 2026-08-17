@@ -72,7 +72,7 @@ def _queue_investigate_target(session: Session, target: str) -> None:
 
 
 def _interactive_investigate_menu(session: Session, console: Console) -> bool:
-    from surfaces.cli.constants import SAMPLE_ALERT_OPTIONS
+    from config.constants.investigation import SAMPLE_ALERT_OPTIONS
 
     root = "/investigate"
     choices: list[tuple[str, str]] = [
@@ -224,11 +224,11 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     from config.constants.investigation import ALERT_TEMPLATE_CHOICES
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
-    from surfaces.cli.investigation.payload import resolve_alert_path
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         run_investigation_for_session,
         run_sample_alert_for_session,
     )
+    from surfaces.shared.demo_alert import resolve_alert_path
 
     if not args and repl_tty_interactive():
         return _interactive_investigate_menu(session, console)

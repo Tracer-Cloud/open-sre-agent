@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from surfaces.cli.ui.renderer.reasoning import reasoning_text, tool_display_name
+from surfaces.interactive_shell.ui.stream_renderer.reasoning import (
+    reasoning_text,
+    tool_display_name,
+)
 
 
 class TestToolDisplayName:

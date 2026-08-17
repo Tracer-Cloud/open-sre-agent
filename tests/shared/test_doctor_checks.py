@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from surfaces.cli.commands import doctor
+from surfaces.shared import doctor_checks as doctor
 
 
 def test_check_python_version_ok(monkeypatch) -> None:
@@ -221,10 +221,12 @@ def test_check_version_freshness_skips_release_compare_for_local_dev(monkeypatch
     fetch_latest_version = MagicMock(return_value="9.9.9")
     monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
+        "platform.common.release_version.development_install_doctor_version_detail",
         lambda c: f"{c} (editable install; skipped comparing to latest main build)",
     )
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", fetch_latest_version)
+    monkeypatch.setattr(
+        "platform.common.release_version.fetch_latest_version", fetch_latest_version
+    )
 
     ok, detail = doctor._check_version_freshness()
 
@@ -238,11 +240,13 @@ def test_check_version_freshness_up_to_date(monkeypatch) -> None:
     is_update_available = MagicMock(return_value=False)
     monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
+        "platform.common.release_version.development_install_doctor_version_detail",
         lambda _c: None,
     )
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", fetch_latest_version)
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_update_available", is_update_available)
+    monkeypatch.setattr(
+        "platform.common.release_version.fetch_latest_version", fetch_latest_version
+    )
+    monkeypatch.setattr("platform.common.release_version.is_update_available", is_update_available)
 
     ok, detail = doctor._check_version_freshness()
 
@@ -257,11 +261,13 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
     is_update_available = MagicMock(return_value=True)
     monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
+        "platform.common.release_version.development_install_doctor_version_detail",
         lambda _c: None,
     )
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", fetch_latest_version)
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_update_available", is_update_available)
+    monkeypatch.setattr(
+        "platform.common.release_version.fetch_latest_version", fetch_latest_version
+    )
+    monkeypatch.setattr("platform.common.release_version.is_update_available", is_update_available)
 
     ok, detail = doctor._check_version_freshness()
 
@@ -275,14 +281,14 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
 def test_check_version_freshness_soft_fails_on_fetch_error(monkeypatch) -> None:
     monkeypatch.setattr(doctor, "get_opensre_version", lambda: "1.2.3")
     monkeypatch.setattr(
-        "surfaces.cli.lifecycle.update.development_install_doctor_version_detail",
+        "platform.common.release_version.development_install_doctor_version_detail",
         lambda _c: None,
     )
 
     def _raise() -> str:
         raise RuntimeError("rate limited")
 
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("platform.common.release_version.fetch_latest_version", _raise)
 
     ok, detail = doctor._check_version_freshness()
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import sys
 
-from surfaces.cli.ui.renderer.constants import _BOLD, _CYAN, _DIM, _RESET
 from surfaces.interactive_shell.ui.output import get_output_format
+from surfaces.interactive_shell.ui.stream_renderer.constants import _BOLD, _CYAN, _DIM, _RESET
 
 
 def _print_connection_banner() -> None:

@@ -16,7 +16,15 @@ from rich.text import Text
 from core.domain.stream import StreamEvent
 from platform.analytics.cli import capture_investigation_lifecycle_event
 from platform.analytics.events import Event
-from surfaces.cli.ui.renderer.constants import (
+from surfaces.interactive_shell.ui.output import (
+    ProgressTracker,
+    _repl_progress_active,
+    get_output_format,
+    set_live_console,
+    stop_display,
+    unregister_live_console,
+)
+from surfaces.interactive_shell.ui.stream_renderer.constants import (
     _BOLD,
     _DIAGNOSE_LIVE_REFRESH,
     _DIAGNOSE_NODE,
@@ -28,14 +36,6 @@ from surfaces.cli.ui.renderer.constants import (
     _RESET,
     _WHITE,
     _render_source,
-)
-from surfaces.interactive_shell.ui.output import (
-    ProgressTracker,
-    _repl_progress_active,
-    get_output_format,
-    set_live_console,
-    stop_display,
-    unregister_live_console,
 )
 
 
