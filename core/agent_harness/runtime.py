@@ -3,7 +3,8 @@
 The headless agent, the two port families it is built on (``DefaultPorts``,
 ``HeadlessPorts``),
 the default tool provider a host configures with its port factories, the
-per-turn binding, the action-turn runner, and the gather ports. Importing this loads ``core.agent``;
+per-turn binding, the turn plan the runtime hands to stages, the action-turn
+runner, and the gather ports. Importing this loads ``core.agent``;
 hosts import it when a turn is dispatched, not at boot.
 """
 
@@ -15,6 +16,7 @@ from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.agent_harness.turns.gather_ports import GatherPorts
 from core.agent_harness.turns.headless_dispatch import HeadlessAgent
 from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
+from core.agent_harness.turns.turn_plan import TurnPlan
 
 __all__ = [
     "ActionTurnRunner",
@@ -24,4 +26,5 @@ __all__ = [
     "HeadlessAgent",
     "HeadlessPorts",
     "TurnBinding",
+    "TurnPlan",
 ]

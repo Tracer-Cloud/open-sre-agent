@@ -14,7 +14,6 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 
 from core.agent_harness import SessionManager
-from core.agent_harness.spi.session_flags import clear_pending_autosubmit, set_auto_command
 from core.agent_harness.spi.session_goal import (
     MAX_GOAL_CONDITION_CHARS,
     SessionGoal,
@@ -27,6 +26,7 @@ from core.agent_harness.spi.session_goal import (
     session_goal_is_attached,
     session_goal_is_paused,
 )
+from core.agent_harness.spi.session_state import clear_pending_autosubmit, set_auto_command
 from platform.common.evidence_compaction import truncate_message
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session

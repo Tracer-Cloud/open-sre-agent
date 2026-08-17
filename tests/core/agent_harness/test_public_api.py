@@ -78,12 +78,14 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "strip_session_goal_progress_tags",
         }
     ),
-    "session_flags": frozenset(
+    "session_state": frozenset(
         {
             "background_investigations",
             "background_mode_enabled",
             "background_notification_channels",
             "clear_pending_autosubmit",
+            "compact_session_branch",
+            "format_recovery_note",
             "pop_turn_outcome_hint",
             "session_terminal",
             "set_auto_command",
@@ -94,6 +96,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
     "cancel": frozenset({"ensure_turn_cancel", "host_cancel_requested"}),
     "accounting": frozenset(
         {
+            "SELF_RECORDING_ACTION_TOOL_NAMES",
             "DefaultTurnAccounting",
             "LlmRunInfo",
             "ToolCallingAccountingStatus",
@@ -111,12 +114,19 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
     ),
     "integrations": frozenset({"has_resolved_integrations", "resolve_integrations"}),
     "grounding": frozenset(
-        {"CacheStats", "GroundingSource", "list_action_skills", "log_grounding_cache_diagnostics"}
+        {
+            "CacheStats",
+            "GroundingSource",
+            "list_action_skills",
+            "load_skill_body",
+            "log_grounding_cache_diagnostics",
+        }
     ),
     "defaults": frozenset(
         {
             "DefaultErrorReporter",
             "DefaultPromptContextProvider",
+            "JsonlSessionStore",
             "default_session_repo",
             "default_session_store",
         }
@@ -132,6 +142,7 @@ RUNTIME = frozenset(
         "HeadlessAgent",
         "HeadlessPorts",
         "TurnBinding",
+        "TurnPlan",
     }
 )
 

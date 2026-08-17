@@ -3,8 +3,9 @@
 Import the role you need, not this package:
 
 * :mod:`.session_goal` — attach, query, render and drive a multi-turn goal.
-* :mod:`.session_flags` — session state a host reads and sets around a turn
-  (background and trust mode, terminal, auto-command, turn-outcome hints).
+* :mod:`.session_state` — session state a host reads and sets around a turn
+  (background and trust mode, terminal, auto-command, turn-outcome hints,
+  resume notes, transcript compaction).
 * :mod:`.cancel` — cooperative cancellation of the running turn.
 * :mod:`.accounting` — per-turn and per-run accounting and token totals.
 * :mod:`.prompt_chrome` — the want-me-to closer and shell prompt chrome.

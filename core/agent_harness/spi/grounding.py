@@ -7,6 +7,12 @@ from core.agent_harness.grounding.diagnostics import (
     log_grounding_cache_diagnostics,
 )
 from core.agent_harness.grounding.models import CacheStats
-from core.agent_harness.prompts.skills.loader import list_action_skills
+from core.agent_harness.prompts.skills.loader import list_action_skills, load_skill_body
 
-__all__ = ["CacheStats", "GroundingSource", "list_action_skills", "log_grounding_cache_diagnostics"]
+__all__ = [
+    "CacheStats",
+    "GroundingSource",
+    "list_action_skills",
+    "load_skill_body",
+    "log_grounding_cache_diagnostics",
+]

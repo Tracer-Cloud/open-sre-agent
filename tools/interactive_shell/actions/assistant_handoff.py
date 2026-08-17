@@ -4,17 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.tools.tool_context import (
-    ActionToolContext,
-    execute_with_action_context,
-    object_schema,
-    string_array_property,
-    string_property,
-)
+from core.agent_harness.tools.tool_context import ActionToolContext, execute_with_action_context
 from core.agent_harness.turns.evidence_kind import EVIDENCE_KIND_VALUES
 from core.agent_harness.turns.handoff_keys import HandoffField
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.schema import object_schema, string_array_property, string_property
 
 
 def execute_assistant_handoff_tool(args: dict[str, Any], ctx: ActionToolContext) -> bool:

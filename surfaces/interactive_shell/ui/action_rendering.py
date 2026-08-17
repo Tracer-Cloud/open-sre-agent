@@ -19,7 +19,7 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
-from core.agent_harness.turns.action_driver import SELF_RECORDING_ACTION_TOOL_NAMES
+from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from platform.terminal.theme import BOLD_SKILL, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui.output.console_state import get_investigation_spinner

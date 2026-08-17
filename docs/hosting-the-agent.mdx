@@ -20,7 +20,7 @@ Everything a host touches comes through four modules. Nothing else under
 | --- | --- | --- |
 | **Embed** | run turns with the standard ports | `core.agent_harness` — `AgentSession`, `SessionConfig`, `SessionCore`, `SessionManager`, `TurnResult`, `ToolCallingTurnResult`, `OutputSink` |
 | **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner` |
-| **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_flags`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
+| **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_state`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
 | **Implement** | satisfy a protocol the harness calls | `core.agent_harness.ports` — `OutputSink`, `ToolProvider`, `PromptContextProvider`, `ReasoningClientProvider`, `RunRecordFactory`, `ErrorReporter`, `TurnAccounting`, `SessionState`, and the rebind mix-ins `ConsoleBindable` / `OutputBindable` / `SessionBindable` |
 
 ## The host loop
@@ -126,7 +126,7 @@ ports and in what they do with the result.
 | Account a turn (telemetry, token totals) | `TurnAccounting` — `record_action_result`, `finalize` | `TurnBinding(accounting=…)` |
 | Approve or deny tool calls per conversation | — | `TurnBinding(tool_hooks=…)` |
 | Follow the turn's console or sink from your own port | `ConsoleBindable.bind_console` / `OutputBindable.bind_output` | happens on `bind_turn` |
-| Drive a multi-turn goal, read or set session flags | — | `spi.session_goal`, `spi.session_flags` |
+| Drive a multi-turn goal, read or set session state | — | `spi.session_goal`, `spi.session_state` |
 
 ## Rules a host must keep
 

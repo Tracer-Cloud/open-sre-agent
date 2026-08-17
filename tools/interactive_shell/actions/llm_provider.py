@@ -11,10 +11,10 @@ from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
-    object_schema,
 )
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.schema import object_schema
 from tools.interactive_shell.shared import allow_tool
 
 

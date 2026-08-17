@@ -11,11 +11,10 @@ from core.agent_harness.tools.tool_context import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
-    object_schema,
-    string_property,
 )
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.schema import object_schema, string_property
 from platform.common.task_types import TaskRecord
 from tools.interactive_shell.shared.investigation_launch import (
     InvestigationLaunchPorts,

@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from core.agent_harness import SessionManager
-from core.agent_harness.session.persistence.wal_recovery import format_recovery_note
+from core.agent_harness.spi.session_state import format_recovery_note
 from surfaces.interactive_shell.command_registry.session_cmds.resume_rendering import (
     render_resumed_session_history,
 )

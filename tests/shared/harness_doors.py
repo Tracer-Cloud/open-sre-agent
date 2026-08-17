@@ -10,7 +10,7 @@ from __future__ import annotations
 SPI_ROLES: frozenset[str] = frozenset(
     {
         "session_goal",
-        "session_flags",
+        "session_state",
         "cancel",
         "accounting",
         "prompt_chrome",

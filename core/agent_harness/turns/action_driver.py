@@ -22,6 +22,7 @@ from typing import Any
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
+from core.agent_harness.accounting.self_recording_tools import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
@@ -225,22 +226,6 @@ _EXECUTED_HISTORY_TYPES = {
     "implementation",
     "cli_command",
 }
-# Action tools that append their own ``session.history`` row when executed.
-# Keep this as the single catalogue: the shell observer and generic tool-result
-# accounting both key off it so new tools cannot silently double-record turns.
-SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "alert_sample",
-        "cli_exec",
-        "code_implement",
-        "investigation_start",
-        "llm_set_provider",
-        "shell_run",
-        "slash_invoke",
-        "synthetic_run",
-        "task_cancel",
-    }
-)
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )

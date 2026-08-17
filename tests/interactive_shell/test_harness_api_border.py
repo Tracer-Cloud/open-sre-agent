@@ -32,19 +32,9 @@ def _is_public_door(module: str) -> bool:
     return module in PUBLIC_DOORS
 
 
-#: Harness submodules surfaces/ still imports directly. Shrink-only.
-_KNOWN_DEEP_IMPORTS = frozenset(
-    {
-        "core.agent_harness.llm_resolution",
-        "core.agent_harness.prompts.skills.loader",
-        "core.agent_harness.session.persistence.jsonl_store",
-        "core.agent_harness.session.persistence.wal_recovery",
-        "core.agent_harness.tools.tool_context",
-        "core.agent_harness.turns.action_driver",
-        "core.agent_harness.turns.transcript_compaction",
-        "core.agent_harness.turns.turn_plan",
-    }
-)
+#: Harness submodules surfaces/ still imports directly. Shrink-only — and now
+#: empty: every harness name surfaces/ uses comes through a door.
+_KNOWN_DEEP_IMPORTS: frozenset[str] = frozenset()
 
 
 def _surface_sources() -> list[Path]:

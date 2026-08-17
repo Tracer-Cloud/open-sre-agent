@@ -321,7 +321,7 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
         importlib.import_module(f"core.agent_harness.spi.{r}")
         for r in (
             "session_goal",
-            "session_flags",
+            "session_state",
             "cancel",
             "accounting",
             "prompt_chrome",

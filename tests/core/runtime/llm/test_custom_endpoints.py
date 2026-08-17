@@ -256,7 +256,7 @@ def test_redact_base_url_drops_userinfo() -> None:
 
 
 def test_resolve_provider_models_returns_custom_model_not_default() -> None:
-    from core.agent_harness.llm_resolution import resolve_provider_models
+    from core.llm.provider_models import resolve_provider_models
 
     reasoning, toolcall = resolve_provider_models(_openai_settings(), "custom-openai")
     assert reasoning == "gpt-5.4"
