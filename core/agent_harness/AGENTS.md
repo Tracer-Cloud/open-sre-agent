@@ -22,8 +22,8 @@ Process boot (`configure_process`) and headless construction
 | Happy path (already booted) | `AgentSession.start()` → repeated `.chat` / `.investigate` |
 | Embedded / script | `start_embedded_session()` → repeated `.chat` / `.investigate` |
 | Multi-step / keep-going | `start` / `start_embedded_session` → `.chat_until_goal(...)` (`SessionGoal` loop) |
-| Custom host | **`DefaultPorts(...).agent(...)`** (only construction seam) → `attach_agent` once → many `.chat` |
-| Gateway | `SessionAgentPool` → factory once / session → `bind_turn` → `run_until_session_goal` (same SessionGoal policy as shell) |
+| Custom host | **`DefaultPorts(...).agent(...)`** (or `HeadlessPorts` in-memory; the only construction seam) → `agent.handle(text, TurnBinding(...))` per message |
+| Gateway | `SessionAgentPool` → `DefaultPorts.agent` once / session → `agent.handle(text, TurnBinding(...))` per message (the goal loop lives inside `handle`; same policy as shell) |
 | Scheduled one-shot | `AgentSession.run_headless_turn(...)` (not the multi-turn pattern) |
 
 `SessionGoal` (`session_goal/` component — `goal` + `run_until`) is
@@ -152,7 +152,7 @@ subpackage. Default port implementations live with the concern they serve, not i
     `_build_evidence_agent` factory that returns an `AgentConfig` handed to
     `build_agent`.
   - `headless_dispatch.py` — headless programmatic entry point
-    (`HeadlessAgent`, constructed with the ports then `.dispatch(message)` per turn)
+    (`HeadlessAgent`, built by a port family; `.handle(text, binding)` per message, `.dispatch` underneath)
     plus in-memory port adapters for
     API / test runs. `tools` is required — surfaces that want a text-only
     turn pass `NullToolProvider()` explicitly.
