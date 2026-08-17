@@ -8,6 +8,7 @@ and ``bind_turn`` refreshes the runner when output or hooks change.
 from __future__ import annotations
 
 import inspect
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -401,3 +402,33 @@ def test_both_hosts_reach_the_agent_through_handle_only() -> None:
         assert "agent.handle(" in source, module.__name__
         assert "run_until_session_goal(" not in source, module.__name__
         assert "AgentSession(" not in source, module.__name__
+
+
+def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch: Any) -> None:
+    """A rebound session is the goal loop's session, not the previously bound one.
+
+    Gateway resolves a fresh ``SessionCore`` per message; if ``handle`` handed the
+    loop the agent's *previous* session, goal state would be read from and
+    written to a stale object.
+    """
+    from core.agent_harness.turns import headless_dispatch
+    from core.agent_harness.turns.headless_adapters import InMemorySessionState
+    from core.agent_harness.turns.port_families import HeadlessPorts
+
+    seen: dict[str, Any] = {}
+
+    def _spy_loop(chat: Any, session: Any, message: str, **kwargs: Any) -> Any:
+        seen["session"] = session
+        return SimpleNamespace(last_result=chat(message))
+
+    monkeypatch.setattr(headless_dispatch, "run_until_session_goal", _spy_loop)
+    previous = InMemorySessionState()
+    current = InMemorySessionState()
+    agent = HeadlessPorts(session=previous).agent(tools=NullToolProvider())
+    agent.bind_stages(
+        execute_actions=lambda _text, **_kw: ToolCallingTurnResult(0, 0, 0, False, True)
+    )
+
+    agent.handle("hello", TurnBinding(session=current))
+
+    assert seen["session"] is current

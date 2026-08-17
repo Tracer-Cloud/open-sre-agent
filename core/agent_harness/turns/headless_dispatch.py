@@ -295,9 +295,12 @@ class HeadlessAgent:
             self.bind_turn(replace(binding, accounting=accounting))
             return self.dispatch(message)
 
+        # The goal loop reads and writes goal state on the session this turn
+        # states, not on whatever the previous binding left behind.
+        session = binding.session if binding.session is not None else self._session
         return run_until_session_goal(
             _one_turn,
-            self._session,
+            session,
             text,
             cancel_requested=cancel_requested,
             on_progress=on_progress,

@@ -26,7 +26,21 @@ def fake_agent(*, dispatch_result: Any = None) -> MagicMock:
 
 
 def attach_real_handle(agent: MagicMock) -> MagicMock:
-    """Give an existing mock agent the real host loop; returns the same mock."""
+    """Give an existing mock agent the real host loop; returns the same mock.
+
+    ``agent.bound_session`` stands for the real agent's currently bound session
+    (``None`` until a binding with a session is applied); ``bind_turn`` on the
+    mock is left to the test to assert on, so it is tracked here explicitly.
+    """
+    agent.bound_session = None
+    original_bind = agent.bind_turn
+
+    def _bind(binding: Any) -> Any:
+        if binding.session is not None:
+            agent.bound_session = binding.session
+        return original_bind(binding)
+
+    agent.bind_turn = MagicMock(side_effect=_bind)
 
     def _handle(
         text: str,
@@ -41,7 +55,9 @@ def attach_real_handle(agent: MagicMock) -> MagicMock:
             agent.bind_turn(replace(binding, accounting=accounting))
             return agent.dispatch(message)
 
-        session = binding.session
+        # Same selection as HeadlessAgent.handle: the session this turn states,
+        # else the agent's currently bound one.
+        session = binding.session if binding.session is not None else agent.bound_session
         return run_until_session_goal(
             _one_turn,
             session,
