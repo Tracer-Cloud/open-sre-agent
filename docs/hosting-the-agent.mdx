@@ -130,9 +130,11 @@ ports and in what they do with the result.
 
 ## Rules a host must keep
 
-- **One agent per logical session; one turn at a time on it.** `bind_turn`
-  mutates per-turn state; the gateway holds a per-session lock across
-  `dispatch`. Do not share one agent between concurrent turns.
+- **One agent per logical session; one turn at a time on it.** The agent
+  enforces this: an overlapping `handle` or `dispatch` raises `AgentBusyError`
+  (from `core.agent_harness.runtime`) rather than interleaving. Queue *before*
+  `handle` — the gateway holds a per-session lock across it — and do not catch
+  the error to retry.
 - **State the whole turn.** Build a fresh `TurnBinding` per message and pass it
   to `handle`; do not call `bind_turn`/`dispatch` yourself.
 - **Bind on the worker thread you dispatch from.** Storage scope is a

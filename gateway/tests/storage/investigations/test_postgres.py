@@ -6,11 +6,9 @@ from typing import Any
 
 import pytest
 
-from gateway.core.storage.investigations.postgres import (
-    PostgresInvestigationStore,
-    _bounded_connect_timeout,
-)
+from gateway.core.storage.investigations.postgres import PostgresInvestigationStore
 from gateway.core.storage.investigations.store import InvestigationStatus
+from gateway.core.storage.postgres import bounded_connect_timeout
 
 
 def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
@@ -144,7 +142,7 @@ def test_dsn_connect_timeout_is_honoured_inside_the_bounds(
     ],
 )
 def test_connect_timeout_is_clamped(dsn_value: str | None, expected: int) -> None:
-    assert _bounded_connect_timeout(dsn_value) == expected
+    assert bounded_connect_timeout(dsn_value) == expected
 
 
 def _raise_query_error() -> None:
@@ -156,7 +154,7 @@ def test_connection_returned_to_pool_on_error(monkeypatch: pytest.MonkeyPatch) -
     store = PostgresInvestigationStore("postgresql://example/db")
     pool = fake_pool_cls.instances[0]
 
-    with pytest.raises(RuntimeError), store._connection():
+    with pytest.raises(RuntimeError), store._db.transaction():  # noqa: SLF001
         _raise_query_error()
 
     assert pool.puts == pool.gets
