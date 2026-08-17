@@ -26,3 +26,6 @@ __all__ = [
     "UNAUTHORIZED_MESSAGE",
     "USER_STOP_MESSAGE",
 ]
+
+#: Postgres DSN for the gateway's shared repositories; unset means process-local storage.
+DATABASE_URL_ENV = "DATABASE_URL"

@@ -142,7 +142,7 @@ def test_http_without_a_shared_store_refuses_to_start(monkeypatch: pytest.Monkey
 
     # Act / Assert.
     with pytest.raises(GatewayConfigurationError, match="DATABASE_URL"):
-        startup_module._build_deduplicator(logging.getLogger("test"))
+        startup_module._build_handled_event_repository(logging.getLogger("test"))
 
 
 def test_local_dedup_is_allowed_when_explicitly_waived(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -151,7 +151,7 @@ def test_local_dedup_is_allowed_when_explicitly_waived(monkeypatch: pytest.Monke
     monkeypatch.setenv(startup_module.LOCAL_DEDUP_ENV, "1")
 
     # Act.
-    dedup = startup_module._build_deduplicator(logging.getLogger("test"))
+    dedup = startup_module._build_handled_event_repository(logging.getLogger("test"))
 
     # Assert — a claim only refuses the retry once the turn was confirmed.
     assert dedup.claim("Ev1") is True

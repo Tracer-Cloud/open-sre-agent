@@ -1,25 +1,96 @@
-"""Cross-replica Slack event de-duplication on Postgres.
+"""Handled Slack events: which ``event_id`` values already ran a turn.
 
-Slack delivers at least once: a retry follows any non-2xx, timeout, or replica
-that dies mid-request. With more than one HTTP replica the retry lands wherever
-the load balancer sends it, so the "already handled" set has to outlive the
-process — a per-process set admits the retry again and runs the turn twice,
-posting a second reply and repeating every tool action the turn performed.
+Slack delivers at least once and retries on any non-2xx or slow answer; under
+HTTP every replica can receive the retry, so this record set must be shared
+across processes to be correct — an in-process store silently duplicates turns
+as soon as a second replica exists.
 
-Claims are provisional until the turn is queued. A primary-key insert wins the
-race; ``confirm`` marks it final after ``submit_turn`` succeeds. If the
-executor rejects the work and ``release`` cannot delete the row, a later
-``claim`` may reclaim an *uncommitted* row so Slack's retry is not answered
-200-as-duplicate and permanently dropped. Committed rows are never reclaimed.
+Lifecycle: ``claim`` (provisional) → ``confirm`` after the turn is queued, or
+``release`` when the queue rejects the work. Uncommitted claims may be
+reclaimed so a failed ``release`` does not permanently drop the event.
 
-Selected when ``DATABASE_URL`` is set; requires the ``postgresql`` extra.
+This module holds the contract, the process-local implementation and the
+Postgres implementation shared by every replica (selected when ``DATABASE_URL``
+is set; requires the ``postgresql`` extra).
 """
 
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
+from typing import Protocol
 
 from gateway.core.storage.postgres import PostgresDatabase
+
+# An uncommitted claim younger than this is assumed to be in flight, so a
+# concurrent duplicate is refused; older, it is assumed abandoned (its delivery
+# died before confirming) and may be reclaimed. Must stay well under Slack's
+# retry interval and comfortably above the claim→submit gap (a queue push).
+ABANDONED_CLAIM_SECONDS = 30
+
+
+class HandledSlackEventRepository(Protocol):
+    """Remembers which Slack ``event_id`` values already ran a turn.
+
+    Slack retries on any non-2xx or slow answer, and under HTTP every replica
+    can receive the retry, so this must be shared across processes to be
+    correct — an in-process implementation silently duplicates turns as soon
+    as a second replica exists.
+
+    Lifecycle: ``claim`` (provisional) → ``confirm`` after the turn is queued,
+    or ``release`` when the queue rejects the work. Uncommitted claims may be
+    reclaimed so a failed ``release`` does not permanently drop the event.
+    """
+
+    def claim(self, event_id: str) -> bool:
+        """Return True when this delivery may run the turn."""
+
+    def release(self, event_id: str) -> bool:
+        """Undo a claim whose turn never started; False when it could not be undone."""
+
+    def confirm(self, event_id: str) -> bool:
+        """Finalize a claim after the turn has been queued."""
+
+
+class InMemoryHandledSlackEventRepository:
+    """Single-process store. Correct only while exactly one replica runs.
+
+    Mirrors the Postgres semantics so both behave alike: a claim is provisional
+    until confirmed, a provisional claim younger than the abandonment window is
+    refused (a concurrent duplicate must not queue a second turn), and an older
+    one is reclaimable (its delivery died before confirming).
+    """
+
+    def __init__(
+        self,
+        *,
+        abandoned_after_seconds: float = ABANDONED_CLAIM_SECONDS,
+        now: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._committed: set[str] = set()
+        self._provisional: dict[str, float] = {}
+        self._abandoned_after = abandoned_after_seconds
+        self._now = now
+
+    def claim(self, event_id: str) -> bool:
+        if event_id in self._committed:
+            return False
+        claimed_at = self._provisional.get(event_id)
+        if claimed_at is not None and self._now() - claimed_at < self._abandoned_after:
+            return False
+        self._provisional[event_id] = self._now()
+        return True
+
+    def release(self, event_id: str) -> bool:
+        self._provisional.pop(event_id, None)
+        return True
+
+    def confirm(self, event_id: str) -> bool:
+        self._provisional.pop(event_id, None)
+        self._committed.add(event_id)
+        return True
+
 
 logger = logging.getLogger("gateway")
 
@@ -29,38 +100,12 @@ logger = logging.getLogger("gateway")
 # job: the delete runs with the insert and touches only expired rows.
 RETENTION_MINUTES = 60
 
-# An uncommitted row means "a delivery took this and has not confirmed yet".
-# Younger than this it is assumed to be in flight, so a concurrent duplicate is
-# refused; older it is assumed abandoned (release could not reach the database,
-# or the replica died between claim and confirm) and may be reclaimed. Must stay
-# well under Slack's retry interval so a genuine retry can still get through,
-# and comfortably above the claim→submit gap, which is a queue push.
-ABANDONED_CLAIM_SECONDS = 30
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS slack_handled_events (
-    event_id TEXT PRIMARY KEY,
-    handled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    committed BOOLEAN NOT NULL DEFAULT FALSE
-);
-CREATE INDEX IF NOT EXISTS slack_handled_events_handled_at_idx
-    ON slack_handled_events (handled_at);
-"""
+class PostgresHandledSlackEventRepository:
+    """:class:`HandledSlackEventRepository` shared by every gateway replica."""
 
-# Older deploys created the table without ``committed``. Default TRUE so
-# pre-existing rows stay refused (they already ran or were treated as handled).
-_MIGRATE_COMMITTED = """
-ALTER TABLE slack_handled_events
-    ADD COLUMN IF NOT EXISTS committed BOOLEAN NOT NULL DEFAULT TRUE;
-"""
-
-
-class PostgresSlackEventDeduplicator:
-    """:class:`SlackEventDeduplicator` shared by every gateway replica."""
-
-    def __init__(self, dsn: str, *, database: PostgresDatabase | None = None) -> None:
-        self._db = database if database is not None else PostgresDatabase(dsn)
-        self._db.run_schema(_SCHEMA, _MIGRATE_COMMITTED)
+    def __init__(self, database: PostgresDatabase) -> None:
+        self._db = database
 
     def release(self, event_id: str) -> bool:
         """Drop a provisional claim whose turn never started.
@@ -154,6 +199,8 @@ class PostgresSlackEventDeduplicator:
 
 __all__ = [
     "ABANDONED_CLAIM_SECONDS",
+    "HandledSlackEventRepository",
+    "InMemoryHandledSlackEventRepository",
+    "PostgresHandledSlackEventRepository",
     "RETENTION_MINUTES",
-    "PostgresSlackEventDeduplicator",
 ]

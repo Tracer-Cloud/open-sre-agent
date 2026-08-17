@@ -69,6 +69,10 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding
   keyed by platform; delegates create / resolve / rotate to `SessionManager`.
+- `core/storage/repositories.py` — `Repositories.from_env()`: the one place that
+  reads `DATABASE_URL` and builds the investigation and handled-Slack-event
+  repositories over one `PostgresDatabase` (or process-local ones). Hosts hold
+  a `Repositories` (web: `app.state.repositories`); they do not construct stores.
 
 ### Dependency rule (acyclic)
 

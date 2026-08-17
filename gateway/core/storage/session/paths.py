@@ -1,4 +1,4 @@
-"""Where the gateway's session-binding index lives.
+"""Filesystem paths for the session-binding index (and the legacy index it replaced).
 
 Session bindings map a conversation to a session inside one organization, so
 they follow that organization's context root — the mounted volume in a deployed
@@ -23,7 +23,7 @@ _BINDINGS_FILE_NAME = "bindings.json"
 
 
 def gateway_dir() -> Path:
-    """Host directory for gateway process state (pidfile, logs)."""
+    """Host-level gateway directory; where a pre-JSON silo kept its binding index."""
     return host_home() / _GATEWAY_DIR_NAME
 
 

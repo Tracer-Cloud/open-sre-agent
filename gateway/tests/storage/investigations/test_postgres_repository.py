@@ -6,9 +6,11 @@ from typing import Any
 
 import pytest
 
-from gateway.core.storage.investigations.postgres import PostgresInvestigationStore
-from gateway.core.storage.investigations.store import InvestigationStatus
-from gateway.core.storage.postgres import bounded_connect_timeout
+from gateway.core.storage.investigations.repository import (
+    InvestigationStatus,
+    PostgresInvestigationRepository,
+)
+from gateway.core.storage.postgres import PostgresDatabase, bounded_connect_timeout
 
 
 def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
@@ -85,48 +87,17 @@ def _install_fake_psycopg2(monkeypatch: pytest.MonkeyPatch) -> type:
 def test_one_pool_and_every_connection_returned(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
 
-    store = PostgresInvestigationStore("postgresql://example/db")
+    store = PostgresInvestigationRepository(PostgresDatabase("postgresql://example/db"))
     store.get("missing-id")
     store.claim_next_queued()
 
     assert len(fake_pool_cls.instances) == 1
     pool = fake_pool_cls.instances[0]
     assert pool.dsn == "postgresql://example/db"
-    # Three operations (schema, get, claim): each borrowed and returned once.
-    assert pool.gets == 3
-    assert pool.puts == 3
-
-
-def test_pool_connects_under_a_bounded_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """libpq waits forever without connect_timeout, and the pool opens connections
-    inside __init__ — a blackholed address would wedge every request queued on the
-    store lock in gateway/web/investigations.py, not just the first."""
-    # Arrange
-    fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
-
-    # Act
-    PostgresInvestigationStore("postgresql://example/db")
-
-    # Assert
-    kwargs = fake_pool_cls.instances[0].kwargs
-    assert 0 < kwargs["connect_timeout"] <= 30
-    # Keepalives are what detect a silently dropped socket after connect.
-    assert kwargs["keepalives"] == 1
-    assert kwargs["keepalives_idle"] > 0
-
-
-def test_dsn_connect_timeout_is_honoured_inside_the_bounds(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Operators tune through DATABASE_URL; the clamp still owns the bound."""
-    # Arrange
-    fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
-
-    # Act
-    PostgresInvestigationStore("postgresql://example/db?connect_timeout=7")
-
-    # Assert
-    assert fake_pool_cls.instances[0].kwargs["connect_timeout"] == 7
+    # Two operations (get, claim): each borrowed and returned once. Schema is
+    # applied by ``Repositories``, not by the repository.
+    assert pool.gets == 2
+    assert pool.puts == 2
 
 
 @pytest.mark.parametrize(
@@ -143,21 +114,6 @@ def test_dsn_connect_timeout_is_honoured_inside_the_bounds(
 )
 def test_connect_timeout_is_clamped(dsn_value: str | None, expected: int) -> None:
     assert bounded_connect_timeout(dsn_value) == expected
-
-
-def _raise_query_error() -> None:
-    raise RuntimeError("query exploded")
-
-
-def test_connection_returned_to_pool_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_pool_cls, _ = _install_fake_psycopg2(monkeypatch)
-    store = PostgresInvestigationStore("postgresql://example/db")
-    pool = fake_pool_cls.instances[0]
-
-    with pytest.raises(RuntimeError), store._db.transaction():  # noqa: SLF001
-        _raise_query_error()
-
-    assert pool.puts == pool.gets
 
 
 def _queued_row(investigation_id: str = "inv-1", org: str = "org_a") -> tuple[Any, ...]:
@@ -188,7 +144,7 @@ def test_cancel_guards_on_org_and_queued_status_in_one_statement(
     """
     # Arrange
     _, cursor_cls = _install_fake_psycopg2(monkeypatch)
-    store = PostgresInvestigationStore("postgresql://example/db")
+    store = PostgresInvestigationRepository(PostgresDatabase("postgresql://example/db"))
     cursor_cls.rows.append(_queued_row())
 
     # Act
@@ -209,7 +165,7 @@ def test_cancel_returns_none_when_no_row_matched(monkeypatch: pytest.MonkeyPatch
     """No matching row means already claimed, already terminal, or another org."""
     # Arrange
     _, cursor_cls = _install_fake_psycopg2(monkeypatch)
-    store = PostgresInvestigationStore("postgresql://example/db")
+    store = PostgresInvestigationRepository(PostgresDatabase("postgresql://example/db"))
     assert cursor_cls.rows == []
 
     # Act

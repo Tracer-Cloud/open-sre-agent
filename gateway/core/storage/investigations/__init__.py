@@ -1,23 +1,23 @@
 """Persistence for gateway-run investigations.
 
-``store`` holds the contract and the process-local implementation; ``postgres``
-holds the shared-queue implementation the hosted fleet runs on.
+``store`` holds the contract, the process-local implementation and the
+shared-queue Postgres implementation the hosted fleet runs on.
 """
 
 from __future__ import annotations
 
-from gateway.core.storage.investigations.postgres import PostgresInvestigationStore
-from gateway.core.storage.investigations.store import (
-    InMemoryInvestigationStore,
+from gateway.core.storage.investigations.repository import (
+    InMemoryInvestigationRepository,
     InvestigationRecord,
+    InvestigationRepository,
     InvestigationStatus,
-    InvestigationStore,
+    PostgresInvestigationRepository,
 )
 
 __all__ = [
-    "InMemoryInvestigationStore",
+    "InMemoryInvestigationRepository",
     "InvestigationRecord",
     "InvestigationStatus",
-    "InvestigationStore",
-    "PostgresInvestigationStore",
+    "InvestigationRepository",
+    "PostgresInvestigationRepository",
 ]

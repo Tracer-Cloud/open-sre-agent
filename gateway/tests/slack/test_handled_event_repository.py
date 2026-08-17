@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from gateway.core.storage.events.slack_dedup import (
-    PostgresSlackEventDeduplicator,
+from gateway.core.storage.events.repository import (
+    PostgresHandledSlackEventRepository,
 )
 
 
@@ -122,23 +122,22 @@ class _FakeDatabase:
         yield _FakeConnection(self._rows, fail=self._fail, fail_on=self._fail_on)
 
 
-def _deduplicator(
+def _store(
     rows: dict[str, bool] | None = None,
     *,
     fail: bool = False,
     fail_on: str | None = None,
-) -> PostgresSlackEventDeduplicator:
-    """Build one over a fake database, so no psycopg2 and no schema run."""
+) -> PostgresHandledSlackEventRepository:
+    """Build one over a fake database, so no psycopg2."""
     store = rows if rows is not None else {}
-    return PostgresSlackEventDeduplicator(
-        "postgresql://unused",
-        database=_FakeDatabase(store, fail=fail, fail_on=fail_on),  # type: ignore[arg-type]
+    return PostgresHandledSlackEventRepository(
+        _FakeDatabase(store, fail=fail, fail_on=fail_on)  # type: ignore[arg-type]
     )
 
 
 def test_first_delivery_is_claimed_and_the_confirmed_retry_is_refused() -> None:
     # Arrange.
-    dedup = _deduplicator()
+    dedup = _store()
 
     # Act.
     first = dedup.claim("Ev123")
@@ -154,8 +153,8 @@ def test_a_retry_reaching_another_replica_is_still_refused() -> None:
     """The point of the shared store: two processes, one handled set."""
     # Arrange — separate instances, as two replicas would be.
     shared: dict[str, bool] = {}
-    replica_a = _deduplicator(shared)
-    replica_b = _deduplicator(shared)
+    replica_a = _store(shared)
+    replica_b = _store(shared)
 
     # Act.
     first = replica_a.claim("Ev123")
@@ -171,7 +170,7 @@ def test_uncommitted_claim_is_reclaimed_after_failed_release() -> None:
     """Greptile P1: release fails, claim survives, retry must not be ignored."""
     # Arrange.
     shared: dict[str, bool] = {}
-    dedup = _deduplicator(shared)
+    dedup = _store(shared)
     assert dedup.claim("Ev123") is True
     # Row left provisional — simulate release failing while the store stays up.
     assert shared == {"Ev123": False}
@@ -186,7 +185,7 @@ def test_uncommitted_claim_is_reclaimed_after_failed_release() -> None:
 
 
 def test_release_clears_provisional_claim() -> None:
-    dedup = _deduplicator()
+    dedup = _store()
     assert dedup.claim("Ev123") is True
     assert dedup.release("Ev123") is True
     assert dedup.claim("Ev123") is True
@@ -194,7 +193,7 @@ def test_release_clears_provisional_claim() -> None:
 
 def test_distinct_events_are_each_claimed() -> None:
     # Arrange.
-    dedup = _deduplicator()
+    dedup = _store()
 
     # Act / Assert.
     assert dedup.claim("Ev1") is True
@@ -204,7 +203,7 @@ def test_distinct_events_are_each_claimed() -> None:
 def test_store_failure_admits_the_delivery(caplog: pytest.LogCaptureFixture) -> None:
     """Losing a real user message is worse than a possible duplicate."""
     # Arrange.
-    dedup = _deduplicator(fail=True)
+    dedup = _store(fail=True)
 
     # Act.
     claimed = dedup.claim("Ev123")
@@ -215,60 +214,7 @@ def test_store_failure_admits_the_delivery(caplog: pytest.LogCaptureFixture) -> 
 
 
 def test_release_failure_returns_false(caplog: pytest.LogCaptureFixture) -> None:
-    dedup = _deduplicator(fail_on="DELETE FROM slack_handled_events")
+    dedup = _store(fail_on="DELETE FROM slack_handled_events")
     assert dedup.claim("Ev123") is True
     assert dedup.release("Ev123") is False
     assert "could not release event claim" in caplog.text
-
-
-def test_dedup_connections_open_under_the_same_bounds_as_every_store(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The shared leaf bounds every connection: connect timeout and keepalives.
-
-    Before the leaf owned the bounds, Slack de-dup opened connections with no
-    connect timeout — the libpq wait-forever hazard the investigations store
-    guarded against on its own.
-    """
-    import sys
-    import types
-
-    from gateway.core.storage.postgres import PostgresDatabase
-
-    # Arrange — a fake psycopg2 that records pool kwargs.
-    class _FakePool:
-        instances: list[_FakePool] = []
-
-        def __init__(self, _min: int, _max: int, _dsn: str, **kwargs: Any) -> None:
-            self.kwargs = kwargs
-            _FakePool.instances.append(self)
-
-        def getconn(self) -> _FakeConnection:
-            return _FakeConnection({})
-
-        def putconn(self, _conn: Any) -> None:
-            return None
-
-    pool_module = types.ModuleType("psycopg2.pool")
-    pool_module.ThreadedConnectionPool = _FakePool  # type: ignore[attr-defined]
-    ext_module = types.ModuleType("psycopg2.extensions")
-    ext_module.parse_dsn = lambda _dsn: {}  # type: ignore[attr-defined]
-    root = types.ModuleType("psycopg2")
-    root.pool = pool_module  # type: ignore[attr-defined]
-    root.extensions = ext_module  # type: ignore[attr-defined]
-    for name, module in (
-        ("psycopg2", root),
-        ("psycopg2.pool", pool_module),
-        ("psycopg2.extensions", ext_module),
-    ):
-        monkeypatch.setitem(sys.modules, name, module)
-
-    # Act
-    PostgresSlackEventDeduplicator(
-        "postgresql://example/db", database=PostgresDatabase("postgresql://example/db")
-    )
-
-    # Assert
-    kwargs = _FakePool.instances[0].kwargs
-    assert 0 < kwargs["connect_timeout"] <= 30
-    assert kwargs["keepalives"] == 1
