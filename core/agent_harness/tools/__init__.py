@@ -1,11 +1,11 @@
-"""What an action tool implements and calls: the tool author's door.
+"""What an action tool implements and calls: the harness API for tool authors.
 
 An action tool receives an :class:`ActionToolContext`, runs its body under it
 with :func:`execute_with_action_context`, and may ask whether a capability is
 available. The handoff and evidence shapes are what a tool hands back to the
 engine. Import-cheap: nothing here loads the agent loop.
 
-The other doors: :mod:`core.agent_harness` (embed), :mod:`core.agent_harness.ports`
+The other API modules: :mod:`core.agent_harness` (embed), :mod:`core.agent_harness.ports`
 (what a host implements), :mod:`core.agent_harness.spi` (what a host calls, by
 role), :mod:`core.agent_harness.runtime` (build and run the agent).
 """

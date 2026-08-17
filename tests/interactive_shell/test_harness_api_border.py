@@ -1,31 +1,28 @@
-"""Surfaces reach the agent harness through its curated surface — or the ledger.
+"""``surfaces/`` imports the agent harness only through its API.
 
-Twin of ``gateway/tests/test_harness_api_border.py``. The interactive shell is
-a thicker host than the gateway — it assembles the agent stack itself — so its
-existing deep imports are pinned in a ledger rather than migrated wholesale:
-hoisting all ~29 modules into the curated ``core.agent_harness.__init__`` table
-at once would un-curate it.
-
-The ledger is asserted with exact equality in both directions, like the
-transport conformance ledger: a *new* deep-import module fails immediately, and
-a module that stops being imported must be deleted here, so the set can only
-shrink. Curating a name into the export table (and migrating its importers) is
-the way an entry gets removed.
+Twin of ``gateway/tests/test_harness_api_border.py``. The allowlist is compared
+exactly in both directions, so it can only shrink: a new internal import fails
+immediately, and an entry no longer imported must be removed.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from tests.shared.harness_doors import assert_ledger_only_shrinks, deep_harness_imports_under
+from tests.shared.harness_api import (
+    assert_internal_imports_match_allowlist,
+    internal_harness_imports_under,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: Harness submodules surfaces/ still imports directly. Shrink-only — and now
-#: empty: every harness name surfaces/ uses comes through a door.
-_KNOWN_DEEP_IMPORTS: frozenset[str] = frozenset()
+#: Internal harness modules surfaces/ still imports directly. Empty: every
+#: harness name surfaces/ uses comes through the API.
+_ALLOWED_INTERNAL_IMPORTS: frozenset[str] = frozenset()
 
 
-def test_surfaces_deep_imports_only_shrink() -> None:
-    imported = deep_harness_imports_under(REPO_ROOT / "surfaces")
-    assert_ledger_only_shrinks(imported, _KNOWN_DEEP_IMPORTS, tier="surfaces/")
+def test_surfaces_import_the_harness_only_through_its_api() -> None:
+    imported = internal_harness_imports_under(REPO_ROOT / "surfaces")
+    assert_internal_imports_match_allowlist(
+        imported, _ALLOWED_INTERNAL_IMPORTS, package="surfaces/"
+    )

@@ -304,7 +304,7 @@ def test_resume_config_reaches_session_manager() -> None:
 
 
 def test_every_advertised_name_is_a_plain_static_import() -> None:
-    """Each door's ``__all__`` names something imported at module level.
+    """Each API module's ``__all__`` names something bound at module level.
 
     A plain re-export is visible to type checkers, IDEs, and readers alike; a
     name that is only resolvable at runtime is not part of the API.
@@ -330,8 +330,8 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
             "defaults",
         )
     ]
-    for door in (root, ports, runtime, *roles):
-        tree = ast.parse(Path(door.__file__).read_text(encoding="utf-8"))
+    for api_module in (root, ports, runtime, *roles):
+        tree = ast.parse(Path(api_module.__file__).read_text(encoding="utf-8"))
         bound: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ImportFrom):
@@ -342,7 +342,7 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
                 bound.update(t.id for t in node.targets if isinstance(t, ast.Name))
             elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 bound.add(node.target.id)
-        assert set(door.__all__) <= bound, (
-            f"{door.__name__}: advertised but not bound at module level: "
-            f"{sorted(set(door.__all__) - bound)}"
+        assert set(api_module.__all__) <= bound, (
+            f"{api_module.__name__}: exported but not bound at module level: "
+            f"{sorted(set(api_module.__all__) - bound)}"
         )

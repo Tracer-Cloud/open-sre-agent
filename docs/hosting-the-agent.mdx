@@ -11,10 +11,10 @@ progress, and drives one agent across many turns. The gateway (Slack, Discord,
 Telegram) and the interactive shell are both hosts, and they are the same
 program with different ports.
 
-## Four roles, five import doors
+## Four roles, five API modules
 
-Everything a host or tool author touches comes through five modules. Nothing
-else under `core.agent_harness` is public.
+Everything a host or tool author touches comes through five modules — the
+harness API. Nothing else under `core.agent_harness` is part of it.
 
 | Role | You want to… | Import |
 | --- | --- | --- |
@@ -140,6 +140,6 @@ ports and in what they do with the result.
 - **Bind on the worker thread you dispatch from.** Storage scope is a
   `ContextVar`; if you hand the turn to a thread pool, wrap it with
   `config.scope_context.in_current_scope` on the calling thread.
-- **Do not reach past the doors.** Modules under `core.agent_harness.turns`,
+- **Do not import past the API.** Modules under `core.agent_harness.turns`,
   `.tools`, `.session` and `.prompts` are internal; the shipped hosts pin their
   remaining deep imports in shrink-only tests.

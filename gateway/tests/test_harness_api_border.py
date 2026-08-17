@@ -1,54 +1,54 @@
-"""Gateway reaches the agent harness only through its curated public surface.
+"""``gateway/`` imports the agent harness only through its API.
 
-``core.agent_harness.__init__`` is the harness's host API — a curated, lazily
-resolved export table that AGENTS.md calls "the package's public surface".
-Gateway code had grown imports of eleven internal submodules
-(``turns.host_cancel``, ``session_goal.run_until``, ``accounting…``), so any
-harness-internal rename broke the gateway. One import path makes the coupling
-surface explicit and reviewable: widening it means editing the harness's own
-export table, not quietly reaching deeper.
-
-Scanned as AST, not text: regexes miss line-continuation imports, unusual
-module-name characters, and dynamic ``importlib.import_module(...)`` calls.
+The API modules are listed once in ``tests/shared/harness_api``; the
+allowlist below is compared exactly in both directions, so it can only shrink.
+Sources are scanned as AST rather than text so that multi-line imports and
+dynamic ``importlib.import_module(...)`` calls are covered.
 """
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
-from tests.shared.harness_doors import (
-    assert_ledger_only_shrinks,
-    is_public_door,
-    python_sources,
+from tests.shared.harness_api import (
+    assert_internal_imports_match_allowlist,
+    internal_harness_imports,
+    internal_harness_imports_under,
+    is_api_module,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: Harness submodules gateway/ still imports directly. Empty: every harness name
-#: the gateway uses comes through a door.
-_KNOWN_DEEP_IMPORTS: frozenset[str] = frozenset()
+#: Internal harness modules gateway/ still imports directly. Empty: every harness
+#: name the gateway uses comes through the API.
+_ALLOWED_INTERNAL_IMPORTS: frozenset[str] = frozenset()
 
 
-def _gateway_product_sources() -> list[Path]:
-    return [p for p in python_sources(REPO_ROOT / "gateway") if "tests" not in p.parts]
+def test_gateway_imports_the_harness_only_through_its_api() -> None:
+    imported = internal_harness_imports_under(
+        REPO_ROOT / "gateway", exclude_parts=frozenset({"tests"})
+    )
+    assert_internal_imports_match_allowlist(imported, _ALLOWED_INTERNAL_IMPORTS, package="gateway/")
 
 
-def test_gateway_imports_the_harness_only_through_its_public_surface() -> None:
-    import ast
-
-    from tests.shared.harness_doors import deep_harness_imports
-
-    imported: set[str] = set()
-    for path in _gateway_product_sources():
-        imported |= deep_harness_imports(
-            ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        )
-    assert_ledger_only_shrinks(imported, _KNOWN_DEEP_IMPORTS, tier="gateway/")
+def test_only_the_listed_spi_roles_are_api_modules() -> None:
+    """A future module under ``spi/`` is internal until it is added to the role list."""
+    assert is_api_module("core.agent_harness.spi.session_goal")
+    assert not is_api_module("core.agent_harness.spi.internal_helper")
+    assert not is_api_module("core.agent_harness.spi.session_goal.impl")
+    assert not is_api_module("core.agent_harness.spi")
 
 
-def test_an_internal_module_under_spi_is_not_a_door() -> None:
-    """Only the curated roles are public; a future ``spi/`` internal is a deep import."""
-    assert is_public_door("core.agent_harness.spi.session_goal")
-    assert not is_public_door("core.agent_harness.spi.internal_helper")
-    assert not is_public_door("core.agent_harness.spi.session_goal.impl")
-    assert not is_public_door("core.agent_harness.spi")
+def test_a_submodule_imported_from_an_api_package_is_internal() -> None:
+    """``from core.agent_harness import harness`` imports an internal module; only exported names are API."""
+    tree = ast.parse(
+        "from core.agent_harness import harness\n"
+        "from core.agent_harness import AgentSession\n"
+        "from core.agent_harness.spi.session_goal import SessionGoal\n"
+        "from core.agent_harness.spi import session_goal\n"
+    )
+    assert internal_harness_imports(tree) == {
+        "core.agent_harness.harness",
+        "core.agent_harness.spi",
+    }
