@@ -5,10 +5,13 @@ from __future__ import annotations
 from dataclasses import replace
 from unittest.mock import patch
 
-from integrations.github.tools.ci_fix.context import CiFixContext, FailingCheck, KnownCheck
+import pytest
+
+from integrations.github.tools.ci_fix.context import CiFixContext, FailingCheck
 from integrations.github.tools.ci_fix.verification import (
     DEFAULT_POLL_INTERVAL_SECONDS,
     CheckState,
+    _workflow_runs_complete,
     wait_for_pr_checks,
 )
 
@@ -21,7 +24,6 @@ _CONTEXT = CiFixContext(
     base_branch="main",
     head_branch="feat/fix-ci",
     head_sha="old-sha",
-    known_checks=(KnownCheck(name="quality", workflow_name="CI"),),
     skipped_check_names=(),
     failing_checks=(
         FailingCheck(
@@ -33,6 +35,14 @@ _CONTEXT = CiFixContext(
     ),
     task="Fix CI.",
 )
+
+
+@pytest.fixture(autouse=True)
+def _completed_workflow_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "integrations.github.tools.ci_fix.verification._workflow_runs_complete",
+        lambda **_kwargs: True,
+    )
 
 
 def _rollup(
@@ -54,6 +64,36 @@ def _rollup(
             }
         ],
     }
+
+
+def test_workflow_runs_complete_uses_exact_commit() -> None:
+    responses = [
+        {"runs": [{"status": "completed"}, {"status": "in_progress"}]},
+        {"runs": [{"status": "completed"}, {"status": "completed"}]},
+    ]
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        side_effect=responses,
+    ) as run_gh:
+        assert (
+            _workflow_runs_complete(
+                repo="Tracer-Cloud/opensre",
+                github_token="tok",
+                expected_head_sha="new-sha",
+            )
+            is False
+        )
+        assert (
+            _workflow_runs_complete(
+                repo="Tracer-Cloud/opensre",
+                github_token="tok",
+                expected_head_sha="new-sha",
+            )
+            is True
+        )
+
+    assert run_gh.call_args_list[0].args[0][:4] == ["run", "list", "--commit", "new-sha"]
 
 
 def test_wait_for_pr_checks_ignores_stale_checks_then_waits_for_success() -> None:
@@ -248,14 +288,9 @@ def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:
     assert result.check_names == ()
 
 
-def test_wait_for_pr_checks_waits_for_late_known_check() -> None:
-    context = replace(
-        _CONTEXT,
-        known_checks=(
-            KnownCheck(name="quality", workflow_name="CI"),
-            KnownCheck(name="tests", workflow_name="CI"),
-        ),
-    )
+def test_wait_for_pr_checks_waits_for_late_check_in_running_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     late_failure = {
         "headRefOid": "new-sha",
         "statusCheckRollup": [
@@ -280,13 +315,18 @@ def test_wait_for_pr_checks_waits_for_late_known_check() -> None:
         late_failure,
     ]
     elapsed = iter((0.0, 0.0, 31.0, 32.0, 62.0))
+    workflow_states = iter((False, False, True, True))
+    monkeypatch.setattr(
+        "integrations.github.tools.ci_fix.verification._workflow_runs_complete",
+        lambda **_kwargs: next(workflow_states),
+    )
 
     with patch(
         "integrations.github.tools.ci_fix.verification.run_gh_json",
         side_effect=responses,
     ):
         result = wait_for_pr_checks(
-            context,
+            _CONTEXT,
             github_token="tok",
             expected_head_sha="new-sha",
             settle_seconds=30,
@@ -379,14 +419,7 @@ def test_wait_for_pr_checks_rejects_original_head_after_propagation_grace() -> N
     assert result.observed_head_sha == "old-sha"
 
 
-def test_wait_for_pr_checks_ignores_checks_from_inapplicable_prior_workflow() -> None:
-    context = replace(
-        _CONTEXT,
-        known_checks=(
-            KnownCheck(name="quality", workflow_name="CI"),
-            KnownCheck(name="deploy", workflow_name="Deploy"),
-        ),
-    )
+def test_wait_for_pr_checks_ignores_absent_conditional_sibling() -> None:
     payload = _rollup(
         sha="new-sha",
         name="quality",
@@ -399,7 +432,7 @@ def test_wait_for_pr_checks_ignores_checks_from_inapplicable_prior_workflow() ->
         return_value=payload,
     ):
         result = wait_for_pr_checks(
-            context,
+            _CONTEXT,
             github_token="tok",
             expected_head_sha="new-sha",
             settle_seconds=0,

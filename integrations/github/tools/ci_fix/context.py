@@ -71,14 +71,6 @@ class FailingCheck:
 
 
 @dataclass(frozen=True)
-class KnownCheck:
-    """A check observed on the PR head before the fix."""
-
-    name: str
-    workflow_name: str
-
-
-@dataclass(frozen=True)
 class CiFixContext:
     """Resolved PR CI failure and coding-agent task."""
 
@@ -90,7 +82,6 @@ class CiFixContext:
     base_branch: str
     head_branch: str
     head_sha: str
-    known_checks: tuple[KnownCheck, ...]
     skipped_check_names: tuple[str, ...]
     failing_checks: tuple[FailingCheck, ...]
     task: str
@@ -187,13 +178,6 @@ def gather_ci_fix_context(
         base_branch=str(pr.get("baseRefName") or "").strip(),
         head_branch=head_branch,
         head_sha=str(pr.get("headRefOid") or "").strip(),
-        known_checks=tuple(
-            KnownCheck(
-                name=_check_name(item),
-                workflow_name=str(item.get("workflowName") or ""),
-            )
-            for item in rollup
-        ),
         skipped_check_names=tuple(_check_name(item) for item in rollup if _is_skipped(item)),
         failing_checks=checks,
         task="",
@@ -354,7 +338,6 @@ def _indent(value: str, *, prefix: str) -> str:
 __all__ = [
     "CiFixContext",
     "FailingCheck",
-    "KnownCheck",
     "PullRequestRef",
     "gather_ci_fix_context",
     "parse_pr_url",

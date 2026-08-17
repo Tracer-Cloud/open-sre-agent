@@ -17,6 +17,9 @@ DEFAULT_SETTLE_SECONDS = 30
 DEFAULT_HEAD_PROPAGATION_SECONDS = 30
 
 _PR_CHECK_FIELDS = "headRefOid,statusCheckRollup"
+_WORKFLOW_RUN_FIELDS = "status"
+_WORKFLOW_RUNS_KEY = "runs"
+_WORKFLOW_RUN_COMPLETED = "completed"
 _FAILED_CONCLUSIONS = frozenset(
     {
         "ACTION_REQUIRED",
@@ -68,11 +71,6 @@ def wait_for_pr_checks(
     repo = f"{ctx.owner}/{ctx.repo}"
     started_at = monotonic()
     deadline = started_at + max(0, timeout_seconds)
-    known_checks = {(check.workflow_name, check.name) for check in ctx.known_checks}
-    failing_workflows = {check.workflow_name for check in ctx.failing_checks if check.workflow_name}
-    failing_standalone_checks = {
-        check.name for check in ctx.failing_checks if not check.workflow_name
-    }
     expected_skips = set(ctx.skipped_check_names)
     last_names: tuple[str, ...] = ()
     terminal_signature: tuple[str, ...] = ()
@@ -103,20 +101,15 @@ def wait_for_pr_checks(
                 observed_head_sha=head_sha,
             )
 
-        # GitHub can briefly return the pre-push rollup. It must never make the
-        # fresh fix look failed before the exact pushed commit and the checks
-        # expected from applicable workflows have registered.
-        observed_checks = {(_check_workflow(check), _check_name(check)) for check in checks}
-        observed_workflows = {workflow for workflow, _name in observed_checks if workflow}
-        required_known_checks = {
-            (workflow, name)
-            for workflow, name in known_checks
-            if workflow in failing_workflows
-            or workflow in observed_workflows
-            or (not workflow and name in failing_standalone_checks)
-        }
-        known_checks_registered = required_known_checks.issubset(observed_checks)
-        if head_sha == expected_head_sha and checks and known_checks_registered:
+        # GitHub can briefly return the pre-push rollup, and jobs can register
+        # late while an applicable workflow is still running. Settle only after
+        # the exact commit's workflow runs have completed.
+        workflows_complete = head_sha == expected_head_sha and _workflow_runs_complete(
+            repo=repo,
+            github_token=github_token,
+            expected_head_sha=expected_head_sha,
+        )
+        if head_sha == expected_head_sha and checks and workflows_complete:
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
                 signature = _check_signature(checks)
@@ -154,8 +147,32 @@ def _check_name(check: dict[str, Any]) -> str:
     return str(check.get("name") or check.get("context") or "unnamed check")
 
 
-def _check_workflow(check: dict[str, Any]) -> str:
-    return str(check.get("workflowName") or "")
+def _workflow_runs_complete(
+    *,
+    repo: str,
+    github_token: str | None,
+    expected_head_sha: str,
+) -> bool:
+    payload = run_gh_json(
+        [
+            "run",
+            "list",
+            "--commit",
+            expected_head_sha,
+            "--limit",
+            "100",
+            "--json",
+            _WORKFLOW_RUN_FIELDS,
+            "--jq",
+            f'{{"{_WORKFLOW_RUNS_KEY}": .}}',
+        ],
+        repo=repo,
+        github_token=github_token,
+    )
+    runs = _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
+    return all(
+        str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
+    )
 
 
 def _check_signature(checks: list[dict[str, Any]]) -> tuple[str, ...]:
