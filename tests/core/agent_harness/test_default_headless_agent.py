@@ -175,3 +175,36 @@ def test_factory_forwards_every_host_port_to_the_tool_provider_and_runner() -> N
     assert runner.deps is deps
     assert runner.tool_hooks is hooks
     assert agent._confirm_fn is not None  # noqa: SLF001
+
+
+def test_a_stage_override_replaces_only_that_stage() -> None:
+    """A host or test may swap one stage; the other two keep the port-driven default.
+
+    This is the seam every turn test drives (98 sites inject a single stage);
+    it is part of the host contract, so it lives on the agent explicitly.
+    """
+    calls: list[str] = []
+
+    def _fake_execute(text: str, *, confirm_fn=None, is_tty=None, turn_plan=None):  # type: ignore[no-untyped-def]
+        calls.append(f"execute:{text}")
+        return ToolCallingTurnResult(
+            planned_count=0,
+            executed_count=0,
+            executed_success_count=0,
+            has_unhandled_clause=False,
+            handled=True,
+        )
+
+    # Act — only execute_actions is overridden
+    agent = build_default_headless_agent(
+        session=SessionCore(store=InMemorySessionStore()),
+        output=BufferOutputSink(),
+        execute_actions=_fake_execute,
+    )
+    result = agent.dispatch("hello")
+
+    # Assert — the override ran and handled the turn; answer/gather defaults untouched
+    assert calls == ["execute:hello"]
+    assert isinstance(result, TurnResult)
+    assert agent._answer_override is None  # noqa: SLF001
+    assert agent._gather_override is None  # noqa: SLF001

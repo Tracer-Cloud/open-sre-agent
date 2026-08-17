@@ -99,48 +99,43 @@ def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
     assert agent._action_runner is before  # noqa: SLF001
 
 
-def test_execute_shell_turn_binds_via_named_bindings_type() -> None:
+def test_execute_shell_turn_binds_stages_through_the_harness_agent() -> None:
+    """The shell drives its turn on ``HeadlessAgent`` and binds injected stages via ``bind_stages``."""
     import surfaces.interactive_shell.runtime.shell_turn_execution as ste
 
     source = inspect.getsource(ste.execute_shell_turn)
-    assert "def execute_bound" not in source
-    assert "def answer_bound" not in source
-    assert "def gather_bound" not in source
-    assert "_ShellTurnBindings" in source
-    assert "action_runner" in source
-    assert hasattr(ste._ShellTurnBindings, "execute_actions")
-    assert hasattr(ste._ShellTurnBindings, "answer_question")
-    assert hasattr(ste._ShellTurnBindings, "gather_evidence")
+    assert "build_shell_agent" in source
+    assert "bind_stages" in source
+    assert "_ShellTurnBindings" not in source
+    assert "ShellActionRunner" not in source
 
 
-def test_shell_action_runner_keeps_core_runner_across_console_rebind() -> None:
+def test_shell_agent_keeps_core_runner_across_console_rebind() -> None:
     from rich.console import Console
 
-    from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
     first = Console(file=MagicMock())
     second = Console(file=MagicMock())
-    runner = ShellActionRunner(session=Session(), console=first)
-    before = runner._action_runner  # noqa: SLF001
+    agent = build_shell_agent(Session(), first)
+    before = agent._action_runner  # noqa: SLF001
 
-    runner.bind_turn(console=second)
-    after = runner._action_runner  # noqa: SLF001
+    agent.bind_turn(console=second)
+    after = agent._action_runner  # noqa: SLF001
 
     assert after is before
-    assert runner._console is second  # noqa: SLF001
 
 
-def test_shell_action_runner_rebuilds_when_external_output_changes() -> None:
+def test_shell_agent_rebuilds_runner_when_external_output_changes() -> None:
     from rich.console import Console
 
-    from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+    from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
-    console = Console(file=MagicMock())
-    runner = ShellActionRunner(session=Session(), console=console)
-    before = runner._action_runner  # noqa: SLF001
+    agent = build_shell_agent(Session(), Console(file=MagicMock()))
+    before = agent._action_runner  # noqa: SLF001
 
-    runner.bind_turn(output=BufferOutputSink())
-    after = runner._action_runner  # noqa: SLF001
+    agent.bind_turn(output=BufferOutputSink())
+    after = agent._action_runner  # noqa: SLF001
 
     assert after is not before
 

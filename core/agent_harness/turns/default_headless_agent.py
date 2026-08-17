@@ -25,8 +25,11 @@ from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
 from core.agent_harness.error_reporting import DefaultErrorReporter
 from core.agent_harness.ports import (
     ConfirmFn,
+    EvidenceGatherer,
+    ExecuteActions,
     OutputSink,
     PromptContextProvider,
+    StreamAnswerFn,
     SubprocessPresenterFactory,
     TurnAccounting,
 )
@@ -109,11 +112,14 @@ def build_default_headless_agent(
     deps: ToolCallingDeps | None = None,
     tool_hooks: ToolExecutionHooks | None = None,
     confirm_fn: ConfirmFn | None = None,
+    execute_actions: ExecuteActions | None = None,
+    answer: StreamAnswerFn | None = None,
+    gather_evidence: EvidenceGatherer | None = None,
     prompts: PromptContextProvider | None = None,
     gather: GatherPorts | None = None,
     gather_enabled: bool = True,
     gather_max_iterations: int | None = None,
-    is_tty: bool = False,
+    is_tty: bool | None = False,
 ) -> HeadlessAgent:
     """Return a :class:`HeadlessAgent` wired with default harness ports.
 
@@ -170,6 +176,9 @@ def build_default_headless_agent(
         confirm_fn=confirm_fn,
         tool_hooks=tool_hooks,
         deps=deps,
+        execute_actions=execute_actions,
+        answer=answer,
+        gather_evidence=gather_evidence,
     )
 
 

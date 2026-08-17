@@ -36,6 +36,8 @@ from core.agent_harness.ports import (
     ConfirmFn,
     ConsoleBindable,
     ErrorReporter,
+    EvidenceGatherer,
+    ExecuteActions,
     OutputBindable,
     OutputSink,
     PromptContextProvider,
@@ -43,6 +45,7 @@ from core.agent_harness.ports import (
     RunRecordFactory,
     SessionBindable,
     SessionState,
+    StreamAnswerFn,
     ToolProvider,
     TurnAccounting,
 )
@@ -122,9 +125,18 @@ class HeadlessAgent:
         is_tty: bool | None = None,
         tool_hooks: ToolExecutionHooks | None = None,
         deps: ToolCallingDeps | None = None,
+        execute_actions: ExecuteActions | None = None,
+        answer: StreamAnswerFn | None = None,
+        gather_evidence: EvidenceGatherer | None = None,
     ) -> None:
         self._tools = tools
         self._deps = deps
+        # A host or test may replace one stage outright; the others keep the
+        # port-driven default. Bound at dispatch so a later bind_turn still
+        # applies to the defaults.
+        self._execute_actions_override = execute_actions
+        self._answer_override = answer
+        self._gather_override = gather_evidence
         self._session: SessionState = session if session is not None else InMemorySessionState()
         self._output: OutputSink = output if output is not None else BufferOutputSink()
         self._prompts: PromptContextProvider = (
@@ -277,15 +289,31 @@ class HeadlessAgent:
             is_cancelled=lambda: host_cancel_requested(self._output),
         )
 
+    def bind_stages(
+        self,
+        *,
+        execute_actions: ExecuteActions | None = None,
+        answer: StreamAnswerFn | None = None,
+        gather_evidence: EvidenceGatherer | None = None,
+    ) -> None:
+        """Replace whole stages for the next dispatches; ``None`` restores the port-driven default.
+
+        The per-turn counterpart of the constructor's stage overrides, for a
+        long-lived agent that hosts many turns with different injected seams.
+        """
+        self._execute_actions_override = execute_actions
+        self._answer_override = answer
+        self._gather_override = gather_evidence
+
     def dispatch(self, message: str) -> TurnResult:
         """Run one full turn for ``message`` via the common chat host API."""
         return dispatch_chat_turn(
             message,
             self._session,
             ChatTurnBindings(
-                execute_actions=self._execute_actions,
-                answer=self._answer,
-                gather=self._gather,
+                execute_actions=self._execute_actions_override or self._execute_actions,
+                answer=self._answer_override or self._answer,
+                gather=self._gather_override or self._gather,
                 accounting=self._take_accounting(message),
                 confirm_fn=self._confirm_fn,
                 is_tty=self._is_tty,
