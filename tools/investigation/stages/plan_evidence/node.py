@@ -29,6 +29,8 @@ def plan_actions(state: InvestigationState) -> dict[str, Any]:
         return {}
 
     state_any = dict(state)
+    # Integration resolution is owned by the preceding pipeline stage; planning
+    # only consumes that snapshot and never resolves providers itself.
     raw_resolved = state_any.get("resolved_integrations")
     resolved = raw_resolved if isinstance(raw_resolved, dict) else {}
     available_tools = _available_investigation_tools(resolved)

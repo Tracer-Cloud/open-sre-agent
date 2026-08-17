@@ -299,13 +299,12 @@ shape; if it answers directly without tools it is the direct-answer shape.
 `turns/orchestrator.py` (`run_turn`) → `core/agent/agent.py` (facade + wiring)
 → `core/agent/react_loop.py` (`run_react_loop`, the tool-calling algorithm).
 
-## Investigation agent — the tool-calling shape with a custom loop
+## Investigation agent — shared loop, investigation-owned policy
 
 `tools/investigation/stages/gather_evidence/agent.py::ConnectedInvestigationAgent`
-composes the shared `EventEmitterMixin` and `ToolFilterMixin` mixins
-(`core.agent.mixins`) instead of subclassing `Agent`, with a specialised ReAct
-`run()` (seed calls, evidence collection, duplicate detection, stagnation
-handling). It is still the tool-calling shape — composition, not a forked loop.
+assembles an `AgentConfig` and calls `build_agent()`. Seed calls, evidence
+collection, duplicate detection, and stagnation handling remain
+investigation-owned policy around the shared `Agent.run()` loop.
 
 ## Construct once → many turns
 
@@ -402,9 +401,8 @@ which owns the actual think → call-tools → observe algorithm.
 
 - `core/agent/mixins.py` — `EventEmitterMixin` (event dispatch),
   `ToolFilterMixin` (tool-narrowing hook), `SteeringMixin` (`steer`/`follow_up`
-  to nudge a run in progress). `Agent` composes all three;
-  `ConnectedInvestigationAgent` composes the first two instead of subclassing
-  `Agent` (see "Investigation agent" above).
+  to nudge a run in progress). `Agent` composes all three; investigation policy
+  reaches them through the built `Agent` (see "Investigation agent" above).
 - `core/agent/provider_hooks.py` — `ProviderHookDelegate`, a fail-open wrapper
   around `core.provider.ProviderHooks` applied around each LLM call. A raised
   hook exception is logged and swallowed; it never breaks the loop.

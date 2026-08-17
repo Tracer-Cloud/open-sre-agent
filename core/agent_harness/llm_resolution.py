@@ -16,6 +16,13 @@ def default_llm_factory() -> Any:
     return get_llm(LLMRole.AGENT)
 
 
+def default_reasoning_llm_factory() -> Any:
+    """Return the default reasoning LLM client."""
+    from core.llm.factory import LLMRole, get_llm
+
+    return get_llm(LLMRole.REASONING)
+
+
 def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     """Return the active ``(reasoning_model, toolcall_model)`` for a provider."""
     try:
@@ -65,4 +72,4 @@ def resolve_provider_models(settings: object, provider: str) -> tuple[str, str]:
     return (reasoning_model or "default", toolcall_model or reasoning_model or "default")
 
 
-__all__ = ["default_llm_factory", "resolve_provider_models"]
+__all__ = ["default_llm_factory", "default_reasoning_llm_factory", "resolve_provider_models"]
