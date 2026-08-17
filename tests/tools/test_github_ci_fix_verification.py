@@ -68,6 +68,7 @@ def _rollup(
 
 def test_workflow_runs_complete_uses_exact_commit() -> None:
     responses = [
+        {"runs": []},
         {"runs": [{"status": "completed"}, {"status": "in_progress"}]},
         {"runs": [{"status": "completed"}, {"status": "completed"}]},
     ]
@@ -81,6 +82,7 @@ def test_workflow_runs_complete_uses_exact_commit() -> None:
                 repo="Tracer-Cloud/opensre",
                 github_token="tok",
                 expected_head_sha="new-sha",
+                require_run=True,
             )
             is False
         )
@@ -89,6 +91,16 @@ def test_workflow_runs_complete_uses_exact_commit() -> None:
                 repo="Tracer-Cloud/opensre",
                 github_token="tok",
                 expected_head_sha="new-sha",
+                require_run=True,
+            )
+            is False
+        )
+        assert (
+            _workflow_runs_complete(
+                repo="Tracer-Cloud/opensre",
+                github_token="tok",
+                expected_head_sha="new-sha",
+                require_run=True,
             )
             is True
         )
@@ -286,6 +298,43 @@ def test_wait_for_pr_checks_times_out_when_new_checks_never_appear() -> None:
 
     assert result.state is CheckState.TIMED_OUT
     assert result.check_names == ()
+
+
+def test_wait_for_pr_checks_waits_for_failing_external_check_to_register() -> None:
+    context = replace(
+        _CONTEXT,
+        failing_checks=(
+            FailingCheck(
+                name="external security scan",
+                conclusion="failure",
+                details_url="https://ci.example.test/run/1",
+                workflow_name="",
+            ),
+        ),
+    )
+    payload = _rollup(
+        sha="new-sha",
+        name="quality",
+        conclusion="SUCCESS",
+        status="COMPLETED",
+    )
+    elapsed = iter((0.0, 0.0, 10.0))
+
+    with patch(
+        "integrations.github.tools.ci_fix.verification.run_gh_json",
+        return_value=payload,
+    ):
+        result = wait_for_pr_checks(
+            context,
+            github_token="tok",
+            expected_head_sha="new-sha",
+            timeout_seconds=10,
+            poll_interval_seconds=1,
+            sleep=lambda _seconds: None,
+            monotonic=lambda: next(elapsed),
+        )
+
+    assert result.state is CheckState.TIMED_OUT
 
 
 def test_wait_for_pr_checks_waits_for_late_check_in_running_workflow(

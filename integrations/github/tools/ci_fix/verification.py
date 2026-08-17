@@ -72,6 +72,10 @@ def wait_for_pr_checks(
     started_at = monotonic()
     deadline = started_at + max(0, timeout_seconds)
     expected_skips = set(ctx.skipped_check_names)
+    actions_run_required = any(check.run_id or check.workflow_name for check in ctx.failing_checks)
+    required_external_checks = {
+        check.name for check in ctx.failing_checks if not check.run_id and not check.workflow_name
+    }
     last_names: tuple[str, ...] = ()
     terminal_signature: tuple[str, ...] = ()
     terminal_since: float | None = None
@@ -108,8 +112,15 @@ def wait_for_pr_checks(
             repo=repo,
             github_token=github_token,
             expected_head_sha=expected_head_sha,
+            require_run=actions_run_required,
         )
-        if head_sha == expected_head_sha and checks and workflows_complete:
+        external_checks_registered = required_external_checks.issubset(set(last_names))
+        if (
+            head_sha == expected_head_sha
+            and checks
+            and workflows_complete
+            and external_checks_registered
+        ):
             pending = [check for check in checks if not _check_is_terminal(check)]
             if not pending:
                 signature = _check_signature(checks)
@@ -152,6 +163,7 @@ def _workflow_runs_complete(
     repo: str,
     github_token: str | None,
     expected_head_sha: str,
+    require_run: bool,
 ) -> bool:
     payload = run_gh_json(
         [
@@ -170,7 +182,7 @@ def _workflow_runs_complete(
         github_token=github_token,
     )
     runs = _check_rows(payload.get(_WORKFLOW_RUNS_KEY))
-    return all(
+    return (bool(runs) or not require_run) and all(
         str(run.get("status") or "").strip().lower() == _WORKFLOW_RUN_COMPLETED for run in runs
     )
 
