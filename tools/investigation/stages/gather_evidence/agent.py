@@ -364,7 +364,10 @@ class ConnectedInvestigationAgent:
             elif isinstance(event, ProviderRequestEndEvent):
                 state.loops_completed = max(state.loops_completed, event.iteration + 1)
             elif isinstance(event, ToolExecutionStartEvent):
-                if state.controller.is_duplicate(event.tool_call_id):
+                if state.controller.is_duplicate_event(
+                    iteration=event.iteration,
+                    tool_call_id=event.tool_call_id,
+                ):
                     return
                 state.tracker.record_tool_start(
                     event.tool_name,
@@ -372,7 +375,15 @@ class ConnectedInvestigationAgent:
                     event_key=event.tool_call_id,
                 )
             elif isinstance(event, ToolExecutionEndEvent):
-                if state.controller.is_duplicate(event.tool_call_id):
+                state.controller.record_runtime_result(
+                    iteration=event.iteration,
+                    tool_call_id=event.tool_call_id,
+                    result=event.result,
+                )
+                if state.controller.is_duplicate_event(
+                    iteration=event.iteration,
+                    tool_call_id=event.tool_call_id,
+                ):
                     return
                 state.tracker.record_tool_end(
                     event.tool_name,
@@ -410,9 +421,19 @@ class ConnectedInvestigationAgent:
             )
             return replace(request, tools=[])
 
+        def _classify_tool_calls(request: ProviderRequest, response: Any) -> Any:
+            tool_calls = tuple(getattr(response, "tool_calls", ()) or ())
+            if tool_calls:
+                state.controller.prepare_batch(
+                    tool_calls,
+                    iteration=int(request.metadata.get("iteration", 0)),
+                )
+            return response
+
         return ProviderHooks(
             transform_messages=_capture,
             before_provider_request=_force_conclusion,
+            after_provider_response=_classify_tool_calls,
         )
 
     def _run_seed_calls(
@@ -503,7 +524,7 @@ class ConnectedInvestigationAgent:
                     tool_name=tool_call.name,
                     tool_args=redacted.tool_input,
                     source=tool_source(tool_by_name, tool_call.name),
-                    loop_iteration=controller.iteration_for(tool_call.id),
+                    loop_iteration=controller.iteration_for(tool_call),
                 )
             )
 
