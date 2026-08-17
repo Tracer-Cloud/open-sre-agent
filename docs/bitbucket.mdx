@@ -3,24 +3,21 @@ title: "Bitbucket"
 description: "Connect Bitbucket so OpenSRE can correlate recent commits and code changes with incidents"
 ---
 
-OpenSRE queries Bitbucket to retrieve recent commits, file contents, and code search results — helping trace which change in a Bitbucket-hosted repository triggered an incident.
+## Overview
+
+OpenSRE queries Bitbucket to retrieve recent commits, file contents, and code search results — helping trace which change in a Bitbucket-hosted repository triggered an incident. All operations are read-only.
 
 ## Prerequisites
 
 - Bitbucket Cloud account
 - App password with repository read access
+- Workspace slug (the identifier in `https://bitbucket.org/<workspace>/`)
 
 ## Setup
 
-### Option 1: Interactive CLI
+Bitbucket is configured through environment variables or the persistent integration store. There is no dedicated `opensre integrations setup bitbucket` wizard today.
 
-```bash
-opensre integrations setup
-```
-
-Select **Bitbucket** when prompted and provide your workspace, username, and app password.
-
-### Option 2: Environment variables
+### Option 1: Environment variables
 
 Add to your `.env`:
 
@@ -28,6 +25,8 @@ Add to your `.env`:
 BITBUCKET_WORKSPACE=your-workspace-slug
 BITBUCKET_USERNAME=your-username
 BITBUCKET_APP_PASSWORD=your-app-password
+# optional:
+# BITBUCKET_BASE_URL=https://api.bitbucket.org/2.0
 ```
 
 | Variable | Default | Description |
@@ -35,8 +34,9 @@ BITBUCKET_APP_PASSWORD=your-app-password
 | `BITBUCKET_WORKSPACE` | — | **Required.** Bitbucket workspace slug |
 | `BITBUCKET_USERNAME` | — | **Required.** Bitbucket username |
 | `BITBUCKET_APP_PASSWORD` | — | **Required.** Bitbucket app password |
+| `BITBUCKET_BASE_URL` | `https://api.bitbucket.org/2.0` | Bitbucket API base URL |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {
@@ -56,11 +56,13 @@ BITBUCKET_APP_PASSWORD=your-app-password
 }
 ```
 
-## Creating an app password
+## Credentials
+
+### Creating an app password
 
 1. In Bitbucket, go to **Personal settings** → **App passwords**
 2. Click **Create app password**
-3. Give it a label (e.g., `opensre`)
+3. Give it a label (for example `opensre`)
 4. Enable the following permissions: **Repositories: Read**
 5. Copy the generated password
 
@@ -68,15 +70,15 @@ BITBUCKET_APP_PASSWORD=your-app-password
 The workspace slug is the identifier in your Bitbucket URL: `https://bitbucket.org/<workspace>/`
 </Info>
 
+Auth uses HTTP Basic with username + app password.
+
 ## Investigation tools
 
-When OpenSRE investigates a Bitbucket-related alert, three tools are available:
-
-- **Commits** — retrieves recent commits for a repository, optionally filtered by file path
-- **File contents** — fetches the contents of a file at a specific revision
-- **Code search** — searches code across the workspace or a specific repository
-
-All operations are read-only.
+| Tool | What it does |
+| --- | --- |
+| `list_bitbucket_commits` | Recent commits for a repository, optionally filtered by file path |
+| `get_bitbucket_file_contents` | Contents of a file at a specific revision |
+| `search_bitbucket_code` | Search code across the workspace or a specific repository |
 
 ## Verify
 
@@ -97,11 +99,11 @@ Detail: Authenticated as Your Name; workspace: your-workspace
 | Symptom | Fix |
 | --- | --- |
 | **401 Unauthorized** | Check username and app password combination |
-| **Workspace not found** | Verify the workspace slug — it's case-sensitive |
+| **Workspace not found** | Verify the workspace slug — it is case-sensitive |
 | **403 Forbidden** | Ensure the app password has **Repositories: Read** permission |
 | **Code search unavailable** | Code search requires a Bitbucket Cloud Standard or Premium plan |
 
-## Security best practices
+## Security
 
 - Use an **app password** rather than your account password — app passwords can be revoked individually.
 - Scope permissions to **Repositories: Read** only.

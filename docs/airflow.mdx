@@ -17,11 +17,17 @@ It supports:
 
 This integration is designed for **incident-driven workflows**, where an alert referencing a DAG triggers an investigation.
 
----
+## Prerequisites
 
-## Configuration
+- A reachable Airflow REST API (Airflow 2.x `/api/v1`)
+- Network access from the OpenSRE environment
+- Auth: **token** (`AIRFLOW_AUTH_TOKEN`) **or** basic auth (`AIRFLOW_USERNAME` / `AIRFLOW_PASSWORD`)
 
-### Required Environment Variables
+## Setup
+
+There is no dedicated `opensre integrations setup airflow` wizard today. Configure via environment variables or the persistent store.
+
+### Option 1: Environment variables
 
 ```bash
 AIRFLOW_BASE_URL=http://localhost:8080
@@ -39,9 +45,41 @@ AIRFLOW_AUTH_TOKEN=your_token
 AIRFLOW_TIMEOUT_SECONDS=15
 AIRFLOW_VERIFY_SSL=true
 AIRFLOW_MAX_RESULTS=50
+AIRFLOW_DAG_ID=test_fail_dag   # optional default DAG for tools
 ```
 
-### Setup Example
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AIRFLOW_BASE_URL` | `http://localhost:8080/api/v1` | Airflow API base URL |
+| `AIRFLOW_USERNAME` | — | Basic auth username (with password) |
+| `AIRFLOW_PASSWORD` | — | Basic auth password |
+| `AIRFLOW_AUTH_TOKEN` | — | Bearer / token auth (alternative to basic) |
+| `AIRFLOW_TIMEOUT_SECONDS` | `15` | Request timeout |
+| `AIRFLOW_VERIFY_SSL` | `true` | Verify TLS certificates |
+| `AIRFLOW_MAX_RESULTS` | `50` | Result cap |
+| `AIRFLOW_DAG_ID` | — | Optional default DAG id for tools |
+
+### Option 2: Persistent store
+
+```json
+{
+  "version": 1,
+  "integrations": [
+    {
+      "id": "airflow-prod",
+      "service": "airflow",
+      "status": "active",
+      "credentials": {
+        "base_url": "http://localhost:8080",
+        "username": "your_username",
+        "password": "your_password"
+      }
+    }
+  ]
+}
+```
+
+### Local smoke setup
 
 Start Airflow locally:
 
@@ -77,17 +115,13 @@ Trigger the DAG:
 airflow dags trigger test_fail_dag
 ```
 
----
-
-## Investigation Flow
-
-Run the investigation CLI:
+Then investigate with an alert that references the DAG:
 
 ```bash
-python -m cli investigate
+uv run opensre investigate
 ```
 
-Provide the alert payload:
+Example alert payload:
 
 ```json
 {
@@ -99,79 +133,67 @@ Provide the alert payload:
 }
 ```
 
----
+## Credentials
 
-## Capabilities
+Provide either `AIRFLOW_AUTH_TOKEN` or `AIRFLOW_USERNAME` + `AIRFLOW_PASSWORD`. Prefer a dedicated read-only Airflow user for investigations.
 
-| Capability | Description |
-|---|---|
-| List DAG runs | Fetch execution history |
-| Get task instances | Inspect task-level failures |
-| Detect failures | Identify recent failing runs |
-| RCA support | Provide structured evidence for root cause analysis |
+## Investigation tools
 
----
+| Tool | What it does |
+| --- | --- |
+| `get_recent_airflow_failures` | Recent failed / retrying task evidence for a DAG |
+| `get_airflow_dag_runs` | DAG run execution history |
+| `get_airflow_task_instances` | Task-level status for a run |
 
-## Planner Behavior
+These tools use the Airflow REST API via `integrations/airflow`. When `source = airflow`, the planner seeds Airflow tools into the action space; exact tool selection remains LLM-driven.
 
-When `source = airflow`, the planner:
+Related (Tracer, not Airflow API): `get_airflow_metrics` pulls orchestration metrics from Tracer when a `trace_id` is available — see [Tracer](/tracer).
 
-- Prioritizes Airflow-related actions
-- Seeds Airflow tools into the action space
-
-However:
-
-- Tool selection is LLM-driven
-- Exact ordering may vary between runs
-
-This design avoids hard-coded routing and keeps the system extensible.
-
----
-
-## Error Handling
+### Behavior notes
 
 - Per-run failures are isolated — one failing request does not break the loop
-- Network/API errors are handled defensively
-- Partial evidence is preserved whenever possible
+- Network/API errors are handled defensively; partial evidence is preserved when possible
+- Planner routing is probabilistic (LLM-based); there is no hard-coded Airflow bypass
 
----
+## Verify
 
-## Testing
+There is no dedicated `opensre integrations verify airflow` target today. Confirm auth with a live investigation or by calling the Airflow API (`GET /dags`) from the same environment.
 
-### E2E Tests
+### Tests
 
 ```bash
-python -m pytest tests/e2e/airflow/test_orchestrator.py -v
+uv run pytest tests/e2e/airflow/test_orchestrator.py -v
 ```
 
-Expected output:
+Expected:
 
 ```
 test_airflow_investigation_e2e PASSED
 ```
 
----
+Routing coverage (if present in your checkout):
 
-## Limitations
+```bash
+uv run pytest tests/nodes/plan_actions/test_airflow_routing.py -v
+```
 
-- Planner routing is probabilistic (LLM-based)
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **Auth required / 401** | Set `AIRFLOW_AUTH_TOKEN` or `AIRFLOW_USERNAME` + `AIRFLOW_PASSWORD` |
+| **Connection refused** | Confirm Airflow is up and `AIRFLOW_BASE_URL` matches the REST API |
+| **Empty DAG runs** | Check `dag_id` in the alert metadata / `AIRFLOW_DAG_ID` |
+| **SSL errors** | Set `AIRFLOW_VERIFY_SSL=false` only for trusted lab endpoints |
+
+### Limitations
+
 - Requires a reachable Airflow instance
 - No CI-backed Airflow instance by default (local validation required)
+- No setup/verify CLI wiring yet
 
----
+## Security
 
-## Design Notes
-
-- Integration follows the same contract as other sources (Datadog, Grafana, etc.)
-- Uses env-based configuration for simplicity
-- Avoids introducing hard overrides in planning logic
-- Focuses on evidence-driven investigation, not static rules
-
----
-
-## Future Work
-
-- Stronger tool routing guarantees
-- CI-backed disposable Airflow instance for e2e tests
-- Deeper DAG dependency analysis
-- Richer RCA explanations
+- Prefer a dedicated read-only Airflow account over admin credentials
+- Enable TLS verification in production (`AIRFLOW_VERIFY_SSL=true`)
+- Store tokens/passwords in `.env` or the integration store — not in source control

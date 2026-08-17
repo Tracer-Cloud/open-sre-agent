@@ -3,6 +3,8 @@ title: "Argo CD"
 description: "Connect Argo CD so OpenSRE can inspect GitOps application health, sync state, revisions, and drift during investigations"
 ---
 
+## Overview
+
 OpenSRE queries the Argo CD REST API as a read-only evidence source during GitOps incident investigations. It can list visible applications, inspect one application's sync and health status, and fetch sanitized server-side diff output to show deployment drift.
 
 ## Prerequisites
@@ -14,7 +16,7 @@ OpenSRE queries the Argo CD REST API as a read-only evidence source during GitOp
 
 ## Setup
 
-Argo CD is configured through environment variables or the persistent integration store.
+Argo CD is configured through environment variables or the persistent integration store. There is no dedicated `opensre integrations setup argocd` wizard today.
 
 ### Option 1: Environment variables
 
@@ -103,25 +105,23 @@ export ARGOCD_INSTANCES='[
 
 When `ARGOCD_INSTANCES` is set, the single-instance `ARGOCD_BASE_URL` and auth variables are ignored for this service. `opensre integrations verify argocd` validates the resolved default instance.
 
-## Verify
+## Credentials
 
-Run:
+1. In Argo CD, create a dedicated **read-only** account or API token for OpenSRE.
+2. Grant that identity list/get access to the applications (and projects) you want investigated.
+3. Set either:
+   - `ARGOCD_AUTH_TOKEN` / `ARGOCD_TOKEN` (or store `bearer_token`), **or**
+   - `ARGOCD_USERNAME` + `ARGOCD_PASSWORD` (or store `username` / `password`)
+4. Set `ARGOCD_BASE_URL` to your API base (HTTPS for remote hosts).
 
-```bash
-opensre integrations verify argocd
-```
+## Investigation tools
 
-Expected output:
+| Tool / evidence | What it does |
+| --- | --- |
+| `argocd_application_status` | With `application_name`, returns a compact summary: sync status, health status, current revision, operation phase/message, destination, images, and recent deployment history. Without `application_name`, lists visible applications (optionally scoped by `ARGOCD_PROJECT`). |
+| `argocd_application_diff` | Server-side diff for one application (requires `application_name`). Returns `drift_detected`, `diff_count`, and sanitized diff records for Kubernetes objects whose live state differs from GitOps. |
 
-```text
-Service: argocd
-Status:  passed
-Detail:  Connected to Argo CD and listed 3 applications.
-```
-
-Verification performs a read-only application list call. It proves OpenSRE can reach Argo CD and list visible applications with the configured credentials; it does not write to Argo CD or sync applications.
-
-## Usage in investigations
+### Usage in investigations
 
 When Argo CD is configured and an incoming alert contains GitOps context, OpenSRE can add Argo CD evidence to the investigation plan.
 
@@ -158,33 +158,21 @@ Then run OpenSRE with the alert payload:
 opensre investigate -i alert.json
 ```
 
-## Evidence collected
+## Verify
 
-### `argocd_application_status`
+```bash
+opensre integrations verify argocd
+```
 
-Fetches application status from Argo CD.
+Expected output:
 
-- With `application_name`, it returns a compact summary for that application: sync status, health status, current revision, operation phase/message, destination, images, and recent deployment history.
-- Without `application_name`, it lists visible applications, optionally scoped by `ARGOCD_PROJECT`.
+```text
+Service: argocd
+Status:  passed
+Detail:  Connected to Argo CD and listed 3 applications.
+```
 
-The investigation agent uses this evidence to determine whether a deployment is `OutOfSync`, `Degraded`, on an unexpected revision, or correlated with a recent rollout.
-
-### `argocd_application_diff`
-
-Fetches Argo CD server-side diff output for one application.
-
-- Requires `application_name`.
-- Returns `drift_detected`, `diff_count`, and sanitized diff records.
-- Helps identify Kubernetes objects whose live state differs from the desired GitOps state.
-
-## Security best practices
-
-- Use a dedicated read-only Argo CD account or token for OpenSRE.
-- Store credentials in `.env` or `~/.opensre/integrations.json`, not in source code.
-- Use `https://` for remote Argo CD URLs. Plain `http://` is accepted only for loopback or localhost development URLs.
-- Do not disable `ARGOCD_VERIFY_SSL` for production instances.
-- OpenSRE redacts bearer tokens, passwords, token-like strings, and Kubernetes `Secret` diffs before surfacing Argo CD errors or diff evidence.
-- The integration is read-only: it lists applications, reads application summaries, and reads server-side diff data. It does not sync, modify, or delete Argo CD resources.
+Verification performs a read-only application list call. It proves OpenSRE can reach Argo CD and list visible applications with the configured credentials; it does not write to Argo CD or sync applications.
 
 ## Troubleshooting
 
@@ -197,3 +185,12 @@ Fetches Argo CD server-side diff output for one application.
 | **SSL error** | Fix the certificate chain or, for a trusted lab only, set `ARGOCD_VERIFY_SSL=false`. |
 | **No diff evidence** | Confirm the alert provides `argocd_application` or `argocd_app`; the diff tool requires an application name. |
 | **Application list succeeds but a named app fails** | Check `ARGOCD_PROJECT` and `ARGOCD_APP_NAMESPACE`, and confirm the account has access to that application. |
+
+## Security
+
+- Use a dedicated read-only Argo CD account or token for OpenSRE.
+- Store credentials in `.env` or `~/.opensre/integrations.json`, not in source code.
+- Use `https://` for remote Argo CD URLs. Plain `http://` is accepted only for loopback or localhost development URLs.
+- Do not disable `ARGOCD_VERIFY_SSL` for production instances.
+- OpenSRE redacts bearer tokens, passwords, token-like strings, and Kubernetes `Secret` diffs before surfacing Argo CD errors or diff evidence.
+- The integration is read-only: it lists applications, reads application summaries, and reads server-side diff data. It does not sync, modify, or delete Argo CD resources.

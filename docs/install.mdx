@@ -1,18 +1,25 @@
 ---
 title: "Install OpenSRE"
-description: "Choose the right OpenSRE installation path for local or enterprise environments"
+description: "Install the OpenSRE CLI on your machine and get ready to investigate."
 ---
 
-Pick the path that matches where you run OpenSRE.
+This page gets the `opensre` command onto your laptop or server, then walks you through the short setup so you can run investigations.
 
-## Which path?
+## What you get
 
-| Path | Best for | Get started |
-| --- | --- | --- |
-| **Local CLI** | Laptop or self-hosted server; full `opensre` binary | [Install locally](/install-local) |
-| **Enterprise (OpenSRE Cloud)** | Org-wide connectors in the hosted web app | [Enterprise setup](/install-enterprise) |
+After install, you have:
 
-## Install locally (most users)
+- The `opensre` CLI on your PATH
+- An interactive shell when you run `opensre` with no arguments
+- An onboard wizard to pick your LLM and connect tools like Datadog or Slack
+
+No sudo required on macOS/Linux in the usual case — the installer puts the binary somewhere writable (often `~/.local/bin`) and tells you if you need a PATH tweak.
+
+## Install
+
+Pick one method.
+
+**One-line installer (most people):**
 
 ```bash
 # macOS / Linux
@@ -22,14 +29,56 @@ curl -fsSL https://install.opensre.com | bash
 irm https://install.opensre.com | iex
 ```
 
-Then configure your LLM and integrations:
+In a normal interactive terminal, the installer often starts `opensre onboard` for you when it finishes. In CI or scripts it skips that and prints what to do next.
+
+Don't want auto-onboard?
+
+```bash
+curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
+```
+
+**Homebrew:**
+
+```bash
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
+```
+
+More options (PATH notes, skipping GitHub CLI install, on-prem layout): [Install locally](/install-local).
+
+## Set things up
+
+If onboard didn't start automatically, run it yourself:
 
 ```bash
 opensre onboard
+```
+
+The wizard asks for:
+
+1. **An LLM** — OpenAI, Anthropic, a local model, or another provider you already use
+2. **Your tools** — whatever you want investigations to query (Datadog, Grafana, Slack, and so on)
+3. **Optional extras** — masking and messaging, if you want them
+
+Then check that the tools you connected actually work:
+
+```bash
 opensre integrations verify
 ```
 
-See [Quickstart](/quickstart) for a full walkthrough including a sample investigation.
+## Try a quick investigation
+
+```bash
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
+
+Or open the shell and describe what's going on:
+
+```bash
+opensre
+```
+
+Full walkthrough with GIFs: [Quickstart](/quickstart).
 
 ## Environment-specific guides
 
@@ -40,12 +89,10 @@ See [Quickstart](/quickstart) for a full walkthrough including a sample investig
 | Windows | [Windows (local)](/environments/windows-local) |
 | Docker | [Docker](/environments/docker) |
 
-## Enterprise hosted setup
+## Stuck?
 
-For teams using the hosted OpenSRE Cloud web app at [app.tracer.cloud](https://app.tracer.cloud), see [Enterprise setup](/install-enterprise).
+- **Command not found** — open a new terminal, or add the bin directory the installer printed to your PATH
+- **Onboard can't reach your LLM** — check the key and network; you can save and retry later
+- **Docker / `make` missing** — see [Quickstart troubleshooting](/quickstart#troubleshooting)
 
-## Next steps
-
-- [Investigations overview](/investigation-overview)
-- [Integrations overview](/integrations-overview)
-- [Environment variables](/configuration/environment-variables)
+Need deploy options beyond a laptop binary? See [Deployment](/deployment).

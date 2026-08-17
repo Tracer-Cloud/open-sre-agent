@@ -3,29 +3,30 @@ title: "MongoDB Atlas"
 description: "Connect MongoDB Atlas to give OpenSRE visibility into cluster health, performance metrics, deployment status, and operational insights during investigations"
 ---
 
-Databases in the cloud can be harder to troubleshoot. That's where OpenSRE comes in. Connect to your MongoDB Atlas cluster to get instant visibility into cluster health, performance metrics, slow queries, and replica set status when alerts fire.
+## Overview
 
-## What you'll need
+OpenSRE uses the **Atlas Admin API** (not a MongoDB connection string) to inspect cluster health, performance metrics, slow-query recommendations, and operational events when alerts fire.
+
+For direct MongoDB wire-protocol diagnostics, see [MongoDB](/mongodb).
+
+## Prerequisites
 
 - MongoDB Atlas API Public Key
 - MongoDB Atlas API Private Key
 - Atlas Project ID
-- Permissions to view cluster metrics and configuration
+- Permissions to view cluster metrics and configuration (Project Read Only or higher)
 
-## Getting connected
+## Setup
 
-### Quick setup: Interactive mode 
-
-Let's walk through it step by step:
+### Option 1: Interactive CLI
 
 ```bash
-opensre integrations setup
+opensre integrations setup mongodb_atlas
 ```
-Choose **MongoDB Atlas** and enter your Atlas API credentials when prompted.
 
-### DIY mode: Environment variables
+Enter your Atlas API credentials when prompted.
 
-Prefer manual config? Add these to your `.env`:
+### Option 2: Environment variables
 
 ```bash
 MONGODB_ATLAS_PUBLIC_KEY=your_public_key
@@ -40,7 +41,6 @@ MONGODB_ATLAS_BASE_URL=https://cloud.mongodb.com/api/atlas/v2
 | `MONGODB_ATLAS_PRIVATE_KEY` | — | **Required.** Atlas API private key |
 | `MONGODB_ATLAS_PROJECT_ID` | — | **Required.** Atlas project identifier |
 | `MONGODB_ATLAS_BASE_URL` | `https://cloud.mongodb.com/api/atlas/v2` | Atlas Admin API base URL |
-
 
 ### Option 3: Persistent store
 
@@ -62,14 +62,13 @@ MONGODB_ATLAS_BASE_URL=https://cloud.mongodb.com/api/atlas/v2
 }
 ```
 
-## Finding your Atlas API credentials
+## Credentials
 
 1. Log in to MongoDB Atlas
 2. Navigate to Access Manager → API Keys
 3. Create a Project API Key
-4. Copy the Public Key
-5. Copy the Private Key
-6. Locate your Project ID from the Atlas project settings
+4. Copy the Public Key and Private Key
+5. Copy the Project ID from Atlas project settings
 
 <Info>
 This integration uses the **Atlas Admin API**, not a MongoDB connection string. Create a Project API key with read access to cluster metrics and alerts.
@@ -77,31 +76,15 @@ This integration uses the **Atlas Admin API**, not a MongoDB connection string. 
 
 ## Investigation tools
 
-When OpenSRE investigates a MongoDB Atlas-related alert, these tools query the Atlas Admin API:
+| Tool | What it does |
+| --- | --- |
+| `get_mongodb_atlas_clusters` | Clusters in the project — state, version, size, topology |
+| `get_mongodb_atlas_cluster_metrics` | CPU, disk I/O, connections, opcounters |
+| `get_mongodb_atlas_alerts` | Open Atlas alerts |
+| `get_mongodb_atlas_cluster_events` | Recent project events (scaling, backups, maintenance) |
+| `get_mongodb_atlas_performance_advisor` | Slow-query / missing-index recommendations |
 
-### Clusters
-
-Lists all clusters in the project — state, MongoDB version, instance size, and replication topology.
-
-### Metrics
-
-Retrieves performance metrics for a cluster (CPU, disk I/O, connections, opcounters).
-
-### Alerts
-
-Fetches open Atlas alerts including event type, affected cluster, and current metric values.
-
-### Events
-
-Returns recent project events such as cluster scaling, backup completions, and maintenance windows.
-
-### Performance advisor
-
-Surfaces Atlas Performance Advisor recommendations for slow queries and missing indexes.
-
-## Verify it works
-
-Let's make sure everything's connected:
+## Verify
 
 ```bash
 opensre integrations verify mongodb_atlas
@@ -119,12 +102,12 @@ Detail: Connected to MongoDB Atlas project ...
 
 | Symptom | Fix |
 | --- | --- |
-| **401 Unauthorized** | Regenerate the API key pair. Confirm the public and private keys are copied correctly. |
-| **403 Forbidden** | Grant the API key **Project Read Only** (or higher) permissions for the target project. |
+| **401 Unauthorized** | Regenerate the API key pair. Confirm public and private keys are copied correctly. |
+| **403 Forbidden** | Grant the API key **Project Read Only** (or higher) for the target project. |
 | **Invalid project ID** | Copy the Project ID from Atlas project settings — not the cluster name or connection string. |
 | **Verify passes but tools fail** | Confirm `MONGODB_ATLAS_PROJECT_ID` matches the project that owns the clusters under investigation. |
 
-## Security best practices
+## Security
 
 - Create a **dedicated Atlas API key** for OpenSRE with the minimum project role required.
 - Rotate API keys periodically and revoke unused keys.

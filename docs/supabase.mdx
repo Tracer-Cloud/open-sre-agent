@@ -3,42 +3,34 @@ title: "Supabase"
 description: "Connect Supabase so OpenSRE can diagnose database, API, and authentication issues during investigations"
 ---
 
-Supabase powers many modern applications. When something goes wrong with your database, APIs, or authentication flows, OpenSRE can use your Supabase project configuration to investigate issues, inspect resources, and gather operational insights.
+## Overview
 
-## What you'll need
+When something goes wrong with your Supabase-backed database, APIs, or authentication flows, OpenSRE can use your project configuration to investigate issues, inspect resources, and gather operational insights.
 
-* A Supabase project
-* Your Supabase Project URL
-* A Supabase Service Role Key
-* Permissions to access project resources
+## Prerequisites
 
-## Connecting Supabase
+- A Supabase project
+- Your Supabase Project URL
+- A Supabase Service Role Key
+- Permissions to access project resources
 
-### Guided walkthrough
+## Setup
 
-Let's set this up together:
+There is no dedicated `opensre integrations setup supabase` wizard today. Configure via environment variables or the persistent store, then verify.
 
-```bash
-opensre integrations setup
-```
-
-Pick **Supabase** and enter your project credentials when prompted.
-
-### DIY: Using environment variables
-
-Or add these directly to your `.env`:
+### Option 1: Environment variables
 
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_KEY=your_service_role_key
 ```
 
-| Variable               | Description               |
-| ---------------------- | ------------------------- |
-| `SUPABASE_URL`         | Supabase project URL      |
+| Variable | Description |
+| --- | --- |
+| `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {
@@ -57,14 +49,13 @@ SUPABASE_SERVICE_KEY=your_service_role_key
 }
 ```
 
-## Finding your Supabase credentials
+## Credentials
 
 1. Log in to Supabase
 2. Open your project
 3. Navigate to **Settings** → **API**
 4. Copy the **Project URL**
-5. Copy the **Service Role Key**
-6. Add these values to your OpenSRE configuration
+5. Copy the **Service Role Key** (not the anon key)
 
 <Info>
 The Service Role Key has elevated privileges. Store it securely and never expose it in client-side applications or public repositories.
@@ -72,19 +63,12 @@ The Service Role Key has elevated privileges. Store it securely and never expose
 
 ## Investigation tools
 
-When OpenSRE investigates a Supabase-related alert, these tools are available:
+| Tool | What it does |
+| --- | --- |
+| `get_supabase_service_health` | Health of PostgREST, Auth, Storage, and other services |
+| `get_supabase_storage_buckets` | Storage buckets and config (public/private, size limits, MIME types) |
 
-### Service health
-
-Checks the health of PostgREST, Auth, Storage, and other Supabase services for the project. Useful when triaging 503 or 401 errors from a Supabase-backed application.
-
-### Storage buckets
-
-Lists all Storage buckets and their configuration metadata — public vs private access, file size limits, and allowed MIME types.
-
-## Verify it works
-
-Let's make sure everything is connected:
+## Verify
 
 ```bash
 opensre integrations verify supabase
@@ -102,12 +86,12 @@ Detail: Connected to Supabase project ...
 
 | Symptom | Fix |
 | --- | --- |
-| **401 Unauthorized** | Confirm the **Service Role Key** (not the anon key) is set in `SUPABASE_SERVICE_KEY`. |
-| **Invalid project URL** | Use the Project URL from Settings → API (`https://your-project.supabase.co`). |
-| **Health check shows degraded service** | Check the Supabase status page and project dashboard for the affected service. |
-| **Storage bucket not found** | Verify the bucket name in the investigation matches an existing bucket in the project. |
+| **401 Unauthorized** | Confirm the **Service Role Key** (not the anon key) is set in `SUPABASE_SERVICE_KEY` |
+| **Invalid project URL** | Use the Project URL from Settings → API (`https://your-project.supabase.co`) |
+| **Health check shows degraded service** | Check the Supabase status page and project dashboard for the affected service |
+| **Storage bucket not found** | Verify the bucket name in the investigation matches an existing bucket |
 
-## Security best practices
+## Security
 
 - Use the **service role key** only on the server side — never in client apps or public repos.
 - Rotate the service role key if it is ever exposed.

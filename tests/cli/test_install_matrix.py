@@ -272,7 +272,7 @@ def _run_install_sh(
                 "curl -fsSL https://install.opensre.com | bash",
                 "OPENSRE_AUTO_LAUNCH=0",
                 "OPENSRE_SKIP_GH_INSTALL=1",
-                'depends_on "gh"',
+                "Homebrew installs pull in `gh` automatically.",
             ),
         ),
         (
