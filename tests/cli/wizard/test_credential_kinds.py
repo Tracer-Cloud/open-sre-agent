@@ -10,7 +10,7 @@ as ambient environment credentials.
 from __future__ import annotations
 
 from config.llm_auth.provider_catalog import CredentialKind
-from surfaces.cli.wizard.config import (
+from integrations.llm_providers.catalog import (
     PROVIDER_BY_VALUE,
     WIZARD_TO_CATALOG_KIND,
     WizardCredentialKind,

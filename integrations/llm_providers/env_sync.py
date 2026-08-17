@@ -21,7 +21,7 @@ from config.env_file import (
     write_env_lines,
 )
 from config.llm_auth.auth_method import LLM_AUTH_METHOD_ENV
-from surfaces.cli.wizard.config import ProviderOption, WizardCredentialKind
+from integrations.llm_providers.catalog import ProviderOption, WizardCredentialKind
 
 
 def sync_reasoning_model_env(
@@ -50,7 +50,7 @@ def _sync_llm_selection_to_store(
     model_provider: ProviderOption | None = None,
     auth_method: str | None = None,
 ) -> None:
-    from surfaces.cli.wizard.store import update_local_llm_selection
+    from config.setup_store import update_local_llm_selection
 
     resolved_model_provider = model_provider or provider
     update_local_llm_selection(
@@ -123,7 +123,7 @@ def sync_provider_env(
     Removes stale keys from other providers and every API-key line. Secrets are
     stored in the system keyring, not in ``.env``.
     """
-    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+    from integrations.llm_providers.catalog import SUPPORTED_PROVIDERS
 
     resolved_model_provider = model_provider or provider
     target_path = env_path or PROJECT_ENV_PATH

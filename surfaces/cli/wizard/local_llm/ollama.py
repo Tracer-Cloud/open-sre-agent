@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 from config.config import DEFAULT_OLLAMA_HOST
+from integrations.llm_providers.ollama import normalize_model_tag
 from platform.terminal.theme import DIM, WARNING
 
 if TYPE_CHECKING:
@@ -74,11 +75,6 @@ def wait_for_server(host: str, timeout_s: int = 30) -> bool:
             return True
         time.sleep(1)
     return False
-
-
-def normalize_model_tag(model: str) -> str:
-    """Ensure model has explicit tag. If no tag specified, append :latest to match Ollama behavior."""
-    return model if ":" in model else f"{model}:latest"
 
 
 def is_model_present(model: str, host: str = DEFAULT_OLLAMA_HOST) -> bool:

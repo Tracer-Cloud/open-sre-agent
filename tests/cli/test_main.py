@@ -84,7 +84,7 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 
@@ -169,7 +169,7 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     )
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -192,7 +192,7 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     )
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 

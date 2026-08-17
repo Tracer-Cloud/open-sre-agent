@@ -83,10 +83,10 @@ layers below it.
   `opensre <command>` runner), `surfaces/interactive_shell` (the stateful
   REPL), and `surfaces/shared` for code two or more surfaces use. A surface
   owns its own I/O, prompts, and presentation, and composes lower layers to do
-  the actual work. Between the two terminal surfaces the edge points one way:
-  `surfaces/cli` launches and composes the shell; the shell does not import
-  the CLI (`tests/interactive_shell/test_cli_border.py` pins the remaining
-  back-edge as a shrink-only allowlist). Slack is not a surface: its inbound
+  the actual work. The two terminal surfaces are peers and do not import each
+  other; what both need lives in `surfaces/shared` or a lower layer
+  (`tests/shared/test_surface_border.py` pins each direction's remaining
+  imports as a shrink-only allowlist). Slack is not a surface: its inbound
   transport lives in `gateway/transports/slack`, outbound delivery in
   `integrations/slack`.
 - **`gateway/`** — the standalone messaging gateway for inbound chat platforms

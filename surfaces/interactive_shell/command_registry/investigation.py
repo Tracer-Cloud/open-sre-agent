@@ -33,7 +33,6 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     InvestigationOutcome,
     normalize_investigation_target,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
     publish_investigation_outcome_analytics,
 )
@@ -41,6 +40,7 @@ from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_investigation_outcome,
     format_investigation_terminal_outcome,
 )
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 
 def _interactive_template_menu(session: Session, console: Console) -> bool:

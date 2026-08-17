@@ -1,11 +1,11 @@
 """CLI-owned LLM provider auth orchestration."""
 
-from surfaces.cli.llm_auth.providers import (
+from integrations.llm_providers.auth_profiles import (
     ProviderAuthProfile,
     iter_auth_profiles,
     resolve_auth_profile,
 )
-from surfaces.cli.llm_auth.service import (
+from integrations.llm_providers.auth_service import (
     AuthSetupError,
     AuthStatus,
     configure_api_key_provider,

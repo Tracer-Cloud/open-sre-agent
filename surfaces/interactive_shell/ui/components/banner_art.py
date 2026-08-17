@@ -5,7 +5,7 @@ Exported
 SPLASH_ART          block font, 59 cols, solid ██ fills
 SPLASH_ART_NARROW   simpleBlock font, 72 cols, pure ASCII fallback
 _FALLBACK_ART       minimal art, 44 cols, last resort
-_render_art(width)  return the best-fit art string for a given terminal width
+render_art(width)  return the best-fit art string for a given terminal width
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ _FALLBACK_ART = """\
       |_|"""
 
 
-def _render_art(console_width: int = 80) -> str:
+def render_art(console_width: int = 80) -> str:
     """Return the splash art string for the given terminal width.
 
     Priority: SPLASH_ART (grid, 34 cols) → SPLASH_ART_NARROW (simpleBlock, 72 cols)
@@ -70,5 +70,5 @@ __all__ = [
     "SPLASH_ART",
     "SPLASH_ART_NARROW",
     "_FALLBACK_ART",
-    "_render_art",
+    "render_art",
 ]

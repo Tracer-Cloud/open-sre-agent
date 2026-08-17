@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from surfaces.cli.wizard.store import (
+from config.setup_store import (
     delete_named_remote,
     load_local_config,
     load_named_remotes,

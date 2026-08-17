@@ -24,7 +24,7 @@ _DISABLED_ENV_VALUES = {"0", "false", "no", "off"}
 
 
 def _load_local_config() -> dict[str, Any]:
-    from surfaces.cli.wizard.store import get_store_path, load_local_config
+    from config.setup_store import get_store_path, load_local_config
 
     return load_local_config(get_store_path())
 
@@ -35,7 +35,7 @@ def _run_onboarding_command(
     ctx: click.Context | None = None,
     load_config: ConfigLoader = _load_local_config,
 ) -> None:
-    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.shared.error_handling.errors import OpenSREError
 
     capture_onboard_started()
     try:

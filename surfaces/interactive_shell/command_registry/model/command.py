@@ -30,7 +30,7 @@ _ROOT = "/model"  # breadcrumb root label
 
 
 def _provider_menu_choices() -> list[tuple[str, str]]:
-    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+    from integrations.llm_providers.catalog import SUPPORTED_PROVIDERS
 
     current_provider = (os.getenv(LLM_PROVIDER_ENV, "anthropic") or "anthropic").strip().lower()
     options: list[tuple[str, str]] = []
@@ -84,7 +84,7 @@ def _prompt_custom_model_id(console: Console, provider_value: str = "provider") 
 
 
 def _interactive_set_provider(console: Console) -> bool | None:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
 
     crumb_set = f"{_ROOT}{CRUMB_SEP}set"
     while True:
@@ -165,7 +165,7 @@ def _interactive_restore_provider(console: Console) -> bool | None:
 
 
 def _interactive_set_toolcall(console: Console) -> bool | None:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
 
     crumb_tc = f"{_ROOT}{CRUMB_SEP}toolcall"
     provider_value = repl_choose_one(
@@ -337,7 +337,7 @@ def _cmd_model(session: Session, console: Console, args: list[str]) -> bool:
             )
             session.mark_latest(ok=False, kind="slash")
             return True
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
 
         if provider_name.strip().lower() not in PROVIDER_BY_VALUE:
             if tc_model is not None:

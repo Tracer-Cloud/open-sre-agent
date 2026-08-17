@@ -26,9 +26,17 @@ from config.llm_auth.auth_method import (
     supports_oauth_auth_method,
 )
 from config.llm_auth.records import save_provider_auth_record
+from config.setup_store import get_store_path, save_local_config
 from core.llm.providers.azure_openai import is_azure_openai_provider
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
+from integrations.llm_providers.catalog import (
+    PROVIDER_BY_VALUE,
+    SUPPORTED_PROVIDERS,
+    ProviderOption,
+    WizardCredentialKind,
+)
+from integrations.llm_providers.env_sync import sync_provider_env
 from platform.terminal.theme import (
     ERROR,
     GLYPH_ERROR,
@@ -54,12 +62,6 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.config import (
-    PROVIDER_BY_VALUE,
-    SUPPORTED_PROVIDERS,
-    ProviderOption,
-    WizardCredentialKind,
-)
 from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_URL,
@@ -72,7 +74,6 @@ from surfaces.cli.wizard.custom_endpoints import (
 from surfaces.cli.wizard.endpoint_prompt import (
     ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
-from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.llm_credential import (
     CANCEL,
@@ -88,10 +89,6 @@ from surfaces.cli.wizard.llm_credential import (
     _provider_choice_label,
 )
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
-from surfaces.cli.wizard.store import get_store_path, save_local_config
-from surfaces.cli.wizard.validation import (
-    build_demo_action_response as _build_demo_action_response,
-)
 
 WIZARD_TOTAL_STEPS = 4
 logger = logging.getLogger(__name__)
@@ -122,15 +119,11 @@ __all__ = [
 ]
 
 
-# Re-export build_demo_action_response from validation as a stable module-level
-# attribute. The wrapper indirection (instead of `from x import y`) is
-# preserved so the function remains patchable via monkeypatch.setattr(flow,
-# "build_demo_action_response", ...) — but we also keep the underlying import
-# at module load time so the attribute exists immediately, even in CI parallel
-# test workers where lazy imports inside the wrapper occasionally fail to
-# materialize on first access.
-def build_demo_action_response():
-    return _build_demo_action_response()
+def build_demo_action_response() -> dict:
+    """Return a safe built-in action response for onboarding."""
+    from tools.system.sre_guidance_tool import get_sre_guidance
+
+    return get_sre_guidance(topic="recovery_remediation", max_topics=1)
 
 
 def _seed_onboarding_loops() -> int:

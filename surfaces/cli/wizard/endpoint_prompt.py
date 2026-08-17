@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from surfaces.cli.wizard.config import ProviderOption
+    from integrations.llm_providers.catalog import ProviderOption
 
 
 def ensure_endpoint_settings(provider: ProviderOption) -> dict[str, str] | None:

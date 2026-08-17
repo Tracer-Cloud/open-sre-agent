@@ -17,6 +17,13 @@ from rich.text import Text
 
 from config.llm_auth.auth_method import OAUTH_AUTH_METHOD, normalize_llm_auth_method
 from core.llm.providers.azure_openai import is_azure_openai_provider
+from integrations.llm_providers.catalog import (
+    PROJECT_ENV_PATH,
+    ProviderOption,
+    WizardCredentialKind,
+)
+from integrations.llm_providers.env_sync import sync_env_values
+from integrations.llm_providers.validation import ValidationResult, validate_provider_credentials
 from platform.terminal.theme import (
     BRAND,
     DIM,
@@ -41,12 +48,9 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption, WizardCredentialKind
 from surfaces.cli.wizard.endpoint_prompt import (
     ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
-from surfaces.cli.wizard.env_sync import sync_env_values
-from surfaces.cli.wizard.validation import ValidationResult, validate_provider_credentials
 
 #: What became of the credential the wizard just collected. ``unsaved`` outranks
 #: ``unverified``: a credential that never landed anywhere is the more urgent thing

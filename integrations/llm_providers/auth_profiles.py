@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from surfaces.cli.wizard.config import (
+from integrations.llm_providers.catalog import (
     PROVIDER_BY_VALUE,
     SUPPORTED_PROVIDERS,
     ProviderOption,

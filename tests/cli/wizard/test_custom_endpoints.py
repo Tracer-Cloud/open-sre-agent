@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import surfaces.cli.wizard._ui as ui
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
 from surfaces.cli.wizard.custom_endpoints import (
     CUSTOM_ENDPOINT_SELECTION,
     ensure_endpoint_settings,

@@ -180,7 +180,7 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
         _chdir,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -489,7 +489,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         _raise,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -889,7 +889,7 @@ def test_task_output_stream_reports_unexpected_failure(
             raise RuntimeError("stream broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -920,7 +920,7 @@ def test_task_pty_stream_reports_unexpected_failure(
         raise RuntimeError("pty broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -952,7 +952,7 @@ def test_start_background_cli_task_reports_spawn_failure(
         raise RuntimeError("spawn broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -996,7 +996,7 @@ def test_start_background_cli_task_reports_watcher_failure(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -1107,7 +1107,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
             raise RuntimeError("poll broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(

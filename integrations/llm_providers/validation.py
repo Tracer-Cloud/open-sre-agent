@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from surfaces.cli.wizard.config import ProviderOption
-from surfaces.cli.wizard.openai_client import load_openai_client
-from surfaces.cli.wizard.validation_result import ValidationResult
+from integrations.llm_providers.catalog import ProviderOption
+from integrations.llm_providers.openai_client import load_openai_client
+from integrations.llm_providers.validation_result import ValidationResult
 
 Anthropic: Any | None = None
 AnthropicAuthError: type[Exception] | None = None
@@ -70,7 +70,7 @@ def _check_ollama(host: str, model: str) -> ValidationResult:
             detail=f"Cannot reach Ollama at {host}. Is it running? Try: ollama serve\n({err})",
         )
     available = [m["name"] for m in r.json().get("models", [])]
-    from surfaces.cli.wizard.local_llm.ollama import normalize_model_tag
+    from integrations.llm_providers.ollama import normalize_model_tag
 
     normalized_model = normalize_model_tag(model)
     base_name = model.split(":")[0]
@@ -122,7 +122,7 @@ def validate_provider_credentials(
         return _check_ollama(host=api_key, model=model)
 
     if provider.value == "azure-openai":
-        from surfaces.cli.wizard.azure_openai import (
+        from integrations.llm_providers.azure_validation import (
             validate_credentials as validate_azure_credentials,
         )
 
@@ -195,10 +195,3 @@ def validate_provider_credentials(
         )
     except Exception as err:
         return ValidationResult(ok=False, detail=f"Validation request failed: {err}")
-
-
-def build_demo_action_response() -> dict:
-    """Return a safe built-in action response for onboarding."""
-    from tools.system.sre_guidance_tool import get_sre_guidance
-
-    return get_sre_guidance(topic="recovery_remediation", max_topics=1)

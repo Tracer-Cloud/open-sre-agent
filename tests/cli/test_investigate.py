@@ -8,7 +8,7 @@ from core.domain.stream import StreamEvent
 from integrations.llm_cli.errors import CLIAuthenticationRequired
 from surfaces.cli.error_mapping import reraise_cli_runtime_error
 from surfaces.cli.investigation import run_investigation_cli, stream_investigation_cli
-from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+from surfaces.shared.error_handling.errors import OpenSREError
 from tools.investigation.capability import resolve_investigation_context
 
 

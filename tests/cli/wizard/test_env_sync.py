@@ -8,12 +8,12 @@ import pytest
 
 from config.env_file import is_sensitive_env_key, sync_env_secret, sync_env_values
 from config.llm_credentials import resolve_env_credential
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-from surfaces.cli.wizard.env_sync import (
+from config.setup_store import load_local_config
+from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
+from integrations.llm_providers.env_sync import (
     sync_provider_env,
     sync_reasoning_model_env,
 )
-from surfaces.cli.wizard.store import load_local_config
 from tests.shared.keyring_backend import MemoryKeyring
 
 _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
@@ -23,7 +23,7 @@ _SKIP_AS_ROOT = not hasattr(os, "getuid") or os.getuid() == 0
 def _redirect_wizard_store(tmp_path, monkeypatch) -> None:
     """Keep sync_provider_env store updates off the developer's ~/.opensre."""
     monkeypatch.setattr(
-        "surfaces.cli.wizard.store.get_store_path",
+        "config.setup_store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
 

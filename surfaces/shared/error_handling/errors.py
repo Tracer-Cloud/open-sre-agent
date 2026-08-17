@@ -1,4 +1,4 @@
-"""CLI rendering for structured OpenSRE errors.
+"""Terminal rendering for structured OpenSRE errors.
 
 The frontend-agnostic error contract lives in :mod:`platform.common.errors`.
 This module adds the CLI presentation layer: a ``click.ClickException``

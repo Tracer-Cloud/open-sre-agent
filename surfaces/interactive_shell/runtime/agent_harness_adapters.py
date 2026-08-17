@@ -23,7 +23,7 @@ from surfaces.interactive_shell.ui.streaming import (
     stream_to_console,
     stream_to_console_state,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 
 class ShellOutputSink:

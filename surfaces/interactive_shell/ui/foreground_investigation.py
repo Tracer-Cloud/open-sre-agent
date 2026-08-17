@@ -23,12 +23,12 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     normalize_investigation_target,
     user_facing_error_message,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
     InvestigationLlmUsage,
     observe_investigation_llm_usage,
     resolve_configured_llm_identity,
 )
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.session import Session

@@ -13,7 +13,7 @@ from core.agent_harness.tools.action_tools import (
 from core.agent_harness.tools.tool_context import (
     ActionToolContext,
 )
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from integrations.llm_providers.catalog import PROVIDER_BY_VALUE
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.session import Session
 from tools.interactive_shell.action_names import TOOL_KIND_TO_NAME
