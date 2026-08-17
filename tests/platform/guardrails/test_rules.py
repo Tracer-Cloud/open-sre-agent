@@ -157,6 +157,61 @@ class TestLoadRules:
         assert rules[0].description == "Credit cards"
         assert rules[0].replacement == "[CC_REDACTED]"
 
+    def test_null_patterns_treated_as_empty(self, tmp_path: Path) -> None:
+        path = _write_config(
+            tmp_path,
+            {
+                "rules": [
+                    {
+                        "name": "null_patterns",
+                        "action": "redact",
+                        "patterns": None,
+                        "keywords": ["x"],
+                    },
+                ]
+            },
+        )
+        rules = load_rules(path)
+        assert len(rules) == 1
+        assert rules[0].patterns == ()
+        assert rules[0].keywords == ("x",)
+
+    def test_null_keywords_treated_as_empty(self, tmp_path: Path) -> None:
+        path = _write_config(
+            tmp_path,
+            {
+                "rules": [
+                    {
+                        "name": "null_keywords",
+                        "action": "redact",
+                        "patterns": ["x"],
+                        "keywords": None,
+                    },
+                ]
+            },
+        )
+        rules = load_rules(path)
+        assert len(rules) == 1
+        assert rules[0].keywords == ()
+
+    def test_non_list_patterns_treated_as_empty(self, tmp_path: Path) -> None:
+        path = _write_config(
+            tmp_path,
+            {
+                "rules": [
+                    {
+                        "name": "scalar_patterns",
+                        "action": "redact",
+                        "patterns": "not-a-list",
+                        "keywords": ["x"],
+                    },
+                ]
+            },
+        )
+        rules = load_rules(path)
+        assert len(rules) == 1
+        assert rules[0].patterns == ()
+
     def test_multiple_rules(self, tmp_path: Path) -> None:
         path = _write_config(
             tmp_path,

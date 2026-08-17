@@ -72,6 +72,17 @@ def load_rules(path: Path | None = None) -> list[GuardrailRule]:
     return rules
 
 
+def _as_list(raw: dict[str, Any], key: str, rule_name: str) -> list[Any]:
+    """``raw[key]`` as a list, or ``[]`` if absent or not a list (e.g. ``key: null``)."""
+    value = raw.get(key, [])
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        logger.warning("Rule %r has non-list %r: %r, ignoring", rule_name, key, value)
+        return []
+    return value
+
+
 def _parse_rule(raw: dict[str, Any]) -> GuardrailRule | None:
     """Parse a single rule entry from the YAML config.
 
@@ -90,14 +101,13 @@ def _parse_rule(raw: dict[str, Any]) -> GuardrailRule | None:
         return None
 
     compiled_patterns: list[re.Pattern[str]] = []
-    for pat_str in raw.get("patterns", []):
+    for pat_str in _as_list(raw, "patterns", name):
         try:
             compiled_patterns.append(re.compile(pat_str, re.IGNORECASE))
         except re.error as exc:
             logger.warning("Invalid regex %r in rule %r: %s — skipping pattern", pat_str, name, exc)
 
-    raw_keywords = raw.get("keywords", [])
-    keywords = tuple(str(kw).lower() for kw in raw_keywords)
+    keywords = tuple(str(kw).lower() for kw in _as_list(raw, "keywords", name))
 
     if not compiled_patterns and not keywords:
         logger.warning("Rule %r has no patterns or keywords, skipping", name)
