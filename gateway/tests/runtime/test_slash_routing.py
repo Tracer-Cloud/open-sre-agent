@@ -12,7 +12,7 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import get_action_tool
-from gateway.core.turn.turn_handler import GatewayTurnHandler
+from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
     headless_slash_ports,

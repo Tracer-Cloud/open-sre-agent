@@ -214,7 +214,7 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
-    from gateway.core.turn.concurrency import process_turn_gate
+    from gateway.core.host.concurrency import process_turn_gate
 
     gate = process_turn_gate()
     # Same process gate as chat / scheduler — busy-drop like GatewayTurnHandler.

@@ -169,7 +169,7 @@ def test_investigate_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_investigate_at_capacity_returns_503(client: TestClient) -> None:
-    from gateway.core.turn.concurrency import (
+    from gateway.core.host.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,

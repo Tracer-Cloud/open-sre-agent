@@ -106,7 +106,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.core.turn.session_agents.DefaultPorts", default_ports_stub(agent_cls)
+        "gateway.core.host.session_agents.DefaultPorts", default_ports_stub(agent_cls)
     )
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
@@ -156,7 +156,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert ctor.kwargs["session"] is session
     # Session-scoped agent holds a live sink proxy; the transport sink is bound
     # each turn (not passed as the constructor ``output`` identity).
-    from gateway.core.turn.live_sink import LiveOutputSink
+    from gateway.core.host.live_sink import LiveOutputSink
 
     assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     assert ctor.kwargs["surface"] == "gateway"

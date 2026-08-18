@@ -116,7 +116,7 @@ def test_ensure_turn_cancel_reuses_existing_event() -> None:
 
 
 def test_live_sink_exposes_turn_cancel_property() -> None:
-    from gateway.core.turn.live_sink import LiveOutputSink
+    from gateway.core.host.live_sink import LiveOutputSink
 
     class _Inner:
         def __init__(self) -> None:
