@@ -211,3 +211,32 @@ def test_shutdown_denies_pending_approvals_before_draining() -> None:
     asyncio.run(_run())
 
     assert waited == [(False, "")]
+
+
+def test_approval_created_after_drain_resolves_immediately() -> None:
+    """Regression: an approval requested after ``drain()`` must not open a
+    fresh wait nothing can ever resolve.
+
+    A turn that reaches its first approval request just after shutdown's
+    one-time ``drain()`` swept the broker would otherwise create a normal
+    pending entry and block ``wait()`` for up to its own expiry — which then
+    blocks ``executor.shutdown(wait=True)`` for the same duration, since
+    cancelling the wrapping asyncio Task does not stop that executor thread.
+    """
+    resources = _resources()
+
+    async def _run() -> tuple[bool, str]:
+        await background._drain_pending_turns(
+            set(), approvals=resources.approvals, logger=logging.getLogger("gateway.test")
+        )
+
+        def _create_and_wait() -> tuple[bool, str]:
+            approval_id = resources.approvals.create(platform="telegram", chat_id="c1")
+            return resources.approvals.wait(approval_id, timeout=30)
+
+        waiter = asyncio.get_running_loop().run_in_executor(None, _create_and_wait)
+        return await asyncio.wait_for(waiter, timeout=1)
+
+    result = asyncio.run(_run())
+
+    assert result == (False, "")

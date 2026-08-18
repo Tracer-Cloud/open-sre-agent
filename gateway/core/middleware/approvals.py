@@ -50,6 +50,7 @@ class ApprovalBroker:
     def __init__(self) -> None:
         self._pending: dict[str, _PendingApproval] = {}
         self._lock = threading.Lock()
+        self._closed = False
 
     def create(
         self,
@@ -59,10 +60,18 @@ class ApprovalBroker:
     ) -> str:
         approval_id = uuid.uuid4().hex
         with self._lock:
-            self._pending[approval_id] = _PendingApproval(
+            pending = _PendingApproval(
                 platform=platform or "",
                 chat_id=chat_id or "",
             )
+            if self._closed:
+                # A turn that reaches its first approval request after
+                # drain() already swept the broker (still in flight, but too
+                # late for that one-time sweep) must not open a fresh wait
+                # nothing can ever resolve — born already denied instead.
+                pending.approved = False
+                pending.event.set()
+            self._pending[approval_id] = pending
         audit_security_action(
             action="approval.create",
             platform=platform,
@@ -102,9 +111,14 @@ class ApprovalBroker:
         deliver a click once its poller stops, so a turn still parked in
         :meth:`wait` would otherwise burn its full expiry while shutdown
         waits on it. Setting each pending Event here lets it return
-        immediately instead. Returns the approval ids that were released.
+        immediately instead. Also closes admission: a turn still in flight
+        that has not yet called :meth:`create` would otherwise open a fresh
+        wait after this one-time sweep that nothing could ever resolve — once
+        closed, :meth:`create` returns an already-denied id instead. Returns
+        the approval ids that were released.
         """
         with self._lock:
+            self._closed = True
             approval_ids = list(self._pending.keys())
             for pending in self._pending.values():
                 pending.approved = False
