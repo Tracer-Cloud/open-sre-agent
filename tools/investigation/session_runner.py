@@ -18,7 +18,7 @@ from tools.investigation.alert_templates import build_alert_template
 
 _logger = logging.getLogger(__name__)
 
-_SESSION_EVENT_POLL_S = 0.25
+_SESSION_EVENT_POLL_SECONDS = 0.25
 
 StreamRendererFn = Callable[[Iterator[StreamEvent]], dict[str, Any]]
 
@@ -163,7 +163,7 @@ def run_session_alert_payload(
                     _cancel_pump()
                     raise KeyboardInterrupt
                 try:
-                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_SECONDS)
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):
