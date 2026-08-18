@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-import integrations.slack.clerk_tokens as clerk_tokens
+import gateway.core.billing.clerk_tokens as clerk_tokens
 from config.constants.billing import MACHINE_SECRET_ENV
 
 

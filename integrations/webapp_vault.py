@@ -25,13 +25,27 @@ from typing import Any
 
 import httpx
 
-from config.constants.billing import CREDITS_HTTP_TIMEOUT_SECONDS, WEBAPP_URL_ENV
+from config.constants.billing import (
+    CREDITS_HTTP_TIMEOUT_SECONDS,
+    USAGE_SECRET_ENV,
+    WEBAPP_URL_ENV,
+)
 from config.constants.organization import organization_id
-from integrations.slack.webapp_auth import webapp_shared_secret
 
 logger = logging.getLogger(__name__)
 
 _INTEGRATIONS_PATH = "/api/agent/integrations"
+
+
+def webapp_shared_secret() -> str:
+    """The fleet secret this silo sends to the vault.
+
+    ``/api/agent/integrations`` compares the bearer against
+    ``AGENT_USAGE_SECRET`` alone — an org-scoped machine token is a 401 there,
+    and the 401 is indistinguishable from an empty result. Returns "" when
+    unset, which leaves the vault switched off.
+    """
+    return (os.getenv(USAGE_SECRET_ENV) or "").strip()
 
 
 def _env(name: str) -> str:

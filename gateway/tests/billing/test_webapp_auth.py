@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-import integrations.slack.webapp_auth as webapp_auth
+import gateway.core.billing.webapp_auth as webapp_auth
 from config.constants.billing import MACHINE_SECRET_ENV, USAGE_SECRET_ENV
 
 

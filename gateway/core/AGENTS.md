@@ -7,8 +7,11 @@ Pinned by `gateway/tests/test_package_borders.py`.
 
 | Package | Role |
 |---------|------|
-| `runtime/` | Composition root (`controller`), turn handler, approvals, attention, daemon |
-| `storage/` | Session bindings + investigation stores |
+| `host/` | The host layer: builds the agent, binds the turn, runs it (`turn_handler`, `session_agents`, `live_sink`, `cancel_console`, capacity) |
+| `runtime/` | Composition root (`controller`), credential hydration, security audit |
+| `process/` | Daemon, polling thread, readiness |
+| `middleware/` | Per-turn steps every transport runs (inbound decision, identity policy, approvals, attention, locks) |
+| `storage/` | Session bindings + investigation, event and feedback stores |
 | `billing/` | Credits client |
 | `attachments/` | Attachment helpers |
 | `session/` | Gateway chat-context helpers |
@@ -16,6 +19,20 @@ Pinned by `gateway/tests/test_package_borders.py`.
 
 Transports and `web/` may import these packages. Peer chat packages never land
 here.
+
+## Who may drive the agent
+
+`host/` is the only package that calls harness **behaviour** — building ports,
+binding a turn, running or flushing a session, formatting goal progress.
+Everywhere else in `gateway/` may import harness **contracts**
+(`SessionCore`, `OutputSink`, `SlashPortsFactory`, `SessionGoal`) to type a
+parameter, and nothing more: a transport that runs a turn itself has become a
+second turn handler.
+
+Pinned by `gateway/tests/test_harness_behaviour_border.py`, whose allowlist can
+only shrink. `web/` is on it today because `POST /investigate` embeds the agent
+directly and therefore gets none of the host layer's guarantees (agent reuse,
+approvals hooks, cancel console, capability policy).
 
 ## Process boot vs lifecycle
 

@@ -1,10 +1,14 @@
-"""Pick the credential for silo → webapp calls.
+"""Pick the credential for the gateway's credit-metering calls to opensre-webapp.
 
 Two credentials exist: this silo's org-scoped machine token (minted from
 ``CLERK_MACHINE_SECRET_KEY``) and the shared ``AGENT_USAGE_SECRET``. Webapp
 routes differ in which they accept, so this module exposes one accessor per
 acceptance rule rather than a single "the token" — a caller that picks the
 wrong one gets a 401 that looks like an empty result.
+
+Lives here because ``credits_client`` is the only consumer: the vault reads the
+shared secret itself (``integrations.webapp_vault``), and nothing else mints a
+machine token.
 
   - :func:`webapp_bearer_token`  — routes accepting either credential
   - :func:`webapp_machine_token` — routes accepting only the machine token
@@ -20,7 +24,7 @@ from __future__ import annotations
 import logging
 import os
 
-import integrations.slack.clerk_tokens as clerk_tokens
+import gateway.core.billing.clerk_tokens as clerk_tokens
 from config.constants.billing import MACHINE_SECRET_ENV, USAGE_SECRET_ENV
 
 logger = logging.getLogger(__name__)

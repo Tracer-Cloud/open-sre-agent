@@ -9,6 +9,7 @@ Pinned rules (see ``gateway/AGENTS.md``):
 * ``gateway.transports.*`` never imports ``gateway.startup`` or ``gateway.web``.
 * ``gateway.startup`` may import peer ``*.startup`` (and ``gateway.web``); peers
   must not import channels.
+* ``gateway.core`` names no chat vendor; a transport names only its own.
 """
 
 from __future__ import annotations
@@ -96,6 +97,42 @@ def test_core_never_imports_chat_transports_or_web() -> None:
     banned = (*_TRANSPORTS, "gateway.web", "gateway.transports")
     offenders = _offenders("gateway.core", banned)
     assert offenders == [], "Core imported a surface directly:\n" + "\n".join(offenders)
+
+
+def test_core_never_names_a_chat_vendor() -> None:
+    """Vendor knowledge belongs to the transport that speaks to that vendor.
+
+    ``gateway/core/billing`` used to import ``integrations.slack.webapp_auth``,
+    which made the billing client look Slack-specific; the module was silo →
+    webapp auth misfiled under a vendor and now lives in
+    ``integrations.webapp``. Core is transport-agnostic, so no module under it
+    may name a chat vendor's integration.
+    """
+    # Arrange: the integration package of every transport on disk.
+    vendor_packages = tuple(f"integrations.{package.rsplit('.', 1)[1]}" for package in _TRANSPORTS)
+
+    # Act
+    offenders = _offenders("gateway.core", vendor_packages)
+
+    # Assert
+    assert offenders == [], (
+        "gateway/core named a chat vendor; move the shared part to a "
+        "vendor-neutral module or push the call into the transport:\n" + "\n".join(offenders)
+    )
+
+
+def test_a_transport_names_only_its_own_vendor() -> None:
+    """A transport may speak to its own vendor's integration, never a peer's."""
+    offenders: list[str] = []
+    for package in _TRANSPORTS:
+        peers = tuple(
+            f"integrations.{other.rsplit('.', 1)[1]}" for other in _TRANSPORTS if other != package
+        )
+        offenders.extend(_offenders(package, peers))
+
+    assert offenders == [], "A transport reached into another vendor's integration:\n" + "\n".join(
+        offenders
+    )
 
 
 def test_only_the_controller_imports_the_startup_module() -> None:

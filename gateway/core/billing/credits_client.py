@@ -28,7 +28,7 @@ from config.constants.billing import (
     WEBAPP_URL_ENV,
 )
 from config.constants.organization import organization_id
-from integrations.slack.webapp_auth import webapp_bearer_token
+from gateway.core.billing.webapp_auth import webapp_bearer_token
 
 logger = logging.getLogger(__name__)
 
