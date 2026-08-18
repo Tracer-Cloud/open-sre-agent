@@ -653,11 +653,6 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         "How do you want to get started?",
         [
             Choice(
-                value="focused",
-                label="Focused",
-                hint="Provider, one integration, then run the agent",
-            ),
-            Choice(
                 value="quickstart", label="Quickstart", hint="Local setup with the usual defaults"
             ),
             Choice(
@@ -667,8 +662,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             ),
         ],
         default=default_wizard_mode
-        if default_wizard_mode in {"focused", "quickstart", "advanced"}
-        else "focused",
+        if default_wizard_mode in {"quickstart", "advanced"}
+        else "quickstart",
     )
 
     store_path = get_store_path()
@@ -944,9 +939,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
         configured_integrations, integration_env_path = (
-            _integration_configurators_module._configure_selected_integrations(
-                mode=wizard_mode,
-            )
+            _integration_configurators_module._configure_selected_integrations()
         )
     except KeyboardInterrupt:
         cancelled = Text()
@@ -970,5 +963,5 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider, persisted_auth_method, credential_state=credential_state
         ),
     )
-    _render_next_steps(focused=wizard_mode == "focused")
+    _render_next_steps()
     return 0

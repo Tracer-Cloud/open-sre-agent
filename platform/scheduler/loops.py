@@ -11,6 +11,7 @@ from pathlib import Path
 
 from platform.scheduler.credentials import (
     resolve_slack_credentials,
+    resolve_slack_default_chat_id,
     resolve_telegram_credentials,
     resolve_telegram_default_chat_id,
 )
@@ -244,7 +245,9 @@ def default_loop_channels() -> tuple[Provider, ...]:
         channels.append(Provider.TELEGRAM)
 
     slack_creds = resolve_slack_credentials({})
-    if slack_creds.get("webhook_url"):
+    if slack_creds.get("webhook_url") or (
+        slack_creds.get("access_token") and resolve_slack_default_chat_id({})
+    ):
         channels.append(Provider.SLACK)
 
     channels.append(Provider.INTERACTIVE_SHELL)
@@ -640,10 +643,14 @@ def _validate_channel_ready(
         )
     if provider == Provider.SLACK:
         creds = resolve_slack_credentials({})
-        if creds.get("webhook_url") or (creds.get("access_token") and slack_chat_id.strip()):
+        if creds.get("webhook_url") or (
+            creds.get("access_token")
+            and (slack_chat_id.strip() or resolve_slack_default_chat_id({}))
+        ):
             return
         raise ValueError(
-            "slack loop delivery needs SLACK_WEBHOOK_URL, or SLACK_BOT_TOKEN with --slack-chat-id"
+            "slack loop delivery needs SLACK_WEBHOOK_URL, or SLACK_BOT_TOKEN with "
+            "SLACK_DEFAULT_CHAT_ID / --slack-chat-id"
         )
 
 

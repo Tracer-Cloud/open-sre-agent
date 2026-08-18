@@ -208,7 +208,12 @@ from config.constants.servicenow import (
     SERVICENOW_PASSWORD_ENV,
     SERVICENOW_USERNAME_ENV,
 )
-from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV, SLACK_WEBHOOK_URL_ENV
+from config.constants.slack import (
+    SLACK_APP_TOKEN_ENV,
+    SLACK_BOT_TOKEN_ENV,
+    SLACK_DEFAULT_CHAT_ID_ENV,
+    SLACK_WEBHOOK_URL_ENV,
+)
 from config.constants.smtp import (
     SMTP_DEFAULT_TO_ENV,
     SMTP_FROM_ADDRESS_ENV,
@@ -1417,6 +1422,7 @@ def load_env_integrations() -> list[dict[str, Any]]:
             "webhook_url": slack_webhook_url,
             "bot_token": slack_bot_token,
             "app_token": resolve_env_credential(SLACK_APP_TOKEN_ENV),
+            "default_chat_id": os.getenv(SLACK_DEFAULT_CHAT_ID_ENV, "").strip(),
         }
         slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
         if slack_view is not None:
@@ -2250,7 +2256,12 @@ def _raw_credentials(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _slack_effective_config(
-    *, webhook_url: str, bot_token: str, app_token: str, webhook_label: str
+    *,
+    webhook_url: str,
+    bot_token: str,
+    app_token: str,
+    webhook_label: str,
+    default_chat_id: str = "",
 ) -> dict[str, str]:
     """Return the Slack effective config: webhook and/or Socket Mode tokens.
 
@@ -2268,6 +2279,8 @@ def _slack_effective_config(
     if bot_token or app_token:
         config["bot_token"] = bot_token
         config["app_token"] = app_token
+    if default_chat_id.strip():
+        config["default_chat_id"] = default_chat_id.strip()
     return config
 
 
@@ -2340,6 +2353,7 @@ def resolve_effective_integrations(
             webhook_url=str(slack_credentials.get("webhook_url", "")).strip(),
             bot_token=str(slack_credentials.get("bot_token", "")).strip(),
             app_token=str(slack_credentials.get("app_token", "")).strip(),
+            default_chat_id=str(slack_credentials.get("default_chat_id", "")).strip(),
             webhook_label="Slack webhook URL from store",
         )
         if slack_config:
@@ -2349,6 +2363,7 @@ def resolve_effective_integrations(
             webhook_url=os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip(),
             bot_token=resolve_env_credential(SLACK_BOT_TOKEN_ENV),
             app_token=resolve_env_credential(SLACK_APP_TOKEN_ENV),
+            default_chat_id=os.getenv(SLACK_DEFAULT_CHAT_ID_ENV, "").strip(),
             webhook_label=SLACK_WEBHOOK_URL_ENV,
         )
         if slack_config:

@@ -41,12 +41,15 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<
 SLACK_BOT_TOKEN=xoxb-…
 SLACK_APP_TOKEN=xapp-…
 SLACK_ALLOWED_USERS=U0123ABCD
+# Optional default channel for scheduled bot-token delivery:
+# SLACK_DEFAULT_CHAT_ID=C0123ABCD
 ```
 
 | Variable | Description |
 | --- | --- |
 | `SLACK_WEBHOOK_URL` | Incoming webhook URL. Required for outbound delivery. |
 | `SLACK_BOT_TOKEN` | Bot token (`xoxb-…`) for the two-way Slack bot. Env or integration store. |
+| `SLACK_DEFAULT_CHAT_ID` | Default channel (`C…`) for scheduled delivery when using a bot token. Env or integration store; pair it with the same source as the bot token. |
 | `SLACK_APP_TOKEN` | App-level token (`xapp-…`) for Socket Mode. Env or integration store. |
 | `SLACK_ALLOWED_USERS` | Comma-separated Slack user IDs allowed to talk to the bot (required unless open workspace). |
 | `SLACK_ALLOW_OPEN_WORKSPACE` | Set to `1` to allow any workspace member (dogfood escape hatch). |
@@ -176,15 +179,30 @@ Example prompts:
 
 ### Production Engineer schedules (Slack)
 
-Wire morning digests and PR sweeps to a Slack channel (`C…` id). The gateway daemon must be running so the scheduler can deliver.
+Wire morning digests, PR sweeps, and `/loops` prompt loops to Slack. The gateway daemon (or `opensre cron start`) must be running so the scheduler can deliver when a tick finishes — the report arrives proactively; you do not need to ask in chat.
+
+**Destination options:**
+
+| Setup | How to target Slack |
+| --- | --- |
+| Incoming webhook | Omit `--chat-id` — the webhook URL is bound to one channel |
+| Bot token (Socket Mode) | Set `SLACK_DEFAULT_CHAT_ID` (or pass `--chat-id` / `/loops add --slack-chat-id`) |
+
+Copy the channel id (`C…`) from Slack channel details. During `opensre integrations setup slack` (Socket Mode or Both), you can persist a default channel id for scheduled delivery. The default channel is taken from the same place as the bot token: if the token is in `.env`, set `SLACK_DEFAULT_CHAT_ID` there too. A channel saved only in the integration store is not paired with an env or task-level token.
 
 ```bash
 opensre sentry digest schedule add \
   --cron "0 8 * * 1-5" --tz Europe/London \
   --provider slack --chat-id C0123ABCD
 
+# Webhook: omit --chat-id
 opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
-  --tz Europe/London --provider slack --chat-id C0123ABCD
+  --tz Europe/London --provider slack
+
+# Bot token: default channel or explicit --chat-id
+export SLACK_DEFAULT_CHAT_ID=C0123ABCD
+opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+  --tz Europe/London --provider slack
 
 opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack --chat-id C0123ABCD

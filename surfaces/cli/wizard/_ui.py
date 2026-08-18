@@ -141,8 +141,8 @@ def _local_defaults() -> dict[str, str | bool | None]:
     if is_oauth_backend:
         auth_method = OAUTH_AUTH_METHOD
     wizard_mode = _string_value(wizard.get("mode"), "quickstart")
-    if wizard_mode == "aha":
-        wizard_mode = "focused"
+    if wizard_mode in {"aha", "focused"}:
+        wizard_mode = "quickstart"
     return {
         "wizard_mode": wizard_mode,
         "provider": provider_value if raw_provider_value else None,
@@ -631,7 +631,7 @@ def _render_integration_result(
             _console.print(detail_text)
 
 
-def _render_next_steps(*, focused: bool = False) -> None:
+def _render_next_steps() -> None:
     """Print suggested commands after onboarding."""
     _console.print(Rule(style=DIM))
 
@@ -642,28 +642,15 @@ def _render_next_steps(*, focused: bool = False) -> None:
     _console.print(Rule(style=DIM))
     _console.print()
 
-    if focused:
-        next_steps: tuple[tuple[str, str], ...] = (
-            (
-                "opensre",
-                'Start the agent and ask: "what OpenSRE version am I running?"',
-            ),
-            (
-                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-                "Run a sample investigation",
-            ),
-            ("opensre", "Start the agent and run /loops to review starter loops"),
-        )
-    else:
-        next_steps = (
-            ("opensre", "Start the interactive agent and run /loops"),
-            (
-                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-                "Run root-cause analysis on a sample alert",
-            ),
-            ("opensre doctor", "Verify your full environment setup"),
-            ("opensre onboard", "Re-run this setup at any time"),
-        )
+    next_steps: tuple[tuple[str, str], ...] = (
+        ("opensre", "Start the interactive agent and run /loops"),
+        (
+            "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+            "Run root-cause analysis on a sample alert",
+        ),
+        ("opensre doctor", "Verify your full environment setup"),
+        ("opensre onboard", "Re-run this setup at any time"),
+    )
 
     for cmd, description in next_steps:
         cmd_line = Text()
