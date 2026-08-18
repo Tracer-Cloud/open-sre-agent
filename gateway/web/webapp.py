@@ -214,13 +214,14 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
-    from gateway.core.host.concurrency import process_turn_gate
+    from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
 
     gate = process_turn_gate()
-    # Same process gate as chat / scheduler — busy-drop like GatewayTurnHandler.
+    # The same gate chat and the scheduler take, and the same sentence chat
+    # finalizes — stated once in gateway.core.host.concurrency, not restated.
     if not gate.try_acquire():
         return JSONResponse(
-            {"error": "OpenSRE is at capacity. Please try again shortly."},
+            {"error": AT_CAPACITY_MESSAGE},
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 

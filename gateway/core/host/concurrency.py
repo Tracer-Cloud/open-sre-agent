@@ -67,6 +67,12 @@ class TurnConcurrencyGate:
         self._semaphore.release()
 
 
+#: What a caller tells the user when the process is already at capacity.
+#: One sentence, one place: chat finalizes it into the conversation and the web
+#: app returns it as a 503 body, and they must not drift apart.
+AT_CAPACITY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
+
+
 def process_turn_gate() -> TurnConcurrencyGate:
     """Return the process-wide gate (lazy from ``OPENSRE_SIZE_PROFILE``).
 
@@ -97,6 +103,7 @@ def reset_process_turn_gate_for_tests() -> None:
 
 
 __all__ = [
+    "AT_CAPACITY_MESSAGE",
     "TurnConcurrencyGate",
     "process_turn_gate",
     "reset_process_turn_gate_for_tests",

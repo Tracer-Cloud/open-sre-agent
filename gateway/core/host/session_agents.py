@@ -174,9 +174,7 @@ class SessionAgentPool:
                 subprocess_presenter_factory=headless_subprocess_presenter_factory,
                 slash_ports_factory=self._slash_ports_factory,
             )
-        prompts = (
-            channel.build_prompts(session) if channel.build_prompts is not None else None
-        )
+        prompts = channel.build_prompts(session) if channel.build_prompts is not None else None
         gather = (
             channel.build_gather(session, self._console)
             if channel.build_gather is not None

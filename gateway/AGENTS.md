@@ -105,6 +105,24 @@ The package holds two different things, and only one of them faces outward:
   is a **channel**: it implements `gateway.core.transport_api` and is handed to
   the turn service, the same way the four chat transports are.
 
+## Channel vs producer
+
+Two ways work reaches the agent. Mixing them is how a second turn engine appears.
+
+| | Has a user and a sink? | Entry |
+|--|------------------------|--------|
+| **Channel** (Slack, Telegram, Discord, Buzz; later the interactive shell) | Yes | `GatewayTurnHandler` — `(text, session, sink, logger)` |
+| **Producer** (`platform.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
+
+The gateway **process** may host the scheduler (same `process_turn_gate`). That
+does not make the scheduler a channel: `platform.scheduler` must not import
+`GatewayTurnHandler`. Pinned by
+`tests/test_package_borders.py::test_scheduler_never_imports_the_gateway_turn_handler`.
+
+`POST /investigate` is the investigation embed verb (`AgentSession.investigate`),
+not a chat turn. It may share the process gate and the at-capacity sentence; it
+must not call the turn handler.
+
 Three modules are surface-facing today — `core.process.supervision`,
 `core.runtime.controller`, `web.web_server` — pinned as an exact allowlist in
 `tests/shared/test_surface_border.py`. Widening it is a deliberate change, not

@@ -44,6 +44,8 @@ _SURFACES_IMPORT_FROM_GATEWAY: frozenset[str] = frozenset(
         "gateway.core.runtime.controller",
         # The REPL hosts the web app in-thread for local use.
         "gateway.web.web_server",
+        # The shell is a channel: it supplies ChannelAgentPorts (not the turn handler).
+        "gateway.core.host.session_agents",
     }
 )
 
