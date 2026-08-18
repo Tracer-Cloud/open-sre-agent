@@ -13,7 +13,7 @@ from integrations.yandex_cloud.availability import (
     yc_credentials,
 )
 
-SOURCE = "yc_compute"
+SOURCE = "yandex_cloud"
 SERVICE = "compute"
 
 _INSTANCES_PATH = "/compute/v1/instances"

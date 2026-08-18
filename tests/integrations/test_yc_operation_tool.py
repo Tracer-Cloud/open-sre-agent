@@ -9,6 +9,8 @@ exactly the set of list and get endpoints.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from typing import Any
 
 import httpx
@@ -100,7 +102,7 @@ class TestGuardrails:
 
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             seen.append(method)
-            return httpx.Response(200, json={})
+            return httpx.Response(HTTPStatus.OK, json={})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         execute_yc_operation(service="compute", path="/compute/v1/instances", **_CREDENTIALS)
@@ -121,7 +123,7 @@ class TestReads:
 
         def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
             captured.update(kwargs["params"])
-            return httpx.Response(200, json={"instances": []})
+            return httpx.Response(HTTPStatus.OK, json={"instances": []})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         execute_yc_operation(service="compute", path="/compute/v1/instances", **_CREDENTIALS)
@@ -133,7 +135,7 @@ class TestReads:
 
         def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
             captured.update(kwargs["params"])
-            return httpx.Response(200, json={})
+            return httpx.Response(HTTPStatus.OK, json={})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         execute_yc_operation(
@@ -165,7 +167,7 @@ class TestReads:
 
         def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
             captured.update(kwargs["params"])
-            return httpx.Response(200, json={})
+            return httpx.Response(HTTPStatus.OK, json={})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = execute_yc_operation(
@@ -181,7 +183,7 @@ class TestReads:
     def test_the_next_page_token_is_surfaced(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "integrations.yandex_cloud.rest_client.send_request",
-            lambda *_a, **_k: httpx.Response(200, json={"nextPageToken": "page-2"}),
+            lambda *_a, **_k: httpx.Response(HTTPStatus.OK, json={"nextPageToken": "page-2"}),
         )
         result = execute_yc_operation(
             service="compute", path="/compute/v1/instances", **_CREDENTIALS
@@ -279,7 +281,7 @@ class TestTheIndexIsTheAllowlist:
 
         def _request(method: str, url: str, **_kwargs: object) -> httpx.Response:
             seen.append(url)
-            return httpx.Response(200, json={"id": "abc"})
+            return httpx.Response(HTTPStatus.OK, json={"id": "abc"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = execute_yc_operation(

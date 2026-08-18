@@ -13,14 +13,14 @@ from integrations.yandex_cloud.availability import (
     yc_available_or_backend,
     yc_credentials,
 )
-from integrations.yc_monitoring.client import (
+from integrations.yandex_cloud.monitoring_client import (
     DEFAULT_MAX_POINTS,
     DEFAULT_WINDOW_MINUTES,
     YandexMonitoringClient,
     summarize_series,
 )
 
-SOURCE = "yc_monitoring"
+SOURCE = "yandex_cloud"
 
 _QUERY_HELP = (
     'Yandex Monitoring query, e.g. \'cpu_usage{service="compute", resource_id="fhm..."}\'. '

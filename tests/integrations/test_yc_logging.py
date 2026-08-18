@@ -8,6 +8,8 @@ to say so rather than read as a broken integration.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
@@ -15,14 +17,14 @@ from urllib.parse import urlparse
 import httpx
 import pytest
 
-from integrations.yc_logging.client import (
+from integrations.yandex_cloud.logging_client import (
     MAX_FILTER_LENGTH,
     LogReadingUnavailableError,
     retention_warning,
     validate_filter,
 )
-from integrations.yc_logging.client import resolve_window as resolve_log_window
-from integrations.yc_logging.tools import list_yc_log_groups, read_yc_logs
+from integrations.yandex_cloud.logging_client import resolve_window as resolve_log_window
+from integrations.yandex_cloud.tools import list_yc_log_groups, read_yc_logs
 
 FOLDER = "b1gexamplefolder"
 _CREDENTIALS: dict[str, Any] = {"folder_id": FOLDER, "iam_token": "t1.token"}
@@ -84,7 +86,7 @@ class TestLogReads:
             raise LogReadingUnavailableError(_real_missing_dependency_message())
 
         monkeypatch.setattr(
-            "integrations.yc_logging.client.YandexLoggingClient.read_entries", _raise
+            "integrations.yandex_cloud.logging_client.YandexLoggingClient.read_entries", _raise
         )
         result = read_yc_logs(log_group_id="e23abc", **_CREDENTIALS)
 
@@ -102,7 +104,7 @@ def _real_missing_dependency_message() -> str:
     """
     import sys
 
-    from integrations.yc_logging import client
+    from integrations.yandex_cloud import logging_client as client
 
     original = sys.modules.get("grpc")
     sys.modules["grpc"] = None  # type: ignore[assignment]  # makes the import fail
@@ -130,7 +132,7 @@ class TestTheGrpcPathWhenTheStubsArePresent:
     def test_the_stubs_import_and_return_what_the_client_expects(self) -> None:
         pytest.importorskip("yandexcloud", reason="the logs extra is not installed here")
 
-        from integrations.yc_logging import client
+        from integrations.yandex_cloud import logging_client as client
 
         service_pb2, service_pb2_grpc, entry_pb2 = client._load_logging_protos()
 
@@ -180,7 +182,7 @@ class TestTheInstallHintIsRealisable:
             }
 
         monkeypatch.setattr(
-            "integrations.yc_logging.client.YandexLoggingClient.read_entries", _read
+            "integrations.yandex_cloud.logging_client.YandexLoggingClient.read_entries", _read
         )
         result = read_yc_logs(log_group_id="e23abc", levels=["ERROR"], **_CREDENTIALS)
 
@@ -213,7 +215,7 @@ class TestGuidanceNamesRealParameters:
     """Advice that names arguments the tool does not take costs the agent a turn."""
 
     def test_the_empty_result_advice_matches_the_schema(self) -> None:
-        from integrations.yc_logging.tools.yc_logs_tool import _WHERE_ELSE_LOGS_LIVE
+        from integrations.yandex_cloud.tools.yc_logs_tool import _WHERE_ELSE_LOGS_LIVE
         from tools.registry import get_registered_tool_map
 
         properties = set(

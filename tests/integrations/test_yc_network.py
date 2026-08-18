@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from typing import Any
 
 import httpx
 import pytest
 
-from integrations.yc_network.tools import get_yc_lb_health
+from integrations.yandex_cloud.tools import get_yc_lb_health
 
 FOLDER = "b1gexamplefolder"
 _CREDENTIALS: dict[str, Any] = {"folder_id": FOLDER, "iam_token": "t1.token"}
@@ -27,8 +29,8 @@ def _responder(routes: dict[str, dict[str, Any]]) -> Any:
     def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
         for fragment, payload in routes.items():
             if fragment in url:
-                return httpx.Response(200, json=payload)
-        return httpx.Response(404, json={"message": f"no stub for {url}"})
+                return httpx.Response(HTTPStatus.OK, json=payload)
+        return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
     return _request
 
@@ -69,12 +71,61 @@ class TestLoadBalancers:
         assert result["unhealthy_targets"][0]["address"] == "10.0.0.2"
         assert result["unhealthy_targets"][0]["balancer"] == "edge"
 
+    def test_every_attached_target_group_is_checked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A second attached group must not be skipped — it can hold the only failure."""
+
+        def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
+            params = kwargs.get("params") or {}
+            if "/load-balancer/v1/networkLoadBalancers" in url and ":getTargetStates" not in url:
+                return httpx.Response(
+                    HTTPStatus.OK,
+                    json={
+                        "loadBalancers": [
+                            {
+                                "id": "nlb-1",
+                                "name": "edge",
+                                "status": "ACTIVE",
+                                "attachedTargetGroups": [
+                                    {"targetGroupId": "tg-healthy"},
+                                    {"targetGroupId": "tg-sick"},
+                                ],
+                            }
+                        ]
+                    },
+                )
+            if ":getTargetStates" in url:
+                group = str(params.get("targetGroupId", ""))
+                status = "HEALTHY" if group == "tg-healthy" else "UNHEALTHY"
+                return httpx.Response(
+                    HTTPStatus.OK,
+                    json={
+                        "targetStates": [
+                            {
+                                "address": f"10.0.0.{2 if status == 'UNHEALTHY' else 1}",
+                                "status": status,
+                            }
+                        ]
+                    },
+                )
+            if "/apploadbalancer/v1/loadBalancers" in url:
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": url})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+
+        result = get_yc_lb_health(**_CREDENTIALS)
+
+        assert [t["address"] for t in result["unhealthy_targets"]] == ["10.0.0.2"]
+        assert result["unhealthy_targets"][0]["target_group"] == "tg-sick"
+
     def test_one_balancer_type_can_be_requested(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[str] = []
 
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             seen.append(url)
-            return httpx.Response(200, json={"loadBalancers": []})
+            return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         get_yc_lb_health(type="application", **_CREDENTIALS)
@@ -179,11 +230,11 @@ class TestApplicationTargetsReachAggregation:
     ) -> None:
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             for fragment, payload in _ALB_ROUTES.items():
                 if fragment in url:
-                    return httpx.Response(200, json=payload)
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+                    return httpx.Response(HTTPStatus.OK, json=payload)
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(**_CREDENTIALS)
@@ -210,11 +261,11 @@ class TestApplicationTargetsReachAggregation:
 
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             for fragment, payload in routes.items():
                 if fragment in url:
-                    return httpx.Response(200, json=payload)
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+                    return httpx.Response(HTTPStatus.OK, json=payload)
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(**_CREDENTIALS)
@@ -230,11 +281,11 @@ class TestApplicationTargetsReachAggregation:
 
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             for fragment, payload in routes.items():
                 if fragment in url:
-                    return httpx.Response(200, json=payload)
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+                    return httpx.Response(HTTPStatus.OK, json=payload)
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(**_CREDENTIALS)
@@ -253,13 +304,13 @@ class TestAFailedGraphReadIsNotSilentHealth:
     def _responder_failing_at(self, failing_fragment: str) -> Any:
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             if failing_fragment in url:
-                return httpx.Response(500, json={"message": "boom"})
+                return httpx.Response(HTTPStatus.INTERNAL_SERVER_ERROR, json={"message": "boom"})
             for fragment, payload in _ALB_ROUTES.items():
                 if fragment in url:
-                    return httpx.Response(200, json=payload)
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+                    return httpx.Response(HTTPStatus.OK, json=payload)
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         return _request
 
@@ -290,11 +341,11 @@ class TestAFailedGraphReadIsNotSilentHealth:
 
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             for fragment, payload in _ALB_ROUTES.items():
                 if fragment in url:
-                    return httpx.Response(200, json=payload)
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+                    return httpx.Response(HTTPStatus.OK, json=payload)
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(**_CREDENTIALS)
@@ -315,7 +366,7 @@ class TestVirtualHostPagingIsFollowed:
 
         def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             if "/virtualHosts" in url:
                 token = (kwargs.get("params") or {}).get("pageToken", "")
                 seen_tokens.append(token)
@@ -339,11 +390,11 @@ class TestVirtualHostPagingIsFollowed:
                     },
                 )
             if "/backendGroups/bg-empty" in url:
-                return httpx.Response(200, json={"id": "bg-empty"})
+                return httpx.Response(HTTPStatus.OK, json={"id": "bg-empty"})
             for fragment, payload in _ALB_ROUTES.items():
                 if fragment in url:
-                    return httpx.Response(200, json=payload)
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+                    return httpx.Response(HTTPStatus.OK, json=payload)
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(**_CREDENTIALS)
@@ -365,7 +416,7 @@ class TestEveryListenerShapeIsWalked:
     def _walk(self, monkeypatch: pytest.MonkeyPatch, listener: dict[str, Any]) -> dict[str, Any]:
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             if "/apploadbalancer/v1/loadBalancers" in url and "targetStates" not in url:
                 return httpx.Response(
                     200,
@@ -382,7 +433,7 @@ class TestEveryListenerShapeIsWalked:
                 )
             for fragment, payload in _ALB_ROUTES.items():
                 if fragment in url and "loadBalancers" not in fragment:
-                    return httpx.Response(200, json=payload)
+                    return httpx.Response(HTTPStatus.OK, json=payload)
             if "targetStates" in url:
                 return httpx.Response(
                     200,
@@ -390,7 +441,7 @@ class TestEveryListenerShapeIsWalked:
                         "/apploadbalancer/v1/loadBalancers/alb-1/targetStates/bg-1/tg-1"
                     ],
                 )
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         return get_yc_lb_health(**_CREDENTIALS)
@@ -461,7 +512,7 @@ class TestOneBackendInTwoTargetGroups:
 
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if "/load-balancer/v1/networkLoadBalancers" in url:
-                return httpx.Response(200, json={"loadBalancers": []})
+                return httpx.Response(HTTPStatus.OK, json={"loadBalancers": []})
             if "targetStates/bg-1/tg-healthy" in url:
                 return httpx.Response(
                     200,
@@ -521,7 +572,7 @@ class TestOneBackendInTwoTargetGroups:
                         ]
                     },
                 )
-            return httpx.Response(404, json={"message": f"no stub for {url}"})
+            return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_lb_health(**_CREDENTIALS)

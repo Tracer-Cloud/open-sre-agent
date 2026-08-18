@@ -193,18 +193,21 @@ class TestTheReaderRefusesStateChangingActions:
         assert "only reads" in result["error"]
 
     @pytest.mark.parametrize(
-        "path",
+        ("service", "path"),
         [
-            "/compute/v1/instances/i-1:serialPortOutput",
-            "/load-balancer/v1/networkLoadBalancers/n-1:getTargetStates",
-            "/vpc/v1/addresses:byValue",
+            ("compute", "/compute/v1/instances/i-1:serialPortOutput"),
+            (
+                "load-balancer",
+                "/load-balancer/v1/networkLoadBalancers/n-1:getTargetStates",
+            ),
+            ("vpc", "/vpc/v1/addresses:byValue"),
         ],
     )
-    def test_a_read_action_still_passes(self, path: str) -> None:
+    def test_a_read_action_still_passes(self, service: str, path: str) -> None:
         """The guard must not catch the read-shaped action suffixes we rely on."""
         tool = get_registered_tool_map()["execute_yc_operation"]
         backend = _RecordingBackend()
 
-        result = tool.run(service="compute", path=path, yc_backend=backend, folder_id="b1gtest")
+        result = tool.run(service=service, path=path, yc_backend=backend, folder_id="b1gtest")
 
         assert not result.get("error")

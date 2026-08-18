@@ -13,7 +13,7 @@ from integrations.yandex_cloud.availability import (
     yc_available_or_backend,
     yc_credentials,
 )
-from integrations.yc_logging.client import (
+from integrations.yandex_cloud.logging_client import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_WINDOW_MINUTES,
     LEVELS,
@@ -24,7 +24,7 @@ from integrations.yc_logging.client import (
     validate_filter,
 )
 
-SOURCE = "yc_logging"
+SOURCE = "yandex_cloud"
 
 #: Attached to an empty read, where the wrong conclusion is easiest to draw.
 #: Cloud Logging holds what was sent to it, which is not everything that was

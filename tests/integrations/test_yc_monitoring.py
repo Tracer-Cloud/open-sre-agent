@@ -7,13 +7,15 @@ here needs the generic operation tool or its endpoint index.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from typing import Any
 
 import httpx
 import pytest
 
-from integrations.yc_monitoring.client import resolve_window, summarize_series
-from integrations.yc_monitoring.tools import list_yc_metrics, query_yc_metrics
+from integrations.yandex_cloud.monitoring_client import resolve_window, summarize_series
+from integrations.yandex_cloud.tools import list_yc_metrics, query_yc_metrics
 
 FOLDER = "b1gexamplefolder"
 _CREDENTIALS: dict[str, Any] = {"folder_id": FOLDER, "iam_token": "t1.token"}
@@ -34,13 +36,16 @@ class TestRegistration:
         from tools.registry import clear_tool_registry_cache, get_registered_tools
 
         clear_tool_registry_cache()
-        names = {
-            t.name
+        by_name = {
+            t.name: str(t.source)
             for t in get_registered_tools("investigation")
-            if str(t.source) == "yc_monitoring"
+            if t.name in {"query_yc_metrics", "list_yc_metrics"}
         }
 
-        assert names == {"query_yc_metrics", "list_yc_metrics"}
+        assert by_name == {
+            "query_yc_metrics": "yandex_cloud",
+            "list_yc_metrics": "yandex_cloud",
+        }
 
 
 class TestWindow:
@@ -83,7 +88,7 @@ class TestMetricReads:
             captured["url"] = url
             captured["params"] = kwargs["params"]
             captured["body"] = kwargs["json"]
-            return httpx.Response(200, json={"metrics": []})
+            return httpx.Response(HTTPStatus.OK, json={"metrics": []})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         query_yc_metrics(query='cpu_usage{service="compute"}', **_CREDENTIALS)
@@ -122,7 +127,7 @@ class TestMetricReads:
 
         def _request(*_a: Any, **_k: Any) -> httpx.Response:
             called["n"] += 1
-            return httpx.Response(200, json={})
+            return httpx.Response(HTTPStatus.OK, json={})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = query_yc_metrics(query="cpu_usage", aggregation="MEDIAN", **_CREDENTIALS)
@@ -136,8 +141,8 @@ def _discovery_responder(names: list[str], keys: list[str]) -> Any:
 
     def _request(_method: str, url: str, **_kwargs: Any) -> httpx.Response:
         if "/names" in url:
-            return httpx.Response(200, json={"names": names})
-        return httpx.Response(200, json={"keys": keys})
+            return httpx.Response(HTTPStatus.OK, json={"names": names})
+        return httpx.Response(HTTPStatus.OK, json={"keys": keys})
 
     return _request
 

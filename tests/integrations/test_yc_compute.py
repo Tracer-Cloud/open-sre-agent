@@ -8,12 +8,14 @@ healthy ones, and whether the response says what to do next.
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from typing import Any
 
 import httpx
 import pytest
 
-from integrations.yc_compute.tools import get_yc_instance_diagnostics, list_yc_instances
+from integrations.yandex_cloud.tools import get_yc_instance_diagnostics, list_yc_instances
 
 FOLDER = "b1gexamplefolder"
 _CREDENTIALS: dict[str, Any] = {"folder_id": FOLDER, "iam_token": "t1.token"}
@@ -33,8 +35,8 @@ def _responder(routes: dict[str, dict[str, Any]]) -> Any:
     def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
         for fragment, payload in routes.items():
             if fragment in url:
-                return httpx.Response(200, json=payload)
-        return httpx.Response(404, json={"message": f"no stub for {url}"})
+                return httpx.Response(HTTPStatus.OK, json=payload)
+        return httpx.Response(HTTPStatus.NOT_FOUND, json={"message": f"no stub for {url}"})
 
     return _request
 
@@ -129,8 +131,8 @@ class TestCompute:
     ) -> None:
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if ":serialPortOutput" in url:
-                return httpx.Response(400, json={"message": "instance is stopped"})
-            return httpx.Response(200, json={"id": "fhm1", "status": "STOPPED"})
+                return httpx.Response(HTTPStatus.BAD_REQUEST, json={"message": "instance is stopped"})
+            return httpx.Response(HTTPStatus.OK, json={"id": "fhm1", "status": "STOPPED"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
         result = get_yc_instance_diagnostics(instance_id="fhm1", **_CREDENTIALS)

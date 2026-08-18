@@ -54,17 +54,23 @@ tell the user a piece of it "is not configured":
 | Logs (Cloud Logging) | `read_yc_logs`, `list_yc_log_groups` |
 | Logs of a managed database | not readable yet — a separate store, see below |
 | Audit events, who changed what | not readable yet — audit trails write to a sink |
-| VMs, disks, images, instance groups | `execute_yc_operation` |
+| VMs, disks, images, instance groups | `list_yc_instances`, `get_yc_instance_diagnostics`; otherwise `execute_yc_operation` |
+| Load balancer target health | `get_yc_lb_health` |
 | Kubernetes **clusters and node groups** | `execute_yc_operation` on `/managed-kubernetes/` |
 | Kubernetes **pods, events, pod logs, nodes** | `kubernetes_list_pods`, `kubernetes_get_events`, `kubernetes_get_pod_logs`, `kubernetes_list_nodes` |
 | Managed PostgreSQL/MySQL/ClickHouse/Redis/MongoDB/Kafka/OpenSearch | `execute_yc_operation` |
 | Functions, containers, triggers, API gateways | `execute_yc_operation` |
-| Networks, subnets, security groups, load balancers | `execute_yc_operation` |
+| Networks, subnets, security groups | `execute_yc_operation` |
 | Anything else in the API | `find_yc_api`, then `execute_yc_operation` |
 | Which services exist at all | `find_yc_api` with no query |
 
-Monitoring and logging are configured whenever Yandex Cloud is configured. They
-share one credential; there is no separate setup to ask the user for.
+Monitoring is configured whenever Yandex Cloud is configured — it shares one
+credential. Cloud Logging *group* lists use that same REST credential.
+Reading **log entries** needs the optional install extra
+`opensre[yandex_cloud_logs]` (gRPC stubs for the log reader host). Without it,
+`read_yc_logs` fails closed and tells you to install the extra; do not tell
+the user logging "is not configured" when the umbrella integration is connected
+and only the entry-reader extra is missing.
 
 
 ## Reading anything

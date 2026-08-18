@@ -15,7 +15,7 @@ from integrations.yandex_cloud.availability import (
 )
 from integrations.yandex_cloud.rest_client import YandexCloudClient
 
-SOURCE = "yc_network"
+SOURCE = "yandex_cloud"
 
 _NLB_SERVICE = "load-balancer"
 _NLB_PATH = "/load-balancer/v1/networkLoadBalancers"
@@ -61,11 +61,7 @@ def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]],
     balancers: list[dict[str, Any]] = []
     for balancer in (listed.get("data") or {}).get("loadBalancers") or []:
         balancer_id = balancer.get("id", "")
-        states = client.get(
-            _NLB_SERVICE,
-            f"{_NLB_PATH}/{balancer_id}:getTargetStates",
-            {"targetGroupId": _first_target_group(balancer)},
-        )
+        targets, states_error = _network_target_states(client, balancer_id, balancer)
         balancers.append(
             {
                 "id": balancer_id,
@@ -73,18 +69,45 @@ def _network_balancers(client: YandexCloudClient) -> tuple[list[dict[str, Any]],
                 "type": TYPE_NETWORK,
                 "status": balancer.get("status", ""),
                 "listeners": len(balancer.get("listeners") or []),
-                "targets": _normalized_targets(states),
-                "target_states_error": ""
-                if states.get("success")
-                else str(states.get("error", "")),
+                "targets": targets,
+                "target_states_error": states_error,
             }
         )
     return balancers, "", more
 
 
-def _first_target_group(balancer: dict[str, Any]) -> str:
-    attachments = balancer.get("attachedTargetGroups") or []
-    return str(attachments[0].get("targetGroupId", "")) if attachments else ""
+def _attached_target_group_ids(balancer: dict[str, Any]) -> list[str]:
+    """Every target group id attached to a network load balancer."""
+    ids: list[str] = []
+    for attachment in balancer.get("attachedTargetGroups") or []:
+        group_id = str(attachment.get("targetGroupId", "") or "")
+        if group_id and group_id not in ids:
+            ids.append(group_id)
+    return ids
+
+
+def _network_target_states(
+    client: YandexCloudClient, balancer_id: str, balancer: dict[str, Any]
+) -> tuple[list[dict[str, Any]], str]:
+    """Target health across all attached groups — not only the first one."""
+    group_ids = _attached_target_group_ids(balancer)
+    if not group_ids:
+        return [], ""
+
+    targets: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for group_id in group_ids:
+        states = client.get(
+            _NLB_SERVICE,
+            f"{_NLB_PATH}/{balancer_id}:getTargetStates",
+            {"targetGroupId": group_id},
+        )
+        if not states.get("success"):
+            errors.append(f"{group_id}: {states.get('error', '')}")
+            continue
+        for target in _normalized_targets(states):
+            targets.append({**target, "target_group": group_id})
+    return targets, "; ".join(errors)
 
 
 _ALB_HTTP_ROUTER_PATH = "/apploadbalancer/v1/httpRouters"

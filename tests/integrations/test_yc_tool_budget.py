@@ -36,8 +36,19 @@ class TestRegistration:
         ceiling, so an addition should come from merging two existing tools
         rather than from moving this number.
         """
-        yc_tools = [
-            name for name in get_registered_tool_map("investigation") if "yc" in name.split("_")
-        ]
+        family = {
+            "find_yc_api",
+            "execute_yc_operation",
+            "query_yc_metrics",
+            "list_yc_metrics",
+            "read_yc_logs",
+            "list_yc_log_groups",
+            "list_yc_instances",
+            "get_yc_instance_diagnostics",
+            "get_yc_lb_health",
+        }
+        registered = get_registered_tool_map("investigation")
+        yc_tools = [name for name in registered if name in family]
 
+        assert set(yc_tools) == family
         assert len(yc_tools) <= 17

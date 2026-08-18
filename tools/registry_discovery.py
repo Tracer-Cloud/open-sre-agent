@@ -95,10 +95,6 @@ INTEGRATION_TOOL_PACKAGES: tuple[str, ...] = (
     "integrations.victoria_logs.tools",
     "integrations.x_mcp.tools",
     "integrations.yandex_cloud.tools",
-    "integrations.yc_compute.tools",
-    "integrations.yc_logging.tools",
-    "integrations.yc_monitoring.tools",
-    "integrations.yc_network.tools",
 )
 
 _SKIP_MODULE_NAMES = {
