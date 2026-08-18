@@ -11,8 +11,8 @@ tests tree.
 | Package main | `main.py` — **fails closed** (no slash-port glue; not a production entry) |
 | Composition root / process | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
-| Daemon pidfile / status | `core/runtime/daemon.py` |
-| Turn callback | `core/runtime/turn_handler.py` |
+| Daemon pidfile / status | `core/process/daemon.py` |
+| Turn callback | `core/host/turn_handler.py` |
 | Transport API (spec, worker, sink, callback) | `core/transport_api/` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
 | Config / transport errors | `core/runtime/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
@@ -44,7 +44,7 @@ start_gateway()
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
 - **Scheduler** starts after the surfaces and is a peer (cron / loops), not a
-  transport. Daemon pidfile/status stays in `core/runtime/daemon.py` — do not
+  transport. Daemon pidfile/status stays in `core/process/daemon.py` — do not
   fold the process daemon into a "scheduler" package.
 - `gateway.core` must not import `gateway.transports` / `gateway.web`; only
   `controller.py` imports `gateway.startup`.
@@ -98,7 +98,7 @@ The package holds two different things, and only one of them faces outward:
   is a **channel**: it implements `gateway.core.transport_api` and is handed to
   the turn service, the same way the four chat transports are.
 
-Three modules are surface-facing today — `core.runtime.daemon`,
+Three modules are surface-facing today — `core.process.daemon`,
 `core.runtime.controller`, `web.web_server` — pinned as an exact allowlist in
 `tests/shared/test_surface_border.py`. Widening it is a deliberate change, not
 a new import.
@@ -161,7 +161,7 @@ InvestigationWorker ──► blocking acquire (already claimed) ──► same 
 ```
 
 - Production chat capacity is on `GatewayTurnHandler(gate=controller.turn_gate)`.
-- `GatewayController` and Path-2 share :func:`~gateway.core.runtime.concurrency.process_turn_gate`.
+- `GatewayController` and Path-2 share :func:`~gateway.core.host.concurrency.process_turn_gate`.
 - `ConcurrencyLimitedTurnHandler` is tests-only. Do not reintroduce it under
   `gateway/core/` — production uses `gate=` on `GatewayTurnHandler` only.
 - **Chat + Path-2:** HTTP `/investigate` busy-drops like chat; the investigation
@@ -205,7 +205,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 **Documented exceptions (do not “fix” by forking a second loop):**
 
 - Gateway chat disables `task_cancel` / investigation / llm_provider
-  (`gateway.core.runtime.capability_policy.ensure_gateway_capability_policy`).
+  (`gateway.core.host.capability_policy.ensure_gateway_capability_policy`).
 - Path-2 web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `sink.turn_cancel` so the ReAct loop / remaining tools stop cooperatively

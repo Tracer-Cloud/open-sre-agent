@@ -14,20 +14,20 @@ transport-specific code.
 | **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
 | **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
 | **Composition root (impl)** | `gateway/core/runtime/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
-| **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
+| **Background daemon helpers** | `gateway/core/process/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
 | **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayController.start_surfaces` |
 | **Chat transport registry** | `gateway/transports/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
 | **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
-| **Per-message turn** | `gateway/core/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
+| **Per-message turn** | `gateway/core/host/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
 opensre gateway start
         │
         ▼
-gateway.core.runtime.daemon.start_gateway_daemon
+gateway.core.process.daemon.start_gateway_daemon
         │  spawns surface-owned argv (see surfaces.shared.gateway_entrypoint):
         │    venv:   python -m surfaces.gateway_entry
         │    frozen: opensre gateway start --foreground
@@ -135,7 +135,7 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
 4. **An output sink** (implement `GatewaySink` from
-   `gateway/core/runtime/sink_protocol.py`): streams status and delivers the answer.
+   `gateway/core/transport_api/__init__.py`): streams status and delivers the answer.
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 

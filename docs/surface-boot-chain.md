@@ -65,7 +65,7 @@ that's already started is a harmless no-op.
   [`surfaces/interactive_shell/runtime/loop_scheduler.py`](../surfaces/interactive_shell/runtime/loop_scheduler.py)
   and
   [`surfaces/interactive_shell/command_registry/loops_cmds.py`](../surfaces/interactive_shell/command_registry/loops_cmds.py).
-- **Gateway daemon** — [`gateway/core/runtime/manager.py`](../gateway/core/runtime/manager.py)
+- **Gateway daemon** — [`gateway/core/runtime/controller.py`](../gateway/core/runtime/controller.py)
   sets up its own logging, readiness state, and credentials first, then runs
   the gateway profile before connecting chat channels and the scheduler.
 - **Gateway web app** — [`gateway/web/webapp.py`](../gateway/web/webapp.py)
