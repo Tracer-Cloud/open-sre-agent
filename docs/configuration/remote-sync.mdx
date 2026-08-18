@@ -13,7 +13,7 @@ Credentials and API keys stay local. You still run integration setup on each new
 | `~/.opensre/memory/` | Model API keys |
 
 <Warning>
-Use a **private** store. It can hold incident chats and system details.
+Use a **private** store. Unless you turn on [encryption](#encryption), it holds incident chats and system details in readable form.
 </Warning>
 
 ## Setup
@@ -62,10 +62,48 @@ A bucket name alone does nothing — you must also set `OPENSRE_REMOTE_SYNC=1` (
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob token (Vercel only) |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE` | Comma-separated paths to skip (see below) |
 | `OPENSRE_REMOTE_SYNC_EXCLUDE_OFF` | `1` ignores exclusions for one run |
+| `OPENSRE_REMOTE_SYNC_ENCRYPT` | `1` seals contents before upload (see [Encryption](#encryption)) |
+| `OPENSRE_REMOTE_SYNC_PASSPHRASE` | Passphrase the contents are sealed under |
 
 Env vars override `~/.opensre/config.yml` for that run. `--region` / `--profile` only work with AWS and Azure (profile = storage account); setup rejects them for other providers.
 
-Every machine that should share history needs the **same provider, store, and prefix** (and for Vercel, a token for that store).
+Every machine that should share history needs the **same provider, store, and prefix** (and for Vercel, a token for that store) — plus the same passphrase when encryption is on.
+
+## Encryption
+
+Without it, whoever runs the store can read your sessions and memory. Turn it on and contents are sealed on your machine first, under a key derived from a passphrase only you hold. `setup` asks:
+
+```bash
+opensre remote-sync setup
+# Encrypt contents [y/N]: y
+# Encryption passphrase: *********
+```
+
+Pass `--encrypt` or `--no-encrypt` to answer up front. A run with no terminal is never asked and defaults to off — for unattended setup, pass `--encrypt` and set `OPENSRE_REMOTE_SYNC_PASSPHRASE`.
+
+<Warning>
+Lose the passphrase and the store's contents are unrecoverable. There is no reset and no copy of the key anywhere else.
+</Warning>
+
+On another machine, set the same passphrase; the salt and wrapped key come from the store. It resolves from `OPENSRE_REMOTE_SYNC_PASSPHRASE`, else `~/.opensre/credentials.json` (owner-only, and not itself encrypted — it guards the *remote* store). `OPENSRE_DISABLE_KEYRING=1` makes the env var the only source.
+
+```bash
+opensre remote-sync rotate-passphrase   # re-wraps the key; no object re-uploaded;
+opensre remote-sync reencrypt           # re-encrypts whole data and encrpyts already stored readable data on cloud.
+```
+
+`reencrypt` re-uploads everything and overwrites each object in place. On a **versioned** bucket the old readable versions survive — remove noncurrent versions yourself.
+
+Encryption fails closed. A sync is refused, never downgraded, when:
+
+- no passphrase is available, or it is wrong
+- the store already holds unencrypted objects (run `reencrypt`)
+- the store is encrypted but encryption is off on this machine
+- a stored object cannot be decrypted — your local file is left untouched
+
+`opensre remote-sync status` reports all of these before you sync.
+
+**Not hidden:** object keys (session ids, memory filenames), object sizes (+49 bytes), and timestamps. Those sessions were also sent to your model provider — this keeps history out of third-party storage, it is not end-to-end confidentiality.
 
 ## Sync
 
