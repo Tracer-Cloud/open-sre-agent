@@ -1,30 +1,41 @@
 """Extension-path template: how a community ObjectStore backend plugs in.
 
-This file is not testing platform code that changes often — it exists as a
+This file is not testing platform code that changes often - it exists as a
 worked example for anyone adding a new cloud backend (an S3-alternative, a
 self-hosted blob store, etc.) to remote sync. The whole contract is:
 
 1. Implement the four :class:`~platform.filestorage.ports.ObjectStore`
    protocol methods: ``list_objects``, ``get_object``, ``put_object``,
    ``describe``.
-2. Call :func:`~platform.filestorage.providers.registry.register_object_store`
-   with a provider name and a factory — typically at import time in your own
+2. Scope every key through ``config.key_for()`` on write/read, and strip the
+   configured prefix back off on list. Every built-in provider does this
+   (see ``platform/filestorage/providers/_s3_shared.py``'s ``_strip_prefix``,
+   used by ``aws.py``/``s3compat.py``, and the same pattern in
+   ``gcs.py``/``azure.py``/``vercel.py``) so two configs sharing one bucket
+   under different prefixes do not collide.
+3. Record each object's real write time and return that same value on every
+   subsequent listing, never a value computed fresh inside ``list_objects``.
+   The engine's push/pull compare ``last_modified`` to decide which side is
+   newer (:func:`~platform.filestorage.engine.push`,
+   :func:`~platform.filestorage.engine._should_download`); a timestamp that
+   changes on every listing call breaks that comparison silently.
+4. Call :func:`~platform.filestorage.providers.registry.register_object_store`
+   with a provider name and a factory - typically at import time in your own
    provider module, the way ``platform/filestorage/providers/aws.py`` does.
-3. Nothing else changes: ``RemoteSyncConfig(provider="your-name", ...)`` plus
+5. Nothing else changes: ``RemoteSyncConfig(provider="your-name", ...)`` plus
    :func:`~platform.filestorage.providers.registry.build_object_store` resolve
-   to your factory automatically — the engine, CLI, and REPL never import a
-   vendor module directly.
-4. :func:`~platform.filestorage.engine.push` and
+   to your factory automatically - the engine, CLI, and REPL never import a
+   vendor module directly. :func:`~platform.filestorage.engine.push` and
    :func:`~platform.filestorage.engine.pull` talk only to the ``ObjectStore``
    protocol, so a new backend gets the full sync engine for free, exercised
    below with real temp directories rather than mocks.
-5. Tests unregister what they registered (see the ``fake_store`` fixture) so
-   a test-only provider never leaks into another test file that calls
+6. Tests unregister what they registered (see the ``fake_provider`` fixture)
+   so a test-only provider never leaks into another test file that calls
    :func:`~platform.filestorage.providers.registry.registered_providers` or
    ``build_object_store``.
 
-See ``platform/filestorage/providers/aws.py`` for the same five steps against
-a real SDK.
+See ``platform/filestorage/providers/aws.py`` for the same steps against a
+real SDK.
 """
 
 from __future__ import annotations
@@ -50,49 +61,75 @@ _PROVIDER_NAME = "fake"
 
 
 class _FakeObjectStore:
-    """The minimum a community backend implements: the four ObjectStore methods."""
+    """The minimum a community backend implements, scoped like a real bucket.
 
-    def __init__(self) -> None:
-        self._objects: dict[str, bytes] = {}
+    ``bucket`` is shared across every ``_FakeObjectStore`` instance built for
+    it (a plain dict standing in for one cloud bucket), the way a real bucket
+    is shared by every client pointed at it regardless of which prefix each
+    one is configured with. Each instance only ever sees the slice under its
+    own ``config.prefix``, via ``config.key_for()`` on write and prefix
+    stripping on list, matching every built-in provider.
+    """
+
+    def __init__(
+        self, config: RemoteSyncConfig, *, bucket: dict[str, tuple[bytes, datetime]]
+    ) -> None:
+        self._config = config
+        self._bucket = bucket
+
+    def _prefix(self) -> str:
+        return f"{self._config.prefix.rstrip('/')}/"
+
+    def _strip_prefix(self, full_key: str) -> str:
+        prefix = self._prefix()
+        return full_key[len(prefix) :] if full_key.startswith(prefix) else full_key
 
     def list_objects(self, prefix: str) -> list[RemoteObject]:
+        full_prefix = self._config.key_for(prefix) if prefix else self._prefix()
         return [
             RemoteObject(
-                key=key,
+                key=self._strip_prefix(full_key),
                 size=len(data),
-                last_modified=datetime.now(tz=UTC),
+                last_modified=written_at,
                 etag=content_tag(data),
             )
-            for key, data in self._objects.items()
-            if key.startswith(prefix)
+            for full_key, (data, written_at) in self._bucket.items()
+            if full_key.startswith(full_prefix)
         ]
 
     def get_object(self, key: str) -> bytes:
-        return self._objects[key]
+        data, _ = self._bucket[self._config.key_for(key)]
+        return data
 
     def put_object(self, key: str, data: bytes) -> None:
-        self._objects[key] = data
+        # The write time is captured once, here, and never recomputed on a
+        # later list_objects() call - see step 3 in the module docstring.
+        self._bucket[self._config.key_for(key)] = (data, datetime.now(tz=UTC))
 
     def describe(self) -> str:
-        return f"{_PROVIDER_NAME}://template"
+        return f"{_PROVIDER_NAME}://template/{self._config.prefix}"
 
 
 @pytest.fixture
-def fake_store() -> Iterator[_FakeObjectStore]:
+def fake_provider() -> Iterator[dict[str, tuple[bytes, datetime]]]:
     """Registers "fake" for one test and unregisters it afterward.
 
-    Mirrors how a real provider module registers at import time
-    (``platform/filestorage/providers/aws.py``), scoped to a single test so no
-    fake store leaks into ``build_object_store`` for any other test file.
+    Mirrors how a real provider module registers a factory at import time
+    (``platform/filestorage/providers/aws.py``'s
+    ``register_object_store(PROVIDER_NAME, _factory, ...)``), scoped to a
+    single test so no fake store leaks into ``build_object_store`` for any
+    other test file. Yields the backing ``bucket`` dict so a test can build
+    more than one ``_FakeObjectStore`` (different prefixes) against the same
+    underlying data, the way two clients share one real bucket.
     """
-    store = _FakeObjectStore()
-    register_object_store(_PROVIDER_NAME, lambda _config: store)
-    yield store
+    bucket: dict[str, tuple[bytes, datetime]] = {}
+    register_object_store(_PROVIDER_NAME, lambda config: _FakeObjectStore(config, bucket=bucket))
+    yield bucket
     unregister_object_store(_PROVIDER_NAME)
 
 
 def test_a_registered_fake_provider_is_built_via_the_registry(
-    fake_store: _FakeObjectStore,
+    fake_provider: dict[str, tuple[bytes, datetime]],
 ) -> None:
     # Arrange
     config = RemoteSyncConfig(bucket="template-bucket", provider=_PROVIDER_NAME)
@@ -101,15 +138,17 @@ def test_a_registered_fake_provider_is_built_via_the_registry(
     built = build_object_store(config)
 
     # Assert
-    assert built is fake_store
-    assert built.describe() == "fake://template"
+    assert isinstance(built, _FakeObjectStore)
+    assert built.describe() == f"fake://template/{config.prefix}"
 
 
 def test_push_then_pull_round_trips_a_file_through_the_fake_store(
-    fake_store: _FakeObjectStore, tmp_path: Path
+    fake_provider: dict[str, tuple[bytes, datetime]], tmp_path: Path
 ) -> None:
     """Full push/pull round trip against the engine, the way a real sync runs."""
     # Arrange
+    config = RemoteSyncConfig(bucket="template-bucket", provider=_PROVIDER_NAME, prefix="laptop-1")
+    store = build_object_store(config)
     push_root = tmp_path / "push_side" / "sessions"
     pull_root = tmp_path / "pull_side" / "sessions"
     push_root.mkdir(parents=True)
@@ -119,10 +158,61 @@ def test_push_then_pull_round_trips_a_file_through_the_fake_store(
     pull_roots = (SyncRoot(name=SyncRootName.SESSIONS, path=pull_root),)
 
     # Act
-    push_report = push(fake_store, roots=push_roots)
-    pull_report = pull(fake_store, roots=pull_roots)
+    push_report = push(store, roots=push_roots)
+    pull_report = pull(store, roots=pull_roots)
 
     # Assert
     assert "sessions/example.jsonl" in push_report.uploaded
     assert "sessions/example.jsonl" in pull_report.downloaded
     assert (pull_root / "example.jsonl").read_text(encoding="utf-8") == '{"turn": 1}\n'
+
+
+def test_objects_are_scoped_under_the_configured_prefix(
+    fake_provider: dict[str, tuple[bytes, datetime]],
+) -> None:
+    """Two configs sharing one bucket under different prefixes must not collide.
+
+    Catches a template that discards ``RemoteSyncConfig`` and operates on raw
+    keys: that shortcut would make this test see team-b's object from
+    team-a's listing, the same way a real misconfigured provider could leak
+    or overwrite another prefix's data in a shared bucket.
+    """
+    # Arrange
+    team_a = build_object_store(
+        RemoteSyncConfig(bucket="shared-bucket", provider=_PROVIDER_NAME, prefix="team-a")
+    )
+    team_b = build_object_store(
+        RemoteSyncConfig(bucket="shared-bucket", provider=_PROVIDER_NAME, prefix="team-b")
+    )
+
+    # Act
+    team_a.put_object("sessions/shared.jsonl", b"from-a")
+
+    # Assert
+    assert [obj.key for obj in team_a.list_objects("")] == ["sessions/shared.jsonl"]
+    assert team_b.list_objects("") == []
+
+
+def test_put_object_records_a_stable_write_time_not_a_fresh_one_per_listing(
+    fake_provider: dict[str, tuple[bytes, datetime]],
+) -> None:
+    """Catches a template that computes last_modified inside list_objects.
+
+    The engine's push/pull decide which side is newer by comparing
+    ``last_modified`` (see :func:`~platform.filestorage.engine.push` and
+    :func:`~platform.filestorage.engine._should_download`). A value
+    recomputed on every listing call would make every remote object look
+    freshly written on every list, which can make push wrongly keep back a
+    local edit that is actually newer, or make pull wrongly re-download an
+    object that has not changed.
+    """
+    # Arrange
+    store = build_object_store(RemoteSyncConfig(bucket="b", provider=_PROVIDER_NAME))
+    store.put_object("sessions/old.jsonl", b"{}")
+
+    # Act
+    first_listing = store.list_objects("")[0].last_modified
+    second_listing = store.list_objects("")[0].last_modified
+
+    # Assert
+    assert first_listing == second_listing
