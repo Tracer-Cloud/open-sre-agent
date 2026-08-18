@@ -8,14 +8,14 @@ tests tree.
 | Role | Path |
 |------|------|
 | Production entry (slash ports) | CLI: `opensre gateway start` / `--foreground` (composition root outside this package) |
-| Package main | `main.py` — **fails closed** (no slash-port glue; not a production entry) |
-| Process composition root | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
+| Package main | `__main__.py` — **fails closed** (no slash-port glue; not a production entry) |
+| Process composition root | `core/lifecycle/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
 | Daemon (pidfile + spawn) | `core/process/supervision.py` — caller passes argv; never names CLI or `surfaces.gateway_entry` |
 | Turn callback | `core/host/turn_handler.py` |
 | Transport API (spec, worker, sink, callback) | `core/transport_api/` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
-| Config / transport errors | `core/runtime/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
+| Config / transport errors | `core/lifecycle/errors.py` (`GatewayConfigurationError`, `GatewayTransportFailedError`) |
 | Web surface (FastAPI) | `web/webapp.py` (`app`) |
 | Transport registry + worker start/stop | `transports/startup.py` (`TRANSPORTS` / `start_transports`) |
 | Surface facade | `startup.py` (`start_gateway` / `StartedGateway`) |
@@ -60,9 +60,9 @@ start_gateway()
 Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 **peer surfaces** vs **composer**.
 
-- `core/` — process and leaf infrastructure (`host`, `process`, `runtime`,
+- `core/` — process and leaf infrastructure (`host`, `process`, `lifecycle`,
   `storage`, `billing`, `attachments`, `session`, `config`). No imports from
-  transports or `web`. Only `core/runtime/controller.py` imports `gateway.startup`.
+  transports or `web`. Only `core/lifecycle/controller.py` imports `gateway.startup`.
 - `startup.py` — the facade: web + chat as one consumer set via
   `transports/startup.py` (which owns the registry and imports each peer's
   `startup` only).
@@ -113,7 +113,7 @@ Two ways work reaches the agent. Mixing them is how a second turn engine appears
 | | Has a user and a sink? | Entry |
 |--|------------------------|--------|
 | **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `GatewayTurnHandler` — `(text, session, sink, logger)` |
-| **Interactive shell** | Yes | `HeadlessAgent.handle` with `AgentBuildConfig` (not the chat callback) |
+| **Interactive shell** | Yes | *today:* `HeadlessAgent.handle` with `AgentBuildConfig`. *Target:* the **chat** verb, like any other channel — it has a user and a sink, so the rule already covers it. The build config is shared; the turn entry is not yet. |
 | **Producer** (`platform.scheduling.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
 
 Agent construction hooks live in `core.agent_harness.agent_build_config.AgentBuildConfig` (not `transport_api`, not a host re-export). Chat omits the config and the session-agent pool injects gateway capability withholds. The shell sets the build hooks it needs and leaves `apply_capability_policy` unset.
@@ -128,9 +128,37 @@ not a chat turn. It may share the process gate and the at-capacity sentence; it
 must not call the turn handler.
 
 Three modules are surface-facing today — `core.process.supervision`,
-`core.runtime.controller`, `web.web_server` — pinned as an exact allowlist in
+`core.lifecycle.controller`, `web.web_server` — pinned as an exact allowlist in
 `tests/shared/test_surface_border.py`. Widening it is a deliberate change, not
 a new import.
+
+## Facade verbs
+
+The gateway exposes two verbs. They differ in whether there is a conversation
+to hold, not in how hard the work is.
+
+| Verb | Entry | Shape | Gets |
+|------|-------|-------|------|
+| **chat** | `GatewayTurnHandler.__call__(text, session, sink, logger)` | returns `None`; every result reaches the user through the sink | capacity gate, capability policy, `SessionAgentPool` reuse, approvals, cancel console, identity policy, turn timeout, terminal outcome, at-capacity copy |
+| **investigate** | `AgentSession.investigate(...)` (the harness Embed API) | returns a payload to the caller | the process capacity gate only |
+
+`POST /investigate` and `InvestigationWorker` use **investigate** and that is
+correct: a one-shot HTTP investigation has no conversation to approve or
+cancel. They share `process_turn_gate()` and the at-capacity sentence
+(`AT_CAPACITY_MESSAGE`); they must not call the turn handler.
+
+Anything with a live user and a sink uses **chat**. That is the rule the
+interactive shell is being moved onto — see the table above for where it
+stands today.
+
+### Why `chat` returns `None`
+
+The four chat transports are fire-and-forget: the sink *is* the reply path, so
+there is nothing to hand back. A caller that needs the turn's outcome as a
+value — the shell wants `TurnResult` for accounting, the prompt recorder, and
+`final_intent` — is not served by this signature as written. Widening it is a
+contract change for all four transports, so decide it deliberately rather than
+adding a second entry beside `GatewayTurnHandler`.
 
 ## Gateway turn dispatch
 
