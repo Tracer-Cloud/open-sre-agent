@@ -259,9 +259,7 @@ def test_scheduler_never_imports_the_gateway_turn_handler() -> None:
                     if alias.name == "GatewayTurnHandler":
                         rel = path.relative_to(REPO_ROOT)
                         offenders.append(f"{rel} → GatewayTurnHandler")
-    assert offenders == [], "scheduler imported the chat turn handler:\n" + "\n".join(
-        offenders
-    )
+    assert offenders == [], "scheduler imported the chat turn handler:\n" + "\n".join(offenders)
 
 
 def test_gateway_never_names_a_surfaces_module_in_executable_code() -> None:

@@ -135,9 +135,7 @@ def build_shell_agent(
     policy = ports.apply_capability_policy or preserve_host_capabilities
     policy(session)
     build_tools = ports.build_tools or (
-        lambda sess, cons, _log, _obs: shell_tool_provider(
-            sess, cons, request_exit=request_exit
-        )
+        lambda sess, cons, _log, _obs: shell_tool_provider(sess, cons, request_exit=request_exit)
     )
     logger = logging.getLogger("opensre.interactive_shell")
     return DefaultPorts(
