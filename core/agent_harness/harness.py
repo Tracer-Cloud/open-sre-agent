@@ -1,35 +1,26 @@
-"""``AgentSession`` — the public host API for chat and investigation.
+"""``AgentSession`` — the embedder's entry point for chat and investigation.
 
-Every surface (shell, gateway, embedder, CLI, web) talks to the agent through
-this module. Chat turns terminate at ``dispatch_chat_turn``; investigations use
-the installed payload runner (wired at process boot). Session lifecycle
-(create / resolve / rotate / restore) belongs to
-:class:`~core.agent_harness.session.lifecycle.SessionManager`; the session API
-sits one layer above and adds env resolution and prompt context.
+Create the session, attach an agent, run turns::
 
-Construct **one** agent per logical session, then many turns::
-
-    session = AgentSession.start(config)  # or attach_agent(custom_headless)
+    session = AgentSession.start(config)  # builds the default agent
     result = session.chat("…")            # turn 1
     follow = session.chat("…")            # turn 2 — same attached agent
-    report = session.investigate({…})     # Path-2 (no attached chat agent required)
+    report = session.investigate({…})     # needs no attached chat agent
 
-Embedded scripts that need local adapters: ``bootstrap.embedded.start_embedded_session``.
+Embedded scripts that need local adapters use
+``bootstrap.embedded.start_embedded_session``. Scheduled one-shots may use
+:meth:`AgentSession.run_headless_turn`; a loop keeps one agent for the loop.
 
-Custom ports (live gateway sink, REPL)::
+A host with its own ports (the gateway pool, the REPL) builds the agent through
+:class:`~core.agent_harness.turns.port_families.DefaultPorts` and drives it
+with :meth:`HeadlessAgent.handle` per message; it may still attach it here to
+use :meth:`chat` and :meth:`investigate`.
 
-    session = AgentSession(SessionConfig(load_env=False))
-    session.startup()
-    session.attach_agent(DefaultPorts(session=…, output=sink).agent(tools=…))
-    session.chat(text)                   # reuse the same agent across messages
-
-Gateway chat reuses one ``HeadlessAgent`` per session via ``SessionAgentPool``
-(``bind_turn`` each message). Scheduled **one-shots** may use
-:meth:`run_headless_turn`; multi-turn loops should keep one agent for the loop.
-There is no ``dispatch_message_to_headless_agent`` free function.
-
-Must not import ``surfaces.interactive_shell``. Surfaces inject prompt
-context through :class:`SessionConfig`.
+Session lifecycle (create / resolve / rotate / restore) belongs to
+:class:`~core.agent_harness.session.lifecycle.SessionManager`; this module adds
+env resolution and prompt context on top. Must not import
+``surfaces.interactive_shell``; surfaces inject prompt context through
+:class:`SessionConfig`.
 """
 
 from __future__ import annotations
@@ -120,86 +111,6 @@ class AgentSession:
         self._agent: ChatDispatcher | None = None
         self._bound_session: SessionCore | None = None
 
-    def _resolve_env_variables(self) -> None:
-        """Load local OpenSRE env defaults into the process, once.
-
-        Delegates to :func:`config.local_env.bootstrap_opensre_env_once` so CLI,
-        gateway, and web share one path (project ``.env`` + wizard defaults).
-        ``override=False``: a variable already set in the real environment wins.
-        """
-        if self._config.load_env:
-            from config.local_env import bootstrap_opensre_env_once
-
-            bootstrap_opensre_env_once(override=False)
-
-    def _load_or_create_session(self) -> SessionCore:
-        """Resume a persisted session if ``session_id`` was given, else create one.
-
-        Delegates entirely to :class:`SessionManager` — this method does not
-        duplicate its bootstrap/restore logic, it just picks which lifecycle
-        call to make based on whether the surface is resuming.
-        """
-        manager = self._session_manager
-        if self._config.session_id:
-            # SessionManager.resolve()'s own default is True: a resumed
-            # session needs tools ready immediately.
-            warm = (
-                True if self._config.warm_integrations is None else self._config.warm_integrations
-            )
-            return manager.resolve(
-                self._config.session_id,
-                hydrate_integrations=self._config.hydrate_integrations,
-                warm_integrations=warm,
-                persistent_tasks=self._config.persistent_tasks,
-            )
-        # SessionManager.create()'s own default is False: a fresh session can
-        # warm lazily on first turn.
-        warm = False if self._config.warm_integrations is None else self._config.warm_integrations
-        return manager.create(
-            hydrate_integrations=self._config.hydrate_integrations,
-            warm_integrations=warm,
-            persistent_tasks=self._config.persistent_tasks,
-            open_store=self._config.open_store,
-        )
-
-    def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
-        """Return resolved integration configs for ``session``."""
-        from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
-
-        return resolve_and_cache_integrations(session)
-
-    def _load_context(self) -> PromptContextProvider | None:
-        """Return the surface's grounding-context provider, if any."""
-        return self._config.prompts
-
-    def _attach_default_headless(
-        self,
-        *,
-        session: SessionCore,
-        output: OutputSink,
-        prompts: PromptContextProvider | None,
-        tools: ToolProvider | None = None,
-        gather: GatherPorts | None = None,
-        console: Any | None = None,
-        logger: logging.Logger | None = None,
-        surface: str | None = None,
-        is_tty: bool | None = None,
-    ) -> None:
-        """Attach the agent built on the default port family (one construction recipe).
-
-        Used by :meth:`start` and :meth:`run_headless_turn`. Custom hosts
-        (gateway pool, REPL) build through :class:`DefaultPorts` themselves and
-        call :meth:`attach_agent` — they must not re-copy this wiring ad hoc.
-        """
-        from core.agent_harness.ports import TurnBinding
-        from core.agent_harness.turns.port_families import DefaultPorts
-
-        agent = DefaultPorts(
-            session=session, output=output, console=console, logger=logger, surface=surface
-        ).agent(tools=tools, prompts=prompts, gather=gather)
-        agent.bind_turn(TurnBinding(is_tty=is_tty))
-        self.attach_agent(agent)
-
     @classmethod
     def start(
         cls,
@@ -288,11 +199,6 @@ class AgentSession:
             is_tty=is_tty,
         ).chat(message)
 
-    @property
-    def agent(self) -> ChatDispatcher | None:
-        """The attached chat dispatcher, if one has been bound."""
-        return self._agent
-
     def startup(self) -> SessionStartupResult:
         """Run process boot (optional), env, session bootstrap/resume, and context.
 
@@ -313,6 +219,11 @@ class AgentSession:
     def attach_agent(self, agent: ChatDispatcher) -> None:
         """Bind a chat dispatcher for :meth:`chat` reuse."""
         self._agent = agent
+
+    @property
+    def agent(self) -> ChatDispatcher | None:
+        """The attached chat dispatcher, if one has been bound."""
+        return self._agent
 
     def chat(
         self,
@@ -389,6 +300,86 @@ class AgentSession:
             opensre_evaluate=opensre_evaluate,
             investigation_metadata=investigation_metadata,
         )
+
+    def resolve_integrations(self, session: SessionCore) -> dict[str, Any]:
+        """Return resolved integration configs for ``session``."""
+        from core.agent_harness.session.integration_resolution import resolve_and_cache_integrations
+
+        return resolve_and_cache_integrations(session)
+
+    def _attach_default_headless(
+        self,
+        *,
+        session: SessionCore,
+        output: OutputSink,
+        prompts: PromptContextProvider | None,
+        tools: ToolProvider | None = None,
+        gather: GatherPorts | None = None,
+        console: Any | None = None,
+        logger: logging.Logger | None = None,
+        surface: str | None = None,
+        is_tty: bool | None = None,
+    ) -> None:
+        """Attach the agent built on the default port family (one construction recipe).
+
+        Used by :meth:`start` and :meth:`run_headless_turn`. Custom hosts
+        (gateway pool, REPL) build through :class:`DefaultPorts` themselves and
+        call :meth:`attach_agent` — they must not re-copy this wiring ad hoc.
+        """
+        from core.agent_harness.ports import TurnBinding
+        from core.agent_harness.turns.port_families import DefaultPorts
+
+        agent = DefaultPorts(
+            session=session, output=output, console=console, logger=logger, surface=surface
+        ).agent(tools=tools, prompts=prompts, gather=gather)
+        agent.bind_turn(TurnBinding(is_tty=is_tty))
+        self.attach_agent(agent)
+
+    def _resolve_env_variables(self) -> None:
+        """Load local OpenSRE env defaults into the process, once.
+
+        Delegates to :func:`config.local_env.bootstrap_opensre_env_once` so CLI,
+        gateway, and web share one path (project ``.env`` + wizard defaults).
+        ``override=False``: a variable already set in the real environment wins.
+        """
+        if self._config.load_env:
+            from config.local_env import bootstrap_opensre_env_once
+
+            bootstrap_opensre_env_once(override=False)
+
+    def _load_or_create_session(self) -> SessionCore:
+        """Resume a persisted session if ``session_id`` was given, else create one.
+
+        Delegates entirely to :class:`SessionManager` — this method does not
+        duplicate its bootstrap/restore logic, it just picks which lifecycle
+        call to make based on whether the surface is resuming.
+        """
+        manager = self._session_manager
+        if self._config.session_id:
+            # SessionManager.resolve()'s own default is True: a resumed
+            # session needs tools ready immediately.
+            warm = (
+                True if self._config.warm_integrations is None else self._config.warm_integrations
+            )
+            return manager.resolve(
+                self._config.session_id,
+                hydrate_integrations=self._config.hydrate_integrations,
+                warm_integrations=warm,
+                persistent_tasks=self._config.persistent_tasks,
+            )
+        # SessionManager.create()'s own default is False: a fresh session can
+        # warm lazily on first turn.
+        warm = False if self._config.warm_integrations is None else self._config.warm_integrations
+        return manager.create(
+            hydrate_integrations=self._config.hydrate_integrations,
+            warm_integrations=warm,
+            persistent_tasks=self._config.persistent_tasks,
+            open_store=self._config.open_store,
+        )
+
+    def _load_context(self) -> PromptContextProvider | None:
+        """Return the surface's grounding-context provider, if any."""
+        return self._config.prompts
 
 
 __all__ = [

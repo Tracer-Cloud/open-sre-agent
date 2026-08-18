@@ -6,7 +6,7 @@ from typing import Any
 
 from core.agent_harness.harness import AgentSession, SessionConfig
 from core.agent_harness.runtime import TurnBinding
-from core.agent_harness.turns.headless_dispatch import (
+from core.agent_harness.turns.headless_adapters import (
     NullToolProvider,
     StaticReasoningClientProvider,
 )

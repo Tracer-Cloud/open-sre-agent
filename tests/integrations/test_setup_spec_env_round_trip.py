@@ -274,6 +274,7 @@ _SUBMITTED: dict[str, dict[str, str]] = {
         "webhook_url": "",
         "bot_token": "xoxb-test-token",
         "app_token": "xapp-test-token",
+        "default_chat_id": "C0123ABCD",
     },
     "aws": {
         # Keys mode — role fields cleared. Catalog hydrates flat access-key credentials.

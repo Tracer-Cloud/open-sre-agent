@@ -76,7 +76,7 @@ def report_exception(
     extra: Mapping[str, Any] | None = None,
     expected: bool = False,
 ) -> bool:
-    from surfaces.interactive_shell.utils.error_handling.exception_reporting import (
+    from surfaces.shared.error_handling.exception_reporting import (
         report_exception as _report_exception,
     )
 
@@ -84,7 +84,7 @@ def report_exception(
 
 
 def should_report_exception(exc: click.ClickException, *, expected: bool = False) -> bool:
-    from surfaces.interactive_shell.utils.error_handling.exception_reporting import (
+    from surfaces.shared.error_handling.exception_reporting import (
         should_report_exception as _should_report_exception,
     )
 

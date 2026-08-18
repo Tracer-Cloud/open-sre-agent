@@ -23,7 +23,7 @@ from core.agent_harness.turns.headless_adapters import (
     NullToolProvider,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
@@ -99,7 +99,7 @@ def _unhandled_actions(*_args: Any, **_kwargs: Any) -> ToolCallingTurnResult:
 def stub_action_planner(monkeypatch: Any) -> None:
     """Keep the action planner off the network so Echo can answer."""
     monkeypatch.setattr(
-        "core.agent_harness.turns.headless_dispatch.ActionTurnRunner.run",
+        "core.agent_harness.turns.headless_agent.ActionTurnRunner.run",
         lambda _self, *_args, **_kwargs: _unhandled_actions(),
     )
 
@@ -304,7 +304,7 @@ def test_resume_config_reaches_session_manager() -> None:
 
 
 def test_every_advertised_name_is_a_plain_static_import() -> None:
-    """Each door's ``__all__`` names something imported at module level.
+    """Each API module's ``__all__`` names something bound at module level.
 
     A plain re-export is visible to type checkers, IDEs, and readers alike; a
     name that is only resolvable at runtime is not part of the API.
@@ -321,7 +321,7 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
         importlib.import_module(f"core.agent_harness.spi.{r}")
         for r in (
             "session_goal",
-            "session_flags",
+            "session_state",
             "cancel",
             "accounting",
             "prompt_chrome",
@@ -330,8 +330,8 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
             "defaults",
         )
     ]
-    for door in (root, ports, runtime, *roles):
-        tree = ast.parse(Path(door.__file__).read_text(encoding="utf-8"))
+    for api_module in (root, ports, runtime, *roles):
+        tree = ast.parse(Path(api_module.__file__).read_text(encoding="utf-8"))
         bound: set[str] = set()
         for node in tree.body:
             if isinstance(node, ast.ImportFrom):
@@ -342,7 +342,7 @@ def test_every_advertised_name_is_a_plain_static_import() -> None:
                 bound.update(t.id for t in node.targets if isinstance(t, ast.Name))
             elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 bound.add(node.target.id)
-        assert set(door.__all__) <= bound, (
-            f"{door.__name__}: advertised but not bound at module level: "
-            f"{sorted(set(door.__all__) - bound)}"
+        assert set(api_module.__all__) <= bound, (
+            f"{api_module.__name__}: exported but not bound at module level: "
+            f"{sorted(set(api_module.__all__) - bound)}"
         )

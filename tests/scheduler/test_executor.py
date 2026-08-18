@@ -272,6 +272,108 @@ class TestExecutor:
         assert mock_slack.call_count == 3
         assert mock_shell.call_count == 1
 
+    def test_loop_fanout_slack_uses_default_channel(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Loop fan-out must resolve Slack chat_id when primary is interactive_shell."""
+        task = ScheduledTask(
+            id="test_fanout_slack_default",
+            kind=TaskKind.DAILY_SUMMARY,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+            params={LOOP_CHANNELS_PARAM: "interactive_shell,slack"},
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.executor.resolve_slack_default_chat_id",
+            lambda _params: "C0123ABCD",
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.executor.resolve_slack_credentials",
+            lambda _params: {"access_token": "xoxb-test"},
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Scheduled report",
+            ),
+            patch("platform.scheduler.executor._deliver_interactive_shell") as mock_shell,
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+        ):
+            mock_shell.return_value = (True, "", "local:1")
+            mock_slack.return_value = (True, "", "ts_123")
+            result = execute_task(task, "2026-01-01T09:00")
+
+        assert result is True
+        slack_task = mock_slack.call_args[0][0]
+        assert slack_task.chat_id == "C0123ABCD"
+
+    def test_loop_fanout_slack_skips_default_when_webhook_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        task = ScheduledTask(
+            id="test_fanout_slack_webhook",
+            kind=TaskKind.CUSTOM_INVESTIGATION,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+            params={LOOP_CHANNELS_PARAM: "slack"},
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.executor.resolve_slack_default_chat_id",
+            lambda _params: "C0123ABCD",
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.executor.resolve_slack_credentials",
+            lambda _params: {"webhook_url": "https://hooks.slack.com/x"},
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Loop report",
+            ),
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+        ):
+            mock_slack.return_value = (True, "", "ts_webhook")
+            result = execute_task(task, "2026-01-01T10:00")
+
+        assert result is True
+        slack_task = mock_slack.call_args[0][0]
+        assert slack_task.chat_id == ""
+
+    def test_loop_fanout_slack_ignores_non_slack_task_chat_id(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A Telegram chat id on an inbox-primary loop must not become Slack's channel."""
+        task = ScheduledTask(
+            id="test_fanout_slack_ignore_foreign_chat",
+            kind=TaskKind.CUSTOM_INVESTIGATION,
+            cron="0 9 * * *",
+            provider=Provider.INTERACTIVE_SHELL,
+            chat_id="8098636622",
+            params={LOOP_CHANNELS_PARAM: "slack"},
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.executor.resolve_slack_default_chat_id",
+            lambda _params: "C0123ABCD",
+        )
+        monkeypatch.setattr(
+            "platform.scheduler.executor.resolve_slack_credentials",
+            lambda _params: {"access_token": "xoxb-test"},
+        )
+
+        with (
+            patch(
+                "platform.scheduler.executor.build_message",
+                return_value="Loop report",
+            ),
+            patch("platform.scheduler.executor._deliver_slack") as mock_slack,
+        ):
+            mock_slack.return_value = (True, "", "ts_123")
+            result = execute_task(task, "2026-01-01T11:00")
+
+        assert result is True
+        slack_task = mock_slack.call_args[0][0]
+        assert slack_task.chat_id == "C0123ABCD"
+
     def test_rocketchat_delivery_posts_to_channel(self) -> None:
         task = ScheduledTask(
             id="test_rc_02",

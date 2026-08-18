@@ -160,7 +160,7 @@ include = [
 ]
 
 [tool.setuptools.package-data]
-"surfaces.cli" = ["investigation/sample_alerts/*.json"]
+"surfaces.shared" = ["sample_alerts/*.json"]
 "core.agent_harness.prompts" = ["skills/**/*.md"]
 "integrations" = ["**/SKILL.md"]
 "tools" = ["**/SKILL.md"]

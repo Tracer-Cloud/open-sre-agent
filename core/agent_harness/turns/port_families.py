@@ -54,7 +54,7 @@ from core.agent_harness.turns.headless_adapters import (
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.headless_agent import HeadlessAgent
 
 if TYPE_CHECKING:
     from core.agent_harness.session.session_core import SessionCore

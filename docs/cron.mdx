@@ -30,9 +30,9 @@ opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
 opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
   --tz Europe/London --provider slack
 
-# Slack bot token path still needs an explicit channel
+# Slack bot token: omit --chat-id when SLACK_DEFAULT_CHAT_ID is set
 opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
-  --tz Europe/London --provider slack --chat-id C0123ABCD
+  --tz Europe/London --provider slack
 
 # GitHub PR sweep standup digest → Slack
 opensre cron add --kind github_pr_sweep --cron "0 9 * * 1-5" \
@@ -65,7 +65,7 @@ Create a new scheduled delivery task.
 | `--cron` | Yes | Cron expression (5 fields: minute hour day month day_of_week) |
 | `--tz` | No | IANA timezone (default: `UTC`). Examples: `Europe/London`, `US/Eastern`, `Asia/Kolkata` |
 | `--provider` | Yes | Messaging provider: `telegram`, `slack`, `discord`, `rocketchat`, `interactive_shell` |
-| `--chat-id` | Cond. | Required for telegram/discord/rocketchat. Optional for slack when an incoming webhook is configured, and not needed for `interactive_shell`. |
+| `--chat-id` | Cond. | Required for telegram/discord/rocketchat. Optional for slack when an incoming webhook or `SLACK_DEFAULT_CHAT_ID` is configured, and not needed for `interactive_shell`. |
 | `--window` | No | Lookback window in hours (default: `24`) |
 
 ### `opensre cron list`
@@ -202,7 +202,9 @@ You can also ask naturally:
 Set up a manual loop called Morning ops at 08:30 UTC to check open incidents and summarize production risk, and run it once now.
 ```
 
-By default, `/loops add` sends to every configured default handle it can reach: Telegram when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_DEFAULT_CHAT_ID` are configured, Slack when `SLACK_WEBHOOK_URL` is configured, and the local interactive-shell inbox.
+By default, `/loops add` sends to every configured default handle it can reach: Telegram when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_DEFAULT_CHAT_ID` are configured, Slack when `SLACK_WEBHOOK_URL` is configured **or** when `SLACK_BOT_TOKEN` and `SLACK_DEFAULT_CHAT_ID` are configured, and the local interactive-shell inbox.
+
+When a scheduled loop or skill finishes, the scheduler delivers the report body to those channels without you prompting — you do not need to be in the REPL or Slack chat at fire time. Loops created before Slack was in your default channel list stay inbox-only until you recreate them with Slack in `--channels` (or rely on the updated defaults for new loops).
 
 The lower-level `/cron` slash command forwards to the CLI:
 

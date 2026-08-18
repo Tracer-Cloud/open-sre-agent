@@ -10,7 +10,6 @@ from core.types import AgentToolContext
 
 ToolExecutionPayload = bool | dict[str, Any]
 ToolExecutor = Callable[[dict[str, Any], "ActionToolContext"], ToolExecutionPayload]
-ToolSchema = dict[str, Any]
 ACTION_TOOL_CONTEXT_RESOURCE_KEY = "action_tool_context"
 _ACTION_SESSION_SOURCE = "_action_session"
 
@@ -78,37 +77,6 @@ def capability_available_from_sources(
     return not (isinstance(capability_values, tuple) and capability_values == ())
 
 
-def string_property(
-    *,
-    description: str,
-    enum: tuple[str, ...] | None = None,
-    min_length: int | None = None,
-) -> ToolSchema:
-    schema: ToolSchema = {"type": "string", "description": description}
-    if enum:
-        schema["enum"] = list(enum)
-    if min_length is not None:
-        schema["minLength"] = min_length
-    return schema
-
-
-def string_array_property(*, description: str) -> ToolSchema:
-    return {
-        "type": "array",
-        "items": {"type": "string"},
-        "description": description,
-    }
-
-
-def object_schema(*, properties: dict[str, ToolSchema], required: tuple[str, ...]) -> ToolSchema:
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(required),
-        "additionalProperties": False,
-    }
-
-
 def capability_not_explicitly_disabled(session: Any, capability_name: str) -> bool:
     available_capabilities = getattr(session, "available_capabilities", {})
     capability_values = (
@@ -124,12 +92,8 @@ __all__ = [
     "ActionToolContext",
     "ToolExecutor",
     "ToolExecutionPayload",
-    "ToolSchema",
     "action_context_from_agent_context",
     "capability_available_from_sources",
     "capability_not_explicitly_disabled",
     "execute_with_action_context",
-    "object_schema",
-    "string_array_property",
-    "string_property",
 ]

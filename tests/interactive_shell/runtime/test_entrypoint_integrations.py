@@ -713,7 +713,7 @@ def test_investigation_rendering_uses_the_supplied_console() -> None:
     the final report — the longest output the shell produces.
     """
     # Arrange
-    import surfaces.cli.ui.renderer as renderer_module
+    import surfaces.interactive_shell.ui.stream_renderer as renderer_module
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         repl_foreground_renderer,
     )
@@ -865,7 +865,7 @@ def test_streamed_run_paints_only_through_the_renderer_on_the_supplied_console()
         return SimpleNamespace(render_stream=_render)
 
     # Act
-    import surfaces.cli.ui.renderer as renderer_module
+    import surfaces.interactive_shell.ui.stream_renderer as renderer_module
 
     real_renderer = renderer_module.StreamRenderer
     renderer_module.StreamRenderer = _fake_stream_renderer  # type: ignore[assignment]

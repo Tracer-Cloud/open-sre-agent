@@ -271,7 +271,12 @@ from config.constants.posthog_mcp import (
     POSTHOG_MCP_PROJECT_ID_ENV,
     POSTHOG_MCP_URL_ENV,
 )
-from config.constants.product import RELEASE_STAGE, RELEASE_STAGE_BANNER
+from config.constants.product import (
+    RELEASE_STAGE,
+    RELEASE_STAGE_BANNER,
+    RELEASES_API_URL_ENV,
+    UV_RUN_RECURSION_DEPTH_ENV,
+)
 from config.constants.rds import RDS_DB_INSTANCE_IDENTIFIER_ENV, RDS_REGION_ENV
 from config.constants.redis import (
     REDIS_DATABASE_ENV,
@@ -321,6 +326,7 @@ from config.constants.signoz import SIGNOZ_API_KEY_ENV, SIGNOZ_URL_ENV
 from config.constants.slack import (
     SLACK_APP_TOKEN_ENV,
     SLACK_BOT_TOKEN_ENV,
+    SLACK_DEFAULT_CHAT_ID_ENV,
     SLACK_FILE_HOST_SUFFIXES,
     SLACK_WEBHOOK_URL_ENV,
 )
@@ -396,6 +402,8 @@ from config.constants.yandex_cloud import (
 __all__ = [
     "RELEASE_STAGE",
     "RELEASE_STAGE_BANNER",
+    "RELEASES_API_URL_ENV",
+    "UV_RUN_RECURSION_DEPTH_ENV",
     "ALERT_TEMPLATE_CHOICES",
     "ALERTMANAGER_BEARER_TOKEN_ENV",
     "ALERTMANAGER_PASSWORD_ENV",
@@ -634,6 +642,7 @@ __all__ = [
     "SIGNOZ_URL_ENV",
     "SLACK_APP_TOKEN_ENV",
     "SLACK_BOT_TOKEN_ENV",
+    "SLACK_DEFAULT_CHAT_ID_ENV",
     "SLACK_WEBHOOK_URL_ENV",
     "SLACK_FILE_HOST_SUFFIXES",
     "SLACK_LINK_RE",

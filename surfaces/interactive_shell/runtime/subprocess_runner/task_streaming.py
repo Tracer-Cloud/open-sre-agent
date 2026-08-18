@@ -17,7 +17,7 @@ from rich.text import Text
 
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.ui import DIM, ERROR
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.subprocess import (
     CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,
     MAX_COMMAND_OUTPUT_CHARS,

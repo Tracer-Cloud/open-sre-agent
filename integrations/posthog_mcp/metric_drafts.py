@@ -15,11 +15,9 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
-from core.agent_harness.turns.cohort_identity import reply_reports_cohort_unverified
-from core.agent_harness.turns.gather_observation import (
-    GatheredEvidence,
-    coerce_gathered_evidence,
-)
+from core.agent_harness.ports import GatheredEvidence
+from core.agent_harness.spi.prompt_chrome import reply_reports_cohort_unverified
+from core.agent_harness.tools import coerce_gathered_evidence
 from platform.harness_ports import (
     register_discovery_targets,
     register_metric_cohort_resolver,

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.spi.session_flags import session_terminal
+from core.agent_harness.spi.session_state import session_terminal
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from platform.common.errors import OpenSREError
 from platform.common.task_types import TaskKind, TaskRecord
@@ -23,12 +23,12 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     normalize_investigation_target,
     user_facing_error_message,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
     InvestigationLlmUsage,
     observe_investigation_llm_usage,
     resolve_configured_llm_identity,
 )
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.session import Session

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.spi.session_flags import background_mode_enabled, session_terminal
+from core.agent_harness.spi.session_state import background_mode_enabled, session_terminal
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -33,7 +33,6 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     InvestigationOutcome,
     normalize_investigation_target,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
     publish_investigation_outcome_analytics,
 )
@@ -41,6 +40,7 @@ from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_investigation_outcome,
     format_investigation_terminal_outcome,
 )
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 
 def _interactive_template_menu(session: Session, console: Console) -> bool:
@@ -72,7 +72,7 @@ def _queue_investigate_target(session: Session, target: str) -> None:
 
 
 def _interactive_investigate_menu(session: Session, console: Console) -> bool:
-    from surfaces.cli.constants import SAMPLE_ALERT_OPTIONS
+    from config.constants.investigation import SAMPLE_ALERT_OPTIONS
 
     root = "/investigate"
     choices: list[tuple[str, str]] = [
@@ -224,11 +224,11 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     from config.constants.investigation import ALERT_TEMPLATE_CHOICES
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
-    from surfaces.cli.investigation.payload import resolve_alert_path
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         run_investigation_for_session,
         run_sample_alert_for_session,
     )
+    from surfaces.shared.demo_alert import resolve_alert_path
 
     if not args and repl_tty_interactive():
         return _interactive_investigate_menu(session, console)

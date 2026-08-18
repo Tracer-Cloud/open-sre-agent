@@ -944,6 +944,10 @@ class SlackBotConfig(StrictConfigModel):
         description="Slack signing secret for webhook HMAC verification. MUST be set for Events API HTTP.",
     )
     app_id: str = ""
+    default_chat_id: str = Field(
+        default="",
+        description="Default channel ID (C…) for scheduled outbound delivery.",
+    )
     identity_policy: dict[str, object] | None = Field(
         default=None,
         description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",

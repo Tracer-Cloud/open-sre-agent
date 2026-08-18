@@ -177,7 +177,7 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
     )
-    from gateway.core.storage.investigations.store import InMemoryInvestigationStore
+    from gateway.core.storage.investigations.repository import InMemoryInvestigationRepository
     from gateway.web.worker import InvestigationWorker
 
     reset_process_turn_gate_for_tests()
@@ -186,7 +186,7 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
     set_process_turn_gate(gate)
     monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
 
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
     store.create(clerk_org_id="org_a", trigger={"raw_alert": {"alert_name": "cpu"}})
     entered = threading.Event()
     result: list[str] = []

@@ -6,7 +6,7 @@ from ``integrations/harness_adapters.py``.
 
 from __future__ import annotations
 
-from core.agent_harness.turns.cohort_identity import COHORT_IDENTITY_UNVERIFIED_MARK
+from core.agent_harness.spi.prompt_chrome import COHORT_IDENTITY_UNVERIFIED_MARK
 
 
 def posthog_assistant_prompt_fragment() -> str:

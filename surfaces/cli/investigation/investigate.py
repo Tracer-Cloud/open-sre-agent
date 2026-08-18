@@ -162,7 +162,7 @@ def run_investigation_cli_streaming(
     Uses async pipeline streaming + ``StreamRenderer`` so the local CLI shows
     the same live tool-call and reasoning updates as a remote investigation.
     """
-    from surfaces.cli.ui.renderer import StreamRenderer
+    from surfaces.interactive_shell.ui.stream_renderer import StreamRenderer
 
     events = stream_investigation_cli(
         raw_alert=raw_alert,

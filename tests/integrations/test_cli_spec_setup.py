@@ -563,7 +563,17 @@ def test_slack_webhook_mode_clears_socket_tokens(
         values={"webhook_url": hook},
     )
     assert run.store == [
-        ("slack", {"credentials": {"webhook_url": hook, "bot_token": None, "app_token": None}})
+        (
+            "slack",
+            {
+                "credentials": {
+                    "webhook_url": hook,
+                    "bot_token": None,
+                    "app_token": None,
+                    "default_chat_id": None,
+                }
+            },
+        )
     ]
     # Webhook is store-only (no env_var). The unchosen socket tokens clear their
     # keyring slots so a prior Socket Mode setup does not linger in the env.
@@ -584,7 +594,14 @@ def test_slack_both_mode_stores_all_three(monkeypatch: pytest.MonkeyPatch, run: 
     assert run.store == [
         (
             "slack",
-            {"credentials": {"webhook_url": hook, "bot_token": "xoxb-1", "app_token": "xapp-1"}},
+            {
+                "credentials": {
+                    "webhook_url": hook,
+                    "bot_token": "xoxb-1",
+                    "app_token": "xapp-1",
+                    "default_chat_id": None,
+                }
+            },
         )
     ]
 
@@ -597,6 +614,7 @@ def test_slack_both_mode_prefills_stored_tokens_on_rerun(
         "webhook_url": "https://hooks.slack.com/services/T/B/x",
         "bot_token": "xoxb-1",
         "app_token": "xapp-1",
+        "default_chat_id": None,
     }
     _drive_picker(
         monkeypatch,

@@ -38,14 +38,14 @@ def _persist_and_report_theme(
     console: Console,
     selected: str,
 ) -> None:
-    from surfaces.cli.commands.config import _load_config, _save_config, _set_nested_key
+    from config.local_settings import load_local_settings, save_local_settings, set_nested_key
     from surfaces.interactive_shell.ui.components.rendering import refresh_welcome_poster
 
     active = set_active_theme(selected)
     session.terminal.active_theme_name = active.name
 
-    updated = _set_nested_key(_load_config(), "interactive.theme", active.name)
-    _save_config(updated)
+    updated = set_nested_key(load_local_settings(), "interactive.theme", active.name)
+    save_local_settings(updated)
 
     # Poster redraw and prompt invalidation both trigger prompt_toolkit DSR/CPR
     # queries under patch_stdout. Drain between each step so bytes never leak into

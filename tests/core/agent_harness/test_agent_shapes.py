@@ -8,7 +8,7 @@ from typing import get_type_hints
 from core.agent import Agent
 from core.agent_harness.ports import ExecuteActions, StreamAnswerFn
 from core.agent_harness.turns.headless_adapters import NullToolProvider
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent
+from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.orchestrator import run_turn, stream_answer
 from core.agent_harness.turns.port_families import HeadlessPorts
 

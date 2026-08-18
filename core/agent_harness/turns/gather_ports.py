@@ -15,6 +15,10 @@ from core.agent_harness.ports import ToolEventObserver
 #: Persists the tool calls a gather pass made: ``[(tool_call, result), ...]``.
 PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
 
+#: Loop budget for headless metric reports (PostHog / digests): schema discovery plus
+#: one query per metric needs more than the chat default; passed as ``max_iterations``.
+MAX_REPORT_GATHER_ITERATIONS = 12
+
 
 @dataclass(frozen=True, slots=True)
 class GatherPorts:
@@ -42,4 +46,4 @@ class GatherPorts:
 GATHER_DISABLED = GatherPorts(enabled=False)
 
 
-__all__ = ["GATHER_DISABLED", "GatherPorts", "PersistToolCalls"]
+__all__ = ["GATHER_DISABLED", "MAX_REPORT_GATHER_ITERATIONS", "GatherPorts", "PersistToolCalls"]

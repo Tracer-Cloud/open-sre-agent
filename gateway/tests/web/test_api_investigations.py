@@ -190,15 +190,13 @@ def test_cancel_unknown_investigation_is_not_found(client: TestClient) -> None:
 
 
 def test_cancel_running_investigation_returns_current_status(client: TestClient) -> None:
-    from gateway.web import investigations
-
     created = client.post(
         "/api/investigations",
         json={"raw_alert": {}},
         headers={"Authorization": "Bearer fake"},
     ).json()
     investigation_id = created["investigation_id"]
-    store = investigations._store()
+    store = webapp.app.state.investigations
     # Drain leftovers from earlier tests sharing the process-local store.
     claimed = None
     for _ in range(32):
