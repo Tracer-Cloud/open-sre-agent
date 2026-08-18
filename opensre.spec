@@ -14,7 +14,7 @@ MODE = os.environ.get("OPENSRE_PYINSTALLER_MODE", "onedir")
 if MODE not in {"onedir", "onefile"}:
     raise ValueError(f"Unsupported OPENSRE_PYINSTALLER_MODE: {MODE!r}")
 
-manifest = runpy.run_path(str(ROOT / "platform/packaging/release_manifest.py"))
+manifest = runpy.run_path(str(ROOT / "platform/deployment/packaging/release_manifest.py"))
 runtime_hidden_imports = manifest["runtime_hidden_imports"]
 skill_data_entries = manifest["skill_data_entries"]
 
