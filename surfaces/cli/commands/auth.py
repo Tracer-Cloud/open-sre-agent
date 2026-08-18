@@ -18,12 +18,12 @@ from platform.terminal.prompt_support import (
     questionary_prompt_style,
 )
 from platform.terminal.theme import BOLD_BRAND, ERROR, HIGHLIGHT, SECONDARY, WARNING
-from surfaces.cli.llm_auth.providers import (
+from surfaces.shared.llm_setup.auth_profiles import (
     ProviderAuthProfile,
     iter_auth_profiles,
     resolve_auth_profile,
 )
-from surfaces.cli.llm_auth.service import (
+from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     cli_subscription_install_error,
     configure_api_key_provider,

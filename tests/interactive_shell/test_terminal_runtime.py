@@ -1720,9 +1720,9 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
         monkeypatch.setattr(
-            "surfaces.cli.commands.config._save_config",
+            "config.local_settings.save_local_settings",
             lambda data: saved_payloads.append(dict(data)),
         )
 
@@ -1766,8 +1766,8 @@ class TestThemeCommand:
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         set_active_theme("green")
         session = Session()
@@ -1782,8 +1782,8 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         refreshed: list[dict[str, object | None]] = []
 
@@ -1844,8 +1844,8 @@ class TestThemeCommand:
             "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
             lambda *_args, **_kwargs: drains.append("poster"),
         )
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         session = Session()
         console, _buf = self._capture()

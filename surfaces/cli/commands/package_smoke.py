@@ -35,7 +35,7 @@ _ACTION_SKILL_BODY_MARKERS = {"architecture-audit": "REPORT TEMPLATE from"}
 @click.command(name="_package-smoke", hidden=True)
 def package_smoke_command() -> None:
     """Fail unless essential dynamically bundled code and data are available."""
-    from core.agent_harness.prompts.skills.loader import list_action_skills, load_skill_body
+    from core.agent_harness.spi.grounding import list_action_skills, load_skill_body
     from integrations._verifiers_loader import register_all_verifiers
     from integrations.verification import list_verifiers
     from tools.registry import get_registered_tool_map

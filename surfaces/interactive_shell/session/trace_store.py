@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
+from core.agent_harness.spi.defaults import JsonlSessionStore
 from platform.observability.trace.spans import NoopSessionTraceStore, SessionTraceStore
 
 

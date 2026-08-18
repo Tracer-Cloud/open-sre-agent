@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 from pydantic import ValidationError
 
-from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+from surfaces.shared.error_handling.errors import OpenSREError
 from tools.system.watch_dog.config import WATCHDOG_SUPPORTED_PROVIDERS, WatchdogConfig
 from tools.system.watch_dog.runner import run_watchdog
 

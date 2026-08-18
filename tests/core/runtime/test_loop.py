@@ -131,7 +131,7 @@ def _agent(
     )
 
 
-def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_agent_exposes_headless_agent_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     class EchoReasoningClient:
         def invoke_stream(self, _prompt: str) -> Iterator[str]:
             yield "hello from headless"
@@ -141,7 +141,7 @@ def test_agent_exposes_headless_dispatch_entrypoint(monkeypatch: pytest.MonkeyPa
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
 
-    from core.agent_harness.turns.headless_dispatch import (
+    from core.agent_harness.turns.headless_adapters import (
         NullToolProvider,
         StaticReasoningClientProvider,
     )
@@ -165,7 +165,7 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
         "core.agent_harness.turns.action_driver.default_llm_factory",
         lambda: FakeLLM(iter([AgentLLMResponse(content="", tool_calls=[], raw_content=None)])),
     )
-    from core.agent_harness.turns.headless_dispatch import (
+    from core.agent_harness.turns.headless_adapters import (
         NullToolProvider,
         StaticReasoningClientProvider,
     )
@@ -184,7 +184,7 @@ def test_one_headless_agent_dispatches_multiple_messages(monkeypatch: pytest.Mon
 
 def test_provided_accounting_is_consumed_once() -> None:
     """Bound accounting is take-once — hosts must rebind per message."""
-    from core.agent_harness.turns.headless_dispatch import NoopTurnAccounting, NullToolProvider
+    from core.agent_harness.turns.headless_adapters import NoopTurnAccounting, NullToolProvider
 
     accounting = NoopTurnAccounting()
     agent = HeadlessPorts().agent(tools=NullToolProvider())
@@ -196,7 +196,7 @@ def test_provided_accounting_is_consumed_once() -> None:
 
 def test_default_accounting_is_resolved_fresh_per_message() -> None:
     from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-    from core.agent_harness.turns.headless_dispatch import InMemorySessionState, NullToolProvider
+    from core.agent_harness.turns.headless_adapters import InMemorySessionState, NullToolProvider
 
     class _PersistentState(InMemorySessionState):
         store = object()  # persistent-backed session selects DefaultTurnAccounting

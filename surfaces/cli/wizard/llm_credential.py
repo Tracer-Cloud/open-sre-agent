@@ -41,12 +41,16 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.config import PROJECT_ENV_PATH, ProviderOption, WizardCredentialKind
 from surfaces.cli.wizard.endpoint_prompt import (
     ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
-from surfaces.cli.wizard.env_sync import sync_env_values
-from surfaces.cli.wizard.validation import ValidationResult, validate_provider_credentials
+from surfaces.shared.llm_setup.catalog import (
+    PROJECT_ENV_PATH,
+    ProviderOption,
+    WizardCredentialKind,
+)
+from surfaces.shared.llm_setup.env_sync import sync_env_values
+from surfaces.shared.llm_setup.validation import ValidationResult, validate_provider_credentials
 
 #: What became of the credential the wizard just collected. ``unsaved`` outranks
 #: ``unverified``: a credential that never landed anywhere is the more urgent thing

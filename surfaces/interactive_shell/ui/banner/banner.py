@@ -54,7 +54,7 @@ from surfaces.interactive_shell.ui.tables.provider import detect_provider_model
 def _is_first_run() -> bool:
     """True when the wizard has never been completed on this machine."""
     try:
-        from surfaces.cli.wizard.store import get_store_path
+        from config.constants import get_store_path
 
         return not get_store_path().exists()
     except Exception:

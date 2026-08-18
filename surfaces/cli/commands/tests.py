@@ -24,7 +24,7 @@ from platform.analytics.cli import (
     capture_tests_picker_opened,
 )
 from platform.common.runtime_flags import is_json_output, is_yes
-from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+from surfaces.shared.error_handling.errors import OpenSREError
 from tools.investigation.reporting.upstream_correlation.runtime import (
     build_runtime_correlation,
 )

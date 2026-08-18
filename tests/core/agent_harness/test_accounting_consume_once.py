@@ -48,7 +48,7 @@ def _stub_dispatch(monkeypatch: Any) -> None:
         return bindings.accounting.finalize(_empty_result())
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.headless_dispatch.dispatch_chat_turn",
+        "core.agent_harness.turns.headless_agent.dispatch_chat_turn",
         _dispatch,
     )
 

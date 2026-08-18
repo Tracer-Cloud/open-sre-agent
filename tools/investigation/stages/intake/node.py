@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any, cast
 
-from core.agent_harness.llm_resolution import default_reasoning_llm_factory
+from core.agent_harness.runtime import default_reasoning_llm_factory
 from core.domain.alerts.extraction import (
     AlertDetails,
     build_alert_details_model,

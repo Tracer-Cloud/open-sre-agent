@@ -21,11 +21,8 @@ from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
 from core.agent_harness.turns.gather_ports import GatherPorts
-from core.agent_harness.turns.headless_dispatch import (
-    BufferOutputSink,
-    HeadlessAgent,
-    NoopTurnAccounting,
-)
+from core.agent_harness.turns.headless_adapters import BufferOutputSink, NoopTurnAccounting
+from core.agent_harness.turns.headless_agent import HeadlessAgent
 from core.agent_harness.turns.port_families import HeadlessPorts
 from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface

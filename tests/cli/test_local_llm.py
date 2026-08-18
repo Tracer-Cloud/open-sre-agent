@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.cli.wizard.local_llm.hardware import HardwareProfile, recommend_model
 from surfaces.cli.wizard.local_llm.ollama import is_model_present, normalize_model_tag, pull_model
-from surfaces.cli.wizard.validation import validate_provider_credentials
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+from surfaces.shared.llm_setup.validation import validate_provider_credentials
 
 # ---------------------------------------------------------------------------
 # Helpers

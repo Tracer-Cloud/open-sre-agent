@@ -60,7 +60,7 @@ def _gateway_delivery_context(context: AgentToolContext | None) -> tuple[str, st
     if context is None:
         return "", ""
     try:
-        from core.agent_harness.tools.tool_context import action_context_from_agent_context
+        from core.agent_harness.tools import action_context_from_agent_context
 
         action_ctx = action_context_from_agent_context(context)
     except RuntimeError:

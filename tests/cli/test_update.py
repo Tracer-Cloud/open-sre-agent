@@ -2,22 +2,21 @@ from __future__ import annotations
 
 import pytest
 
-from surfaces.cli.lifecycle.update import (
-    _extract_main_build_sha,
-    _extract_main_build_version,
-    _fetch_latest_version,
-    _is_update_available,
-    _upgrade_via_install_script,
+from platform.common.release_version import (
     development_install_doctor_version_detail,
-    run_update,
+    extract_main_build_sha,
+    extract_main_build_version,
+    fetch_latest_version,
+    is_update_available,
 )
+from surfaces.cli.lifecycle.update import _upgrade_via_install_script, run_update
 
 
 def test_already_up_to_date(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.2.3")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
 
     rc = run_update()
 
@@ -30,7 +29,7 @@ def test_check_only_returns_1_when_update_available(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr(
         "surfaces.cli.lifecycle.update._upgrade_via_install_script",
         pytest.fail,
@@ -49,7 +48,7 @@ def test_check_only_returns_0_when_up_to_date(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.2.3")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
 
     rc = run_update(check_only=True)
 
@@ -61,7 +60,7 @@ def test_update_install_script_success(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)
 
     rc = run_update(yes=True)
@@ -75,7 +74,7 @@ def test_update_install_script_failure_shows_retry_hint(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 1)
 
     rc = run_update(yes=True)
@@ -94,7 +93,7 @@ def test_fetch_error_returns_1(
     def _raise() -> str:
         raise RuntimeError("network unreachable")
 
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", _raise)
 
     rc = run_update()
 
@@ -110,7 +109,7 @@ def test_rate_limit_error_message(
     def _raise() -> str:
         raise RuntimeError("GitHub API rate limit exceeded, try again later")
 
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", _raise)
 
     rc = run_update()
 
@@ -128,7 +127,7 @@ def test_proxy_hint_in_connect_error(
             "could not connect to GitHub — check your network or HTTPS_PROXY settings"
         )
 
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", _raise)
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", _raise)
 
     rc = run_update()
 
@@ -141,7 +140,7 @@ def test_binary_install_upgrades_via_install_script(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_binary_install", lambda: True)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)
 
@@ -156,9 +155,9 @@ def test_editable_install_prints_warning(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_binary_install", lambda: False)
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_editable_install", lambda: True)
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.is_editable_install", lambda: True)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)
 
     rc = run_update(yes=True)
@@ -174,7 +173,7 @@ def test_install_script_failure_windows_shows_powershell_hint(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_windows", lambda: True)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 1)
 
@@ -189,7 +188,7 @@ def test_install_script_failure_unix_shows_curl_hint(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_windows", lambda: False)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 1)
 
@@ -204,7 +203,7 @@ def test_update_prints_main_build_url_after_success(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("surfaces.cli.lifecycle.update.get_opensre_version", lambda: "1.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "1.2.3")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "1.2.3")
     monkeypatch.setattr("surfaces.cli.lifecycle.update._is_binary_install", lambda: False)
     monkeypatch.setattr("surfaces.cli.lifecycle.update._upgrade_via_install_script", lambda: 0)
 
@@ -241,7 +240,7 @@ def test_upgrade_via_install_script_uses_main_channel(monkeypatch: pytest.Monkey
 
 def test_extract_main_build_version_from_release_body() -> None:
     body = "## Main build\n\n- Version: `0.1.2026.6.29+main.abc1234`\n- Commit: `abc1234`\n"
-    assert _extract_main_build_version(body) == "0.1.2026.6.29+main.abc1234"
+    assert extract_main_build_version(body) == "0.1.2026.6.29+main.abc1234"
 
 
 def test_fetch_latest_version_parses_main_build_release(
@@ -256,46 +255,46 @@ def test_fetch_latest_version_parses_main_build_release(
 
     monkeypatch.setattr("httpx.get", lambda *_args, **_kwargs: FakeResponse())
 
-    assert _fetch_latest_version() == "0.1.2026.6.29+main.deadbeef"
+    assert fetch_latest_version() == "0.1.2026.6.29+main.deadbeef"
 
 
 def test_is_update_available_no_downgrade_local_version() -> None:
-    assert not _is_update_available("1.0.0+local", "1.0.0")
+    assert not is_update_available("1.0.0+local", "1.0.0")
 
 
 def test_is_update_available_no_downgrade_dev_version() -> None:
-    assert not _is_update_available("0.2.0.dev0", "0.1.3")
+    assert not is_update_available("0.2.0.dev0", "0.1.3")
 
 
 def test_is_update_available_when_behind() -> None:
-    assert _is_update_available("1.0.0", "1.2.3")
+    assert is_update_available("1.0.0", "1.2.3")
 
 
 def test_is_update_available_when_equal() -> None:
-    assert not _is_update_available("1.0.0", "1.0.0")
+    assert not is_update_available("1.0.0", "1.0.0")
 
 
 def test_is_update_available_same_day_main_rebuild() -> None:
     current = "0.1.2026.6.29+main.be706ff"
     latest = "0.1.2026.6.29+main.0c306ad"
-    assert _is_update_available(current, latest)
+    assert is_update_available(current, latest)
 
 
 def test_is_update_available_same_day_main_rebuild_up_to_date() -> None:
     version = "0.1.2026.6.29+main.0c306ad"
-    assert not _is_update_available(version, version)
+    assert not is_update_available(version, version)
 
 
-def test_extract_main_build_sha() -> None:
-    assert _extract_main_build_sha("0.1.2026.6.29+main.0c306ad") == "0c306ad"
-    assert _extract_main_build_sha("1.0.0") is None
-    assert _extract_main_build_sha("1.0.0+local") is None
+def testextract_main_build_sha() -> None:
+    assert extract_main_build_sha("0.1.2026.6.29+main.0c306ad") == "0c306ad"
+    assert extract_main_build_sha("1.0.0") is None
+    assert extract_main_build_sha("1.0.0+local") is None
 
 
 def test_development_install_doctor_detail_none_for_release_like_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_editable_install", lambda: False)
+    monkeypatch.setattr("platform.common.release_version.is_editable_install", lambda: False)
     monkeypatch.delenv("UV_RUN_RECURSION_DEPTH", raising=False)
     assert development_install_doctor_version_detail("2026.4.5") is None
 
@@ -303,7 +302,7 @@ def test_development_install_doctor_detail_none_for_release_like_install(
 def test_development_install_doctor_detail_editable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_editable_install", lambda: True)
+    monkeypatch.setattr("platform.common.release_version.is_editable_install", lambda: True)
     monkeypatch.delenv("UV_RUN_RECURSION_DEPTH", raising=False)
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == "2026.4.5 (editable install; skipped comparing to latest main build)"
@@ -312,7 +311,7 @@ def test_development_install_doctor_detail_editable(
 def test_development_install_doctor_detail_uv_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_editable_install", lambda: False)
+    monkeypatch.setattr("platform.common.release_version.is_editable_install", lambda: False)
     monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == "2026.4.5 (uv run; skipped comparing to latest main build)"
@@ -321,7 +320,7 @@ def test_development_install_doctor_detail_uv_run(
 def test_development_install_doctor_detail_editable_and_uv_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_editable_install", lambda: True)
+    monkeypatch.setattr("platform.common.release_version.is_editable_install", lambda: True)
     monkeypatch.setenv("UV_RUN_RECURSION_DEPTH", "1")
     detail = development_install_doctor_version_detail("2026.4.5")
     assert detail == (

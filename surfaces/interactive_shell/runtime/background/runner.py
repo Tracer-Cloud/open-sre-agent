@@ -25,7 +25,7 @@ from surfaces.interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
 )
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 BackgroundRunFn = Callable[..., dict[str, Any]]
 

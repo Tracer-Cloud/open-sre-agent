@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 
 import surfaces.cli.wizard._ui as ui
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
 from surfaces.cli.wizard.custom_endpoints import (
     CUSTOM_ENDPOINT_SELECTION,
     ensure_endpoint_settings,
@@ -15,6 +14,7 @@ from surfaces.cli.wizard.custom_endpoints import (
     onboarding_provider_default,
     resolve_onboarding_provider,
 )
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
 
 def test_configured_custom_openai_short_circuits_and_keeps_v1(monkeypatch: Any) -> None:

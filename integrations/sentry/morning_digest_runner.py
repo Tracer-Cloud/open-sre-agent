@@ -7,7 +7,7 @@ from typing import Any
 
 from core.agent_harness import AgentSession, TurnResult
 from core.agent_harness.runtime import GatherPorts
-from core.agent_harness.session.integration_resolution import (
+from core.agent_harness.spi.integrations import (
     merge_resolved_integrations,
     resolve_and_cache_integrations,
 )

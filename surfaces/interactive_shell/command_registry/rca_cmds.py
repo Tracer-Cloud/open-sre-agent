@@ -32,7 +32,7 @@ from surfaces.interactive_shell.ui.components.choice_menu import (
     repl_tty_interactive,
 )
 from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 _RCA_ROOT = "/rca"
 _RCA_LATEST = "__latest__"

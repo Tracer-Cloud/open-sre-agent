@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from surfaces.cli.wizard import _ui, flow
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
 
 def _wire_prompts(

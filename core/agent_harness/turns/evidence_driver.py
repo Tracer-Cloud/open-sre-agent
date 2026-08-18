@@ -61,9 +61,9 @@ log = logging.getLogger(__name__)
 # PostHog count query never ran. Pair with :func:`with_gather_discovery_budget`
 # so successful schema thrash cannot burn the iteration cap. The full
 # multi-stage ReAct budget belongs to investigations. Headless metric reports
-# (PostHog / digests) may raise this via ``max_iterations``.
+# (PostHog / digests) may raise this via ``max_iterations``
+# (``gather_ports.MAX_REPORT_GATHER_ITERATIONS``).
 _MAX_GATHER_ITERATIONS = 6
-MAX_REPORT_GATHER_ITERATIONS = 12
 
 # Caps so a chatty tool (or many tools) can't blow up the follow-up prompt the
 # assistant must summarize.
@@ -408,7 +408,6 @@ def gather_tool_evidence(
 __all__ = [
     "GatherAgentFactory",
     "GatheredEvidence",
-    "MAX_REPORT_GATHER_ITERATIONS",
     "PersistToolCalls",
     "gather_tool_evidence",
 ]

@@ -8,8 +8,8 @@ import pytest
 
 from config.constants.billing import ORGANIZATION_ID_ENV, USAGE_SECRET_ENV, WEBAPP_URL_ENV
 from gateway.core.billing.credits_client import CreditsOutcome
-from gateway.core.storage.investigations.store import (
-    InMemoryInvestigationStore,
+from gateway.core.storage.investigations.repository import (
+    InMemoryInvestigationRepository,
     InvestigationStatus,
 )
 from gateway.web.artifacts import ARTIFACTS_BUCKET_ENV, upload_report_to_s3
@@ -25,13 +25,13 @@ def _metering_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENSRE_ANALYTICS_DISABLED", "1")
 
 
-def _queued(store: InMemoryInvestigationStore, org: str = "org_a") -> str:
+def _queued(store: InMemoryInvestigationRepository, org: str = "org_a") -> str:
     record = store.create(clerk_org_id=org, trigger={"raw_alert": {"alert_name": "cpu"}})
     return record.id
 
 
 def test_run_once_completes_and_writes_local_report(tmp_path: Path) -> None:
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
     investigation_id = _queued(store)
     worker = InvestigationWorker(
         store,
@@ -52,7 +52,7 @@ def test_run_once_completes_and_writes_local_report(tmp_path: Path) -> None:
 
 
 def test_run_once_marks_failed_on_runner_error(tmp_path: Path) -> None:
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
     investigation_id = _queued(store)
 
     def runner(_trigger: dict[str, Any]) -> dict[str, Any]:
@@ -71,7 +71,7 @@ def test_run_once_marks_failed_on_runner_error(tmp_path: Path) -> None:
 def test_run_once_credit_denial_skips_pipeline_and_marks_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
     investigation_id = _queued(store)
     runs: list[dict[str, Any]] = []
     denials: list[tuple[str | None, str]] = []
@@ -102,7 +102,7 @@ def test_run_once_proceeds_when_credits_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Fail-open: a webapp outage must not stall queued investigations."""
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
     investigation_id = _queued(store)
     monkeypatch.setattr(
         "gateway.web.worker.consume_credits",
@@ -119,13 +119,13 @@ def test_run_once_proceeds_when_credits_unavailable(
 
 def test_run_once_returns_false_when_queue_empty(tmp_path: Path) -> None:
     worker = InvestigationWorker(
-        InMemoryInvestigationStore(), runner=lambda _t: {}, artifacts_dir=tmp_path
+        InMemoryInvestigationRepository(), runner=lambda _t: {}, artifacts_dir=tmp_path
     )
     assert worker.run_once() is False
 
 
 def test_claim_is_oldest_first_and_single_delivery() -> None:
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
     first = _queued(store)
     second = _queued(store)
 
@@ -186,7 +186,7 @@ def test_ensure_worker_started_is_noop_when_disabled(
     monkeypatch.delenv(WORKER_ENABLED_ENV, raising=False)
     monkeypatch.setattr(worker_mod, "_worker", None)
 
-    assert ensure_worker_started(InMemoryInvestigationStore()) is None
+    assert ensure_worker_started(InMemoryInvestigationRepository()) is None
 
 
 def test_ensure_worker_started_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -195,7 +195,7 @@ def test_ensure_worker_started_once(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv(WORKER_ENABLED_ENV, "1")
     monkeypatch.setattr(worker_mod, "_worker", None)
-    store = InMemoryInvestigationStore()
+    store = InMemoryInvestigationRepository()
 
     first = ensure_worker_started(store)
     second = ensure_worker_started(store)

@@ -11,16 +11,17 @@ progress, and drives one agent across many turns. The gateway (Slack, Discord,
 Telegram) and the interactive shell are both hosts, and they are the same
 program with different ports.
 
-## Three roles, four import doors
+## Four roles, five API modules
 
-Everything a host touches comes through four modules. Nothing else under
-`core.agent_harness` is public.
+Everything a host or tool author touches comes through five modules — the
+harness API. Nothing else under `core.agent_harness` is part of it.
 
 | Role | You want to… | Import |
 | --- | --- | --- |
 | **Embed** | run turns with the standard ports | `core.agent_harness` — `AgentSession`, `SessionConfig`, `SessionCore`, `SessionManager`, `TurnResult`, `ToolCallingTurnResult`, `OutputSink` |
-| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner` |
-| **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_flags`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
+| **Host** | build one agent from your ports, handle it per message | `core.agent_harness.runtime` — `DefaultPorts`, `HeadlessPorts`, `HeadlessAgent`, `TurnBinding`, `GatherPorts`, `DefaultToolProvider`, `ActionTurnRunner`; also the ReAct engine the investigation pipeline shares (`AgentConfig`, `build_agent`, the default LLM factories) |
+| **Host** | call helpers around a turn | `core.agent_harness.spi.<role>` — `session_goal`, `session_state`, `cancel`, `accounting`, `prompt_chrome`, `integrations`, `grounding`, `defaults` |
+| **Write a tool** | implement an action tool | `core.agent_harness.tools` — `ActionToolContext`, `execute_with_action_context`, `capability_available_from_sources`, `HandoffField`, `EVIDENCE_KIND_VALUES` |
 | **Implement** | satisfy a protocol the harness calls | `core.agent_harness.ports` — `OutputSink`, `ToolProvider`, `PromptContextProvider`, `ReasoningClientProvider`, `RunRecordFactory`, `ErrorReporter`, `TurnAccounting`, `SessionState`, and the rebind mix-ins `ConsoleBindable` / `OutputBindable` / `SessionBindable` |
 
 ## The host loop
@@ -126,18 +127,19 @@ ports and in what they do with the result.
 | Account a turn (telemetry, token totals) | `TurnAccounting` — `record_action_result`, `finalize` | `TurnBinding(accounting=…)` |
 | Approve or deny tool calls per conversation | — | `TurnBinding(tool_hooks=…)` |
 | Follow the turn's console or sink from your own port | `ConsoleBindable.bind_console` / `OutputBindable.bind_output` | happens on `bind_turn` |
-| Drive a multi-turn goal, read or set session flags | — | `spi.session_goal`, `spi.session_flags` |
+| Drive a multi-turn goal, read or set session state | — | `spi.session_goal`, `spi.session_state` |
 
 ## Rules a host must keep
 
-- **One agent per logical session; one turn at a time on it.** `bind_turn`
-  mutates per-turn state; the gateway holds a per-session lock across
-  `dispatch`. Do not share one agent between concurrent turns.
+- **One agent per logical session; one turn at a time on it.** The agent
+  enforces this: a second `handle` while one is running raises `AgentBusyError`
+  rather than interleaving. Serialize turns *before* calling `handle` (the
+  gateway holds a per-session lock across it); do not catch the error to retry.
 - **State the whole turn.** Build a fresh `TurnBinding` per message and pass it
   to `handle`; do not call `bind_turn`/`dispatch` yourself.
 - **Bind on the worker thread you dispatch from.** Storage scope is a
   `ContextVar`; if you hand the turn to a thread pool, wrap it with
   `config.scope_context.in_current_scope` on the calling thread.
-- **Do not reach past the doors.** Modules under `core.agent_harness.turns`,
+- **Do not import past the API.** Modules under `core.agent_harness.turns`,
   `.tools`, `.session` and `.prompts` are internal; the shipped hosts pin their
   remaining deep imports in shrink-only tests.
