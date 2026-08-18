@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("release", "main")]
     [string]$Channel = $(if ($env:OPENSRE_INSTALL_CHANNEL) { $env:OPENSRE_INSTALL_CHANNEL } else { "main" }),
     [switch]$SkipMain
@@ -1191,3 +1191,4 @@ function Install-OpenSre {
 if (-not $SkipMain) {
     Install-OpenSre
 }
+
