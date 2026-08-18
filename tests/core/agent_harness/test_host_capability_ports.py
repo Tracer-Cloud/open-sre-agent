@@ -117,6 +117,25 @@ def test_every_host_capability_protocol_takes_the_gate_by_inheritance() -> None:
     )
 
 
+def _aliases_bound_by(tree: ast.Module) -> set[str]:
+    """Every top-level name this module binds, in all three alias forms.
+
+    ``X = ...`` (Assign), ``X: TypeAlias = ...`` (AnnAssign) and PEP 695
+    ``type X = ...`` (TypeAlias) are all established in this repository, so a
+    ratchet that reads only one of them would miss a duplicate written in
+    either of the others.
+    """
+    bound: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            bound |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            bound.add(node.target.id)
+        elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+            bound.add(node.name.id)
+    return bound
+
+
 def test_no_tier_redeclares_a_host_port_factory_alias() -> None:
     # Arrange — the aliases are part of the harness API; a second copy drifts.
     aliases = {
@@ -133,13 +152,7 @@ def test_no_tier_redeclares_a_host_port_factory_alias() -> None:
         if relative == _ALIAS_HOME:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        assigned = [
-            target.id
-            for node in tree.body
-            if isinstance(node, ast.Assign)
-            for target in node.targets
-            if isinstance(target, ast.Name) and target.id in aliases
-        ]
+        assigned = sorted(_aliases_bound_by(tree) & aliases)
         if assigned:
             offenders[relative] = assigned
 
