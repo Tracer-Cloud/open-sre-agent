@@ -28,7 +28,7 @@ from core.agent_harness.spi.session_goal import (
 )
 from gateway.core.host.cancel_console import CancelConsole, ensure_turn_cancel
 from gateway.core.host.concurrency import TurnConcurrencyGate
-from gateway.core.host.session_agents import SessionAgentPool
+from gateway.core.host.session_agents import ChannelAgentPorts, SessionAgentPool
 from gateway.core.host.status_messages import EMPTY_RESPONSE_MESSAGE
 from gateway.core.transport_api import GatewaySink
 from platform.analytics.cli import (
@@ -64,6 +64,7 @@ class GatewayTurnHandler:
         *,
         console: Console,
         slash_ports_factory: SlashPortsFactory | None = None,
+        ports: ChannelAgentPorts | None = None,
         gate: TurnConcurrencyGate | None = None,
         busy_message: str = _DEFAULT_BUSY_MESSAGE,
     ) -> None:
@@ -71,6 +72,7 @@ class GatewayTurnHandler:
         self._pool = SessionAgentPool(
             console=console,
             slash_ports_factory=slash_ports_factory,
+            ports=ports,
         )
         # Gateway already bootstrapped env at process start; turns must not reload.
         self._gate = gate
