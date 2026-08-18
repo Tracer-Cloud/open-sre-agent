@@ -110,7 +110,7 @@ def capture_exception(
 
 
 def render_landing(group: click.Group) -> None:
-    from surfaces.interactive_shell.ui.layout import render_landing as _render_landing
+    from surfaces.cli.layout import render_landing as _render_landing
 
     _render_landing(group)
 

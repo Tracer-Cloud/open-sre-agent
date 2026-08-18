@@ -31,17 +31,6 @@ _CLI_IMPORTS_FROM_SHELL: frozenset[str] = frozenset(
     {
         # Launching the REPL — the composition point; belongs in the entrypoint.
         "surfaces.interactive_shell",
-        # Terminal primitives both surfaces render with — belong in surfaces/shared.
-        "surfaces.interactive_shell.ui.layout",
-        "surfaces.interactive_shell.ui.health",
-        "surfaces.interactive_shell.ui.feedback",
-        "surfaces.interactive_shell.ui.components.rendering",
-        "surfaces.interactive_shell.ui.components.key_reader",
-        "surfaces.interactive_shell.ui.components.banner_art",
-        "surfaces.interactive_shell.ui.agents.agents_view",
-        "surfaces.interactive_shell.ui.stream_renderer",
-        # Harness port installation — belongs in bootstrap/.
-        "surfaces.interactive_shell.ui.output.boundary",
         # Slash-command adapter for the gateway entry.
         "surfaces.interactive_shell.runtime.slash_adapter",
     }

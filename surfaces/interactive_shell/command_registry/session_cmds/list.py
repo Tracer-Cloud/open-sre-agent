@@ -14,7 +14,7 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.time_format import (
+from surfaces.shared.terminal.components.time_format import (
     format_repl_duration,
     format_repl_timestamp,
 )

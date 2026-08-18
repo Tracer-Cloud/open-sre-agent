@@ -30,7 +30,7 @@ from surfaces.cli.app import cli
 # inside CLI ``run()`` so those patches target the defining module.
 _ENV = "bootstrap.process.bootstrap_opensre_env_once"
 _SENTRY = "platform.observability.errors.sentry.init_sentry"
-_ADAPTERS = "surfaces.interactive_shell.ui.output.boundary.install_product_adapters"
+_ADAPTERS = "surfaces.shared.terminal.output.boundary.install_product_adapters"
 _ESCAPE = "platform.terminal.prompt_support.install_questionary_escape_cancel"
 _CTRL_C = "platform.terminal.prompt_support.install_questionary_ctrl_c_double_exit"
 _SIGINT = "surfaces.cli.signals.install_sigint_handler"

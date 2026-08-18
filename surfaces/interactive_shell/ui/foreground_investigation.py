@@ -169,9 +169,9 @@ def _run_foreground_investigation_body(
     task.mark_completed(result=str(root) if root is not None else "")
     session.apply_investigation_result(final_state, trigger=task_command)
 
-    from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
-    from surfaces.interactive_shell.ui.components.key_reader import restore_stdin_terminal
-    from surfaces.interactive_shell.ui.feedback import prompt_investigation_feedback
+    from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
+    from surfaces.shared.terminal.components.key_reader import restore_stdin_terminal
+    from surfaces.shared.terminal.feedback import prompt_investigation_feedback
 
     # Skip feedback while the prompt-toolkit app is running: its cursor-position
     # queries would race the raw feedback menu and leak bytes into the next prompt.

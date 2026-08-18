@@ -204,7 +204,7 @@ def _sleep_until_or_cancel(seconds: float) -> None:
     if os.name == "nt":
         import msvcrt
 
-        from surfaces.interactive_shell.ui.components.key_reader import read_key_windows
+        from surfaces.shared.terminal.components.key_reader import read_key_windows
 
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
@@ -217,7 +217,7 @@ def _sleep_until_or_cancel(seconds: float) -> None:
     import termios
     import tty
 
-    from surfaces.interactive_shell.ui.components.key_reader import read_key_unix
+    from surfaces.shared.terminal.components.key_reader import read_key_unix
 
     fd = sys.stdin.fileno()
     old_attrs = termios.tcgetattr(fd)  # type: ignore[attr-defined]

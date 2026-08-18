@@ -87,7 +87,7 @@ def health_command(watch: bool, rate: int) -> None:
     from config.config import get_environment
     from config.constants.paths import integrations_store_path
     from integrations.verify import verify_integrations
-    from surfaces.interactive_shell.ui.health import render_health_json, render_health_report
+    from surfaces.shared.terminal.health import render_health_json, render_health_report
 
     def _run_once() -> int:
         results = verify_integrations()

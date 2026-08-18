@@ -84,7 +84,9 @@ layers below it.
   REPL), and `surfaces/shared` for code two or more surfaces use. A surface
   owns its own I/O, prompts, and presentation, and composes lower layers to do
   the actual work. The two terminal surfaces are peers and do not import each
-  other; what both need lives in `surfaces/shared` or a lower layer
+  other; what both need lives in `surfaces/shared` — `terminal/` (output
+  tracking, tables, prompts, banner, health and feedback rendering),
+  `llm_setup/`, `error_handling/` — or a lower layer
   (`tests/shared/test_surface_border.py` pins each direction's remaining
   imports as a shrink-only allowlist). Slack is not a surface: its inbound
   transport lives in `gateway/transports/slack`, outbound delivery in

@@ -26,7 +26,7 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.session.background_investigations import (
     BackgroundInvestigationRecord,
 )
-from surfaces.interactive_shell.ui.tables.tool_catalog import ToolCatalogEntry
+from surfaces.shared.terminal.tables.tool_catalog import ToolCatalogEntry
 
 
 def _capture() -> tuple[Console, io.StringIO]:

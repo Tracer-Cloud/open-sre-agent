@@ -9,13 +9,13 @@ from rich.text import Text
 
 from platform.terminal import theme as ui_theme
 from surfaces.interactive_shell.runtime import Session
-from surfaces.interactive_shell.ui.banner.banner_state import integration_display_name
 from surfaces.interactive_shell.ui.input_prompt.completion import completion_preview_hint_ansi
 from surfaces.interactive_shell.ui.input_prompt.layout import (
     _clip_text,
     _prompt_line_width,
     _short_meta,
 )
+from surfaces.shared.terminal.banner.banner_state import integration_display_name
 
 _PROMPT_RULE_CHAR = "─"
 DEFAULT_PLACEHOLDER_TEXT = "Type a message, /command, or paste an alert"

@@ -17,8 +17,8 @@ from core.tool_framework.registered_tool import RegisteredTool
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.command_registry.tools_cmds import _TOOLS_FIRST_ARGS, _cmd_tools
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.tables import tool_catalog
-from surfaces.interactive_shell.ui.tables.tool_catalog import (
+from surfaces.shared.terminal.tables import tool_catalog
+from surfaces.shared.terminal.tables.tool_catalog import (
     ToolCatalogEntry,
     _summarize_input_schema,
     build_tool_catalog,

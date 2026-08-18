@@ -12,11 +12,11 @@ from surfaces.interactive_shell.command_registry.session_cmds.resume_rendering i
 )
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
+from surfaces.shared.terminal.components.time_format import format_repl_timestamp
 
 
 def _record_resume_slash(

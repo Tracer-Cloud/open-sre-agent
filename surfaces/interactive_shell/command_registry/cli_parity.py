@@ -23,8 +23,8 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
     start_background_cli_task,
 )
 from surfaces.interactive_shell.ui import DIM, ERROR, print_command_output
-from surfaces.interactive_shell.ui.components.choice_menu import prepare_repl_output_line
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import format_wizard_cli_outcome
+from surfaces.shared.terminal.components.choice_menu import prepare_repl_output_line
 
 _UPDATE_SUBPROCESS_TIMEOUT_SECONDS = 300
 _BACKGROUND_TEST_SUBCOMMANDS = frozenset({"run", "synthetic", "cloudopsbench"})
