@@ -1,9 +1,7 @@
-"""Background (daemon) lifecycle for the OpenSRE gateway process.
+"""Start, stop and inspect the detached gateway process.
 
-Supervises a detached child process whose output is captured in
-``~/.opensre/gateway/gateway.log`` and whose PID is tracked in ``gateway.pid``.
-The running process reports per-component state (web app, chat transports, task
-scheduler) through ``components.json``.
+Supervises a child whose output is captured in ``~/.opensre/gateway/gateway.log``
+and whose PID is tracked in ``gateway.pid``.
 
 The caller supplies the child's ``argv``: each surface owns its own composition
 root, so this module names no entrypoint and stays free of any ``surfaces``
@@ -12,8 +10,6 @@ dependency.
 
 from __future__ import annotations
 
-import contextlib
-import json
 import os
 import signal
 import subprocess
@@ -23,10 +19,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from config.constants import OPENSRE_HOME_DIR
+from gateway.core.process.component_status import clear_component_status
+from gateway.core.process.liveness import process_is_alive
 
 GATEWAY_LOG_FILE: Path = OPENSRE_HOME_DIR / "gateway" / "gateway.log"
 GATEWAY_PID_FILE: Path = OPENSRE_HOME_DIR / "gateway" / "gateway.pid"
-GATEWAY_COMPONENTS_FILE: Path = OPENSRE_HOME_DIR / "gateway" / "components.json"
 
 
 def gateway_daemon_pid() -> int | None:
@@ -35,7 +32,7 @@ def gateway_daemon_pid() -> int | None:
         pid = int(GATEWAY_PID_FILE.read_text().strip())
     except (OSError, ValueError):
         return None
-    if _alive(pid):
+    if process_is_alive(pid):
         return pid
     GATEWAY_PID_FILE.unlink(missing_ok=True)
     return None
@@ -84,7 +81,7 @@ def stop_gateway_daemon(*, timeout: float = 10.0) -> tuple[bool, str]:
     os.kill(pid, signal.SIGTERM)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not _alive(pid):
+        if not process_is_alive(pid):
             _clear_runtime_files()
             return True, f"OpenSRE gateway stopped (pid {pid})."
         time.sleep(0.2)
@@ -92,7 +89,7 @@ def stop_gateway_daemon(*, timeout: float = 10.0) -> tuple[bool, str]:
     # A long-poll or in-flight turn can outlive the graceful window — force it.
     os.kill(pid, signal.SIGKILL)
     time.sleep(0.5)
-    if _alive(pid):
+    if process_is_alive(pid):
         return False, f"OpenSRE gateway (pid {pid}) survived SIGKILL."
     _clear_runtime_files()
     return True, f"OpenSRE gateway force-killed after {timeout:g}s (pid {pid})."
@@ -101,29 +98,6 @@ def stop_gateway_daemon(*, timeout: float = 10.0) -> tuple[bool, str]:
 def _clear_runtime_files() -> None:
     GATEWAY_PID_FILE.unlink(missing_ok=True)
     clear_component_status()
-
-
-def write_component_status(components: dict[str, str]) -> None:
-    """Record the running process's per-component state (called by the manager)."""
-    GATEWAY_COMPONENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"pid": os.getpid(), "started_at": time.time(), "components": components}
-    GATEWAY_COMPONENTS_FILE.write_text(json.dumps(payload, indent=2))
-
-
-def read_component_status() -> dict[str, str]:
-    """Return the live process's component states ({} when it is not running)."""
-    try:
-        payload = json.loads(GATEWAY_COMPONENTS_FILE.read_text())
-        pid = int(payload["pid"])
-    except (OSError, ValueError, KeyError, TypeError):
-        return {}
-    if pid <= 0 or not _alive(pid):
-        return {}
-    return {str(name): str(detail) for name, detail in payload.get("components", {}).items()}
-
-
-def clear_component_status() -> None:
-    GATEWAY_COMPONENTS_FILE.unlink(missing_ok=True)
 
 
 def read_gateway_log_tail(lines: int = 50) -> str:
@@ -135,27 +109,11 @@ def read_gateway_log_tail(lines: int = 50) -> str:
         return ""
 
 
-def _alive(pid: int) -> bool:
-    with contextlib.suppress(ChildProcessError):
-        os.waitpid(pid, os.WNOHANG)  # reap first if the daemon is our own child
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        pass  # exists, owned by another user
-    return True
-
-
 __all__ = [
-    "GATEWAY_COMPONENTS_FILE",
     "GATEWAY_LOG_FILE",
     "GATEWAY_PID_FILE",
-    "clear_component_status",
     "gateway_daemon_pid",
-    "read_component_status",
     "read_gateway_log_tail",
     "start_gateway_daemon",
     "stop_gateway_daemon",
-    "write_component_status",
 ]

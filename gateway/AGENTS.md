@@ -11,7 +11,7 @@ tests tree.
 | Package main | `main.py` — **fails closed** (no slash-port glue; not a production entry) |
 | Composition root / process | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
-| Daemon pidfile / status | `core/process/daemon.py` |
+| Daemon pidfile / status | `core/process/supervision.py` |
 | Turn callback | `core/host/turn_handler.py` |
 | Transport API (spec, worker, sink, callback) | `core/transport_api/` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
@@ -44,7 +44,7 @@ start_gateway()
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
 - **Scheduler** starts after the surfaces and is a peer (cron / loops), not a
-  transport. Daemon pidfile/status stays in `core/process/daemon.py` — do not
+  transport. Daemon pidfile/status stays in `core/process/supervision.py` — do not
   fold the process daemon into a "scheduler" package.
 - `gateway.core` must not import `gateway.transports` / `gateway.web`; only
   `controller.py` imports `gateway.startup`.
@@ -98,7 +98,7 @@ The package holds two different things, and only one of them faces outward:
   is a **channel**: it implements `gateway.core.transport_api` and is handed to
   the turn service, the same way the four chat transports are.
 
-Three modules are surface-facing today — `core.process.daemon`,
+Three modules are surface-facing today — `core.process.supervision`,
 `core.runtime.controller`, `web.web_server` — pinned as an exact allowlist in
 `tests/shared/test_surface_border.py`. Widening it is a deliberate change, not
 a new import.

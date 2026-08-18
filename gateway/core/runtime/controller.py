@@ -9,7 +9,7 @@ assemble the turn handler and start components —
 * :meth:`start_scheduler` — peer of the consumer surfaces (cron / loops)
 
 Owns signals and ``stop``/``wait``. Component states go through
-:func:`gateway.core.process.daemon.write_component_status`. Channel start/stop
+:func:`gateway.core.process.component_status.write_component_status`. Channel start/stop
 lives in :mod:`gateway.startup`; turn dispatch lives in
 :mod:`gateway.core.host.turn_handler` — not here.
 """
@@ -34,12 +34,9 @@ from gateway.core.host.concurrency import (
     set_process_turn_gate,
 )
 from gateway.core.host.turn_handler import GatewayTurnHandler
-from gateway.core.process.daemon import (
-    GATEWAY_PID_FILE,
-    clear_component_status,
-    write_component_status,
-)
+from gateway.core.process.component_status import clear_component_status, write_component_status
 from gateway.core.process.readiness import set_ready
+from gateway.core.process.supervision import GATEWAY_PID_FILE
 from gateway.core.runtime.credential_hydration import (
     GatewayBootstrap,
     GatewayCredentialHydrator,

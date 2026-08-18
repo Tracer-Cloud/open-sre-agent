@@ -5,10 +5,10 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from gateway.core.process.daemon import (
+from gateway.core.process.component_status import read_component_status
+from gateway.core.process.supervision import (
     GATEWAY_LOG_FILE,
     gateway_daemon_pid,
-    read_component_status,
     read_gateway_log_tail,
     start_gateway_daemon,
     stop_gateway_daemon,

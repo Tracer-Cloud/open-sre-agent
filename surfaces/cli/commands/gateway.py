@@ -6,10 +6,10 @@ import time
 
 import click
 
-from gateway.core.process.daemon import (
+from gateway.core.process.component_status import read_component_status
+from gateway.core.process.supervision import (
     GATEWAY_LOG_FILE,
     gateway_daemon_pid,
-    read_component_status,
     read_gateway_log_tail,
     start_gateway_daemon,
     stop_gateway_daemon,

@@ -14,7 +14,7 @@ transport-specific code.
 | **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
 | **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
 | **Composition root (impl)** | `gateway/core/runtime/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
-| **Background daemon helpers** | `gateway/core/process/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
+| **Background daemon helpers** | `gateway/core/process/supervision.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
 | **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayController.start_surfaces` |
 | **Chat transport registry** | `gateway/transports/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
@@ -27,7 +27,7 @@ transport-specific code.
 opensre gateway start
         │
         ▼
-gateway.core.process.daemon.start_gateway_daemon
+gateway.core.process.supervision.start_gateway_daemon
         │  spawns surface-owned argv (see surfaces.shared.gateway_entrypoint):
         │    venv:   python -m surfaces.gateway_entry
         │    frozen: opensre gateway start --foreground
