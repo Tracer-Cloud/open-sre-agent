@@ -58,8 +58,12 @@ session = AgentSession.start()
 
 # 3. Query repository trends or metrics (requires GitHub integration configured)
 result = session.chat("what's our GitHub star velocity over the last 7 days?")
-succeeded = (result.answered or result.final_intent == "cli_agent_handled") and not result.cancelled
-if not succeeded or not result.primary_response_text:
+action_ok = (
+    result.action_result.handled
+    and not result.action_result.has_unhandled_clause
+    and result.action_result.accounting_status == "completed"
+)
+if not (result.answered or action_ok) or result.cancelled or not result.primary_response_text:
     raise RuntimeError(f"Turn failed: {result.primary_response_text or 'no response produced'}")
 
 print(result.primary_response_text)
@@ -104,7 +108,12 @@ configure_process(EMBEDDED_PROFILE)
 
 session = AgentSession.start()
 result = session.chat("why is checkout-api slow?")
-if (result.answered or result.final_intent == "cli_agent_handled") and not result.cancelled:
+action_ok = (
+    result.action_result.handled
+    and not result.action_result.has_unhandled_clause
+    and result.action_result.accounting_status == "completed"
+)
+if (result.answered or action_ok) and not result.cancelled:
     print(result.primary_response_text)
 
 report = session.investigate({"alert_name": "HighLatency", "severity": "warning"})
@@ -128,7 +137,7 @@ agent; it uses the payload runner installed by `configure_process`.
 
 Always verify turn success before trusting chat text:
 - For conversational questions and digests, the agent synthesizes an answer (`result.answered`).
-- For action-only turns (tools handled the request directly without an LLM call), the turn completes with `result.final_intent == "cli_agent_handled"`.
+- For action-only turns (tools handled the request directly without an LLM call), verify `result.action_result.handled` with `not result.action_result.has_unhandled_clause` and `result.action_result.accounting_status == "completed"`.
 - When a turn fails (for example the LLM provider is unreachable) or is cancelled (`result.cancelled`), the failure details land in `result.primary_response_text`.
 
 ### Internal seams (not for hosts)
@@ -154,8 +163,12 @@ configure_process(EMBEDDED_PROFILE)
 session = AgentSession.start(gather=GatherPorts(enabled=True))
 
 result = session.chat("summarize critical alerts and deployment changes from the last 24h")
-succeeded = (result.answered or result.final_intent == "cli_agent_handled") and not result.cancelled
-if not succeeded or not result.primary_response_text:
+action_ok = (
+    result.action_result.handled
+    and not result.action_result.has_unhandled_clause
+    and result.action_result.accounting_status == "completed"
+)
+if not (result.answered or action_ok) or result.cancelled or not result.primary_response_text:
     raise RuntimeError(f"Scheduled digest failed: {result.primary_response_text or 'no response produced'}")
 
 summary = result.primary_response_text
