@@ -19,17 +19,23 @@ self-hosted blob store, etc.) to remote sync. The whole contract is:
    newer (:func:`~platform.filestorage.engine.push`,
    :func:`~platform.filestorage.engine._should_download`); a timestamp that
    changes on every listing call breaks that comparison silently.
-4. Call :func:`~platform.filestorage.providers.registry.register_object_store`
+4. Protect any shared state ``put_object`` mutates with a lock. A push calls
+   it concurrently - up to ``max_parallel_uploads`` at once, a cap the
+   provider declares to :func:`~platform.filestorage.providers.registry.register_object_store`
+   (see the concurrency note on :meth:`~platform.filestorage.ports.ObjectStore.put_object`
+   itself) - so an implementation that mutates shared state unprotected can
+   silently lose writes under a real multi-file push.
+5. Call :func:`~platform.filestorage.providers.registry.register_object_store`
    with a provider name and a factory - typically at import time in your own
    provider module, the way ``platform/filestorage/providers/aws.py`` does.
-5. Nothing else changes: ``RemoteSyncConfig(provider="your-name", ...)`` plus
+6. Nothing else changes: ``RemoteSyncConfig(provider="your-name", ...)`` plus
    :func:`~platform.filestorage.providers.registry.build_object_store` resolve
    to your factory automatically - the engine, CLI, and REPL never import a
    vendor module directly. :func:`~platform.filestorage.engine.push` and
    :func:`~platform.filestorage.engine.pull` talk only to the ``ObjectStore``
    protocol, so a new backend gets the full sync engine for free, exercised
    below with real temp directories rather than mocks.
-6. Tests unregister what they registered (see the ``fake_provider`` fixture)
+7. Tests unregister what they registered (see the ``fake_provider`` fixture)
    so a test-only provider never leaks into another test file that calls
    :func:`~platform.filestorage.providers.registry.registered_providers` or
    ``build_object_store``.
@@ -40,6 +46,7 @@ real SDK.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -69,13 +76,27 @@ class _FakeObjectStore:
     one is configured with. Each instance only ever sees the slice under its
     own ``config.prefix``, via ``config.key_for()`` on write and prefix
     stripping on list, matching every built-in provider.
+
+    ``_lock`` guards every read and write of ``bucket``: a push calls
+    ``put_object`` concurrently (see step 4 in the module docstring), and a
+    provider that skips this would risk losing a write under a real
+    multi-file push even though a single-file test would never catch it.
+    ``barrier`` is a test-only hook (see
+    ``test_put_object_is_safe_under_the_engines_real_concurrent_push`` below)
+    that forces genuine overlap between calls; a real provider never needs one.
     """
 
     def __init__(
-        self, config: RemoteSyncConfig, *, bucket: dict[str, tuple[bytes, datetime]]
+        self,
+        config: RemoteSyncConfig,
+        *,
+        bucket: dict[str, tuple[bytes, datetime]],
+        barrier: threading.Barrier | None = None,
     ) -> None:
         self._config = config
         self._bucket = bucket
+        self._lock = threading.Lock()
+        self._barrier = barrier
 
     def _prefix(self) -> str:
         return f"{self._config.prefix.rstrip('/')}/"
@@ -86,6 +107,8 @@ class _FakeObjectStore:
 
     def list_objects(self, prefix: str) -> list[RemoteObject]:
         full_prefix = self._config.key_for(prefix) if prefix else self._prefix()
+        with self._lock:
+            snapshot = list(self._bucket.items())
         return [
             RemoteObject(
                 key=self._strip_prefix(full_key),
@@ -93,18 +116,23 @@ class _FakeObjectStore:
                 last_modified=written_at,
                 etag=content_tag(data),
             )
-            for full_key, (data, written_at) in self._bucket.items()
+            for full_key, (data, written_at) in snapshot
             if full_key.startswith(full_prefix)
         ]
 
     def get_object(self, key: str) -> bytes:
-        data, _ = self._bucket[self._config.key_for(key)]
+        with self._lock:
+            data, _ = self._bucket[self._config.key_for(key)]
         return data
 
     def put_object(self, key: str, data: bytes) -> None:
-        # The write time is captured once, here, and never recomputed on a
-        # later list_objects() call - see step 3 in the module docstring.
-        self._bucket[self._config.key_for(key)] = (data, datetime.now(tz=UTC))
+        if self._barrier is not None:
+            self._barrier.wait(timeout=5.0)
+        with self._lock:
+            # The write time is captured once, here, under the same lock as
+            # the write itself, and never recomputed on a later
+            # list_objects() call - see step 3 in the module docstring.
+            self._bucket[self._config.key_for(key)] = (data, datetime.now(tz=UTC))
 
     def describe(self) -> str:
         return f"{_PROVIDER_NAME}://template/{self._config.prefix}"
@@ -216,3 +244,33 @@ def test_put_object_records_a_stable_write_time_not_a_fresh_one_per_listing(
 
     # Assert
     assert first_listing == second_listing
+
+
+def test_put_object_is_safe_under_the_engines_real_concurrent_push(tmp_path: Path) -> None:
+    """``put_object`` is called concurrently by a real push - see step 4 in
+    the module docstring and the concurrency note on
+    :meth:`~platform.filestorage.ports.ObjectStore.put_object` itself - up to
+    ``max_parallel_uploads`` objects in flight at once. A barrier, not a mere
+    file count, is what proves genuine overlap happened rather than the
+    uploads happening to run one after another; the same technique is used
+    against the engine itself in ``test_push_concurrency.py``. This test
+    proves only the template's own ``put_object`` survives that load without
+    losing a write, not the engine's own concurrency machinery.
+    """
+    # Arrange
+    cap = 4
+    barrier = threading.Barrier(cap, timeout=5.0)
+    config = RemoteSyncConfig(bucket="b", provider=_PROVIDER_NAME)
+    store = _FakeObjectStore(config, bucket={}, barrier=barrier)
+    root = tmp_path / "sessions"
+    root.mkdir()
+    for i in range(cap):
+        (root / f"file{i}.jsonl").write_text(f'{{"n": {i}}}\n', encoding="utf-8")
+    roots = (SyncRoot(name=SyncRootName.SESSIONS, path=root),)
+
+    # Act
+    report = push(store, roots=roots, max_parallel_uploads=cap)
+
+    # Assert
+    assert len(report.uploaded) == cap
+    assert len(store.list_objects("")) == cap
