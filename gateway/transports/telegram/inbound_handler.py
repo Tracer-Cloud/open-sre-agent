@@ -25,7 +25,7 @@ from gateway.transports.telegram.principal import (
 )
 from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
-from platform.analytics.usage_context import SURFACE_TELEGRAM, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ async def handle_polled_inbound_telegram_message(
                 with (
                     bound_storage_scope(scope),
                     bound_usage_context(
-                        surface=SURFACE_TELEGRAM,
+                        surface=UsageSurface.TELEGRAM,
                         session_id=session.session_id,
                         user_id=event.user_id or None,
                     ),

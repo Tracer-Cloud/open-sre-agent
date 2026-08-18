@@ -850,6 +850,15 @@ def _setup_temporal() -> None:
 _HANDLERS["temporal"] = _setup_temporal
 
 
+def _setup_azure() -> None:
+    from integrations.azure.setup import AZURE_SETUP
+
+    _run_spec_setup(AZURE_SETUP)
+
+
+_HANDLERS["azure"] = _setup_azure
+
+
 def _setup_azure_sql() -> None:
     from integrations.azure_sql.setup import AZURE_SQL_SETUP
 

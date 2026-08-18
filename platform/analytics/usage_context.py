@@ -37,16 +37,7 @@ class UsageSurface(StrEnum):
     BUZZ = "buzz"
 
 
-# Legacy string constants kept for backwards compatibility with callers/tests
-SURFACE_CLI: Final[str] = UsageSurface.CLI.value
-SURFACE_SLACK: Final[str] = UsageSurface.SLACK.value
-SURFACE_TELEGRAM: Final[str] = UsageSurface.TELEGRAM.value
-SURFACE_DISCORD: Final[str] = UsageSurface.DISCORD.value
-SURFACE_BUZZ: Final[str] = UsageSurface.BUZZ.value
-
-CANONICAL_SURFACES: Final[frozenset[str]] = frozenset(
-    {SURFACE_CLI, SURFACE_SLACK, SURFACE_TELEGRAM, SURFACE_DISCORD, SURFACE_BUZZ}
-)
+CANONICAL_SURFACES: Final[frozenset[str]] = frozenset(member.value for member in UsageSurface)
 ORGANIZATION_GROUP_TYPE: Final[str] = "organization"
 
 _SURFACE: ContextVar[str | None] = ContextVar("analytics_surface", default=None)

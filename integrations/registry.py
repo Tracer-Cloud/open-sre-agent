@@ -303,6 +303,7 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         aliases=("azure monitor", "azure_monitor"),
         has_verifier=True,
         direct_effective=True,
+        setup_order=44,
         verify_order=30,
     ),
     IntegrationSpec(

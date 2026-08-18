@@ -24,8 +24,8 @@ forbidden_modules =
     gateway.transports
     gateway.web
 ignore_imports =
-    # Composition root: the one edge into the channels composer, which owns all
-    # transport and web wiring. Pinned by gateway/tests/test_package_borders.py
+    # Composition root: the one edge into the surface facade, which owns web
+    # and chat transport wiring. Pinned by gateway/tests/test_package_borders.py
     # (test_only_controller_imports_the_startup_module).
     gateway.core.runtime.controller -> gateway.startup
 

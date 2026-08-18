@@ -42,7 +42,7 @@ from gateway.transports.discord.thread_history import (
     session_needs_thread_seed,
 )
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import SURFACE_DISCORD, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"
@@ -298,7 +298,7 @@ class DiscordTurnDispatcher:
                             on_user_stop=_on_user_stop,
                         ),
                         bound_usage_context(
-                            surface=SURFACE_DISCORD,
+                            surface=UsageSurface.DISCORD,
                             session_id=session.session_id,
                             user_id=inbound.user_id or None,
                         ),

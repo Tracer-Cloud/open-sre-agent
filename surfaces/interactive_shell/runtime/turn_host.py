@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from core.agent_harness.runtime import HeadlessAgent
 
 from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -180,7 +180,7 @@ async def _run_agent_turn_loop(
 
         with (
             bound_usage_context(
-                surface=SURFACE_CLI,
+                surface=UsageSurface.CLI,
                 session_id=runtime.session.session_id,
             ),
             bound_repl_turn_context(

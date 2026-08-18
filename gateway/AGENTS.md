@@ -40,7 +40,7 @@ start_gateway()
 ```
 
 - **Surface startup** lives in `gateway/startup.py` — sole composer of web + Telegram /
-  Slack / Discord. Manager keeps only `ChannelsHandle`.
+  Slack / Discord. The controller keeps only `StartedGateway`.
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
 - **Scheduler** is a **platform** component (`platform.scheduler`). The gateway
@@ -60,16 +60,17 @@ start_gateway()
 Packages are split like `core/agent_harness/prompts/`: **core infra** vs
 **peer surfaces** vs **composer**.
 
-- `core/` — process and leaf infrastructure (`runtime`, `storage`,
-  `billing`, `attachments`, `session`, `config`). No imports from transports
-  or `web`. Only `core/runtime/controller.py` imports `gateway.startup`.
+- `core/` — process and leaf infrastructure (`host`, `process`, `runtime`,
+  `storage`, `billing`, `attachments`, `session`, `config`). No imports from
+  transports or `web`. Only `core/runtime/controller.py` imports `gateway.startup`.
 - `startup.py` — the facade: web + chat as one consumer set via
   `transports/startup.py` (which owns the registry and imports each peer's
   `startup` only).
 - `transports/` — chat peers (`slack`, `discord`, `telegram`). Each owns
   settings, inbound worker, security, output sink, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
-  `core/` (usually `gateway.core.runtime`).
+  `core/` (per-turn steps in `gateway.core.middleware`, host wiring in
+  `gateway.core.host`).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding

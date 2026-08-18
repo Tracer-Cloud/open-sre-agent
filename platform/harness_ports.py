@@ -1,7 +1,9 @@
 """Agent-harness ports — integrations, tools, and repository scope without tier violations.
 
-Adapters register at startup via :func:`surfaces.shared.terminal.output.boundary.install_harness_ports`
-(shell/tests) or the gateway boot path in :mod:`gateway.core.runtime.controller` (duplicate wiring).
+Adapters register at process boot via
+:func:`bootstrap.adapters.install_harness_adapters` (CLI, gateway, web, and
+embedded profiles). Do not reintroduce a second registration site in a surface
+or in :mod:`gateway.core.runtime.controller`.
 """
 
 from __future__ import annotations

@@ -2,9 +2,10 @@
 
 Subpackages:
 
-* ``core/`` — process + leaf infrastructure (``runtime``, ``storage``,
-  ``billing``, ``attachments``, ``session``, ``config``)
-* ``transports/`` — chat peers (``slack``, ``discord``, ``telegram``)
+* ``core/`` — process + leaf infrastructure (``host``, ``process``,
+  ``runtime``, ``storage``, ``billing``, ``attachments``, ``session``,
+  ``config``)
+* ``transports/`` — chat peers (``slack``, ``discord``, ``telegram``, ``buzz``)
 * ``web/`` — web surface (FastAPI health / alerts / investigations; not a chat transport)
 
 Entry points:
@@ -12,7 +13,7 @@ Entry points:
 * Production — ``opensre gateway start`` (CLI wires slash ports into ``GatewayController``)
 * Package main — ``python -m gateway`` fails closed (guard in ``__main__.py``)
 * Composition root — :mod:`gateway.core.runtime.controller`
-* Daemon helpers — :mod:`gateway.core.process.daemon`
+* Daemon helpers — :mod:`gateway.core.process.supervision`
 * HTTP app (``MODE=web``) — :mod:`gateway.web.webapp` (``app``)
 * Telegram — :mod:`gateway.transports.telegram.startup`
 * Slack — :mod:`gateway.transports.slack.startup`

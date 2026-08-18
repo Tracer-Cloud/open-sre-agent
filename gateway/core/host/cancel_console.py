@@ -6,8 +6,7 @@ it. :class:`GatewayTurnHandler` binds this wrapper so tools and ReAct see
 ``cancel_requested`` like the interactive shell's ``StreamingConsole``.
 
 The Event itself is created/attached by
-:func:`core.agent_harness.turns.host_cancel.ensure_turn_cancel` — re-exported
-here so transport call sites keep a stable import path.
+:func:`core.agent_harness.spi.cancel.ensure_turn_cancel`.
 """
 
 from __future__ import annotations
@@ -16,8 +15,6 @@ import threading
 from typing import Any
 
 from rich.console import Console
-
-from core.agent_harness.spi.cancel import ensure_turn_cancel
 
 # Set on the wrapper itself; everything else is proxied to the wrapped console.
 _OWN_ATTRIBUTES = frozenset({"_output", "_cancel_event"})
@@ -56,4 +53,4 @@ class CancelConsole:
         setattr(self._output, name, value)
 
 
-__all__ = ["CancelConsole", "ensure_turn_cancel"]
+__all__ = ["CancelConsole"]

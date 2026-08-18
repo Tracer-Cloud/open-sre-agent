@@ -41,7 +41,7 @@ LLM preload) lives in
 :func:`bootstrap.process.configure_process` with ``GATEWAY_PROFILE``.
 `GatewayController.start_gateway` is lifecycle-only after logging + credential
 hydrate: configure process, compose **one** `GatewayTurnHandler(gate=…)`, then
-`start_channels()` (delegates to :func:`gateway.channels.start_channels`) and
+`start_surfaces()` (delegates to :func:`gateway.startup.start_gateway`) and
 `start_scheduler()` (hosts `platform.scheduler` in this process — not a gateway
 surface and not a `gateway/scheduler/` package). Do not wrap the turn handler in a
 second handler class. Do not reintroduce a bootstrap essay in the controller.

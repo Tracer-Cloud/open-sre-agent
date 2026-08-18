@@ -2,7 +2,10 @@
 
 Subpackages:
 
-* ``runtime/`` — composition root, turn handler, approvals, daemon
+* ``host/`` — turn handler, session agents, cancel console, capacity
+* ``process/`` — daemon supervision, polling thread, readiness
+* ``runtime/`` — composition root, credential hydration, security audit
+* ``middleware/`` — per-turn steps every transport runs
 * ``storage/`` — session bindings and investigation stores
 * ``billing/`` — credits client
 * ``attachments/`` — attachment helpers
