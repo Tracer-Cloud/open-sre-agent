@@ -17,8 +17,8 @@ from core.agent_harness.turns.headless_adapters import (
     SimpleRunRecordFactory,
     StaticReasoningClientProvider,
 )
-from core.agent_harness.turns.host_cancel import ensure_turn_cancel
 from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
+from core.agent_harness.turns.host_cancel import ensure_turn_cancel
 
 
 class _SpyTools:
