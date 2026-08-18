@@ -42,10 +42,13 @@ LLM preload) lives in
 `GatewayController.start_gateway` is lifecycle-only after logging + credential
 hydrate: configure process, compose **one** `GatewayTurnHandler(gate=…)`, then
 `start_channels()` (delegates to :func:`gateway.channels.start_channels`) and
-`start_scheduler()` (peer of the channels). Do not wrap the turn handler in a
+`start_scheduler()` (hosts `platform.scheduler` in this process — not a gateway
+surface and not a `gateway/scheduler/` package). Do not wrap the turn handler in a
 second handler class. Do not reintroduce a bootstrap essay in the controller.
-Scheduler runners register when the scheduler stage starts
-(:func:`bootstrap.adapters.install_scheduler_runners`).
+Hosting is a thin call: `scheduler_runners().gated(turn_gate).install()` then
+:func:`platform.scheduler.runner.start_background_scheduler`. Reload is
+:func:`platform.scheduler.reload_signal.request_scheduler_reload` (shell/CLI
+writers); the controller only polls and resyncs.
 
 Process boot has one entrypoint: :func:`bootstrap.process.configure_process`
 with ``GATEWAY_PROFILE``. Do not add a gateway-local wrapper around it.

@@ -1,11 +1,11 @@
-"""Start, stop and inspect the detached gateway process.
+"""Daemon: pidfile + spawn + stop for the detached gateway process.
 
 Supervises a child whose output is captured in ``~/.opensre/gateway/gateway.log``
 and whose PID is tracked in ``gateway.pid``.
 
-The caller supplies the child's ``argv``: each surface owns its own composition
-root, so this module names no entrypoint and stays free of any ``surfaces``
-dependency.
+This is process supervision, not the task scheduler. The caller supplies the
+child's ``argv``. This module never imports CLI, never names
+``surfaces.gateway_entry``, and never starts ``platform.scheduler`` itself.
 """
 
 from __future__ import annotations

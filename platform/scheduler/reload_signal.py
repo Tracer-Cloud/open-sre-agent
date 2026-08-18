@@ -1,8 +1,9 @@
 """Cross-process signal for live scheduler hosts to resync jobs from the store.
 
-The interactive shell and CLI mutate ``scheduler_tasks.json``; the long-lived
-gateway scheduler only sees those mutations when it reloads. Writers touch a
-file under ``~/.opensre``; the gateway polls and resyncs.
+The interactive shell and CLI mutate the task store; the long-lived gateway
+scheduler only sees those mutations when it reloads. Writers touch a file
+under ``~/.opensre``; the gateway polls and resyncs. Do not add a second
+scheduler inside ``gateway/``.
 """
 
 from __future__ import annotations

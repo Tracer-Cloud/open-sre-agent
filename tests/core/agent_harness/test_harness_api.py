@@ -101,6 +101,7 @@ SPI_ROLE_NAMES: dict[str, frozenset[str]] = {
             "set_auto_command",
             "set_turn_outcome_hint",
             "trust_mode_enabled",
+            "withhold_capabilities",
         }
     ),
     "cancel": frozenset({"ensure_turn_cancel", "host_cancel_requested"}),

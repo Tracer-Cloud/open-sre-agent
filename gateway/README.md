@@ -13,8 +13,8 @@ transport-specific code.
 |---------------|---------------|-------------------|
 | **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
 | **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
-| **Composition root (impl)** | `gateway/core/runtime/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
-| **Background daemon helpers** | `gateway/core/process/supervision.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
+| **Process composition root** | `gateway/core/runtime/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
+| **Daemon (pidfile + spawn)** | `gateway/core/process/supervision.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`); caller passes argv |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
 | **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayController.start_surfaces` |
 | **Chat transport registry** | `gateway/transports/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
@@ -40,7 +40,7 @@ gateway.core.runtime.controller.GatewayController.start_gateway
         │     ├── web/web_server  →  web/webapp:app
         │     └── transports/startup.start_transports
         │           (telegram / slack / discord startup)
-        └── start_scheduler()   # peer of the surfaces, not a transport
+        └── start_scheduler()   # hosts platform.scheduler; not a gateway surface
 ```
 
 Layout: `core/` (runtime, storage, …), `startup.py` (surface composer),
@@ -84,7 +84,7 @@ uv run opensre messaging allow -p telegram -u 123456789
 # Allow your Slack member id (profile → Copy member ID; see below)
 uv run opensre messaging allow -p slack -u U0123ABCD
 
-# Start the gateway daemon (web app + Telegram chat + Slack chat + task scheduler)
+# Start the gateway daemon (web + chat). The process also hosts platform.scheduler.
 uv run opensre gateway start
 ```
 

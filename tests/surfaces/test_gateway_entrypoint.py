@@ -1,4 +1,4 @@
-"""Frozen-safe argv for the gateway daemon child (Wave C2)."""
+"""Frozen-safe argv for the gateway daemon child."""
 
 from __future__ import annotations
 

@@ -27,7 +27,6 @@ from core.agent_harness.spi.session_goal import (
     format_session_goal_status_line,
 )
 from gateway.core.host.cancel_console import CancelConsole, ensure_turn_cancel
-from gateway.core.host.capability_policy import ensure_gateway_capability_policy
 from gateway.core.host.concurrency import TurnConcurrencyGate
 from gateway.core.host.session_agents import SessionAgentPool
 from gateway.core.host.status_messages import EMPTY_RESPONSE_MESSAGE
@@ -100,8 +99,6 @@ class GatewayTurnHandler:
         sink: GatewaySink,
         logger: logging.Logger,
     ) -> None:
-        # Idempotent host policy (also applied in SessionResolver for production).
-        ensure_gateway_capability_policy(session)
         session_id = getattr(session, "session_id", None)
         surface = get_surface()
         if surface not in CANONICAL_SURFACES:

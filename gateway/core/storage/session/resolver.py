@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 from core.agent_harness import SessionCore, SessionManager
 from core.agent_harness.spi.integrations import has_resolved_integrations
-from gateway.core.host.capability_policy import ensure_gateway_capability_policy
 from gateway.core.session.gateway_chat_context import inject_gateway_chat_context
 
 if TYPE_CHECKING:
@@ -38,14 +37,17 @@ def _ensure_integrations(session: SessionCore) -> SessionCore:
 
 
 def _inject_chat_context(session: SessionCore, *, chat_id: str, platform: str = "") -> SessionCore:
-    """Attach per-turn gateway chat metadata and host capability policy."""
+    """Attach per-turn gateway chat metadata.
+
+    Capability policy is not applied here: it belongs to the host layer, which
+    states it once when it builds the session's agent.
+    """
     _ensure_integrations(session)
     session.resolved_integrations_cache = inject_gateway_chat_context(
         dict(session.resolved_integrations_cache or {}),
         chat_id,
         platform,
     )
-    ensure_gateway_capability_policy(session)
     return session
 
 

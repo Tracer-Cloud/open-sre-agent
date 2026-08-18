@@ -18,6 +18,7 @@ from rich.console import Console
 from core.agent_harness import SessionCore
 from core.agent_harness.ports import SlashPortsFactory
 from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, GatherPorts, HeadlessAgent
+from gateway.core.host.capability_policy import ensure_gateway_capability_policy
 from gateway.core.host.live_sink import LiveOutputSink
 from gateway.core.host.status_messages import status_from_tool_start
 from gateway.core.transport_api import GatewaySink
@@ -100,6 +101,9 @@ class SessionAgentPool:
         Prefer :meth:`session_agent`, which holds the session's lock for the
         whole turn. This is the unsynchronised primitive it wraps.
         """
+        # Every gateway agent serves chat, so the policy is stated once here
+        # rather than at each place a session is prepared.
+        ensure_gateway_capability_policy(session)
         session_id = str(getattr(session, "session_id", "") or "")
         live_sink = self._sinks.get(session_id) if session_id else None
         if live_sink is None:

@@ -9,9 +9,9 @@ tests tree.
 |------|------|
 | Production entry (slash ports) | CLI: `opensre gateway start` / `--foreground` (composition root outside this package) |
 | Package main | `main.py` — **fails closed** (no slash-port glue; not a production entry) |
-| Composition root / process | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
+| Process composition root | `core/runtime/controller.py` (`GatewayController`; inject `slash_ports_factory`) |
 | Surface startup (web + chat composer) | `startup.py` (`start_gateway` / `StartedGateway`) |
-| Daemon pidfile / status | `core/process/supervision.py` |
+| Daemon (pidfile + spawn) | `core/process/supervision.py` — caller passes argv; never names CLI or `surfaces.gateway_entry` |
 | Turn callback | `core/host/turn_handler.py` |
 | Transport API (spec, worker, sink, callback) | `core/transport_api/` |
 | Turn middleware (decision, policy, approvals, stop, locks) | `core/middleware/` |
@@ -35,7 +35,7 @@ start_gateway()
   → configure_process(GATEWAY_PROFILE)
   → compose turn handler
   → start_surfaces()   # delegates to gateway/startup.py (web + chat)
-  → start_scheduler()  # peer of the surfaces — not one of them
+  → start_scheduler()  # hosts platform.scheduler — not a gateway surface
   → ready
 ```
 
@@ -43,9 +43,14 @@ start_gateway()
   Slack / Discord. Manager keeps only `ChannelsHandle`.
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
-- **Scheduler** starts after the surfaces and is a peer (cron / loops), not a
-  transport. Daemon pidfile/status stays in `core/process/supervision.py` — do not
-  fold the process daemon into a "scheduler" package.
+- **Scheduler** is a **platform** component (`platform.scheduler`). The gateway
+  process *may host* it (`start_scheduler()` → `scheduler_runners().gated(…).install()`
+  + `start_background_scheduler()`). It is not a consumer surface, not a
+  transport, and there is no `gateway/scheduler/` package. Do not move runner
+  code into `gateway/core/runtime/`.
+- **Daemon** is pidfile + spawn in `core/process/supervision.py`. Do not fold it
+  into a scheduler package. The child argv is surface-owned (`python -m
+  surfaces.gateway_entry`, or `opensre gateway start --foreground` when frozen).
 - `gateway.core` must not import `gateway.transports` / `gateway.web`; only
   `controller.py` imports `gateway.startup`.
 - Peer transports and `web` must not import `gateway.startup`.
@@ -93,6 +98,8 @@ The package holds two different things, and only one of them faces outward:
 
 - **The deployment** — the daemon, the transports, the web app, storage. A
   surface may drive the *process* (start, stop, status) and nothing else.
+  The task scheduler is hosted here when this process is the long-lived runner;
+  loop CRUD lives in CLI/shell and signals reload via `request_scheduler_reload()`.
 - **The turn service** — `GatewayTurnHandler`, the middleware steps and the
   session-agent pool. A surface never imports this. A surface that runs turns
   is a **channel**: it implements `gateway.core.transport_api` and is handed to

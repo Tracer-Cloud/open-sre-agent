@@ -38,20 +38,22 @@ _HARNESS_CONTRACTS: frozenset[str] = frozenset(
     }
 )
 
-#: Modules allowed to import harness behaviour, and why.
-_HOST_LAYER: frozenset[str] = frozenset(
+#: The host layer: every module under it may drive the agent, because driving
+#: the agent is what the package is for.
+_HOST_PACKAGE = "gateway/core/host/"
+
+#: Modules outside the host layer that still call harness behaviour, and why.
+#: Compared exactly, so it can only shrink.
+_OUTSIDE_HOST_LAYER: frozenset[str] = frozenset(
     {
-        # The host layer proper: builds the agent, binds the turn, runs it.
-        "gateway/core/host/session_agents.py",
-        "gateway/core/host/turn_handler.py",
-        "gateway/core/host/cancel_console.py",
         # Session lifecycle is the harness's; the resolver adds the gateway's
         # chat-id binding on top and must flush through SessionManager.
         "gateway/core/storage/session/resolver.py",
-        # The HTTP investigate path embeds the agent directly instead of going
-        # through the host layer, so it gets none of the host's guarantees
-        # (agent reuse, approvals hooks, cancel console, capability policy).
-        # Listed so the second path is visible; remove when web stops embedding.
+        # The HTTP investigate path embeds the agent (``AgentSession``) instead
+        # of going through the host layer, so it gets none of the host's
+        # guarantees: agent reuse, approvals hooks, cancel console, capability
+        # policy. Listed so the second path stays visible; remove when
+        # POST /investigate runs through the turn handler.
         "gateway/web/webapp.py",
         "gateway/web/worker.py",
     }
@@ -92,9 +94,10 @@ def _behaviour_callers() -> dict[str, set[str]]:
 def test_only_the_host_layer_drives_the_agent() -> None:
     # Arrange / Act
     callers = _behaviour_callers()
+    outside = {name for name in callers if not name.startswith(_HOST_PACKAGE)}
 
     # Assert: no module outside the host layer calls harness behaviour…
-    added = sorted(set(callers) - _HOST_LAYER)
+    added = sorted(outside - _OUTSIDE_HOST_LAYER)
     assert added == [], (
         f"gateway modules outside the host layer import harness behaviour: "
         f"{ {name: sorted(callers[name]) for name in added} }. "
@@ -103,7 +106,7 @@ def test_only_the_host_layer_drives_the_agent() -> None:
     )
 
     # …and the allowlist holds no module that stopped calling it.
-    stale = sorted(_HOST_LAYER - set(callers))
+    stale = sorted(_OUTSIDE_HOST_LAYER - outside)
     assert stale == [], (
         f"{stale} no longer import harness behaviour; remove them from the allowlist "
         "so it keeps shrinking."

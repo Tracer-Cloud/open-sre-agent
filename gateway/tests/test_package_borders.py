@@ -243,7 +243,8 @@ def test_gateway_never_names_a_surfaces_module_in_executable_code() -> None:
     The daemon used to hardcode ``python -m surfaces.gateway_entry`` in its
     subprocess argv. Import-linter cannot see a dependency spelled as a string
     literal, so the cycle stayed invisible: a surface starts the daemon, and the
-    daemon starts a surface back. Each surface now passes its own argv.
+    daemon starts a surface back. Each surface now passes its own argv;
+    this package still must not name ``surfaces.*``.
     """
     # Arrange / Act: scan every non-test gateway module.
     offenders: list[str] = []
