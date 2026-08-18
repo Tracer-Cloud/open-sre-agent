@@ -25,6 +25,7 @@ from typing import Any
 
 from rich.console import Console
 
+from core.agent_harness.ports import SlashPortsFactory
 from gateway import startup as gateway_startup
 from gateway.core.config.logging_config import configure_logging
 from gateway.core.runtime.concurrency import (
@@ -50,7 +51,6 @@ from gateway.core.transport_api import GatewayAgentCallback
 # shutdown budget; cap it so chat workers keep the rest.
 SCHEDULER_RELOAD_JOIN_TIMEOUT_SECONDS = 2.0
 
-SlashPortsFactory = Callable[[], Any]
 CredentialHydratorFactory = Callable[[], GatewayCredentialHydrator | None]
 
 

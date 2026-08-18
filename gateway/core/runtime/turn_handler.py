@@ -15,12 +15,11 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Callable
-from typing import Any
 
 from rich.console import Console
 
 from core.agent_harness import SessionCore, SessionManager
+from core.agent_harness.ports import SlashPortsFactory
 from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.spi.session_goal import (
     SessionGoal,
@@ -44,8 +43,6 @@ from platform.analytics.usage_context import (
     get_surface,
 )
 from platform.observability.trace.spans import traced_session
-
-SlashPortsFactory = Callable[[], Any]
 
 _DEFAULT_BUSY_MESSAGE = "OpenSRE is at capacity. Please try again shortly."
 
