@@ -34,6 +34,7 @@ _TOOLS_TO_PROBE = (
     "python",
     "python3",
     "curl",
+    "grep",
     "bash",
     "sh",
     "buzz",
@@ -287,7 +288,8 @@ def capability_warning_facts(tools: dict[str, str] | None = None) -> dict[str, A
     """Honest capability gaps the agent should surface at boot, not mid-turn.
 
     ``network_egress`` is false unless ``OPENSRE_ALLOW_NETWORK=1`` — matching the
-    sandbox default (blocked egress). Shell presence is derived from ``bash``/``sh``.
+    sandbox default (blocked egress). Shell and Python presence accept either
+    supported executable name.
     """
     resolved = tools if tools is not None else installed_tools()
     missing = sorted(name for name, path in resolved.items() if not path)
@@ -298,13 +300,25 @@ def capability_warning_facts(tools: dict[str, str] | None = None) -> dict[str, A
         "on",
     }
     shell_available = bool(resolved.get("bash") or resolved.get("sh"))
+    python_available = bool(resolved.get("python") or resolved.get("python3"))
     warnings: list[str] = []
     if "curl" in missing:
-        warnings.append("curl is not on PATH")
+        warnings.append("curl is not on PATH — install curl and add it to PATH")
     if not shell_available:
-        warnings.append("no interactive shell (bash/sh) on PATH")
+        warnings.append(
+            "no interactive shell (bash/sh) on PATH — install bash or sh and add it to PATH"
+        )
+    if "grep" in missing:
+        warnings.append("grep is not on PATH — install grep and add it to PATH")
     if not allow_network:
-        warnings.append("network egress is blocked for sandboxed code by default")
+        warnings.append(
+            "network egress is blocked for sandboxed code by default — use a configured "
+            "integration for outbound HTTP"
+        )
+    if not python_available:
+        warnings.append(
+            "python/python3 is not on PATH — install Python 3 and add python3 or python to PATH"
+        )
     return {
         "network_egress": allow_network,
         "shell_available": shell_available,
