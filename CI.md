@@ -112,6 +112,12 @@ the repository's merge requirements are satisfied: required GitHub checks are
 green, actionable human or automated review feedback (including Greptile) is
 addressed, and resolved conversations are closed out.
 
+After each completed PR update, once commits are pushed, the PR description is
+current, and addressed threads are resolved, trigger a Greptile re-review by
+following [CONTRIBUTING.md](CONTRIBUTING.md#greptile-code-review). Repeat until
+Greptile reports 5/5 with no unresolved comments. Do not re-trigger while a
+review is already running.
+
 Use relevant built-in capabilities or locally installed skills, when available,
 for PR monitoring, CI diagnosis, and review remediation rather than duplicating
 tool-specific procedures in this document. Keep monitoring after each update;
