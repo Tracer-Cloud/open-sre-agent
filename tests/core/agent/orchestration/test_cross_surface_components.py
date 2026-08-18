@@ -15,7 +15,7 @@ from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from gateway.core.host.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
 
@@ -35,7 +35,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     )
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultPorts", default_ports_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(factory)
     )
 
     session = Session(store=InMemorySessionStore())
@@ -79,8 +79,8 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         llm_run=object(),
     )
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultPorts",
-        default_ports_stub(MagicMock(return_value=agent)),
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(MagicMock(return_value=agent)),
     )
 
     session = Session(store=InMemorySessionStore())

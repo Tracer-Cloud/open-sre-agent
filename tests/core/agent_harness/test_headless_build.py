@@ -1,4 +1,4 @@
-"""Characterization for ``DefaultPorts`` — the default port family and the agent built on it."""
+"""Characterization for ``DefaultHeadlessBuild`` — the default port family and the agent built on it."""
 
 from __future__ import annotations
 
@@ -11,18 +11,18 @@ from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.headless_adapters import BufferOutputSink
-from core.agent_harness.turns.port_families import DefaultPorts
+from core.agent_harness.turns.headless_build import DefaultHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.execution import ToolExecutionHooks
 
 
-def test_default_ports_sets_gateway_surface() -> None:
+def test_default_headless_build_sets_gateway_surface() -> None:
     session = SimpleNamespace(
         configured_integrations=[],
         resolved_integrations_cache={},
         session_id="s1",
     )
-    agent = DefaultPorts(
+    agent = DefaultHeadlessBuild(
         session=session,
         output=BufferOutputSink(),
         console=Console(force_terminal=False, file=StringIO()),
@@ -33,12 +33,12 @@ def test_default_ports_sets_gateway_surface() -> None:
     assert prompts.surface() == "gateway"
 
 
-def test_default_ports_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
+def test_default_headless_build_is_exported_from_runtime_and_the_buffer_sink_is_not() -> None:
     import core.agent_harness as pkg
     from core.agent_harness import runtime
 
-    assert runtime.DefaultPorts is DefaultPorts
-    assert not hasattr(pkg, "DefaultPorts")
+    assert runtime.DefaultHeadlessBuild is DefaultHeadlessBuild
+    assert not hasattr(pkg, "DefaultHeadlessBuild")
     assert not hasattr(pkg, "BufferOutputSink")
     assert not hasattr(runtime, "BufferOutputSink")
 
@@ -59,7 +59,7 @@ def test_builder_uses_supplied_prompts_even_when_falsy() -> None:
     supplied = _FalsyPrompts()
 
     # Act
-    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(prompts=supplied)
+    agent = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).agent(prompts=supplied)
 
     # Assert
     assert agent._prompts is supplied  # noqa: SLF001
@@ -75,7 +75,7 @@ def test_builder_defaults_prompts_when_omitted() -> None:
     )
 
     # Act
-    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent()
+    agent = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).agent()
 
     # Assert
     assert type(agent._prompts).__name__ == "DefaultPromptContextProvider"  # noqa: SLF001
@@ -112,7 +112,7 @@ def test_primary_response_text_prefers_assistant() -> None:
     assert empty_assistant.primary_response_text == "from action"
 
 
-def test_default_ports_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> None:
+def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> None:
     """A host varies the agent through its ``ToolProvider``; ``llm_factory`` reaches the runner.
 
     ``tools`` is the bridge between the agent and a host's tool stack: the shell
@@ -132,11 +132,11 @@ def test_default_ports_takes_the_hosts_tool_provider_and_forwards_the_llm_factor
     hooks = ToolExecutionHooks()
 
     # Act
-    agent = DefaultPorts(session=session, output=BufferOutputSink()).agent(
+    agent = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).agent(
         tools=tools, llm_factory=llm_factory
     )
     agent.bind_turn(TurnBinding(tool_hooks=hooks))
-    bare = DefaultPorts(session=session, output=BufferOutputSink()).agent()
+    bare = DefaultHeadlessBuild(session=session, output=BufferOutputSink()).agent()
 
     # Assert — the host's provider is used as-is; the factory and hooks reach the
     # runner; no ``tools`` yields a default provider.
@@ -166,7 +166,7 @@ def test_a_stage_override_replaces_only_that_stage() -> None:
         )
 
     # Act — only execute_actions is overridden, on the built agent
-    agent = DefaultPorts(
+    agent = DefaultHeadlessBuild(
         session=SessionCore(store=InMemorySessionStore()), output=BufferOutputSink()
     ).agent()
     agent.bind_stages(execute_actions=_fake_execute)

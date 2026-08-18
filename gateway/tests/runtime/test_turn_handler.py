@@ -20,7 +20,7 @@ from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
 
@@ -62,7 +62,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultPorts", default_ports_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(factory)
     )
     return factory
 

@@ -2,7 +2,7 @@
 
 Keeps agent construction out of :class:`GatewayTurnHandler` so the handler
 stays a thin dispatch/finalize orchestrator. Construction goes through
-:meth:`~core.agent_harness.turns.port_families.DefaultPorts.agent`
+:meth:`~core.agent_harness.turns.headless_build.DefaultHeadlessBuild.agent`
 once per session — not a second port-wiring stack.
 """
 
@@ -19,9 +19,9 @@ from core.agent_harness import SessionCore
 from core.agent_harness.ports import SlashPortsFactory
 from core.agent_harness.runtime import (
     AgentBuildConfig,
-    DefaultPorts,
+    DefaultHeadlessBuild,
     DefaultToolProvider,
-    GatherPorts,
+    GatherPhase,
     HeadlessAgent,
 )
 from gateway.core.host.capability_policy import ensure_gateway_capability_policy
@@ -150,9 +150,9 @@ class SessionAgentPool:
         gather = (
             build.build_gather(session, self._console)
             if build.build_gather is not None
-            else GatherPorts()
+            else GatherPhase()
         )
-        agent = DefaultPorts(
+        agent = DefaultHeadlessBuild(
             session=session,
             output=live_sink,
             console=self._console,

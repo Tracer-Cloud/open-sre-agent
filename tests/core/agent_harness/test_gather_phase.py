@@ -1,4 +1,4 @@
-"""``GatherPorts`` — one object for how a surface runs the gather phase.
+"""``GatherPhase`` — one object for how a surface runs the gather phase.
 
 The four settings always vary together per surface: a REPL streams progress and
 persists tool calls, a scheduled report does neither and only raises the
@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.turns.gather_ports import GatherPorts
-from core.agent_harness.turns.port_families import HeadlessPorts
+from core.agent_harness.turns.gather_phase import GatherPhase
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 
 
 class _Session:
@@ -23,7 +23,7 @@ class _Session:
 def test_defaults_gather_with_no_surface_instrumentation() -> None:
     # Arrange / Act: the shape a scheduled digest wants — run the phase, watch
     # nothing, record nothing.
-    ports = GatherPorts()
+    ports = GatherPhase()
 
     # Assert
     assert ports.enabled is True
@@ -34,7 +34,7 @@ def test_defaults_gather_with_no_surface_instrumentation() -> None:
 
 def test_disabled_is_expressible_without_a_sentinel() -> None:
     # Arrange / Act
-    ports = GatherPorts(enabled=False)
+    ports = GatherPhase(enabled=False)
 
     # Assert: a caller that wants no gather says so, rather than passing a
     # magic iteration count.
@@ -43,7 +43,7 @@ def test_disabled_is_expressible_without_a_sentinel() -> None:
 
 def test_is_immutable_so_one_surfaces_ports_cannot_leak_into_another() -> None:
     # Arrange
-    ports = GatherPorts()
+    ports = GatherPhase()
 
     # Act / Assert: agents are pooled per session on the gateway; a mutable
     # ports object would let one turn retarget another's progress stream.
@@ -71,9 +71,9 @@ class TestAgentForwardsThePorts:
         def _persist(_executed: list[tuple[Any, Any]]) -> None:
             return None
 
-        agent = HeadlessPorts(session=headless_adapters.InMemorySessionState()).agent(
+        agent = InMemoryHeadlessBuild(session=headless_adapters.InMemorySessionState()).agent(
             tools=headless_adapters.NullToolProvider(),
-            gather=GatherPorts(on_progress=_on_progress, persist=_persist, max_iterations=9),
+            gather=GatherPhase(on_progress=_on_progress, persist=_persist, max_iterations=9),
         )
 
         # Act
@@ -94,9 +94,9 @@ class TestAgentForwardsThePorts:
 
         monkeypatch.setattr(headless_agent, "gather_tool_evidence", _never)
 
-        agent = HeadlessPorts(session=headless_adapters.InMemorySessionState()).agent(
+        agent = InMemoryHeadlessBuild(session=headless_adapters.InMemorySessionState()).agent(
             tools=headless_adapters.NullToolProvider(),
-            gather=GatherPorts(enabled=False),
+            gather=GatherPhase(enabled=False),
         )
 
         # Act / Assert

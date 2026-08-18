@@ -21,7 +21,7 @@ MAX_REPORT_GATHER_ITERATIONS = 12
 
 
 @dataclass(frozen=True, slots=True)
-class GatherPorts:
+class GatherPhase:
     """What a surface plugs into the gather phase.
 
     Grouped rather than passed as four keywords because they vary together: a
@@ -29,7 +29,7 @@ class GatherPorts:
     neither and only raises the iteration budget.
 
     Frozen: gateway agents are pooled per session and rebound per turn, so a
-    mutable ports object would let one turn retarget another's progress stream.
+    mutable gather object would let one turn retarget another's progress stream.
     """
 
     #: Run the phase at all. A turn with no tools to gather from sets this False.
@@ -43,7 +43,7 @@ class GatherPorts:
 
 
 #: A phase that does not run. Named so callers read as intent, not a bare flag.
-GATHER_DISABLED = GatherPorts(enabled=False)
+GATHER_DISABLED = GatherPhase(enabled=False)
 
 
-__all__ = ["GATHER_DISABLED", "MAX_REPORT_GATHER_ITERATIONS", "GatherPorts", "PersistToolCalls"]
+__all__ = ["GATHER_DISABLED", "MAX_REPORT_GATHER_ITERATIONS", "GatherPhase", "PersistToolCalls"]

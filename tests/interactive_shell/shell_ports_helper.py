@@ -12,7 +12,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.ports import AnswerRequest
-from core.agent_harness.runtime import DefaultPorts
+from core.agent_harness.runtime import DefaultHeadlessBuild
 from core.agent_harness.turns.evidence_driver import GatherAgentFactory, gather_tool_evidence
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.orchestrator import stream_answer
@@ -21,7 +21,7 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
     ShellOutputSink,
 )
-from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_ports
+from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_phase
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
 
@@ -34,7 +34,7 @@ def answer_through_shell_ports(
     request: AnswerRequest | None = None,
 ) -> LlmRunInfo | None:
     """The agent's answer stage on the shell's default port family."""
-    ports = DefaultPorts(
+    ports = DefaultHeadlessBuild(
         session=session,  # type: ignore[arg-type]
         output=ShellOutputSink(console),
         console=console,
@@ -61,7 +61,7 @@ def gather_through_shell_ports(
     resolved_integrations: dict[str, Any] | None = None,
 ) -> str | GatheredEvidence | None:
     """The agent's gather stage with the shell's gather ports."""
-    ports = shell_gather_ports(session, console)
+    ports = shell_gather_phase(session, console)
     return gather_tool_evidence(
         message,
         session,

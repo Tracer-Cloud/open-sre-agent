@@ -24,7 +24,7 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from gateway.core.host.live_sink import LiveOutputSink
 from gateway.core.host.session_agents import SessionAgentPool
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 
 _LOGGER = logging.getLogger("channel.ports.test")
 
@@ -69,9 +69,9 @@ def test_a_host_supplies_its_own_tools_prompts_and_gather() -> None:
     def build_gather(session: Any, console: Any) -> Any:
         _ = (session, console)
         used.append("gather")
-        from core.agent_harness.runtime import GatherPorts
+        from core.agent_harness.runtime import GatherPhase
 
-        return GatherPorts()
+        return GatherPhase()
 
     pool = SessionAgentPool(
         console=Console(force_terminal=False),
@@ -154,8 +154,8 @@ def test_error_reporter_and_surface_reach_default_ports(
         return _null_tools()
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultPorts",
-        default_ports_stub(_build),
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(_build),
     )
     reporter = object()
     SessionAgentPool(

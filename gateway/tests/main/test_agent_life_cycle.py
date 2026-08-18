@@ -37,7 +37,7 @@ from gateway.transports.telegram.settings import (
     TelegramInboundMessage,
 )
 from gateway.web.startup import WebStartup
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import attach_real_handle
 
 
@@ -106,7 +106,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultPorts", default_ports_stub(agent_cls)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(agent_cls)
     )
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:
@@ -160,9 +160,9 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
 
     assert isinstance(ctor.kwargs["output"], LiveOutputSink)
     assert ctor.kwargs["surface"] == "gateway"
-    from core.agent_harness.turns.gather_ports import GatherPorts
+    from core.agent_harness.turns.gather_phase import GatherPhase
 
-    assert isinstance(ctor.kwargs["gather"], GatherPorts)
+    assert isinstance(ctor.kwargs["gather"], GatherPhase)
     assert ctor.kwargs["gather"].enabled is True
     turn_binding = agent_cls.return_value.bind_turn.call_args.args[0]
     assert turn_binding.is_tty is False

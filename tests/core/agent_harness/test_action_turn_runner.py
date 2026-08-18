@@ -17,7 +17,7 @@ import pytest
 from core.agent_harness.runtime import ActionTurnRunner, TurnBinding
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NullToolProvider
 from core.agent_harness.turns.headless_agent import HeadlessAgent
-from core.agent_harness.turns.port_families import HeadlessPorts
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from core.execution import ToolExecutionHooks
 from surfaces.interactive_shell.runtime.turn_seams import bind_injected_stages
@@ -76,7 +76,7 @@ def test_headless_agent_uses_bound_methods_not_nested_defs() -> None:
 def test_bind_turn_rebuilds_action_runner_when_output_changes() -> None:
     first = BufferOutputSink()
     second = BufferOutputSink()
-    agent = HeadlessPorts(output=first).agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild(output=first).agent(tools=NullToolProvider())
     before = agent._action_runner  # noqa: SLF001
     assert before.output is first
 
@@ -88,7 +88,7 @@ def test_bind_turn_rebuilds_action_runner_when_output_changes() -> None:
 
 def test_bind_turn_rebuilds_action_runner_when_tool_hooks_change() -> None:
     hooks = ToolExecutionHooks()
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     before = agent._action_runner  # noqa: SLF001
 
     agent.bind_turn(TurnBinding(tool_hooks=hooks))
@@ -98,7 +98,7 @@ def test_bind_turn_rebuilds_action_runner_when_tool_hooks_change() -> None:
 
 
 def test_bind_turn_keeps_runner_when_only_accounting_changes() -> None:
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     before = agent._action_runner  # noqa: SLF001
     agent.bind_turn(TurnBinding(accounting=MagicMock()))
     assert agent._action_runner is before  # noqa: SLF001
@@ -181,7 +181,7 @@ def test_a_sink_without_hooks_clears_the_previous_sinks_hooks() -> None:
     that can never arrive.
     """
     # Arrange
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     approval_hooks = MagicMock()
     agent.bind_turn(TurnBinding(tool_hooks=approval_hooks))
     assert agent._tool_hooks is approval_hooks  # noqa: SLF001
@@ -204,7 +204,7 @@ def test_a_binding_states_the_whole_turn_and_replace_carries_it_forward() -> Non
     from dataclasses import replace
 
     # Arrange
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     approval_hooks = MagicMock()
     confirm = MagicMock()
     binding = TurnBinding(tool_hooks=approval_hooks, confirm_fn=confirm, is_tty=True)
@@ -287,7 +287,7 @@ def test_shell_gather_progress_follows_the_turn_console_after_rebind() -> None:
     agent.bind_turn(TurnBinding(console=turn_console))
 
     # Act — the gather phase reports a tool start.
-    on_progress = agent._gather_ports.on_progress  # noqa: SLF001
+    on_progress = agent._gather_phase.on_progress  # noqa: SLF001
     assert on_progress is not None
     on_progress("tool_start", {"name": "query_grafana_metrics", "input": {"query": "up"}})
 
@@ -355,10 +355,10 @@ def test_handle_is_the_one_host_loop_binding_each_outer_turn() -> None:
     """
     from dataclasses import replace
 
-    from core.agent_harness.turns.port_families import HeadlessPorts
+    from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 
     # Arrange — an agent whose action stage handles every turn; record what got bound.
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     seen: list[tuple[str, Any]] = []
     original_bind = agent.bind_turn
 
@@ -415,7 +415,7 @@ def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch
     """
     from core.agent_harness.turns import headless_agent
     from core.agent_harness.turns.headless_adapters import InMemorySessionState
-    from core.agent_harness.turns.port_families import HeadlessPorts
+    from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 
     seen: dict[str, Any] = {}
 
@@ -426,7 +426,7 @@ def test_handle_runs_the_goal_loop_on_the_session_the_binding_states(monkeypatch
     monkeypatch.setattr(headless_agent, "run_until_session_goal", _spy_loop)
     previous = InMemorySessionState()
     current = InMemorySessionState()
-    agent = HeadlessPorts(session=previous).agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild(session=previous).agent(tools=NullToolProvider())
     agent.bind_stages(
         execute_actions=lambda _text, **_kw: ToolCallingTurnResult(0, 0, 0, False, True)
     )
@@ -446,7 +446,7 @@ def test_a_second_thread_cannot_start_a_turn_while_one_is_running() -> None:
     import threading
 
     from core.agent_harness.runtime import AgentBusyError
-    from core.agent_harness.turns.port_families import HeadlessPorts
+    from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 
     # Arrange — an action stage that blocks until the test releases it.
     entered = threading.Event()
@@ -457,7 +457,7 @@ def test_a_second_thread_cannot_start_a_turn_while_one_is_running() -> None:
         release.wait(timeout=5)
         return ToolCallingTurnResult(0, 0, 0, False, True)
 
-    agent = HeadlessPorts().agent(tools=NullToolProvider())
+    agent = InMemoryHeadlessBuild().agent(tools=NullToolProvider())
     agent.bind_stages(execute_actions=_blocking_execute)
     first = threading.Thread(target=agent.handle, args=("one", TurnBinding()))
 

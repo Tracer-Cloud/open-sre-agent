@@ -1,8 +1,8 @@
-"""Build the interactive shell's agent on the default port family.
+"""Build the interactive shell's agent with DefaultHeadlessBuild.
 
 The shell is a host: it supplies :class:`AgentBuildConfig` (tools, prompts,
 gather, error reporter) and omits capability policy so gateway-chat withholds
-do not run. Construction still goes through :class:`DefaultPorts` — the same
+do not run. Construction still goes through :class:`DefaultHeadlessBuild` — the same
 family the gateway pool uses — so the shell keeps investigation / llm_provider
 / task_cancel and REPL slash / TTY paint.
 """
@@ -18,7 +18,7 @@ from rich.console import Console
 from core.agent_harness import OutputSink
 from core.agent_harness.runtime import (
     AgentBuildConfig,
-    DefaultPorts,
+    DefaultHeadlessBuild,
     DefaultToolProvider,
     HeadlessAgent,
 )
@@ -28,7 +28,7 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     resolve_output_sink,
 )
 from surfaces.interactive_shell.runtime.background import runner as background_runner
-from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_ports
+from surfaces.interactive_shell.runtime.integration_tool_gathering import shell_gather_phase
 from surfaces.interactive_shell.runtime.investigation_adapter import (
     repl_investigation_launch_ports,
 )
@@ -91,7 +91,7 @@ def shell_agent_build_config(
     return AgentBuildConfig(
         build_tools=build_tools,
         build_prompts=shell_prompt_context_provider,
-        build_gather=shell_gather_ports,
+        build_gather=shell_gather_phase,
         error_reporter=ShellErrorReporter(),
     )
 
@@ -131,7 +131,7 @@ def build_shell_agent(
     if build_tools is None or build_prompts is None or build_gather is None:
         raise RuntimeError("shell agent build config is incomplete")
     logger = logging.getLogger("opensre.interactive_shell")
-    return DefaultPorts(
+    return DefaultHeadlessBuild(
         session=session,
         output=resolve_output_sink(console, output),
         console=console,

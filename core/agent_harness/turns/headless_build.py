@@ -1,20 +1,15 @@
-"""The two port families an agent is built on: in-memory and product defaults.
+"""The two ways a HeadlessAgent is built: in-memory and product defaults.
 
-**This is the single construction seam.** :class:`HeadlessPorts` is the
-in-memory family (scripts, tests, a turn with zero configuration);
-:class:`DefaultPorts` is the product family (gateway ``SessionAgentPool``, the
-REPL, ``AgentSession.start``). Both build through ``.agent(...)``; hosts never
-call :class:`HeadlessAgent` directly. A host varies the agent through the ports
-it passes to ``agent()`` — its :class:`~core.agent_harness.ports.ToolProvider`
-(usually a configured :class:`~core.agent_harness.tools.tool_provider.DefaultToolProvider`),
-prompt provider and gather ports; the family owns the rest.
+**This is the single construction seam.** :class:`InMemoryHeadlessBuild` is
+session + output in memory (scripts, tests, a turn with zero configuration).
+:class:`DefaultHeadlessBuild` is session + output + console + logger +
+error reporter (gateway ``SessionAgentPool``, the REPL, ``AgentSession.start``).
+Both build through ``.agent(tools=…, prompts=…, gather=…)``; hosts never
+construct :class:`HeadlessAgent` directly.
 
 Per-message values are bound on the agent with :meth:`HeadlessAgent.handle`
-(a :class:`~core.agent_harness.ports.TurnBinding`); whole-stage replacements
-for tests with :meth:`HeadlessAgent.bind_stages`.
-
-Process boot (``configure_process``) is a **different layer** — adapters and
-env — and does not build agents.
+(a :class:`~core.agent_harness.ports.TurnBinding`). Process boot
+(``configure_process``) does not build agents.
 """
 
 from __future__ import annotations
@@ -45,7 +40,7 @@ from core.agent_harness.prompts.grounding import (
 )
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.gather_ports import GATHER_DISABLED, GatherPorts
+from core.agent_harness.turns.gather_phase import GATHER_DISABLED, GatherPhase
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -61,7 +56,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class HeadlessPorts:
+class InMemoryHeadlessBuild:
     """The in-memory family: a turn runs with zero configuration.
 
     ``session`` defaults to an in-memory state, ``output`` to a buffer sink,
@@ -93,7 +88,7 @@ class HeadlessPorts:
         *,
         tools: ToolProvider,
         prompts: PromptContextProvider | None = None,
-        gather: GatherPorts | None = None,
+        gather: GatherPhase | None = None,
         llm_factory: LlmFactory | None = None,
     ) -> HeadlessAgent:
         return HeadlessAgent(
@@ -112,7 +107,7 @@ class HeadlessPorts:
 
 
 @dataclass(frozen=True)
-class DefaultPorts:
+class DefaultHeadlessBuild:
     """The default adapters for ``session`` streaming to ``output``.
 
     ``console`` and ``logger`` feed only the defaults (tool rendering, tool
@@ -171,7 +166,7 @@ class DefaultPorts:
         *,
         tools: ToolProvider | None = None,
         prompts: PromptContextProvider | None = None,
-        gather: GatherPorts | None = None,
+        gather: GatherPhase | None = None,
         llm_factory: LlmFactory | None = None,
     ) -> HeadlessAgent:
         """The agent on this family; each port a host passes replaces that default.
@@ -193,4 +188,4 @@ class DefaultPorts:
         )
 
 
-__all__ = ["DefaultPorts", "HeadlessPorts"]
+__all__ = ["DefaultHeadlessBuild", "InMemoryHeadlessBuild"]

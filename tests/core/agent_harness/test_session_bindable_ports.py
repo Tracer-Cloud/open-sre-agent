@@ -18,7 +18,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.host_cancel import ensure_turn_cancel
-from core.agent_harness.turns.port_families import HeadlessPorts
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 
 
 class _SpyTools:
@@ -68,14 +68,14 @@ def test_headless_agent_bind_session_invokes_session_bindable() -> None:
     first = InMemorySessionState(session_id="a")
     second = InMemorySessionState(session_id="b")
     tools = _SpyTools()
-    agent = HeadlessPorts(session=first).agent(tools=tools)
+    agent = InMemoryHeadlessBuild(session=first).agent(tools=tools)
     agent.bind_session(second)
     assert tools.sessions == [second]
 
 
 def test_headless_agent_bind_turn_console_invokes_console_bindable() -> None:
     tools = _SpyTools()
-    agent = HeadlessPorts(session=InMemorySessionState()).agent(tools=tools)
+    agent = InMemoryHeadlessBuild(session=InMemorySessionState()).agent(tools=tools)
     agent.bind_turn(TurnBinding(console="second"))
     assert tools.consoles == ["second"]
 
@@ -96,7 +96,7 @@ def test_headless_agent_bind_turn_output_retargets_reasoning() -> None:
     first = BufferOutputSink()
     second = BufferOutputSink()
     reasoning = DefaultReasoningClientProvider(output=first)
-    agent = HeadlessPorts(session=InMemorySessionState(), output=first, reasoning=reasoning).agent(
+    agent = InMemoryHeadlessBuild(session=InMemorySessionState(), output=first, reasoning=reasoning).agent(
         tools=NullToolProvider()
     )
     agent.bind_turn(TurnBinding(output=second))
