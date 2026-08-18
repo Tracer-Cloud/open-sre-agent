@@ -38,6 +38,10 @@ def run_scheduled_investigation(alert_payload: AlertPayload) -> InvestigationRes
 def install() -> None:
     """Bind the canonical investigation pipeline as the scheduler runner.
 
+    Registers this seam alone. A host that wants both seams — and its capacity
+    gate applied to them — builds ``SchedulerRunners`` through
+    :func:`bootstrap.adapters.scheduler_runners` instead.
+
     Idempotent — re-registering the same shim is a no-op from the scheduler's
     perspective. Tests that need to swap the runner should call
     :func:`platform.scheduler.investigation_runner.register_investigation_runner`

@@ -16,12 +16,19 @@ is the only layer allowed to see both ``integrations`` and ``tools``.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
-from platform.scheduler.agent_runner import AgentRunner, register_agent_runner
+from platform.scheduler.agent_runner import (
+    AgentPayload,
+    AgentRunner,
+    register_agent_runner,
+)
 from platform.scheduler.investigation_runner import (
+    AlertPayload,
+    InvestigationResult,
     InvestigationRunner,
     register_investigation_runner,
 )
@@ -37,13 +44,31 @@ class TurnGate(Protocol):
         """Give the permit back."""
 
 
-def _gated[**P, R](runner: Callable[P, R], gate: TurnGate) -> Callable[P, R]:
-    def run(*args: P.args, **kwargs: P.kwargs) -> R:
-        gate.acquire()
-        try:
-            return runner(*args, **kwargs)
-        finally:
-            gate.release()
+@contextmanager
+def _permit(gate: TurnGate) -> Iterator[None]:
+    """Hold one of ``gate``'s permits for the body, releasing it even on error."""
+    gate.acquire()
+    try:
+        yield
+    finally:
+        gate.release()
+
+
+def _gated_agent(runner: AgentRunner, gate: TurnGate) -> AgentRunner:
+    def run(payload: AgentPayload) -> str:
+        with _permit(gate):
+            return runner(payload)
+
+    return run
+
+
+def _gated_investigation(
+    runner: InvestigationRunner,
+    gate: TurnGate,
+) -> InvestigationRunner:
+    def run(alert_payload: AlertPayload) -> InvestigationResult | None:
+        with _permit(gate):
+            return runner(alert_payload)
 
     return run
 
@@ -58,8 +83,8 @@ class SchedulerRunners:
     def gated(self, gate: TurnGate) -> SchedulerRunners:
         """Return a bundle whose runs each take one permit from ``gate``."""
         return SchedulerRunners(
-            agent=_gated(self.agent, gate),
-            investigation=_gated(self.investigation, gate),
+            agent=_gated_agent(self.agent, gate),
+            investigation=_gated_investigation(self.investigation, gate),
         )
 
     def install(self) -> None:

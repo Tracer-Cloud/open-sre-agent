@@ -11,7 +11,10 @@ the scheduler ones.
 
 from __future__ import annotations
 
-from platform.scheduler.runners import SchedulerRunners
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from platform.scheduler.runners import SchedulerRunners
 
 
 def install_investigation_api() -> None:
@@ -95,6 +98,7 @@ def scheduler_runners() -> SchedulerRunners:
     bundle is built here and handed to whichever host installs it.
     """
     from integrations.scheduled_agent_bootstrap import run_scheduled_agent_digest
+    from platform.scheduler.runners import SchedulerRunners
     from tools.investigation.scheduler_bootstrap import run_scheduled_investigation
 
     return SchedulerRunners(

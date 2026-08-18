@@ -28,7 +28,12 @@ def run_scheduled_agent_digest(payload: AgentPayload) -> str:
 
 
 def install() -> None:
-    """Bind the multiplexed scheduled agent runner."""
+    """Bind the multiplexed scheduled agent runner.
+
+    Registers this seam alone. A host that wants both seams — and its capacity
+    gate applied to them — builds ``SchedulerRunners`` through
+    :func:`bootstrap.adapters.scheduler_runners` instead.
+    """
     register_agent_runner(run_scheduled_agent_digest)
 
 
