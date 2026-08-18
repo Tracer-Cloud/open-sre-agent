@@ -79,7 +79,7 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
-        from gateway.core.runtime.concurrency import process_turn_gate
+        from gateway.core.turn.concurrency import process_turn_gate
 
         # Already claimed from the queue — block like scheduler runners so the
         # work waits for a chat/Path-2 slot instead of racing the process gate.

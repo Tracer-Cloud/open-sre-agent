@@ -17,7 +17,7 @@ import time
 from collections.abc import Iterable
 
 from core.execution import ToolExecutionHooks
-from gateway.core.runtime.status_messages import (
+from gateway.core.turn.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,

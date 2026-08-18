@@ -9,9 +9,9 @@ assemble the turn handler and start components —
 * :meth:`start_scheduler` — peer of the consumer surfaces (cron / loops)
 
 Owns signals and ``stop``/``wait``. Component states go through
-:func:`gateway.core.runtime.daemon.write_component_status`. Channel start/stop
+:func:`gateway.core.process.daemon.write_component_status`. Channel start/stop
 lives in :mod:`gateway.startup`; turn dispatch lives in
-:mod:`gateway.core.runtime.turn_handler` — not here.
+:mod:`gateway.core.turn.turn_handler` — not here.
 """
 
 from __future__ import annotations
@@ -28,24 +28,24 @@ from rich.console import Console
 from core.agent_harness.ports import SlashPortsFactory
 from gateway import startup as gateway_startup
 from gateway.core.config.logging_config import configure_logging
-from gateway.core.runtime.concurrency import (
-    TurnConcurrencyGate,
-    process_turn_gate,
-    set_process_turn_gate,
-)
-from gateway.core.runtime.credential_hydration import (
-    GatewayBootstrap,
-    GatewayCredentialHydrator,
-)
-from gateway.core.runtime.daemon import (
+from gateway.core.process.daemon import (
     GATEWAY_PID_FILE,
     clear_component_status,
     write_component_status,
 )
+from gateway.core.process.readiness import set_ready
+from gateway.core.runtime.credential_hydration import (
+    GatewayBootstrap,
+    GatewayCredentialHydrator,
+)
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.core.runtime.readiness import set_ready
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from gateway.core.transport_api import GatewayAgentCallback
+from gateway.core.turn.concurrency import (
+    TurnConcurrencyGate,
+    process_turn_gate,
+    set_process_turn_gate,
+)
+from gateway.core.turn.turn_handler import GatewayTurnHandler
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.

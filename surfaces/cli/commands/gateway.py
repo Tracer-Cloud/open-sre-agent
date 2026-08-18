@@ -6,7 +6,7 @@ import time
 
 import click
 
-from gateway.core.runtime.daemon import (
+from gateway.core.process.daemon import (
     GATEWAY_LOG_FILE,
     gateway_daemon_pid,
     read_component_status,

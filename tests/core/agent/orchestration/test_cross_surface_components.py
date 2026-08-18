@@ -13,7 +13,7 @@ from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.orchestrator import run_turn
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.turn.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.session import Session
 from tests.shared.default_ports_stub import default_ports_stub
 from tests.shared.fake_agent import fake_agent
@@ -35,7 +35,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     )
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
+        "gateway.core.turn.session_agents.DefaultPorts", default_ports_stub(factory)
     )
 
     session = Session(store=InMemorySessionStore())
@@ -45,7 +45,7 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
 
     # The message is dispatched per-turn; session-stable ports are wired once,
     # with a live sink proxy rebound to the transport sink each turn.
-    from gateway.core.runtime.live_sink import LiveOutputSink
+    from gateway.core.turn.live_sink import LiveOutputSink
 
     agent.dispatch.assert_called_once()
     assert agent.dispatch.call_args.args == ("hello gateway",)
@@ -79,7 +79,7 @@ def test_gateway_turn_handler_does_not_finalize_answered_turn(
         llm_run=object(),
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts",
+        "gateway.core.turn.session_agents.DefaultPorts",
         default_ports_stub(MagicMock(return_value=agent)),
     )
 

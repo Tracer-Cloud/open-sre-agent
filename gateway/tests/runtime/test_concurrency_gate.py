@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from gateway.core.runtime.concurrency import TurnConcurrencyGate
+from gateway.core.turn.concurrency import TurnConcurrencyGate
 from gateway.tests.runtime.concurrency_limited_handler import (
     ConcurrencyLimitedTurnHandler,
 )
@@ -86,7 +86,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
     """Production path: capacity lives on GatewayTurnHandler itself."""
     from rich.console import Console
 
-    from gateway.core.runtime.turn_handler import GatewayTurnHandler
+    from gateway.core.turn.turn_handler import GatewayTurnHandler
 
     gate = TurnConcurrencyGate(1)
     entered = threading.Event()
@@ -124,7 +124,7 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
 
 
 def test_process_turn_gate_is_shared_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
-    from gateway.core.runtime.concurrency import (
+    from gateway.core.turn.concurrency import (
         process_turn_gate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
@@ -147,7 +147,7 @@ def test_path2_sync_investigate_busy_drops_when_gate_full(
     """POST /investigate shares process_turn_gate — try_acquire like chat."""
     from fastapi.testclient import TestClient
 
-    from gateway.core.runtime.concurrency import (
+    from gateway.core.turn.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
@@ -172,12 +172,12 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from gateway.core.runtime.concurrency import (
+    from gateway.core.storage.investigations.repository import InMemoryInvestigationRepository
+    from gateway.core.turn.concurrency import (
         TurnConcurrencyGate,
         reset_process_turn_gate_for_tests,
         set_process_turn_gate,
     )
-    from gateway.core.storage.investigations.repository import InMemoryInvestigationRepository
     from gateway.web.worker import InvestigationWorker
 
     reset_process_turn_gate_for_tests()

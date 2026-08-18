@@ -90,7 +90,7 @@ def test_manager_stop_never_touches_the_real_gateway_directory() -> None:
     ``gateway/tests/conftest.py`` this test deleted
     ``~/.opensre/gateway/components.json`` on the developer's machine.
     """
-    from gateway.core.runtime import daemon
+    from gateway.core.process import daemon
 
     real_gateway_dir = Path.home() / ".opensre" / "gateway"
 

@@ -14,7 +14,7 @@ from rich.console import Console
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.turn.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
@@ -25,13 +25,13 @@ from tests.shared.fake_agent import fake_agent
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "gateway.core.turn.turn_handler.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "gateway.core.turn.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "gateway.core.turn.turn_handler.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -60,7 +60,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
+        "gateway.core.turn.session_agents.DefaultPorts", default_ports_stub(factory)
     )
     return factory
 
@@ -272,7 +272,7 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
 
 def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> None:
     """Soft timeout / stop owns the sink; do not overwrite with empty finalize."""
-    from gateway.core.runtime.cancel_console import CancelConsole
+    from gateway.core.turn.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
@@ -294,7 +294,7 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
 
 def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
     """Each turn rebinds a CancelConsole so timeout Events stay turn-scoped."""
-    from gateway.core.runtime.cancel_console import CancelConsole
+    from gateway.core.turn.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
@@ -400,11 +400,11 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     completed: list[dict[str, object]] = []
 
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_started",
+        "gateway.core.turn.turn_handler.capture_gateway_turn_started",
         lambda **kwargs: started.append(kwargs),
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed",
+        "gateway.core.turn.turn_handler.capture_gateway_turn_completed",
         lambda **kwargs: completed.append(kwargs),
     )
     _patch_headless_agent(monkeypatch, _empty_turn_result())

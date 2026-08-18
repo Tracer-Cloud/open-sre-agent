@@ -23,7 +23,7 @@ def _isolate_gateway_runtime_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     deleted the status file of the daemon actually running on the machine,
     leaving ``opensre gateway status`` blank until the next restart.
     """
-    from gateway.core.runtime import daemon
+    from gateway.core.process import daemon
     from gateway.transports.buzz.poller import cursor as buzz_cursor
 
     runtime_dir = tmp_path / "gateway"

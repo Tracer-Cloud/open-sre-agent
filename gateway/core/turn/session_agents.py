@@ -18,9 +18,9 @@ from rich.console import Console
 from core.agent_harness import SessionCore
 from core.agent_harness.ports import SlashPortsFactory
 from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, GatherPorts, HeadlessAgent
-from gateway.core.runtime.live_sink import LiveOutputSink
-from gateway.core.runtime.status_messages import status_from_tool_start
 from gateway.core.transport_api import GatewaySink
+from gateway.core.turn.live_sink import LiveOutputSink
+from gateway.core.turn.status_messages import status_from_tool_start
 from tools.interactive_shell.subprocess_presenter import (
     headless_subprocess_presenter_factory,
 )
