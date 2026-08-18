@@ -50,6 +50,7 @@ import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -253,15 +254,24 @@ def test_put_object_is_safe_under_the_engines_real_concurrent_push(tmp_path: Pat
     ``max_parallel_uploads`` objects in flight at once. A barrier, not a mere
     file count, is what proves genuine overlap happened rather than the
     uploads happening to run one after another; the same technique is used
-    against the engine itself in ``test_push_concurrency.py``. This test
-    proves only the template's own ``put_object`` survives that load without
-    losing a write, not the engine's own concurrency machinery.
+    against the engine itself in ``test_push_concurrency.py``.
+
+    A handful of writes to *distinct* dictionary keys would still pass even
+    with the lock deleted entirely - CPython's GIL already makes that one
+    pattern safe on its own, so counting uploads or final entries proves
+    nothing about the lock. Spying on ``store._lock`` instead proves
+    ``put_object`` actually enters it once per call, which is the concrete
+    thing "protect shared state" has to mean: deleting the
+    ``with self._lock:`` line in ``put_object`` is what this test catches.
     """
     # Arrange
     cap = 4
     barrier = threading.Barrier(cap, timeout=5.0)
     config = RemoteSyncConfig(bucket="b", provider=_PROVIDER_NAME)
-    store = _FakeObjectStore(config, bucket={}, barrier=barrier)
+    bucket: dict[str, tuple[bytes, datetime]] = {}
+    store = _FakeObjectStore(config, bucket=bucket, barrier=barrier)
+    spy_lock = MagicMock(wraps=store._lock)
+    store._lock = spy_lock
     root = tmp_path / "sessions"
     root.mkdir()
     for i in range(cap):
@@ -273,4 +283,11 @@ def test_put_object_is_safe_under_the_engines_real_concurrent_push(tmp_path: Pat
 
     # Assert
     assert len(report.uploaded) == cap
-    assert len(store.list_objects("")) == cap
+    # Bypasses the spied store and reads the backing dict directly, so this
+    # count is independent of how many times list_objects() also happens to
+    # enter the lock.
+    assert len(bucket) == cap
+    # At least once per put_object call - exactly cap if nothing else touches
+    # the lock, more if push() also lists first. Either way, removing the
+    # lock from put_object drops this below cap and fails the assertion.
+    assert spy_lock.__enter__.call_count >= cap
