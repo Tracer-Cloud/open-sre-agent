@@ -19,8 +19,8 @@ from bootstrap import adapters
 _REGISTRARS = {
     "integrations.harness_adapters.register_harness_adapters": "integrations",
     "tools.harness_adapters.register_harness_adapters": "tools",
-    "platform.scheduler.runners.register_investigation_runner": "investigation",
-    "platform.scheduler.runners.register_agent_runner": "scheduled",
+    "platform.scheduling.scheduler.runners.register_investigation_runner": "investigation",
+    "platform.scheduling.scheduler.runners.register_agent_runner": "scheduled",
 }
 _STEPS = ("install_harness_adapters", "install_scheduler_runners")
 

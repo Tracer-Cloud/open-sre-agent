@@ -33,7 +33,7 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for env_var in _ROCKETCHAT_ENV_VARS:
         monkeypatch.delenv(env_var, raising=False)
     monkeypatch.setattr(
-        "platform.scheduler.credentials._get_integration_credential",
+        "platform.scheduling.scheduler.credentials._get_integration_credential",
         lambda *_: "",
     )
     monkeypatch.setattr(

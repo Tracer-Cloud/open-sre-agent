@@ -80,7 +80,7 @@ def _patch_process_boot(monkeypatch) -> None:
     )
     monkeypatch.setattr("core.llm.internal.preload.preload_llm_clients", lambda: None)
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.boot_capability_warnings",
+        "platform.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
 

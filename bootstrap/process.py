@@ -147,7 +147,7 @@ def _run_scheduler_runners(_profile: ProcessProfile, _log: logging.Logger) -> No
 
 
 def _run_capability_warnings(profile: ProcessProfile, log: logging.Logger) -> None:
-    from platform.sandbox.capabilities import boot_capability_warnings
+    from platform.safety.sandbox.capabilities import boot_capability_warnings
 
     for warning in boot_capability_warnings():
         log.warning("[%s] capability: %s", profile.name, warning)

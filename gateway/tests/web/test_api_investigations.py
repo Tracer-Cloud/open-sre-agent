@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gateway.web import webapp
-from platform.auth.jwt_auth import JWTClaims
+from platform.safety.auth.jwt_auth import JWTClaims
 
 
 def _claims(*, org: str = "org_test") -> JWTClaims:
@@ -59,7 +59,7 @@ def test_get_investigation_requires_auth() -> None:
 
 
 def test_invalid_token_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    from platform.auth.jwt_auth import JWTVerificationError
+    from platform.safety.auth.jwt_auth import JWTVerificationError
 
     monkeypatch.setattr(
         "gateway.web.clerk_deps.verify_jwt_async",

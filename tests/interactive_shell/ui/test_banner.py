@@ -184,7 +184,7 @@ def test_count_scheduled_tasks_survives_store_failure(monkeypatch: object) -> No
     real_import = builtins.__import__
 
     def _fail_scheduler_store(name: str, *args: object, **kwargs: object) -> object:
-        if name == "platform.scheduler.store":
+        if name == "platform.scheduling.scheduler.store":
             raise ImportError("simulated scheduler store failure")
         return real_import(name, *args, **kwargs)
 

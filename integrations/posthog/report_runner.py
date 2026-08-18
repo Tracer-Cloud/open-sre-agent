@@ -17,7 +17,7 @@ from integrations.posthog.report_prerequisites import (
     posthog_not_configured_hint,
     posthog_report_available,
 )
-from platform.scheduler.agent_runner import AgentPayload
+from platform.scheduling.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
 

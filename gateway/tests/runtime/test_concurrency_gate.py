@@ -13,12 +13,12 @@ from gateway.core.host.concurrency import TurnConcurrencyGate
 from gateway.tests.runtime.concurrency_limited_handler import (
     ConcurrencyLimitedTurnHandler,
 )
-from platform.deployment_contracts.models import SizeProfile
-from platform.scheduler.agent_runner import (
+from platform.deployment.contracts.models import SizeProfile
+from platform.scheduling.scheduler.agent_runner import (
     invoke_agent_runner,
     register_agent_runner,
 )
-from platform.scheduler.runners import SchedulerRunners
+from platform.scheduling.scheduler.runners import SchedulerRunners
 
 
 @pytest.mark.parametrize(

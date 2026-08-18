@@ -16,7 +16,7 @@ from gateway.core.host.status_messages import (
 )
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from integrations.telegram.formatting import markdown_to_telegram_html
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from platform.text.truncation import truncate
 
 _LOG_PREVIEW_LIMIT = 500

@@ -13,8 +13,8 @@ from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.registered_tool import RegisteredTool
 from core.tool_framework.utils.schema import object_schema, string_property
-from platform.scheduler.credentials import requires_explicit_chat_id
-from platform.scheduler.types import Provider, TaskKind
+from platform.scheduling.scheduler.credentials import requires_explicit_chat_id
+from platform.scheduling.scheduler.types import Provider, TaskKind
 
 # Match surfaces.cli.commands.cron: Sentry kinds use `opensre sentry`, not cron add.
 _KIND_VALUES = frozenset(

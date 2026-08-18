@@ -16,8 +16,8 @@ import time
 
 from integrations.rocketchat.credentials import RocketChatCredentials
 from integrations.rocketchat.delivery import post_rocketchat_message, post_rocketchat_webhook
-from platform.notifications.cooldown import CooldownGate
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.cooldown import CooldownGate
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)

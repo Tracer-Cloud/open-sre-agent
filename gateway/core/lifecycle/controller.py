@@ -7,7 +7,7 @@ logging + credential hydrate, then
 assemble the turn handler and start components —
 
 * :meth:`start_surfaces` — web + chat transports via :mod:`gateway.startup`
-* :meth:`start_scheduler` — host ``platform.scheduler`` in this process (cron / loops)
+* :meth:`start_scheduler` — host ``platform.scheduling.scheduler`` in this process (cron / loops)
 
 Owns signals and ``stop``/``wait``. Component states go through
 :func:`gateway.core.process.component_status.write_component_status`. Channel start/stop
@@ -124,15 +124,15 @@ class GatewayController:
         self.components.update(self.surfaces.statuses)
 
     def start_scheduler(self, *, logger: logging.Logger) -> None:
-        """Host ``platform.scheduler`` here — runners and APScheduler stay there.
+        """Host ``platform.scheduling.scheduler`` here — runners and APScheduler stay there.
 
         Not a gateway surface. CLI/shell mutate the task store and call
         :func:`request_scheduler_reload`; this process only installs gated
         runners and starts :func:`start_background_scheduler`.
         """
         from bootstrap.adapters import scheduler_runners
-        from platform.scheduler.reload_signal import consume_scheduler_reload_request
-        from platform.scheduler.runner import start_background_scheduler
+        from platform.scheduling.scheduler.reload_signal import consume_scheduler_reload_request
+        from platform.scheduling.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
         # A scheduled run costs a turn, so both take the same capacity gate chat
@@ -194,7 +194,7 @@ class GatewayController:
             return
 
         def _watch() -> None:
-            from platform.scheduler.reload_signal import (
+            from platform.scheduling.scheduler.reload_signal import (
                 RELOAD_POLL_SECONDS,
                 consume_scheduler_reload_request,
             )
@@ -219,7 +219,7 @@ class GatewayController:
 
     def _reload_scheduler(self, logger: logging.Logger) -> None:
         """Resync the live scheduler (or start one) from the current task store."""
-        from platform.scheduler.runner import refresh_background_scheduler
+        from platform.scheduling.scheduler.runner import refresh_background_scheduler
 
         scheduler, task_count = refresh_background_scheduler(self.scheduler)
         self.scheduler = scheduler

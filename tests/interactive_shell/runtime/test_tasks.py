@@ -14,8 +14,8 @@ import pytest
 from rich.console import Console
 
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from platform.tasks.task_registry import TaskRegistry
-from platform.tasks.task_types import TaskKind, TaskStatus
+from platform.scheduling.tasks.task_registry import TaskRegistry
+from platform.scheduling.tasks.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import (
     Session,
@@ -96,7 +96,7 @@ class TestTaskRegistry:
         def _fake_hex(_nbytes: int) -> str:
             return next(_ids)
 
-        monkeypatch.setattr("platform.tasks.task_registry.secrets.token_hex", _fake_hex)
+        monkeypatch.setattr("platform.scheduling.tasks.task_registry.secrets.token_hex", _fake_hex)
         session = Session()
         session.task_registry.create(TaskKind.INVESTIGATION)
         session.task_registry.create(TaskKind.INVESTIGATION)
@@ -165,7 +165,7 @@ class TestTaskRegistry:
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "platform.tasks.task_types.os.kill",
+            "platform.scheduling.tasks.task_types.os.kill",
             lambda _pid, _sig: (_ for _ in ()).throw(ProcessLookupError()),
         )
 
@@ -188,7 +188,7 @@ class TestTaskRegistry:
         def _fake_kill(pid: int, sig: int) -> None:
             calls.append((pid, sig))
 
-        monkeypatch.setattr("platform.tasks.task_types.os.kill", _fake_kill)
+        monkeypatch.setattr("platform.scheduling.tasks.task_types.os.kill", _fake_kill)
         reg = TaskRegistry.persistent()
         task = reg.create(TaskKind.SYNTHETIC_TEST, command="opensre tests synthetic")
         task.mark_running()

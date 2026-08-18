@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 from gateway.transports.telegram.output_sink import TelegramOutputSink
 from gateway.transports.telegram.poller.client import TelegramBotClient
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 
 
 def test_initial_status_is_not_working_placeholder() -> None:

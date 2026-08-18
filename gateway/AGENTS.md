@@ -35,7 +35,7 @@ start_gateway()
   → configure_process(GATEWAY_PROFILE)
   → compose turn handler
   → start_surfaces()   # delegates to gateway/startup.py (web + chat)
-  → start_scheduler()  # hosts platform.scheduler — not a gateway surface
+  → start_scheduler()  # hosts platform.scheduling.scheduler — not a gateway surface
   → ready
 ```
 
@@ -43,7 +43,7 @@ start_gateway()
   Slack / Discord. The controller keeps only `StartedGateway`.
 - Missing chat credentials → `not configured`; readiness/runtime failures →
   `failed`. The rest still start.
-- **Scheduler** is a **platform** component (`platform.scheduler`). The gateway
+- **Scheduler** is a **platform** component (`platform.scheduling.scheduler`). The gateway
   process *may host* it (`start_scheduler()` → `scheduler_runners().gated(…).install()`
   + `start_background_scheduler()`). It is not a consumer surface, not a
   transport, and there is no `gateway/scheduler/` package. Do not move runner
@@ -114,12 +114,12 @@ Two ways work reaches the agent. Mixing them is how a second turn engine appears
 |--|------------------------|--------|
 | **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `GatewayTurnHandler` — `(text, session, sink, logger)` |
 | **Interactive shell** | Yes | `HeadlessAgent.handle` with `AgentBuildConfig` (not the chat callback) |
-| **Producer** (`platform.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
+| **Producer** (`platform.scheduling.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
 
 Agent construction hooks live in `core.agent_harness.agent_build_config.AgentBuildConfig` (not `transport_api`, not a host re-export). Chat omits the config and the session-agent pool injects gateway capability withholds. The shell sets the build hooks it needs and leaves `apply_capability_policy` unset.
 
 The gateway **process** may host the scheduler (same `process_turn_gate`). That
-does not make the scheduler a channel: `platform.scheduler` must not import
+does not make the scheduler a channel: `platform.scheduling.scheduler` must not import
 `GatewayTurnHandler`. Pinned by
 `tests/test_package_borders.py::test_scheduler_never_imports_the_gateway_turn_handler`.
 

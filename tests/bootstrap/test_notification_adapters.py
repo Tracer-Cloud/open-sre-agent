@@ -11,7 +11,7 @@ import ast
 import pathlib
 
 from bootstrap.adapters import install_notification_adapters
-from platform.notifications.outbound_registry import (
+from platform.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     clear_outbound_adapters,
     get_outbound_adapter,

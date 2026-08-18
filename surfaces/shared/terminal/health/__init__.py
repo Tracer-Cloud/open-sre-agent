@@ -83,7 +83,7 @@ def render_health_report(
     console.print()
     console.print(Panel.fit(f"[{BOLD_BRAND}]OpenSRE Health[/]", border_style=BRAND))
 
-    from platform.guardrails.rules import get_default_rules_path, load_rules
+    from platform.safety.guardrails.rules import get_default_rules_path, load_rules
 
     rules_path = get_default_rules_path()
     if rules_path.exists():

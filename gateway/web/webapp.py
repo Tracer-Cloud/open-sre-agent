@@ -41,7 +41,7 @@ from gateway.core.storage import open_database  # noqa: E402
 from gateway.core.storage.investigations.repository import investigation_repository  # noqa: E402
 from gateway.web.investigations import router as investigations_router  # noqa: E402
 from platform.observability.errors.sentry import capture_exception  # noqa: E402
-from platform.turn_capacity import turn_slot  # noqa: E402
+from platform.process.turn_capacity import turn_slot  # noqa: E402
 from tools.investigation.capability import resolve_investigation_context  # noqa: E402
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.

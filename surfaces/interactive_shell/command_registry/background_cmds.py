@@ -33,7 +33,7 @@ def _allowed_notify_channels() -> tuple[str, ...]:
     modules at command time and nothing on the boot path.
     """
     from bootstrap.adapters import install_notification_adapters
-    from platform.notifications.outbound_registry import (
+    from platform.delivery.notifications.outbound_registry import (
         BACKGROUND_RCA,
         outbound_adapter_names_for,
     )

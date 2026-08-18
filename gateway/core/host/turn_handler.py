@@ -43,7 +43,7 @@ from platform.analytics.usage_context import (
     get_surface,
 )
 from platform.observability.trace.spans import traced_session
-from platform.turn_capacity import turn_slot
+from platform.process.turn_capacity import turn_slot
 
 
 class GatewayTurnHandler:

@@ -14,7 +14,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from platform.tasks.task_types import TaskKind, TaskStatus
+from platform.scheduling.tasks.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
 from surfaces.interactive_shell.command_registry.investigation import (
@@ -432,7 +432,7 @@ class TestDispatchSlash:
         list deciding it. Registering one makes its channel acceptable without any
         edit here, which a hardcoded tuple cannot do."""
         from bootstrap.adapters import install_notification_adapters
-        from platform.notifications.outbound_registry import (
+        from platform.delivery.notifications.outbound_registry import (
             BACKGROUND_RCA,
             clear_outbound_adapters,
             get_outbound_adapter,

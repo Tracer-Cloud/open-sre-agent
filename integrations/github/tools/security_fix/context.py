@@ -25,7 +25,7 @@ from integrations.github.tools.security_fix.errors import (
     GitHubSecurityFixError,
 )
 from integrations.github.tools.security_fix.local_rules import has_builtin_local_fix
-from platform.masking import MaskingContext, MaskingPolicy
+from platform.safety.masking import MaskingContext, MaskingPolicy
 
 AlertType = Literal[
     "auto",

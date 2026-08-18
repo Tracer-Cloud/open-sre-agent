@@ -88,7 +88,7 @@ def _count_loaded_skills() -> int:
 def _count_scheduled_tasks() -> int:
     """Return the number of persisted scheduled tasks. Never raises."""
     try:
-        from platform.scheduler.store import list_tasks
+        from platform.scheduling.scheduler.store import list_tasks
 
         return len(list_tasks())
     except Exception:

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from platform.background_investigations.types import BackgroundInvestigationRecord
-from platform.notifications.outbound_registry import (
+from platform.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
-from platform.notifications.rca_summary import summary_sections
+from platform.delivery.notifications.rca_summary import summary_sections
+from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_rocketchat_notification(record: BackgroundInvestigationRecord) -> str:
@@ -26,7 +26,7 @@ def deliver_rocketchat_notification(record: BackgroundInvestigationRecord) -> st
         post_rocketchat_webhook,
     )
     from integrations.smtp.delivery import format_background_rca_email
-    from platform.notifications.redaction import redact_token
+    from platform.delivery.notifications.redaction import redact_token
 
     entry = resolve_effective_integrations().get("rocketchat") or {}
     config = entry.get("config") if isinstance(entry, dict) else None

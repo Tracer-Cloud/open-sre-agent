@@ -15,8 +15,8 @@ import time
 
 from integrations.buzz.credentials import BuzzCredentials
 from integrations.buzz.delivery import post_buzz_message
-from platform.notifications.cooldown import CooldownGate
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.cooldown import CooldownGate
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)

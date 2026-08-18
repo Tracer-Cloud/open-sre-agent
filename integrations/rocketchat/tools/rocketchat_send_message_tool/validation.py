@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from platform.text.truncation import truncate
 
 

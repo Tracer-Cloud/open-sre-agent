@@ -6,10 +6,10 @@ import logging
 from typing import Any
 
 from config.constants.discord import DISCORD_API_BASE
-from platform.notifications.delivery_errors import extract_http_error
-from platform.notifications.delivery_transport import post_json
-from platform.notifications.limits import MAX_MESSAGE_SIZE
-from platform.notifications.redaction import redact_token
+from platform.delivery.notifications.delivery_errors import extract_http_error
+from platform.delivery.notifications.delivery_transport import post_json
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.redaction import redact_token
 from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)

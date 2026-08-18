@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from config.constants.runtime_metadata import OPENSRE_ALLOW_NETWORK_ENV
-from platform.sandbox.capabilities import (
+from platform.safety.sandbox.capabilities import (
     Capability,
     _file_grep_available,
     _file_read_available,
@@ -37,7 +37,7 @@ def test_shell_probe_reports_missing_interpreters(monkeypatch: Any) -> None:
     def _which(name: str) -> None:
         probed.append(name)
 
-    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", _which)
+    monkeypatch.setattr("platform.safety.sandbox.capabilities.shutil.which", _which)
 
     # Act
     available = _shell_available()
@@ -54,7 +54,7 @@ def test_file_grep_probe_reports_missing_executable(monkeypatch: Any) -> None:
     def _which(name: str) -> None:
         probed.append(name)
 
-    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", _which)
+    monkeypatch.setattr("platform.safety.sandbox.capabilities.shutil.which", _which)
 
     # Act
     available = _file_grep_available()
@@ -101,7 +101,7 @@ def test_probe_never_raises_even_when_the_check_explodes(monkeypatch: Any) -> No
     def _boom(*_args: Any, **_kwargs: Any) -> bool:
         raise OSError("environment is hostile")
 
-    monkeypatch.setattr("platform.sandbox.capabilities._python_available", _boom)
+    monkeypatch.setattr("platform.safety.sandbox.capabilities._python_available", _boom)
 
     # Act
     results = probe_capabilities()
@@ -137,7 +137,7 @@ def test_network_probe_uses_default_sandbox_policy(monkeypatch: Any) -> None:
             {"stdout": "", "stderr": "PermissionError: Network access is not permitted"},
         )()
 
-    monkeypatch.setattr("platform.sandbox.runner.run_python_sandbox", _fake_run)
+    monkeypatch.setattr("platform.safety.sandbox.runner.run_python_sandbox", _fake_run)
     assert _network_available() is False
     assert calls and calls[0].get("allow_network", False) is False
     assert "socket.socket" in calls[0]["code"]
@@ -155,7 +155,7 @@ def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> N
         _facts,
     )
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.unavailable_capability_warnings",
+        "platform.safety.sandbox.capabilities.unavailable_capability_warnings",
         lambda _results=None: ["dup", "network requests is unavailable"],
     )
 
@@ -184,7 +184,7 @@ def test_boot_warnings_make_every_basic_capability_actionable(
     # Arrange
     monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.unavailable_capability_warnings",
+        "platform.safety.sandbox.capabilities.unavailable_capability_warnings",
         lambda _results=None: [],
     )
     installed_tools = {

@@ -275,7 +275,7 @@ jobs:
           ${{ matrix.pytest_paths }}
           --cov=config
           --cov=core
-          --cov=platform.deployment_ec2
+          --cov=platform.deployment.ec2
           --cov=integrations
           --cov=platform
           --cov=surfaces

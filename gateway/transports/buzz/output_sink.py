@@ -22,7 +22,7 @@ from gateway.core.host.status_messages import (
     user_facing_error_message,
 )
 from integrations.buzz.client import BuzzClient
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 from platform.text.truncation import truncate
 
 _LOG_PREVIEW_LIMIT = 500

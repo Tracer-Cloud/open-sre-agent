@@ -205,7 +205,7 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
         lambda: None,
     )
     monkeypatch.setattr(
-        "platform.sandbox.capabilities.boot_capability_warnings",
+        "platform.safety.sandbox.capabilities.boot_capability_warnings",
         lambda: [],
     )
     from gateway.startup import StartedGateway

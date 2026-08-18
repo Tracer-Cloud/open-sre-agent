@@ -112,7 +112,7 @@ def test_manager_reload_scheduler_refreshes_component_status(
         return object(), 3
 
     monkeypatch.setattr(
-        "platform.scheduler.runner.refresh_background_scheduler",
+        "platform.scheduling.scheduler.runner.refresh_background_scheduler",
         _refresh,
     )
     manager = GatewayController()

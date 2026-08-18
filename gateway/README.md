@@ -41,7 +41,7 @@ gateway.core.lifecycle.controller.GatewayController.start_gateway
         │     ├── web/web_server  →  web/webapp:app
         │     └── transports/startup.start_transports
         │           (telegram / slack / discord startup)
-        └── start_scheduler()   # hosts platform.scheduler; not a gateway surface
+        └── start_scheduler()   # hosts platform.scheduling.scheduler; not a gateway surface
 ```
 
 Layout: `core/` (runtime, storage, …), `startup.py` (surface composer),
@@ -92,7 +92,7 @@ uv run opensre messaging allow -p telegram -u 123456789
 # Allow your Slack member id (profile → Copy member ID; see below)
 uv run opensre messaging allow -p slack -u U0123ABCD
 
-# Start the gateway daemon (web + chat). The process also hosts platform.scheduler.
+# Start the gateway daemon (web + chat). The process also hosts platform.scheduling.scheduler.
 uv run opensre gateway start
 ```
 

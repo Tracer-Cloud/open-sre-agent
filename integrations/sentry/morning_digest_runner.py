@@ -16,7 +16,7 @@ from integrations.sentry.project_scope import (
     payload_project_slug,
 )
 from platform.harness_ports import configured_integration_services
-from platform.scheduler.agent_runner import AgentPayload
+from platform.scheduling.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
 

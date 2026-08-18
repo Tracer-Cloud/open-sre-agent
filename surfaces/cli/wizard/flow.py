@@ -128,7 +128,7 @@ def build_demo_action_response() -> dict:
 
 def _seed_onboarding_loops() -> int:
     """Seed starter scheduled loops after onboarding completes."""
-    from platform.scheduler.loops import seed_starter_loops
+    from platform.scheduling.scheduler.loops import seed_starter_loops
 
     try:
         return len(seed_starter_loops())

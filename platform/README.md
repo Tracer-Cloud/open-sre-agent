@@ -10,30 +10,74 @@ orchestration, state, tool planning, and tool execution contracts belong in
 `core/`.
 
 Name packages by **what they do**. Do not add a `common/` / `shared/` / `util/`
-junk drawer.
+junk drawer. Prefer leaf imports over re-export shims.
 
-Areas:
+This package intentionally shadows the stdlib `platform` name and re-exposes
+its API in `__init__.py`. Do not add a submodule named `release` — that would
+overwrite stdlib `platform.release()`.
 
-- `auth/` — runtime authentication and identity checks.
-- `analytics/` — product and runtime analytics.
+## Process & install
+
+- `process/` — exit codes, CLI runtime flags, process-wide turn capacity
+  (`process/turn_capacity/`), and installed vs latest release version
+  (`process/release_version.py`).
+- `setup_state.py` — install/setup facts surfaced to agents and doctor.
+- `harness_ports.py` — integration port registries wired into the harness.
+
+## Contracts
+
 - `errors/` — `OpenSREError` contract (any layer may raise/catch).
-- `process/` — process exit codes and CLI runtime flags.
-- `tasks/` — in-flight task types and the persistent task registry.
-- `turn_capacity/` — process-wide turn concurrency gates.
-- `release_version.py` — installed vs latest release version helpers.
 - `service_families/` — tool-availability family-key normalization.
+
+## Prompt-sized results
+
 - `text/` — truncate / coerce / URL validation helpers.
-- `evidence/` — log and evidence compaction for prompt-sized results.
-- `cloudflare_install_proxy/` — Cloudflare Worker for `install.opensre.com`.
-- `deployment_ec2/` — EC2 AWS primitives and Telegram gateway AMI/systemd deploy (`telegram_gateway/`). Makefile: `make deploy-gateway`.
-- `notifications/` — notification delivery transports and channel-specific senders.
+- `evidence/` — log and evidence compaction; metric summary for tool results.
+
+## Observability & UX
+
 - `observability/` — logging, tracing, progress, debug output, and runtime
   display ports.
-- `masking/` — reversible masking and identifier normalization.
-- `scheduler/` — cron-driven scheduled deliveries, task persistence, and
-  execution deduplication.
-- `sandbox/` — constrained execution environments.
-- `guardrails/` — minimal runtime safety checks outside the core agent loop.
+- `logging/` — shell/third-party log handlers.
+- `analytics/` — product and runtime analytics.
+- `terminal/` — terminal theme and display helpers.
+
+## Safety — `safety/`
+
+- `safety/auth/` — runtime authentication and identity checks.
+- `safety/guardrails/` — minimal runtime safety checks outside the core agent loop.
+- `safety/masking/` — reversible masking and identifier normalization.
+- `safety/sandbox/` — constrained execution environments.
+
+## Scheduled and background work — `scheduling/`
+
+- `scheduling/scheduler/` — cron and agentic loop tasks, hosted by the gateway
+  process. Not a gateway submodule: every surface reads and mutates the task
+  store, and the gateway only supplies the process and the capacity gate.
+- `scheduling/tasks/` — in-flight task types and the persistent task registry.
+- `scheduling/background_investigations/` — background investigation store and types.
+
+## Delivery — `delivery/`
+
+- `delivery/notifications/` — notification delivery transports and
+  channel-specific senders.
+- `delivery/reporting/` — cross-vendor report-delivery registry and
+  surface-agnostic ports.
+
+## Persistence
+
+- `filestorage/` — syncable file storage providers and operations.
+
+## Deploy and packaging — `deployment/`
+
+- `deployment/ec2/` — EC2 AWS primitives and Telegram gateway AMI/systemd
+  deploy (`telegram_gateway/`). Makefile: `make deploy-gateway`.
+- `deployment/packaging/` — wheel validation and release manifest helpers.
+- `deployment/contracts/` — shared deployment models. `SizeProfile` is read at
+  runtime by the gateway capacity gate, so this is not build-time-only code.
+
+The Cloudflare Worker for `install.opensre.com` is not Python and lives at
+`infra/cloudflare_install_proxy/`.
 
 Future migrations should move existing modules into this folder incrementally
 with import updates and tests. Avoid compatibility-only forwarding modules;

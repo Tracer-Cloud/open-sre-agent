@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import threading
 
-from platform.deployment_contracts.models import SizeProfile
+from platform.deployment.contracts.models import SizeProfile
 
 _PROFILE_LIMITS = {
     SizeProfile.SMALL: 1,

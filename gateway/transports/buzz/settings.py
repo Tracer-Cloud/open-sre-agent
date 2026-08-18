@@ -14,7 +14,7 @@ from config.strict_config import StrictConfigModel
 from gateway.core.lifecycle.errors import GatewayConfigurationError
 from integrations.messaging_security import MessagingIdentityPolicy, MessagingPlatform
 from integrations.store import get_integration
-from platform.scheduler.credentials import resolve_buzz_credentials
+from platform.scheduling.scheduler.credentials import resolve_buzz_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class BuzzGatewayEnv(BaseSettings):
     """Environment-backed Buzz gateway settings.
 
     ``private_key``/``relay_url``/``auth_tag``/``buzz_path`` are resolved via
-    :func:`platform.scheduler.credentials.resolve_buzz_credentials` instead of
+    :func:`platform.scheduling.scheduler.credentials.resolve_buzz_credentials` instead of
     duplicated here, so the store > env > keyring precedence stays identical
     to the delivery-tier (watchdog/cron) code path.
     """

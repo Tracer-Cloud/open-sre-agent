@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from platform.scheduler.runners import SchedulerRunners
+    from platform.scheduling.scheduler.runners import SchedulerRunners
 
 
 def install_investigation_api() -> None:
@@ -76,7 +76,7 @@ def install_notification_adapters() -> tuple[str, ...]:
     from integrations.rocketchat.background_adapter import rocketchat_background_adapter
     from integrations.smtp.background_adapter import email_background_adapter
     from integrations.telegram.background_adapter import telegram_background_adapter
-    from platform.notifications.outbound_registry import (
+    from platform.delivery.notifications.outbound_registry import (
         register_outbound_adapter,
         registered_outbound_adapter_names,
     )
@@ -98,7 +98,7 @@ def scheduler_runners() -> SchedulerRunners:
     bundle is built here and handed to whichever host installs it.
     """
     from integrations.scheduled_agent_bootstrap import run_scheduled_agent_digest
-    from platform.scheduler.runners import SchedulerRunners
+    from platform.scheduling.scheduler.runners import SchedulerRunners
     from tools.investigation.scheduler_bootstrap import run_scheduled_investigation
 
     return SchedulerRunners(
