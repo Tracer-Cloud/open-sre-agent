@@ -58,9 +58,19 @@ def initialize_telegram_polling_runtime(settings: GatewaySettings) -> TelegramPo
 
 
 def shutdown_telegram_polling_runtime(runtime: TelegramPollingRuntime) -> None:
-    """Release resources created by :func:`initialize_telegram_polling_runtime`."""
+    """Release resources created by :func:`initialize_telegram_polling_runtime`.
+
+    Executor teardown is non-blocking on purpose. The poll loop already
+    drained asyncio tasks for ``_SHUTDOWN_DRAIN_SECONDS`` and cancelled the
+    rest; cancelling an asyncio task does **not** stop the underlying
+    ``run_in_executor`` thread — a turn still running past that bound would
+    otherwise hold ``wait=True`` here for as long as that thread takes to
+    return, pushing the Telegram background thread past the gateway's ~8s
+    ``stop()`` join budget (same trade-off as Buzz's and Discord's
+    ``wait=False`` shutdown).
+    """
     try:
-        runtime.executor.shutdown(wait=True, cancel_futures=False)
+        runtime.executor.shutdown(wait=False, cancel_futures=True)
     except Exception:
         logger.debug("[telegram-gateway] executor shutdown failed", exc_info=True)
     try:
