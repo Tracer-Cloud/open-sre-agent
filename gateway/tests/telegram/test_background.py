@@ -127,3 +127,87 @@ def test_poll_loop_delivers_callback_while_a_turn_is_still_dispatching() -> None
     asyncio.run(_run())
 
     assert handled_callbacks == [callback]
+
+
+def test_stop_in_same_batch_cancels_the_just_dispatched_turn() -> None:
+    """Regression: ``/stop`` in the same poll batch as its target message must
+    find the just-dispatched turn instead of reporting "no active turn".
+
+    Dispatch-time registration in ``ActiveTurnRegistry`` happens in the poll
+    loop itself, before ``create_task`` — so a same-batch ``/stop`` can find
+    and cancel a turn whose task has not even started running yet.
+    """
+    resources = _resources()
+    stop_event = threading.Event()
+    dispatch_started = asyncio.Event()
+    seen_cancel_events: list[threading.Event] = []
+
+    async def _hanging_dispatch(
+        _event: object, *, turn_cancel: threading.Event, **_kw: object
+    ) -> None:
+        seen_cancel_events.append(turn_cancel)
+        dispatch_started.set()
+        await asyncio.Event().wait()
+
+    message = TelegramInboundMessage(
+        update_id=1, user_id="u1", chat_id="c1", message_id="m1", text="do the thing"
+    )
+    stop_message = TelegramInboundMessage(
+        update_id=2, user_id="u1", chat_id="c1", message_id="m2", text="/stop"
+    )
+    call_count = 0
+
+    def _poll_once() -> TelegramPollResult:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return TelegramPollResult(messages=[message, stop_message])
+        stop_event.set()
+        return TelegramPollResult()
+
+    poller = MagicMock()
+    poller.poll_once.side_effect = _poll_once
+
+    async def _run() -> None:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(background, "TelegramPoller", lambda _token: poller)
+            mp.setattr(background, "handle_polled_inbound_telegram_message", _hanging_dispatch)
+
+            task = asyncio.create_task(
+                background._poll_telegram_until_stopped(
+                    settings=GatewaySettings(bot_token="tok"),
+                    stop_event=stop_event,
+                    logger=logging.getLogger("gateway.test"),
+                    resources=resources,
+                    handle_callback_to_gateway_agent=lambda *_a: None,
+                )
+            )
+            await asyncio.wait_for(dispatch_started.wait(), timeout=1)
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(_run())
+
+    resources.client.send_message.assert_not_called()  # no "no active turn" reply
+    assert len(seen_cancel_events) == 1
+    assert seen_cancel_events[0].is_set()
+
+
+def test_shutdown_denies_pending_approvals_before_draining() -> None:
+    """A turn parked in ``ApprovalBroker.wait`` must not outlive the drain budget."""
+    resources = _resources()
+    approval_id = resources.approvals.create(platform="telegram", chat_id="c1")
+    waited: list[tuple[bool, str]] = []
+
+    async def _run() -> None:
+        waiter = asyncio.get_running_loop().run_in_executor(
+            None, lambda: resources.approvals.wait(approval_id, timeout=30)
+        )
+        await background._drain_pending_turns(
+            set(), approvals=resources.approvals, logger=logging.getLogger("gateway.test")
+        )
+        waited.append(await asyncio.wait_for(waiter, timeout=1))
+
+    asyncio.run(_run())
+
+    assert waited == [(False, "")]

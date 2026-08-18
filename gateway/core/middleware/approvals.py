@@ -95,6 +95,24 @@ class ApprovalBroker:
         )
         return True
 
+    def drain(self) -> list[str]:
+        """Resolve every still-pending approval as denied; for shutdown drain.
+
+        A transport that dispatches turns as detached tasks can no longer
+        deliver a click once its poller stops, so a turn still parked in
+        :meth:`wait` would otherwise burn its full expiry while shutdown
+        waits on it. Setting each pending Event here lets it return
+        immediately instead. Returns the approval ids that were released.
+        """
+        with self._lock:
+            approval_ids = list(self._pending.keys())
+            for pending in self._pending.values():
+                pending.approved = False
+                pending.decided_by = ""
+                pending.event.set()
+            self._pending.clear()
+        return approval_ids
+
     def wait(self, approval_id: str, *, timeout: float) -> tuple[bool, str]:
         """Block for a decision; expiry counts as deny. Returns (approved, decided_by)."""
         with self._lock:

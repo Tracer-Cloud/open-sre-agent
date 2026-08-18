@@ -113,6 +113,10 @@ async def _poll_telegram_until_stopped(
                     if not resources.active_cancels.request_stop(event.chat_id):
                         resources.client.send_message(event.chat_id, NO_ACTIVE_TURN_MESSAGE)
                     continue
+                # Registered before the task exists: a /stop later in this
+                # same batch must find the accepted turn, not "nothing".
+                turn_cancel = threading.Event()
+                resources.active_cancels.register(event.chat_id, turn_cancel)
                 task = asyncio.create_task(
                     _dispatch_turn(
                         event,
@@ -124,6 +128,7 @@ async def _poll_telegram_until_stopped(
                         turn_semaphore=turn_semaphore,
                         approvals=resources.approvals,
                         active_cancels=resources.active_cancels,
+                        turn_cancel=turn_cancel,
                         loop=loop,
                         handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
                         logger=logger,
@@ -136,7 +141,7 @@ async def _poll_telegram_until_stopped(
             logger.error("Error while polling Telegram updates", exc_info=True)
             await asyncio.to_thread(stop_event.wait, 2)
 
-    await _drain_pending_turns(pending_tasks, logger=logger)
+    await _drain_pending_turns(pending_tasks, approvals=resources.approvals, logger=logger)
 
 
 async def _dispatch_turn(
@@ -150,6 +155,7 @@ async def _dispatch_turn(
     turn_semaphore: asyncio.Semaphore,
     approvals: ApprovalBroker,
     active_cancels: ActiveTurnRegistry,
+    turn_cancel: threading.Event,
     loop: asyncio.AbstractEventLoop,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
     logger: logging.Logger,
@@ -166,6 +172,7 @@ async def _dispatch_turn(
             turn_semaphore=turn_semaphore,
             approvals=approvals,
             active_cancels=active_cancels,
+            turn_cancel=turn_cancel,
             loop=loop,
             handle_callback_to_gateway_agent=handle_callback_to_gateway_agent,
         )
@@ -175,21 +182,33 @@ async def _dispatch_turn(
             event.chat_id,
             exc_info=True,
         )
+    finally:
+        active_cancels.unregister(event.chat_id, turn_cancel)
 
 
 async def _drain_pending_turns(
     pending_tasks: set[asyncio.Task[None]],
     *,
+    approvals: ApprovalBroker,
     logger: logging.Logger,
 ) -> None:
     """Let in-flight turn tasks finish before the event loop closes under them.
 
     Polling has stopped, so nothing can deliver an approval click any more —
     a turn parked in ``ApprovalBroker.wait`` would otherwise sit until its own
-    (up to 180s) expiry while ``asyncio.run`` is trying to close the loop.
-    The wait is bounded rather than generous; anything still running past the
-    bound is cancelled so shutdown stays prompt.
+    (up to 180s) expiry, and cancelling its asyncio Task does not stop the
+    blocking wait on the executor thread underneath it. Denying every pending
+    approval first lets those threads return immediately, so the bounded task
+    wait below (and the executor shutdown that follows it) do not inherit
+    that expiry. The wait is bounded rather than generous; anything still
+    running past the bound is cancelled so shutdown stays prompt.
     """
+    denied = approvals.drain()
+    if denied:
+        logger.info(
+            "[telegram-gateway] denied %d pending approval(s) at shutdown",
+            len(denied),
+        )
     if not pending_tasks:
         return
     _done, still_running = await asyncio.wait(pending_tasks, timeout=_SHUTDOWN_DRAIN_SECONDS)
