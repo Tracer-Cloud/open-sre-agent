@@ -42,7 +42,6 @@
             "group": "First steps",
             "pages": [
               "quickstart",
-              "first-loop-github-stars-slack",
               "investigation-overview",
               "how-investigations-work",
               "interactive-shell-commands",
