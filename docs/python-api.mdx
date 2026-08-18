@@ -58,7 +58,8 @@ session = AgentSession.start()
 
 # 3. Query repository trends or metrics (requires GitHub integration configured)
 result = session.chat("what's our GitHub star velocity over the last 7 days?")
-if not result.answered or result.cancelled or not result.primary_response_text:
+succeeded = (result.answered or result.action_result.executed_success_count > 0) and not result.cancelled
+if not succeeded or not result.primary_response_text:
     raise RuntimeError(f"Turn failed: {result.primary_response_text or 'no response produced'}")
 
 print(result.primary_response_text)
@@ -103,7 +104,7 @@ configure_process(EMBEDDED_PROFILE)
 
 session = AgentSession.start()
 result = session.chat("why is checkout-api slow?")
-if result.answered and not result.cancelled:
+if (result.answered or result.action_result.executed_success_count > 0) and not result.cancelled:
     print(result.primary_response_text)
 
 report = session.investigate({"alert_name": "HighLatency", "severity": "warning"})
@@ -125,10 +126,12 @@ shell uses. It does **not** register adapters (``core`` may not import
 ``start_embedded_session``. `investigate` does not require an attached chat
 agent; it uses the payload runner installed by `configure_process`.
 
-Always check `result.answered` (and verify `not result.cancelled`) before
-trusting chat text: when a turn fails or is cancelled (for example the LLM
-provider is unreachable or times out), the failure details land in
-`result.primary_response_text`.
+Always check `result.answered` or `result.action_result.executed_success_count > 0`
+before trusting chat text, and verify `not result.cancelled`: when a turn fails
+(for example the LLM provider is unreachable) or is cancelled (host timeout),
+the failure details land in `result.primary_response_text`. Action-only turns
+(tools handled the request without an LLM call) set `executed_success_count`
+but leave `answered` false — check both.
 
 ### Internal seams (not for hosts)
 
@@ -153,7 +156,8 @@ configure_process(EMBEDDED_PROFILE)
 session = AgentSession.start(gather=GatherPorts(enabled=True))
 
 result = session.chat("summarize critical alerts and deployment changes from the last 24h")
-if not result.answered or result.cancelled or not result.primary_response_text:
+succeeded = (result.answered or result.action_result.executed_success_count > 0) and not result.cancelled
+if not succeeded or not result.primary_response_text:
     raise RuntimeError(f"Scheduled digest failed: {result.primary_response_text or 'no response produced'}")
 
 summary = result.primary_response_text
