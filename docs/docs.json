@@ -139,6 +139,7 @@
                   "work-management",
                   "fleet",
                   "cron",
+                  "monitoring-scheduled-work",
                   "closed-loop-learning"
                 ]
               },

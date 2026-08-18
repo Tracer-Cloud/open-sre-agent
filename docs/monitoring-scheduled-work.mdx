@@ -1,0 +1,45 @@
+---
+title: "Monitoring Scheduled Agent Work"
+description: "How to monitor background investigations, Slack/Telegram deliveries, and cron jobs."
+---
+
+# Monitoring Scheduled Agent Work
+
+OpenSRE supports a variety of ways to run tasks automatically or in the background. Because these jobs run without blocking your immediate terminal or chat session, it's important to know how to monitor them. 
+
+## 1. Background Mode (`/background`)
+
+When you use `/background on` in the interactive shell, tasks run asynchronously.
+
+- **Check Status & Tracked Jobs:** Run `/background list` or `/tasks` to see all running and completed investigations in your current session.
+- **Review Results:** Use `/background show <task_id>` to view the root cause, analysis, and next steps for a finished job.
+- **Delivery Configuration:** Use `/background notify list` to see where finished RCAs will be sent (e.g., email, telegram, rocketchat, buzz).
+- **Adopt Context:** Run `/background use <task_id>` to bring a finished background RCA into your active context for follow-up questions.
+
+For more details, see [Background investigations](/background-investigations).
+
+## 2. Messaging Platforms (Slack & Telegram)
+
+If your team uses scheduled deliveries or notification channels directly to messaging platforms like Slack or Telegram:
+
+- **Notifications & Outputs:** The completed summaries (root cause, analysis, internal stats) are delivered as plain text directly to the configured channel or DM.
+- **Monitoring Delivery Success:** If you are running an investigation from the interactive shell and sending it to a messaging platform, `/background show <task_id>` will show if the notification was `sent` or `failed` (e.g., if a bot token is missing).
+- **Proactive Slack Deliveries:** Proactive and highly detailed product delivery tracking in Slack is planned for an upcoming release.
+
+## 3. Cron Deliveries
+
+Cron tasks are scheduled reporting jobs (e.g., daily summaries, weekly audits, custom investigations).
+
+- **List Configured Tasks:** Use `opensre cron list` to view all configured tasks, their next fire times, and the last run status.
+- **Execution History:** Use `opensre cron logs <task_id>` to view past runs, including start time, status, message IDs, and errors.
+- **Debugging & Manual Runs:** You can run `opensre cron run <task_id>` to execute a task immediately to verify that delivery to your configured providers is working.
+- **Log Files:** Operational breadcrumbs are appended locally to `~/.opensre/operations_log.jsonl`, and execution history is stored in `~/.opensre/scheduler.db`.
+
+For more details, see [Scheduled Deliveries (Cron)](/cron).
+
+## Future Product Delivery
+
+<Note>
+**Product Delivery Gap (T-SR-12)**  
+More robust productized dashboards and holistic cross-platform tracking for scheduled agents and background deliveries are currently tracked under issue `T-SR-12`.
+</Note>
