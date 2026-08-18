@@ -63,9 +63,13 @@ class SchedulerRunners:
         )
 
     def install(self) -> None:
-        """Bind both runners for the scheduler to dispatch through."""
-        register_agent_runner(self.agent)
+        """Bind both runners for the scheduler to dispatch through.
+
+        Investigation first: the scheduled-agent runner resolves against it,
+        so the order is load-bearing rather than cosmetic.
+        """
         register_investigation_runner(self.investigation)
+        register_agent_runner(self.agent)
 
 
 __all__ = ["SchedulerRunners", "TurnGate"]
