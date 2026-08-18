@@ -10,7 +10,7 @@ from rich.console import Console
 
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from platform.errors import OpenSREError
-from platform.scheduling.tasks.task_types import TaskRecord
+from platform.scheduling.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from surfaces.interactive_shell.ui.investigation_outcome import (

@@ -41,7 +41,7 @@ from core.agent_harness.session.persistence.ports import SessionRepo, SessionSto
 # re-export SessionManager without a circular import.
 from core.agent_harness.session.session_core import SessionCore
 from platform.observability.trace.spans import component_span
-from platform.scheduling.tasks.task_registry import TaskRegistry
+from platform.scheduling.task_registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
 

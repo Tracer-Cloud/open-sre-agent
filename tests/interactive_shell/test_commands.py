@@ -14,7 +14,7 @@ from rich.console import Console
 
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
-from platform.scheduling.tasks.task_types import TaskKind, TaskStatus
+from platform.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS, dispatch_slash
 from surfaces.interactive_shell.command_registry import repl_data as repl_data_module
 from surfaces.interactive_shell.command_registry.investigation import (

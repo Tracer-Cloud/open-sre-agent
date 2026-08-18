@@ -13,7 +13,7 @@ import pytest
 from rich.console import Console
 
 from integrations.llm_cli.base import CLIInvocation, CLIProbe
-from platform.scheduling.tasks.task_types import TaskKind, TaskStatus
+from platform.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,

@@ -13,7 +13,7 @@ from core.agent_harness.spi.session_state import session_terminal
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from platform.errors import OpenSREError
 from platform.observability.trace.spans import mark_span_outcome, traced_session
-from platform.scheduling.tasks.task_types import TaskKind, TaskRecord
+from platform.scheduling.task_types import TaskKind, TaskRecord
 from platform.terminal.theme import DIM, ERROR, WARNING
 from surfaces.interactive_shell.ui.investigation_outcome import (
     ForegroundInvestigationStatus,

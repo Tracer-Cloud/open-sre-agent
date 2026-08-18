@@ -1,6 +1,6 @@
 """Background-investigation session state for the REPL.
 
-``BackgroundInvestigationRecord`` itself lives under ``platform.scheduling.tasks`` so the
+``BackgroundInvestigationRecord`` itself lives under ``platform.scheduling`` so the
 vendor notification adapters can share the contract without importing this
 package. It is re-exported here because this is the import path the REPL
 runtime and its tests already use.

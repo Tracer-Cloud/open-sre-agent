@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from platform.scheduling.tasks.task_registry import TaskRegistry
-from platform.scheduling.tasks.task_types import TaskKind, TaskRecord, TaskStatus
+from platform.scheduling.task_registry import TaskRegistry
+from platform.scheduling.task_types import TaskKind, TaskRecord, TaskStatus
 from surfaces.interactive_shell.runtime.context import (
     ReplRuntimeContext,
     SessionBootstrapSpec,

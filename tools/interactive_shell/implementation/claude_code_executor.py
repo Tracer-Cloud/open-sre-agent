@@ -22,7 +22,7 @@ from typing import Protocol, cast
 
 from integrations.llm_cli.claude_code import ClaudeCodeAdapter
 from integrations.llm_cli.subprocess_env import build_cli_subprocess_env
-from platform.scheduling.tasks.task_types import TaskKind
+from platform.scheduling.task_types import TaskKind
 from tools.interactive_shell.shared import allow_tool
 from tools.interactive_shell.subprocess import (
     CLAUDE_CODE_IMPLEMENTATION_TIMEOUT_SECONDS,

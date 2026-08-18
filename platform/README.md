@@ -54,7 +54,9 @@ overwrite stdlib `platform.release()`.
 - `scheduling/scheduler/` — cron and agentic loop tasks, hosted by the gateway
   process. Not a gateway submodule: every surface reads and mutates the task
   store, and the gateway only supplies the process and the capacity gate.
-- `scheduling/tasks/` — in-flight task types and the persistent task registry.
+- `scheduling/task_types.py` / `scheduling/task_registry.py` — in-flight task
+  contract and persistent registry. (Not under a `tasks/` directory — root
+  `.gitignore` ignores `tasks/` everywhere.)
 - `scheduling/background_investigations/` — background investigation store and types.
 
 ## Delivery — `delivery/`

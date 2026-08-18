@@ -46,6 +46,16 @@ def test_a_dropped_turn_never_holds_a_slot() -> None:
     assert gate.events == ["try_acquire_refused"]
 
 
+def _fail_the_turn() -> None:
+    """Raise from a call rather than from the ``with`` body.
+
+    CodeQL does not model ``pytest.raises`` catching the exception, so a
+    ``raise`` as the last statement of a ``with`` body makes everything after
+    the block read as unreachable.
+    """
+    raise RuntimeError("turn blew up")
+
+
 def test_a_held_slot_is_released_even_when_the_turn_raises() -> None:
     """The other half: a leaked permit is a process that answers 'at capacity' forever."""
     # Arrange
@@ -54,7 +64,7 @@ def test_a_held_slot_is_released_even_when_the_turn_raises() -> None:
     # Act
     with pytest.raises(RuntimeError), turn_slot(gate) as running:
         assert running
-        raise RuntimeError("turn blew up")
+        _fail_the_turn()
 
     # Assert
     assert gate.events == ["try_acquire", "release"]
