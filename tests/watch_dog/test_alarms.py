@@ -11,7 +11,7 @@ from integrations.telegram.credentials import (
     TelegramCredentials,
     load_credentials_from_env,
 )
-from platform.common.errors import OpenSREError
+from platform.errors import OpenSREError
 
 
 def _stub_telegram(

@@ -43,6 +43,7 @@ from platform.analytics.usage_context import (
     get_surface,
 )
 from platform.observability.trace.spans import traced_session
+from platform.turn_capacity import turn_slot
 
 
 class GatewayTurnHandler:
@@ -84,14 +85,11 @@ class GatewayTurnHandler:
         sink: GatewaySink,
         logger: logging.Logger,
     ) -> None:
-        if self._gate is not None and not self._gate.try_acquire():
-            sink.finalize(self._busy_message)
-            return
-        try:
+        with turn_slot(self._gate) as running:
+            if not running:
+                sink.finalize(self._busy_message)
+                return
             self._run_turn(text, session, sink, logger)
-        finally:
-            if self._gate is not None:
-                self._gate.release()
 
     def _run_turn(
         self,

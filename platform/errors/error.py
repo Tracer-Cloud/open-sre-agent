@@ -2,7 +2,7 @@
 
 Carries a human-readable suggestion (what to do next) and an optional docs
 link, following the `clig.dev <https://clig.dev/>`_ / flyctl convention. Lives
-in ``platform/common`` so any layer (CLI, tools, integrations, infra) can raise
+in ``platform.errors`` so any layer (CLI, tools, integrations, infra) can raise
 and catch the same error contract without importing the CLI package.
 
 Rendering is a CLI concern: ``surfaces.shared.error_handling.errors``

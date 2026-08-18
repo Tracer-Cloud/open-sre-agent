@@ -80,11 +80,16 @@ class InvestigationWorker:
             )
             return True
         from gateway.core.host.concurrency import process_turn_gate
+        from platform.turn_capacity import queued_turn_slot
 
-        # Already claimed from the queue — block like scheduler runners so the
-        # work waits for a chat/Path-2 slot instead of racing the process gate.
-        gate = process_turn_gate()
-        gate.acquire()
+        # Already claimed from the queue, so it waits for a slot rather than
+        # being dropped — the same policy scheduled runs take.
+        with queued_turn_slot(process_turn_gate()):
+            self._investigate(record)
+        return True
+
+    def _investigate(self, record: Any) -> None:
+        """Run one claimed investigation and record its outcome; capacity is the caller's."""
         try:
             from platform.analytics.cli import track_investigation
             from platform.analytics.source import EntrypointSource, TriggerMode
@@ -128,9 +133,6 @@ class InvestigationWorker:
                 status=InvestigationStatus.FAILED,
                 error=type(exc).__name__,
             )
-        finally:
-            gate.release()
-        return True
 
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self._loop, name="InvestigationWorker", daemon=True)

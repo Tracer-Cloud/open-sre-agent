@@ -5,7 +5,7 @@ Pinned rules (see ``gateway/AGENTS.md``):
 * Chat transports are peers — none imports another.
 * ``gateway.web`` never imports ``gateway.transports`` or ``gateway.startup``.
 * ``gateway.core`` never imports chat transports or ``gateway.web``.
-* Only ``gateway.core.runtime.controller`` may import ``gateway.startup``.
+* Only ``gateway.core.lifecycle.controller`` may import ``gateway.startup``.
 * ``gateway.transports.*`` never imports ``gateway.startup`` or ``gateway.web``.
 * ``gateway.startup`` may import peer ``*.startup`` (and ``gateway.web``); peers
   must not import channels.
@@ -38,7 +38,7 @@ def _discover_transport_packages() -> tuple[str, ...]:
 
 _TRANSPORTS = _discover_transport_packages()
 
-_STARTUP_COMPOSER = "gateway/core/runtime/controller.py"
+_STARTUP_COMPOSER = "gateway/core/lifecycle/controller.py"
 
 _TRANSPORT_STARTUP_MODULES = frozenset(f"{package}.startup" for package in _TRANSPORTS)
 

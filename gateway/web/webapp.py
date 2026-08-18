@@ -41,6 +41,7 @@ from gateway.core.storage import open_database  # noqa: E402
 from gateway.core.storage.investigations.repository import investigation_repository  # noqa: E402
 from gateway.web.investigations import router as investigations_router  # noqa: E402
 from platform.observability.errors.sentry import capture_exception  # noqa: E402
+from platform.turn_capacity import turn_slot  # noqa: E402
 from tools.investigation.capability import resolve_investigation_context  # noqa: E402
 
 # Standalone uvicorn and in-process gateway both need adapters for /investigate.
@@ -216,15 +217,20 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
 
     from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
 
-    gate = process_turn_gate()
-    # The same gate chat and the scheduler take, and the same sentence chat
-    # finalizes — stated once in gateway.core.host.concurrency, not restated.
-    if not gate.try_acquire():
-        return JSONResponse(
-            {"error": AT_CAPACITY_MESSAGE},
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-        )
+    # Drop rather than queue: the caller is holding an HTTP connection open, so
+    # it gets an answer now. Same gate chat and the scheduler take, same sentence
+    # chat finalizes.
+    with turn_slot(process_turn_gate()) as running:
+        if not running:
+            return JSONResponse(
+                {"error": AT_CAPACITY_MESSAGE},
+                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+        return _run_investigation(req)
 
+
+def _run_investigation(req: InvestigateRequest) -> InvestigateResponse | JSONResponse:
+    """Run one investigation and shape the response; capacity is the caller's."""
     investigation_metadata = resolve_investigation_context(
         raw_alert=req.raw_alert,
         alert_name=req.alert_name,
@@ -248,5 +254,3 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
             {"error": f"investigation failed: {type(exc).__name__}"},
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
-    finally:
-        gate.release()

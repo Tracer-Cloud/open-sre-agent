@@ -10,7 +10,7 @@ from integrations.rocketchat.credentials import (
     RocketChatCredentials,
     load_credentials_from_env,
 )
-from platform.common.errors import OpenSREError
+from platform.errors import OpenSREError
 
 _ROCKETCHAT_ENV_VARS = (
     "ROCKETCHAT_SERVER_URL",

@@ -8,8 +8,8 @@ import pytest
 
 import config.constants as const_module
 from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TEST
-from platform.common.task_registry import TaskRegistry
-from platform.common.task_types import TaskKind
+from platform.tasks.task_registry import TaskRegistry
+from platform.tasks.task_types import TaskKind
 from surfaces.interactive_shell.session import (
     Session,
 )

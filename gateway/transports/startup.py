@@ -17,7 +17,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from gateway.core.runtime.errors import (
+from gateway.core.lifecycle.errors import (
     GatewayConfigurationError,
     GatewayTransportFailedError,
 )

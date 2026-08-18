@@ -10,7 +10,7 @@ from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.spi.session_state import background_mode_enabled, session_terminal
-from platform.common.task_types import TaskRecord
+from platform.tasks.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.background.runner import (

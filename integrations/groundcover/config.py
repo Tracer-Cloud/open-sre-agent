@@ -11,7 +11,7 @@ from integrations._validators import (
     normalize_url,
     normalize_with_default,
 )
-from platform.common.url_validation import validate_https_or_loopback_http_url
+from platform.text.url_validation import validate_https_or_loopback_http_url
 
 DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
 DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"

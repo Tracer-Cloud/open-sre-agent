@@ -86,7 +86,7 @@ def _check_buzz_cli() -> tuple[bool, str]:
 
 def _check_version_freshness() -> tuple[bool, str]:
     current = get_opensre_version()
-    from platform.common.release_version import (
+    from platform.release_version import (
         development_install_doctor_version_detail,
         fetch_latest_version,
         is_update_available,

@@ -515,8 +515,8 @@ def _deliver_rocketchat(task: ScheduledTask, message: str) -> tuple[bool, str, s
         return False, "Missing chat_id (channel) for Rocket.Chat", ""
 
     from integrations.rocketchat.delivery import post_rocketchat_message
-    from platform.common.truncation import truncate
     from platform.notifications.limits import MAX_MESSAGE_SIZE
+    from platform.text.truncation import truncate
 
     # Strip HTML tags — Rocket.Chat uses Markdown, not HTML
     plain_message = truncate(_strip_html(message), MAX_MESSAGE_SIZE, suffix="…")

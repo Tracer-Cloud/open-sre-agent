@@ -35,7 +35,7 @@ from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from core.agent_harness.session.persistence.ports import SessionStore
 from core.agent_harness.session_goal.goal import SessionGoal
 from core.state import MutableAgentState
-from platform.common.task_registry import TaskRegistry
+from platform.tasks.task_registry import TaskRegistry
 
 #: How many recent history rows keep their full response body. Sized above
 #: the conversation window so anything a prompt or a ``*_latest_*`` lookup

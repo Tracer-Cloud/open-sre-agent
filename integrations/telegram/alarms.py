@@ -21,9 +21,9 @@ from integrations.telegram.delivery import (
     post_telegram_message,
     truncate_for_telegram_html,
 )
-from platform.common.truncation import truncate
 from platform.notifications.cooldown import CooldownGate
 from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import io
+from typing import Any
 
+import pytest
 from rich.console import Console
 
+from core.agent_harness.runtime import AgentBuildConfig
 from gateway.core.host.capability_policy import ensure_gateway_capability_policy
 from surfaces.interactive_shell.runtime.shell_agent import (
     build_shell_agent,
@@ -35,3 +38,28 @@ def test_build_shell_agent_keeps_investigation_capability() -> None:
     session.available_capabilities["investigation"] = ("investigate",)
     build_shell_agent(session, Console(file=io.StringIO(), force_terminal=False))
     assert session.available_capabilities["investigation"] == ("investigate",)
+
+
+def test_build_shell_agent_applies_capability_policy_when_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[object] = []
+    base = shell_agent_build_config()
+
+    def _config(*, request_exit: Any = None) -> AgentBuildConfig:
+        _ = request_exit
+        return AgentBuildConfig(
+            build_tools=base.build_tools,
+            build_prompts=base.build_prompts,
+            build_gather=base.build_gather,
+            error_reporter=base.error_reporter,
+            apply_capability_policy=seen.append,
+        )
+
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.shell_agent.shell_agent_build_config",
+        _config,
+    )
+    session = Session()
+    build_shell_agent(session, Console(file=io.StringIO(), force_terminal=False))
+    assert seen == [session]

@@ -81,9 +81,9 @@ and explicit host APIs remain for older readers. Checklist progress uses
 `session_goal:done=<index>` in replies.
 
 Do **not** duplicate the default port stack outside `DefaultHeadlessBuild`.
-Shell uses a TTY `ChatDispatcher` (same `AgentSession.chat` / `run_turn`) —
-intentional, not a second headless factory. Do not reintroduce peer
-`bootstrap.adapters` copies under surfaces or gateway.
+The interactive shell builds a `HeadlessAgent` via `AgentBuildConfig` and
+`DefaultHeadlessBuild.agent` (not `GatewayTurnHandler`). Do not reintroduce
+peer `bootstrap.adapters` copies under surfaces or gateway.
 
 **Bind ports:** session-aware defaults implement
 `SessionBindable` / `ConsoleBindable` / `OutputBindable` (`ports.py`).
@@ -335,7 +335,7 @@ explicit ``boot_process``).
 | Chat session (gateway) | `SessionAgentPool` keeps one `HeadlessAgent` per session id; each turn rebinds outer sink via `LiveOutputSink.bind`, then `bind_turn` (session / accounting / console / tool_hooks) | `AgentSession.chat` / `agent.dispatch` |
 | Embedder / script | `start_embedded_session()` or `attach_agent(HeadlessAgent…)` once | repeated `chat` / `dispatch` |
 | Scheduled loop | Prefer one agent for the loop’s lifetime when multi-turn; `run_headless_turn` is OK for true one-shot digests | do not treat one-shot as the multi-turn pattern |
-| Interactive shell | TTY `ChatDispatcher` bound for the REPL lifetime (not `HeadlessAgent`) | `AgentSession.chat` per submission |
+| Interactive shell | `build_shell_agent` → `DefaultHeadlessBuild.agent` once; `HeadlessAgent.handle` per submission (not `GatewayTurnHandler`) | `HeadlessAgent.handle` |
 
 Same-session turns must not overlap on one pooled agent (gateway holds a
 per-session lock). Different sessions stay concurrent under the capacity gate.
@@ -378,14 +378,15 @@ over ``run_turn``). Do **not** add new top-level chat entrypoints that call
 
 | Host | Process boot | Host call |
 |------|--------------|-----------|
-| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `execute_shell_turn` → TTY `ChatDispatcher` → `AgentSession.chat` |
+| CLI / interactive shell | `configure_process(CLI_PROFILE)` + shell Rich adapters | `build_shell_agent` → `HeadlessAgent.handle` |
 | Gateway chat | `configure_process(GATEWAY_PROFILE)` | `GatewayTurnHandler` → `SessionAgentPool` → `AgentSession.chat` |
 | Standalone web | `configure_process(WEB_PROFILE)` | `AgentSession.investigate` (Path 2) |
 | Scheduled digests | adapters via profile; runners via `install_scheduler_runners` | `AgentSession.run_headless_turn` → `chat` |
 
-Do **not** force the REPL through `HeadlessAgent`. Shell is the TTY adapter of
-the same engine; headless agents are for non-TTY hosts. Do **not** invent a
-second public investigate entrypoint beside ``AgentSession.investigate``.
+Do **not** route the REPL through `GatewayTurnHandler` (that callback
+finalizes a chat sink with `is_tty=False`). The shell is a TTY host of the
+same `HeadlessAgent` construction seam. Do **not** invent a second public
+investigate entrypoint beside ``AgentSession.investigate``.
 
 ## Keep the loop primitive in core
 

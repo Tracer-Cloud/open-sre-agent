@@ -20,7 +20,7 @@ from integrations.rocketchat.credentials import (
 )
 from integrations.telegram.alarms import AlarmDispatcher
 from integrations.telegram.credentials import load_credentials_from_env
-from platform.common.errors import OpenSREError
+from platform.errors import OpenSREError
 from surfaces.interactive_shell.command_registry.types import (
     SlashCommand,
 )

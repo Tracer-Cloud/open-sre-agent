@@ -287,8 +287,8 @@ from integrations.opensre.grafana_backend_queries import (
     query_metrics_from_backend,
     query_traces_from_backend,
 )
-from platform.common.evidence_compaction import summarize_counts
-from platform.common.log_compaction import build_error_taxonomy, deduplicate_logs
+from platform.evidence.evidence_compaction import summarize_counts
+from platform.evidence.log_compaction import build_error_taxonomy, deduplicate_logs
 
 
 def _resolve_grafana_client(
@@ -715,7 +715,7 @@ def query_grafana_service_names(
 
 from core.domain.pipeline_spans import extract_pipeline_spans as _extract_pipeline_spans
 from core.tool_framework.tool_decorator import tool
-from platform.common.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
+from platform.evidence.evidence_compaction import DEFAULT_TRACE_LIMIT, compact_traces
 
 
 def _query_grafana_traces_extract_params(sources: dict[str, dict]) -> dict[str, Any]:

@@ -41,13 +41,17 @@ def _null_tools(*_args: Any, **_kwargs: Any) -> Any:
 
 def test_a_host_that_supplies_nothing_gets_the_chat_defaults() -> None:
     # Arrange — how every chat transport constructs the pool today
+    session = _session()
     pool = SessionAgentPool(console=Console(force_terminal=False))
 
     # Act
-    agent = pool.agent_for(session=_session(), sink=LiveOutputSink(), logger=_LOGGER)
+    agent = pool.agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
 
-    # Assert
+    # Assert — chat defaults include gateway withholds
     assert agent is not None
+    assert session.available_capabilities["investigation"] == ()
+    assert session.available_capabilities["llm_provider"] == ()
+    assert session.available_capabilities["task_cancel"] == ()
 
 
 def test_a_host_supplies_its_own_tools_prompts_and_gather() -> None:
@@ -124,7 +128,7 @@ def test_default_path_applies_gateway_capability_policy() -> None:
     assert session.available_capabilities["task_cancel"] == ()
 
 
-def test_omitted_capability_policy_does_not_withhold() -> None:
+def test_empty_config_does_not_inject_gateway_withholds() -> None:
     session = _session()
     SessionAgentPool(
         console=Console(force_terminal=False),
@@ -144,7 +148,7 @@ def test_host_can_replace_capability_policy() -> None:
     assert "investigation" not in session.available_capabilities
 
 
-def test_error_reporter_and_surface_reach_default_ports(
+def test_error_reporter_and_surface_reach_default_headless_build(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}

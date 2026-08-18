@@ -1,6 +1,6 @@
 """Process-wide CLI runtime flags (json, verbose, yes, interactive).
 
-Lives in ``platform/common`` so integrations and tools can read the same flag
+Lives in ``platform.process`` so integrations and tools can read the same flag
 contract without importing the CLI package. The CLI root callback populates
 these via :func:`cli.runtime_flags.sync_runtime_flags_from_click`.
 """

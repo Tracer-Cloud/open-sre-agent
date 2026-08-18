@@ -36,7 +36,7 @@ def test_gateway_slash_ports_factory_is_headless_and_exposes_remote_sync() -> No
 
 def test_start_gateway_injects_remote_sync_capable_factory() -> None:
     """Changing gateway_entry must keep slash ports wired for chat turns."""
-    import gateway.core.runtime.controller as manager_module
+    import gateway.core.lifecycle.controller as manager_module
 
     mock_manager = MagicMock()
     mock_manager.start_gateway.return_value = mock_manager

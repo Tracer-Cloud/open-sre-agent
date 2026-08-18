@@ -10,7 +10,6 @@ from config.constants.filestorage import (
     DEFAULT_REMOTE_SYNC_PREFIX,
     DEFAULT_REMOTE_SYNC_PROVIDER,
 )
-from platform.common.exit_codes import ERROR, SUCCESS
 from platform.filestorage import RemoteSyncConfigError, RemoteSyncError
 from platform.filestorage.enums import RemoteSyncField, RemoteSyncSubcommand
 from platform.filestorage.messages import (
@@ -27,6 +26,7 @@ from platform.filestorage.setup import (
     disable_remote_sync,
     save_remote_sync_settings,
 )
+from platform.process.exit_codes import ERROR, SUCCESS
 from surfaces.cli.commands.remote_sync_progress import CliProgress
 from surfaces.cli.telemetry import capture_exception
 

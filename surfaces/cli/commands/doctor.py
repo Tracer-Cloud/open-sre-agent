@@ -26,9 +26,9 @@ from rich.console import Console
 from rich.rule import Rule
 from rich.text import Text
 
-from platform.common.exit_codes import ERROR as EXIT_ERROR
-from platform.common.exit_codes import SUCCESS
-from platform.common.runtime_flags import is_json_output
+from platform.process.exit_codes import ERROR as EXIT_ERROR
+from platform.process.exit_codes import SUCCESS
+from platform.process.runtime_flags import is_json_output
 from platform.terminal.theme import (
     DIM,
     ERROR,

@@ -243,7 +243,7 @@ def test_create_investigation_writes_security_audit(
 ) -> None:
     from pathlib import Path
 
-    from gateway.core.runtime import security_audit
+    from gateway.core.storage import security_audit
 
     path = Path(str(tmp_path)) / "security-audit.jsonl"
     monkeypatch.setattr(security_audit, "security_audit_path", lambda: path)
@@ -267,7 +267,7 @@ def test_cancel_investigation_writes_security_audit(
 ) -> None:
     from pathlib import Path
 
-    from gateway.core.runtime import security_audit
+    from gateway.core.storage import security_audit
 
     path = Path(str(tmp_path)) / "security-audit.jsonl"
     monkeypatch.setattr(security_audit, "security_audit_path", lambda: path)

@@ -35,14 +35,14 @@ from gateway.core.host.concurrency import (
     set_process_turn_gate,
 )
 from gateway.core.host.turn_handler import GatewayTurnHandler
-from gateway.core.process.component_status import clear_component_status, write_component_status
-from gateway.core.process.readiness import set_ready
-from gateway.core.process.supervision import GATEWAY_PID_FILE
-from gateway.core.runtime.credential_hydration import (
+from gateway.core.lifecycle.credential_hydration import (
     GatewayBootstrap,
     GatewayCredentialHydrator,
 )
-from gateway.core.runtime.errors import GatewayConfigurationError
+from gateway.core.lifecycle.errors import GatewayConfigurationError
+from gateway.core.process.component_status import clear_component_status, write_component_status
+from gateway.core.process.readiness import set_ready
+from gateway.core.process.supervision import GATEWAY_PID_FILE
 from gateway.core.transport_api import GatewayAgentCallback
 
 # The reload watcher only polls a flag, so it should never need the full

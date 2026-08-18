@@ -3,7 +3,7 @@
 Adapters register at process boot via
 :func:`bootstrap.adapters.install_harness_adapters` (CLI, gateway, web, and
 embedded profiles). Do not reintroduce a second registration site in a surface
-or in :mod:`gateway.core.runtime.controller`.
+or in :mod:`gateway.core.lifecycle.controller`.
 """
 
 from __future__ import annotations

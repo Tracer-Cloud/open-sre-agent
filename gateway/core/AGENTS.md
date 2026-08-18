@@ -34,6 +34,22 @@ only shrink. `web/` is on it today because `POST /investigate` embeds the agent
 directly and therefore gets none of the host layer's guarantees (agent reuse,
 approvals hooks, cancel console, capability policy).
 
+## Taking a capacity slot
+
+Every turn in this process — chat, `POST /investigate`, the investigation
+worker, a scheduled run — takes one permit from the same
+`process_turn_gate()`. Pick a policy from
+`platform.turn_capacity`; do not pair `acquire`/`release` by hand:
+
+- `turn_slot(gate)` — **drop** when full. For a caller holding a connection or
+  a conversation: it yields `False` and the caller answers (chat finalizes
+  `AT_CAPACITY_MESSAGE`, web returns it as a 503 body).
+- `queued_turn_slot(gate)` — **wait** for a slot. For work already claimed from
+  a queue, which cannot be told to try again.
+
+A missing `finally` leaks a permit, and a leaked permit is a process that
+answers "at capacity" forever.
+
 ## Process boot vs lifecycle
 
 Shared process setup (env → Sentry → harness adapters → capability warnings →

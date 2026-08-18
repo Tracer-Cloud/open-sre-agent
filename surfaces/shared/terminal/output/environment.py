@@ -41,7 +41,7 @@ def _is_verbose() -> bool:
     if os.getenv("TRACER_VERBOSE", "").lower() in ("1", "true", "yes"):
         return True
     try:
-        from platform.common.runtime_flags import is_debug, is_verbose
+        from platform.process.runtime_flags import is_debug, is_verbose
 
         return is_verbose() or is_debug()
     except Exception:

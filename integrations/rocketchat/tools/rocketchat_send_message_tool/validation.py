@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from platform.common.truncation import truncate
 from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.text.truncation import truncate
 
 
 def normalize_optional_text(value: str) -> str:

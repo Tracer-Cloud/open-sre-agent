@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from platform.common.coercion import safe_int
+from platform.text.coercion import safe_int
 
 
 @pytest.mark.parametrize(

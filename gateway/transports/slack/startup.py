@@ -12,7 +12,7 @@ import logging
 import os
 from collections.abc import Callable, Mapping
 
-from gateway.core.runtime.errors import GatewayConfigurationError
+from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.storage import open_database
 from gateway.core.storage.events.repository import (
     HandledSlackEventRepository,

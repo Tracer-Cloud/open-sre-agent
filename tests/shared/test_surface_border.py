@@ -41,7 +41,7 @@ _SURFACES_IMPORT_FROM_GATEWAY: frozenset[str] = frozenset(
         # `opensre gateway start|stop|status` and the REPL's /gateway commands.
         "gateway.core.process",
         # The console entry that constructs the process and starts it.
-        "gateway.core.runtime.controller",
+        "gateway.core.lifecycle.controller",
         # The REPL hosts the web app in-thread for local use.
         "gateway.web.web_server",
     }

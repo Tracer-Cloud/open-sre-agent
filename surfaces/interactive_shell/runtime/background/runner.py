@@ -15,7 +15,7 @@ from rich.markup import escape
 
 from platform.analytics.cli import track_investigation
 from platform.analytics.source import EntrypointSource, TriggerMode
-from platform.common.errors import OpenSREError
+from platform.errors import OpenSREError
 from surfaces.interactive_shell.runtime import (
     BackgroundInvestigationRecord,
     Session,

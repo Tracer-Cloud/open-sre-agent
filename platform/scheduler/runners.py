@@ -16,10 +16,7 @@ is the only layer allowed to see both ``integrations`` and ``tools``.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Protocol
 
 from platform.scheduler.agent_runner import (
     AgentPayload,
@@ -32,31 +29,12 @@ from platform.scheduler.investigation_runner import (
     InvestigationRunner,
     register_investigation_runner,
 )
-
-
-class TurnGate(Protocol):
-    """Capacity a scheduled run takes while it holds a turn."""
-
-    def acquire(self, *, timeout: float | None = None) -> bool:
-        """Take one permit, blocking until it is available."""
-
-    def release(self) -> None:
-        """Give the permit back."""
-
-
-@contextmanager
-def _permit(gate: TurnGate) -> Iterator[None]:
-    """Hold one of ``gate``'s permits for the body, releasing it even on error."""
-    gate.acquire()
-    try:
-        yield
-    finally:
-        gate.release()
+from platform.turn_capacity import TurnGate, queued_turn_slot
 
 
 def _gated_agent(runner: AgentRunner, gate: TurnGate) -> AgentRunner:
     def run(payload: AgentPayload) -> str:
-        with _permit(gate):
+        with queued_turn_slot(gate):
             return runner(payload)
 
     return run
@@ -67,7 +45,7 @@ def _gated_investigation(
     gate: TurnGate,
 ) -> InvestigationRunner:
     def run(alert_payload: AlertPayload) -> InvestigationResult | None:
-        with _permit(gate):
+        with queued_turn_slot(gate):
             return runner(alert_payload)
 
     return run

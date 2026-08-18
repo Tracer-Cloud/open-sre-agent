@@ -27,7 +27,7 @@ from core.agent_harness.spi.session_goal import (
     session_goal_is_paused,
 )
 from core.agent_harness.spi.session_state import clear_pending_autosubmit, set_auto_command
-from platform.common.evidence_compaction import truncate_message
+from platform.evidence.evidence_compaction import truncate_message
 from platform.terminal.theme import DIM, ERROR, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
 

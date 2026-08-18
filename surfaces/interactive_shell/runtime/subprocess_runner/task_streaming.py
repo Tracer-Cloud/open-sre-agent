@@ -15,7 +15,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.text import Text
 
-from platform.common.task_types import TaskRecord
+from platform.tasks.task_types import TaskRecord
 from surfaces.interactive_shell.ui import DIM, ERROR
 from surfaces.shared.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.subprocess import (

@@ -27,7 +27,7 @@ ignore_imports =
     # Composition root: the one edge into the surface facade, which owns web
     # and chat transport wiring. Pinned by gateway/tests/test_package_borders.py
     # (test_only_controller_imports_the_startup_module).
-    gateway.core.runtime.controller -> gateway.startup
+    gateway.core.lifecycle.controller -> gateway.startup
 
 [importlinter:contract:gateway-web-no-transports]
 name = Gateway web surface never imports chat transports

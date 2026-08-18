@@ -12,7 +12,7 @@ Entry points:
 
 * Production — ``opensre gateway start`` (CLI wires slash ports into ``GatewayController``)
 * Package main — ``python -m gateway`` fails closed (guard in ``__main__.py``)
-* Composition root — :mod:`gateway.core.runtime.controller`
+* Composition root — :mod:`gateway.core.lifecycle.controller`
 * Daemon helpers — :mod:`gateway.core.process.supervision`
 * HTTP app (``MODE=web``) — :mod:`gateway.web.webapp` (``app``)
 * Telegram — :mod:`gateway.transports.telegram.startup`

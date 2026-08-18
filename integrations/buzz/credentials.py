@@ -18,7 +18,7 @@ import os
 from dataclasses import dataclass, field
 
 from config.constants.buzz import BUZZ_DEFAULT_CHANNEL_ENV
-from platform.common.errors import OpenSREError
+from platform.errors import OpenSREError
 
 logger = logging.getLogger(__name__)
 

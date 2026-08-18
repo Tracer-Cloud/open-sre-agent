@@ -6,7 +6,8 @@ each domain package holds its contract, a process-local implementation, a
 Postgres implementation and a selector (``investigation_repository(database)``).
 :func:`open_database` gives a process its one migrated
 :class:`~gateway.core.storage.postgres.PostgresDatabase`, or ``None`` when
-``DATABASE_URL`` is unset.
+``DATABASE_URL`` is unset. :mod:`gateway.core.storage.security_audit` appends
+approval and investigation actions to a JSONL file on the org home.
 
 Transport-neutral on purpose. Slack principal resolution lives in
 :mod:`gateway.transports.slack`; scope binding lives in :mod:`config.scope_context`.

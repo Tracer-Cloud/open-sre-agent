@@ -211,20 +211,20 @@ def test_gateway_manager_registers_harness_adapters(monkeypatch: pytest.MonkeyPa
     from gateway.startup import StartedGateway
 
     monkeypatch.setattr(
-        "gateway.core.runtime.controller.gateway_startup.start_gateway",
+        "gateway.core.lifecycle.controller.gateway_startup.start_gateway",
         lambda **_kwargs: StartedGateway(),
     )
     # Keep this test focused on adapter registration (life-cycle tests cover scheduler).
     monkeypatch.setattr(
-        "gateway.core.runtime.controller.GatewayController.start_scheduler",
+        "gateway.core.lifecycle.controller.GatewayController.start_scheduler",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.controller.GatewayController._publish_status",
+        "gateway.core.lifecycle.controller.GatewayController._publish_status",
         lambda *_args, **_kwargs: None,
     )
 
-    from gateway.core.runtime.controller import GatewayController
+    from gateway.core.lifecycle.controller import GatewayController
 
     GatewayController().start_gateway(wait=False)
 

@@ -47,7 +47,7 @@ start_gateway()
   process *may host* it (`start_scheduler()` → `scheduler_runners().gated(…).install()`
   + `start_background_scheduler()`). It is not a consumer surface, not a
   transport, and there is no `gateway/scheduler/` package. Do not move runner
-  code into `gateway/core/runtime/`.
+  code into `gateway/core/lifecycle/`.
 - **Daemon** is pidfile + spawn in `core/process/supervision.py`. Do not fold it
   into a scheduler package. The child argv is surface-owned (`python -m
   surfaces.gateway_entry`, or `opensre gateway start --foreground` when frozen).

@@ -30,7 +30,7 @@ from pydantic import Field, field_validator
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
-from platform.common.coercion import safe_int
+from platform.text.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 

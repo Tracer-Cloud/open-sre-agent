@@ -18,8 +18,8 @@ from platform.analytics.cli import (
     track_investigation,
 )
 from platform.analytics.source import EntrypointSource, TriggerMode
-from platform.common.exit_codes import ERROR, SUCCESS
-from platform.common.runtime_flags import is_json_output, is_yes
+from platform.process.exit_codes import ERROR, SUCCESS
+from platform.process.runtime_flags import is_json_output, is_yes
 
 
 @click.command(name="uninstall")

@@ -9,23 +9,32 @@ minimal guardrails. Configuration-only behavior belongs in `config/`; agent
 orchestration, state, tool planning, and tool execution contracts belong in
 `core/`.
 
-Initial areas:
+Name packages by **what they do**. Do not add a `common/` / `shared/` / `util/`
+junk drawer.
 
-- `auth/` owns runtime authentication and identity checks.
-- `analytics/` owns product and runtime analytics.
-- `common/` owns small shared helpers that do not belong to a runtime subsystem.
-- `cloudflare_install_proxy/` owns the Cloudflare Worker for `install.opensre.com`.
-- `deployment_ec2/` owns EC2 AWS primitives and Telegram gateway AMI/systemd deploy (`telegram_gateway/`). Makefile: `make deploy-gateway`.
-- `notifications/` owns notification delivery transports and channel-specific senders.
-- `observability/` owns logging, tracing, progress, debug output, and runtime
+Areas:
+
+- `auth/` — runtime authentication and identity checks.
+- `analytics/` — product and runtime analytics.
+- `errors/` — `OpenSREError` contract (any layer may raise/catch).
+- `process/` — process exit codes and CLI runtime flags.
+- `tasks/` — in-flight task types and the persistent task registry.
+- `turn_capacity/` — process-wide turn concurrency gates.
+- `release_version.py` — installed vs latest release version helpers.
+- `service_families/` — tool-availability family-key normalization.
+- `text/` — truncate / coerce / URL validation helpers.
+- `evidence/` — log and evidence compaction for prompt-sized results.
+- `cloudflare_install_proxy/` — Cloudflare Worker for `install.opensre.com`.
+- `deployment_ec2/` — EC2 AWS primitives and Telegram gateway AMI/systemd deploy (`telegram_gateway/`). Makefile: `make deploy-gateway`.
+- `notifications/` — notification delivery transports and channel-specific senders.
+- `observability/` — logging, tracing, progress, debug output, and runtime
   display ports.
-- `masking/` owns reversible masking and identifier normalization.
-- `scheduler/` owns cron-driven scheduled deliveries, task persistence, and
+- `masking/` — reversible masking and identifier normalization.
+- `scheduler/` — cron-driven scheduled deliveries, task persistence, and
   execution deduplication.
-- `sandbox/` owns constrained execution environments.
-- `guardrails/` owns minimal runtime safety checks outside the core agent loop.
+- `sandbox/` — constrained execution environments.
+- `guardrails/` — minimal runtime safety checks outside the core agent loop.
 
 Future migrations should move existing modules into this folder incrementally
 with import updates and tests. Avoid compatibility-only forwarding modules;
 each migration should leave one canonical import path.
-

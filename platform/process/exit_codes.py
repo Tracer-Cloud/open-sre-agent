@@ -4,7 +4,7 @@ Follows the convention from clig.dev and POSIX:
   0 - success
   1 - runtime / general error (retrying may help)
 
-Lives in ``platform/common`` so any layer (CLI, tools, integrations) can
+Lives in ``platform.process`` so any layer (CLI, tools, integrations) can
 share the same exit-code contract without importing the CLI package.
 """
 

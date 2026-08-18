@@ -24,7 +24,7 @@ def summary_sections(
     record: BackgroundInvestigationRecord,
 ) -> tuple[str, str, tuple[str, ...], tuple[str, ...]]:
     """Return the RCA sections trimmed to fit one chat message."""
-    from platform.common.truncation import truncate
+    from platform.text.truncation import truncate
 
     def _items(values: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(truncate(value, _ITEM_CHARS, suffix="…") for value in values[:_MAX_ITEMS])

@@ -902,7 +902,7 @@ def cmd_setup(service: str | None) -> str:
 
 
 def cmd_list() -> None:
-    from platform.common.runtime_flags import is_json_output
+    from platform.process.runtime_flags import is_json_output
 
     items = list_integrations()
 
@@ -951,7 +951,7 @@ def cmd_show(service: str | None) -> None:
 
 
 def cmd_remove(service: str | None) -> None:
-    from platform.common.runtime_flags import is_yes
+    from platform.process.runtime_flags import is_yes
 
     if not service:
         _die("Usage: remove <service>")
@@ -973,7 +973,7 @@ def cmd_remove(service: str | None) -> None:
 
 
 def cmd_verify(service: str | None, *, send_slack_test: bool = False) -> int:
-    from platform.common.runtime_flags import is_json_output
+    from platform.process.runtime_flags import is_json_output
 
     if service:
         service = resolve_management_service(service)

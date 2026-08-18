@@ -44,7 +44,7 @@ def test_gateway_start_foreground_without_a_host_fails_clearly(runner: CliRunner
 
 def test_gateway_entry_wires_slash_ports() -> None:
     """Production entry must inject headless slash ports into GatewayController."""
-    import gateway.core.runtime.controller as manager_module
+    import gateway.core.lifecycle.controller as manager_module
 
     mock_manager = MagicMock()
     with patch.object(manager_module, "GatewayController", return_value=mock_manager) as ctor:

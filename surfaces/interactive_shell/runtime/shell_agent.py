@@ -82,10 +82,9 @@ def shell_agent_build_config(
     def build_tools(
         session: Session,
         console: Console,
-        logger: Any,
-        observer: Any,
+        _logger: logging.Logger,
+        _observer: Any,
     ) -> DefaultToolProvider:
-        _ = (logger, observer)
         return shell_tool_provider(session, console, request_exit=request_exit)
 
     return AgentBuildConfig(
@@ -125,12 +124,17 @@ def build_shell_agent(
 ) -> HeadlessAgent:
     """One shell agent from :func:`shell_agent_build_config`; per-turn values via ``bind_turn``."""
     config = shell_agent_build_config(request_exit=request_exit)
-    build_tools = config.build_tools
-    build_prompts = config.build_prompts
-    build_gather = config.build_gather
-    if build_tools is None or build_prompts is None or build_gather is None:
-        raise RuntimeError("shell agent build config is incomplete")
+    policy = config.apply_capability_policy
+    if policy is not None:
+        policy(session)
     logger = logging.getLogger("opensre.interactive_shell")
+    tools = (
+        config.build_tools(session, console, logger, None)
+        if config.build_tools is not None
+        else None
+    )
+    prompts = config.build_prompts(session) if config.build_prompts is not None else None
+    gather = config.build_gather(session, console) if config.build_gather is not None else None
     return DefaultHeadlessBuild(
         session=session,
         output=resolve_output_sink(console, output),
@@ -138,9 +142,9 @@ def build_shell_agent(
         surface="interactive_shell",
         error_reporter=config.error_reporter,
     ).agent(
-        tools=build_tools(session, console, logger, None),
-        prompts=build_prompts(session),
-        gather=build_gather(session, console),
+        tools=tools,
+        prompts=prompts,
+        gather=gather,
     )
 
 

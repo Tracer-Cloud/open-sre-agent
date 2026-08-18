@@ -1,4 +1,4 @@
-"""Tests for :mod:`gateway.core.runtime.controller` lifecycle behavior."""
+"""Tests for :mod:`gateway.core.lifecycle.controller` lifecycle behavior."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.core.runtime.controller import GatewayController
+from gateway.core.lifecycle.controller import GatewayController
 from gateway.core.transport_api import TransportName
 from gateway.startup import StartedGateway
 from gateway.transports.startup import TransportHandle
@@ -35,7 +35,7 @@ def test_start_surfaces_delegates_to_the_startup_module(
         captured["handler"] = handler
         return expected
 
-    monkeypatch.setattr("gateway.core.runtime.controller.gateway_startup.start_gateway", _boot)
+    monkeypatch.setattr("gateway.core.lifecycle.controller.gateway_startup.start_gateway", _boot)
     manager = GatewayController()
     handler = MagicMock(name="chat-handler")
     logger = logging.getLogger("test.manager.surfaces")

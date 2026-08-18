@@ -8,7 +8,11 @@ from integrations.aws.lambda_client import (
     get_recent_invocations,
 )
 from integrations.aws_lambda.availability import lambda_available, lambda_name
-from platform.common.evidence_compaction import compact_invocations, compact_logs, summarize_counts
+from platform.evidence.evidence_compaction import (
+    compact_invocations,
+    compact_logs,
+    summarize_counts,
+)
 
 
 def _extract_lambda_invocation_logs_params(sources: dict[str, dict]) -> dict:
