@@ -111,6 +111,7 @@ def _run_without_subcommand(
     *,
     launch_shell: ShellLauncher | None,
     resume_session_id: str | None,
+    sync_on_exit: bool,
     interactive: bool,
     passed_on_command_line: bool,
     layout: str | None,
@@ -137,7 +138,12 @@ def _run_without_subcommand(
             cli_theme=theme,
         )
         if config.enabled or resume_session_id:
-            return launch_shell(config, resume_session_id)
+            exit_code = launch_shell(config, resume_session_id)
+            if sync_on_exit:
+                from surfaces.cli.commands.remote_sync import run_remote_sync_on_exit
+
+                run_remote_sync_on_exit()
+            return exit_code
 
     click.echo(RELEASE_STAGE_BANNER, err=True)
     render_landing(group)
@@ -169,6 +175,11 @@ def _run_without_subcommand(
     help="Resume a previous interactive shell session by ID, prefix, or name substring.",
 )
 @click.option(
+    "--sync-on-exit",
+    is_flag=True,
+    help="Sync sessions and memory after the interactive shell exits.",
+)
+@click.option(
     "--layout",
     type=click.Choice(["classic", "pinned"]),
     default=None,
@@ -191,6 +202,7 @@ def cli(
     yes: bool,
     interactive: bool,
     resume_session_id: str | None,
+    sync_on_exit: bool,
     layout: str | None,
     theme: str | None,
 ) -> None:
@@ -220,6 +232,7 @@ def cli(
                 cli,
                 launch_shell=cli_host(ctx).launch_shell,
                 resume_session_id=resume_session_id,
+                sync_on_exit=sync_on_exit,
                 interactive=interactive,
                 passed_on_command_line=(
                     interactive_source is not None and interactive_source.name == "COMMANDLINE"

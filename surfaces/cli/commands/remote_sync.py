@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 import click
 
 from config.constants.filestorage import (
@@ -26,6 +28,7 @@ from platform.filestorage.setup import (
     save_remote_sync_settings,
 )
 from surfaces.cli.commands.remote_sync_progress import CliProgress
+from surfaces.cli.telemetry import capture_exception
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -74,6 +77,30 @@ def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
     for line in format_report_lines(report, dry_run=dry_run):
         click.echo(line)
     raise SystemExit(SUCCESS)
+
+
+def run_remote_sync_on_exit() -> None:
+    """Run remote sync without changing the interactive shell's exit result."""
+    try:
+        report = run_remote_sync()
+    except Exception as exc:  # noqa: BLE001 - an optional exit hook must fail soft
+        with suppress(Exception):
+            capture_exception(exc, context="surfaces.cli.sync_on_exit")
+        click.echo(
+            "Automatic remote sync failed; run 'opensre remote-sync sync' for details.",
+            err=True,
+        )
+        return
+
+    if report is None:
+        click.echo(
+            "Automatic remote sync skipped because remote sync is off; "
+            "run 'opensre remote-sync setup' first.",
+            err=True,
+        )
+        return
+    for line in format_report_lines(report):
+        click.echo(line)
 
 
 @remote_sync_command.command(name=RemoteSyncSubcommand.SETUP.value)
@@ -229,4 +256,4 @@ def _prompt_extra_field(field: RemoteSyncField, provider: str, current: str | No
     return str(click.prompt(extra.prompt, default=current or "", show_default=False))
 
 
-__all__ = ["remote_sync_command"]
+__all__ = ["remote_sync_command", "run_remote_sync_on_exit"]
