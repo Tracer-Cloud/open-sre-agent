@@ -157,9 +157,11 @@ path is in the index.
 ## A past incident needs an explicit window
 
 Every reader defaults to a window ending now. Asked about an incident on a given
-date, **pass `from_time` and `to_time` around that date** — `window_minutes`
-counts back from the present and will silently return nothing for anything
-older, which reads as "no evidence" rather than "wrong window".
+date, **pass that date as the window that reader actually accepts** —
+`query_yc_metrics` takes `from_time` and `to_time`; `read_yc_logs` takes
+`since` and `until`. `window_minutes` counts back from the present and will
+silently return nothing for anything older, which reads as "no evidence"
+rather than "wrong window".
 
 Retention differs by source, and an empty result means different things:
 

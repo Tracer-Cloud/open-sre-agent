@@ -18,6 +18,7 @@ from integrations.yandex_cloud.api_index import (
     _INDEX_FILE,
     endpoint_count,
     known_services,
+    lookup,
     provenance,
     search,
 )
@@ -313,3 +314,37 @@ class TestTheShellCanUseThem:
             assert "action" in tools[name].surfaces
         # Plain GET resources stay off the action surface: execute_yc_operation covers them.
         assert "action" not in tools["list_yc_instances"].surfaces
+
+
+class TestLookupIsTheAllowlist:
+    """execute_yc_operation may send only what lookup accepts."""
+
+    def test_a_listed_collection_resolves(self) -> None:
+        match = lookup("compute", "/compute/v1/instances")
+
+        assert match is not None
+        assert match.path == "/compute/v1/instances"
+
+    def test_a_concrete_id_matches_the_templated_get(self) -> None:
+        match = lookup("compute", "/compute/v1/instances/abc")
+
+        assert match is not None
+        assert (
+            "{instance_id}" in match.path
+            or "{instanceId}" in match.path
+            or "instances/" in match.path
+        )
+
+    def test_an_action_suffix_does_not_match_the_plain_resource(self) -> None:
+        listed = lookup("compute", "/compute/v1/instances/abc:serialPortOutput")
+        plain = lookup("compute", "/compute/v1/instances/abc")
+
+        assert plain is not None
+        if listed is not None:
+            assert listed.path != plain.path
+
+    def test_a_path_the_index_does_not_list_is_none(self) -> None:
+        assert lookup("compute", "/compute/v1/notARealCollection") is None
+
+    def test_a_real_path_on_the_wrong_service_is_none(self) -> None:
+        assert lookup("iam", "/compute/v1/instances") is None

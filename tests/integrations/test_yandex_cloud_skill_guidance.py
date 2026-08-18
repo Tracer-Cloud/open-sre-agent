@@ -40,6 +40,13 @@ class TestTheSkillDocument:
         assert result.diagnostics == [], f"Unexpected diagnostics: {result.diagnostics}"
         assert result.skill is not None
 
+    def test_a_past_incident_names_the_window_each_reader_accepts(self) -> None:
+        """query_yc_metrics and read_yc_logs do not share parameter names."""
+        text = SKILL_FILE.read_text(encoding="utf-8")
+
+        assert "`from_time`" in text and "`to_time`" in text
+        assert "`since`" in text and "`until`" in text
+
     def test_it_declares_exactly_the_two_generic_readers(self) -> None:
         """A name here that no tool answers to attaches the guidance to nothing."""
         result = load_tool_skill_guidance(SKILL_FILE, known_tool_names=GUIDED_TOOLS)

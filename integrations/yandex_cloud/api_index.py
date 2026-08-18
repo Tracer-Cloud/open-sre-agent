@@ -212,3 +212,55 @@ def search(
     ]
     found.sort(key=lambda endpoint: _rank(endpoint, terms))
     return found[: max(1, limit)]
+
+
+def _segment_matches(template: str, actual: str) -> bool:
+    """Whether one path segment of *actual* is the templated *template* segment.
+
+    Yandex binds some reads as an action on a resource
+    (``{instance_id}:serialPortOutput``). The placeholder and the action suffix
+    have to match independently, otherwise a list path would also accept the
+    action and the other way around.
+    """
+    template_name, _, template_action = template.partition(":")
+    actual_name, _, actual_action = actual.partition(":")
+    if template_action != actual_action:
+        return False
+    if template_name == actual_name:
+        return True
+    return (
+        template_name.startswith("{")
+        and template_name.endswith("}")
+        and bool(actual_name)
+        and "/" not in actual_name
+    )
+
+
+def _path_matches(template: str, actual: str) -> bool:
+    actual = actual.split("?", 1)[0].rstrip("/") or "/"
+    template = template.rstrip("/") or "/"
+    template_parts = [part for part in template.split("/") if part]
+    actual_parts = [part for part in actual.split("/") if part]
+    if len(template_parts) != len(actual_parts):
+        return False
+    return all(
+        _segment_matches(template_part, actual_part)
+        for template_part, actual_part in zip(template_parts, actual_parts, strict=True)
+    )
+
+
+def lookup(service: str, path: str) -> ApiEndpoint | None:
+    """Return the indexed read that *path* is, or ``None`` if it is not one.
+
+    The generic reader may call only what this index lists. The index is built
+    from GET bindings, so matching it is the read-only allowlist, not merely a
+    convenience for discovery. A concrete path such as
+    ``/compute/v1/instances/abc`` matches ``/compute/v1/instances/{instance_id}``.
+    """
+    wanted = service.strip()
+    if not wanted or not path:
+        return None
+    for endpoint in _endpoints():
+        if endpoint.service == wanted and _path_matches(endpoint.path, path):
+            return endpoint
+    return None

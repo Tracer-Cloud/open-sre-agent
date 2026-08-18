@@ -17,6 +17,7 @@ from typing import Any
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
+from integrations.yandex_cloud.api_index import known_services, lookup
 from integrations.yandex_cloud.availability import (
     YC_INJECTED_PARAMS,
     client_from_params,
@@ -136,6 +137,25 @@ def execute_yc_operation(
             "path": path,
             "data": None,
             "error": f"Invalid path: {rejected}.",
+            "metadata": {},
+        }
+    # The index is the GET-only allowlist. Path-shape checks above catch
+    # traversal and mutating suffixes; they do not stop a well-formed write
+    # path that Yandex binds to GET, or a path the generator never listed.
+    # Unknown services still fall through to the client, which names them as
+    # unknown. A known service with a path the index does not list is refused
+    # here so a well-formed write never reaches the network.
+    if service in known_services() and lookup(service, path) is None:
+        return {
+            "success": False,
+            "service": service,
+            "path": path,
+            "data": None,
+            "error": (
+                f"'{path}' is not a documented read of '{service}'. "
+                "Call find_yc_api to get the path; this tool only sends what "
+                "the index lists."
+            ),
             "metadata": {},
         }
 

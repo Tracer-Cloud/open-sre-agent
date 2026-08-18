@@ -254,3 +254,39 @@ class TestItNamesOnlyToolsThatExist:
 
         assert named, "the description should point at a discovery tool"
         assert named <= registered, f"names tools that do not exist: {named - registered}"
+
+
+class TestTheIndexIsTheAllowlist:
+    def test_a_path_the_index_does_not_list_never_hits_the_network(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _never(*_a: object, **_k: object) -> None:
+            raise AssertionError("no request should be made")
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _never)
+        result = execute_yc_operation(
+            service="compute",
+            path="/compute/v1/notARealCollection",
+            **_CREDENTIALS,
+        )
+
+        assert result["success"] is False
+        assert "find_yc_api" in result["error"]
+        assert "not a documented read" in result["error"]
+
+    def test_a_concrete_resource_path_is_sent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: list[str] = []
+
+        def _request(method: str, url: str, **_kwargs: object) -> httpx.Response:
+            seen.append(url)
+            return httpx.Response(200, json={"id": "abc"})
+
+        monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)
+        result = execute_yc_operation(
+            service="compute",
+            path="/compute/v1/instances/abc",
+            **_CREDENTIALS,
+        )
+
+        assert result["success"] is True
+        assert seen and "instances/abc" in seen[0]
