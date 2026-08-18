@@ -30,7 +30,7 @@ from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.prompts.grounding import provider as default_prompt_context
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
-from tests.interactive_shell.shell_ports_helper import answer_through_shell_ports
+from tests.interactive_shell.shell_answer_gather import stream_shell_answer
 
 
 def _answer(
@@ -40,8 +40,8 @@ def _answer(
     *,
     request: AnswerRequest | None = None,
 ) -> LlmRunInfo | None:
-    """Answer through the shell's ports with a default ``AnswerRequest``."""
-    return answer_through_shell_ports(message, session, console, request=request)
+    """Answer with the shell's DefaultHeadlessBuild with a default ``AnswerRequest``."""
+    return stream_shell_answer(message, session, console, request=request)
 
 
 def _build_environment_block(session: Session) -> str:

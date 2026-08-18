@@ -1,8 +1,8 @@
-"""Answer and gather through the shell's ports, without a full turn.
+"""Answer and gather with the shell's HeadlessAgent build, without a full turn.
 
-The REPL adds no stage of its own — answering and gathering are the agent's,
-configured by the shell's ports. Tests that exercise those paths in isolation
-compose the same ports here.
+The REPL does not add a stage. These helpers wire the same session, output,
+console, and error reporter the shell uses, then call the harness answer/gather
+functions. Tests that exercise those paths in isolation compose that here.
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
 
 
-def answer_through_shell_ports(
+def stream_shell_answer(
     message: str,
     session: Session,
     console: Console,
     *,
     request: AnswerRequest | None = None,
 ) -> LlmRunInfo | None:
-    """The agent's answer stage on the shell's default port family."""
-    ports = DefaultHeadlessBuild(
+    """The agent's answer stage with the shell's DefaultHeadlessBuild."""
+    build = DefaultHeadlessBuild(
         session=session,  # type: ignore[arg-type]
         output=ShellOutputSink(console),
         console=console,
@@ -43,16 +43,16 @@ def answer_through_shell_ports(
     return stream_answer(
         message,
         session,
-        ports.output,
+        build.output,
         prompts=shell_prompt_context_provider(session),
-        reasoning=ports.reasoning(),
-        run_factory=ports.run_factory(),
-        error_reporter=ports._error_reporter,  # noqa: SLF001
+        reasoning=build.reasoning(),
+        run_factory=build.run_factory(),
+        error_reporter=build._error_reporter,  # noqa: SLF001
         request=request if request is not None else AnswerRequest(),
     )
 
 
-def gather_through_shell_ports(
+def gather_shell_evidence(
     message: str,
     session: Session,
     console: Console,
@@ -60,17 +60,17 @@ def gather_through_shell_ports(
     agent_factory: GatherAgentFactory | None = None,
     resolved_integrations: dict[str, Any] | None = None,
 ) -> str | GatheredEvidence | None:
-    """The agent's gather stage with the shell's gather ports."""
-    ports = shell_gather_phase(session, console)
+    """The agent's gather stage with the shell's GatherPhase."""
+    gather = shell_gather_phase(session, console)
     return gather_tool_evidence(
         message,
         session,
-        on_progress=ports.on_progress,
-        persist=ports.persist,
+        on_progress=gather.on_progress,
+        persist=gather.persist,
         error_reporter=ShellErrorReporter(),
         agent_factory=agent_factory,
         resolved_integrations=resolved_integrations,
     )
 
 
-__all__ = ["answer_through_shell_ports", "gather_through_shell_ports"]
+__all__ = ["gather_shell_evidence", "stream_shell_answer"]

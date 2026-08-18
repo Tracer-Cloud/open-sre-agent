@@ -106,7 +106,8 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(agent_cls)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(agent_cls),
     )
 
     def _start_telegram_gateway_background(**kwargs: Any) -> MagicMock:

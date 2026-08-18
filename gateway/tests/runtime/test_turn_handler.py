@@ -62,7 +62,8 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(factory),
     )
     return factory
 

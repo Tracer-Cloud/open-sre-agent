@@ -112,7 +112,9 @@ def test_primary_response_text_prefers_assistant() -> None:
     assert empty_assistant.primary_response_text == "from action"
 
 
-def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> None:
+def test_default_headless_build_takes_the_hosts_tool_provider_and_forwards_the_llm_factory() -> (
+    None
+):
     """A host varies the agent through its ``ToolProvider``; ``llm_factory`` reaches the runner.
 
     ``tools`` is the bridge between the agent and a host's tool stack: the shell

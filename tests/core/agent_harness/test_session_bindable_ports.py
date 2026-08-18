@@ -96,9 +96,9 @@ def test_headless_agent_bind_turn_output_retargets_reasoning() -> None:
     first = BufferOutputSink()
     second = BufferOutputSink()
     reasoning = DefaultReasoningClientProvider(output=first)
-    agent = InMemoryHeadlessBuild(session=InMemorySessionState(), output=first, reasoning=reasoning).agent(
-        tools=NullToolProvider()
-    )
+    agent = InMemoryHeadlessBuild(
+        session=InMemorySessionState(), output=first, reasoning=reasoning
+    ).agent(tools=NullToolProvider())
     agent.bind_turn(TurnBinding(output=second))
     reasoning._handle_unavailable(RuntimeError("boom"), context="test")
     assert "LLM client unavailable" in second.text

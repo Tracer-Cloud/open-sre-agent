@@ -35,7 +35,8 @@ def test_gateway_turn_handler_delegates_to_agent_dispatch(monkeypatch: pytest.Mo
     )
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(factory),
     )
 
     session = Session(store=InMemorySessionStore())

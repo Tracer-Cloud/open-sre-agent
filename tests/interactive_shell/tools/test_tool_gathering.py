@@ -31,7 +31,7 @@ from surfaces.interactive_shell.runtime.integration_tool_gathering import (
     _tool_input_hint,
 )
 from surfaces.interactive_shell.session import Session
-from tests.interactive_shell.shell_ports_helper import gather_through_shell_ports
+from tests.interactive_shell.shell_answer_gather import gather_shell_evidence
 
 _FakeRun = Callable[[dict[str, Any], list[dict[str, Any]]], runtime_module.AgentRunResult]
 
@@ -81,7 +81,7 @@ def test_no_tools_available_returns_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(harness_ports, "get_investigation_tools", lambda _resolved: [])
 
-    assert gather_through_shell_ports("any question", session, _console()) is None
+    assert gather_shell_evidence("any question", session, _console()) is None
 
 
 def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
@@ -99,7 +99,7 @@ def test_secondary_only_tools_return_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _unexpected_llm())
 
-    assert gather_through_shell_ports("why did it fail?", session, _console()) is None
+    assert gather_shell_evidence("why did it fail?", session, _console()) is None
 
 
 def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None:
@@ -125,7 +125,7 @@ def test_executed_results_return_formatted_observation(monkeypatch: Any) -> None
     ) -> runtime_module.AgentRunResult:
         return runtime_module.AgentRunResult(messages=[], final_text="", executed=executed)
 
-    gathered = gather_through_shell_ports(
+    gathered = gather_shell_evidence(
         "any open issues?",
         session,
         _console(),
@@ -158,7 +158,7 @@ def test_no_executed_returns_none(monkeypatch: Any) -> None:
         return runtime_module.AgentRunResult(messages=[], final_text="nothing to do", executed=[])
 
     assert (
-        gather_through_shell_ports(
+        gather_shell_evidence(
             "any question",
             session,
             _console(),
@@ -183,7 +183,7 @@ def test_exception_path_returns_none(monkeypatch: Any) -> None:
 
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: _boom())
 
-    assert gather_through_shell_ports("any question", session, _console()) is None
+    assert gather_shell_evidence("any question", session, _console()) is None
 
 
 def test_tool_input_hint_prefers_distinguishing_fields() -> None:
@@ -262,7 +262,7 @@ def test_gathering_progress_lines_print_on_tool_start(monkeypatch: Any) -> None:
             )
         return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
-    gather_through_shell_ports(
+    gather_shell_evidence(
         "check metrics",
         session,
         console,
@@ -421,7 +421,7 @@ def test_gather_enriches_github_before_selecting_tools(monkeypatch: Any) -> None
     ) -> runtime_module.AgentRunResult:
         return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
-    gather_through_shell_ports(
+    gather_shell_evidence(
         "check github issues in https://github.com/Tracer-Cloud/opensre",
         session,
         _console(),
@@ -455,7 +455,7 @@ def test_gather_enriches_gitlab_before_selecting_tools(monkeypatch: Any) -> None
     ) -> runtime_module.AgentRunResult:
         return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
-    gather_through_shell_ports(
+    gather_shell_evidence(
         "read https://gitlab.com/group/project/-/blob/main/runbook.md",
         session,
         _console(),
@@ -486,7 +486,7 @@ def test_gather_user_message_includes_recent_conversation(monkeypatch: Any) -> N
         captured["messages"] = initial_messages
         return runtime_module.AgentRunResult(messages=[], final_text="", executed=[])
 
-    gather_through_shell_ports(
+    gather_shell_evidence(
         "follow up",
         session,
         _console(),

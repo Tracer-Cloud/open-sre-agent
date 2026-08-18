@@ -23,35 +23,35 @@ class _Session:
 def test_defaults_gather_with_no_surface_instrumentation() -> None:
     # Arrange / Act: the shape a scheduled digest wants — run the phase, watch
     # nothing, record nothing.
-    ports = GatherPhase()
+    gather = GatherPhase()
 
     # Assert
-    assert ports.enabled is True
-    assert ports.on_progress is None
-    assert ports.persist is None
-    assert ports.max_iterations is None
+    assert gather.enabled is True
+    assert gather.on_progress is None
+    assert gather.persist is None
+    assert gather.max_iterations is None
 
 
 def test_disabled_is_expressible_without_a_sentinel() -> None:
     # Arrange / Act
-    ports = GatherPhase(enabled=False)
+    gather = GatherPhase(enabled=False)
 
     # Assert: a caller that wants no gather says so, rather than passing a
     # magic iteration count.
-    assert ports.enabled is False
+    assert gather.enabled is False
 
 
-def test_is_immutable_so_one_surfaces_ports_cannot_leak_into_another() -> None:
+def test_is_immutable_so_one_surfaces_gather_cannot_leak_into_another() -> None:
     # Arrange
-    ports = GatherPhase()
+    gather = GatherPhase()
 
     # Act / Assert: agents are pooled per session on the gateway; a mutable
-    # ports object would let one turn retarget another's progress stream.
+    # GatherPhase would let one turn retarget another's progress stream.
     with pytest.raises(AttributeError):
-        ports.enabled = False  # type: ignore[misc]
+        gather.enabled = False  # type: ignore[misc]
 
 
-class TestAgentForwardsThePorts:
+class TestAgentForwardsGatherPhase:
     def test_progress_and_persist_reach_the_gather_phase(self, monkeypatch) -> None:
         # Arrange: a REPL supplies both so the user sees live tool lines and the
         # calls land in session history.
@@ -85,7 +85,7 @@ class TestAgentForwardsThePorts:
         assert seen["persist"] is _persist
         assert seen["max_iterations"] == 9
 
-    def test_disabled_ports_skip_the_phase_entirely(self, monkeypatch) -> None:
+    def test_disabled_gather_skips_the_phase_entirely(self, monkeypatch) -> None:
         # Arrange
         from core.agent_harness.turns import headless_adapters, headless_agent
 

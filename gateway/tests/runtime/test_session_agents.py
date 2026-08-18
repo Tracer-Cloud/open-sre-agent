@@ -80,7 +80,8 @@ def test_pool_reuses_agent_for_same_session(monkeypatch: pytest.MonkeyPatch) -> 
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(_fake_build)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(_fake_build),
     )
     pool = SessionAgentPool(console=Console(force_terminal=False))
     session = SessionCore(store=InMemorySessionStore())
@@ -145,7 +146,8 @@ def test_turn_handler_reuses_headless_agent_across_turns(monkeypatch: pytest.Mon
     agent = fake_agent(dispatch_result=_empty_result())
     factory = MagicMock(return_value=agent)
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(factory),
     )
 
     session = SessionCore(store=InMemorySessionStore())

@@ -383,7 +383,8 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild", default_headless_build_stub(_spy_build)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(_spy_build),
     )
 
 
