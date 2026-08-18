@@ -52,10 +52,9 @@ def test_a_held_slot_is_released_even_when_the_turn_raises() -> None:
     gate = _Gate()
 
     # Act
-    with pytest.raises(RuntimeError):
-        with turn_slot(gate) as running:
-            assert running
-            raise RuntimeError("turn blew up")
+    with pytest.raises(RuntimeError), turn_slot(gate) as running:
+        assert running
+        raise RuntimeError("turn blew up")
 
     # Assert
     assert gate.events == ["try_acquire", "release"]

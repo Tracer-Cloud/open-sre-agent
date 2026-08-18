@@ -224,7 +224,9 @@ def test_check_version_freshness_skips_release_compare_for_local_dev(monkeypatch
         "platform.process.release_version.development_install_doctor_version_detail",
         lambda c: f"{c} (editable install; skipped comparing to latest main build)",
     )
-    monkeypatch.setattr("platform.process.release_version.fetch_latest_version", fetch_latest_version)
+    monkeypatch.setattr(
+        "platform.process.release_version.fetch_latest_version", fetch_latest_version
+    )
 
     ok, detail = doctor._check_version_freshness()
 
@@ -241,7 +243,9 @@ def test_check_version_freshness_up_to_date(monkeypatch) -> None:
         "platform.process.release_version.development_install_doctor_version_detail",
         lambda _c: None,
     )
-    monkeypatch.setattr("platform.process.release_version.fetch_latest_version", fetch_latest_version)
+    monkeypatch.setattr(
+        "platform.process.release_version.fetch_latest_version", fetch_latest_version
+    )
     monkeypatch.setattr("platform.process.release_version.is_update_available", is_update_available)
 
     ok, detail = doctor._check_version_freshness()
@@ -260,7 +264,9 @@ def test_check_version_freshness_update_available(monkeypatch) -> None:
         "platform.process.release_version.development_install_doctor_version_detail",
         lambda _c: None,
     )
-    monkeypatch.setattr("platform.process.release_version.fetch_latest_version", fetch_latest_version)
+    monkeypatch.setattr(
+        "platform.process.release_version.fetch_latest_version", fetch_latest_version
+    )
     monkeypatch.setattr("platform.process.release_version.is_update_available", is_update_available)
 
     ok, detail = doctor._check_version_freshness()

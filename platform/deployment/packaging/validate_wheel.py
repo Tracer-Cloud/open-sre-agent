@@ -7,7 +7,7 @@ import runpy
 from pathlib import Path
 from zipfile import ZipFile
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def missing_skill_files(wheel_path: Path, *, repo_root: Path = ROOT) -> tuple[str, ...]:

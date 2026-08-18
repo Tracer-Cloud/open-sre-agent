@@ -20,7 +20,9 @@ from surfaces.interactive_shell.runtime.background.runner import (
 )
 from surfaces.interactive_shell.session import Session
 
-_STORE_FACTORY = "platform.scheduling.background_investigations.store.background_investigation_store"
+_STORE_FACTORY = (
+    "platform.scheduling.background_investigations.store.background_investigation_store"
+)
 
 
 def _noop_tracker(**_kwargs: Any) -> Any:

@@ -67,7 +67,7 @@ def _run(script: str, home: Path) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         timeout=60,
-        cwd=Path(__file__).resolve().parents[3],
+        cwd=Path(__file__).resolve().parents[4],
         env={**os.environ, "OPENSRE_HOME": str(home)},
     )
 

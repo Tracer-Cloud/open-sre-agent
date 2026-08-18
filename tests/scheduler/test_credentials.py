@@ -28,7 +28,9 @@ def _stub_slack_store(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str]) 
             return ""
         return mapping.get(key, "")
 
-    monkeypatch.setattr("platform.scheduling.scheduler.credentials._get_integration_credential", _get)
+    monkeypatch.setattr(
+        "platform.scheduling.scheduler.credentials._get_integration_credential", _get
+    )
     monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
 
 

@@ -6,7 +6,7 @@ import argparse
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 _VERSION_LINE = re.compile(r'(?m)^version = "[^"]+"')
 
 

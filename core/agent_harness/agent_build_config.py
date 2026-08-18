@@ -15,7 +15,12 @@ from core.agent_harness.turns.gather_phase import GatherPhase
 
 
 class BuildTools(Protocol):
-    """``(session, console, logger, observer) -> ToolProvider``."""
+    """``(session, console, logger, observer) -> ToolProvider``.
+
+    Positional-only: every caller passes these in order, so an implementation
+    is free to name an argument it ignores ``_logger`` without failing the
+    protocol on a name it never reads.
+    """
 
     def __call__(
         self,
@@ -23,6 +28,7 @@ class BuildTools(Protocol):
         console: Any,
         logger: logging.Logger,
         observer: Any,
+        /,
     ) -> ToolProvider:
         """Return the tools for this session."""
 
@@ -30,21 +36,21 @@ class BuildTools(Protocol):
 class BuildPrompts(Protocol):
     """``(session) -> PromptContextProvider``."""
 
-    def __call__(self, session: Any) -> PromptContextProvider:
+    def __call__(self, session: Any, /) -> PromptContextProvider:
         """Return the prompt context for this session."""
 
 
 class BuildGather(Protocol):
     """``(session, console) -> GatherPhase``."""
 
-    def __call__(self, session: Any, console: Any) -> GatherPhase:
+    def __call__(self, session: Any, console: Any, /) -> GatherPhase:
         """Return how this host runs the gather phase."""
 
 
 class ApplyCapabilityPolicy(Protocol):
     """``(session) -> None``. ``None`` on the config field means do not call."""
 
-    def __call__(self, session: Any) -> None:
+    def __call__(self, session: Any, /) -> None:
         """Mutate ``session`` capabilities, or do nothing."""
 
 

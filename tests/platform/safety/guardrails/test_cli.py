@@ -17,7 +17,9 @@ class TestCmdInit:
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         rules_path = tmp_path / "guardrails.yml"
-        monkeypatch.setattr("platform.safety.guardrails.cli.get_default_rules_path", lambda: rules_path)
+        monkeypatch.setattr(
+            "platform.safety.guardrails.cli.get_default_rules_path", lambda: rules_path
+        )
 
         cmd_init()
         out = capsys.readouterr().out
@@ -37,7 +39,9 @@ class TestCmdInit:
     ) -> None:
         rules_path = tmp_path / "guardrails.yml"
         rules_path.write_text("existing content", encoding="utf-8")
-        monkeypatch.setattr("platform.safety.guardrails.cli.get_default_rules_path", lambda: rules_path)
+        monkeypatch.setattr(
+            "platform.safety.guardrails.cli.get_default_rules_path", lambda: rules_path
+        )
 
         cmd_init()
         out = capsys.readouterr().out
