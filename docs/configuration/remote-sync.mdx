@@ -89,7 +89,7 @@ On another machine, set the same passphrase; the salt and wrapped key come from 
 
 ```bash
 opensre remote-sync rotate-passphrase   # re-wraps the key; no object re-uploaded;
-opensre remote-sync reencrypt           # re-encrypts whole data and encrpyts already stored readable data on cloud.
+opensre remote-sync reencrypt           # re-encrypts whole data and encrypts already stored readable data on cloud.
 ```
 
 `reencrypt` re-uploads everything and overwrites each object in place. On a **versioned** bucket the old readable versions survive — remove noncurrent versions yourself.
