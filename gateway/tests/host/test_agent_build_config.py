@@ -19,10 +19,11 @@ from typing import Any
 import pytest
 from rich.console import Console
 
+from core.agent_harness.runtime import AgentBuildConfig
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from gateway.core.host.live_sink import LiveOutputSink
-from gateway.core.host.session_agents import ChannelAgentPorts, SessionAgentPool
+from gateway.core.host.session_agents import SessionAgentPool
 from tests.shared.default_ports_stub import default_ports_stub
 
 _LOGGER = logging.getLogger("channel.ports.test")
@@ -38,7 +39,7 @@ def _null_tools(*_args: Any, **_kwargs: Any) -> Any:
     return NullToolProvider()
 
 
-def test_a_channel_that_supplies_nothing_gets_the_chat_defaults() -> None:
+def test_a_host_that_supplies_nothing_gets_the_chat_defaults() -> None:
     # Arrange — how every chat transport constructs the pool today
     pool = SessionAgentPool(console=Console(force_terminal=False))
 
@@ -49,7 +50,7 @@ def test_a_channel_that_supplies_nothing_gets_the_chat_defaults() -> None:
     assert agent is not None
 
 
-def test_a_channel_supplies_its_own_tools_prompts_and_gather() -> None:
+def test_a_host_supplies_its_own_tools_prompts_and_gather() -> None:
     # Arrange — record which of the channel's builders the pool actually used
     used: list[str] = []
 
@@ -74,8 +75,7 @@ def test_a_channel_supplies_its_own_tools_prompts_and_gather() -> None:
 
     pool = SessionAgentPool(
         console=Console(force_terminal=False),
-        ports=ChannelAgentPorts(
-            surface="interactive_shell",
+        agent_build=AgentBuildConfig(
             build_tools=build_tools,
             build_prompts=build_prompts,
             build_gather=build_gather,
@@ -101,7 +101,7 @@ def test_agent_reuse_stays_the_pool_decision() -> None:
 
     pool = SessionAgentPool(
         console=Console(force_terminal=False),
-        ports=ChannelAgentPorts(build_tools=build_tools),
+        agent_build=AgentBuildConfig(build_tools=build_tools),
     )
     session = _session()
 
@@ -124,12 +124,21 @@ def test_default_path_applies_gateway_capability_policy() -> None:
     assert session.available_capabilities["task_cancel"] == ()
 
 
-def test_channel_can_replace_capability_policy() -> None:
+def test_omitted_capability_policy_does_not_withhold() -> None:
+    session = _session()
+    SessionAgentPool(
+        console=Console(force_terminal=False),
+        agent_build=AgentBuildConfig(),
+    ).agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
+    assert "investigation" not in session.available_capabilities
+
+
+def test_host_can_replace_capability_policy() -> None:
     seen: list[object] = []
     session = _session()
     SessionAgentPool(
         console=Console(force_terminal=False),
-        ports=ChannelAgentPorts(apply_capability_policy=seen.append),
+        agent_build=AgentBuildConfig(apply_capability_policy=seen.append),
     ).agent_for(session=session, sink=LiveOutputSink(), logger=_LOGGER)
     assert seen == [session]
     assert "investigation" not in session.available_capabilities
@@ -151,9 +160,9 @@ def test_error_reporter_and_surface_reach_default_ports(
     reporter = object()
     SessionAgentPool(
         console=Console(force_terminal=False),
-        ports=ChannelAgentPorts(surface="interactive_shell", error_reporter=reporter),
+        agent_build=AgentBuildConfig(error_reporter=reporter),
     ).agent_for(session=_session(), sink=LiveOutputSink(), logger=_LOGGER)
-    assert captured["surface"] == "interactive_shell"
+    assert captured["surface"] == "gateway"
     assert captured["error_reporter"] is reporter
 
 

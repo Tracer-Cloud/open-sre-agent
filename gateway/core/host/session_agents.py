@@ -10,16 +10,20 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Any
 
 from rich.console import Console
 
 from core.agent_harness import SessionCore
 from core.agent_harness.ports import SlashPortsFactory
-from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, GatherPorts, HeadlessAgent
+from core.agent_harness.runtime import (
+    AgentBuildConfig,
+    DefaultPorts,
+    DefaultToolProvider,
+    GatherPorts,
+    HeadlessAgent,
+)
 from gateway.core.host.capability_policy import ensure_gateway_capability_policy
 from gateway.core.host.live_sink import LiveOutputSink
 from gateway.core.host.status_messages import status_from_tool_start
@@ -44,43 +48,6 @@ class _ToolStatusObserver:
         self._sink.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
 
 
-#: Built per session, because each needs the session it serves.
-ToolProviderFactory = Callable[[Any, Console, logging.Logger, Any], Any]
-PromptsFactory = Callable[[Any], Any]
-GatherFactory = Callable[[Any, Console], Any]
-CapabilityPolicy = Callable[[Any], None]
-
-
-@dataclass(frozen=True)
-class ChannelAgentPorts:
-    """What a channel supplies so the gateway can build its agent for it.
-
-    Every field defaults to the chat behaviour the four transports use, so a
-    channel states only what is genuinely its own. The interactive shell needs
-    all of them — its tools carry the REPL slash ports and ``request_exit``,
-    its prompts ground the model in the CLI, its gather writes progress lines
-    to the console. A chat transport needs none.
-
-    The pool still decides which agent is reused and how the live sink is bound.
-    Capability policy is a channel field so the shell is not forced onto
-    gateway-chat withholds (investigation / llm_provider / task_cancel).
-    Ports are process-lifetime: a cached agent is not rebuilt if they change.
-    """
-
-    #: Analytics surface for the turn, e.g. ``gateway`` or ``interactive_shell``.
-    surface: str = "gateway"
-    #: ``(session, console, logger, observer) -> ToolProvider``
-    build_tools: ToolProviderFactory | None = None
-    #: ``(session) -> PromptContextProvider``
-    build_prompts: PromptsFactory | None = None
-    #: ``(session, console) -> GatherPorts``
-    build_gather: GatherFactory | None = None
-    #: Where a swallowed exception is reported; the harness default when absent.
-    error_reporter: Any | None = None
-    #: Applied before construction. ``None`` means gateway-chat withholds.
-    apply_capability_policy: CapabilityPolicy | None = None
-
-
 class SessionAgentPool:
     """One :class:`HeadlessAgent` (+ live sink) per logical session id."""
 
@@ -89,11 +56,17 @@ class SessionAgentPool:
         *,
         console: Console,
         slash_ports_factory: SlashPortsFactory | None = None,
-        ports: ChannelAgentPorts | None = None,
+        agent_build: AgentBuildConfig | None = None,
     ) -> None:
         self._console = console
         self._slash_ports_factory = slash_ports_factory
-        self._ports = ports if ports is not None else ChannelAgentPorts()
+        self._build = (
+            agent_build
+            if agent_build is not None
+            else AgentBuildConfig(
+                apply_capability_policy=ensure_gateway_capability_policy,
+            )
+        )
         self._agents: dict[str, HeadlessAgent] = {}
         self._sinks: dict[str, LiveOutputSink] = {}
         # One agent serves every turn of a session, and each turn rebinds its
@@ -142,10 +115,9 @@ class SessionAgentPool:
         Prefer :meth:`session_agent`, which holds the session's lock for the
         whole turn. This is the unsynchronised primitive it wraps.
         """
-        policy = self._ports.apply_capability_policy
-        if policy is None:
-            policy = ensure_gateway_capability_policy
-        policy(session)
+        policy = self._build.apply_capability_policy
+        if policy is not None:
+            policy(session)
         session_id = str(getattr(session, "session_id", "") or "")
         live_sink = self._sinks.get(session_id) if session_id else None
         if live_sink is None:
@@ -162,9 +134,9 @@ class SessionAgentPool:
             return cached
 
         observer = _ToolStatusObserver(live_sink)
-        channel = self._ports
-        if channel.build_tools is not None:
-            tools = channel.build_tools(session, self._console, logger, observer)
+        build = self._build
+        if build.build_tools is not None:
+            tools = build.build_tools(session, self._console, logger, observer)
         else:
             tools = DefaultToolProvider(
                 session,
@@ -174,10 +146,10 @@ class SessionAgentPool:
                 subprocess_presenter_factory=headless_subprocess_presenter_factory,
                 slash_ports_factory=self._slash_ports_factory,
             )
-        prompts = channel.build_prompts(session) if channel.build_prompts is not None else None
+        prompts = build.build_prompts(session) if build.build_prompts is not None else None
         gather = (
-            channel.build_gather(session, self._console)
-            if channel.build_gather is not None
+            build.build_gather(session, self._console)
+            if build.build_gather is not None
             else GatherPorts()
         )
         agent = DefaultPorts(
@@ -185,8 +157,8 @@ class SessionAgentPool:
             output=live_sink,
             console=self._console,
             logger=logger,
-            surface=channel.surface,
-            error_reporter=channel.error_reporter,
+            surface="gateway",
+            error_reporter=build.error_reporter,
         ).agent(
             tools=tools,
             prompts=prompts,
@@ -202,4 +174,4 @@ class SessionAgentPool:
         return frozenset(self._agents)
 
 
-__all__ = ["ChannelAgentPorts", "SessionAgentPool"]
+__all__ = ["SessionAgentPool"]

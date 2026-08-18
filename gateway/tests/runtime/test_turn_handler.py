@@ -11,10 +11,11 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from core.agent_harness.runtime import AgentBuildConfig
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.host.session_agents import ChannelAgentPorts, SessionAgentPool
+from gateway.core.host.session_agents import SessionAgentPool
 from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
@@ -454,17 +455,17 @@ def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any
     assert events == ["lock-acquired", "lock-released"]
 
 
-def test_turn_handler_forwards_channel_ports_to_the_pool(
+def test_turn_handler_forwards_agent_build_to_the_pool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[Any] = []
     original_init = SessionAgentPool.__init__
 
     def _init(self: SessionAgentPool, **kwargs: Any) -> None:
-        seen.append(kwargs.get("ports"))
+        seen.append(kwargs.get("agent_build"))
         original_init(self, **kwargs)
 
     monkeypatch.setattr(SessionAgentPool, "__init__", _init)
-    ports = ChannelAgentPorts(surface="interactive_shell")
-    GatewayTurnHandler(console=Console(force_terminal=False), ports=ports)
-    assert seen == [ports]
+    agent_build = AgentBuildConfig()
+    GatewayTurnHandler(console=Console(force_terminal=False), agent_build=agent_build)
+    assert seen == [agent_build]

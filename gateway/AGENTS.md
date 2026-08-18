@@ -112,8 +112,11 @@ Two ways work reaches the agent. Mixing them is how a second turn engine appears
 
 | | Has a user and a sink? | Entry |
 |--|------------------------|--------|
-| **Channel** (Slack, Telegram, Discord, Buzz; later the interactive shell) | Yes | `GatewayTurnHandler` — `(text, session, sink, logger)` |
+| **Channel** (Slack, Telegram, Discord, Buzz) | Yes | `GatewayTurnHandler` — `(text, session, sink, logger)` |
+| **Interactive shell** | Yes | `HeadlessAgent.handle` with `AgentBuildConfig` (not the chat callback) |
 | **Producer** (`platform.scheduler`, scheduled digest/PR runners) | No | Embed: `AgentSession.run_headless_turn` (and investigation payload runners) |
+
+Agent construction hooks live in `core.agent_harness.agent_build_config.AgentBuildConfig` (not `transport_api`, not a host re-export). Chat omits the config and the session-agent pool injects gateway capability withholds. The shell sets the build hooks it needs and leaves `apply_capability_policy` unset.
 
 The gateway **process** may host the scheduler (same `process_turn_gate`). That
 does not make the scheduler a channel: `platform.scheduler` must not import

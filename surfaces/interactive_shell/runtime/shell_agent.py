@@ -1,10 +1,10 @@
 """Build the interactive shell's agent on the default port family.
 
-The shell is a **channel**: it supplies :class:`ChannelAgentPorts` (tools,
-prompts, gather, error reporter) and a capability policy that does **not**
-apply gateway-chat withholds. Construction still goes through
-:class:`DefaultPorts` — the same family the gateway pool uses — so the shell
-keeps investigation / llm_provider / task_cancel and REPL slash / TTY paint.
+The shell is a host: it supplies :class:`AgentBuildConfig` (tools, prompts,
+gather, error reporter) and omits capability policy so gateway-chat withholds
+do not run. Construction still goes through :class:`DefaultPorts` — the same
+family the gateway pool uses — so the shell keeps investigation / llm_provider
+/ task_cancel and REPL slash / TTY paint.
 """
 
 from __future__ import annotations
@@ -16,8 +16,12 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness import OutputSink
-from core.agent_harness.runtime import DefaultPorts, DefaultToolProvider, HeadlessAgent
-from gateway.core.host.session_agents import ChannelAgentPorts
+from core.agent_harness.runtime import (
+    AgentBuildConfig,
+    DefaultPorts,
+    DefaultToolProvider,
+    HeadlessAgent,
+)
 from surfaces.interactive_shell.grounding.cli_reference import shell_prompt_context_provider
 from surfaces.interactive_shell.runtime.agent_harness_adapters import (
     ShellErrorReporter,
@@ -69,20 +73,11 @@ def _observer_factory(session: Session, console: Console) -> Callable[[str], Any
     return observer_factory
 
 
-def preserve_host_capabilities(_session: object) -> None:
-    """Do not apply gateway-chat withholds (investigation / llm_provider / task_cancel).
-
-    Chat transports use the pool default ``ensure_gateway_capability_policy``.
-    The shell is a different channel and must keep those tools.
-    """
-    return None
-
-
-def shell_channel_ports(
+def shell_agent_build_config(
     *,
     request_exit: Callable[[], None] | None = None,
-) -> ChannelAgentPorts:
-    """The interactive shell's agent ports: REPL tools, CLI grounding, console gather."""
+) -> AgentBuildConfig:
+    """REPL wiring: shell tools, CLI grounding, console gather; no withholds."""
 
     def build_tools(
         session: Session,
@@ -93,13 +88,11 @@ def shell_channel_ports(
         _ = (logger, observer)
         return shell_tool_provider(session, console, request_exit=request_exit)
 
-    return ChannelAgentPorts(
-        surface="interactive_shell",
+    return AgentBuildConfig(
         build_tools=build_tools,
         build_prompts=shell_prompt_context_provider,
         build_gather=shell_gather_ports,
         error_reporter=ShellErrorReporter(),
-        apply_capability_policy=preserve_host_capabilities,
     )
 
 
@@ -130,30 +123,29 @@ def build_shell_agent(
     output: OutputSink | None = None,
     request_exit: Callable[[], None] | None = None,
 ) -> HeadlessAgent:
-    """One shell agent from :func:`shell_channel_ports`; per-turn values via ``bind_turn``."""
-    ports = shell_channel_ports(request_exit=request_exit)
-    policy = ports.apply_capability_policy or preserve_host_capabilities
-    policy(session)
-    build_tools = ports.build_tools or (
-        lambda sess, cons, _log, _obs: shell_tool_provider(sess, cons, request_exit=request_exit)
-    )
+    """One shell agent from :func:`shell_agent_build_config`; per-turn values via ``bind_turn``."""
+    config = shell_agent_build_config(request_exit=request_exit)
+    build_tools = config.build_tools
+    build_prompts = config.build_prompts
+    build_gather = config.build_gather
+    if build_tools is None or build_prompts is None or build_gather is None:
+        raise RuntimeError("shell agent build config is incomplete")
     logger = logging.getLogger("opensre.interactive_shell")
     return DefaultPorts(
         session=session,
         output=resolve_output_sink(console, output),
         console=console,
-        surface=ports.surface,
-        error_reporter=ports.error_reporter,
+        surface="interactive_shell",
+        error_reporter=config.error_reporter,
     ).agent(
         tools=build_tools(session, console, logger, None),
-        prompts=ports.build_prompts(session) if ports.build_prompts else None,
-        gather=ports.build_gather(session, console) if ports.build_gather else None,
+        prompts=build_prompts(session),
+        gather=build_gather(session, console),
     )
 
 
 __all__ = [
     "build_shell_agent",
-    "preserve_host_capabilities",
-    "shell_channel_ports",
+    "shell_agent_build_config",
     "shell_tool_provider",
 ]
