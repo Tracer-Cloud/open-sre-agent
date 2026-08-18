@@ -228,17 +228,15 @@ _VERSIONED_BUCKET_NOTE = (
 )
 
 
-def format_reencrypt_lines(report: ReencryptReport, *, dry_run: bool = False) -> tuple[str, ...]:
+def format_reencrypt_lines(report: ReencryptReport) -> tuple[str, ...]:
     """Result lines after a re-encrypt (pure)."""
-    heading = "Dry run" if dry_run else "Re-encrypted"
-    would = " would be" if dry_run else ""
     lines = [
-        f"{heading} — {report.changed}{would} resealed under a new key, "
+        f"Re-encrypted — {report.changed} resealed under a new key, "
         f"{report.already_current} already current."
     ]
     if report.adopted:
         lines.append(f"{report.adopted} had never been encrypted and now are.")
-    if report.changed and not dry_run:
+    if report.changed:
         lines.append(_VERSIONED_BUCKET_NOTE)
     return tuple(lines)
 

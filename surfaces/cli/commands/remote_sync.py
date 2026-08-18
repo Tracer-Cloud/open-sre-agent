@@ -377,15 +377,14 @@ def rotate_passphrase_command() -> None:
 
 
 @remote_sync_command.command(name=RemoteSyncSubcommand.REENCRYPT.value)
-@click.option("--dry-run", is_flag=True, help="Report what would be resealed, changing nothing.")
-def reencrypt_command(dry_run: bool) -> None:
+def reencrypt_command() -> None:
     """Reseal every stored object under a fresh key (re-uploads everything)."""
     try:
-        report = reencrypt_remote_store(passphrase=resolve_passphrase(), dry_run=dry_run)
+        report = reencrypt_remote_store(passphrase=resolve_passphrase())
     except RemoteSyncError as exc:
         click.echo(str(exc), err=True)
         raise SystemExit(ERROR) from exc
-    for line in format_reencrypt_lines(report, dry_run=dry_run):
+    for line in format_reencrypt_lines(report):
         click.echo(line)
     raise SystemExit(SUCCESS)
 

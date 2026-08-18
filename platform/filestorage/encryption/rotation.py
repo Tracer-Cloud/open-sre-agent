@@ -75,7 +75,7 @@ def rotate_passphrase(store: ObjectStore, *, old_passphrase: str, new_passphrase
     forget_cached_kek()
 
 
-def reencrypt(store: ObjectStore, *, passphrase: str, dry_run: bool = False) -> ReencryptReport:
+def reencrypt(store: ObjectStore, *, passphrase: str) -> ReencryptReport:
     """Seal every mirrored object under a fresh content key.
 
     Objects already sealed under the new key are left alone, so an interrupted
@@ -109,15 +109,13 @@ def reencrypt(store: ObjectStore, *, passphrase: str, dry_run: bool = False) -> 
         else:
             plaintext = payload
             adopted += 1
-        if not dry_run:
-            store.put_object(obj.key, cipher.seal(obj.key, plaintext))
+        store.put_object(obj.key, cipher.seal(obj.key, plaintext))
         resealed.append(obj.key)
 
-    if not dry_run:
-        # Written last, on purpose: until it lands the old manifest still names
-        # the previous key as active, and every object opens under one or other
-        # generation, so a run interrupted anywhere leaves a readable store.
-        save_manifest(store, manifest)
+    # Written last, on purpose: until it lands the old manifest still names the
+    # previous key as active, and every object opens under one or other
+    # generation, so a run interrupted anywhere leaves a readable store.
+    save_manifest(store, manifest)
     return ReencryptReport(resealed=resealed, adopted=adopted, already_current=already_current)
 
 

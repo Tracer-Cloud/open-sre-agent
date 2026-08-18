@@ -288,7 +288,7 @@ def rotate_remote_sync_passphrase(*, old_passphrase: str, new_passphrase: str) -
     )
 
 
-def reencrypt_remote_store(*, passphrase: str, dry_run: bool = False) -> ReencryptReport:
+def reencrypt_remote_store(*, passphrase: str) -> ReencryptReport:
     """Seal every stored object under a fresh content key.
 
     The migration path for a store that predates encryption, and the only way
@@ -297,7 +297,7 @@ def reencrypt_remote_store(*, passphrase: str, dry_run: bool = False) -> Reencry
     """
     _refuse_org_scoped_turn()
     config = _encrypted_config()
-    return reencrypt(build_object_store(config), passphrase=passphrase, dry_run=dry_run)
+    return reencrypt(build_object_store(config), passphrase=passphrase)
 
 
 def _encrypted_config() -> RemoteSyncConfig:

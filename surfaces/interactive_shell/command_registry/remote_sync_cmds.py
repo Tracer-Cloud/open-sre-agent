@@ -198,11 +198,10 @@ def _passphrase_available() -> bool:
     return True
 
 
-def _run_reencrypt(console: Console, args: list[str]) -> bool:
+def _run_reencrypt(console: Console) -> bool:
     """Reseal the store under a fresh key. Uses the passphrase already stored."""
-    dry_run = "--dry-run" in {a.lower() for a in args}
-    report = reencrypt_remote_store(passphrase=resolve_passphrase(), dry_run=dry_run)
-    _print_lines(console, format_reencrypt_lines(report, dry_run=dry_run))
+    report = reencrypt_remote_store(passphrase=resolve_passphrase())
+    _print_lines(console, format_reencrypt_lines(report))
     return True
 
 
@@ -224,7 +223,7 @@ def _cmd_remote_sync(_session: Session, console: Console, args: list[str]) -> bo
         if sub is RemoteSyncSubcommand.SETUP:
             return _run_setup(console, args[1:])
         if sub is RemoteSyncSubcommand.REENCRYPT:
-            return _run_reencrypt(console, args[1:])
+            return _run_reencrypt(console)
         if sub is RemoteSyncSubcommand.ROTATE_PASSPHRASE:
             # Deliberately not offered here: rotating needs a new passphrase
             # typed twice and never echoed, which no chat transport can do.
