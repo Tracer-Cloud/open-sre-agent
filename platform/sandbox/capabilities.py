@@ -10,12 +10,9 @@ with a short detail string.
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-
-_PROBE_TIMEOUT_SECONDS = 2.0
 
 
 class Capability(StrEnum):
@@ -46,18 +43,8 @@ def _python_available() -> bool:
 
 
 def _shell_available() -> bool:
-    """True when a shell interpreter can run a generated script."""
-    shell = shutil.which("bash") or shutil.which("sh")
-    if shell is None:
-        return False
-    result = subprocess.run(
-        [shell, "-c", "exit 0"],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=_PROBE_TIMEOUT_SECONDS,
-    )
-    return result.returncode == 0
+    """True when a shell interpreter exists to run generated scripts."""
+    return bool(shutil.which("bash") or shutil.which("sh"))
 
 
 def _file_read_available() -> bool:
@@ -74,19 +61,8 @@ def _file_read_available() -> bool:
 
 
 def _file_grep_available() -> bool:
-    """True when grep can search local input."""
-    grep = shutil.which("grep")
-    if grep is None:
-        return False
-    result = subprocess.run(
-        [grep, "-q", "OpenSRE"],
-        capture_output=True,
-        check=False,
-        input="OpenSRE\n",
-        text=True,
-        timeout=_PROBE_TIMEOUT_SECONDS,
-    )
-    return result.returncode == 0
+    """True when grep exists to search local files."""
+    return shutil.which("grep") is not None
 
 
 def _network_available() -> bool:

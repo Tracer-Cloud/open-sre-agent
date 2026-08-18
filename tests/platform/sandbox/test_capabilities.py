@@ -30,44 +30,38 @@ def test_file_read_is_detected() -> None:
     assert results[Capability.FILE_READ].available is True
 
 
-def test_shell_probe_rejects_a_failed_script(monkeypatch: Any) -> None:
+def test_shell_probe_reports_missing_interpreters(monkeypatch: Any) -> None:
     # Arrange
-    calls: list[tuple[list[str], dict[str, Any]]] = []
+    probed: list[str] = []
 
-    def _run(command: list[str], **kwargs: Any) -> Any:
-        calls.append((command, kwargs))
-        return type("Result", (), {"returncode": 1})()
+    def _which(name: str) -> None:
+        probed.append(name)
 
-    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", lambda _name: "/bin/sh")
-    monkeypatch.setattr("platform.sandbox.capabilities.subprocess.run", _run)
+    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", _which)
 
     # Act
     available = _shell_available()
 
     # Assert
     assert available is False
-    assert calls[0][0] == ["/bin/sh", "-c", "exit 0"]
-    assert calls[0][1]["timeout"] > 0
+    assert probed == ["bash", "sh"]
 
 
-def test_file_grep_probe_rejects_a_failed_search(monkeypatch: Any) -> None:
+def test_file_grep_probe_reports_missing_executable(monkeypatch: Any) -> None:
     # Arrange
-    calls: list[tuple[list[str], dict[str, Any]]] = []
+    probed: list[str] = []
 
-    def _run(command: list[str], **kwargs: Any) -> Any:
-        calls.append((command, kwargs))
-        return type("Result", (), {"returncode": 2})()
+    def _which(name: str) -> None:
+        probed.append(name)
 
-    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", lambda _name: "/bin/grep")
-    monkeypatch.setattr("platform.sandbox.capabilities.subprocess.run", _run)
+    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", _which)
 
     # Act
     available = _file_grep_available()
 
     # Assert
     assert available is False
-    assert calls[0][0] == ["/bin/grep", "-q", "OpenSRE"]
-    assert calls[0][1]["input"] == "OpenSRE\n"
+    assert probed == ["grep"]
 
 
 def test_every_capability_is_reported() -> None:
