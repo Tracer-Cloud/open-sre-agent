@@ -8,8 +8,6 @@ to say so rather than read as a broken integration.
 
 from __future__ import annotations
 
-from http import HTTPStatus
-
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse

@@ -9,7 +9,6 @@ healthy ones, and whether the response says what to do next.
 from __future__ import annotations
 
 from http import HTTPStatus
-
 from typing import Any
 
 import httpx
@@ -131,7 +130,9 @@ class TestCompute:
     ) -> None:
         def _request(method: str, url: str, **_kwargs: Any) -> httpx.Response:
             if ":serialPortOutput" in url:
-                return httpx.Response(HTTPStatus.BAD_REQUEST, json={"message": "instance is stopped"})
+                return httpx.Response(
+                    HTTPStatus.BAD_REQUEST, json={"message": "instance is stopped"}
+                )
             return httpx.Response(HTTPStatus.OK, json={"id": "fhm1", "status": "STOPPED"})
 
         monkeypatch.setattr("integrations.yandex_cloud.rest_client.send_request", _request)

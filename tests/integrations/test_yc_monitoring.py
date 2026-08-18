@@ -8,7 +8,6 @@ here needs the generic operation tool or its endpoint index.
 from __future__ import annotations
 
 from http import HTTPStatus
-
 from typing import Any
 
 import httpx

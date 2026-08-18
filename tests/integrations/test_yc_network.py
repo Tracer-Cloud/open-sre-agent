@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from http import HTTPStatus
-
 from typing import Any
 
 import httpx
@@ -71,9 +70,7 @@ class TestLoadBalancers:
         assert result["unhealthy_targets"][0]["address"] == "10.0.0.2"
         assert result["unhealthy_targets"][0]["balancer"] == "edge"
 
-    def test_every_attached_target_group_is_checked(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_every_attached_target_group_is_checked(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A second attached group must not be skipped — it can hold the only failure."""
 
         def _request(method: str, url: str, **kwargs: Any) -> httpx.Response:

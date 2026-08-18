@@ -10,7 +10,6 @@ exactly the set of list and get endpoints.
 from __future__ import annotations
 
 from http import HTTPStatus
-
 from typing import Any
 
 import httpx
