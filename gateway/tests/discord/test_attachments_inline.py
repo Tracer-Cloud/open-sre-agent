@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gateway.attachments.inline import scrub_secrets
+from gateway.core.attachments.inline import scrub_secrets
 
 
 def test_scrub_secrets_redacts_bearer_tokens() -> None:

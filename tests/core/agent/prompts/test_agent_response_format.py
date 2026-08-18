@@ -32,7 +32,7 @@ def test_format_agent_response_compact_single_line() -> None:
 
 
 def test_agent_response_rule_is_in_assistant_system_prompt() -> None:
-    from core.agent_harness.prompts.assistant_agent_prompt import _build_system_prompt
+    from core.agent_harness.prompts.assistant import _build_system_prompt
 
     prompt = _build_system_prompt("ref", "history")
 
@@ -46,12 +46,24 @@ def test_format_agent_response_rejects_empty_found_with_detail() -> None:
 
 
 def test_observation_block_on_screen_requires_want_me_to() -> None:
-    from core.agent_harness.prompts.assistant_agent_prompt import _build_observation_block
+    from core.agent_harness.prompts.assistant import _build_observation_block
 
     block = _build_observation_block("grafana: passed", on_screen=True)
 
     assert "**Want me to:**" in block
     assert "connect another integration" in block
+
+
+def test_observation_block_omits_want_me_to_when_session_goal_active() -> None:
+    from core.agent_harness.prompts.assistant import _build_observation_block
+
+    on_screen = _build_observation_block("grafana: passed", on_screen=True, omit_want_me_to=True)
+    off_screen = _build_observation_block("grafana: passed", on_screen=False, omit_want_me_to=True)
+
+    assert "Still end with **Want me to:**" not in on_screen
+    assert "Do NOT close with **Want me to:**" in on_screen
+    assert "Do NOT close with **Want me to:**" in off_screen
+    assert "with a specific next step" not in off_screen
 
 
 def test_normalize_three_tier_spacing_splits_want_me_to() -> None:

@@ -15,8 +15,8 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-class InMemorySessionStorage:
-    """SessionStorage backend that stores v2 records in process memory."""
+class InMemorySessionStore:
+    """SessionStore backend that stores v2 records in process memory."""
 
     def __init__(self) -> None:
         self._files: dict[str, list[dict[str, Any]]] = {}
@@ -106,17 +106,50 @@ class InMemorySessionStorage:
         result: str,
         ok: bool,
         source: str | None = None,
+        tool_call_id: str | None = None,
+        sidecar: bool = False,
     ) -> None:
         call_id = self._append(
             session_id,
             "tool_call",
-            {"tool": tool, "arguments": arguments, "source": source},
+            {"tool": tool, "arguments": arguments, "source": source, "tool_call_id": tool_call_id},
+            sidecar=sidecar,
         )
         self._append(
             session_id,
             "tool_result",
-            {"tool": tool, "ok": ok, "content": result, "source": source},
+            {
+                "tool": tool,
+                "ok": ok,
+                "content": result,
+                "source": source,
+                "tool_call_id": tool_call_id,
+            },
             parent_id=call_id,
+            sidecar=sidecar,
+        )
+
+    def append_tool_intent(
+        self,
+        session_id: str,
+        *,
+        tool: str,
+        arguments: dict[str, Any],
+        tool_call_id: str,
+        seq: int,
+        user_text: str | None = None,
+    ) -> str:
+        return self._append(
+            session_id,
+            "tool_intent",
+            {
+                "tool": tool,
+                "arguments": arguments,
+                "tool_call_id": tool_call_id,
+                "seq": seq,
+                "user_text": user_text or None,
+            },
+            sidecar=True,
         )
 
     def append_tool_update(
@@ -186,12 +219,15 @@ class InMemorySessionStorage:
         records = self._files.get(session.session_id)
         if not records:
             return
-        if records[-1].get("type") == "leaf":
-            return
-        if not any(rec.get("type") != "session" for rec in records):
+        trailing_leaf = records[-1].get("type") == "leaf"
+        if not trailing_leaf and not any(rec.get("type") != "session" for rec in records):
             del self._files[session.session_id]
             return
-        if session.accumulated_context:
+        # A trailing ``leaf`` means a prior flush already closed the tip. Still
+        # allow live state (session goals) to append past that marker so
+        # mid-session ``/goal pause`` survives the next gateway ``resolve``;
+        # never write a second leaf (flush stays idempotent for end-of-session).
+        if session.accumulated_context and not trailing_leaf:
             self._append(
                 session.session_id,
                 "custom_message",
@@ -202,6 +238,27 @@ class InMemorySessionStorage:
                 },
             )
             records = self._files.get(session.session_id, records)
+        if hasattr(session, "session_goal"):
+            from core.agent_harness.session_goal.persist import (
+                SESSION_GOAL_STATE_CUSTOM_TYPE,
+                session_goal_state_snapshot,
+                should_persist_session_goal_state,
+            )
+
+            goal_state = session_goal_state_snapshot(session)
+            if should_persist_session_goal_state(goal_state, prior_records=records):
+                self._append(
+                    session.session_id,
+                    "custom_message",
+                    {
+                        "custom_type": SESSION_GOAL_STATE_CUSTOM_TYPE,
+                        "content": goal_state,
+                        "display": False,
+                    },
+                )
+                records = self._files.get(session.session_id, records)
+        if trailing_leaf:
+            return
         if session.agent.messages and not any(rec.get("type") == "message" for rec in records):
             for role, content in session.agent.messages:
                 self._append(
@@ -232,18 +289,22 @@ class InMemorySessionStorage:
         payload: dict[str, Any],
         *,
         parent_id: str | None = None,
+        sidecar: bool = False,
     ) -> str:
         records = self._files.get(session_id)
         if records is None:
             return ""
         entry_id = uuid.uuid4().hex
-        parent = parent_id if parent_id is not None else self._current_leaf(records)
+        parent = parent_id
+        if parent is None and not sidecar:
+            parent = self._current_leaf(records)
         records.append(
             {
                 "id": entry_id,
                 "parent_id": parent,
                 "timestamp": _now(),
                 "type": entry_type,
+                **({"sidecar": True} if sidecar else {}),
                 **{key: value for key, value in payload.items() if value is not None},
             }
         )
@@ -252,6 +313,8 @@ class InMemorySessionStorage:
     @staticmethod
     def _current_leaf(records: list[dict[str, Any]]) -> str | None:
         for rec in reversed(records):
+            if rec.get("sidecar"):
+                continue
             if rec.get("type") == "leaf":
                 return str(rec.get("parent_id") or "") or None
             if rec.get("type") != "session":

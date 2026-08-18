@@ -26,7 +26,7 @@ from core.tool_framework.schema import (
 
 REGISTERED_TOOL_ATTR = "__opensre_registered_tool__"
 
-_DEFAULT_SURFACES: tuple[ToolSurface, ...] = ("investigation",)
+_DEFAULT_SURFACES: tuple[ToolSurface, ...] = (ToolSurface.INVESTIGATION,)
 
 
 def _always_available(_sources: dict[str, dict]) -> bool:
@@ -37,7 +37,7 @@ def _extract_no_params(_sources: dict[str, dict]) -> dict[str, Any]:
     return {}
 
 
-def _normalize_surfaces(surfaces: Iterable[str] | None) -> tuple[ToolSurface, ...]:
+def _normalize_surfaces(surfaces: Iterable[ToolSurface] | None) -> tuple[ToolSurface, ...]:
     """Backward-compatible alias for registry surface normalization."""
     return normalize_surfaces(surfaces)
 
@@ -206,7 +206,7 @@ class RegisteredTool:
         cls,
         tool: BaseTool,
         *,
-        surfaces: Iterable[str] | None = None,
+        surfaces: Iterable[ToolSurface] | None = None,
         retrieval_controls: RetrievalControls | None = None,
         tags: tuple[str, ...] | None = None,
         requires_approval: bool | None = None,
@@ -290,7 +290,7 @@ class RegisteredTool:
         source_id: str | None = None,
         evidence_type: EvidenceType | None = None,
         side_effect_level: SideEffectLevel | None = None,
-        surfaces: Iterable[str] | None = None,
+        surfaces: Iterable[ToolSurface] | None = None,
         use_cases: list[str] | None = None,
         examples: list[str] | None = None,
         anti_examples: list[str] | None = None,

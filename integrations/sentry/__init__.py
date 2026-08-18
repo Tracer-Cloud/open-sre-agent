@@ -12,13 +12,21 @@ from typing import Any
 import httpx
 from pydantic import Field, field_validator
 
+from config.constants.sentry import (
+    DEFAULT_SENTRY_BASE_URL,
+    SENTRY_AUTH_TOKEN_ENV,
+    SENTRY_BASE_URL_ENV,
+    SENTRY_ORGANIZATION_SLUG_ENV,
+    SENTRY_PROJECT_SLUG_ENV,
+    SENTRY_STATS_PERIOD_ENV,
+)
 from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SENTRY_URL = "https://sentry.io"
+DEFAULT_SENTRY_URL = DEFAULT_SENTRY_BASE_URL
 DEFAULT_SENTRY_STATS_PERIOD = "24h"
 # Sentry's issues endpoint caps the page size at 100; asking for more is
 # silently truncated to 100. We default to the full page so a search returns
@@ -35,7 +43,7 @@ _SENTRY_VERIFY_WINDOW_LABEL = "last 7 days"
 
 def _resolve_stats_period(explicit: str | None = None) -> str:
     """Resolve the issues lookback window, overridable via ``SENTRY_STATS_PERIOD``."""
-    period = (explicit or os.getenv("SENTRY_STATS_PERIOD", "") or "").strip()
+    period = (explicit or os.getenv(SENTRY_STATS_PERIOD_ENV, "") or "").strip()
     return period or DEFAULT_SENTRY_STATS_PERIOD
 
 
@@ -92,16 +100,17 @@ def build_sentry_config(raw: dict[str, Any] | None) -> SentryConfig:
 
 def sentry_config_from_env() -> SentryConfig | None:
     """Load a Sentry config from env vars."""
-    organization_slug = os.getenv("SENTRY_ORG_SLUG", "").strip()
-    auth_token = resolve_env_credential("SENTRY_AUTH_TOKEN")
+    organization_slug = os.getenv(SENTRY_ORGANIZATION_SLUG_ENV, "").strip()
+    auth_token = resolve_env_credential(SENTRY_AUTH_TOKEN_ENV)
     if not organization_slug or not auth_token:
         return None
     return build_sentry_config(
         {
-            "base_url": os.getenv("SENTRY_URL", DEFAULT_SENTRY_URL).strip() or DEFAULT_SENTRY_URL,
+            "base_url": os.getenv(SENTRY_BASE_URL_ENV, DEFAULT_SENTRY_URL).strip()
+            or DEFAULT_SENTRY_URL,
             "organization_slug": organization_slug,
             "auth_token": auth_token,
-            "project_slug": os.getenv("SENTRY_PROJECT_SLUG", "").strip(),
+            "project_slug": os.getenv(SENTRY_PROJECT_SLUG_ENV, "").strip(),
         }
     )
 

@@ -119,7 +119,7 @@ When set to `litellm`, both investigation (`get_llm(LLMRole.AGENT)`) and non-age
 native vendor SDK clients under `core/llm/transports/sdk/`.
 
 Supported providers: `anthropic`, `openai`, `bedrock`, and OpenAI-compatible providers
-(`deepseek`, `groq`, `openrouter`, `gemini`, `nvidia`, `minimax`, `ollama`), plus
+(`deepseek`, `groq`, `openrouter`, `trustedrouter`, `gemini`, `nvidia`, `minimax`, `ollama`), plus
 `azure-openai` (always via LiteLLM). Set the matching API key and model env vars from
 `.env.example` as usual. User-facing setup: [LLM Providers](/llm-providers#litellm-transport).
 

@@ -1,7 +1,7 @@
 """Agent-harness ports — integrations, tools, and repository scope without tier violations.
 
-Adapters register at startup via :func:`surfaces.interactive_shell.ui.output.boundary.install_harness_ports`
-(shell/tests) or the gateway boot path in :mod:`gateway.runtime.manager` (duplicate wiring).
+Adapters register at startup via :func:`surfaces.shared.terminal.output.boundary.install_harness_ports`
+(shell/tests) or the gateway boot path in :mod:`gateway.core.runtime.controller` (duplicate wiring).
 """
 
 from __future__ import annotations
@@ -10,17 +10,19 @@ import base64
 import json
 import logging
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from config.strict_config import StrictConfigModel
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 
 if TYPE_CHECKING:
-    from core.agent_harness.ports import ToolRegistry
+    from core.agent_harness.ports import SubprocessPresenterFactory, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ MergeIntegrationsByServiceFn = Callable[
     list[dict[str, Any]],
 ]
 ConfiguredIntegrationServicesFn = Callable[[], tuple[str, ...]]
+SetupableIntegrationServicesFn = Callable[[], tuple[str, ...]]
 
 
 def _default_fetch_remote(org_id: str, auth_token: str) -> list[dict[str, Any]]:
@@ -83,6 +86,10 @@ def _default_configured_services() -> tuple[str, ...]:
     return ()
 
 
+def _default_setupable_services() -> tuple[str, ...]:
+    return ()
+
+
 def _default_fetch_webapp_vault() -> list[dict[str, Any]] | None:
     return None
 
@@ -95,6 +102,7 @@ _classify_integrations: ClassifyIntegrationsFn = _default_classify_integrations
 _merge_local_integrations: MergeLocalIntegrationsFn = _default_merge_local
 _merge_integrations_by_service: MergeIntegrationsByServiceFn = _default_merge_by_service
 _configured_integration_services: ConfiguredIntegrationServicesFn = _default_configured_services
+_setupable_integration_services: SetupableIntegrationServicesFn = _default_setupable_services
 _fetch_webapp_vault: WebappVaultFetcherFn = _default_fetch_webapp_vault
 
 
@@ -109,6 +117,17 @@ def fetch_remote_integrations(*, org_id: str, auth_token: str) -> list[dict[str,
 
 def configured_integration_services() -> tuple[str, ...]:
     return _configured_integration_services()
+
+
+def set_setupable_integration_services(fetcher: SetupableIntegrationServicesFn) -> None:
+    """Register the catalog of service ids valid for ``/integrations setup``."""
+    global _setupable_integration_services
+    _setupable_integration_services = fetcher
+
+
+def setupable_integration_services() -> tuple[str, ...]:
+    """Service ids that have a real setup handler (never invent outside this set)."""
+    return _setupable_integration_services()
 
 
 def set_integration_resolution_adapters(
@@ -347,10 +366,10 @@ InvestigationToolsFn = Callable[[dict[str, Any]], list[RegisteredTool]]
 class _EmptyToolRegistry:
     """Default tool registry that resolves nothing until one is injected."""
 
-    def tools_for_surface(self, _surface: str) -> list[RegisteredTool]:
+    def tools_for_surface(self, _surface: ToolSurface) -> list[RegisteredTool]:
         return []
 
-    def tool_map_for_surface(self, _surface: str) -> dict[str, RegisteredTool]:
+    def tool_map_for_surface(self, _surface: ToolSurface) -> dict[str, RegisteredTool]:
         return {}
 
 
@@ -362,11 +381,11 @@ _tool_registry: ToolRegistry = _EmptyToolRegistry()
 _get_investigation_tools: InvestigationToolsFn = _default_investigation_tools
 
 
-def get_surface_tools(surface: str) -> list[RegisteredTool]:
+def get_surface_tools(surface: ToolSurface) -> list[RegisteredTool]:
     return _tool_registry.tools_for_surface(surface)
 
 
-def get_surface_tool_map(surface: str) -> dict[str, RegisteredTool]:
+def get_surface_tool_map(surface: ToolSurface) -> dict[str, RegisteredTool]:
     return _tool_registry.tool_map_for_surface(surface)
 
 
@@ -638,8 +657,235 @@ def strip_message_context_prefix(text: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# Preferred evidence sources (by ask kind)
+# ---------------------------------------------------------------------------
+#
+# Core classifies ask kinds (``metric_read``, …) but must not name vendor
+# integration ids. Each analytics/vendor package *opts in* at boot by appending
+# its service id. Nothing is preferred until a vendor registers — omitting a
+# vendor's registration means metric asks will not CTA that vendor.
+
+_preferred_evidence_sources: dict[str, tuple[str, ...]] = {}
+
+
+def register_preferred_evidence_source(kind: str, *service_ids: str) -> None:
+    """Opt service id(s) into satisfying asks of ``kind`` (append, dedupe).
+
+    Vendors call this from their own modules. The composition root must not
+    invent a default vendor list in core — only wire who opts in.
+    """
+    if not service_ids:
+        return
+    current = _preferred_evidence_sources.get(kind, ())
+    merged = list(current)
+    for service_id in service_ids:
+        if service_id and service_id not in merged:
+            merged.append(service_id)
+    _preferred_evidence_sources[kind] = tuple(merged)
+
+
+def preferred_evidence_sources_for(kind: str) -> tuple[str, ...]:
+    """Return preferred integration ids for ``kind``, or ``()`` when none opted in."""
+    return _preferred_evidence_sources.get(kind, ())
+
+
+def preferred_evidence_sources_by_kind() -> dict[str, tuple[str, ...]]:
+    """Return a copy of every kind → preferred service ids map."""
+    return {kind: ids for kind, ids in _preferred_evidence_sources.items() if ids}
+
+
+def clear_preferred_evidence_sources() -> None:
+    _preferred_evidence_sources.clear()
+
+
+# ---------------------------------------------------------------------------
+# Metric query drafts + vendor cohort resolvers
+# ---------------------------------------------------------------------------
+#
+# Core owns *when* an unformed metric answer needs a draft fence + setup slash
+# and *when* a SessionGoal is about people-cohort identity
+# (:mod:`core.agent_harness.turns.cohort_identity`). Draft text, which tools
+# run a query, which targets are schema discovery, and how to read a vendor's
+# observations for "cohort resolved" are integration-owned and opt in here.
+# With no draft registered, core uses a generic text fence.
+#
+# A source that registers only a draft is still second-class: core cannot tell
+# its query tools from its schema probes. Register the tools too.
+
+MetricCohortResolvedFn = Callable[[Any, str], bool]
+"""``(evidence, reply) -> True`` when a vendor cohort is live-resolved."""
+
+
+@dataclass(frozen=True, slots=True)
+class MetricQueryDraft:
+    """Draft fences one analytics source offers when no live query formed."""
+
+    count: str
+    cohort: str | None
+    priority: int
+
+
+_metric_query_drafts: dict[str, MetricQueryDraft] = {}
+_metric_cohort_resolvers: dict[str, MetricCohortResolvedFn] = {}
+_metric_query_tools: dict[str, frozenset[str]] = {}
+_metric_discovery_targets: dict[str, frozenset[str]] = {}
+
+
+def _require_service_id(service_id: str, *, port: str) -> str:
+    """Return the trimmed id, or raise — a blank id is a wiring bug, not input."""
+    key = (service_id or "").strip()
+    if not key:
+        raise ValueError(f"{port} needs a non-empty service_id")
+    return key
+
+
+def register_metric_query_tools(service_id: str, tools: Collection[str]) -> None:
+    """Register the tool names that run a live query for this source.
+
+    Without this, core falls back to shape rules that recognise no vendor, so
+    the source's real queries read as "no metric query ran".
+    """
+    key = _require_service_id(service_id, port="register_metric_query_tools")
+    names = frozenset(name.strip().lower() for name in tools if name and name.strip())
+    if not names:
+        raise ValueError(f"register_metric_query_tools({key!r}) needs at least one tool name")
+    _metric_query_tools[key] = _metric_query_tools.get(key, frozenset()) | names
+
+
+def register_discovery_targets(service_id: str, targets: Collection[str]) -> None:
+    """Register the bridge targets that only explore schema for this source."""
+    key = _require_service_id(service_id, port="register_discovery_targets")
+    names = frozenset(name.strip().lower() for name in targets if name and name.strip())
+    if not names:
+        raise ValueError(f"register_discovery_targets({key!r}) needs at least one target")
+    _metric_discovery_targets[key] = _metric_discovery_targets.get(key, frozenset()) | names
+
+
+def registered_metric_query_tools() -> frozenset[str]:
+    """Every tool name any source registered as running a live query."""
+    return frozenset().union(*_metric_query_tools.values()) if _metric_query_tools else frozenset()
+
+
+def registered_discovery_targets() -> frozenset[str]:
+    """Every bridge target any source registered as schema discovery."""
+    if not _metric_discovery_targets:
+        return frozenset()
+    return frozenset().union(*_metric_discovery_targets.values())
+
+
+def register_metric_query_draft(
+    service_id: str,
+    *,
+    count_draft: str,
+    cohort_draft: str | None = None,
+    priority: int = 50,
+) -> None:
+    """Register the draft fence(s) this analytics source owns.
+
+    ``count_draft`` / ``cohort_draft`` are full markdown fences. ``cohort_draft``
+    is optional — omit it when the vendor has no cohort/signup template. Lower
+    ``priority`` wins when several registered sources are connected at once.
+    """
+    key = _require_service_id(service_id, port="register_metric_query_draft")
+    count = (count_draft or "").strip()
+    if not count:
+        raise ValueError(f"register_metric_query_draft({key!r}) needs a non-empty count_draft")
+    cohort = (
+        cohort_draft.strip() if isinstance(cohort_draft, str) and cohort_draft.strip() else None
+    )
+    _metric_query_drafts[key] = MetricQueryDraft(count=count, cohort=cohort, priority=priority)
+
+
+def register_metric_cohort_resolver(service_id: str, resolver: MetricCohortResolvedFn) -> None:
+    """Register how this source decides a cohort is resolved from gather evidence.
+
+    Used after a live query ran: core asks whether identity is still open so it
+    can keep the draft fence. The vendor owns observation parsers; core must not.
+    """
+    key = _require_service_id(service_id, port="register_metric_cohort_resolver")
+    _metric_cohort_resolvers[key] = resolver
+
+
+def metric_query_draft_for(
+    service_ids: tuple[str, ...],
+    *,
+    cohort_goal: bool = False,
+) -> str | None:
+    """Return the registered draft for the highest-priority connected source.
+
+    Ranked by registration priority, then service id — never by the order the
+    caller happened to assemble ``service_ids``, which made the winner depend
+    on an unrelated tuple.
+    """
+    matches = [
+        (draft, key)
+        for key in {str(raw or "").strip() for raw in service_ids}
+        if key and (draft := _metric_query_drafts.get(key)) is not None
+    ]
+    if not matches:
+        return None
+    draft, _key = min(matches, key=lambda pair: (pair[0].priority, pair[1]))
+    if cohort_goal and draft.cohort is not None:
+        return draft.cohort
+    return draft.count
+
+
+def metric_cohort_resolved_for(
+    service_ids: tuple[str, ...],
+    evidence: Any,
+    reply: str,
+) -> bool | None:
+    """Ask registered resolvers whether cohort identity is resolved.
+
+    Returns ``None`` when no opted-in source has a resolver (caller falls back
+    to reply-only signals). ``True``/``False`` from the first matching source.
+    """
+    for raw in service_ids:
+        key = str(raw or "").strip()
+        if not key:
+            continue
+        resolver = _metric_cohort_resolvers.get(key)
+        if resolver is not None:
+            return bool(resolver(evidence, reply))
+    return None
+
+
+def clear_metric_query_drafts() -> None:
+    _metric_query_drafts.clear()
+    _metric_cohort_resolvers.clear()
+    _metric_query_tools.clear()
+    _metric_discovery_targets.clear()
+
+
+# ---------------------------------------------------------------------------
 # Test reset
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Integration setup command (surface syntax)
+# ---------------------------------------------------------------------------
+#
+# Core builds the upgrade CTA but must not know slash syntax. The surface
+# registers how it spells "connect this integration" at boot.
+
+
+def _default_integration_setup_command(service_id: str) -> str:
+    return f"integrations setup {service_id}"
+
+
+_integration_setup_command: Callable[[str], str] = _default_integration_setup_command
+
+
+def set_integration_setup_command(render: Callable[[str], str]) -> None:
+    """Register how this surface spells the connect command for a service."""
+    global _integration_setup_command
+    _integration_setup_command = render
+
+
+def integration_setup_command(service_id: str) -> str:
+    """Return the surface command that connects ``service_id``."""
+    return _integration_setup_command(service_id)
 
 
 def reset_harness_ports() -> None:
@@ -676,6 +922,11 @@ def reset_harness_ports() -> None:
     clear_assistant_prompt_fragments()
     clear_gateway_persona_fragments()
     clear_message_context_prefix_strippers()
+    clear_preferred_evidence_sources()
+    clear_metric_query_drafts()
+    set_subprocess_presenter_factory(None)
+    set_integration_setup_command(_default_integration_setup_command)
+    set_setupable_integration_services(_default_setupable_services)
 
     # Core leaf registries (populated by integrations/harness_adapters).
     from core.domain.alerts.alert_source import (
@@ -695,3 +946,24 @@ def reset_harness_ports() -> None:
     clear_alert_detail_fields()
     clear_taxonomy_profiles()
     clear_anchor_parsers()
+
+
+# --- Subprocess presenter -------------------------------------------------
+#
+# Streaming shell/CLI output needs a presenter that lives in ``tools`` (its
+# process helpers) and is therefore invisible to ``core.agent_harness``.
+# Registering it here lets the default agent execute shell tools instead of
+# refusing them, without core importing tools or gateway.
+
+_subprocess_presenter_factory: SubprocessPresenterFactory | None = None
+
+
+def set_subprocess_presenter_factory(factory: SubprocessPresenterFactory | None) -> None:
+    """Register (or clear) the presenter the default agent gives shell tools."""
+    global _subprocess_presenter_factory
+    _subprocess_presenter_factory = factory
+
+
+def get_subprocess_presenter_factory() -> SubprocessPresenterFactory | None:
+    """Return the registered presenter factory, or ``None`` before boot."""
+    return _subprocess_presenter_factory

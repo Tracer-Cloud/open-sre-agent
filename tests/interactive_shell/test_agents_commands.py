@@ -18,7 +18,7 @@ from surfaces.interactive_shell.session import Session
 from tools.system.fleet_monitoring import config as config_mod
 from tools.system.fleet_monitoring.conflicts import DEFAULT_WINDOW_SECONDS, FileWriteConflict
 from tools.system.fleet_monitoring.registry import AgentRecord, AgentRegistry
-from tools.system.fleet_monitoring.tail import AttachUnsupported, TailBuffer
+from tools.system.fleet_monitoring.tail import AttachUnsupportedError, TailBuffer
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -60,7 +60,7 @@ def isolated_agents_yaml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Pat
 def _clear_sampler_module_state() -> None:
     """Reset module-level state in the sampler before each test (#2023).
 
-    Same isolation pattern as ``tests/interactive_shell/ui/test_agents_view.py``:
+    Same isolation pattern as ``tests/shared/terminal/test_agents_view.py``:
     probe snapshots, the token rate tracker, and the per-tick caches
     all live as module globals and can leak across test files.
     """
@@ -519,7 +519,7 @@ class TestAgentsTrace:
 
     def test_attach_unsupported_renders_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _refuse(_pid: int) -> _FakeSession:
-            raise AttachUnsupported("stdout is on a terminal; live tail not supported")
+            raise AttachUnsupportedError("stdout is on a terminal; live tail not supported")
 
         monkeypatch.setattr(agents_trace, "attach", _refuse)
 

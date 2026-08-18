@@ -86,6 +86,15 @@ class SetupMode:
     integration's always-on fields — Alertmanager's "None (unauthenticated)".
     """
 
+    required_fields: tuple[str, ...] = ()
+    """Subset of :attr:`fields` that must be non-empty when this mode is chosen.
+
+    A mode-gated field is declared ``required=False`` on the spec because it is
+    unset under every *other* mode; this is where "required within this mode"
+    lives, so a blank answer is refused at the prompt instead of surfacing later
+    as a config-model validation error.
+    """
+
 
 @dataclass(frozen=True)
 class SetupField:
@@ -135,6 +144,15 @@ class SetupField:
     ignores any submitted value under *name*. Use for transport modes and
     other values the user must not choose — OpenClaw's ``stdio`` mode, for
     example, whose config-model default is ``streamable-http``.
+    """
+
+    validate: Callable[[str], str | None] | None = None
+    """Shape check applied to a non-empty answer at the prompt.
+
+    Returns an error message to show (the surface re-asks) or ``None`` when
+    the value is acceptable. For the checks the config model would only reject
+    later with a stack of validation errors — a role *ID* pasted where a role
+    *ARN* belongs.
     """
 
     @property
@@ -198,6 +216,13 @@ class IntegrationSetupSpec:
     returns a note for the success detail and a failure is surfaced there rather
     than rolling back the save.
     """
+
+    def is_required(self, field: SetupField, mode: str | None) -> bool:
+        """Whether *field* must be non-empty: spec-required, or required by *mode*."""
+        if field.required:
+            return True
+        chosen = next((one for one in self.modes if one.value == mode), None)
+        return chosen is not None and field.name in chosen.required_fields
 
     def collectable_fields(self, mode: str | None) -> tuple[SetupField, ...]:
         """Fields a collection surface should prompt for under *mode*.

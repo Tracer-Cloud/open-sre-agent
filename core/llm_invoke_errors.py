@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 @dataclass(frozen=True)
@@ -92,32 +93,104 @@ LLM_PROVIDER_FAILURE_KINDS = frozenset(
     }
 )
 
-_NOT_CONFIGURED_PATTERNS = (
-    "_api_key",  # env-var style, e.g. "requires ANTHROPIC_API_KEY to be set"
-    "api key is not set",
-    "missing api key",
-    "not available for your account",
-    "marketplace",
-    "inference profile",
-    "not configured",
-    "no llm provider",
-    "llm client unavailable",
-    "billing is not enabled",
+
+class ProviderFailureKind(StrEnum):
+    """One verdict per provider failure message; every consumer derives from it."""
+
+    MISSING_KEY = "missing_key"
+    REJECTED_KEY = "rejected_key"
+    QUOTA = "quota"
+    NOT_CONFIGURED = "not_configured"
+    PROVIDER_ERROR = "provider_error"
+
+
+# First match wins, most specific first. MISSING_KEY holds absence phrasings
+# only — never a bare env-var-name match: rejected-key errors also cite
+# *_API_KEY names and must keep their real authentication message.
+_FAILURE_RULES: tuple[tuple[ProviderFailureKind, tuple[str, ...]], ...] = (
+    (
+        ProviderFailureKind.MISSING_KEY,
+        (
+            "missing credentials",
+            "api key is not set",
+            "missing api key",
+            "no api key",
+            "could not resolve authentication method",  # anthropic SDK, key/token both unset
+            "to be set",  # opensre wrapper: "requires ANTHROPIC_API_KEY to be set"
+        ),
+    ),
+    (
+        ProviderFailureKind.REJECTED_KEY,
+        (
+            "invalid",
+            "incorrect",
+            "expired",
+            "revoked",
+            "401",
+            "403",
+            "unauthorized",
+            "forbidden",
+            "authentication",
+            "x-api-key",
+        ),
+    ),
+    (
+        ProviderFailureKind.QUOTA,
+        ("429", "quota", "rate limit", "too many requests", "credit"),
+    ),
+    (
+        ProviderFailureKind.NOT_CONFIGURED,
+        (
+            "_api_key",  # env-var style, e.g. "set the OPENAI_API_KEY environment variable"
+            "not available for your account",
+            "marketplace",
+            "inference profile",
+            "not configured",
+            "no llm provider",
+            "llm client unavailable",
+            "billing is not enabled",
+        ),
+    ),
 )
-_QUOTA_PATTERNS = ("429", "quota", "rate limit", "too many requests", "credit")
-_AUTH_PATTERNS = (
-    "authentication",
-    "unauthorized",
-    "401",
-    "403",
-    "forbidden",
-    "invalid api key",
-    "incorrect api key",
-    "invalid api_key",
-    "incorrect api_key",
-    "api_key is invalid",
-    "x-api-key",
-)
+
+
+def classify_llm_provider_failure(message: str) -> ProviderFailureKind:
+    """Classify a provider failure message once; rendering and analytics both read this."""
+    text = message.lower()
+    for kind, patterns in _FAILURE_RULES:
+        if any(pattern in text for pattern in patterns):
+            return kind
+    if "model" in text and "not found" in text:
+        return ProviderFailureKind.NOT_CONFIGURED
+    return ProviderFailureKind.PROVIDER_ERROR
+
+
+def remediate_missing_llm_credentials(message: str, *, provider: str | None = None) -> str | None:
+    """Actionable replacement text when an LLM call failed for lack of any API key.
+
+    Returns ``None`` for every other failure (rejected key, quota, timeout, …)
+    so callers fall back to their existing rendering.
+    """
+    if classify_llm_provider_failure(message) is not ProviderFailureKind.MISSING_KEY:
+        return None
+    target = provider.strip() if provider else "<provider>"
+    subject = f"No API key is set for {target}" if provider else "No LLM API key is set"
+    return (
+        f"{subject}. Run `/auth login {target}` to add one, or `/onboard` to rerun "
+        f"setup (from a terminal: `opensre auth login {target}`). "
+        f"(Provider detail: {message.strip()})"
+    )
+
+
+# Analytics vocabulary predates the split of key failures into missing vs
+# rejected; dashboards filter on these four values.
+_ANALYTICS_KIND_BY_FAILURE: dict[ProviderFailureKind, str] = {
+    ProviderFailureKind.MISSING_KEY: "not_configured",
+    ProviderFailureKind.REJECTED_KEY: "auth",
+    ProviderFailureKind.QUOTA: "quota",
+    ProviderFailureKind.NOT_CONFIGURED: "not_configured",
+    ProviderFailureKind.PROVIDER_ERROR: "provider_error",
+}
 
 
 def classify_provider_error_kind(message: str) -> str:
@@ -127,16 +200,7 @@ def classify_provider_error_kind(message: str) -> str:
     ``provider_error`` so downstream dashboards can filter provider failures
     without regexing over response text.
     """
-    text = message.lower()
-    if any(pattern in text for pattern in _AUTH_PATTERNS):
-        return "auth"
-    if any(pattern in text for pattern in _QUOTA_PATTERNS):
-        return "quota"
-    if any(pattern in text for pattern in _NOT_CONFIGURED_PATTERNS) or (
-        "model" in text and "not found" in text
-    ):
-        return "not_configured"
-    return "provider_error"
+    return _ANALYTICS_KIND_BY_FAILURE[classify_llm_provider_failure(message)]
 
 
 def classify_llm_invoke_failure(exc: BaseException) -> LLMInvokeFailure | None:

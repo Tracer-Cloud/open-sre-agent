@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
-    object_schema,
-    string_property,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.schema import object_schema, string_property
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
@@ -43,7 +43,7 @@ code_implement_tool = RegisteredTool(
         required=("task",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_implementation,

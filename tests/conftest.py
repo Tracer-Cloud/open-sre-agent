@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
-from importlib.util import find_spec
-from pathlib import Path
 
 import pytest
 
@@ -22,39 +20,13 @@ ensure_project_platform_package()
 
 _ENV_PATH = paths.PROJECT_ROOT / ".env"
 
-# Private opensre-infra-aws submodule paths. Without
-# ``git submodule update --init platform/deployment_multi_tenant``, collection of
-# these trees fails for community/fork CI.
-_OPENSRE_INFRA_AWS_TEST_MARKERS = (
-    "/tests/platform/deployment_multi_tenant",
-    "/tests/deployment/control_plane",
-)
-_OPENSRE_INFRA_AWS_AVAILABLE = (
-    find_spec("platform.deployment_multi_tenant.lambda_control_plane") is not None
-)
-
-if not _OPENSRE_INFRA_AWS_AVAILABLE:
-    # Relative to this conftest — covers directory discovery.
-    collect_ignore_glob = [
-        "platform/deployment_multi_tenant/*",
-        "deployment/control_plane/*",
-    ]
-
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Drop explicit CLI paths that need the private submodule when it is absent."""
+    """Prepare the environment every test run depends on."""
+    _ = config
     _load_env()
     _disable_sentry()
     _mark_tests_for_analytics()
-    if _OPENSRE_INFRA_AWS_AVAILABLE:
-        return
-    kept: list[str] = []
-    for arg in config.args:
-        normalized = Path(arg).resolve().as_posix()
-        if any(marker in normalized for marker in _OPENSRE_INFRA_AWS_TEST_MARKERS):
-            continue
-        kept.append(arg)
-    config.args = kept
 
 
 def _load_env() -> None:
@@ -80,7 +52,7 @@ _mark_tests_for_analytics()
 def _harness_ports_per_test() -> Iterator[None]:
     """Wire harness ports before each test; reset after to avoid session leakage."""
     from platform.harness_ports import reset_harness_ports
-    from surfaces.interactive_shell.ui.output.boundary import install_harness_ports
+    from surfaces.shared.terminal.output.boundary import install_harness_ports
 
     install_harness_ports()
     yield
@@ -167,6 +139,19 @@ def _isolate_opensre_home_files(request, monkeypatch, tmp_path) -> None:
     # keyring failure would otherwise write real secrets into the developer's
     # ~/.opensre/credentials.json and leave them there.
     monkeypatch.setattr(paths, "OPENSRE_HOME_DIR", tmp_path / "opensre-home")
+
+
+@pytest.fixture(autouse=True)
+def _reset_setup_state_cache() -> None:
+    """Drop the memoized setup block between tests.
+
+    It lives at module scope and is keyed partly on a stat of the scheduler
+    stores, so a test whose stores happen to match an earlier one would read
+    the earlier block and pass or fail for the wrong reason.
+    """
+    from platform.setup_state import clear_setup_state_cache
+
+    clear_setup_state_cache()
 
 
 @pytest.hookimpl(trylast=True)

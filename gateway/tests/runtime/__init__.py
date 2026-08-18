@@ -1,3 +1,3 @@
-"""Tests mirroring gateway/runtime/."""
+"""Tests mirroring gateway/core/runtime/."""
 
 from __future__ import annotations

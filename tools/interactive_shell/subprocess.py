@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from core.agent_harness.tools.tool_context import ActionToolContext
+from core.agent_harness.tools import ActionToolContext
 from tools.interactive_shell.shared import ExecutionPolicyResult
 
 # --- constants ---

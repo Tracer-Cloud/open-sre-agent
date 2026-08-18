@@ -79,6 +79,7 @@ class BeforeToolCallResult:
 BeforeToolCallHook = Callable[[ToolExecutionRequest], BeforeToolCallResult | None]
 AfterToolCallHook = Callable[[ToolExecutionRequest, ToolExecutionResult], ToolExecutionPatch | None]
 ToolUpdateHook = Callable[[ToolExecutionRequest, Any], None]
+BeforeToolBatchHook = Callable[[Sequence[ToolCall]], None]
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,8 @@ class ToolExecutionHooks:
     before_tool_call: BeforeToolCallHook | None = None
     after_tool_call: AfterToolCallHook | None = None
     on_tool_update: ToolUpdateHook | None = None
+    # Fired once per provider tool-call list before any call runs (batch replay guards).
+    before_tool_batch: BeforeToolBatchHook | None = None
 
 
 def execute_tool_calls(
@@ -106,6 +109,8 @@ def execute_tool_calls(
     """
 
     hooks = hooks or ToolExecutionHooks()
+    if hooks.before_tool_batch is not None:
+        hooks.before_tool_batch(tool_calls)
     tool_sources = availability_view(resolved_integrations)
     tool_map = {t.name: t for t in tools}
     runtime_resources = dict(tool_resources or {})
@@ -181,6 +186,25 @@ def execute_tools(
     ]
 
 
+def _unavailable_tool_message(name: str, tool_map: Mapping[str, Any]) -> str:
+    """Explain a missing tool so the caller can recover on the next iteration.
+
+    A tool absent from the map is usually configured-but-unavailable (its
+    integration lacks a credential this session), not nonexistent — so say
+    "not available" and name the siblings that are, rather than leaving the
+    model to guess and the user to read a bare identifier.
+    """
+    family = name.split("_", 1)[0]
+    siblings = sorted(
+        other for other in tool_map if other != name and other.split("_", 1)[0] == family
+    )
+    if not siblings:
+        return f"tool {name!r} is not available in this session"
+    return (
+        f"tool {name!r} is not available in this session; available instead: {', '.join(siblings)}"
+    )
+
+
 def _execute_one_tool_call(
     tc: ToolCall,
     *,
@@ -196,8 +220,11 @@ def _execute_one_tool_call(
     if tool is None:
         mark_span_outcome(span_attrs, "unknown_tool", error=True)
         logger.debug("tool_call unknown name=%s id=%s", tc.name, tc.id)
-        return _error_result(f"unknown tool: {tc.name}", metadata={"tool_name": tc.name})
+        return _error_result(
+            _unavailable_tool_message(tc.name, tool_map), metadata={"tool_name": tc.name}
+        )
 
+    request: ToolExecutionRequest | None = None
     try:
         validation_error = tool.validate_public_input(tc.input)
         if validation_error:
@@ -257,7 +284,15 @@ def _execute_one_tool_call(
     except Exception as exc:
         mark_span_outcome(span_attrs, "exception", error=True)
         logger.warning("[tool:%s] failed: %s", tc.name, exc)
-        return _error_result(str(exc), metadata={"tool_name": tc.name})
+        result = _error_result(str(exc), metadata={"tool_name": tc.name})
+        # Raised transport failures must still reach after_tool_call so gather
+        # circuit breakers can mark the source (Grafana used to swallow these
+        # as empty lists; once re-raised, skipping the hook would hide them).
+        if request is not None:
+            patch = _run_after_hook(hooks, request, result)
+            if patch is not None:
+                result = _apply_patch(result, patch)
+        return result
 
 
 def _invoke_runtime_tool(

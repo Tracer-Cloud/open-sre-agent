@@ -33,7 +33,10 @@ from pydantic import BaseModel
 from config.constants.aws import BEDROCK_AWS_REGION_ENV
 from core.llm.providers import provider_credentials
 from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
-from core.llm.shared.llm_retry import extract_retry_after_seconds
+from core.llm.shared.llm_retry import (
+    extract_retry_after_seconds,
+    is_credit_exhausted_error,
+)
 from core.llm.shared.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
@@ -192,14 +195,34 @@ class LLMClient:
     _cache_markers_enabled = True
 
     def __init__(
-        self, *, model: str, max_tokens: int = 1024, temperature: float | None = None
+        self,
+        *,
+        model: str,
+        max_tokens: int = 1024,
+        temperature: float | None = None,
+        base_url: str | None = None,
+        api_key_env: str = "ANTHROPIC_API_KEY",
     ) -> None:
-        api_key = provider_credentials.resolve_llm_api_key("ANTHROPIC_API_KEY")
+        # base_url + api_key_env let a custom-anthropic gateway (Anthropic SDK
+        # with a base-URL override) reuse this client; they default to the
+        # first-party Anthropic endpoint/key, so existing behavior is unchanged.
+        self._api_key_env = api_key_env
+        self._base_url = base_url
+        api_key = provider_credentials.resolve_llm_api_key(api_key_env)
         self._api_key = api_key
-        self._client = Anthropic(api_key=api_key, timeout=LLM_CLIENT_TIMEOUT_SEC)
+        self._client = self._new_anthropic_client(api_key)
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+
+    def _new_anthropic_client(self, api_key: str) -> Anthropic:
+        client_kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": LLM_CLIENT_TIMEOUT_SEC,
+        }
+        if self._base_url:
+            client_kwargs["base_url"] = self._base_url
+        return Anthropic(**client_kwargs)
 
     def with_config(self, **_kwargs) -> LLMClient:
         return self
@@ -231,14 +254,15 @@ class LLMClient:
         ).content
 
     def _ensure_client(self) -> None:
-        api_key = provider_credentials.resolve_llm_api_key("ANTHROPIC_API_KEY")
+        api_key = provider_credentials.resolve_llm_api_key(self._api_key_env)
         if not api_key:
             raise RuntimeError(
-                "Missing ANTHROPIC_API_KEY. Set it in your environment, .env, or secure local keychain before running LLM steps."
+                f"Missing {self._api_key_env}. Set it in your environment, .env, or secure "
+                "local keychain before running LLM steps."
             )
         if api_key != self._api_key:
             self._api_key = api_key
-            self._client = Anthropic(api_key=api_key, timeout=LLM_CLIENT_TIMEOUT_SEC)
+            self._client = self._new_anthropic_client(api_key)
 
     def _build_request_kwargs(self, prompt_or_messages: Any) -> dict[str, Any]:
         """Refresh credentials, normalize messages, apply guardrails, and build API kwargs.
@@ -891,11 +915,7 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
-                body = getattr(err, "body", None)
-                if (
-                    isinstance(body, dict)
-                    and body.get("error", {}).get("code") == "insufficient_quota"
-                ):
+                if is_credit_exhausted_error(err):
                     raise RuntimeError(
                         f"{self._provider_label} billing quota exceeded. "
                         "Check your plan and billing details."
@@ -1009,11 +1029,7 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
-                body = getattr(err, "body", None)
-                if (
-                    isinstance(body, dict)
-                    and body.get("error", {}).get("code") == "insufficient_quota"
-                ):
+                if is_credit_exhausted_error(err):
                     raise RuntimeError(
                         f"{self._provider_label} billing quota exceeded. "
                         "Check your plan and billing details."

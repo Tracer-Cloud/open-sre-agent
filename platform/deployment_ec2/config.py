@@ -5,13 +5,6 @@ from __future__ import annotations
 # ─── Region ───────────────────────────────────────────────────────────────────
 DEFAULT_REGION = "us-east-1"
 
-# ─── Deploy account guard ─────────────────────────────────────────────────────
-# When OPENSRE_DEPLOY_ACCOUNT_ID is set (local .env only — never commit an account
-# id), build/deploy assert the active AWS account matches it before creating
-# anything, so the default profile can't silently deploy to the wrong account.
-# Unset (other devs, CI) means no enforcement.
-DEPLOY_ACCOUNT_ID_ENV = "OPENSRE_DEPLOY_ACCOUNT_ID"
-
 # ─── Boto3 client ─────────────────────────────────────────────────────────────
 BOTO3_RETRY_MAX_ATTEMPTS = 3
 BOTO3_CONNECT_TIMEOUT_SECONDS = 10
@@ -63,7 +56,7 @@ SSM_TERMINAL_STATUSES = ("Success", "Failed", "Cancelled", "TimedOut", "Undelive
 GATEWAY_HEALTH_POLL_INTERVAL_SECONDS = 15
 GATEWAY_HEALTH_MAX_ATTEMPTS = 60
 GATEWAY_LOG_TAIL_LINES = 200
-# Transport-agnostic ready line from GatewayManager after components start.
+# Transport-agnostic ready line from GatewayController after components start.
 # Also accept legacy per-transport lines so older images still pass health waits.
 GATEWAY_READY_LOG_SENTINEL = "[gateway] ready"
 GATEWAY_READY_LOG_SENTINELS: tuple[str, ...] = (

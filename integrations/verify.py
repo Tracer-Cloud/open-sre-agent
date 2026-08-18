@@ -14,7 +14,7 @@ from typing import Any
 
 from rich.markup import escape
 
-from integrations._table_render import new_table, render_table
+from integrations._table_render import new_table, render_table, wrap_clauses
 from integrations._verifiers_loader import register_all_verifiers
 from integrations.catalog import (
     resolve_effective_integrations as _resolve_effective_integrations,
@@ -172,6 +172,9 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
     Long ``detail`` text (e.g. the multi-clause OpenClaw bridge hint) is
     folded within its own column instead of overflowing the terminal, which
     is what broke row alignment in the old fixed-width string formatting.
+    Each ``"; "``/``" | "`` clause is put on its own line first (see
+    ``wrap_clauses``) so remaining fold-overflow only has to break within a
+    clause, not split an unrelated word across two clauses.
     """
     table = new_table()
     table.add_column("SERVICE", style=TEXT, no_wrap=True)
@@ -190,7 +193,7 @@ def format_verification_results(results: list[dict[str, str]]) -> str:
             escape(row.get("service", "?")),
             escape(row.get("source", "-")),
             f"[{style}]{glyph} {escape(status)}[/]",
-            escape(row.get("detail", "")),
+            escape(wrap_clauses(row.get("detail", ""))),
         )
 
     return render_table(table)

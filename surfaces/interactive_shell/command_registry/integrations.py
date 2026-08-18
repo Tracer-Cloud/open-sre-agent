@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
-from core.agent_harness.session.terminal_access import session_terminal
+from core.agent_harness.spi.session_state import session_terminal
 from surfaces.interactive_shell.command_registry.cli_parity import (
     publish_headless_slash_response,
     run_cli_command,
@@ -24,14 +24,14 @@ from surfaces.interactive_shell.ui import (
     render_mcp_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     prepare_repl_output_line,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.rendering import (
+from surfaces.shared.terminal.components.rendering import (
     _repl_table_width,
     print_repl_table,
     repl_print,
@@ -180,9 +180,20 @@ def _print_verify_summary(
         style = WARNING if failed else HIGHLIGHT
         detail = "needs attention" if failed else "ok"
         repl_print(console, f"[{style}]{service} {detail}.[/]")
+        if failed:
+            repl_print(
+                console,
+                f"[{DIM}]Reconfigure with /integrations setup {service} — "
+                "the detail column above names what is missing.[/]",
+            )
         return
     if failed:
         repl_print(console, f"[{WARNING}]{len(failed)} integration(s) need attention.[/]")
+        repl_print(
+            console,
+            f"[{DIM}]Reconfigure with /integrations setup <service> — "
+            "the detail column above names what is missing.[/]",
+        )
     else:
         repl_print(console, f"[{HIGHLIGHT}]all integrations ok.[/]")
 
@@ -269,7 +280,8 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
         # Bare setup delegates to the CLI service picker on the REPL; headless
         # surfaces (Telegram) have no picker, so return usage guidance instead.
         if not headless:
-            result = run_cli_command(console, ["integrations", "setup"])
+            # Interactive service picker + credential prompts on the real TTY.
+            result = run_cli_command(console, ["integrations", "setup"], capture_output=False)
             session.refresh_integration_state()
             return result
         repl_print(console, f"[{DIM}]usage:[/] /integrations setup <service>")
@@ -296,6 +308,7 @@ def _run_integrations_setup(session: Session, console: Console, args: list[str])
     result = run_cli_command(
         console,
         ["integrations", "setup", service, *args[2:]],
+        capture_output=False,
         session=session,
     )
     session.refresh_integration_state()

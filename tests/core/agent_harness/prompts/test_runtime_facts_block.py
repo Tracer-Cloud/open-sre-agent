@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.prompts.assistant_agent_prompt import build_environment_block
+from core.agent_harness.prompts.assistant import build_environment_block
 
 
 def _env_block(runtime: dict[str, object]) -> str:
@@ -126,6 +126,23 @@ def test_environment_block_states_cloud_absence_when_not_deployed() -> None:
     # No value slot is rendered, so there is nothing that reads as a detected one.
     assert "cloud provider is" not in block
     assert "cloud region is" not in block
+
+
+def test_environment_block_renders_host_os_for_environment_questions() -> None:
+    """macOS/Linux must be quotable so 'what environment' does not invent AWS."""
+    block = _env_block(
+        {
+            "opensre_version": "0.1",
+            "os_family": "macOS",
+            "cloud_provider": "",
+            "cloud_region": "",
+        }
+    )
+    assert "host operating system is macOS;" in block  # no version appended
+    assert "what environment this process is running in" in block
+    assert "never invent AWS" in block
+    assert "`uname`" in block
+    assert "no cloud provider or cloud region was detected" in block
 
 
 def test_environment_block_does_not_coach_arbitrary_reachability_probing() -> None:

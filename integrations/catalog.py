@@ -5,6 +5,20 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from config.constants.helm import OSRE_HELM_INTEGRATION_ENV
+from config.constants.new_relic import (
+    NEW_RELIC_ACCOUNT_ID_ENV,
+    NEW_RELIC_API_KEY_ENV,
+    NEW_RELIC_INSTANCES_ENV,
+)
+from config.constants.yandex_cloud import (
+    YC_FOLDER_ID_ENV,
+    YC_IAM_TOKEN_ENV,
+    YC_SA_KEY_ENV,
+    YC_SA_KEY_FILE_ENV,
+    YC_TOKEN_ENV,
+    YC_USE_METADATA_ENV,
+)
 from integrations import _catalog_impl
 from integrations.store import load_integrations
 
@@ -88,6 +102,11 @@ def load_env_integration_services() -> list[str]:
     add("honeycomb", _any_env("HONEYCOMB_API_KEY", "HONEYCOMB_INSTANCES"))
     add("coralogix", _any_env("CORALOGIX_API_KEY", "CORALOGIX_INSTANCES"))
     add(
+        "new_relic",
+        _all_env(NEW_RELIC_API_KEY_ENV, NEW_RELIC_ACCOUNT_ID_ENV)
+        or _env_is_set(NEW_RELIC_INSTANCES_ENV),
+    )
+    add(
         "aws",
         _any_env("AWS_INSTANCES", "AWS_ROLE_ARN")
         or _all_env("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
@@ -111,7 +130,7 @@ def load_env_integration_services() -> list[str]:
             )
         ),
     )
-    add("helm", os.getenv("OSRE_HELM_INTEGRATION", "").strip().lower() in {"1", "true", "yes"})
+    add("helm", os.getenv(OSRE_HELM_INTEGRATION_ENV, "").strip().lower() in {"1", "true", "yes"})
     add(
         "railway",
         _env_is_set("RAILWAY_TOKEN")
@@ -133,6 +152,7 @@ def load_env_integration_services() -> list[str]:
         _all_env("ROCKETCHAT_SERVER_URL", "ROCKETCHAT_AUTH_TOKEN", "ROCKETCHAT_USER_ID")
         or _env_is_set("ROCKETCHAT_WEBHOOK_URL"),
     )
+    add("buzz", _env_is_set("BUZZ_PRIVATE_KEY"))
     add("slack", _any_env("SLACK_BOT_TOKEN", "SLACK_ACCESS_TOKEN"))
     add("smtp", _env_is_set("SMTP_HOST"))
     add("whatsapp", _all_env("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"))
@@ -160,6 +180,19 @@ def load_env_integration_services() -> list[str]:
     add("x_mcp", _any_env("X_MCP_COMMAND", "X_MCP_URL", "X_MCP_AUTH_TOKEN"))
     add("mariadb", _all_env("MARIADB_HOST", "MARIADB_DATABASE"))
     add("opensearch", _env_is_set("OPENSEARCH_URL"))
+    add(
+        "yandex_cloud",
+        # A folder plus one credential, or the instance metadata service, which
+        # needs neither. Mirrors the classifier's rule so the banner, health and
+        # verification agree on whether it is configured.
+        (
+            _env_is_set(YC_FOLDER_ID_ENV)
+            and _any_env(YC_SA_KEY_FILE_ENV, YC_SA_KEY_ENV, YC_TOKEN_ENV, YC_IAM_TOKEN_ENV)
+        )
+        or os.getenv(YC_USE_METADATA_ENV, "").strip().lower() in {"1", "true", "yes", "on"},
+    )
+
+    services.extend(_catalog_impl.external_env_presence_services())
 
     return list(dict.fromkeys(services))
 
@@ -287,6 +320,13 @@ def configured_integration_health() -> list[tuple[str, str]]:
     return health
 
 
+# Re-exported so an out-of-tree integration registers through this facade
+# instead of reaching into the private implementation module.
+register_classifier = _catalog_impl.register_classifier
+register_env_loader = _catalog_impl.register_env_loader
+register_env_presence = _catalog_impl.register_env_presence
+
+
 __all__ = [
     "classify_integrations",
     "configured_integration_health",
@@ -296,5 +336,8 @@ __all__ = [
     "load_integrations",
     "merge_integrations_by_service",
     "merge_local_integrations",
+    "register_classifier",
+    "register_env_loader",
+    "register_env_presence",
     "resolve_effective_integrations",
 ]

@@ -19,15 +19,15 @@ from rich.markup import escape
 
 from platform.common.task_types import TaskRecord
 from tools.interactive_shell.shared.execution_policy import (
-    ExecutionPolicyResult,
     plan_foreground_tool,
 )
+from tools.interactive_shell.shared.host_ports import ExecutionGate
 
 
 class ForegroundInvestigationStatus(StrEnum):
     """Terminal outcome of one foreground REPL/UI investigation run.
 
-    Distinct from ``gateway.storage.investigations.store.InvestigationStatus``,
+    Distinct from ``gateway.core.storage.investigations.store.InvestigationStatus``,
     which tracks a different state machine (the async gateway job lifecycle,
     including in-flight ``QUEUED``/``RUNNING`` states this one never has).
     Do not merge the two. Canonical definition lives here (``tools/``, tier 2)
@@ -63,21 +63,8 @@ class ForegroundInvestigationResult:
 
 
 @runtime_checkable
-class InvestigationLaunchPorts(Protocol):
+class InvestigationLaunchPorts(ExecutionGate, Protocol):
     """Surface-specific hooks for gating and foreground investigation UX."""
-
-    def execution_allowed(
-        self,
-        *,
-        policy: ExecutionPolicyResult,
-        session: InvestigationSession,
-        console: Console,
-        action_summary: str,
-        confirm_fn: Callable[[str], str] | None,
-        is_tty: bool | None,
-        action_already_listed: bool,
-    ) -> bool:
-        raise NotImplementedError
 
     def background_mode_enabled(
         self,

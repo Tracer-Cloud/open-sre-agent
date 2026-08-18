@@ -9,12 +9,18 @@ session, or analytics coupling. The interactive shell's accounting layer
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 
 # Distinguishes the two zero-count outcomes that need different analytics:
 # a normal tool-calling run that completed without planning actions ("completed"),
 # versus a run that never produced actions because it failed/overflowed ("not_run").
 ToolCallingAccountingStatus = Literal["completed", "not_run"]
+
+# Host soft-timeout / ``/stop`` — orchestrator skips gather/answer on this intent.
+FINAL_INTENT_CANCELLED = "cli_agent_cancelled"
 
 
 @dataclass(frozen=True)
@@ -28,8 +34,16 @@ class ToolCallingTurnResult:
     handled: bool
     response_text: str = ""
     handoff_contents: tuple[str, ...] = ()
+    #: Typed handoffs (schema decode). Prefer over parsing ``handoff_contents``.
+    assistant_handoffs: tuple[AssistantHandoff, ...] = ()
+    # False when every handoff this turn declared ``requires_gather=false``:
+    # stream-only chat (no live evidence) or action tools already answered —
+    # the orchestrator skips gather and goes straight to stream_answer.
+    handoff_requires_gather: bool = True
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False
+    #: Host soft-timeout / stop asked the action phase to halt (shell/gateway).
+    cancelled: bool = False
 
 
 @dataclass(frozen=True)
@@ -43,11 +57,20 @@ class TurnResult:
     # Kept untyped here so ``agent/`` stays decoupled from the shell's telemetry
     # types; consumers read ``.response_text`` off it.
     llm_run: Any | None = None
+    #: Successful gather-phase tools (excludes ``tool_unavailable``). Metric
+    #: handoffs often have zero action-tool successes; SessionGoal evidence
+    #: must still see live PostHog/Grafana work from gather.
+    gather_success_count: int = 0
 
     @property
     def answered(self) -> bool:
         """A turn is "answered" exactly when the conversational LLM produced a run."""
         return self.llm_run is not None
+
+    @property
+    def cancelled(self) -> bool:
+        """True when the host cancelled mid-turn (timeout / stop)."""
+        return self.final_intent == FINAL_INTENT_CANCELLED or self.action_result.cancelled
 
     @property
     def primary_response_text(self) -> str:
@@ -56,6 +79,7 @@ class TurnResult:
 
 
 __all__ = [
+    "FINAL_INTENT_CANCELLED",
     "ToolCallingAccountingStatus",
     "ToolCallingTurnResult",
     "TurnResult",

@@ -6,6 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from surfaces.cli.app import cli
+from surfaces.cli.host import CLI_HOST_CONTEXT_KEY, CliHost
 
 
 @pytest.fixture
@@ -21,22 +22,33 @@ def test_gateway_requires_subcommand(runner: CliRunner) -> None:
         assert subcommand in result.output
 
 
-def test_gateway_start_foreground_runs_manager(runner: CliRunner) -> None:
-    with patch("surfaces.cli.gateway_entry.start_gateway") as mock_start:
-        result = runner.invoke(cli, ["gateway", "start", "--foreground"])
+def test_gateway_start_foreground_runs_the_host_runner(runner: CliRunner) -> None:
+    calls: list[str] = []
+    host = CliHost(start_gateway_foreground=lambda: calls.append("started"))
+
+    result = runner.invoke(
+        cli, ["gateway", "start", "--foreground"], obj={CLI_HOST_CONTEXT_KEY: host}
+    )
 
     assert result.exit_code == 0
-    mock_start.assert_called_once()
+    assert calls == ["started"]
     assert "OpenSRE gateway" in result.output
 
 
+def test_gateway_start_foreground_without_a_host_fails_clearly(runner: CliRunner) -> None:
+    result = runner.invoke(cli, ["gateway", "start", "--foreground"])
+
+    assert result.exit_code != 0
+    assert "opensre entrypoint" in result.output
+
+
 def test_gateway_entry_wires_slash_ports() -> None:
-    """Production entry must inject headless slash ports into GatewayManager."""
-    import gateway.runtime.manager as manager_module
+    """Production entry must inject headless slash ports into GatewayController."""
+    import gateway.core.runtime.controller as manager_module
 
     mock_manager = MagicMock()
-    with patch.object(manager_module, "GatewayManager", return_value=mock_manager) as ctor:
-        from surfaces.cli.gateway_entry import main as entry_main
+    with patch.object(manager_module, "GatewayController", return_value=mock_manager) as ctor:
+        from surfaces.gateway_entry import main as entry_main
 
         entry_main()
 
@@ -45,6 +57,8 @@ def test_gateway_entry_wires_slash_ports() -> None:
 
 
 def test_gateway_start_spawns_daemon(runner: CliRunner) -> None:
+    from surfaces.shared.gateway_entrypoint import gateway_entry_argv
+
     with patch(
         "surfaces.cli.commands.gateway.start_gateway_daemon",
         return_value=(True, "Telegram gateway started (pid 4242)."),
@@ -52,7 +66,7 @@ def test_gateway_start_spawns_daemon(runner: CliRunner) -> None:
         result = runner.invoke(cli, ["gateway", "start"])
 
     assert result.exit_code == 0
-    mock_start.assert_called_once()
+    mock_start.assert_called_once_with(argv=gateway_entry_argv())
     assert "pid 4242" in result.output
     assert "Logs:" in result.output
 

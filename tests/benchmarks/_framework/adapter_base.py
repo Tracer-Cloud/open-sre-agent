@@ -11,7 +11,7 @@ pulling in the late-binding TYPE_CHECKING surface this module needs to
 type-check ``investigation_agent_class()``-style hooks against
 ``ConnectedInvestigationAgent``.
 
-This module deliberately has zero ``app.*`` imports at module load — the
+This module deliberately has zero product-package imports at module load — the
 framework is independent of opensre internals. The TYPE_CHECKING block
 below is type-checker-only and never executes at runtime.
 """
@@ -35,7 +35,7 @@ from tests.benchmarks._framework.types import (
 )
 
 if TYPE_CHECKING:
-    # Type-only import — preserves the framework's "zero ``app.*`` imports"
+    # Type-only import — preserves the framework's "zero product-package imports"
     # constraint at runtime while still letting type-checkers validate
     # that adapter overrides return an investigation-agent subclass.
     from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent

@@ -478,7 +478,7 @@ def get_recent_logs(
     use_cases=[
         "Trace the cause: which downstream services does the failing service depend on? Check those for errors too.",
         "Trace the impact: which upstream services call the failing one? Useful for confirming user-visible impact.",
-        "Identify shared infrastructure: multiple failing services calling the same database/cache often points to that shared dep as the cause.",
+        "Identify core infrastructure: multiple failing services calling the same database/cache often points to that shared dep as the cause.",
     ],
     requires=["cluster_name"],
     is_available=_cloudops_available,

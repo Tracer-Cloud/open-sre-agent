@@ -51,7 +51,7 @@ def _cmd_health(_session: Session, console: Console, _args: list[str]) -> bool:
     from config.config import get_environment
     from config.constants.paths import integrations_store_path
     from integrations.verify import verify_integrations
-    from surfaces.interactive_shell.ui.health import render_health_report
+    from surfaces.shared.terminal.health import render_health_report
 
     results = verify_integrations()
     environment = get_environment().value
@@ -65,7 +65,7 @@ def _cmd_health(_session: Session, console: Console, _args: list[str]) -> bool:
 
 
 def _cmd_doctor(_session: Session, console: Console, _args: list[str]) -> bool:
-    from surfaces.cli.commands.doctor import _CHECKS, _check
+    from surfaces.shared.doctor_checks import run_doctor_checks
 
     status_styles: dict[str, str] = {"ok": HIGHLIGHT, "warn": WARNING, "error": ERROR}
     table = repl_table(title="OpenSRE Doctor\n", title_style=BOLD_BRAND)
@@ -74,11 +74,10 @@ def _cmd_doctor(_session: Session, console: Console, _args: list[str]) -> bool:
     table.add_column("detail", style=DIM, overflow="fold")
 
     issues = 0
-    for name, fn in _CHECKS:
-        result = _check(name, fn)
+    for result in run_doctor_checks():
         status = result["status"]
         style = status_styles.get(status, DIM)
-        table.add_row(name, f"[{style}]{status}[/]", result["detail"])
+        table.add_row(result["check"], f"[{style}]{status}[/]", result["detail"])
         if status in ("warn", "error"):
             issues += 1
 

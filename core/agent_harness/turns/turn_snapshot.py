@@ -10,14 +10,32 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from core.agent_harness.prompts.kernel.surfaces import profile_for
 from core.state import MAX_CONVERSATION_MESSAGES
 from core.state.transcript_window import compact_messages_to_window
+from platform.setup_state import cached_setup_state
 
 if TYPE_CHECKING:
     from config.llm_reasoning_effort import ReasoningEffortChoice
     from core.messages import RuntimeMessage
 
 RuntimeTool = Any
+
+
+def _setup_state_for_surface(integrations: Sequence[str], surface: str | None) -> str:
+    """Render setup facts only when the surface profile allows them.
+
+    Gateway keeps ``setup_state=False`` so a shared chat does not broadcast the
+    install's integrations and schedules to every member.
+
+    ``surface=None`` means the caller does not know where the turn is going, and
+    yields no facts. :func:`profile_for` deliberately fails *open* so a new
+    surface still gets the full prompt; that is the wrong direction for install
+    state, which is the one field where guessing wrong discloses something.
+    """
+    if surface is None or not profile_for(surface).setup_state:
+        return ""
+    return cached_setup_state(integrations)
 
 
 @runtime_checkable
@@ -131,6 +149,11 @@ class TurnSnapshot:
     reasoning_effort: ReasoningEffortChoice | None
     """Session-scoped reasoning effort preference for LLM calls this turn."""
 
+    setup_state: str = ""
+    """The operator's connected integrations, schedules, and last delivery
+    outcome, rendered as a fact block. The planner decides whether to offer a
+    scheduled delivery, so it reads what is already configured."""
+
     system_prompt: SystemPromptInput = ""
     """Runtime system prompt used by the shared agent loop."""
 
@@ -159,8 +182,19 @@ class TurnSnapshot:
     display_preferences: dict[str, Any] = field(default_factory=dict)
     last_observation: str | None = None
 
+    recovery_note: str | None = None
+    """WAL recovery note from ``/resume`` — dangling tool intents formatted for
+    the action agent. Consumed from ``session.pending_recovery_note`` (popped:
+    the note rides exactly one turn)."""
+
     @classmethod
-    def from_session(cls, text: str, session: TurnSnapshotSource) -> TurnSnapshot:
+    def from_session(
+        cls,
+        text: str,
+        session: TurnSnapshotSource,
+        *,
+        surface: str | None,
+    ) -> TurnSnapshot:
         """Snapshot the relevant session fields for one turn.
 
         Call this once at the top of the turn before any mutations happen, then
@@ -168,6 +202,11 @@ class TurnSnapshot:
         :class:`TurnSnapshotSource` (e.g. the shell's ``Session``). When the
         source also exposes ``select_turn_runtime_input`` directly or through
         ``source.agent``, runtime request fields are snapshotted too.
+
+        ``surface`` selects the :class:`SurfaceProfile` and is required so no
+        caller can silently claim to be the shell: gateway passes ``"gateway"``
+        to keep setup facts out of shared chats, and ``None`` says "unknown",
+        which omits them.
         """
         valid_messages = [
             (str(role), str(content))
@@ -179,11 +218,13 @@ class TurnSnapshot:
         )
         runtime_input = _select_runtime_request_input(text, session)
         last_observation = _read_last_observation(session, runtime_input)
+        recovery_note = _pop_recovery_note(session)
         return cls(
             text=text,
             conversation_messages=snapshot,
             configured_integrations=tuple(session.configured_integrations),
             configured_integrations_known=bool(session.configured_integrations_known),
+            setup_state=_setup_state_for_surface(session.configured_integrations, surface),
             last_state=session.last_state,
             last_synthetic_observation_path=session.last_synthetic_observation_path,
             reasoning_effort=session.reasoning_effort,
@@ -195,6 +236,7 @@ class TurnSnapshot:
             max_iterations=int(getattr(runtime_input, "max_iterations", 1)),
             model=getattr(runtime_input, "model", None),
             last_observation=last_observation,
+            recovery_note=recovery_note,
         )
 
     def render_system_prompt(self) -> str:
@@ -215,6 +257,20 @@ class TurnSnapshot:
             raise ValueError("TurnSnapshot.max_iterations must be positive.")
         if not self.active_tools:
             raise ValueError("TurnSnapshot.active_tools must include at least one tool.")
+
+
+def _pop_recovery_note(session: TurnSnapshotSource) -> str | None:
+    """Consume ``session.pending_recovery_note`` (optional field, one turn only).
+
+    Popping here — the single per-turn snapshot point — guarantees the note is
+    injected into exactly the first turn after ``/resume`` and never lingers in
+    later cached prompts.
+    """
+    note = getattr(session, "pending_recovery_note", None)
+    if not isinstance(note, str) or not note.strip():
+        return None
+    setattr(session, "pending_recovery_note", None)  # noqa: B010 - protocol lacks the optional field
+    return note
 
 
 def _read_last_observation(session: TurnSnapshotSource, runtime_input: Any | None) -> str | None:

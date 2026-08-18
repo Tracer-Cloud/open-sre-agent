@@ -15,6 +15,7 @@ from core.llm.providers.azure_openai import (
     is_azure_openai_provider,
     resolve_azure_openai_request_kwargs,
 )
+from core.llm.providers.custom_endpoints import is_custom_anthropic_provider
 from core.llm.providers.openai_compat_providers import (
     is_openai_compat_provider,
     resolve_openai_compat_provider,
@@ -27,6 +28,17 @@ from core.llm.transports.litellm.clients import LiteLLMAgentClient, LiteLLMLLMCl
 from core.llm.types import ModelType
 
 
+def _guard_sdk_only_provider(provider: str) -> None:
+    """Reject providers that are intentionally SDK-only under the LiteLLM transport."""
+    if is_custom_anthropic_provider(provider):
+        raise RuntimeError(
+            "Provider 'custom-anthropic' uses the Anthropic SDK with a base-URL override "
+            "and does not support OPENSRE_LLM_TRANSPORT=litellm. Unset OPENSRE_LLM_TRANSPORT "
+            "(or set it to 'sdk'), or use 'custom-openai' for a LiteLLM-proxied "
+            "OpenAI-compatible endpoint."
+        )
+
+
 def _litellm_model_for_compat(model: str) -> str:
     """Prefix model with ``openai/`` if not already prefixed, for compat endpoints."""
     return model if model.startswith("openai/") else f"openai/{model}"
@@ -34,6 +46,7 @@ def _litellm_model_for_compat(model: str) -> str:
 
 def build_litellm_agent_client(settings: Any, provider: str) -> LiteLLMAgentClient:
     """Build a :class:`LiteLLMAgentClient` for the given provider and settings."""
+    _guard_sdk_only_provider(provider)
     from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
     spec = FIRST_PARTY_PROVIDERS.get(provider)
@@ -97,6 +110,7 @@ def build_litellm_llm_client(
     usage_callback: Any = None,
 ) -> LiteLLMLLMClient:
     """Build a :class:`LiteLLMLLMClient` for the given provider, model tier, and settings."""
+    _guard_sdk_only_provider(provider)
 
     from core.llm.providers.provider_registry import FIRST_PARTY_PROVIDERS
 
@@ -140,11 +154,14 @@ def build_litellm_llm_client(
 
     if is_openai_compat_provider(provider):
         compat = resolve_openai_compat_provider(settings, provider, model_type)
-        raw_fallback = _fallback(provider)
+        # Resolve the toolcall fallback via the compat path (settings_prefix
+        # aware) rather than _fallback(provider): the raw slug can be hyphenated
+        # (custom-openai), which getattr would never match.
         fallback_model: str | None = None
-        if raw_fallback:
+        if model_type != ModelType.TOOLCALL:
             fallback_compat = resolve_openai_compat_provider(settings, provider, ModelType.TOOLCALL)
-            fallback_model = _litellm_model_for_compat(fallback_compat.model)
+            if fallback_compat.model:
+                fallback_model = _litellm_model_for_compat(fallback_compat.model)
         return LiteLLMLLMClient(
             litellm_model=_litellm_model_for_compat(compat.model),
             model_fallback=fallback_model,

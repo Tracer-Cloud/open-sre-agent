@@ -1,4 +1,14 @@
-"""Config-owned storage helpers for LLM provider auth metadata."""
+"""Config-owned storage helpers for LLM provider auth metadata.
+
+``credentials`` is loaded on first attribute access so leaf importers
+(``provider_catalog``, keychain migration) never pull in
+:mod:`config.secrets.store` through this package init — that edge was a
+cyclic-import with ``store`` → ``keychain_import`` → ``llm_auth``.
+"""
+
+from __future__ import annotations
+
+from typing import Any
 
 from config.llm_auth.auth_method import (
     API_KEY_AUTH_METHOD,
@@ -11,21 +21,6 @@ from config.llm_auth.auth_method import (
     get_configured_llm_auth_method,
     normalize_llm_auth_method,
     supports_oauth_auth_method,
-)
-from config.llm_auth.credentials import (
-    CredentialResolution,
-    CredentialSource,
-    CredentialStatus,
-    MissingLLMCredentialError,
-    delete,
-    has_api_key_env_status,
-    require_for_request,
-    resolve_api_key_env_for_request,
-    resolve_for_request,
-    save_api_key,
-    source_for_api_key_env,
-    status,
-    verify,
 )
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
@@ -40,6 +35,25 @@ from config.llm_auth.records import (
     provider_auth_record_name,
     resolve_provider_auth_record,
     save_provider_auth_record,
+)
+
+# Names resolved from :mod:`config.llm_auth.credentials` via ``__getattr__``.
+_CREDENTIAL_EXPORTS: frozenset[str] = frozenset(
+    {
+        "CredentialResolution",
+        "CredentialSource",
+        "CredentialStatus",
+        "MissingLLMCredentialError",
+        "delete",
+        "has_api_key_env_status",
+        "require_for_request",
+        "resolve_api_key_env_for_request",
+        "resolve_for_request",
+        "save_api_key",
+        "source_for_api_key_env",
+        "status",
+        "verify",
+    }
 )
 
 __all__ = [
@@ -77,3 +91,15 @@ __all__ = [
     "supports_oauth_auth_method",
     "verify",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name in _CREDENTIAL_EXPORTS:
+        from config.llm_auth import credentials as _credentials
+
+        return getattr(_credentials, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)

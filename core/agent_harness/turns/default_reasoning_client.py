@@ -42,6 +42,10 @@ class DefaultReasoningClientProvider:
         """Point error staging at a freshly resolved session (gateway reuse)."""
         self._session = session
 
+    def bind_output(self, output: OutputSink | None) -> None:
+        """Retarget LLM-unavailable error rendering after ``bind_turn(output=)``."""
+        self._output = output
+
     def get(self) -> Any | None:
         try:
             from core.llm.factory import LLMRole, get_llm

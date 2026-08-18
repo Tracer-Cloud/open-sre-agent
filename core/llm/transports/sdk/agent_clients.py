@@ -49,9 +49,12 @@ from core.llm.transports.sdk.anthropic_cache import (
 from core.llm.transports.sdk.anthropic_cache import (
     tools_with_cache as _anthropic_tools_with_cache,
 )
-from core.llm.types import AgentLLMResponse, ToolCall
+from core.llm.types import AgentLLMResponse, ModelType, ToolCall
 
 logger = logging.getLogger(__name__)
+
+_ASSISTANT_HANDOFF_TOOL_NAME = "assistant_handoff"
+_CLI_PLAIN_TEXT_HANDOFF_CHAR_LIMIT = 360
 
 
 def _anthropic_tool_schema(tool: Any) -> dict[str, Any]:
@@ -82,17 +85,32 @@ class AnthropicAgentClient:
         model: str,
         max_tokens: int = 4096,
         *,
+        base_url: str | None = None,
+        api_key_env: str = "ANTHROPIC_API_KEY",
         client: Any | None = None,
         credential_resolver: Callable[[str], str] | None = None,
     ) -> None:
+        # base_url + api_key_env let a custom-anthropic gateway (Anthropic SDK
+        # with a base-URL override) reuse this client. They default to the
+        # first-party Anthropic endpoint/key, so existing behavior is unchanged.
+        # Only override the hint for a non-default key env so subclasses
+        # (e.g. BedrockAgentClient) keep their own class-level auth_error_hint.
+        if api_key_env != "ANTHROPIC_API_KEY":
+            self.auth_error_hint = f"Check {api_key_env}."
         if client is None:
             from anthropic import Anthropic
 
             from config.llm_credentials import resolve_env_credential
 
             resolver = credential_resolver or resolve_env_credential
-            api_key = resolver("ANTHROPIC_API_KEY")
-            self._client = Anthropic(api_key=api_key, timeout=AGENT_CLIENT_TIMEOUT_SEC)
+            api_key = resolver(api_key_env)
+            client_kwargs: dict[str, Any] = {
+                "api_key": api_key,
+                "timeout": AGENT_CLIENT_TIMEOUT_SEC,
+            }
+            if base_url:
+                client_kwargs["base_url"] = base_url
+            self._client = Anthropic(**client_kwargs)
         else:
             self._client = client
         self._model = model
@@ -523,10 +541,11 @@ def _openai_max_token_kwarg(model: str) -> str:
 # .title() breaks brand names with an internal capital letter (e.g.
 # "OPENAI_API_KEY" -> "Openai" instead of "OpenAI"). Override just the
 # providers this class is actually constructed with (see
-# core/llm/openai_compat_providers.py) where that happens.
+# core/llm/providers/openai_compat_providers.py) where that happens.
 _PROVIDER_LABEL_OVERRIDES = {
     "OPENAI_API_KEY": "OpenAI",
     "OPENROUTER_API_KEY": "OpenRouter",
+    "TRUSTEDROUTER_API_KEY": "TrustedRouter",
     "MINIMAX_API_KEY": "MiniMax",
 }
 
@@ -765,12 +784,18 @@ class CLIBackedAgentClient:
     """
 
     _TOOL_CALL_INSTRUCTION = (
-        "You are an SRE investigation agent. Use the available tools to investigate "
-        "the alert. On each turn respond with EITHER:\n"
+        "You are a tool-calling adapter for the current OpenSRE phase. Follow the "
+        "System instructions and choose the appropriate available tool. On each "
+        "turn respond with EITHER:\n"
         '  (a) A JSON object: {"tool_calls": [{"id": "<unique_id>", "name": "<tool>",'
         ' "input": {<args>}}]}\n'
-        "  (b) A plain-text final answer when investigation is complete.\n"
-        "Respond with JSON only when calling tools; respond with plain text only for the final answer."
+        "  (b) A concise plain-text final answer only after tool use is complete "
+        "or when no suitable tool exists.\n"
+        "If a tool named assistant_handoff is available and the System instructions "
+        "say to hand off the request, emit an assistant_handoff JSON tool call. "
+        "Do not answer that request in prose during the tool-selection turn. "
+        "Respond with JSON only when calling tools; respond with plain text only "
+        "for the final answer."
     )
 
     def __init__(self, adapter: Any, *, model: str | None = None) -> None:
@@ -780,7 +805,11 @@ class CLIBackedAgentClient:
         self._model = model
         # Reuse one client so any probe cache in the CLI backend applies across
         # ReAct iterations instead of re-probing every invoke.
-        self._cli_client = build_cli_client(adapter, model=self._model)
+        self._cli_client = build_cli_client(
+            adapter,
+            model=self._model,
+            model_type=ModelType.TOOLCALL,
+        )
 
     @property
     def model_id(self) -> str | None:
@@ -811,8 +840,12 @@ class CLIBackedAgentClient:
         instruction = self._TOOL_CALL_INSTRUCTION + tool_block
         prompt = f"{system_block}{instruction}\n\n{flatten_cli_messages_to_prompt(messages)}"
 
-        response = self._cli_client.invoke(prompt)
-        text = response.content.strip()
+        text, force_handoff = self._invoke_cli_for_tool_selection(
+            prompt,
+            handoff_on_plain_text=_should_handoff_initial_cli_prose(messages, tools),
+        )
+        if force_handoff:
+            return _assistant_handoff_response()
 
         # Try to parse a JSON tool call response.
         tool_calls: list[ToolCall] = []
@@ -846,6 +879,36 @@ class CLIBackedAgentClient:
             raw_content=None,  # None so _build_assistant_msg falls through to build_assistant_message
         )
 
+    def _invoke_cli_for_tool_selection(
+        self,
+        prompt: str,
+        *,
+        handoff_on_plain_text: bool,
+    ) -> tuple[str, bool]:
+        if not handoff_on_plain_text:
+            response = self._cli_client.invoke(prompt)
+            return response.content.strip(), False
+
+        chunks: list[str] = []
+        stream = self._cli_client.invoke_stream(prompt)
+        for chunk in stream:
+            chunks.append(chunk)
+            text = "".join(chunks)
+            if _should_force_cli_plain_text_handoff(text):
+                close = getattr(stream, "close", None)
+                if callable(close):
+                    close()
+                return "", True
+
+        text = "".join(chunks).strip()
+        if (
+            text
+            and _try_parse_tool_call_json(text) is None
+            and not _looks_like_cli_structured_response(text)
+        ):
+            return "", True
+        return text, False
+
     @staticmethod
     def build_tool_result_message(tool_calls: list[ToolCall], results: list[Any]) -> dict[str, Any]:
         parts = [
@@ -868,6 +931,74 @@ class CLIBackedAgentClient:
                 return {"role": "assistant", "content": f"{content.strip()}\n\n{tool_json}"}
             return {"role": "assistant", "content": tool_json}
         return {"role": "assistant", "content": content}
+
+
+def _assistant_handoff_response() -> AgentLLMResponse:
+    return AgentLLMResponse(
+        content="",
+        tool_calls=[
+            ToolCall(
+                id="cli_plain_text_handoff_0",
+                name=_ASSISTANT_HANDOFF_TOOL_NAME,
+                input={"content": "chat:conversation"},
+            )
+        ],
+        stop_reason="tool_use",
+        raw_content=None,
+    )
+
+
+def _tool_name(tool: dict[str, Any]) -> str:
+    name = tool.get("name")
+    if isinstance(name, str):
+        return name
+    function = tool.get("function")
+    if isinstance(function, dict):
+        function_name = function.get("name")
+        if isinstance(function_name, str):
+            return function_name
+    return ""
+
+
+def _has_tool_named(tools: list[dict[str, Any]] | None, name: str) -> bool:
+    return any(_tool_name(tool) == name for tool in tools or [])
+
+
+def _messages_have_tool_observation(messages: list[dict[str, Any]]) -> bool:
+    for message in messages:
+        role = message.get("role")
+        if role in {"tool", "toolResult", "tool_result"}:
+            return True
+        content = message.get("content")
+        if role == "user" and isinstance(content, str) and content.startswith("Tool result for "):
+            return True
+    return False
+
+
+def _should_handoff_initial_cli_prose(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+) -> bool:
+    return _has_tool_named(tools, _ASSISTANT_HANDOFF_TOOL_NAME) and not (
+        _messages_have_tool_observation(messages)
+    )
+
+
+def _looks_like_cli_structured_response(text: str) -> bool:
+    stripped = text.lstrip()
+    return (
+        stripped.startswith("{")
+        or stripped.startswith("```")
+        or '"tool_calls"' in stripped
+        or "'tool_calls'" in stripped
+    )
+
+
+def _should_force_cli_plain_text_handoff(text: str) -> bool:
+    stripped = text.lstrip()
+    if len(stripped) < _CLI_PLAIN_TEXT_HANDOFF_CHAR_LIMIT:
+        return False
+    return not _looks_like_cli_structured_response(stripped)
 
 
 def _try_parse_tool_call_json(text: str) -> dict[str, Any] | None:

@@ -10,16 +10,15 @@ import pytest
 from rich.console import Console
 
 from surfaces.interactive_shell.runtime.core.state import SpinnerState
-from surfaces.interactive_shell.ui.components.rendering import (
+from surfaces.interactive_shell.ui.poster import refresh_welcome_poster, repl_render_launch_poster
+from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.rendering import (
     _repl_write_buffer,
     print_repl_json,
-    refresh_welcome_poster,
     repl_print,
-    repl_render_launch_poster,
     repl_table,
 )
-from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
-from surfaces.interactive_shell.ui.tables import (
+from surfaces.shared.terminal.tables import (
     render_integrations_table,
     render_mcp_table,
 )
@@ -53,8 +52,61 @@ def test_print_repl_json_tty_uses_single_buffered_write(monkeypatch: pytest.Monk
 
     assert len(fake_stdout.writes) == 1
     rendered = re.sub(r"\x1b\[[0-9;]*m", "", fake_stdout.writes[0])
-    assert rendered.startswith("\r\n")
+    # Column-zero reset, then the leading blank line: immune to wherever a
+    # spinner teardown or wrapped log line left the cursor.
+    assert rendered.startswith("\r\r\n")
     assert '"ok": true' in rendered
+
+
+def test_print_repl_table_stays_on_the_crlf_path_while_recording(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every slash command records its console; that must not force row-by-row prints.
+
+    Under ``patch_stdout(raw=True)`` each ``console.print`` row ends in a bare
+    ``\\n`` and the table staircases. Recording is fed from the buffered write
+    instead, so the screen gets one CRLF write and the transcript still sees the
+    table.
+    """
+    from rich.table import Table
+
+    from surfaces.shared.terminal.components.rendering import print_repl_table
+
+    class _FakeStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def write(self, text: str) -> int:
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+        def isatty(self) -> bool:
+            return True
+
+    # Arrange — a recording console (what capture_console_segment does) on a TTY
+    fake_stdout = _FakeStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+    console = Console(force_terminal=True, width=80)
+    console.record = True
+    table = Table()
+    table.add_column("service")
+    table.add_column("status")
+    table.add_row("github", "passed")
+    table.add_row("slack", "passed")
+
+    # Act
+    print_repl_table(console, table, width=60)
+
+    # Assert — one CRLF write on screen, and the recorder still has the rows
+    assert len(fake_stdout.writes) == 1
+    written = fake_stdout.writes[0]
+    assert written.count("\n") == written.count("\r\n")
+    assert "github" in written
+    exported = console.export_text(clear=True)
+    assert "github" in exported and "slack" in exported
 
 
 def test_render_integrations_table_empty_shows_hint() -> None:
@@ -68,7 +120,7 @@ def test_repl_print_resets_before_each_line(monkeypatch) -> None:
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -84,7 +136,7 @@ def test_repl_print_does_not_double_prepare_with_streaming_console(monkeypatch) 
     resets: list[bool] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
         lambda: resets.append(True),
     )
 
@@ -120,7 +172,7 @@ def test_repl_print_streaming_console_prepares_tty_once_when_interactive(
     fake_stdout = _FakeStdout()
     monkeypatch.setattr("sys.stdout", fake_stdout)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        "surfaces.shared.terminal.components.choice_menu.repl_tty_interactive",
         lambda: True,
     )
 
@@ -172,7 +224,8 @@ def test_repl_render_launch_poster_uses_crlf_on_tty(monkeypatch: pytest.MonkeyPa
     assert "38;2;168;212;255" in written
     assert "185;237;175" not in written
     assert "opensre" in written
-    assert "Welcome back" in written
+    # Greeting wording varies by first-run state; only the salutation root is stable.
+    assert "Welcome" in written
     assert "\r\n" in written
     # REPL path must not emit bare \\n (causes double-spaced splash under patch_stdout).
     assert "\r" not in written.replace("\r\n", "")
@@ -207,15 +260,15 @@ def test_refresh_welcome_poster_drains_cpr_after_clear(monkeypatch: pytest.Monke
     drains: list[str] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_clear_screen",
+        "surfaces.interactive_shell.ui.poster.repl_clear_screen",
         lambda: drains.append("clear"),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.cpr_stdin.drain_stale_cpr_bytes",
+        "surfaces.shared.terminal.components.cpr_stdin.drain_stale_cpr_bytes",
         lambda: drains.append("drain"),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_render_launch_poster",
+        "surfaces.interactive_shell.ui.poster.repl_render_launch_poster",
         lambda *_args, **_kwargs: drains.append("render"),
     )
 

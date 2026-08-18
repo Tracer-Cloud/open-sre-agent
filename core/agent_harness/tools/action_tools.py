@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Protocol
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
 from core.tool_framework.utils.integration_sources import availability_view
 from platform.harness_ports import get_surface_tool_map, get_surface_tools
@@ -52,7 +53,7 @@ def get_action_tools_from_integrations_context(
     """Return canonical registered tools available to the action agent."""
     sources = _sources_for_context(ctx, resolved_integrations)
     tools: list[RegisteredTool] = []
-    for candidate in get_surface_tools("action"):
+    for candidate in get_surface_tools(ToolSurface.ACTION):
         try:
             if not candidate.is_available(sources):
                 continue
@@ -67,7 +68,7 @@ def get_action_tools_from_integrations_context(
 
 def get_action_tool(name: str) -> RegisteredTool | None:
     """Return a registered action tool by name."""
-    return get_surface_tool_map("action").get(name)
+    return get_surface_tool_map(ToolSurface.ACTION).get(name)
 
 
 def action_tool_names(tools: Iterable[RegisteredTool]) -> tuple[str, ...]:

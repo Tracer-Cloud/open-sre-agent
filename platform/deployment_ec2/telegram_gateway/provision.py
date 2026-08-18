@@ -7,10 +7,11 @@ import logging
 import shlex
 import time
 
-from platform.deployment_ec2.client import DEFAULT_REGION
 from platform.deployment_ec2.config import (
+    DEFAULT_REGION,
     GATEWAY_HEALTH_MAX_ATTEMPTS,
     GATEWAY_HEALTH_POLL_INTERVAL_SECONDS,
+    GATEWAY_LOG_TAIL_LINES,
     SSM_PROVISION_CMD_POLL_ATTEMPTS,
     SSM_PROVISION_CMD_POLL_INTERVAL_SECONDS,
     logs_contain_gateway_ready,
@@ -104,7 +105,7 @@ def wait_for_gateway_ready(
                 instance_id=instance_id,
                 commands=[
                     f"systemctl is-active {service} || true",
-                    f"journalctl -u {service} -n 200 --no-pager 2>/dev/null || true",
+                    f"journalctl -u {service} -n {GATEWAY_LOG_TAIL_LINES} --no-pager 2>/dev/null || true",
                 ],
                 region=region,
             )

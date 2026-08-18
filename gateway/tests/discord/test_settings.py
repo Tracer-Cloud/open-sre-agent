@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.discord.settings import load_discord_gateway_settings
-from gateway.runtime.errors import GatewayConfigurationError
+from gateway.core.runtime.errors import GatewayConfigurationError
+from gateway.transports.discord.settings import load_discord_gateway_settings
 
-_STORE_PATH = "gateway.discord.settings.get_integration"
+_STORE_PATH = "gateway.transports.discord.settings.get_integration"
 
 
 @pytest.fixture(autouse=True)
@@ -29,12 +29,12 @@ def empty_store() -> Iterator[None]:
 
 def test_loads_token_with_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "bot-token")
-    monkeypatch.setenv("DISCORD_ALLOWED_USERS", "123456789012345678")
+    monkeypatch.setenv("DISCORD_ALLOWED_USERS", "discord-user-fixture-1")
 
     settings = load_discord_gateway_settings()
 
     assert settings.bot_token == "bot-token"
-    assert settings.allowed_user_ids == ["123456789012345678"]
+    assert settings.allowed_user_ids == ["discord-user-fixture-1"]
     assert settings.allow_open_guild is False
 
 

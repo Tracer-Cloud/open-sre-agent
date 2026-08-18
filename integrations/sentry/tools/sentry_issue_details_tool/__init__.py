@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.sentry import get_sentry_issue
@@ -50,7 +51,7 @@ def _issue_details_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     injected_params=("organization_slug", "sentry_token", "sentry_url"),
     is_available=_issue_details_available,
     extract_params=_issue_details_extract_params,
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def get_sentry_issue_details(
     organization_slug: str,

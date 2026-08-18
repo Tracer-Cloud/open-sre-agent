@@ -18,11 +18,11 @@ from config.config import (
     resolve_llm_settings_verbose,
 )
 from config.llm_auth.credentials import status as credential_status
-from core.agent_harness.session import JsonlSessionStorage
+from core.agent_harness.session import JsonlSessionStore
 from surfaces.interactive_shell.command_registry import dispatch_slash
 from surfaces.interactive_shell.session import Session
 
-SessionStore = JsonlSessionStorage()
+SessionState = JsonlSessionStore()
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -127,7 +127,7 @@ def _write_finalized_session(
 
 @pytest.fixture
 def isolated_sessions(tmp_path: Path) -> Path:
-    """Sessions directory with SessionStore patched for the test."""
+    """Sessions directory with SessionState patched for the test."""
     directory = tmp_path / "sessions"
     directory.mkdir()
     with (
@@ -138,7 +138,7 @@ def isolated_sessions(tmp_path: Path) -> Path:
 
 
 def _open_current(session: Session) -> None:
-    SessionStore.open_session(session)
+    SessionState.open_session(session)
 
 
 def _require_live_llm_for_repl_planner() -> None:
@@ -376,6 +376,93 @@ class TestResumeScenarioMatrix:
         assert any("/resume" in t.get("text", "") for t in turns_a)
         assert any("/resume" in t.get("text", "") for t in turns_b)
         assert session.agent.messages[0] == ("user", "session B question")
+
+    def test_scenario_resume_interrupted_session_stashes_recovery_note(
+        self,
+        isolated_sessions: Path,
+    ) -> None:
+        """A session with a dangling WAL intent resumes with a recovery note."""
+        target_id = "33339999-aaaa-bbbb-cccc-ddddeeeeffff"
+        path = _write_finalized_session(isolated_sessions, target_id, chat_text="run 5 steps")
+        wal_lines = [
+            json.dumps(
+                {
+                    "id": "wal-i1",
+                    "parent_id": None,
+                    "timestamp": "2026-05-29T10:00:06+00:00",
+                    "type": "tool_intent",
+                    "sidecar": True,
+                    "tool": "shell_run",
+                    "arguments": {"command": "step-1 >> /tmp/demo_state.json"},
+                    "tool_call_id": "call_1",
+                    "seq": 1,
+                }
+            ),
+            json.dumps(
+                {
+                    "id": "wal-c1",
+                    "parent_id": None,
+                    "timestamp": "2026-05-29T10:00:07+00:00",
+                    "type": "tool_call",
+                    "sidecar": True,
+                    "tool": "shell_run",
+                    "tool_call_id": "call_1",
+                    "source": "wal",
+                }
+            ),
+            # Interrupted: step 2's intent never committed.
+            json.dumps(
+                {
+                    "id": "wal-i2",
+                    "parent_id": None,
+                    "timestamp": "2026-05-29T10:00:08+00:00",
+                    "type": "tool_intent",
+                    "sidecar": True,
+                    "tool": "shell_run",
+                    "arguments": {"command": "step-2 >> /tmp/demo_state.json"},
+                    "tool_call_id": "call_2",
+                    "seq": 2,
+                    "user_text": "run 5 steps",
+                }
+            ),
+        ]
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\n".join(wal_lines) + "\n",
+            encoding="utf-8",
+        )
+
+        session = Session()
+        _open_current(session)
+        console, buf = _capture()
+
+        dispatch_slash(f"/resume {target_id[:8]}", session, console)
+
+        assert session.session_id == target_id
+        output = buf.getvalue()
+        assert "resumed session" in output
+        assert "interrupted mid-turn" in output
+        note = session.pending_recovery_note
+        assert note is not None
+        assert "shell_run step-2 >> /tmp/demo_state.json (step 2)" in note
+        # The committed step must not appear as interrupted.
+        assert "step-1" not in note
+
+    def test_scenario_resume_clean_session_has_no_recovery_note(
+        self,
+        isolated_sessions: Path,
+    ) -> None:
+        target_id = "4444aaaa-bbbb-cccc-dddd-eeeeffff0000"
+        _write_finalized_session(isolated_sessions, target_id)
+
+        session = Session()
+        _open_current(session)
+        console, buf = _capture()
+
+        dispatch_slash(f"/resume {target_id[:8]}", session, console)
+
+        assert session.session_id == target_id
+        assert "interrupted mid-turn" not in buf.getvalue()
+        assert session.pending_recovery_note is None
 
     def test_scenario_active_session_with_turns_flushed_without_resume_slash(
         self,

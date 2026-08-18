@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 import logging
+import threading
+from dataclasses import dataclass, field
 
+from config.constants.grafana import (
+    GRAFANA_CA_BUNDLE_ENV,
+    GRAFANA_INSTANCE_URL_ENV,
+    GRAFANA_READ_TOKEN_ENV,
+    GRAFANA_VERIFY_SSL_ENV,
+)
+from config.grafana_cloud import DEFAULT_INSTANCE_URL, get_datasource_uids
 from integrations.grafana.base import GrafanaClientBase
 from integrations.grafana.config import GrafanaAccountConfig
 from integrations.grafana.loki import LokiMixin
@@ -12,7 +21,28 @@ from integrations.grafana.tempo import TempoMixin
 
 logger = logging.getLogger(__name__)
 
+# Successful clients only. Transport failures are NOT cached here — a process-
+# wide failure entry would pin a host "dead" across /new and after recovery.
+# Concurrent gather tools that miss the success cache share one in-flight build
+# via ``_BuildGate`` so they do not each wait out the connect timeout.
 _grafana_client_cache: dict[str, GrafanaClient] = {}
+#: Datasource discovery is one network round trip per account. An investigation
+#: queries Mimir, Loki, Tempo and alert rules concurrently, so without this the
+#: first callers all miss the empty cache and each runs its own discovery — and
+#: against an unreachable Grafana each one waits out the full connect timeout.
+_grafana_client_lock = threading.Lock()
+
+
+@dataclass
+class _BuildGate:
+    """One shared build attempt for concurrent callers of the same cache key."""
+
+    done: threading.Event = field(default_factory=threading.Event)
+    client: GrafanaClient | None = None
+    error: BaseException | None = None
+
+
+_grafana_build_inflight: dict[str, _BuildGate] = {}
 
 
 class GrafanaClient(LokiMixin, TempoMixin, MimirMixin, GrafanaClientBase):
@@ -28,11 +58,11 @@ def get_grafana_client() -> GrafanaClient:
     from config.llm_credentials import resolve_env_credential
 
     return get_grafana_client_from_credentials(
-        endpoint=os.getenv("GRAFANA_INSTANCE_URL", "https://tracerbio.grafana.net"),
-        api_key=resolve_env_credential("GRAFANA_READ_TOKEN"),
+        endpoint=os.getenv(GRAFANA_INSTANCE_URL_ENV, DEFAULT_INSTANCE_URL),
+        api_key=resolve_env_credential(GRAFANA_READ_TOKEN_ENV),
         account_id="env_default",
-        verify_ssl=os.getenv("GRAFANA_VERIFY_SSL", "true").strip().lower() != "false",
-        ca_bundle=os.getenv("GRAFANA_CA_BUNDLE", "").strip(),
+        verify_ssl=os.getenv(GRAFANA_VERIFY_SSL_ENV, "true").strip().lower() != "false",
+        ca_bundle=os.getenv(GRAFANA_CA_BUNDLE_ENV, "").strip(),
     )
 
 
@@ -47,9 +77,80 @@ def get_grafana_client_from_credentials(
 ) -> GrafanaClient:
     """Create a Grafana client from integration credentials."""
     cache_key = f"creds_{account_id}_{endpoint}"
-    if cache_key in _grafana_client_cache:
-        return _grafana_client_cache[cache_key]
+    cached = _grafana_client_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
+    gate: _BuildGate | None = None
+    leader = False
+    with _grafana_client_lock:
+        cached = _grafana_client_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        gate = _grafana_build_inflight.get(cache_key)
+        if gate is None:
+            gate = _BuildGate()
+            _grafana_build_inflight[cache_key] = gate
+            leader = True
+
+    assert gate is not None
+    if not leader:
+        gate.done.wait()
+        if gate.client is not None:
+            return gate.client
+        if gate.error is not None:
+            raise gate.error
+        # Leader finished without client or error (should not happen); retry.
+        return get_grafana_client_from_credentials(
+            endpoint=endpoint,
+            api_key=api_key,
+            account_id=account_id,
+            username=username,
+            password=password,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+        )
+
+    try:
+        client = _build_and_cache_client(
+            cache_key=cache_key,
+            endpoint=endpoint,
+            api_key=api_key,
+            account_id=account_id,
+            username=username,
+            password=password,
+            verify_ssl=verify_ssl,
+            ca_bundle=ca_bundle,
+        )
+        gate.client = client
+        return client
+    except BaseException as exc:
+        gate.error = exc
+        raise
+    finally:
+        gate.done.set()
+        with _grafana_client_lock:
+            if _grafana_build_inflight.get(cache_key) is gate:
+                del _grafana_build_inflight[cache_key]
+
+
+def _build_and_cache_client(
+    *,
+    cache_key: str,
+    endpoint: str,
+    api_key: str,
+    account_id: str,
+    username: str,
+    password: str,
+    verify_ssl: bool,
+    ca_bundle: str,
+) -> GrafanaClient:
+    """Discover datasources once and cache the resulting client.
+
+    Prefer live discovery; when a UID is missing, fall back to
+    ``GRAFANA_*_DATASOURCE_UID`` / Grafana Cloud defaults so env-configured
+    installs still work when auto-discovery is incomplete.
+    """
     config = GrafanaAccountConfig(
         account_id=account_id,
         instance_url=endpoint.rstrip("/"),
@@ -61,8 +162,13 @@ def get_grafana_client_from_credentials(
     )
     client = GrafanaClient(config=config)
 
-    discovered = client.discover_datasource_uids()
-    if discovered:
+    discovered = client.discover_datasource_uids() or {}
+    fallback_loki, fallback_tempo, fallback_mimir = get_datasource_uids()
+    loki_uid = discovered.get("loki_uid") or fallback_loki
+    tempo_uid = discovered.get("tempo_uid") or fallback_tempo
+    mimir_uid = discovered.get("mimir_uid") or fallback_mimir
+
+    if loki_uid or tempo_uid or mimir_uid:
         config = GrafanaAccountConfig(
             account_id=account_id,
             instance_url=endpoint.rstrip("/"),
@@ -71,23 +177,26 @@ def get_grafana_client_from_credentials(
             password=password,
             verify_ssl=verify_ssl,
             ca_bundle=ca_bundle,
-            loki_datasource_uid=discovered.get("loki_uid", ""),
-            tempo_datasource_uid=discovered.get("tempo_uid", ""),
-            mimir_datasource_uid=discovered.get("mimir_uid", ""),
+            loki_datasource_uid=loki_uid,
+            tempo_datasource_uid=tempo_uid,
+            mimir_datasource_uid=mimir_uid,
         )
         client = GrafanaClient(config=config)
         logger.info(
-            "[grafana] Client ready for account_id=%s with datasource discovery status: loki=%s tempo=%s mimir=%s",
+            "[grafana] Client ready for account_id=%s with datasource UIDs: "
+            "loki=%s tempo=%s mimir=%s (discovered=%s)",
             account_id,
             config.loki_datasource_uid,
             config.tempo_datasource_uid,
             config.mimir_datasource_uid,
+            bool(discovered),
         )
     else:
         logger.warning(
-            "[grafana] Could not discover datasource UIDs for account_id=%s — queries will fail",
+            "[grafana] Could not resolve datasource UIDs for account_id=%s — queries will fail",
             account_id,
         )
 
-    _grafana_client_cache[cache_key] = client
+    with _grafana_client_lock:
+        _grafana_client_cache[cache_key] = client
     return client

@@ -336,6 +336,38 @@ def test_truncate_for_telegram_html_balances_open_tags_within_limit() -> None:
     assert out.count("<b>") == out.count("</b>")
 
 
+def test_truncate_for_telegram_html_closes_open_pre_block() -> None:
+    # Fenced code blocks render as <pre>, so an evidence dump that straddles the
+    # limit gets cut with <pre> still open and the Bot API rejects the message.
+    src = "<pre>" + ("pool exhausted acquire timeout 30s\n" * 200) + "</pre>"
+    out = truncate_for_telegram_html(src, 4096, suffix="…")
+    assert len(out) <= 4096
+    assert out.count("<pre>") == out.count("</pre>") == 1
+
+
+def test_truncate_for_telegram_html_closes_open_strikethrough() -> None:
+    src = "<s>" + ("superseded " * 500) + "</s>"
+    out = truncate_for_telegram_html(src, 512, suffix="…")
+    assert len(out) <= 512
+    assert out.count("<s>") == out.count("</s>") == 1
+
+
+def test_truncate_for_telegram_html_keeps_bare_angle_pair_as_text() -> None:
+    # "<>" carries no element name: a SQL inequality predicate, not markup.
+    src = "<b>slow query</b> SELECT id FROM jobs WHERE state <> 'done'; " * 100
+    out = truncate_for_telegram_html(src, 4096, suffix="…")
+    assert len(out) <= 4096
+    assert "<>" in out
+    assert out.count("<b>") == out.count("</b>")
+
+
+def test_truncate_for_telegram_html_ignores_whitespace_only_tag() -> None:
+    src = "< > spaced angle pair " * 400
+    out = truncate_for_telegram_html(src, 256, suffix="…")
+    assert len(out) <= 256
+    assert out.endswith("…")
+
+
 def test_truncate_for_telegram_html_noop_when_under_limit() -> None:
     s = "<i>ok</i>"
     assert truncate_for_telegram_html(s, 50) == s

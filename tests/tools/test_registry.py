@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from core.domain.types.retrieval import RetrievalControls
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import REGISTERED_TOOL_ATTR, RegisteredTool
 from core.tool_framework.tool_decorator import tool
@@ -295,7 +296,7 @@ def test_github_workflow_skill_guidance_is_attached_to_chat_and_investigation_to
         "summarize_community_followups",
     }
 
-    for surface in ("chat", "investigation"):
+    for surface in (ToolSurface.CHAT, ToolSurface.INVESTIGATION):
         tools_by_name = {
             tool_def.name: tool_def for tool_def in registry_module.get_registered_tools(surface)
         }
@@ -344,7 +345,7 @@ def test_architecture_audit_action_tools_are_registered() -> None:
 
 
 def test_architecture_audit_not_on_chat_or_investigation() -> None:
-    for surface in ("chat", "investigation"):
+    for surface in (ToolSurface.CHAT, ToolSurface.INVESTIGATION):
         names = {tool_def.name for tool_def in registry_module.get_registered_tools(surface)}
         assert "find_architecture_violations" not in names
         assert "architecture_clone_repo" not in names
@@ -1053,3 +1054,10 @@ def test_resolve_tool_activity_labels_uses_registry_metadata() -> None:
         "Tools",
         "query grafana mystery",
     )
+
+
+def test_activity_source_badge_drops_trailing_mcp_segment() -> None:
+    assert registry_module._activity_source_badge("posthog_mcp") == "Posthog"
+    assert registry_module._activity_source_badge("sentry_mcp") == "Sentry"
+    assert registry_module._activity_source_badge("grafana") == "Grafana"
+    assert registry_module._activity_source_badge("mcp") == "Mcp"

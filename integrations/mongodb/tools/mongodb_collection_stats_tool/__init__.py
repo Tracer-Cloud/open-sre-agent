@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.mongodb import (
     MongoDBConfig,
@@ -15,7 +16,7 @@ from integrations.mongodb import (
     name="get_mongodb_collection_stats",
     description="Retrieve document counts, size metrics, and index information for a specific MongoDB collection.",
     source="mongodb",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     is_available=mongodb_database_is_available,
     injected_params=("connection_string",),
     extract_params=mongodb_extract_params,

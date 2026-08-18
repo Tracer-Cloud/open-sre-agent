@@ -7,13 +7,24 @@ some auth methods use a provider-specific runtime backend under the hood.
 from __future__ import annotations
 
 import os
-from typing import Literal
+from enum import StrEnum
+
+from config.constants.llm import LLM_PROVIDER_ENV
 
 LLM_AUTH_METHOD_ENV = "LLM_AUTH_METHOD"
-LLMAuthMethod = Literal["api_key", "oauth"]
 
-API_KEY_AUTH_METHOD: LLMAuthMethod = "api_key"
-OAUTH_AUTH_METHOD: LLMAuthMethod = "oauth"
+
+class LLMAuthMethod(StrEnum):
+    """How the user authenticates to their LLM provider."""
+
+    API_KEY = "api_key"
+    OAUTH = "oauth"
+
+
+#: Backwards-compatible aliases: callers import these names, and comparing an
+#: ``LLMAuthMethod`` against them stays true because the members equal them.
+API_KEY_AUTH_METHOD = LLMAuthMethod.API_KEY
+OAUTH_AUTH_METHOD = LLMAuthMethod.OAUTH
 
 OAUTH_BACKEND_PROVIDER_BY_PROVIDER: dict[str, str] = {
     "openai": "codex",
@@ -45,7 +56,7 @@ def canonical_llm_provider(provider: str) -> str:
 
 def get_configured_llm_auth_method(provider: str | None = None) -> LLMAuthMethod:
     """Return the active auth method from env, with legacy CLI compatibility."""
-    normalized_provider = (provider or os.getenv("LLM_PROVIDER") or "").strip().lower()
+    normalized_provider = (provider or os.getenv(LLM_PROVIDER_ENV) or "").strip().lower()
     if normalized_provider in OAUTH_PROVIDER_BY_BACKEND_PROVIDER:
         return OAUTH_AUTH_METHOD
     return normalize_llm_auth_method(os.getenv(LLM_AUTH_METHOD_ENV))

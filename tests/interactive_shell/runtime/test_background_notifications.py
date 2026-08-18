@@ -696,54 +696,77 @@ def test_deliver_background_notifications_rocketchat_body_keeps_actionable_tail(
     assert "NEXTSTEPSENTINEL0" in body
 
 
-def test_notifications_module_does_not_eagerly_import_rocketchat() -> None:
-    """Rocket.Chat loads only when its channel is processed (same rule as telegram)."""
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import surfaces.interactive_shell.runtime.background.notifications as n; "
-                + "import sys; "
-                + "assert 'integrations.rocketchat.delivery' not in sys.modules; "
-                + "print('OK: rocketchat not eagerly imported')"
-            ),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert completed.returncode == 0, completed.stderr
-    assert "OK: rocketchat not eagerly imported" in completed.stdout
+# Vendor transports that must never load just because the notification path was
+# imported or its adapters were registered. Dotted names, because a bare
+# "telegram.delivery" is never a real sys.modules key and would pass vacuously.
+_VENDOR_TRANSPORTS = (
+    "integrations.telegram.delivery",
+    "integrations.telegram.credentials",
+    "integrations.rocketchat.delivery",
+    "integrations.buzz.delivery",
+    "integrations.smtp.delivery",
+    "integrations.catalog",
+)
+
+_ASSERT_NO_TRANSPORTS = "".join(
+    f"assert {module!r} not in sys.modules, {module!r}; " for module in _VENDOR_TRANSPORTS
+)
+
+# Importing the REPL entry point must not pull any vendor client onto the boot path.
+_SHIM_IMPORT_PROBE = (
+    "import sys; "
+    "import surfaces.interactive_shell.runtime.background.notifications; "
+    f"{_ASSERT_NO_TRANSPORTS}"
+    "print('OK: shim clean')"
+)
+
+# Stronger than the above: registering every adapter must also cost no transport.
+# This is what fails if someone hoists a vendor import to an adapter's module level.
+_BOOTSTRAP_PROBE = (
+    "import sys; "
+    "from bootstrap.adapters import install_notification_adapters; "
+    "names = install_notification_adapters(); "
+    "assert sorted(names) == ['buzz', 'email', 'rocketchat', 'telegram'], names; "
+    f"{_ASSERT_NO_TRANSPORTS}"
+    "print('OK: registration clean')"
+)
 
 
-def test_notifications_module_does_not_eagerly_import_telegram() -> None:
-    """AC-11 (corrected, dotted-module sys.modules check): telegram loads only when processed.
+def _run_probe(script: str) -> subprocess.CompletedProcess[str]:
+    """Run ``script`` in a fresh interpreter.
 
-    Run in a fresh subprocess: sys.modules is process-global, so checking it in
-    the current test process would be contaminated by whatever earlier tests in
-    this session already imported. The banned/vacuous draft check used the
-    non-dotted string 'telegram.delivery', which is never a real sys.modules
-    key and so prints True unconditionally, regardless of implementation.
+    sys.modules is process-global, so checking it inside the test process would
+    be contaminated by whatever earlier tests in the session already imported.
     """
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import surfaces.interactive_shell.runtime.background.notifications as n; "
-                + "import sys; "
-                + "assert 'integrations.telegram.delivery' not in sys.modules; "
-                + "assert 'integrations.telegram.credentials' not in sys.modules; "
-                + "print('OK: telegram not eagerly imported')"
-            ),
-        ],
+    return subprocess.run(
+        [sys.executable, "-c", script],
         capture_output=True,
         text=True,
         timeout=30,
     )
+
+
+def test_notification_entry_point_does_not_eagerly_import_vendor_transports() -> None:
+    """The REPL imports this module at boot; no vendor client may come with it."""
+    completed = _run_probe(_SHIM_IMPORT_PROBE)
+
     assert completed.returncode == 0, completed.stderr
-    assert "OK: telegram not eagerly imported" in completed.stdout
+    assert "OK: shim clean" in completed.stdout
+
+
+def test_registering_every_adapter_pulls_no_vendor_transport() -> None:
+    """Registration is now all-or-nothing, so it must stay free.
+
+    The old chain imported one channel module per requested channel, so an
+    unused channel cost nothing by construction. The registry imports all four
+    up front, which is only acceptable because each adapter keeps its vendor
+    client inside the delivery function. Assert that rather than trust it: this
+    is the test that fails if a future edit hoists an import to module level.
+    """
+    completed = _run_probe(_BOOTSTRAP_PROBE)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "OK: registration clean" in completed.stdout
 
 
 def test_deliver_background_notifications_email_only_never_touches_telegram_creds(
@@ -906,3 +929,203 @@ def test_deliver_background_notifications_telegram_body_keeps_actionable_tail(
     assert "validity score" in body
     # Email keeps the full report; only the Telegram copy is budgeted.
     assert "r" * 1_000 not in body or len(body) <= 4096
+
+
+_BUZZ_ENTRY = {
+    "buzz": {
+        "source": "local env",
+        "config": {
+            "relay_url": "http://relay.example.com:3000",
+            "private_key": "bz-priv-key",
+            "auth_tag": "tag-1",
+            "buzz_path": "buzz",
+            "default_channel": "#incidents",
+        },
+    }
+}
+
+
+def test_deliver_background_notifications_sends_buzz(monkeypatch) -> None:
+    """Buzz shipped in #4756 with no coverage; this pins the success path."""
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_BUZZ_ENTRY),
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_post(
+        relay_url: str,
+        channel: str,
+        text: str,
+        private_key: str,
+        *,
+        auth_tag: str = "",
+        buzz_path: str = "buzz",
+        reply_to: str = "",
+    ) -> tuple[bool, str, str]:
+        captured.update(
+            relay_url=relay_url,
+            channel=channel,
+            text=text,
+            private_key=private_key,
+            auth_tag=auth_tag,
+            buzz_path=buzz_path,
+        )
+        return True, "", "evt-1"
+
+    monkeypatch.setattr("integrations.buzz.delivery.post_buzz_message", _fake_post)
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123",
+        status="completed",
+        command="/investigate checkout-latency",
+        root_cause="ROOTSENTINEL postgres connection pool saturation",
+        top_analysis=("TOPANALYSISSENTINEL rds cpu spike",),
+        next_steps=("NEXTSTEPSENTINEL raise pool size",),
+        stats={"tool_call_count": 4, "investigation_loop_count": 2, "validity_score": 0.8},
+    )
+
+    results = deliver_background_notifications(record=record, channels=("buzz",))
+
+    assert results == {"buzz": "sent"}
+    assert captured["relay_url"] == "http://relay.example.com:3000"
+    assert captured["channel"] == "#incidents"
+    assert captured["auth_tag"] == "tag-1"
+    body = str(captured["text"])
+    assert "ROOTSENTINEL" in body
+    assert "NEXTSTEPSENTINEL" in body
+
+
+def test_deliver_background_notifications_buzz_missing_integration(monkeypatch) -> None:
+    """No buzz entry at all."""
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", dict)
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("buzz",))
+
+    assert results == {"buzz": "missing buzz integration: Buzz is not configured."}
+
+
+def test_deliver_background_notifications_buzz_missing_private_key(monkeypatch) -> None:
+    """A configured buzz entry with no private_key reports the same gap as no entry."""
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: {
+            "buzz": {
+                "source": "local env",
+                "config": {"relay_url": "http://relay.example.com:3000", "private_key": ""},
+            }
+        },
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("buzz",))
+
+    assert results == {"buzz": "missing buzz integration: Buzz is not configured."}
+
+
+def test_deliver_background_notifications_buzz_missing_default_channel(monkeypatch) -> None:
+    """A key without a destination is a configuration gap, named as such."""
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: {
+            "buzz": {
+                "source": "local env",
+                "config": {"private_key": "bz-priv-key", "default_channel": ""},
+            }
+        },
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("buzz",))
+
+    assert results == {
+        "buzz": (
+            "missing buzz integration: no default_channel configured "
+            "(set BUZZ_DEFAULT_CHANNEL or re-run setup)."
+        )
+    }
+
+
+def test_deliver_background_notifications_buzz_redacts_private_key_on_failure(
+    monkeypatch,
+) -> None:
+    """The failure string lands in the record and `/background show`, so the key
+    must not survive into it even when the transport echoes it back."""
+    monkeypatch.setattr(
+        "integrations.catalog.resolve_effective_integrations",
+        lambda: dict(_BUZZ_ENTRY),
+    )
+
+    def _fake_post(
+        relay_url: str,
+        channel: str,
+        text: str,
+        private_key: str,
+        *,
+        auth_tag: str = "",
+        buzz_path: str = "buzz",
+        reply_to: str = "",
+    ) -> tuple[bool, str, str]:
+        return False, f"relay rejected key {private_key}", ""
+
+    monkeypatch.setattr("integrations.buzz.delivery.post_buzz_message", _fake_post)
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("buzz",))
+
+    outcome = results["buzz"]
+    assert outcome.startswith("failed: ")
+    assert "bz-priv-key" not in outcome
+
+
+def test_deliver_background_notifications_unknown_channel_is_unsupported(monkeypatch) -> None:
+    """An unrecognised channel name reports 'unsupported' rather than raising."""
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", dict)
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+    results = deliver_background_notifications(record=record, channels=("nope",))
+
+    assert results == {"nope": "unsupported"}
+
+
+def test_deliver_background_notifications_preserves_caller_channel_order(monkeypatch) -> None:
+    """`/background show` renders `results` in insertion order, so the dispatcher
+    must follow the caller's channel tuple. Dict equality cannot catch a reorder,
+    so assert the key sequence explicitly."""
+    monkeypatch.setattr("integrations.catalog.resolve_effective_integrations", dict)
+
+    def _raise_missing(**_: object) -> None:
+        raise OpenSREError("TELEGRAM_BOT_TOKEN is not set.")
+
+    monkeypatch.setattr(
+        "integrations.telegram.credentials.load_credentials_from_env",
+        _raise_missing,
+    )
+
+    record = BackgroundInvestigationRecord(
+        task_id="bg-123", status="completed", command="free-text", root_cause="boom"
+    )
+
+    forward = deliver_background_notifications(
+        record=record, channels=("email", "telegram", "rocketchat", "buzz")
+    )
+    reverse = deliver_background_notifications(
+        record=record, channels=("buzz", "rocketchat", "telegram", "email")
+    )
+
+    assert list(forward) == ["email", "telegram", "rocketchat", "buzz"]
+    assert list(reverse) == ["buzz", "rocketchat", "telegram", "email"]
+    # Same outcomes either way; only the ordering differs.
+    assert forward == reverse

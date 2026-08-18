@@ -35,7 +35,7 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "surfaces.interactive_shell.runtime.action_turn.default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
 execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
@@ -108,12 +108,23 @@ def _response_from_actions(actions: list[PlannedAction]) -> AgentLLMResponse:
 
 
 def _message_from_agent_prompt(messages: list[dict[str, object]]) -> str:
+    """Extract what the user literally typed from the built user message.
+
+    The literal envelope is one segment of the message, not the whole of it:
+    the turn's ephemeral blocks (recent conversation, prior action facts) follow
+    it so they stay out of the cacheable system prompt while still being the
+    part an over-budget turn drops first. Read between the delimiters rather
+    than assuming the envelope spans the string.
+    """
     raw = str(messages[-1].get("content", "")) if messages else ""
     prefix = "USER MESSAGE (literal): <<<"
     suffix = ">>>"
-    if raw.startswith(prefix) and raw.endswith(suffix):
-        return raw[len(prefix) : -len(suffix)]
-    return raw
+    start = raw.find(prefix)
+    if start == -1:
+        return raw
+    body_at = start + len(prefix)
+    end = raw.find(suffix, body_at)
+    return raw[body_at:end] if end != -1 else raw
 
 
 def _expected_shell_argv(command: str) -> list[str]:
@@ -355,7 +366,11 @@ def test_execute_cli_actions_skips_remaining_actions_when_cancelled(
         console,  # type: ignore[arg-type]
     )
 
-    assert handled.handled is True
+    # A cancelled turn reports ``cancelled``; the orchestrator short-circuits on
+    # that flag to skip gather/answer, which is what forcing ``handled=True``
+    # used to accomplish. ``handled`` now reflects the work that actually ran.
+    assert handled.cancelled is True
+    assert handled.handled is False
     # Only the first action ran; the second was skipped because the
     # cancel event was set between iterations.
     assert dispatched == ["/health"], (
@@ -740,7 +755,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     monkeypatch: object,
 ) -> None:
-    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.shared.error_handling.errors import OpenSREError
 
     def _raise(
         *,

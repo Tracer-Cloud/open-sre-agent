@@ -9,21 +9,21 @@ from unittest.mock import patch
 
 import pytest
 
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from platform.observability.trace.spans import (
-    NoopSessionTraceSink,
+    NoopSessionTraceStore,
     bind_session_trace,
-    set_session_trace_sink,
+    set_session_trace_store,
 )
-from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 from tools.investigation.stages.gather_evidence import ConnectedInvestigationAgent
 
 
 @pytest.fixture(autouse=True)
-def _reset_session_trace_sink() -> Any:
-    set_session_trace_sink(NoopSessionTraceSink())
+def _reset_session_trace_store() -> Any:
+    set_session_trace_store(NoopSessionTraceStore())
     yield
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
 
 
 class _QuietAgent(ConnectedInvestigationAgent):
@@ -43,17 +43,17 @@ def test_run_connected_investigation_emits_stage_spans(
     from tools.investigation.state_factory import make_initial_state
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: tmp_path / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-lifecycle-stages"
     path = tmp_path / f"{session_id}.jsonl"
     path.write_text(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     state = make_initial_state(raw_alert="alert text")
     with (
@@ -100,17 +100,17 @@ def test_run_connected_investigation_skips_later_stages_on_noise(
     from tools.investigation.state_factory import make_initial_state
 
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: tmp_path / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-lifecycle-noise"
     path = tmp_path / f"{session_id}.jsonl"
     path.write_text(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     state = make_initial_state(raw_alert="noise")
     with (
@@ -137,11 +137,11 @@ def test_run_connected_investigation_skips_later_stages_on_noise(
 
 def test_run_connected_investigation_noop_sink_emits_nothing() -> None:
     """Headless / gateway default: pipeline stages must not require a sink."""
-    from platform.observability.trace.spans import get_session_trace_sink
+    from platform.observability.trace.spans import get_session_trace_store
     from tools.investigation.lifecycle import run_connected_investigation
     from tools.investigation.state_factory import make_initial_state
 
-    assert isinstance(get_session_trace_sink(), NoopSessionTraceSink)
+    assert isinstance(get_session_trace_store(), NoopSessionTraceStore)
     state = make_initial_state(raw_alert="alert text")
     with (
         patch(

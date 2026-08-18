@@ -11,6 +11,7 @@ from core.domain.alerts.alert_source import (
     secondary_tool_sources,
 )
 from core.domain.diagnosis import root_cause_category_instruction_for_source
+from core.domain.types.tools import ToolSurface
 from tools.investigation.stages.gather_evidence.tools import (
     planned_action_names,
     select_investigation_tools,
@@ -152,7 +153,7 @@ def format_alert_context(
     resolved = state.get("resolved_integrations") or {}
     if available_tools is None:
         registry_tools = [
-            t for t in get_registered_tools("investigation") if t.is_available(resolved)
+            t for t in get_registered_tools(ToolSurface.INVESTIGATION) if t.is_available(resolved)
         ]
         available_tools = select_investigation_tools(registry_tools, state)
 

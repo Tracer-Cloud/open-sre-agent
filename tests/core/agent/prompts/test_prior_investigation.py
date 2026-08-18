@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.prompts import prior_investigation as pi
+from core.agent_harness.prompts.memory import prior_investigation as pi
 
 
 def test_headline_returns_only_the_fields_present() -> None:

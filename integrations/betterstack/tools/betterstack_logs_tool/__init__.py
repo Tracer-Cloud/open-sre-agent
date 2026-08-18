@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.betterstack import (
     BetterStackConfig,
@@ -24,7 +25,7 @@ from integrations.betterstack import (
         "timestamps (ISO 8601)."
     ),
     source="betterstack",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Fetching application log lines from a Better Stack source during RCA",
         "Correlating timestamped log events with an alert window",

@@ -21,6 +21,16 @@ class TokenUsage:
     totals: dict[str, int] = field(default_factory=dict)
     call_count: int = 0
 
+    def io_totals(self) -> tuple[int, int]:
+        """Running ``(input, output)`` totals, coerced to non-negative ints."""
+        try:
+            return (
+                max(0, int(self.totals.get("input", 0) or 0)),
+                max(0, int(self.totals.get("output", 0) or 0)),
+            )
+        except (TypeError, ValueError):
+            return 0, 0
+
     @property
     def has_estimates(self) -> bool:
         """True when any recorded tokens were estimated rather than measured."""

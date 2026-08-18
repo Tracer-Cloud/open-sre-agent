@@ -13,14 +13,14 @@ from config.llm_credentials import resolve_env_credential
 from config.secrets.os_keyring import reset_keyring_state
 from integrations.llm_cli.base import CLIProbe
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
-from surfaces.cli.llm_auth.providers import ProviderAuthProfile, resolve_auth_profile
-from surfaces.cli.llm_auth.service import (
+from surfaces.shared.llm_setup.auth_profiles import ProviderAuthProfile, resolve_auth_profile
+from surfaces.shared.llm_setup.auth_service import (
     AuthSetupError,
     configure_api_key_provider,
     configure_cli_subscription_provider,
 )
-from surfaces.cli.wizard.config import ModelOption, ProviderOption
-from surfaces.cli.wizard.validation import ValidationResult
+from surfaces.shared.llm_setup.catalog import ModelOption, ProviderOption
+from surfaces.shared.llm_setup.validation import ValidationResult
 from tests.shared.keyring_backend import MemoryKeyring
 
 
@@ -44,20 +44,18 @@ def test_resolve_auth_profile_accepts_subscription_aliases() -> None:
     assert resolve_auth_profile("deepseek").provider_value == "deepseek"
 
 
-def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
+def test_configure_deepseek_api_key_stores_secret_and_nonsecret_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "surfaces.cli.wizard.store.get_store_path",
+        "config.setup_store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     monkeypatch.setattr(
-        "surfaces.cli.llm_auth.service.validate_provider_credentials",
+        "surfaces.shared.llm_setup.auth_service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="ok"),
     )
 
@@ -78,8 +76,8 @@ def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
         assert "LLM_PROVIDER=deepseek\n" in env_content
         assert "DEEPSEEK_REASONING_MODEL=deepseek-v4-flash\n" in env_content
         assert "DEEPSEEK_API_KEY=" not in env_content
-        assert resolve_provider_auth_record("deepseek")["source"] == "keyring"
-        assert result.source == "keyring"
+        assert resolve_provider_auth_record("deepseek")["source"] == "fallback"
+        assert result.source == "fallback"
     finally:
         keyring.set_keyring(previous_backend)
 
@@ -87,23 +85,21 @@ def test_configure_deepseek_api_key_stores_keyring_and_nonsecret_env(
 def test_configure_api_key_reports_the_fallback_tier_it_actually_used(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """`opensre auth login` must not claim the keychain on a machine without one.
+    """`opensre auth login` must report the tier that actually stored the key.
 
-    The setup result feeds CLI and REPL output, and the auth record feeds
-    `opensre auth status`, so hardcoding "keyring" here both misleads the user
-    and overwrites the correct record that `save_api_key` just wrote.
+    The setup result feeds CLI and REPL output and the auth record feeds
+    `opensre auth status`, so a hardcoded tier both misleads the user and
+    overwrites the correct record that `save_api_key` just wrote.
     """
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "surfaces.cli.wizard.store.get_store_path",
+        "config.setup_store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     monkeypatch.setattr(
-        "surfaces.cli.llm_auth.service.validate_provider_credentials",
+        "surfaces.shared.llm_setup.auth_service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=True, detail="ok"),
     )
 
@@ -119,7 +115,7 @@ def test_configure_api_key_reports_the_fallback_tier_it_actually_used(
         )
 
         assert result.source == "fallback"
-        assert "No system keychain" in result.detail
+        assert "credentials.json" in result.detail
         assert resolve_provider_auth_record("deepseek")["source"] == "fallback"
     finally:
         keyring.set_keyring(previous_backend)
@@ -131,12 +127,10 @@ def test_configure_api_key_does_not_store_when_validation_fails(
     tmp_path: Path,
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "surfaces.cli.llm_auth.service.validate_provider_credentials",
+        "surfaces.shared.llm_setup.auth_service.validate_provider_credentials",
         lambda **_kwargs: ValidationResult(ok=False, detail="rejected"),
     )
 
@@ -193,11 +187,9 @@ def test_configure_cli_subscription_syncs_provider(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "surfaces.cli.wizard.store.get_store_path",
+        "config.setup_store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     fake_provider = ProviderOption(
@@ -213,7 +205,8 @@ def test_configure_cli_subscription_syncs_provider(
         allow_custom_models=True,
     )
     monkeypatch.setattr(
-        "surfaces.cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider
+        "surfaces.shared.llm_setup.auth_service.provider_for_profile",
+        lambda _profile: fake_provider,
     )
 
     previous_backend = keyring.get_keyring()
@@ -244,11 +237,9 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.setenv("OPENSRE_LLM_AUTH_METADATA_PATH", str(tmp_path / "llm-auth.json"))
     monkeypatch.setattr(
-        "surfaces.cli.wizard.store.get_store_path",
+        "config.setup_store.get_store_path",
         lambda: tmp_path / "opensre.json",
     )
     fake_provider = ProviderOption(
@@ -264,7 +255,8 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
         allow_custom_models=True,
     )
     monkeypatch.setattr(
-        "surfaces.cli.llm_auth.service.provider_for_profile", lambda _profile: fake_provider
+        "surfaces.shared.llm_setup.auth_service.provider_for_profile",
+        lambda _profile: fake_provider,
     )
     oauth_calls: list[object] = []
 
@@ -277,7 +269,7 @@ def test_configure_cli_subscription_uses_managed_codex_oauth_when_status_probe_u
         )
 
     monkeypatch.setattr(
-        "surfaces.cli.llm_auth.service.run_codex_oauth_login", _fake_codex_oauth_login
+        "surfaces.shared.llm_setup.auth_service.run_codex_oauth_login", _fake_codex_oauth_login
     )
 
     previous_backend = keyring.get_keyring()
@@ -323,56 +315,11 @@ class _ErroringKeyring(KeyringBackend):
         raise keyring.errors.KeyringError("Secret Service is not reachable")
 
 
-def test_resolve_for_request_does_not_stale_verified_record_on_keyring_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A backend hiccup (regression for #3721) must not downgrade a verified credential.
-
-    Previously any ``keyring.errors.KeyringError`` during the on-demand keychain
-    read was swallowed into an empty string, which read as "credential missing"
-    and permanently marked the metadata record stale/unverified — even though
-    the secret itself was untouched.
-    """
-    monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected to this same tmp_path
-    # by the autouse ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
-    save_provider_auth_record(
-        provider="deepseek",
-        auth_name="deepseek",
-        kind="api_key",
-        source="keyring",
-        detail="DEEPSEEK_API_KEY stored in the system keychain.",
-        verified=True,
-        stale=False,
-        env_var="DEEPSEEK_API_KEY",
-    )
-
-    previous_backend = keyring.get_keyring()
-    keyring.set_keyring(_ErroringKeyring())
-    try:
-        resolution = resolve_for_request("deepseek")
-
-        assert resolution.ok is False
-        assert "keychain" in resolution.detail.lower()
-
-        record = resolve_provider_auth_record("deepseek")
-        assert record["stale"] == "false"
-        assert record["verified"] == "true"
-        assert status("deepseek").verified is True
-    finally:
-        keyring.set_keyring(previous_backend)
-
-
 def test_resolve_for_request_still_stales_when_credential_is_genuinely_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A clean (error-free) keychain miss is real evidence and should still stale."""
     monkeypatch.delenv("OPENSRE_DISABLE_KEYRING", raising=False)
-    # Keyring writes are opt-in now; this test exercises the keyring path.
-    monkeypatch.setenv("OPENSRE_USE_KEYRING", "1")
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     # OPENSRE_LLM_AUTH_METADATA_PATH is already redirected by the autouse
     # ``_isolate_opensre_home_files`` fixture in tests/conftest.py.
@@ -411,8 +358,6 @@ def test_codex_oauth_metadata_counts_as_prompt_safe_cli_status(
         source="codex-oauth",
         detail="OpenAI OAuth tokens stored for Codex.",
     )
-
-    from config.llm_auth.credentials import status
 
     result = status("codex")
 

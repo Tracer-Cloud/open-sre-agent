@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.postgresql import (
@@ -19,15 +21,15 @@ from integrations.postgresql import (
         " blocked queries, their blockers, and a summary of lock types."
     ),
     source="postgresql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Diagnosing query blocking chains during performance incidents",
         "Identifying deadlock-prone transactions or long-held locks",
         "Investigating sudden latency spikes caused by lock contention",
     ],
     source_id="postgresql_pg_locks",
-    evidence_type="query_stats",
-    side_effect_level="read_only",
+    evidence_type=EvidenceType.QUERY_STATS,
+    side_effect_level=SideEffectLevel.READ_ONLY,
     examples=[
         "Check for blocked queries causing application timeouts.",
         "Find which query is blocking a deployment migration.",

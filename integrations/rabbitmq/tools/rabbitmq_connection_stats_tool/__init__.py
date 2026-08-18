@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.rabbitmq import (
     RabbitMQConfig,
@@ -15,7 +16,7 @@ from integrations.rabbitmq import (
     name="get_rabbitmq_connection_stats",
     description="List active RabbitMQ connections sorted by receive rate. Reports user, vhost, protocol, channel count, peer host/port, TLS status, and recv/send byte rates — helps spot connection exhaustion, slow consumers, or noisy publishers during an incident.",
     source="rabbitmq",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Investigating connection exhaustion or connection storms",
         "Identifying noisy publishers with high byte rates",

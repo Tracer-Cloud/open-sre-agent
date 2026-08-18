@@ -14,6 +14,11 @@ from core.agent_harness.ports import (
     ConfirmFn,
     ToolEventObserver,
 )
+from core.agent_harness.session.history_entry import build_history_entry
+from core.agent_harness.session.pending_offer import (
+    PendingInvestigationOffer,
+    PendingScheduleOffer,
+)
 from core.agent_harness.turns.turn_results import (
     ToolCallingTurnResult,
     TurnResult,
@@ -21,8 +26,8 @@ from core.agent_harness.turns.turn_results import (
 
 
 @dataclass
-class InMemorySessionStore:
-    """List-backed :class:`core.agent_harness.ports.SessionStore` for headless runs."""
+class InMemorySessionState:
+    """List-backed :class:`core.agent_harness.ports.SessionState` for headless runs."""
 
     session_id: str = "headless"
     cli_agent_messages: list[tuple[str, str]] = field(default_factory=list)
@@ -30,15 +35,37 @@ class InMemorySessionStore:
     configured_integrations_known: bool = False
     last_state: dict[str, Any] | None = None
     last_synthetic_observation_path: str | None = None
+    pending_schedule_offer: PendingScheduleOffer | None = None
+    pending_investigation_offer: PendingInvestigationOffer | None = None
     reasoning_effort: Any | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
     last_command_observation: str | None = None
     resolved_integrations_cache: dict[str, Any] | None = None
     vcs_repo_scopes: dict[str, tuple[str, ...]] = field(default_factory=dict)
     records: list[tuple[str, str, bool]] = field(default_factory=list)
+    available_capabilities: dict[str, Any] = field(default_factory=dict)
 
-    def record(self, kind: str, text: str, *, ok: bool = True) -> None:
+    def record(
+        self,
+        kind: str,
+        text: str,
+        *,
+        ok: bool = True,
+        response_text: str | None = None,
+        slash_outcome: str | None = None,
+    ) -> None:
         self.records.append((kind, text, ok))
+        # Mirror SessionCore.history so tools that inspect recent shell/slash
+        # rows (e.g. propose_scheduled_delivery's fetch precondition) work
+        # under headless smokes the same way they do in the live shell.
+        entry = build_history_entry(
+            kind,
+            text,
+            ok=ok,
+            response_text=response_text,
+            slash_outcome=slash_outcome,
+        )
+        self.history.append(entry)
 
 
 @dataclass
@@ -63,11 +90,16 @@ class BufferOutputSink:
         label: str,
         chunks: Iterable[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with)
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
         text = "".join(str(chunk) for chunk in chunks)
         self.streamed.append(text)
         return text
+
+    def finish_streamed_response(self, text: str) -> None:
+        # Headless tests assert on ``TurnResult.assistant_response_text``.
+        _ = text
 
     @property
     def text(self) -> str:
@@ -76,6 +108,10 @@ class BufferOutputSink:
 
 class EmptyPromptContextProvider:
     """Grounding provider that supplies no corpora (headless)."""
+
+    def bind_session(self, session: Any) -> None:
+        """No session state — session retarget is a no-op for empty grounding."""
+        _ = session
 
     def surface(self) -> str:
         return "interactive_shell"
@@ -104,6 +140,9 @@ class EmptyPromptContextProvider:
     def long_term_memory(self) -> str:
         return ""
 
+    def setup_state(self) -> str:
+        return ""
+
     def suggested_synthetic_prompt(self) -> str:
         return ""
 
@@ -113,6 +152,14 @@ class EmptyPromptContextProvider:
 
 class NullToolProvider:
     """Provides no action tools and a no-op tool-event observer."""
+
+    def bind_session(self, session: Any) -> None:
+        """No tools to retarget."""
+        _ = session
+
+    def bind_console(self, console: Any) -> None:
+        """No console-backed tools."""
+        _ = console
 
     def action_tools(
         self,
@@ -165,6 +212,10 @@ class SimpleRunRecord:
 class SimpleRunRecordFactory:
     """Builds :class:`SimpleRunRecord` values."""
 
+    def bind_session(self, session: Any) -> None:
+        """Records are ephemeral — no session handle to update."""
+        _ = session
+
     def build(
         self, *, client: Any, prompt: str, response_text: str, started: float
     ) -> SimpleRunRecord:
@@ -177,6 +228,14 @@ class StaticReasoningClientProvider:
     """Provides a fixed reasoning client (or None to skip the assistant)."""
 
     client: Any | None = None
+
+    def bind_session(self, session: Any) -> None:
+        """Client is fixed at construction — ignore session retargets."""
+        _ = session
+
+    def bind_output(self, output: Any) -> None:
+        """No sink of its own — accept rebind for :class:`OutputBindable` parity."""
+        _ = output
 
     def get(self) -> Any | None:
         return self.client

@@ -17,6 +17,7 @@ from urllib.parse import quote
 
 import httpx
 
+from config.constants.vercel import VERCEL_API_BASE_URL, VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV
 from integrations.config_models import VercelIntegrationConfig
 from integrations.probes import ProbeResult
 from platform.observability.errors.service import capture_service_error
@@ -24,7 +25,7 @@ from platform.observability.streaming import StreamingParseStats
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://api.vercel.com"
+_BASE_URL = VERCEL_API_BASE_URL
 _MAX_VERCEL_PATH_SEGMENT_LEN = 256
 # Vercel project and deployment IDs are opaque tokens (no slashes or traversal).
 _VERCEL_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -48,13 +49,14 @@ def _safe_vercel_path_segment(raw: str) -> str | None:
 def _runtime_logs_read_timeout_seconds() -> float:
     """Seconds to wait per read for runtime logs (env VERCEL_RUNTIME_LOGS_READ_TIMEOUT)."""
     read_s = _RUNTIME_LOGS_READ_TIMEOUT_DEFAULT
-    raw = os.getenv("VERCEL_RUNTIME_LOGS_READ_TIMEOUT", "").strip()
+    raw = os.getenv(VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV, "").strip()
     if raw:
         try:
             read_s = max(30.0, float(raw))
         except ValueError:
             logger.warning(
-                "Invalid VERCEL_RUNTIME_LOGS_READ_TIMEOUT=%r; using default %s",
+                "Invalid %s=%r; using default %s",
+                VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV,
                 raw,
                 read_s,
             )
@@ -563,7 +565,7 @@ class VercelClient:
                 "success": False,
                 "error": (
                     f"{detail} (after {_RUNTIME_LOGS_READ_ATTEMPTS} attempts, "
-                    f"{read_s:g}s read timeout each; set VERCEL_RUNTIME_LOGS_READ_TIMEOUT to increase)"
+                    f"{read_s:g}s read timeout each; set {VERCEL_RUNTIME_LOGS_READ_TIMEOUT_ENV} to increase)"
                 ),
             }
 
@@ -584,5 +586,6 @@ def make_vercel_client(api_token: str | None, team_id: str | None = None) -> Ver
         return None
     try:
         return VercelClient(VercelConfig(api_token=token, team_id=team_id or ""))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to create Vercel client: %s", exc, exc_info=True)
         return None

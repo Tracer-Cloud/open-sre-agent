@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from core.domain.types.evidence import EvidenceSource
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from core.tool_framework.registered_tool import RegisteredTool, _normalize_surfaces
 from core.tool_framework.tool_decorator import tool
@@ -287,17 +288,17 @@ def test_from_function_explicit_description_overrides_docstring() -> None:
 
 
 def test_normalize_surfaces_none_returns_investigation_default() -> None:
-    assert _normalize_surfaces(None) == ("investigation",)
+    assert _normalize_surfaces(None) == (ToolSurface.INVESTIGATION,)
 
 
 def test_normalize_surfaces_valid_list() -> None:
-    result = _normalize_surfaces(["investigation", "chat"])
-    assert set(result) == {"investigation", "chat"}
+    result = _normalize_surfaces([ToolSurface.INVESTIGATION, ToolSurface.CHAT])
+    assert set(result) == {ToolSurface.INVESTIGATION, ToolSurface.CHAT}
 
 
 def test_normalize_surfaces_deduplicates() -> None:
-    result = _normalize_surfaces(["investigation", "investigation"])
-    assert result == ("investigation",)
+    result = _normalize_surfaces([ToolSurface.INVESTIGATION, ToolSurface.INVESTIGATION])
+    assert result == (ToolSurface.INVESTIGATION,)
 
 
 def test_normalize_surfaces_invalid_raises() -> None:
@@ -307,7 +308,7 @@ def test_normalize_surfaces_invalid_raises() -> None:
 
 def test_normalize_surfaces_empty_list_returns_investigation_default() -> None:
     result = _normalize_surfaces([])
-    assert result == ("investigation",)
+    assert result == (ToolSurface.INVESTIGATION,)
 
 
 class _TaggedBaseTool(BaseTool):
@@ -315,7 +316,7 @@ class _TaggedBaseTool(BaseTool):
     description = "Base tool with registry metadata."
     input_schema: dict[str, Any] = {"type": "object", "properties": {}}
     source: EvidenceSource = "grafana"
-    surfaces = ("investigation", "chat")
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
     tags = ("logs", "observability")
     parallel_safe = False
 

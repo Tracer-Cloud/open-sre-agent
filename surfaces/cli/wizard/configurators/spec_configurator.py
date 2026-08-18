@@ -15,6 +15,8 @@ guidance differ, so those are the arguments.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from integrations.setup_flow import IntegrationSetupSpec, apply_setup
 from platform.terminal.theme import SECONDARY
 from surfaces.cli.wizard._ui import (
@@ -29,14 +31,25 @@ from surfaces.cli.wizard._ui import (
 )
 from surfaces.cli.wizard.integration_validators.shared import IntegrationHealthResult
 
+#: Vendor hook run after the mode picker and before its fields are prompted.
+#: Returns the mode to continue with — the same one, or a different one when
+#: the vendor steered the user (a prerequisite the chosen mode needs is absent).
+ModeGate = Callable[[str], str]
+
 
 def configure_from_spec(
-    spec: IntegrationSetupSpec, *, title: str, intro: str = ""
+    spec: IntegrationSetupSpec,
+    *,
+    title: str,
+    intro: str = "",
+    on_mode_chosen: ModeGate | None = None,
 ) -> tuple[str, str]:
     """Prompt for *spec*'s fields until they verify, then persist them.
 
-    Returns the pair the wizard's configurator table expects: the display name
-    and the ``.env`` path that was written.
+    *on_mode_chosen* lets a vendor check a mode's prerequisites at the moment
+    it is picked — before the user types credentials that cannot work — and
+    steer to another mode. Returns the pair the wizard's configurator table
+    expects: the display name and the ``.env`` path that was written.
     """
     _, credentials = _integration_defaults(spec.service)
     if intro:
@@ -49,6 +62,8 @@ def configure_from_spec(
                 [Choice(value=m.value, label=m.label) for m in spec.modes],
                 default=spec.modes[0].value,
             )
+            if on_mode_chosen is not None:
+                mode = on_mode_chosen(mode)
         collectable = {field.name for field in spec.collectable_fields(mode)}
         values: dict[str, str | None] = {}
         for field in spec.fields:
@@ -67,17 +82,23 @@ def configure_from_spec(
             default = _joined_values(
                 stored, separator=",", fallback=_string_value(stored, field.default)
             )
-            values[field.name] = _prompt_value(
-                field.question,
-                # A stored value wins over the spec's default, so re-running
-                # onboarding is a series of enters rather than a retype.
-                default=default,
-                secret=field.secret,
-                # Only reached when the field has no default to fall back on:
-                # _prompt_value substitutes the default before it consults this,
-                # so a defaulted field never re-prompts and never returns blank.
-                allow_empty=not field.required,
-            )
+            while True:
+                answer = _prompt_value(
+                    field.question,
+                    # A stored value wins over the spec's default, so re-running
+                    # onboarding is a series of enters rather than a retype.
+                    default=default,
+                    secret=field.secret,
+                    # Only reached when the field has no default to fall back on:
+                    # _prompt_value substitutes the default before it consults this,
+                    # so a defaulted field never re-prompts and never returns blank.
+                    allow_empty=not spec.is_required(field, mode),
+                )
+                problem = field.validate(answer) if answer and field.validate else None
+                if problem is None:
+                    break
+                _console.print(f"[{SECONDARY}]{problem}[/]")
+            values[field.name] = answer
         with _console.status(f"Validating {title} credentials...", spinner="dots"):
             outcome = apply_setup(spec, values)
         _render_integration_result(

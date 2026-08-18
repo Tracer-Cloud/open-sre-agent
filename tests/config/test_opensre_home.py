@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,6 +20,48 @@ from config.constants.paths import (
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness.session.persistence.paths import sessions_dir
+
+
+def _imported_opensre_home(env: dict[str, str]) -> Path:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from config.constants.paths import OPENSRE_HOME_DIR; print(OPENSRE_HOME_DIR)",
+        ],
+        check=True,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+    return Path(completed.stdout.strip())
+
+
+def test_opensre_home_defaults_to_dot_opensre_under_user_home(tmp_path: Path) -> None:
+    # Arrange
+    env = os.environ.copy()
+    env.pop("OPENSRE_HOME", None)
+    env["HOME"] = str(tmp_path)
+    env["USERPROFILE"] = str(tmp_path)
+
+    # Act
+    home = _imported_opensre_home(env)
+
+    # Assert
+    assert home == tmp_path / ".opensre"
+
+
+def test_opensre_home_uses_environment_override(tmp_path: Path) -> None:
+    # Arrange
+    override = tmp_path / "relocated-opensre"
+    env = os.environ.copy()
+    env["OPENSRE_HOME"] = str(override)
+
+    # Act
+    home = _imported_opensre_home(env)
+
+    # Assert
+    assert home == override
 
 
 @pytest.fixture

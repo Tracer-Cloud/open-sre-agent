@@ -85,3 +85,34 @@ def test_empty_tools_returns_none(monkeypatch: Any) -> None:
     monkeypatch.setattr(harness_ports, "get_investigation_tools", lambda _resolved: [])
 
     assert evidence_agent.gather_tool_evidence("status?", _session()) is None
+
+
+class _FakeGatherLLM:
+    model_id: str | None = None
+
+    def tool_schemas(self, tools: list[Any]) -> list[dict[str, Any]]:  # noqa: ARG002
+        return []
+
+    def invoke(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("not invoked in this test")
+
+
+def test_default_gather_agent_gets_a_goal_reviewer_over_the_question() -> None:
+    """A gather turn that concludes on discovery-only output must be nudged.
+
+    The default factory wires a gather-flavored reviewed goal over the user's
+    question, so the loop cannot stop after e.g. an MCP tool listing without
+    one goal review pass.
+    """
+    agent = evidence_agent._build_evidence_agent(
+        llm=_FakeGatherLLM(),
+        session=_session(),
+        gather_tools=[],
+        resolved={},
+        on_progress=None,
+        message="how many posthog users do we have on windows?",
+    )
+
+    assert agent._goal is not None
+    assert "how many posthog users do we have on windows?" in agent._goal.description
+    assert agent._goal.verify is not None

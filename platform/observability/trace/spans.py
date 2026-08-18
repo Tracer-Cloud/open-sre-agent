@@ -2,10 +2,10 @@
 
 Design for production safety
 ----------------------------
-* Default sink is :class:`NoopSessionTraceSink` — emit paths return immediately
+* Default store is :class:`NoopSessionTraceStore` — emit paths return immediately
   after an ``isinstance`` check (no timing, no sampling, no I/O).
 * Expensive work (RSS / thread enumeration, JSONL append) runs **only** when a
-  real sink is registered (REPL with JSONL storage).
+  real store is registered (REPL with JSONL storage).
 * Call sites should prefer the semantic helpers below (``component_span``,
   ``tool_span``, ``stage_span``, …) so business code stays readable. Prefer
   those over raw ``emit_span`` / ``timed_span`` with ``span_kind=`` kwargs.
@@ -32,7 +32,7 @@ SPAN_STATUS_OK = "ok"
 SPAN_STATUS_ERROR = "error"
 
 
-class SessionTraceSink(Protocol):
+class SessionTraceStore(Protocol):
     """Append-only session trace spans (routes, stages, threads, resources)."""
 
     def emit(
@@ -49,8 +49,8 @@ class SessionTraceSink(Protocol):
         """Persist one span; return entry id (empty when persistence is unavailable)."""
 
 
-class NoopSessionTraceSink:
-    """Default sink before a surface registers a JSONL adapter."""
+class NoopSessionTraceStore:
+    """Default store before a surface registers a JSONL adapter."""
 
     def emit(
         self,
@@ -67,21 +67,21 @@ class NoopSessionTraceSink:
         return ""
 
 
-_sink: SessionTraceSink = NoopSessionTraceSink()
+_store: SessionTraceStore = NoopSessionTraceStore()
 
 
-def get_session_trace_sink() -> SessionTraceSink:
-    return _sink
+def get_session_trace_store() -> SessionTraceStore:
+    return _store
 
 
-def set_session_trace_sink(sink: SessionTraceSink | None) -> None:
-    global _sink
-    _sink = sink if sink is not None else NoopSessionTraceSink()
+def set_session_trace_store(store: SessionTraceStore | None) -> None:
+    global _store
+    _store = store if store is not None else NoopSessionTraceStore()
 
 
 def is_session_trace_active() -> bool:
-    """True when a non-noop sink is registered (JSONL / ATM path)."""
-    return not isinstance(_sink, NoopSessionTraceSink)
+    """True when a non-noop store is registered (JSONL / ATM path)."""
+    return not isinstance(_store, NoopSessionTraceStore)
 
 
 def current_trace_session_id() -> str | None:
@@ -117,7 +117,7 @@ def emit_span(
     sid = session_id or _session_id.get()
     if not sid:
         return ""
-    return _sink.emit(
+    return _store.emit(
         sid,
         span_kind=span_kind,
         name=name,
@@ -140,7 +140,7 @@ def timed_span(
     """Time a region and emit a span on exit when tracing is active.
 
     Yields a mutable ``attrs`` dict callers may enrich before the block ends.
-    When the sink is noop, this is a near-zero-cost nullcontext (no clock).
+    When the store is noop, this is a near-zero-cost nullcontext (no clock).
     """
     attrs: dict[str, Any] = dict(attributes or {})
     if not is_session_trace_active():
@@ -165,7 +165,7 @@ def timed_span(
         # Only honor a caller override when the body did not raise.
         if not body_raised and isinstance(override, str) and override:
             status = override
-        _sink.emit(
+        _store.emit(
             sid,
             span_kind=span_kind,
             name=name,
@@ -186,7 +186,7 @@ def emit_thread_boundary(
 ) -> str:
     """Emit a ``span_kind=thread`` snapshot at a REPL turn or session boundary.
 
-    Skips process sampling entirely when the sink is noop so headless/tests
+    Skips process sampling entirely when the store is noop so headless/tests
     pay only an ``isinstance`` check.
     """
     if not is_session_trace_active():
@@ -195,7 +195,7 @@ def emit_thread_boundary(
     attributes["phase"] = phase
     if extra:
         attributes.update(extra)
-    return _sink.emit(
+    return _store.emit(
         session_id,
         span_kind="thread",
         name=name,
@@ -250,6 +250,26 @@ def llm_span(
     return timed_span(span_kind="llm", name=name, attributes=attrs)
 
 
+def loop_span(
+    name: str,
+    *,
+    attributes: dict[str, Any] | None = None,
+) -> AbstractContextManager[dict[str, Any]]:
+    """Time one bounded loop such as a ReAct run."""
+    return timed_span(span_kind="loop", name=name, attributes=attributes)
+
+
+def loop_iteration_span(
+    name: str,
+    *,
+    iteration: int,
+    attributes: dict[str, Any] | None = None,
+) -> AbstractContextManager[dict[str, Any]]:
+    """Time one iteration inside a bounded loop."""
+    attrs = {"iteration": iteration, **(attributes or {})}
+    return timed_span(span_kind="loop_iteration", name=name, attributes=attrs)
+
+
 def emit_route(
     name: str,
     *,
@@ -297,22 +317,24 @@ def mark_span_outcome(
 
 
 __all__ = [
-    "NoopSessionTraceSink",
+    "NoopSessionTraceStore",
     "SPAN_STATUS_ATTR",
     "SPAN_STATUS_ERROR",
     "SPAN_STATUS_OK",
-    "SessionTraceSink",
+    "SessionTraceStore",
     "bind_session_trace",
     "component_span",
     "current_trace_session_id",
     "emit_route",
     "emit_span",
     "emit_thread_boundary",
-    "get_session_trace_sink",
+    "get_session_trace_store",
     "is_session_trace_active",
     "llm_span",
+    "loop_iteration_span",
+    "loop_span",
     "mark_span_outcome",
-    "set_session_trace_sink",
+    "set_session_trace_store",
     "stage_span",
     "timed_span",
     "tool_span",

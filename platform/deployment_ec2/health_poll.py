@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from http import HTTPStatus
 
 import requests
 
@@ -52,7 +53,7 @@ def poll_deployment_health(
             try:
                 response = http_get(url, timeout=request_timeout_seconds)
                 status_code = int(getattr(response, "status_code", 0))
-                if status_code == 200:
+                if status_code == HTTPStatus.OK:
                     return HealthPollStatus(
                         url=url,
                         attempts=attempt,

@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+from typing import Any
 
 import keyring
 import keyring.errors
@@ -22,12 +23,12 @@ import keyring.errors
 from config.constants.secrets import (
     KEYRING_SERVICE,
     OPENSRE_DISABLE_KEYRING_ENV,
-    OPENSRE_USE_KEYRING_ENV,
 )
 from config.secrets.backend import KeyringUnavailableError, KeyringUnavailableReason
 
 _DISABLED_VALUES = frozenset({"1", "true", "yes", "on"})
 _MACOS_PROBE_TIMEOUT_SECONDS = 2.0
+_MACOS_DUMP_TIMEOUT_SECONDS = 30.0
 _MACOS_ITEM_NOT_FOUND_RETURNCODE = 44
 
 # Sticky per-process record of the first hard failure. A machine without a
@@ -45,17 +46,6 @@ def reset_keyring_state() -> None:
 
 def keyring_is_disabled() -> bool:
     return os.getenv(OPENSRE_DISABLE_KEYRING_ENV, "").strip().lower() in _DISABLED_VALUES
-
-
-def keyring_writes_enabled() -> bool:
-    """Whether new secrets may be written to the OS keyring.
-
-    Default is off (env-file / fallback-file first). Set ``OPENSRE_USE_KEYRING=1``
-    to opt into keychain writes. Disable still wins over opt-in.
-    """
-    if keyring_is_disabled():
-        return False
-    return os.getenv(OPENSRE_USE_KEYRING_ENV, "").strip().lower() in _DISABLED_VALUES
 
 
 def _backend() -> object:
@@ -143,18 +133,146 @@ def set(env_var: str, value: str) -> None:  # noqa: A001 - mirrors get/delete in
 def delete(env_var: str) -> None:
     """Remove a secret from the OS keychain, tolerating an absent entry.
 
-    Deliberately does *not* set the sticky flag: ``store.delete_secret`` already
-    treats a failed keyring delete as non-fatal, so letting it mark the whole
-    process unavailable would push every later read and write in the run onto
-    the plaintext fallback because one logout could not reach the backend.
+    Deliberately does *not* set the sticky unavailability flag: a one-shot
+    delete failure must not poison later reads in the same process.
+
+    Nor does it honour ``OPENSRE_DISABLE_KEYRING``. That switch declines to
+    *store* secrets locally; refusing to delete on top of it left a revoked
+    credential in the keychain, recoverable by unsetting the flag. Removing a
+    secret is safe on a machine that has opted out of keeping any.
+
+    Callers that need revocation (logout, migration scrub) must treat
+    :class:`KeyringUnavailableError` as failure except ``NO_BACKEND``.
     """
-    _guard()
+    if _unavailable is not None:
+        raise _unavailable
     try:
         keyring.delete_password(KEYRING_SERVICE, env_var)
     except keyring.errors.PasswordDeleteError:
         return
     except (keyring.errors.KeyringError, RuntimeError, OSError) as exc:
         raise _classify(exc) from exc
+
+
+def _is_secret_service_backend() -> bool:
+    try:
+        backend = _backend()
+    except Exception:
+        return False
+    return backend.__class__.__module__.startswith("keyring.backends.SecretService")
+
+
+def supports_username_enumeration() -> bool:
+    """Whether this process can list account names under ``KEYRING_SERVICE``.
+
+    macOS Keychain + ``security dump-keychain`` (metadata only, no ``-d``) and
+    Freedesktop Secret Service (search by service attribute) can surface every
+    account for our service — including names the finite constants scan never
+    knew about. Other backends have no portable list API in ``keyring``.
+    """
+    if sys.platform == "darwin" and _is_macos_backend() and shutil.which("security"):
+        return True
+    return _is_secret_service_backend()
+
+
+def list_usernames() -> tuple[str, ...] | None:
+    """Account names stored under ``KEYRING_SERVICE``, without reading secrets.
+
+    Returns ``None`` when enumeration is unsupported or the listing failed — the
+    one-time importer must not mark itself done on an enumerable platform when
+    this is ``None``, or dynamically named leftovers stay recoverable forever.
+    """
+    if sys.platform == "darwin" and _is_macos_backend():
+        return _list_macos_usernames()
+    if _is_secret_service_backend():
+        return _list_secret_service_usernames()
+    return None
+
+
+def _list_macos_usernames() -> tuple[str, ...] | None:
+    security_bin = shutil.which("security")
+    if security_bin is None:
+        return None
+    try:
+        result = subprocess.run(
+            [security_bin, "dump-keychain"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_MACOS_DUMP_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return _usernames_for_service(result.stdout, KEYRING_SERVICE)
+
+
+def _list_secret_service_usernames() -> tuple[str, ...] | None:
+    """List usernames for ``KEYRING_SERVICE`` via Secret Service attributes."""
+    from contextlib import closing
+
+    try:
+        # The Secret Service backend publishes no typed surface for any of this
+        # — ``schemes``/``scheme`` and ``_query`` are internals — so it is bound
+        # as ``Any`` rather than annotated with a shape this package would then
+        # have to keep in step with ``keyring``.
+        backend: Any = _backend()
+        scheme = backend.schemes[backend.scheme]
+        username_key = scheme["username"]
+        collection = backend.get_preferred_collection()
+        with closing(collection.connection):
+            items = collection.search_items(backend._query(KEYRING_SERVICE))
+            names: list[str] = []
+            for item in items:
+                attrs = item.get_attributes()
+                name = attrs.get(username_key) if isinstance(attrs, dict) else None
+                if isinstance(name, str) and name:
+                    names.append(name)
+            return tuple(dict.fromkeys(names))
+    except Exception:
+        return None
+
+
+def _usernames_for_service(dump_text: str, service: str) -> tuple[str, ...]:
+    """Parse ``security dump-keychain`` metadata for accounts under ``service``."""
+    names: list[str] = []
+    current_acct: str | None = None
+    current_svce: str | None = None
+
+    def _flush() -> None:
+        nonlocal current_acct, current_svce
+        if current_svce == service and current_acct:
+            names.append(current_acct)
+        current_acct = None
+        current_svce = None
+
+    for raw_line in dump_text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("keychain:") or line.startswith("class:"):
+            _flush()
+            continue
+        if not line.startswith('"'):
+            continue
+        if line.startswith('"acct"'):
+            current_acct = _blob_string(line)
+        elif line.startswith('"svce"'):
+            current_svce = _blob_string(line)
+    _flush()
+    return tuple(dict.fromkeys(name for name in names if name))
+
+
+def _blob_string(attribute_line: str) -> str | None:
+    """Extract the quoted string from a dump-keychain attribute line."""
+    marker = '<blob>="'
+    start = attribute_line.find(marker)
+    if start < 0:
+        return None
+    start += len(marker)
+    end = attribute_line.find('"', start)
+    if end < 0:
+        return None
+    return attribute_line[start:end] or None
 
 
 def item_exists(env_var: str) -> bool | None:
@@ -195,7 +313,8 @@ __all__ = [
     "get",
     "item_exists",
     "keyring_is_disabled",
-    "keyring_writes_enabled",
+    "list_usernames",
     "reset_keyring_state",
     "set",
+    "supports_username_enumeration",
 ]

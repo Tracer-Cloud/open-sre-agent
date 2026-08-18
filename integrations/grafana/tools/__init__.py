@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 
@@ -487,6 +488,7 @@ def query_grafana_logs(
     result_data = {
         "source": "grafana_loki",
         "available": True,
+        "truncated": result.get("truncated", False),
         "logs": compacted_logs,
         "error_logs": compacted_error_logs,
         "total_logs": result.get("total_logs", 0),
@@ -499,6 +501,13 @@ def query_grafana_logs(
         "account_id": client.account_id,
     }
     summary = summarize_counts(len(logs_data), len(compacted_logs), "logs")
+
+    if result.get("truncated"):
+        cap_warning = (
+            "WARNING: Upstream Loki query hit the maximum line limit; earlier logs were dropped. "
+        )
+        summary = cap_warning + (summary or "")
+
     if summary:
         result_data["truncation_note"] = summary
     return result_data
@@ -562,8 +571,8 @@ def _query_grafana_metrics_available(sources: dict[str, dict]) -> bool:
     ],
     requires=["metric_name"],
     source_id="grafana_mimir",
-    evidence_type="metrics",
-    side_effect_level="read_only",
+    evidence_type=EvidenceType.METRICS,
+    side_effect_level=SideEffectLevel.READ_ONLY,
     examples=[
         "Query `pipeline_runs_total` to verify throughput drops.",
         "Query HTTP error rate metric with a `service_name` filter.",

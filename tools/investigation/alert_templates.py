@@ -97,6 +97,19 @@ _ALERT_TEMPLATES: dict[str, dict[str, Any]] = {
             "splunk_query": 'index=main source="/var/log/payments*" "NullPointerException" | head 50',
         },
     },
+    "new_relic": {
+        "alert_name": "New Relic alert: checkout-latency threshold breached",
+        "pipeline_name": "checkout_service",
+        "severity": "critical",
+        "alert_source": "new_relic",
+        "message": "New Relic condition checkout-latency fired for checkout-service",
+        "commonAnnotations": {
+            "summary": "checkout-service p99 latency crossed the checkout-latency threshold",
+            "condition_name": "checkout-latency",
+            "policy_name": "checkout-service-policy",
+            "correlation_id": "replace-me",
+        },
+    },
 }
 
 

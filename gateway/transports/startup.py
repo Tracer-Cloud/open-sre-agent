@@ -1,0 +1,121 @@
+"""The transport registry and the one loop that starts and stops the workers.
+
+Owned by the transports group: worker initialization belongs next to the
+platforms it initializes, not at the gateway package root. Every transport is
+started in one pass — there is no per-transport start order — and a transport
+without credentials is skipped, not an error.
+
+This is the only module in the package allowed to import its peers, and only
+their ``startup`` submodules. Importing one platform package never loads this
+module, so peer isolation (one platform ≠ four SDK stacks) is preserved.
+Composed by :func:`gateway.startup.start_gateway`; nothing else imports this.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from gateway.core.runtime.errors import (
+    GatewayConfigurationError,
+    GatewayTransportFailedError,
+)
+from gateway.core.transport_api import (
+    GatewayAgentCallback,
+    TransportName,
+    TransportSpec,
+    TransportWorker,
+)
+from gateway.transports.buzz.startup import start_buzz_worker
+from gateway.transports.discord.startup import start_discord_worker
+from gateway.transports.slack.startup import start_slack_worker
+from gateway.transports.telegram.startup import start_telegram_worker
+
+# How long a shutdown waits on each worker before giving up on it.
+DEFAULT_STOP_TIMEOUT_SECONDS = 8.0
+
+
+TRANSPORTS: tuple[TransportSpec, ...] = (
+    TransportSpec(TransportName.TELEGRAM, start_telegram_worker, "polling for messages"),
+    TransportSpec(TransportName.SLACK, start_slack_worker, "inbound connected"),
+    TransportSpec(TransportName.DISCORD, start_discord_worker, "connected via gateway"),
+    TransportSpec(TransportName.BUZZ, start_buzz_worker, "polling for messages"),
+)
+
+
+@dataclass(frozen=True)
+class TransportHandle:
+    """A started transport: the worker to stop, and how to describe it."""
+
+    name: TransportName
+    worker: TransportWorker
+    status: str
+
+
+@dataclass(frozen=True)
+class ChatStartup:
+    """Started chat transports plus the status of every transport that was tried.
+
+    ``statuses`` covers transports that did not start, so the caller can report
+    "not configured" without the callee reaching into its status map.
+    """
+
+    handles: list[TransportHandle]
+    statuses: dict[TransportName, str]
+
+
+def start_transports(
+    *,
+    logger: logging.Logger,
+    handler: GatewayAgentCallback,
+) -> ChatStartup:
+    """Start every configured transport and report what each one did.
+
+    * :class:`GatewayConfigurationError` → ``not configured (…)`` (skipped).
+    * :class:`GatewayTransportFailedError` → ``failed (…)`` (skipped).
+
+    The gateway still serves whichever transports started successfully.
+    """
+    handles: list[TransportHandle] = []
+    statuses: dict[TransportName, str] = {}
+    for spec in TRANSPORTS:
+        try:
+            worker, _settings = spec.start(logger=logger, handler=handler)
+        except GatewayConfigurationError as exc:
+            logger.warning("%s chat disabled: %s", spec.name.capitalize(), exc)
+            statuses[spec.name] = f"not configured ({exc})"
+            continue
+        except GatewayTransportFailedError as exc:
+            logger.warning("%s chat failed: %s", spec.name.capitalize(), exc)
+            statuses[spec.name] = f"failed ({exc})"
+            continue
+        handles.append(TransportHandle(name=spec.name, worker=worker, status=spec.running_status))
+        statuses[spec.name] = spec.running_status
+    return ChatStartup(handles=handles, statuses=statuses)
+
+
+def stop_transports(
+    *,
+    handles: Sequence[TransportHandle],
+    timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS,
+) -> bool:
+    """Stop every started transport and return whether all of them stopped.
+
+    Every worker is asked to stop even after one fails, so a single stuck
+    transport cannot leave the others running.
+    """
+    stopped = True
+    for handle in handles:
+        stopped = handle.worker.stop(timeout=timeout) and stopped
+    return stopped
+
+
+__all__ = [
+    "DEFAULT_STOP_TIMEOUT_SECONDS",
+    "TRANSPORTS",
+    "ChatStartup",
+    "TransportHandle",
+    "start_transports",
+    "stop_transports",
+]

@@ -44,7 +44,17 @@ def _validate_allow_user_id(platform: str, user_id: str) -> str:
             "from.id, not a username or display name.",
             param_hint="--user-id",
         )
+    if platform == MessagingPlatform.BUZZ.value and not _is_hex_pubkey(uid):
+        raise click.BadParameter(
+            f"Buzz user ids are 64-char hex Nostr pubkeys; got '{uid}'. Use the sender's "
+            "hex pubkey (from `buzz messages get` output), not an npub or display name.",
+            param_hint="--user-id",
+        )
     return uid
+
+
+def _is_hex_pubkey(value: str) -> bool:
+    return len(value) == 64 and all(c in "0123456789abcdefABCDEF" for c in value)
 
 
 def _load_identity_policy(service: str) -> tuple[dict | None, MessagingIdentityPolicy]:

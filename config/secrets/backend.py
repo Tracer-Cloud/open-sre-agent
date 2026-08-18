@@ -9,11 +9,19 @@ acyclic.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
 
-# Where a resolved secret came from. ``fallback`` is the owner-only local file
-# used when the OS keyring cannot be reached.
-SecretTier = Literal["env", "keyring", "fallback", "none"]
+
+class SecretTier(StrEnum):
+    """Which storage tier a resolved secret came from.
+
+    ``fallback`` is the owner-only local file used when the OS keyring cannot be
+    reached; ``none`` means no tier held the secret.
+    """
+
+    ENV = "env"
+    KEYRING = "keyring"
+    FALLBACK = "fallback"
+    NONE = "none"
 
 
 class KeyringUnavailableReason(StrEnum):

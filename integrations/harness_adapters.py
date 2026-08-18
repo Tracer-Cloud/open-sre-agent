@@ -26,6 +26,11 @@ def register_harness_adapters() -> None:
         fetch_webapp_vault=lambda: webapp_vault.fetch_webapp_org_integrations(),
     )
 
+    from integrations.cli import setup_services
+    from platform.harness_ports import set_setupable_integration_services
+
+    set_setupable_integration_services(lambda: tuple(setup_services()))
+
     _register_vcs_repo_scope_providers()
     _register_cli_llm_adapters()
     _register_alert_source_detectors()
@@ -37,6 +42,7 @@ def register_harness_adapters() -> None:
     _register_alert_detail_fields()
     _register_secondary_tool_sources()
     _register_gateway_persona()
+    _register_preferred_evidence_sources()
 
 
 def _register_vcs_repo_scope_providers() -> None:
@@ -92,8 +98,11 @@ def _register_incident_anchor_parsers() -> None:
 
 
 def _register_prompt_fragments() -> None:
+    from integrations.buzz.action_prompt import buzz_action_prompt_fragment
     from integrations.github.action_prompt import github_action_prompt_fragment
     from integrations.github.gather_prompt import github_gather_prompt_fragment
+    from integrations.posthog.assistant_prompt import posthog_assistant_prompt_fragment
+    from integrations.posthog.gather_prompt import posthog_gather_prompt_fragment
     from integrations.rocketchat.action_prompt import rocketchat_action_prompt_fragment
     from integrations.sentry.assistant_prompt import sentry_assistant_prompt_fragment
     from integrations.sentry.gather_prompt import sentry_gather_prompt_fragment
@@ -112,6 +121,7 @@ def _register_prompt_fragments() -> None:
 
     clear_gather_prompt_fragments()
     register_gather_prompt_fragment(github_gather_prompt_fragment)
+    register_gather_prompt_fragment(posthog_gather_prompt_fragment)
     register_gather_prompt_fragment(sentry_gather_prompt_fragment)
     register_gather_prompt_fragment(slack_gather_prompt_fragment)
 
@@ -120,9 +130,11 @@ def _register_prompt_fragments() -> None:
     register_action_prompt_fragment(github_action_prompt_fragment)
     register_action_prompt_fragment(telegram_action_prompt_fragment)
     register_action_prompt_fragment(rocketchat_action_prompt_fragment)
+    register_action_prompt_fragment(buzz_action_prompt_fragment)
 
     clear_assistant_prompt_fragments()
     register_assistant_prompt_fragment(sentry_assistant_prompt_fragment)
+    register_assistant_prompt_fragment(posthog_assistant_prompt_fragment)
     register_assistant_prompt_fragment(slack_assistant_prompt_fragment)
 
 
@@ -183,6 +195,30 @@ def _register_gateway_persona() -> None:
 
     clear_gateway_persona_fragments()
     register_gateway_persona_fragment(gateway_persona_prompt_fragment)
+
+
+def _register_preferred_evidence_sources() -> None:
+    """Let vendor packages opt into ask kinds and unformed-metric draft fences.
+
+    No central default list — each integration registers itself. Skip a
+    vendor's ``register_*`` call to stop treating it as preferred (no L0 CTA /
+    no dialect draft for that id).
+    """
+    from integrations.grafana.metric_drafts import register_grafana_metric_drafts
+    from integrations.posthog_mcp.evidence_sources import (
+        register_posthog_mcp_evidence_sources,
+    )
+    from integrations.posthog_mcp.metric_drafts import register_posthog_mcp_metric_drafts
+    from platform.harness_ports import (
+        clear_metric_query_drafts,
+        clear_preferred_evidence_sources,
+    )
+
+    clear_preferred_evidence_sources()
+    clear_metric_query_drafts()
+    register_posthog_mcp_evidence_sources()
+    register_posthog_mcp_metric_drafts()
+    register_grafana_metric_drafts()
 
 
 def _register_cli_llm_adapters() -> None:

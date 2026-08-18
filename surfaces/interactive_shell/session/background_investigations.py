@@ -1,23 +1,16 @@
+"""Background-investigation session state for the REPL.
+
+``BackgroundInvestigationRecord`` itself lives in ``platform.common`` so the
+vendor notification adapters can share the contract without importing this
+package. It is re-exported here because this is the import path the REPL
+runtime and its tests already use.
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
-
-@dataclass
-class BackgroundInvestigationRecord:
-    """One completed or in-flight background investigation tracked by the REPL."""
-
-    task_id: str
-    status: str
-    command: str
-    investigation_id: str = ""
-    root_cause: str = ""
-    top_analysis: tuple[str, ...] = ()
-    next_steps: tuple[str, ...] = ()
-    stats: dict[str, Any] = field(default_factory=dict)
-    final_state: dict[str, Any] = field(default_factory=dict)
-    notification_results: dict[str, str] = field(default_factory=dict)
+from platform.background_investigations.types import BackgroundInvestigationRecord
 
 
 @dataclass
@@ -33,3 +26,9 @@ class BackgroundNotificationPreferences:
             if normalized and normalized not in cleaned:
                 cleaned.append(normalized)
         self.channels = tuple(cleaned)
+
+
+__all__ = [
+    "BackgroundInvestigationRecord",
+    "BackgroundNotificationPreferences",
+]

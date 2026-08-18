@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from config.constants.llm import LLM_PROVIDER_ENV
 from config.constants.paths import OPENSRE_HOME_DIR, PROJECT_ROOT
 
 OPENSRE_PROJECT_ENV_PATH_ENV = "OPENSRE_PROJECT_ENV_PATH"
@@ -96,15 +97,15 @@ def apply_wizard_store_env_defaults(*, path: Path | None = None) -> None:
         return
 
     provider = str(local.get("provider") or "").strip()
-    configured_provider = os.environ.get("LLM_PROVIDER", "").strip()
+    configured_provider = os.environ.get(LLM_PROVIDER_ENV, "").strip()
     if (
-        "LLM_PROVIDER" in os.environ
+        LLM_PROVIDER_ENV in os.environ
         and provider
         and configured_provider.lower() != provider.lower()
     ):
         return
 
-    _set_if_unset("LLM_PROVIDER", provider)
+    _set_if_unset(LLM_PROVIDER_ENV, provider)
     _set_if_unset("LLM_AUTH_METHOD", local.get("auth_method"))
 
     model_env = str(local.get("model_env") or "").strip()

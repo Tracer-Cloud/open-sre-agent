@@ -1,12 +1,12 @@
-"""Regression: Slack org scoping must not leak into other surfaces.
+"""Regression: Slack org scoping must not leak into peer surfaces.
 
 Borders under test
 ------------------
-* Slack team turn — only place that binds ``StorageScope`` and resolves a
-  principal from the install catalog.
-* Telegram / CLI / interactive shell — stay unbound; host ``~/.opensre``;
-  bindings omit principal/actor (legacy empty ids).
-* Shared ``gateway.storage`` — transport-neutral; no Slack resolve exports.
+* Slack / Discord / Telegram — each binds ``StorageScope`` via its own
+  ``*.principal`` module (peer isolation; no cross-imports).
+* CLI / interactive shell — stay unbound; host ``~/.opensre``; bindings omit
+  principal/actor (legacy empty ids).
+* Shared ``gateway.core.storage`` — transport-neutral; no Slack resolve exports.
 * Actors in one org — private sessions; shared integrations; no cross-user
   corruption.
 * Orgs — never share a context root or binding row.
@@ -24,7 +24,7 @@ from config.constants import paths
 from config.constants.billing import ORGANIZATION_ID_ENV
 from config.principal import Actor, Principal, StorageScope
 from config.scope_context import bound_storage_scope, current_scope
-from gateway.storage import FileBindingStore
+from gateway.core.storage import FileBindingStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -60,32 +60,28 @@ def _imported_modules(path: Path) -> set[str]:
     return names
 
 
-def test_telegram_package_never_imports_slack_principal_or_scope() -> None:
-    """Telegram must not resolve Slack installs or bind org scope."""
+def test_telegram_package_never_imports_slack_or_discord_principal() -> None:
+    """Telegram uses its own principal module — never Slack/Discord peers."""
     banned = (
-        "gateway.slack.principal",
-        "gateway.slack.installs",
-        "gateway.storage.principal_resolve",
-        "gateway.storage.slack_installs",
+        "gateway.transports.slack.processing.principal",
+        "gateway.transports.discord.principal",
+        "gateway.core.storage.principal_resolve",
+        "gateway.core.storage.slack_installs",
     )
     offenders: list[str] = []
-    for path in _python_files("gateway.telegram"):
+    for path in _python_files("gateway.transports.telegram"):
         imported = _imported_modules(path)
         for name in banned:
             if name in imported or any(n.startswith(name + ".") for n in imported):
                 offenders.append(f"{path.relative_to(REPO_ROOT)} → {name}")
-        # bound_storage_scope is allowed only via gateway.storage re-export in
-        # theory — Telegram must not use it at all.
-        if "config.scope_context" in imported:
-            offenders.append(f"{path.relative_to(REPO_ROOT)} → config.scope_context")
-    assert offenders == [], "Telegram crossed the Slack storage border:\n" + "\n".join(offenders)
+    assert offenders == [], "Telegram crossed a peer principal border:\n" + "\n".join(offenders)
 
 
 def test_surfaces_never_import_slack_principal_resolve() -> None:
     """CLI / interactive shell stay unbound; no Slack resolve on those surfaces."""
     banned_prefixes = (
-        "gateway.slack.principal",
-        "gateway.storage.principal_resolve",
+        "gateway.transports.slack.processing.principal",
+        "gateway.core.storage.principal_resolve",
     )
     offenders: list[str] = []
     for package in ("surfaces.cli", "surfaces.interactive_shell"):
@@ -98,7 +94,7 @@ def test_surfaces_never_import_slack_principal_resolve() -> None:
 
 def test_gateway_storage_package_does_not_export_slack_resolve() -> None:
     """Shared storage stays transport-neutral after the Slack SoC move."""
-    storage = importlib.import_module("gateway.storage")
+    storage = importlib.import_module("gateway.core.storage")
     leaked = [
         name
         for name in (
@@ -111,16 +107,18 @@ def test_gateway_storage_package_does_not_export_slack_resolve() -> None:
         )
         if hasattr(storage, name)
     ]
-    assert leaked == [], f"gateway.storage still exports Slack APIs: {leaked}"
+    assert leaked == [], f"gateway.core.storage still exports Slack APIs: {leaked}"
 
 
 def test_config_principal_has_no_slack_named_factories() -> None:
-    """Leaf identity types stay vendor-neutral; Slack factories live in gateway.slack."""
+    """Leaf identity types stay vendor-neutral; Slack factories live in gateway.transports.slack."""
     from config import principal as principal_mod
 
     assert not hasattr(principal_mod.Actor, "slack")
     assert not hasattr(principal_mod.StorageScope, "for_slack_member")
-    assert hasattr(importlib.import_module("gateway.slack.principal"), "slack_scope")
+    assert hasattr(
+        importlib.import_module("gateway.transports.slack.processing.principal"), "slack_scope"
+    )
 
 
 # ── Slack org users: isolation ──────────────────────────────────────────────
@@ -166,7 +164,7 @@ def test_two_orgs_do_not_share_integrations_or_sessions(_host: Path) -> None:
     assert globex_integ.read_text(encoding="utf-8") == '{"globex": true}'
 
 
-def test_slack_bindings_isolate_actors_and_keep_legacy_telegram_untouched(
+def test_slack_and_telegram_scoped_bindings_stay_isolated(
     tmp_path: Path,
 ) -> None:
     store = FileBindingStore(tmp_path / "bindings.json")
@@ -185,8 +183,13 @@ def test_slack_bindings_isolate_actors_and_keep_legacy_telegram_untouched(
         principal=org,
         actor="U_BOB",
     )
-    # Telegram production shape: omit principal + actor → legacy empty ids.
-    store.bind(platform="telegram", chat_id="42", session_id="tg-legacy")
+    store.bind(
+        platform="telegram",
+        chat_id="42",
+        session_id="tg-alice",
+        principal=org,
+        actor="tg-42",
+    )
 
     assert (
         store.get_session_id(platform="slack", chat_id="T:C:1", principal=org, actor="U_ALICE")
@@ -196,10 +199,14 @@ def test_slack_bindings_isolate_actors_and_keep_legacy_telegram_untouched(
         store.get_session_id(platform="slack", chat_id="T:C:1", principal=org, actor="U_BOB")
         == "slack-bob"
     )
-    assert store.get_session_id(platform="telegram", chat_id="42") == "tg-legacy"
-    # Slack actor rows must never answer a Telegram omit-scope lookup.
+    assert (
+        store.get_session_id(platform="telegram", chat_id="42", principal=org, actor="tg-42")
+        == "tg-alice"
+    )
+    # Unscoped lookups must not answer scoped rows.
     assert store.get_session_id(platform="slack", chat_id="T:C:1") is None
-    # Telegram legacy must never answer a Slack scoped lookup.
+    assert store.get_session_id(platform="telegram", chat_id="42") is None
+    # Cross-platform scoped lookup must miss.
     assert (
         store.get_session_id(platform="telegram", chat_id="42", principal=org, actor="U_ALICE")
         is None
@@ -207,7 +214,7 @@ def test_slack_bindings_isolate_actors_and_keep_legacy_telegram_untouched(
     store.close()
 
 
-# ── Non-Slack surfaces: unbound / mount ignored ─────────────────────────────
+# ── Unbound CLI surfaces: mount ignored ─────────────────────────────────────
 
 
 def test_unbound_surfaces_ignore_context_root_mount(

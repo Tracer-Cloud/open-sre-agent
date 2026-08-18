@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session import default_session_repo
+from core.agent_harness.spi.defaults import default_session_repo
 from surfaces.interactive_shell.command_registry.investigation import (
     render_investigation_report,
     write_investigation_export,
@@ -24,15 +24,15 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     prepare_repl_output_line,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.components.time_format import format_repl_timestamp
 
 _RCA_ROOT = "/rca"
 _RCA_LATEST = "__latest__"

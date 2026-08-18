@@ -272,7 +272,7 @@ def _run_install_sh(
                 "curl -fsSL https://install.opensre.com | bash",
                 "OPENSRE_AUTO_LAUNCH=0",
                 "OPENSRE_SKIP_GH_INSTALL=1",
-                'depends_on "gh"',
+                "Homebrew installs pull in `gh` automatically.",
             ),
         ),
         (
@@ -363,7 +363,7 @@ def test_homebrew_sync_script_updates_formula_checksums() -> None:
 def test_dockerfile_installs_runtime_entrypoint() -> None:
     text = DOCKERFILE.read_text(encoding="utf-8")
     assert "FROM python:" in text
-    assert "opensre gateway" in text or "uvicorn gateway.http.webapp" in text
+    assert "opensre gateway" in text or "uvicorn gateway.web.webapp" in text
 
 
 def test_makefile_install_uses_uv_sync() -> None:

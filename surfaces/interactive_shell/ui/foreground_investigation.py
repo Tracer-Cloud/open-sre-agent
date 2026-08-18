@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import session_terminal
+from core.agent_harness.spi.session_state import session_terminal
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 from platform.common.errors import OpenSREError
 from platform.common.task_types import TaskKind, TaskRecord
@@ -23,12 +23,12 @@ from surfaces.interactive_shell.ui.investigation_outcome import (
     normalize_investigation_target,
     user_facing_error_message,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry.investigation_llm_usage import (
     InvestigationLlmUsage,
     observe_investigation_llm_usage,
     resolve_configured_llm_identity,
 )
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.session import Session
@@ -169,9 +169,9 @@ def _run_foreground_investigation_body(
     task.mark_completed(result=str(root) if root is not None else "")
     session.apply_investigation_result(final_state, trigger=task_command)
 
-    from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
-    from surfaces.interactive_shell.ui.components.key_reader import restore_stdin_terminal
-    from surfaces.interactive_shell.ui.feedback import prompt_investigation_feedback
+    from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
+    from surfaces.shared.terminal.components.key_reader import restore_stdin_terminal
+    from surfaces.shared.terminal.feedback import prompt_investigation_feedback
 
     # Skip feedback while the prompt-toolkit app is running: its cursor-position
     # queries would race the raw feedback menu and leak bytes into the next prompt.

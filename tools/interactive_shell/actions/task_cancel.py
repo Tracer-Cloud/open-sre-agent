@@ -7,13 +7,14 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
-    object_schema,
 )
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.registered_tool import RegisteredTool
+from core.tool_framework.utils.schema import object_schema
 from platform.common.task_types import TaskKind, TaskStatus
 from tools.interactive_shell.shared import plan_foreground_tool
 
@@ -122,7 +123,7 @@ task_cancel_tool = RegisteredTool(
         required=("target",),
     ),
     source="interactive_shell",
-    surfaces=("action",),
+    surfaces=(ToolSurface.ACTION,),
     parallel_safe=False,
     accepts_runtime_context=True,
     run=run_task_cancel,

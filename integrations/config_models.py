@@ -9,6 +9,11 @@ from urllib.parse import urlparse
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from config.config import get_tracer_base_url
+from config.constants.azure import (
+    AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT,
+    AZURE_MAX_RESULTS_DEFAULT,
+    AZURE_MAX_RESULTS_HARD_LIMIT,
+)
 from config.strict_config import StrictConfigModel
 from integrations._validators import (
     normalize_bearer,
@@ -20,8 +25,6 @@ from integrations._validators import (
 from platform.common.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
-DEFAULT_GROUNDCOVER_MCP_URL = "https://mcp.groundcover.com/api/mcp"
-DEFAULT_GROUNDCOVER_TIMEZONE = "UTC"
 DEFAULT_DATADOG_SITE = "datadoghq.com"
 DEFAULT_CORALOGIX_BASE_URL = "https://api.coralogix.com"
 DEFAULT_OPSGENIE_BASE_URLS: dict[str, str] = {
@@ -139,61 +142,6 @@ class DatadogIntegrationConfig(StrictConfigModel):
             "DD-APPLICATION-KEY": self.app_key,
             "Content-Type": "application/json",
         }
-
-
-class GroundcoverIntegrationConfig(StrictConfigModel):
-    """Normalized groundcover credentials used by resolution and verification flows.
-
-    groundcover is reached through its public streamable-HTTP MCP endpoint. The
-    bearer ``api_key`` is a read-only service-account token; ``tenant_uuid`` and
-    ``backend_id`` are optional routing selectors only needed when the account
-    has multiple workspaces/backends.
-    """
-
-    api_key: str = ""
-    mcp_url: str = DEFAULT_GROUNDCOVER_MCP_URL
-    tenant_uuid: str = ""
-    backend_id: str = ""
-    timezone: str = DEFAULT_GROUNDCOVER_TIMEZONE
-    integration_id: str = ""
-
-    _normalize_api_key = field_validator("api_key", mode="before")(normalize_bearer())
-    _normalize_strs = field_validator("tenant_uuid", "backend_id", "integration_id", mode="before")(
-        normalize_str()
-    )
-    _normalize_timezone = field_validator("timezone", mode="before")(
-        normalize_with_default(DEFAULT_GROUNDCOVER_TIMEZONE)
-    )
-
-    @field_validator("mcp_url", mode="before")
-    @classmethod
-    def _normalize_mcp_url(cls, value: object) -> str:
-        normalized = normalize_url(DEFAULT_GROUNDCOVER_MCP_URL)(value)
-        return validate_https_or_loopback_http_url(
-            normalized, service_name="groundcover", field_name="mcp_url"
-        )
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.api_key and self.mcp_url)
-
-    @property
-    def request_headers(self) -> dict[str, str]:
-        """HTTP headers for the MCP transport.
-
-        Only auth and timezone are always sent; tenant/backend routing headers
-        are added when configured so single-workspace accounts work with no
-        routing while multi-workspace accounts stay scoped to one context.
-        """
-        headers: dict[str, str] = {
-            "Authorization": f"Bearer {self.api_key}",
-            "X-Timezone": self.timezone,
-        }
-        if self.tenant_uuid:
-            headers["X-Tenant-UUID"] = self.tenant_uuid
-        if self.backend_id:
-            headers["X-Backend-Id"] = self.backend_id
-        return headers
 
 
 class CoralogixIntegrationConfig(StrictConfigModel):
@@ -830,6 +778,47 @@ class RocketChatConfig(StrictConfigModel):
         return self
 
 
+class BuzzConfig(StrictConfigModel):
+    """Buzz (Nostr-based workspace) runtime config for delivery via ``buzz-cli``.
+
+    ``private_key`` is the agent's Nostr identity (hex or ``nsec1...``) and is
+    the only required field. ``default_channel`` is a Buzz channel UUID —
+    channels are identified by UUID, not by name.
+    """
+
+    relay_url: str = "http://localhost:3000"
+    private_key: str = ""
+    default_channel: str = ""
+    auth_tag: str = ""
+    buzz_path: str = "buzz"
+    integration_id: str = ""
+
+    @field_validator("relay_url", mode="before")
+    @classmethod
+    def _normalize_relay_url(cls, value: object) -> str:
+        stripped = str(value or "").strip().rstrip("/")
+        if not stripped:
+            return "http://localhost:3000"
+        if not stripped.startswith(("http://", "https://")):
+            raise ValueError("relay_url must start with http:// or https://")
+        return stripped
+
+    @field_validator("private_key", "auth_tag", mode="before")
+    @classmethod
+    def _strip_secret(cls, value: object) -> str:
+        return str(value or "").strip()
+
+    _normalize_default_channel = field_validator("default_channel", mode="before")(normalize_str())
+    _normalize_buzz_path = field_validator("buzz_path", mode="before")(
+        normalize_with_default("buzz")
+    )
+    _normalize_integration_id = field_validator("integration_id", mode="before")(normalize_str())
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.private_key)
+
+
 class WhatsAppConfig(StrictConfigModel):
     """Twilio WhatsApp runtime config.
 
@@ -955,6 +944,10 @@ class SlackBotConfig(StrictConfigModel):
         description="Slack signing secret for webhook HMAC verification. MUST be set for Events API HTTP.",
     )
     app_id: str = ""
+    default_chat_id: str = Field(
+        default="",
+        description="Default channel ID (C…) for scheduled outbound delivery.",
+    )
     identity_policy: dict[str, object] | None = Field(
         default=None,
         description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",
@@ -1071,14 +1064,14 @@ class AzureIntegrationConfig(StrictConfigModel):
 
     workspace_id: str
     access_token: str
-    endpoint: str = "https://api.loganalytics.io"
+    endpoint: str = AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT
     tenant_id: str = ""
     subscription_id: str = ""
-    max_results: int = 100
+    max_results: int = AZURE_MAX_RESULTS_DEFAULT
     integration_id: str = ""
 
     _normalize_endpoint = field_validator("endpoint", mode="before")(
-        normalize_url("https://api.loganalytics.io")
+        normalize_url(AZURE_LOG_ANALYTICS_DEFAULT_ENDPOINT)
     )
     _normalize_strs = field_validator(
         "tenant_id", "subscription_id", "integration_id", mode="before"
@@ -1090,8 +1083,8 @@ class AzureIntegrationConfig(StrictConfigModel):
         try:
             v: int = int(value)  # type: ignore[arg-type,call-overload]
         except (TypeError, ValueError):
-            return 100
-        return max(1, min(v, 500))
+            return AZURE_MAX_RESULTS_DEFAULT
+        return max(1, min(v, AZURE_MAX_RESULTS_HARD_LIMIT))
 
 
 class OpenObserveIntegrationConfig(StrictConfigModel):

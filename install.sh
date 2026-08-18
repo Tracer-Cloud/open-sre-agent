@@ -925,6 +925,11 @@ extract_and_verify_binary() {
 
   extracted_binary_path="$(get_binary_path_from_archive "$extraction_dir" "$BIN_NAME")"
   printf 'Found binary at %s, verifying it runs...\n' "$extracted_binary_path" >&2
+  # macOS: clear quarantine and re-adhoc-sign onedir libs+binary. Stale or
+  # post-mutation signatures otherwise SIGKILL --version (exit 137,
+  # CODESIGNING / Invalid Page) on consumer Macs.
+  clear_macos_quarantine "$extraction_dir"
+  resign_macos_onedir_adhoc "$extracted_binary_path"
 
   if [ "$INSTALL_CHANNEL" = "main" ]; then
     extracted_version="$(verify_binary_version "$extracted_binary_path")" || return "$?"
@@ -988,6 +993,11 @@ verify_binary_version() {
     else
       printf 'Command output: <empty>\n' >&2
     fi
+    # 137 = 128+SIGKILL. On Darwin this is often CODESIGNING / Invalid Page for
+    # a broken adhoc main-build artifact (not a missing quarantine xattr).
+    if [ "$version_status" -eq 137 ] && [ "$(uname -s 2>/dev/null || true)" = "Darwin" ]; then
+      printf 'Hint: exit 137 on macOS usually means the kernel killed the binary for an invalid code signature (adhoc main-build). Check Console DiagnosticReports for "Code Signature Invalid", re-download a notarized release, or install from source/uv.\n' >&2
+    fi
     print_binary_diagnostics "$binary_path"
     return 1
   fi
@@ -1018,6 +1028,35 @@ verify_binary_version() {
   esac
 }
 
+clear_macos_quarantine() {
+  local target_path="$1"
+
+  # Only relevant on Darwin; no-op elsewhere / when xattr is missing.
+  [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] || return 0
+  command -v xattr >/dev/null 2>&1 || return 0
+  [ -e "$target_path" ] || return 0
+  xattr -dr com.apple.quarantine "$target_path" >/dev/null 2>&1 || true
+}
+
+resign_macos_onedir_adhoc() {
+  local binary_path="$1"
+  local bundle_dir
+
+  # PyInstaller onedir: post-build dylib rewrites (or a stale CI signature) leave
+  # Invalid Page codesign faults. Consumer Macs SIGKILL --version (exit 137).
+  # Sign nested libs first, then the main binary (same order as release.yml).
+  [ "$(uname -s 2>/dev/null || true)" = "Darwin" ] || return 0
+  command -v codesign >/dev/null 2>&1 || return 0
+  [ -f "$binary_path" ] || return 0
+  bundle_dir="$(cd "$(dirname "$binary_path")" && pwd)"
+  clear_macos_quarantine "$bundle_dir"
+  find "$bundle_dir" -type f \( -name '*.dylib' -o -name '*.so' -o -name '*.so.*' \) -print0 \
+    | while IFS= read -r -d '' lib; do
+        codesign --force --sign - "$lib" >/dev/null 2>&1 || true
+      done
+  codesign --force --sign - "$binary_path" >/dev/null 2>&1 || true
+}
+
 print_binary_diagnostics() {
   local binary_path="$1"
 
@@ -1031,6 +1070,9 @@ print_binary_diagnostics() {
   fi
   if command -v file >/dev/null 2>&1; then
     file "$binary_path" >&2 2>/dev/null || true
+  fi
+  if command -v xattr >/dev/null 2>&1; then
+    printf '  xattr: %s\n' "$(xattr -l "$binary_path" 2>/dev/null || printf '(none)')" >&2
   fi
   if [ "$platform" = "linux" ] && command -v ldd >/dev/null 2>&1; then
     ldd "$binary_path" >&2 2>/dev/null || true

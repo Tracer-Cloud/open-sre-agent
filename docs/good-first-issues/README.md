@@ -33,7 +33,7 @@ Browse issues tagged with the `good first issue` label:
 
 Full contribution flow is in [CONTRIBUTING.md](../../CONTRIBUTING.md).
 After you open a PR, follow the [PR review flow](../pr-review-flow.mdx)
-(Greptile · human review · automerge).
+(Greptile · human review · CI).
 
 ## Ask for help
 

@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from config.constants.slack import SLACK_BOT_TOKEN_ENV
 from config.llm_credentials import resolve_env_credential
 
 _API_BASE = "https://slack.com/api"
@@ -57,7 +58,7 @@ def resolve_bot_token() -> tuple[SlackBotTarget | None, str]:
     ``resolve_env_credential`` checks process env then the OS keyring (wizard
     ``sync_env_secret``), preserving the historical env-before-store order.
     """
-    env_token = resolve_env_credential("SLACK_BOT_TOKEN").strip()
+    env_token = resolve_env_credential(SLACK_BOT_TOKEN_ENV).strip()
     if env_token:
         return SlackBotTarget(bot_token=env_token), ""
 
@@ -99,7 +100,7 @@ def bot_token_configured(sources: dict[str, Any] | None = None) -> bool:
     INTEGRATIONS: none``) while ``SLACK_BOT_TOKEN`` / the store still have a
     usable token. ``resolve_bot_token`` already understands that shape.
     """
-    if resolve_env_credential("SLACK_BOT_TOKEN").strip():
+    if resolve_env_credential(SLACK_BOT_TOKEN_ENV).strip():
         return True
     if _bot_token_from_slack_source((sources or {}).get("slack")):
         return True

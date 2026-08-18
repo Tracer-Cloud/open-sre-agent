@@ -38,10 +38,6 @@ from surfaces.interactive_shell.runtime.investigation_adapter import (
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
-from surfaces.interactive_shell.ui.components.cpr_stdin import (
-    strip_cpr_escape_sequences,
-    strip_cpr_sequences,
-)
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
@@ -55,6 +51,10 @@ from surfaces.interactive_shell.ui.input_prompt.rendering import _prompt_message
 from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.cpr_stdin import (
+    strip_cpr_escape_sequences,
+    strip_cpr_sequences,
+)
 
 
 def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
@@ -224,10 +224,13 @@ def test_shift_enter_inserts_newline_before_submit(
         ):
             prompt = input_prompt.build_prompt_session()
             task = asyncio.create_task(prompt.prompt_async(""))
+            # Yield so prompt_async attaches readers before keystrokes arrive;
+            # under loaded ``test-cov`` (xdist + coverage) a 1s wait_for flakes.
+            await asyncio.sleep(0)
             pipe_input.send_bytes(b"first line")
             pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
             pipe_input.send_bytes(b"second line\r")
-            return await asyncio.wait_for(task, timeout=1)
+            return await asyncio.wait_for(task, timeout=5.0)
 
     assert asyncio.run(_collect()) == "first line\nsecond line"
 
@@ -736,14 +739,19 @@ class TestSpinnerState:
         assert "168;212;255" in raw
         assert "185;237;175" not in raw
 
+    @staticmethod
+    def _all_verbs(spinner: loop_state.SpinnerState) -> tuple[str, ...]:
+        """Union of every tier's verb pool."""
+        return tuple(verb for _threshold, pool in spinner._VERB_TIERS for verb in pool)
+
     def test_streaming_inline_spinner_includes_glyph_and_token_count(self) -> None:
         spinner = loop_state.SpinnerState()
         spinner.start()
         spinner.bytes_in = 1234 * _CHARS_PER_TOKEN  # = 1234 tokens
         rendered = _strip_ansi(spinner.inline_spinner_ansi())
-        # The verb is randomly picked from ``_THINKING_VERBS`` per turn —
+        # The verb is randomly picked from the tier pools per turn —
         # any of them followed by ``…`` is acceptable.
-        assert any(f"{verb}…" in rendered for verb in spinner._THINKING_VERBS)
+        assert any(f"{verb}…" in rendered for verb in self._all_verbs(spinner))
         # 1234 tokens → "1.2k" via format_token_count_short.
         assert "1.2k tokens" in rendered
         # Spinner glyph from the brail palette.
@@ -781,11 +789,80 @@ class TestSpinnerState:
         verbs_seen: set[str] = set()
         for _ in range(20):
             rendered = _strip_ansi(spinner.inline_spinner_ansi())
-            for verb in spinner._THINKING_VERBS:
+            for verb in self._all_verbs(spinner):
                 if f"{verb}…" in rendered:
                     verbs_seen.add(verb)
                     break
         assert len(verbs_seen) == 1, f"verb changed mid-turn — saw {verbs_seen}"
+
+    def test_advance_verb_changes_verb_between_agent_steps(self) -> None:
+        """``advance_verb`` re-rolls the verb and never repeats the current one."""
+        spinner = loop_state.SpinnerState()
+        spinner.start()
+        for _ in range(20):
+            before = spinner._verb
+            spinner.advance_verb()
+            assert spinner._verb != before
+            assert spinner._verb in spinner._VERB_TIERS[0][1]
+
+    def test_weighted_verbs_are_picked_about_twice_as_often(self) -> None:
+        """Verbs in ``_VERB_WEIGHTS`` (weight 2) beat the unweighted average."""
+        import random as _random
+
+        _random.seed(20260807)
+        spinner = loop_state.SpinnerState()
+        counts: dict[str, int] = dict.fromkeys(spinner._VERB_TIERS[0][1], 0)
+        for _ in range(6000):
+            spinner.start()
+            counts[spinner._verb] += 1
+        plain = [count for verb, count in counts.items() if verb not in spinner._VERB_WEIGHTS]
+        plain_avg = sum(plain) / len(plain)
+        for verb in spinner._VERB_WEIGHTS:
+            assert counts[verb] > 1.5 * plain_avg, (
+                f"{verb!r} picked {counts[verb]}x vs plain avg {plain_avg:.0f}"
+            )
+
+    def test_spinner_verb_escalates_through_tiers_with_elapsed_time(self) -> None:
+        """The verb pool escalates as the run goes hot, and never de-escalates."""
+        spinner = loop_state.SpinnerState()
+        spinner.start()
+        tier0, tier1, tier2 = (pool for _threshold, pool in spinner._VERB_TIERS)
+        assert spinner._verb in tier0
+
+        spinner.started_at -= 45  # elapsed ≈ 45s → ICE contact
+        _strip_ansi(spinner.inline_spinner_ansi())
+        assert spinner._verb in tier1
+        assert spinner._verb_tier == 1
+
+        spinner.started_at -= 75  # elapsed ≈ 120s → deep run
+        _strip_ansi(spinner.inline_spinner_ansi())
+        assert spinner._verb in tier2
+        assert spinner._verb_tier == 2
+
+        # Re-rendering at the same elapsed time keeps the deep-run tier.
+        _strip_ansi(spinner.inline_spinner_ansi())
+        assert spinner._verb in tier2
+
+    def test_advance_verb_after_escalation_picks_within_escalated_tier(self) -> None:
+        spinner = loop_state.SpinnerState()
+        spinner.start()
+        spinner.started_at -= 45  # escalate to the ICE-contact tier
+        spinner.inline_spinner_ansi()
+        tier1 = spinner._VERB_TIERS[1][1]
+        for _ in range(10):
+            spinner.advance_verb()
+            assert spinner._verb in tier1
+
+    def test_start_resets_escalation_to_calm_tier(self) -> None:
+        spinner = loop_state.SpinnerState()
+        spinner.start()
+        spinner.started_at -= 120
+        spinner.inline_spinner_ansi()
+        assert spinner._verb_tier == 2
+
+        spinner.start()
+        assert spinner._verb_tier == 0
+        assert spinner._verb in spinner._VERB_TIERS[0][1]
 
     def test_inline_spinner_glyph_animates_with_elapsed_time(self) -> None:
         """The frame is a function of elapsed time, not of render-call count.
@@ -844,6 +921,7 @@ class TestSpinnerState:
         spinner = loop_state.SpinnerState()
         rendered = _strip_ansi(spinner.idle_hint_ansi())
         assert "/ for commands" in rendered
+        assert "tab tool details" in rendered
         assert "history" in rendered
         # Hidden — buffer is empty, Esc would be a no-op, so the hint
         # would mislead the user.
@@ -972,11 +1050,11 @@ class TestStreamingConsole:
 
         calls: list[str] = []
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
+            "surfaces.shared.terminal.components.choice_menu.ensure_tty_column_zero",
             lambda: calls.append("ensure"),
         )
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+            "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
             lambda: calls.append("prepare"),
         )
 
@@ -1642,9 +1720,9 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
         monkeypatch.setattr(
-            "surfaces.cli.commands.config._save_config",
+            "config.local_settings.save_local_settings",
             lambda data: saved_payloads.append(dict(data)),
         )
 
@@ -1688,8 +1766,8 @@ class TestThemeCommand:
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         set_active_theme("green")
         session = Session()
@@ -1704,8 +1782,8 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         refreshed: list[dict[str, object | None]] = []
 
@@ -1718,7 +1796,7 @@ class TestThemeCommand:
             refreshed.append({"console": console, "session": session, "theme_notice": theme_notice})
 
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.poster.refresh_welcome_poster",
             _refresh,
         )
 
@@ -1763,11 +1841,11 @@ class TestThemeCommand:
             lambda: drains.append("drain"),
         )
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.poster.refresh_welcome_poster",
             lambda *_args, **_kwargs: drains.append("poster"),
         )
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         session = Session()
         console, _buf = self._capture()

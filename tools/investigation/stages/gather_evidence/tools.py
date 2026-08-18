@@ -11,6 +11,7 @@ from core.domain.alerts.alert_source import (
     secondary_tool_sources,
     seed_tool_sources_for_alert,
 )
+from core.domain.types.tools import ToolSurface
 from core.llm.types import ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
 from core.tool_framework.utils.integration_sources import availability_view
@@ -52,7 +53,11 @@ STAGNATION_NUDGE = (
 
 def get_available_tools(resolved_integrations: dict[str, Any]) -> list[RegisteredTool]:
     available_sources = availability_view(resolved_integrations)
-    return [t for t in get_registered_tools("investigation") if t.is_available(available_sources)]
+    return [
+        t
+        for t in get_registered_tools(ToolSurface.INVESTIGATION)
+        if t.is_available(available_sources)
+    ]
 
 
 def planned_action_names(state: dict[str, Any]) -> list[str]:

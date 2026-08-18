@@ -31,6 +31,7 @@ def ensure_delivery_adapters_registered() -> tuple[str, ...]:
     """
     # These imports are intentional wiring, not dispatch logic. Keeping them
     # here means ``dispatch.py`` never touches the vendor packages directly.
+    import integrations.buzz.reporting_adapter  # noqa: F401
     import integrations.discord.reporting_adapter  # noqa: F401
     import integrations.grafana.reporting_adapter  # noqa: F401
     import integrations.openclaw.reporting_adapter  # noqa: F401

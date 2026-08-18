@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.domain.types.tools import ToolSurface
 from tools.registry import get_registered_tool_map, get_registered_tools
 
 # Parameter names that are supplied from resolved integration config (auth
@@ -71,7 +72,7 @@ MODEL_SUPPLIED_CREDENTIAL_PARAMS = frozenset(
 
 def _all_registered_tools() -> dict[str, object]:
     tools: dict[str, object] = {}
-    for surface in ("investigation", "chat"):
+    for surface in (ToolSurface.INVESTIGATION, ToolSurface.CHAT):
         for tool in get_registered_tools(surface):
             tools[tool.name] = tool
     return tools

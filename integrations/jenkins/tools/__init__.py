@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.jenkins import jenkins_config_from_env
@@ -91,7 +92,7 @@ def _list_jenkins_builds_extract_params(sources: dict[str, dict]) -> dict[str, A
         "Correlating a deployment window with downstream errors in logs or metrics",
     ],
     requires=["job_name"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -166,7 +167,7 @@ def _get_jenkins_build_log_extract_params(sources: dict[str, dict]) -> dict[str,
         "Finding the stack trace or failing step that broke a deployment",
     ],
     requires=["job_name", "build_number"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -234,7 +235,7 @@ def _get_jenkins_pipeline_stages_extract_params(sources: dict[str, dict]) -> dic
         "Seeing how long each stage took to spot a slow or stuck stage",
     ],
     requires=["job_name", "build_number"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -298,7 +299,7 @@ def _list_jenkins_jobs_extract_params(sources: dict[str, dict]) -> dict[str, Any
         "Discovering which jobs exist when the failing job name is unknown",
         "Getting an overview of which pipelines are passing or failing",
     ],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {
@@ -352,7 +353,7 @@ def _list_jenkins_running_builds_extract_params(sources: dict[str, dict]) -> dic
         "Checking whether a build is running right now during an active incident",
         "Spotting a long-running or stuck build that may be causing impact",
     ],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

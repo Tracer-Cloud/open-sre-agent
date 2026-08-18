@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -83,6 +84,9 @@ class ScenarioSession:
     has_prior_state: bool
     configured_integrations: tuple[str, ...]
     resolved_integrations: dict[str, Any] | None = None
+    # Phase 1b accept path: seed PendingInvestigationOffer + prior Want-me-to turn.
+    pending_investigation_alert: str | None = None
+    conversation_seed: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -362,6 +366,27 @@ def _string_list(raw: object, *, label: str) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _conversation_seed(raw: object, *, label: str) -> tuple[tuple[str, str], ...]:
+    """Parse ``session.conversation_seed`` as ``[{role, content}, …]``."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        msg = f"{label} must be a list, got {type(raw).__name__}."
+        raise ValueError(msg)
+    seed: list[tuple[str, str]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            msg = f"{label}[{index}] must be a mapping with role/content."
+            raise ValueError(msg)
+        role = str(item.get("role", "")).strip()
+        content = str(item.get("content", "")).strip()
+        if role not in {"user", "assistant"} or not content:
+            msg = f"{label}[{index}] requires role user|assistant and non-empty content."
+            raise ValueError(msg)
+        seed.append((role, content))
+    return tuple(seed)
+
+
 def _optional_string_list(raw: object, *, label: str) -> tuple[str, ...] | None:
     """Parse a capability allowlist while preserving the absent-vs-empty split.
 
@@ -478,6 +503,17 @@ def validate_action_shape(
         if content and content != f"{suite}:{scenario}":
             msg = f"{prefix} content must match suite:scenario when set."
             raise ValueError(msg)
+    elif kind == "assistant_handoff":
+        evidence_kind = action.get("evidence_kind")
+        if evidence_kind is not None:
+            kind_token = str(evidence_kind).strip()
+            if kind_token not in {"metric_read", "incident", "setup", "other"}:
+                msg = f"{prefix} evidence_kind {kind_token!r} is not a closed enum value."
+                raise ValueError(msg)
+        items = action.get("session_goal_items")
+        if items is not None and not isinstance(items, list):
+            msg = f"{prefix} session_goal_items must be a list when set."
+            raise ValueError(msg)
     elif kind == "cli_command":
         payload = str(action.get("payload", "")).strip()
         if not payload:
@@ -530,6 +566,20 @@ def _parse_scenario_yaml(
         data.get("available_capabilities", {}),
         label=f"{scenario_path} available_capabilities",
     )
+    pending_alert_raw = session_raw.get("pending_investigation_alert")
+    pending_investigation_alert = (
+        str(pending_alert_raw).strip() if pending_alert_raw is not None else None
+    ) or None
+    conversation_seed = _conversation_seed(
+        session_raw.get("conversation_seed"),
+        label=f"{scenario_path} session.conversation_seed",
+    )
+    if pending_investigation_alert and not conversation_seed:
+        msg = (
+            f"{scenario_path}: session.pending_investigation_alert requires "
+            "session.conversation_seed (prior Want-me-to turn)."
+        )
+        raise ValueError(msg)
 
     return Scenario(
         id=scenario_id,
@@ -546,6 +596,8 @@ def _parse_scenario_yaml(
                 session_raw.get("resolved_integrations"),
                 label=f"{scenario_path} session.resolved_integrations",
             ),
+            pending_investigation_alert=pending_investigation_alert,
+            conversation_seed=conversation_seed,
         ),
         available_capabilities=ScenarioCapabilities(
             slash_commands=_optional_string_list(
@@ -908,30 +960,112 @@ def scenario_complexity(case: ScenarioCase) -> float:
 class SelectionSpec:
     """Parsed ``--turn-select`` / ``TURN_SELECT`` request.
 
-    Exactly one of ``count`` (absolute) or ``fraction`` (0 < f <= 1) is set.
+    Modes:
+    * ``complex`` / ``sample`` — size via ``count`` or ``fraction`` (exactly one).
+    * ``id`` — explicit scenario id / numeric-prefix list in ``ids``.
     """
 
     mode: str
     fraction: float | None = None
     count: int | None = None
+    ids: tuple[str, ...] = ()
+
+
+def _parse_id_tokens(raw: str) -> tuple[str, ...]:
+    tokens: list[str] = []
+    for chunk in raw.replace(";", ",").split(","):
+        token = chunk.strip().lower()
+        if token:
+            tokens.append(token)
+    return tuple(tokens)
+
+
+def _looks_like_id_selection(text: str) -> bool:
+    """True for comma lists or a single numeric / ``NNN-slug`` scenario token."""
+    stripped = text.strip().lower()
+    if not stripped or stripped in _SELECT_MODES:
+        return False
+    if "," in stripped or ";" in stripped:
+        return True
+    if stripped.startswith("id:"):
+        return True
+    # Bare scenario id or numeric prefix (e.g. ``346`` / ``346-metric-read-…``).
+    first = stripped.split("-", 1)[0]
+    return first.isdigit()
+
+
+def _scenario_id_matches(scenario_id: str, token: str) -> bool:
+    sid = scenario_id.strip().lower()
+    tok = token.strip().lower()
+    if not tok:
+        return False
+    if sid == tok:
+        return True
+    # Numeric / slug prefix: ``346`` → ``346-metric-read-windows-users``.
+    return sid.startswith(f"{tok}-")
+
+
+def select_cases_by_ids(
+    cases: list[ScenarioCase],
+    ids: Sequence[str],
+) -> list[ScenarioCase]:
+    """Keep cases whose id equals or is prefixed by any token in ``ids``."""
+    tokens = tuple(str(token).strip().lower() for token in ids if str(token).strip())
+    if not tokens:
+        msg = "Turn selection id list is empty."
+        raise ValueError(msg)
+    matched: list[ScenarioCase] = []
+    seen: set[str] = set()
+    missing: list[str] = []
+    for token in tokens:
+        hits = [case for case in cases if _scenario_id_matches(case.scenario.id, token)]
+        if not hits:
+            missing.append(token)
+            continue
+        for case in hits:
+            if case.scenario.id in seen:
+                continue
+            seen.add(case.scenario.id)
+            matched.append(case)
+    if missing:
+        msg = (
+            "Unknown turn scenario id(s): "
+            + ", ".join(missing)
+            + ". Use a full id or numeric prefix (e.g. 346 or 346-metric-read-windows-users)."
+        )
+        raise ValueError(msg)
+    order = {case.scenario.id: index for index, case in enumerate(cases)}
+    return sorted(matched, key=lambda case: order[case.scenario.id])
 
 
 def parse_selection_spec(spec: str | None) -> SelectionSpec | None:
-    """Parse a selection spec like ``complex:5``, ``sample:0.1``, or ``complex``.
+    """Parse ``complex:5``, ``sample:0.1``, ``346,347``, or ``id:346-…``.
 
-    Returns ``None`` for an empty/unset spec (meaning "run everything"). The
-    count component may be an absolute integer (``6``), a percentage (``5%``), or
-    a fraction (``0.05``); a bare ``complex``/``sample`` defaults to 5%.
+    Returns ``None`` for an empty/unset spec (meaning "run everything" in
+    ``select_cases``). Size specs may be an absolute integer (``6``), a
+    percentage (``5%``), or a fraction (``0.05``); a bare ``complex``/``sample``
+    defaults to 5%.
     """
     if spec is None:
         return None
-    text = spec.strip().lower()
+    text = spec.strip()
     if not text:
         return None
-    mode, sep, raw = text.partition(":")
+    lowered = text.lower()
+    if _looks_like_id_selection(lowered):
+        raw_ids = lowered.partition(":")[2] if lowered.startswith("id:") else lowered
+        tokens = _parse_id_tokens(raw_ids)
+        if not tokens:
+            msg = "Turn selection id list is empty."
+            raise ValueError(msg)
+        return SelectionSpec(mode="id", ids=tokens)
+    mode, sep, raw = lowered.partition(":")
     mode = mode.strip()
     if mode not in _SELECT_MODES:
-        msg = f"Invalid turn selection mode {mode!r}; expected one of {sorted(_SELECT_MODES)}."
+        msg = (
+            f"Invalid turn selection mode {mode!r}; expected one of "
+            f"{sorted(_SELECT_MODES)} or a scenario id list (e.g. '346,347')."
+        )
         raise ValueError(msg)
     raw = raw.strip()
     if not sep or not raw:
@@ -959,14 +1093,16 @@ def select_cases(
 ) -> list[ScenarioCase]:
     """Return a subset of ``cases`` for fast local iteration.
 
-    ``spec`` selects either the most complex cases (``complex:N``) or a random
-    sample (``sample:N``). ``None``/empty returns every case (the default, so CI
-    and the full local suite are unchanged). Selected cases keep their original
+    ``spec`` selects the most complex cases (``complex:N``), a random sample
+    (``sample:N``), or an explicit id list (``346,347`` / ``id:346-…``).
+    ``None``/empty returns every case. Selected cases keep their original
     ordering for stable, readable test ids.
     """
     parsed = spec if isinstance(spec, SelectionSpec) else parse_selection_spec(spec)
     if parsed is None or not cases:
         return list(cases)
+    if parsed.mode == "id":
+        return select_cases_by_ids(cases, parsed.ids)
     if parsed.count is not None:
         count = parsed.count
     else:
@@ -1007,6 +1143,7 @@ __all__ = [
     "read_shard_config",
     "scenario_complexity",
     "select_cases",
+    "select_cases_by_ids",
     "select_representative",
     "validate_action_shape",
 ]

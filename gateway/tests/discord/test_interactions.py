@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from gateway.discord.worker import (
+from gateway.transports.discord.worker import (
     application_command_name,
     application_command_option,
     investigate_slash_text,

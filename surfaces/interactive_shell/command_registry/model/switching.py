@@ -8,8 +8,9 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
+from config.constants.llm import LLM_PROVIDER_ENV
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render_models_table
-from surfaces.interactive_shell.ui.components.choice_menu import print_valid_choice_list
+from surfaces.shared.terminal.components.choice_menu import print_valid_choice_list
 
 
 def _format_supported_models(provider_models: tuple[object, ...]) -> str:
@@ -50,6 +51,29 @@ def _is_model_allowed(provider: object, model: str) -> bool:
     return bool(model) and _provider_allows_custom_models(provider)
 
 
+def _resolve_omitted_model(provider: object) -> str:
+    """Model to persist/display when the caller supplies none (switch/restore-default).
+
+    Custom gateways ship an empty ``default_model`` (the user's gateway serves its
+    own names); falling back to it would blank a previously-working model and break
+    the next ``LLMSettings`` load. Mirror the missing-base-URL guard: reuse the
+    already-configured model from the environment. First-party providers keep their
+    real ``default_model``.
+    """
+    default_model = str(getattr(provider, "default_model", "") or "")
+    if default_model:
+        return default_model
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    model_env = str(getattr(provider, "model_env", "") or "")
+    if model_env and is_custom_provider(str(getattr(provider, "value", ""))):
+        legacy_model_env = str(getattr(provider, "legacy_model_env", "") or "")
+        return os.getenv(model_env, "").strip() or (
+            os.getenv(legacy_model_env, "").strip() if legacy_model_env else ""
+        )
+    return default_model
+
+
 def _reset_runtime_llm_caches() -> None:
     """Force subsequent REPL assistant calls to use the updated model env."""
     from core.llm.factory import reset_llm_clients
@@ -65,8 +89,8 @@ def switch_llm_provider(
     toolcall_model: str | None = None,
 ) -> bool:
     from config.llm_auth.credentials import status as credential_status
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-    from surfaces.cli.wizard.env_sync import sync_provider_env
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.env_sync import sync_provider_env
 
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)
@@ -92,6 +116,18 @@ def switch_llm_provider(
                 "set AZURE_OPENAI_BASE_URL, or run [bold]opensre onboard[/bold]."
             )
             return False
+    from core.llm.providers.custom_endpoints import is_custom_provider
+
+    if (
+        is_custom_provider(provider.value)
+        and provider.endpoint_env
+        and not os.getenv(provider.endpoint_env, "").strip()
+    ):
+        console.print(
+            f"[{ERROR}]missing base URL for {provider.value}:[/] "
+            f"set {provider.endpoint_env}, or run [bold]opensre onboard[/bold]."
+        )
+        return False
     if provider.credential_secret and provider.api_key_env and not auth_status.configured:
         console.print(
             f"[{ERROR}]missing credential for {provider.value}:[/] "
@@ -115,8 +151,11 @@ def switch_llm_provider(
                 f"[bold]opensre auth login {provider.value}[/bold][{DIM}].[/]"
             )
             return False
-        from surfaces.cli.llm_auth.providers import resolve_auth_profile
-        from surfaces.cli.llm_auth.service import AuthSetupError, configure_api_key_provider
+        from surfaces.shared.llm_setup.auth_profiles import resolve_auth_profile
+        from surfaces.shared.llm_setup.auth_service import (
+            AuthSetupError,
+            configure_api_key_provider,
+        )
 
         console.print(f"[{DIM}]validating {provider.value} key…[/]")
         try:
@@ -140,7 +179,16 @@ def switch_llm_provider(
             f"[{DIM}]to refresh metadata if the next LLM request fails.[/]"
         )
 
-    selected_model = _normalize_model_id(model) if model else provider.default_model
+    selected_model = _normalize_model_id(model) if model else _resolve_omitted_model(provider)
+    if is_custom_provider(provider.value) and not selected_model:
+        # Custom gateways require a model; refuse rather than persist a blank one
+        # (which would break the next config load), mirroring the base-URL guard.
+        console.print(
+            f"[{ERROR}]missing model for {provider.value}:[/] pass one "
+            f"(e.g. [bold]/model set {provider.value} <model>[/bold]), set "
+            f"{provider.model_env}, or run [bold]opensre onboard[/bold]."
+        )
+        return False
     if selected_model and not _is_model_allowed(provider, selected_model):
         console.print(f"[{ERROR}]unknown model for {provider.value}:[/] {escape(selected_model)}")
         console.print(
@@ -198,9 +246,9 @@ def switch_toolcall_model(
 ) -> bool:
     """Set the toolcall model for the active (or named) provider."""
     from config.env_file import sync_env_values
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
-    raw_name = provider_name if provider_name else os.getenv("LLM_PROVIDER", "anthropic")
+    raw_name = provider_name if provider_name else os.getenv(LLM_PROVIDER_ENV, "anthropic")
     resolved_name = (raw_name or "anthropic").strip().lower()
     provider = PROVIDER_BY_VALUE.get(resolved_name)
     if provider is None:
@@ -243,10 +291,10 @@ def switch_reasoning_model(
     provider_name: str | None = None,
 ) -> bool:
     """Set the reasoning model for the active (or named) provider."""
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
-    from surfaces.cli.wizard.env_sync import sync_reasoning_model_env
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.env_sync import sync_reasoning_model_env
 
-    raw_name = provider_name if provider_name else os.getenv("LLM_PROVIDER", "anthropic")
+    raw_name = provider_name if provider_name else os.getenv(LLM_PROVIDER_ENV, "anthropic")
     resolved_name = (raw_name or "anthropic").strip().lower()
     provider = PROVIDER_BY_VALUE.get(resolved_name)
     if provider is None:
@@ -283,7 +331,7 @@ def switch_reasoning_model(
 
 def restore_default_model(provider_name: str, console: Console) -> bool:
     """Reset a provider to its configured default reasoning model."""
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     provider_key = provider_name.strip().lower()
     provider = PROVIDER_BY_VALUE.get(provider_key)

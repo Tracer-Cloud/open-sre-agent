@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -10,11 +11,11 @@ import pytest
 from rich.console import Console
 
 from platform.filestorage.config import RemoteSyncConfig
-from platform.filestorage.engine import SyncReport
+from platform.filestorage.engine import SyncProgress, SyncReport
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
-from surfaces.cli.gateway_entry import gateway_slash_ports_factory, start_gateway
+from surfaces.gateway_entry import gateway_slash_ports_factory, start_gateway
 from surfaces.interactive_shell.runtime import Session
 
 
@@ -35,11 +36,11 @@ def test_gateway_slash_ports_factory_is_headless_and_exposes_remote_sync() -> No
 
 def test_start_gateway_injects_remote_sync_capable_factory() -> None:
     """Changing gateway_entry must keep slash ports wired for chat turns."""
-    import gateway.runtime.manager as manager_module
+    import gateway.core.runtime.controller as manager_module
 
     mock_manager = MagicMock()
     mock_manager.start_gateway.return_value = mock_manager
-    with patch.object(manager_module, "GatewayManager", return_value=mock_manager) as ctor:
+    with patch.object(manager_module, "GatewayController", return_value=mock_manager) as ctor:
         start_gateway(wait=False)
 
     factory = ctor.call_args.kwargs["slash_ports_factory"]
@@ -98,8 +99,13 @@ def test_gateway_dispatch_sync_with_flags(monkeypatch: pytest.MonkeyPatch) -> No
     seen: dict[str, bool] = {}
 
     def _run(
-        *, pull_only: bool = False, push_only: bool = False, dry_run: bool = False
+        *,
+        pull_only: bool = False,
+        push_only: bool = False,
+        dry_run: bool = False,
+        on_progress: Callable[[SyncProgress], None] | None = None,
     ) -> SyncReport:
+        del on_progress
         seen["pull_only"] = pull_only
         seen["push_only"] = push_only
         seen["dry_run"] = dry_run

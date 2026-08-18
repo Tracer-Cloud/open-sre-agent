@@ -8,7 +8,7 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness.accounting.turn_accounting import DefaultTurnAccounting
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.orchestrator import run_turn
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
@@ -102,8 +102,8 @@ def test_recorder_flushes_once_for_silent_handled_turn() -> None:
 
 
 def test_default_turn_accounting_persists_action_only_context() -> None:
-    storage = InMemorySessionStorage()
-    session = Session(storage=storage)
+    storage = InMemorySessionStore()
+    session = Session(store=storage)
     storage.open_session(session)
 
     def _handled(*_args: object, **_kwargs: object) -> ToolCallingTurnResult:

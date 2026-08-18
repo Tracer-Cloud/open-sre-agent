@@ -8,6 +8,11 @@ from typing import Any
 
 from core.agent_harness.ports import (
     ConfirmFn,
+    InvestigationPortsFactory,
+    LlmProviderPortsFactory,
+    SlashPortsFactory,
+    SubprocessPresenterFactory,
+    TaskCancelPortsFactory,
     ToolEventObserver,
 )
 from core.agent_harness.tools.action_tools import get_action_tools_from_integrations_context
@@ -18,15 +23,7 @@ from core.agent_harness.tools.tool_context import (
 
 ActionObserverFactory = Callable[[str], ToolEventObserver]
 # Return value is tools.interactive_shell.subprocess.SubprocessPresenter (surface-injected).
-SubprocessPresenterFactory = Callable[
-    [Any, Any, ConfirmFn | None, bool | None, bool],
-    Any,
-]
 
-InvestigationPortsFactory = Callable[[], Any]
-LlmProviderPortsFactory = Callable[[], Any]
-TaskCancelPortsFactory = Callable[[], Any]
-SlashPortsFactory = Callable[[], Any]
 
 _TOOL_INPUT_LOG_PREVIEW_LIMIT = 500
 
@@ -79,6 +76,22 @@ class DefaultToolProvider:
         self._console = console
         self._tool_context = None
 
+    def _resolved_presenter_factory(self) -> SubprocessPresenterFactory | None:
+        """The host's presenter factory, else the one registered at process boot.
+
+        Without the fallback the default port stack has no presenter, so
+        ``shell_run`` refuses every call and the agent degrades into describing
+        a plan it cannot run. A host factory always wins.
+        """
+        if self._subprocess_presenter_factory is not None:
+            return self._subprocess_presenter_factory
+        import platform.harness_ports as harness_ports
+
+        registered: SubprocessPresenterFactory | None = (
+            harness_ports.get_subprocess_presenter_factory()
+        )
+        return registered
+
     def action_tools(
         self,
         *,
@@ -87,8 +100,9 @@ class DefaultToolProvider:
         resolved_integrations: dict[str, Any] | None = None,
     ) -> list[Any]:
         subprocess_presenter = None
-        if self._subprocess_presenter_factory is not None:
-            subprocess_presenter = self._subprocess_presenter_factory(
+        presenter_factory = self._resolved_presenter_factory()
+        if presenter_factory is not None:
+            subprocess_presenter = presenter_factory(
                 self._session,
                 self._console,
                 confirm_fn,
@@ -119,6 +133,9 @@ class DefaultToolProvider:
             is_tty=is_tty,
             request_exit=self._request_exit,
             action_already_listed=True,
+            # Built once per turn, before any tool runs — so the current
+            # history length is this turn's starting boundary.
+            history_start=len(getattr(self._session, "history", None) or []),
             subprocess_presenter=subprocess_presenter,
             investigation_ports=investigation_ports,
             llm_provider_ports=llm_provider_ports,

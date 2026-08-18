@@ -41,14 +41,10 @@ def _env(name: str) -> str:
 def _organization_id() -> str:
     """The organization this deployment speaks for at the webapp vault.
 
-    Resolved through :func:`config.constants.organization.organization_id`,
-    which reads whichever name this deployment sets: a Fargate silo gets the
-    bare ``ORGANIZATION_ID`` from the control plane, the EC2 Slack service sets
-    ``OPENSRE_ORGANIZATION_ID`` — and the vault has served both. Reading one
-    name directly is what previously left this module silent on every
-    control-plane silo. Only hydration ("did the control plane provision this
-    silo?") reads the tenant name alone; the vault asks "which org do I
-    serve", so it uses the shared resolver.
+    Resolved through :func:`config.constants.organization.organization_id` so
+    this module cannot drift from the rest of the product — reading the env var
+    directly under a name the control plane does not inject is what previously
+    left the vault silent on every silo.
     """
     return organization_id()
 

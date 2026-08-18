@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.postgresql import (
@@ -16,7 +17,7 @@ from integrations.postgresql import (
     name="get_postgresql_table_stats",
     description="Retrieve PostgreSQL table statistics including size, row counts, index usage, and maintenance info.",
     source="postgresql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identifying large tables or rapid table growth during storage incidents",
         "Analyzing table scan patterns and index usage efficiency",

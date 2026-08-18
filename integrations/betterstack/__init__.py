@@ -22,11 +22,18 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from http import HTTPStatus
 from typing import Any
 
 import httpx
 from pydantic import Field, field_validator
 
+from config.constants.betterstack import (
+    BETTERSTACK_PASSWORD_ENV,
+    BETTERSTACK_QUERY_ENDPOINT_ENV,
+    BETTERSTACK_SOURCES_ENV,
+    BETTERSTACK_USERNAME_ENV,
+)
 from config.strict_config import StrictConfigModel
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -103,16 +110,16 @@ def betterstack_config_from_env() -> BetterStackConfig | None:
     surfaced to the planner via :func:`betterstack_extract_params`; it is
     not required for availability.
     """
-    endpoint = os.getenv("BETTERSTACK_QUERY_ENDPOINT", "").strip()
-    username = os.getenv("BETTERSTACK_USERNAME", "").strip()
+    endpoint = os.getenv(BETTERSTACK_QUERY_ENDPOINT_ENV, "").strip()
+    username = os.getenv(BETTERSTACK_USERNAME_ENV, "").strip()
     if not endpoint or not username:
         return None
     return build_betterstack_config(
         {
             "query_endpoint": endpoint,
             "username": username,
-            "password": os.getenv("BETTERSTACK_PASSWORD", ""),
-            "sources": os.getenv("BETTERSTACK_SOURCES", ""),
+            "password": os.getenv(BETTERSTACK_PASSWORD_ENV, ""),
+            "sources": os.getenv(BETTERSTACK_SOURCES_ENV, ""),
         }
     )
 
@@ -233,7 +240,7 @@ def validate_betterstack_config(
     assert response is not None
 
     status = response.status_code
-    if status == 200:
+    if status == HTTPStatus.OK:
         body = response.text.strip()
         if not body:
             return BetterStackValidationResult(
@@ -244,12 +251,12 @@ def validate_betterstack_config(
             ok=True,
             detail=f"Connected to Better Stack SQL API at {config.query_endpoint}.",
         )
-    if status == 401:
+    if status == HTTPStatus.UNAUTHORIZED:
         return BetterStackValidationResult(
             ok=False,
             detail="Better Stack authentication failed (check BETTERSTACK_USERNAME / BETTERSTACK_PASSWORD).",
         )
-    if status == 404:
+    if status == HTTPStatus.NOT_FOUND:
         return BetterStackValidationResult(
             ok=False,
             detail=(
@@ -416,12 +423,12 @@ def query_logs(
             source=safe_source,
         )
 
-    if response.status_code == 401:
+    if response.status_code == HTTPStatus.UNAUTHORIZED:
         return _error_evidence(
             "Better Stack authentication failed (check credentials).",
             source=safe_source,
         )
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         return _error_evidence(
             f"Better Stack query returned HTTP {response.status_code}: {response.text[:200]}",
             source=safe_source,

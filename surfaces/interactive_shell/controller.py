@@ -35,8 +35,12 @@ from surfaces.interactive_shell.runtime.input.actions import (
     InputAction,
     SubmitTurn,
 )
+from surfaces.interactive_shell.runtime.loop_scheduler import (
+    shutdown_loop_scheduler,
+    start_loop_scheduler,
+)
 from surfaces.interactive_shell.runtime.turn_host import (
-    AgentTurnRuntime,
+    AgentTurnResources,
     run_agent_turn,
     run_agent_turn_queue,
     run_input_loop,
@@ -79,7 +83,7 @@ def _alert_listener(
         yield None
         return
 
-    from gateway.http.web_server import WebAppServerHandle, serve_webapp_in_thread
+    from gateway.web.web_server import WebAppServerHandle, serve_webapp_in_thread
 
     inbox: _alert_inbox.AlertInbox | None = None
     handle: WebAppServerHandle | None = None
@@ -131,6 +135,20 @@ def _resolve_runtime_context(
     )
 
 
+def _should_wait_until_turn_finishes(
+    *,
+    exclusive_stdin: bool,
+    goal_condition_autosubmitted: bool,
+) -> bool:
+    """True when the next prompt must not open until this turn completes.
+
+    Exclusive-stdin slash commands already wait. ``/goal`` autosubmit is prose
+    (no exclusive stdin) but must still wait — otherwise ``[N] ❯`` appears under
+    the live crawl spinner and looks like a second / finished goal.
+    """
+    return exclusive_stdin or goal_condition_autosubmitted
+
+
 class InteractiveShellController:
     """Coordinate prompt input, queued dispatch, background workers, and shutdown."""
 
@@ -169,18 +187,18 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+        from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
-        self.turn_runtime = AgentTurnRuntime(
+        self.turn_runtime = AgentTurnResources(
             session=self.session,
             state=self.state,
             spinner=self.spinner,
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
             console=self.service_console,
-            action_runner=ShellActionRunner(
-                session=self.session,
-                console=self.service_console,
+            agent=build_shell_agent(
+                self.session,
+                self.service_console,
                 request_exit=self.prompt.request_exit,
             ),
         )
@@ -236,6 +254,10 @@ class InteractiveShellController:
         )
         # Fleet sampler is lazy: /fleet triggers it on first live use.
         self.session.terminal.fleet_sampler_starter = self.background.ensure_fleet_sampler_started
+        try:
+            start_loop_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Loop scheduler could not start: %s", exc)
 
     async def _handle_input_action(self, action: InputAction) -> bool:
         match action:
@@ -252,11 +274,18 @@ class InteractiveShellController:
                 self.state.deliver_confirmation(text)
                 return True
             case SubmitTurn(text=text, wait_until_idle=wait, warning=warning):
+                # Read before render_submitted_prompt — that clears the flag.
+                wait_for_turn = _should_wait_until_turn_finishes(
+                    exclusive_stdin=wait,
+                    goal_condition_autosubmitted=bool(
+                        self.session.terminal.last_input_autosubmitted
+                    ),
+                )
                 if warning:
                     self.echo_console.print(warning)
                 self.prompt.render_submitted_prompt(self.echo_console, text)
                 await self.state.queue.put(text)
-                if wait:
+                if wait_for_turn:
                     await self.state.queue.join()
                 return True
         raise AssertionError(f"Unhandled input action: {action!r}")
@@ -275,6 +304,7 @@ class InteractiveShellController:
         for (label, _task), result in zip(self.tasks, shutdown_results, strict=True):
             if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                 log.debug("%s task shutdown raised exception: %s", label, result)
+        shutdown_loop_scheduler()
 
 
 __all__ = ["InteractiveShellController"]

@@ -44,6 +44,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Query logs from Coralogix DataPrime",
     ),
     Choice(
+        value="new_relic",
+        label="New Relic",
+        group="Observability",
+        hint="Query alerts and NRQL metrics",
+    ),
+    Choice(
         value="sentry",
         label="Sentry",
         group="Observability",
@@ -156,6 +162,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         label="Rocket.Chat",
         group="Incident & Comms",
         hint="Post findings to a Rocket.Chat channel",
+    ),
+    Choice(
+        value="buzz",
+        label="Buzz",
+        group="Incident & Comms",
+        hint="Post findings to a Buzz (Nostr) channel — requires the buzz CLI",
     ),
     Choice(
         value="google_docs",

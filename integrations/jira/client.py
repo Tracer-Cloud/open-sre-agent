@@ -7,12 +7,13 @@ from typing import Any
 
 import httpx
 
+from integrations._validation_helpers import report_validation_failure
 from integrations.config_models import JiraIntegrationConfig
 from platform.observability.errors.service import capture_service_error
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TIMEOUT = 30
+_DEFAULT_TIMEOUT_SECONDS = 30
 
 
 class JiraClient:
@@ -29,7 +30,7 @@ class JiraClient:
         return httpx.Client(
             auth=(self.config.email, self.config.api_token),
             headers={"Content-Type": "application/json", "Accept": "application/json"},
-            timeout=_DEFAULT_TIMEOUT,
+            timeout=_DEFAULT_TIMEOUT_SECONDS,
         )
 
     def create_issue(
@@ -297,5 +298,8 @@ def make_jira_client(
             project_key=(project_key or "").strip(),
         )
         return JiraClient(config)
-    except Exception:
+    except Exception as exc:
+        report_validation_failure(
+            exc, logger=logger, integration="jira", method="make_client", include_traceback=True
+        )
         return None

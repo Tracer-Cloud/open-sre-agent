@@ -85,17 +85,17 @@ def test_context_supports_lightweight_bootstrap_for_unit_seams(
     assert isinstance(context.spinner, SpinnerState)
 
 
-def test_create_context_registers_jsonl_session_trace_sink(
+def test_create_context_registers_jsonl_session_trace_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """REPL boot wires the JSONL session-trace sink for ATM / span metrics."""
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
-        get_session_trace_sink,
+        NoopSessionTraceStore,
+        get_session_trace_store,
         is_session_trace_active,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
-    from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+    from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
     monkeypatch.setattr(
         Session,
@@ -107,27 +107,27 @@ def test_create_context_registers_jsonl_session_trace_sink(
         "persistent",
         staticmethod(TaskRegistry),
     )
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
     try:
         create_repl_runtime_context(
             hydrate_integrations=False,
             persistent_tasks=False,
         )
         assert is_session_trace_active()
-        assert isinstance(get_session_trace_sink(), JsonlSessionTraceSink)
+        assert isinstance(get_session_trace_store(), JsonlSessionTraceStore)
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())
 
 
-def test_create_context_uses_noop_trace_sink_for_in_memory_session(
+def test_create_context_uses_noop_trace_store_for_in_memory_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from core.agent_harness.session import InMemorySessionStorage
+    from core.agent_harness.session import InMemorySessionStore
     from platform.observability.trace.spans import (
-        NoopSessionTraceSink,
-        get_session_trace_sink,
+        NoopSessionTraceStore,
+        get_session_trace_store,
         is_session_trace_active,
-        set_session_trace_sink,
+        set_session_trace_store,
     )
 
     monkeypatch.setattr(
@@ -135,17 +135,17 @@ def test_create_context_uses_noop_trace_sink_for_in_memory_session(
         "hydrate_configured_integrations",
         lambda _self: None,
     )
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
     try:
         create_repl_runtime_context(
-            session=Session(storage=InMemorySessionStorage()),
+            session=Session(store=InMemorySessionStore()),
             hydrate_integrations=False,
             persistent_tasks=False,
         )
         assert not is_session_trace_active()
-        assert isinstance(get_session_trace_sink(), NoopSessionTraceSink)
+        assert isinstance(get_session_trace_store(), NoopSessionTraceStore)
     finally:
-        set_session_trace_sink(NoopSessionTraceSink())
+        set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_context_uses_canonical_initial_mutable_state() -> None:

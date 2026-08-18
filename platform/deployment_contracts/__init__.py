@@ -1,1 +1,1 @@
-"""Public contracts shared by Gateway runtime and multi-tenant deployment."""
+"""Public contracts shared by Gateway runtime (size-profile concurrency)."""

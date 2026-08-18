@@ -11,6 +11,7 @@ from core.domain.alerts.alert_source import (
 from core.domain.alerts.tool_planning import score_tools
 from core.domain.types.planning import PlannedInvestigationAction
 from core.domain.types.retrieval import RetrievalControlsMap, RetrievalIntent, TimeBounds
+from core.domain.types.tools import ToolSurface
 from core.state import InvestigationState
 from core.tool_framework.registered_tool import RegisteredTool
 from tools.investigation.stages.gather_evidence.tools import (
@@ -28,6 +29,8 @@ def plan_actions(state: InvestigationState) -> dict[str, Any]:
         return {}
 
     state_any = dict(state)
+    # Integration resolution is owned by the preceding pipeline stage; planning
+    # only consumes that snapshot and never resolves providers itself.
     raw_resolved = state_any.get("resolved_integrations")
     resolved = raw_resolved if isinstance(raw_resolved, dict) else {}
     available_tools = _available_investigation_tools(resolved)
@@ -74,7 +77,7 @@ def _available_investigation_tools(resolved_integrations: dict[str, Any]) -> lis
     available_sources = availability_view(resolved_integrations)
     return [
         tool
-        for tool in get_registered_tools("investigation")
+        for tool in get_registered_tools(ToolSurface.INVESTIGATION)
         if tool.is_available(available_sources)
     ]
 

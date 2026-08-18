@@ -18,7 +18,7 @@ import platform.harness_ports as harness_ports
 from core.domain.alerts import extraction as alert_extraction
 from core.domain.diagnosis import taxonomy_registry
 from core.domain.types import incident_anchors
-from surfaces.interactive_shell.ui.output import boundary as output_boundary
+from surfaces.shared.terminal.output import boundary as output_boundary
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +36,8 @@ def test_gather_prompt_fragments_cover_every_registered_vendor() -> None:
     assert "github" in fragments.lower()
     assert "sentry" in fragments.lower()
     assert "slack" in fragments.lower()
+    assert "posthog" in fragments.lower()
+    assert "execute-sql" in fragments.lower()
 
 
 def test_action_prompt_fragments_cover_every_registered_vendor() -> None:
@@ -55,6 +57,7 @@ def test_assistant_prompt_fragments_cover_every_registered_vendor() -> None:
 
     # Assert
     assert "sentry" in fragments.lower()
+    assert "posthog" in fragments.lower()
     assert "slack" in fragments.lower()
 
 
@@ -65,6 +68,36 @@ def test_gateway_persona_fragment_is_registered() -> None:
     # Assert: the Slack teammate persona wording core no longer owns.
     assert "AI production engineer" in persona
     assert "never call it the 'interactive shell'" in persona
+
+
+def test_setupable_integration_services_come_from_cli_handlers() -> None:
+    services = harness_ports.setupable_integration_services()
+    assert "posthog_mcp" in services or "grafana" in services
+    assert "mixpanel" not in services
+
+    assert harness_ports.integration_setup_command("posthog_mcp") == (
+        "/integrations setup posthog_mcp"
+    )
+
+
+def test_preferred_evidence_sources_opt_in_from_posthog_mcp_package() -> None:
+    # Assert: PostHog MCP opts itself in; core still has no vendor list.
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == ("posthog_mcp",)
+    assert harness_ports.preferred_evidence_sources_for("incident") == ()
+
+
+def test_preferred_evidence_sources_are_additive_across_vendors() -> None:
+    harness_ports.register_preferred_evidence_source("metric_read", "other_analytics")
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == (
+        "posthog_mcp",
+        "other_analytics",
+    )
+
+
+def test_omitting_vendor_registration_leaves_metric_read_unpreferred() -> None:
+    """If no vendor opts in, metric asks must not invent a preferred source."""
+    harness_ports.clear_preferred_evidence_sources()
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == ()
 
 
 def test_message_context_stripper_handles_slack_prefix() -> None:
@@ -129,4 +162,5 @@ def test_reset_clears_every_vendor_registry() -> None:
     assert harness_ports.action_prompt_vendor_fragments() == ""
     assert harness_ports.assistant_prompt_vendor_fragments() == ""
     assert harness_ports.gateway_persona_fragments() == ""
+    assert harness_ports.preferred_evidence_sources_for("metric_read") == ()
     assert harness_ports._vcs_repo_scope_providers == []

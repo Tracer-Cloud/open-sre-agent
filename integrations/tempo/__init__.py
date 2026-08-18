@@ -17,6 +17,13 @@ from typing import Any
 import httpx
 from pydantic import Field
 
+from config.constants.tempo import (
+    TEMPO_API_KEY_ENV,
+    TEMPO_ORG_ID_ENV,
+    TEMPO_PASSWORD_ENV,
+    TEMPO_URL_ENV,
+    TEMPO_USERNAME_ENV,
+)
 from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
@@ -76,17 +83,17 @@ def build_tempo_config(raw: dict[str, Any] | None) -> TempoConfig:
 
 def tempo_config_from_env() -> TempoConfig | None:
     """Load a Tempo config from env vars."""
-    url = os.getenv("TEMPO_URL", "").strip()
+    url = os.getenv(TEMPO_URL_ENV, "").strip()
     if not url:
         return None
 
     return build_tempo_config(
         {
             "url": url,
-            "api_key": resolve_env_credential("TEMPO_API_KEY"),
-            "username": os.getenv("TEMPO_USERNAME", "").strip(),
-            "password": resolve_env_credential("TEMPO_PASSWORD"),
-            "org_id": os.getenv("TEMPO_ORG_ID", "").strip(),
+            "api_key": resolve_env_credential(TEMPO_API_KEY_ENV),
+            "username": os.getenv(TEMPO_USERNAME_ENV, "").strip(),
+            "password": resolve_env_credential(TEMPO_PASSWORD_ENV),
+            "org_id": os.getenv(TEMPO_ORG_ID_ENV, "").strip(),
         }
     )
 

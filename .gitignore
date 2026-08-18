@@ -18,8 +18,6 @@ build/
 develop-eggs/
 dist/
 .stdlib_vendor/
-# PyInstaller generates this from CLI args during the release build.
-opensre.spec
 downloads/
 eggs/
 .eggs/
@@ -190,3 +188,9 @@ crash.log
 
 # Local-only Cursor agent rules — never commit/push these
 .cursor/rules/local-rules.mdc
+
+# Local Factory.ai / Droid prompt & skill extraction (debugging reference)
+factory-ai-extract/
+
+# Local checkout of opensre-infra-aws — separate repo, never track here
+platform/deployment_multi_tenant/

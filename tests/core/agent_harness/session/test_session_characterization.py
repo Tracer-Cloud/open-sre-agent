@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 
 from core.agent_harness.accounting.token_usage import TokenUsage
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.session.session_core import SessionCore
 
 # Every surface-agnostic field on SessionCore. The 7 former integration fields collapsed
@@ -19,13 +19,24 @@ from core.agent_harness.session.session_core import SessionCore
 _CORE_FIELDS = (
     "session_id",
     "started_at",
-    "storage",
+    "store",
     "resumed_from_name",
     "history",
     "last_state",
     "last_investigation_id",
     "last_assistant_intent",
     "last_synthetic_observation_path",
+    "pending_schedule_offer",
+    "pending_investigation_offer",
+    "pending_user_choice",
+    "pending_recovery_note",
+    # Outer multi-turn goal, plus the evidence-tier upgrade CTA it can offer.
+    "session_goal",
+    "pending_integration_setup_offer",
+    "offered_upgrade_ctas",
+    # SessionGoal gather carry: tools/sources that failed at transport level.
+    "gather_unreachable_tools",
+    "gather_unreachable_sources",
     "integrations",
     "available_capabilities",
     "accumulated_context",
@@ -40,7 +51,7 @@ _CORE_FIELDS = (
 
 
 def _session() -> SessionCore:
-    return SessionCore(storage=InMemorySessionStorage())
+    return SessionCore(store=InMemorySessionStore())
 
 
 def test_session_core_carries_exactly_the_core_fields_and_no_facets() -> None:

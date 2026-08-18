@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.helpers import (
@@ -57,7 +58,7 @@ def _list_github_commits_available(sources: dict[str, dict]) -> bool:
         "Correlating a deployment or incident window with code changes",
     ],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

@@ -14,9 +14,8 @@ Package layout (separation of concerns):
 - ``context.py``   — Sentry URL parse + issue fetch, compacted into a masked task.
 - ``runner.py``    — opt-in gates, coding-agent readiness, the coding run, ship
   orchestration, and result shaping.
-- ``pr.py``        — open the GitHub pull request via ``integrations/github``.
 - ``ship.py``      — sequence branch -> commit -> push -> PR into a :class:`ShipResult`
-  (git primitives live in ``integrations/git``).
+  (git primitives live in ``integrations/git``; PR creation in ``integrations/github``).
 - ``__init__.py``  — this file: the agent-facing :class:`BaseTool` contract. The
   class lives here because the tool registry discovers instances by
   ``__class__.__module__`` and does not recurse into sub-modules.
@@ -31,7 +30,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
+from core.tool_framework.metadata import SideEffectLevel
 from tools.cross_vendor.fix_sentry_issue.context import gather_issue_context
 from tools.cross_vendor.fix_sentry_issue.errors import FixIssueError
 from tools.cross_vendor.fix_sentry_issue.runner import (
@@ -57,8 +58,8 @@ class FixSentryIssueTool(BaseTool):
     name = "fix_sentry_issue"
     display_name = "Fix Sentry issue"
     source = SOURCE
-    side_effect_level = "mutating"
-    surfaces = ("investigation",)
+    side_effect_level = SideEffectLevel.MUTATING
+    surfaces = (ToolSurface.INVESTIGATION,)
     requires_approval = True
     approval_reason = (
         "Runs a coding agent to edit files based on a Sentry issue, and can open a PR."

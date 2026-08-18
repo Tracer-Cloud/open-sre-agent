@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
@@ -41,8 +43,8 @@ def _community_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
         "Drafting suggested replies without mutating GitHub or messaging platforms",
     ],
     anti_examples=["Posting replies", "Changing GitHub labels or assignees"],
-    surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {

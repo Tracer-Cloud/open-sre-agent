@@ -8,7 +8,8 @@ a frozen view, and a package's purpose from its name alone.
 
 | Term | Means | Example |
 | --- | --- | --- |
-| **State** | Mutable investigation/session facts that evolve during a run | `AgentState`, `InvestigationState` |
+| **State** | Mutable investigation/session facts that evolve during a run | `AgentState`, `InvestigationState`, harness port `SessionState` |
+| **Storage** / **Repo** | Durable persistence backends (not the in-memory turn port) | `SessionStore`, `SessionRepo`, `JsonlSessionStore` |
 | **Snapshot** | A frozen view captured at a boundary (turn start, run start) | `TurnSnapshot` |
 | **RunInput** / **RunResult** | The input to and output from one `Agent.run()` boundary | `AgentRunInput`, `AgentRunResult` |
 | **Slice** | A typed segment of a state dict | `DiagnosisSlice`, `AlertInputSlice` |
@@ -37,7 +38,7 @@ core/agent/
   `SteeringMixin`.
 - **Protocols** are named by their role, not with a `Protocol` suffix — matches
   the stdlib (`Iterable`, `SupportsRead`) and `agent_harness/ports.py`
-  (`OutputSink`, `SessionStore`). `LoopHost`, not `LoopHostProtocol`.
+  (`OutputSink`, `SessionState`). `LoopHost`, not `LoopHostProtocol`.
 - **Do not prefix a type with its own package name.** Inside `core/agent/`, a
   class is `EventEmitterMixin`, not `AgentEventEmitter` — the namespace already
   says "agent."
@@ -50,6 +51,11 @@ core/agent/
   are (`run_io.py`).
 - `*Context` without a domain prefix when another `*Context` already exists.
 - A package whose only child is a single sub-package — collapse the wrapper.
+- Calling the mutable harness session port `SessionStore` — that word means
+  durable persistence. The port is `SessionState` (`InMemorySessionState` for
+  headless); JSONL durability stays `SessionStore` / `SessionRepo`.
+- Module-level mutable globals for “current session” — pass `SessionState`
+  explicitly (see local notes: no-globals design).
 
 ## Imports
 

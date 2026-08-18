@@ -8,21 +8,21 @@ from typing import Any
 
 import pytest
 
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
 from platform.observability.trace.hook import traceable
 from platform.observability.trace.spans import (
-    NoopSessionTraceSink,
+    NoopSessionTraceStore,
     bind_session_trace,
-    set_session_trace_sink,
+    set_session_trace_store,
 )
-from surfaces.interactive_shell.session.trace_sink import JsonlSessionTraceSink
+from surfaces.interactive_shell.session.trace_store import JsonlSessionTraceStore
 
 
 @pytest.fixture(autouse=True)
-def _reset_session_trace_sink() -> Any:
-    set_session_trace_sink(NoopSessionTraceSink())
+def _reset_session_trace_store() -> Any:
+    set_session_trace_store(NoopSessionTraceStore())
     yield
-    set_session_trace_sink(NoopSessionTraceSink())
+    set_session_trace_store(NoopSessionTraceStore())
 
 
 def test_traceable_is_near_free_passthrough_when_noop() -> None:
@@ -60,17 +60,17 @@ def test_traceable_emits_component_span_when_sink_active(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: tmp_path / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-traceable"
     path = tmp_path / f"{session_id}.jsonl"
     path.write_text(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     @traceable(name="investigation")
     def run_investigation() -> str:
@@ -88,17 +88,17 @@ def test_traceable_marks_error_status_when_callable_raises(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "core.agent_harness.session.persistence.jsonl_storage.session_path",
+        "core.agent_harness.session.persistence.jsonl_store.session_path",
         lambda session_id: tmp_path / f"{session_id}.jsonl",
     )
-    storage = JsonlSessionStorage()
+    storage = JsonlSessionStore()
     session_id = "sess-traceable-err"
     path = tmp_path / f"{session_id}.jsonl"
     path.write_text(
         json.dumps({"type": "session", "version": 2, "id": session_id}) + "\n",
         encoding="utf-8",
     )
-    set_session_trace_sink(JsonlSessionTraceSink(storage=storage))
+    set_session_trace_store(JsonlSessionTraceStore(store=storage))
 
     @traceable("failing_component")
     def boom() -> None:

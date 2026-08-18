@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from integrations.azure_sql import (
     azure_sql_extract_params,
@@ -15,7 +16,7 @@ from integrations.azure_sql import (
     name="get_azure_sql_wait_stats",
     description="Retrieve top wait statistics from Azure SQL Database to diagnose throttling, lock contention, IO bottlenecks, and network issues.",
     source="azure_sql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identifying the most impactful wait types during an incident",
         "Diagnosing lock contention or IO bottlenecks",

@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.postgresql import (
@@ -53,15 +55,15 @@ class PostgreSQLSlowQueriesOutput(BaseModel):
         " by mean execution time."
     ),
     source="postgresql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Identifying slow queries that may be causing performance degradation",
         "Analyzing query execution patterns during incident timeframes",
         "Finding poorly optimized queries with high execution times or low cache hit rates",
     ],
     source_id="postgresql_pg_stat_statements",
-    evidence_type="query_stats",
-    side_effect_level="read_only",
+    evidence_type=EvidenceType.QUERY_STATS,
+    side_effect_level=SideEffectLevel.READ_ONLY,
     examples=[
         "List slow queries above 1000ms to diagnose database latency spikes.",
         "Lower threshold to 200ms to inspect emerging query regressions.",

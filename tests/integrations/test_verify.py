@@ -18,6 +18,7 @@ def clean_slack_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
 
 
+from integrations._table_render import wrap_clauses
 from integrations.aws.verifier import verify_aws as _verify_aws
 from integrations.coralogix.verifier import verify_coralogix as _verify_coralogix
 from integrations.datadog.verifier import verify_datadog as _verify_datadog
@@ -30,6 +31,7 @@ from integrations.telegram.verifier import verify_telegram as _verify_telegram
 from integrations.tracer.verifier import verify_tracer as _verify_tracer
 from integrations.vercel.verifier import verify_vercel as _verify_vercel
 from integrations.verify import (
+    format_verification_results,
     resolve_effective_integrations,
     verification_exit_code,
     verify_integrations,
@@ -550,13 +552,17 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
                 "Arn": "arn:aws:sts::123456789012:assumed-role/TracerReadOnly/TracerIntegrationVerify",
             }
 
-    def _fake_boto3_client(service_name: str, **kwargs: Any) -> Any:
+    def _fake_assumed_client(service_name: str, **kwargs: Any) -> Any:
         assert service_name == "sts"
-        if kwargs.get("aws_access_key_id"):
-            return _AssumedSTSClient()
-        return _BaseSTSClient()
+        assert kwargs.get("aws_access_key_id") == "ASIA_TEST"
+        return _AssumedSTSClient()
 
-    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_boto3_client)
+    # The base client (the identity that assumes the role) comes from one seam;
+    # the assumed client is built with the returned temporary keys.
+    monkeypatch.setattr(
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
+    )
+    monkeypatch.setattr("integrations.aws.verifier.boto3.client", _fake_assumed_client)
 
     result = _verify_aws(
         "local store",
@@ -570,6 +576,39 @@ def test_verify_aws_assume_role_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["status"] == "passed"
     assert "assume-role" in result["detail"]
     assert "123456789012" in result["detail"]
+
+
+def test_verify_aws_role_without_base_credentials_explains_the_prerequisite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Role ARN alone on a bare machine: say what to configure, not a raw boto3 error."""
+    from botocore.exceptions import NoCredentialsError
+
+    from integrations.aws.verifier import ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
+
+    # Arrange — no ambient credential chain, so assume_role cannot even be called
+    class _BaseSTSClient:
+        def assume_role(self, **_kwargs: Any) -> dict[str, Any]:
+            raise NoCredentialsError()
+
+    monkeypatch.setattr(
+        "integrations.aws.verifier._base_sts_client", lambda _region: _BaseSTSClient()
+    )
+
+    # Act
+    result = _verify_aws(
+        "local store",
+        {
+            "role_arn": "arn:aws:iam::123456789012:role/opensre-setup-s3-access",
+            "region": "ap-south-1",
+        },
+    )
+
+    # Assert — actionable message; the raw "Unable to locate credentials" is not surfaced
+    assert result["status"] == "failed"
+    assert result["detail"] == ROLE_NEEDS_BASE_CREDENTIALS_MESSAGE
+    assert "sts:AssumeRole" in result["detail"]
+    assert "Access Key + Secret" in result["detail"]
 
 
 def test_verify_tracer_passes_with_env_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -896,3 +935,53 @@ def test_resolve_effective_integrations_skips_invalid_slack_store_url(
 
     assert "slack" not in effective
     assert any("Slack webhook" in r.message for r in caplog.records)
+
+
+def test_wrap_clauses_splits_on_semicolon_and_pipe() -> None:
+    detail = (
+        "OK @davincios; repos=30; owners=davincios; "
+        "examples=davincios/tracer-cli, davincios/lostagenticsouls; mcp_tools=62 "
+        "| listing had no parseable repos"
+    )
+
+    wrapped = wrap_clauses(detail)
+
+    assert wrapped.splitlines() == [
+        "OK @davincios",
+        "repos=30",
+        "owners=davincios",
+        "examples=davincios/tracer-cli, davincios/lostagenticsouls",
+        "mcp_tools=62",
+        "listing had no parseable repos",
+    ]
+
+
+def test_wrap_clauses_leaves_plain_text_untouched() -> None:
+    assert wrap_clauses("Connected to Honeycomb dataset prod-api.") == (
+        "Connected to Honeycomb dataset prod-api."
+    )
+
+
+def test_format_verification_results_puts_each_detail_clause_on_its_own_line() -> None:
+    rendered = format_verification_results(
+        [
+            {
+                "service": "github",
+                "source": "local store",
+                "status": "passed",
+                "detail": (
+                    "OK @davincios; repos=30; owners=davincios; "
+                    "examples=davincios/tracer-cli, davincios/lostagenticsouls; mcp_tools=62"
+                ),
+            }
+        ]
+    )
+
+    assert "OK @davincios" in rendered
+    assert "repos=30" in rendered
+    # Regression guard: the repo list must never split mid-word (e.g. the old
+    # "dav" / "incios/..." fold) — only at the comma between full names.
+    assert "davincios/tracer-cli," in rendered
+    assert "davincios/lostagenticsouls" in rendered
+    assert "dav\n" not in rendered
+    assert "\nincios" not in rendered

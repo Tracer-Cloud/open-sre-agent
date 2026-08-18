@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.session import InMemorySessionStore
 from surfaces.interactive_shell.session import Session
 
 
-def _session(storage: InMemorySessionStorage) -> Session:
-    return Session(storage=storage)
+def _session(storage: InMemorySessionStore) -> Session:
+    return Session(store=storage)
 
 
 def test_open_then_record_appends_turn() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     session.record("chat", "hello world")
@@ -26,14 +26,14 @@ def test_open_then_record_appends_turn() -> None:
 
 
 def test_record_noop_when_not_opened() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     session.record("chat", "hi")  # no open_session
     assert storage.read(session.session_id) == []
 
 
 def test_flush_writes_session_end_with_counts() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     session.record("chat", "q1")
@@ -46,7 +46,7 @@ def test_flush_writes_session_end_with_counts() -> None:
 
 
 def test_flush_deletes_empty_session() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     storage.flush(session)
@@ -54,7 +54,7 @@ def test_flush_deletes_empty_session() -> None:
 
 
 def test_flush_is_idempotent() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     session.record("chat", "hi")
@@ -65,7 +65,7 @@ def test_flush_is_idempotent() -> None:
 
 
 def test_append_turn_detail_writes_message_entries() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     storage.append_turn_detail(session.session_id, "chat", "hello", response="hi")
@@ -76,7 +76,7 @@ def test_append_turn_detail_writes_message_entries() -> None:
 
 
 def test_append_tool_call_reopens_finalized_session() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     session.record("chat", "do a thing")
@@ -89,7 +89,7 @@ def test_append_tool_call_reopens_finalized_session() -> None:
 
 
 def test_append_investigation_result_returns_id() -> None:
-    storage = InMemorySessionStorage()
+    storage = InMemorySessionStore()
     session = _session(storage)
     storage.open_session(session)
     inv_id = storage.append_investigation_result(

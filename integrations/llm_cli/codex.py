@@ -94,6 +94,7 @@ class CodexAdapter:
     """Non-interactive Codex CLI (`codex exec` with read-only sandbox)."""
 
     name = "codex"
+    streams_plain_stdout = True
     binary_env_key = "CODEX_BIN"
     install_hint = "npm i -g @openai/codex"
     auth_hint = "Run: codex login"

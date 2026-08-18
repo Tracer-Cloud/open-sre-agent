@@ -11,17 +11,12 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from integrations.sentry.digest_delivery import SENTRY_DIGEST_SUPPORTED_PROVIDERS
-from surfaces.cli.commands.cron import _validate_cron_and_timezone
+from bootstrap.process import SCHEDULED_COMMAND_PROFILE, configure_process
+from platform.scheduler.delivery import SUPPORTED_DELIVERY_PROVIDERS
+from surfaces.cli.commands.scheduling import add_task_and_echo, validate_cron_and_timezone
 
 _console = Console()
-_PROVIDER_CHOICES = [p.value for p in SENTRY_DIGEST_SUPPORTED_PROVIDERS]
-
-
-def _install_scheduler_runners() -> None:
-    from surfaces.shared.runtime_bootstrap import install_runtime
-
-    install_runtime()
+_PROVIDER_CHOICES = [p.value for p in SUPPORTED_DELIVERY_PROVIDERS]
 
 
 @click.group(name="sentry")
@@ -138,12 +133,11 @@ def sentry_uptime_watch_add(
         require_digest_delivery_provider,
         require_sentry_integration,
     )
-    from platform.scheduler.store import add_task
     from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_sentry_integration()
     require_digest_delivery_provider(provider)
-    _validate_cron_and_timezone(cron_expr, timezone)
+    validate_cron_and_timezone(cron_expr, timezone)
 
     params: dict[str, str] = {}
     if project_slug.strip():
@@ -160,10 +154,7 @@ def sentry_uptime_watch_add(
         window_hours=0,
         params=params,
     )
-    added = add_task(task)
-    _console.print(f"[green]Sentry uptime watch task {added.id} created.[/green]")
-    _console.print(f"  Cron: {added.cron}  TZ: {added.timezone}")
-    _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
+    added = add_task_and_echo(task, label="Sentry uptime watch")
     if params:
         _console.print(f"  Project: {params['project_slug']}")
 
@@ -247,7 +238,7 @@ def sentry_uptime_watch_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    _install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_UPTIME_WATCH:
         _console.print(f"[red]Error: Sentry uptime watch task {task_id} not found.[/red]")
@@ -276,7 +267,7 @@ def sentry_digest_run(project_slug: str) -> None:
     """Run the morning digest once and print the report to stdout."""
     from platform.scheduler.agent_runner import invoke_agent_runner
 
-    _install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     payload: dict[str, str] = {
         "source": "cli_sentry_morning_digest",
         "stats_period": "24h",
@@ -346,12 +337,11 @@ def sentry_digest_schedule_add(
         require_digest_delivery_provider,
         require_sentry_integration,
     )
-    from platform.scheduler.store import add_task
     from platform.scheduler.types import Provider, ScheduledTask, TaskKind
 
     require_sentry_integration()
     require_digest_delivery_provider(provider)
-    _validate_cron_and_timezone(cron_expr, timezone)
+    validate_cron_and_timezone(cron_expr, timezone)
 
     params: dict[str, str] = {}
     if project_slug.strip():
@@ -366,10 +356,7 @@ def sentry_digest_schedule_add(
         window_hours=24,
         params=params,
     )
-    added = add_task(task)
-    _console.print(f"[green]Sentry digest task {added.id} created.[/green]")
-    _console.print(f"  Cron: {added.cron}  TZ: {added.timezone}")
-    _console.print(f"  Provider: {added.provider.value}  Chat: {added.chat_id}")
+    add_task_and_echo(task, label="Sentry digest")
     if params:
         _console.print(f"  Project: {params['project_slug']}")
 
@@ -439,7 +426,7 @@ def sentry_digest_schedule_run(task_id: str) -> None:
     from platform.scheduler.store import get_task
     from platform.scheduler.types import TaskKind
 
-    _install_scheduler_runners()
+    configure_process(SCHEDULED_COMMAND_PROFILE)
     task = get_task(task_id)
     if task is None or task.kind != TaskKind.SENTRY_MORNING_DIGEST:
         _console.print(f"[red]Error: Sentry digest task {task_id} not found.[/red]")

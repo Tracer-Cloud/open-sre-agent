@@ -1,6 +1,6 @@
 """Optional ``@traceable`` hook — free when session tracing is inactive.
 
-When a real :class:`~platform.observability.trace.spans.SessionTraceSink` is
+When a real :class:`~platform.observability.trace.spans.SessionTraceStore` is
 registered (REPL JSONL), wraps the callable in :func:`timed_span`. When the
 default noop sink is active, the wrapper is a near-zero-cost pass-through
 (``isinstance`` check only — no clock, no I/O).

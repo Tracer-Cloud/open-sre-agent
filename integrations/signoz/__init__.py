@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 from pydantic import Field
 
+from config.constants.signoz import SIGNOZ_API_KEY_ENV, SIGNOZ_URL_ENV
 from config.strict_config import StrictConfigModel
 from integrations._validation_helpers import report_classify_failure, report_validation_failure
 
@@ -52,8 +53,8 @@ def build_signoz_config(raw: dict[str, Any] | None) -> SigNozConfig:
 
 def signoz_config_from_env() -> SigNozConfig | None:
     """Load a SigNoz config from env vars."""
-    url = os.getenv("SIGNOZ_URL", "").strip()
-    api_key = os.getenv("SIGNOZ_API_KEY", "").strip()
+    url = os.getenv(SIGNOZ_URL_ENV, "").strip()
+    api_key = os.getenv(SIGNOZ_API_KEY_ENV, "").strip()
 
     if not (url and api_key):
         return None

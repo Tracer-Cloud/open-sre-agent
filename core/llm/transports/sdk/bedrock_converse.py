@@ -21,7 +21,6 @@ from config.constants.aws import (
 from core.llm.shared.tool_schema_normalize import (
     BEDROCK_UNSUPPORTED_SCHEMA_KEYS,
     normalize_object_tool_input_schema,
-    sanitize_strict_tool_schema,
 )
 
 if TYPE_CHECKING:
@@ -270,11 +269,6 @@ def build_bedrock_anthropic_client(
 def new_tool_use_id() -> str:
     """Return a short alphanumeric id suitable for Converse ``toolUseId`` fields."""
     return secrets.token_hex(5)
-
-
-def sanitize_converse_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Return a Converse-compatible copy of *schema* with required ``type`` / ``items`` filled in."""
-    return sanitize_strict_tool_schema(schema, unsupported_keys=BEDROCK_UNSUPPORTED_SCHEMA_KEYS)
 
 
 def normalize_tool_input_schema(schema: dict[str, Any] | None) -> dict[str, Any]:

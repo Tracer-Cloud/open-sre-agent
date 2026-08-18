@@ -1,7 +1,8 @@
-"""Session lifecycle slash commands: /clear, /new, /sessions, /resume, /compact."""
+"""Session lifecycle slash commands: /clear, /new, /sessions, /resume, /compact, /goal."""
 
 from __future__ import annotations
 
+from surfaces.interactive_shell.command_registry.session_cmds.goal import _cmd_goal
 from surfaces.interactive_shell.command_registry.session_cmds.lifecycle import (
     _cmd_clear,
     _cmd_compact,
@@ -51,6 +52,33 @@ COMMANDS: list[SlashCommand] = [
         notes=(
             "Writes a compaction entry and keeps the most recent messages plus a summary.",
             "Useful before continuing a long-running investigation in the same REPL.",
+        ),
+    ),
+    SlashCommand(
+        "/goal",
+        "Show, set, pause, resume, edit, or clear the multi-step goal.",
+        _cmd_goal,
+        usage=(
+            "/goal",
+            "/goal show",
+            "/goal set [--max-turns N] <condition>",
+            "/goal pause",
+            "/goal resume",
+            "/goal edit <condition>",
+            "/goal clear",
+        ),
+        notes=(
+            "Sugar over chat_until_goal — distinct from /work durable todos.",
+            "Setting a goal queues the condition as the next turn (autosubmit).",
+            "Pause keeps state without continuation; resume queues the condition again.",
+        ),
+        first_arg_completions=(
+            ("show", "show the goal (duration, turns, tokens)"),
+            ("set", "set a goal and start working on it immediately"),
+            ("pause", "pause continuation (keep state)"),
+            ("resume", "resume a paused goal"),
+            ("edit", "change the condition in place"),
+            ("clear", "clear the goal"),
         ),
     ),
 ]

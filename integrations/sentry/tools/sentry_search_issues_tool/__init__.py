@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
@@ -102,7 +103,7 @@ def _search_issues_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
     injected_params=("organization_slug", "sentry_token", "sentry_url", "project_slug"),
     is_available=_sentry_available,
     extract_params=_search_issues_extract_params,
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
 )
 def search_sentry_issues(
     organization_slug: str,

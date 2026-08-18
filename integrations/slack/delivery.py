@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 from config.config import SLACK_CHANNEL
+from config.constants.slack import SLACK_WEBHOOK_URL_ENV
 from platform.notifications.delivery_errors import extract_http_error
 from platform.notifications.delivery_transport import post_json
 from platform.notifications.redaction import redact_slack_token
@@ -152,7 +153,7 @@ def _merge_payload(
 
 def _configured_webhook_url() -> str:
     """Return the standalone Slack webhook from env or the local integration store."""
-    env_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    env_webhook_url = os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip()
     if env_webhook_url:
         return env_webhook_url
 

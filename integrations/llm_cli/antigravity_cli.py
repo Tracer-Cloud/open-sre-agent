@@ -135,6 +135,7 @@ class AntigravityCLIAdapter:
     """Non-interactive Antigravity CLI (``agy -p`` headless mode)."""
 
     name = "antigravity-cli"
+    streams_plain_stdout = True
     binary_env_key = "ANTIGRAVITY_CLI_BIN"
     install_hint = "curl -fsSL https://antigravity.google/cli/install.sh | bash"
     auth_hint = _AUTH_HINT.removesuffix(".")

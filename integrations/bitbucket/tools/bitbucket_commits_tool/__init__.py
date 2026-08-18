@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
-from integrations.bitbucket import list_commits
-from integrations.bitbucket.availability import bitbucket_available_or_backend
+from integrations.bitbucket.client import list_commits
+from integrations.bitbucket.tools.availability import bitbucket_available_or_backend
 from integrations.bitbucket.tools.bitbucket_search_code_tool import (
     _bb_creds,
     _resolve_config,
@@ -33,7 +34,7 @@ def _list_bitbucket_commits_available(sources: dict[str, dict]) -> bool:
     name="list_bitbucket_commits",
     description="List recent commits for a Bitbucket repository, optionally filtered by file path.",
     source="bitbucket",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking whether a recent change could explain a failure",
         "Reviewing commit history for a specific file or directory",

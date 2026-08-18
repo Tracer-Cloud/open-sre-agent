@@ -15,6 +15,7 @@ from surfaces.interactive_shell.command_registry.investigation import (
     _INVESTIGATE_FIRST_ARGS,
     _TEMPLATE_FIRST_ARGS,
 )
+from surfaces.interactive_shell.command_registry.loops_cmds import _LOOPS_FIRST_ARGS
 from surfaces.interactive_shell.command_registry.model.command import _MODEL_FIRST_ARGS
 from surfaces.interactive_shell.command_registry.settings_cmds import (
     _TRUST_FIRST_ARGS,
@@ -38,6 +39,7 @@ def test_slash_registry_includes_modular_commands() -> None:
         "/tools",
         "/integrations",
         "/investigate",
+        "/loops",
         "/tasks",
         "/watch",
         "/watches",
@@ -65,6 +67,7 @@ def test_registry_first_arg_completion_hints_co_located_with_handlers() -> None:
         "/template": _TEMPLATE_FIRST_ARGS,
         "/trust": _TRUST_FIRST_ARGS,
         "/verbose": _VERBOSE_FIRST_ARGS,
+        "/loops": _LOOPS_FIRST_ARGS,
     }
     for name, tup in expected.items():
         assert SLASH_COMMANDS[name].first_arg_completions == tup

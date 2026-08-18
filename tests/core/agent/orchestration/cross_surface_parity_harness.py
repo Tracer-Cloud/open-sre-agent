@@ -15,22 +15,24 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from core.agent_harness.prompts.prompt_context import DefaultPromptContextProvider
-from core.agent_harness.session import InMemorySessionStorage
+from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+from core.agent_harness.runtime import TurnBinding
+from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.headless_dispatch import (
-    BufferOutputSink,
-    HeadlessAgent,
-    NoopTurnAccounting,
-)
+from core.agent_harness.turns.gather_ports import GatherPorts
+from core.agent_harness.turns.headless_adapters import BufferOutputSink, NoopTurnAccounting
+from core.agent_harness.turns.headless_agent import HeadlessAgent
+from core.agent_harness.turns.port_families import HeadlessPorts
 from core.agent_harness.turns.turn_results import TurnResult
+from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.runtime.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
+from tests.shared.default_ports_stub import default_ports_stub
 
 Surface = Literal["shell", "headless", "gateway_handler"]
 
@@ -199,11 +201,15 @@ class RecordingGatewaySink:
         label: str,
         chunks: Iterator[str],
         suppress_if_starts_with: str | None = None,
+        defer_want_me_to_closer: bool = False,
     ) -> str:
-        _ = (label, suppress_if_starts_with)
+        _ = (label, suppress_if_starts_with, defer_want_me_to_closer)
         text = "".join(str(chunk) for chunk in chunks)
         self.streamed.append(text)
         return text
+
+    def finish_streamed_response(self, text: str) -> None:
+        self.finalize(text)
 
     def finalize(self, text: str) -> None:
         self.finalized = text
@@ -222,7 +228,7 @@ def console() -> Console:
 
 
 def fresh_session(*, integrations: dict[str, Any] | None = None) -> Session:
-    session = Session(storage=InMemorySessionStorage())
+    session = Session(store=InMemorySessionStore())
     session.resolved_integrations_cache = dict(integrations or {})
     return session
 
@@ -249,11 +255,11 @@ def wire_tool_registry(monkeypatch: Any, tools: list[RegisteredTool]) -> None:
     by_name = {tool.name: tool for tool in tools}
 
     class _FixedToolRegistry:
-        def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
+        def tools_for_surface(self, surface: ToolSurface) -> list[RegisteredTool]:
             del surface
             return list(tools)
 
-        def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
+        def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, RegisteredTool]:
             del surface
             return dict(by_name)
 
@@ -302,19 +308,18 @@ def _dispatch_turn(
     gather_enabled: bool = True,
 ) -> TurnResult:
     output = BufferOutputSink()
-    agent = HeadlessAgent(
+    agent = HeadlessPorts(
+        session=session, output=output, reasoning=DefaultReasoningClientProvider(output=output)
+    ).agent(
         tools=DefaultToolProvider(
             session,
             console(),
             slash_ports_factory=headless_slash_ports,
         ),
-        session=session,
-        output=output,
         prompts=DefaultPromptContextProvider(session),
-        reasoning=DefaultReasoningClientProvider(output=output),
-        accounting=NoopTurnAccounting(),
-        gather_enabled=gather_enabled,
+        gather=GatherPorts(enabled=gather_enabled),
     )
+    agent.bind_turn(TurnBinding(accounting=NoopTurnAccounting()))
     return agent.dispatch(message)
 
 
@@ -342,17 +347,25 @@ def _install_gateway_dispatch_spy(
     monkeypatch: Any,
     captured: list[TurnResult],
 ) -> None:
-    """Spy on the gateway pool's agent factory (not ``HeadlessAgent`` directly).
+    """Spy on the gateway pool's agent construction (not ``HeadlessAgent`` directly).
 
-    ``SessionAgentPool`` builds agents via ``build_default_headless_agent``; patching
-    the class name on ``session_agents`` no longer intercepts construction.
+    ``SessionAgentPool`` builds agents via ``DefaultPorts(...).agent(...)``; the
+    stub routes both halves through one ``build`` over the real family.
     """
-    from core.agent_harness.turns.default_headless_agent import (
-        build_default_headless_agent as real_build,
-    )
+    from core.agent_harness.turns.port_families import DefaultPorts as real_ports
 
-    def _spy_build(**kwargs: Any) -> HeadlessAgent:
-        agent = real_build(**kwargs)
+    def _spy_build(
+        *,
+        session: Any,
+        output: Any,
+        console: Any = None,
+        logger: Any = None,
+        surface: Any = None,
+        **ports: Any,
+    ) -> HeadlessAgent:
+        agent = real_ports(
+            session=session, output=output, console=console, logger=logger, surface=surface
+        ).agent(**ports)
         original_dispatch = type(agent).dispatch
 
         def dispatch(message: str) -> TurnResult:
@@ -364,8 +377,7 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.runtime.session_agents.build_default_headless_agent",
-        _spy_build,
+        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(_spy_build)
     )
 
 

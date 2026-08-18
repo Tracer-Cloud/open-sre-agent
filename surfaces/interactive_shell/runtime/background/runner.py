@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import threading
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -24,9 +25,43 @@ from surfaces.interactive_shell.runtime.background.notifications import (
     deliver_background_notifications,
 )
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 BackgroundRunFn = Callable[..., dict[str, Any]]
+
+
+def _persist_record(session: Session, record: BackgroundInvestigationRecord) -> None:
+    """Save the record so it outlives this REPL session.
+
+    Never raises. The call sits in a ``finally`` on a daemon thread, so an escaping
+    exception could not fail the investigation (the ``except`` arms have already
+    run) but would reach ``threading.excepthook`` and print a traceback straight
+    into the terminal prompt_toolkit is drawing.
+
+    Failures report through both channels the arms above use, because the CLI
+    configures no logging and a lost record is otherwise invisible.
+    """
+    from platform.background_investigations.store import (
+        UnreadableBackgroundInvestigationsError,
+        background_investigation_store,
+    )
+
+    try:
+        background_investigation_store().save(record)
+    except Exception as exc:  # noqa: BLE001
+        report_exception(exc, context="surfaces.interactive_shell.background_persist")
+        # A damaged document fails every later save too, so name it rather than
+        # repeating an unactionable notice after every investigation. That message
+        # already carries the path, and the local terminal is not an external sink.
+        detail = (
+            escape(str(exc))
+            if isinstance(exc, UnreadableBackgroundInvestigationsError)
+            else escape(type(exc).__name__)
+        )
+        session.terminal.enqueue_background_notice(
+            f"[{WARNING}]background record not saved[/] "
+            f"[{DIM}]for task {escape(record.task_id)}:[/] {detail}",
+        )
 
 
 def _safe_console_print(console: Console, message: str) -> None:
@@ -174,9 +209,18 @@ def _start_background_investigation(
                     f"[{ERROR}]background investigation failed[/] "
                     f"[{DIM}]for task {escape(task.task_id)}:[/] {escape(str(exc))}",
                 )
+            finally:
+                # After the arms above, so persistence can never alter task state.
+                _persist_record(session, record)
 
+    # Copy the context so the per-turn storage scope (a ContextVar set by
+    # ``bound_storage_scope``) is inherited. Without it ``current_scope()`` is None
+    # on the worker and ``opensre_home()`` resolves the shared host root instead of
+    # the bound organization's, filing one org's records where every org can read
+    # them. Same reason as ``memory_extraction._schedule_coalesced``.
     thread = threading.Thread(
-        target=_worker,
+        target=contextvars.copy_context().run,
+        args=(_worker,),
         daemon=True,
         name=f"background-investigation-{task.task_id}",
     )

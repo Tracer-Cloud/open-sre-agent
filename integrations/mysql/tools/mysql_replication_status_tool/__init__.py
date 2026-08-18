@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.sql_wrapper import call_db_tool_with_default_db_warning
 from integrations.mysql import (
@@ -16,7 +17,7 @@ from integrations.mysql import (
     name="get_mysql_replication_status",
     description="Retrieve MySQL replication status including IO/SQL thread health and replica lag.",
     source="mysql",
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     use_cases=[
         "Checking replica lag during high-write incidents",
         "Verifying replication IO and SQL threads are running",

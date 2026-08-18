@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import sys
 import threading
 from functools import lru_cache
 from types import ModuleType
@@ -117,14 +118,24 @@ def _load_registry_tool_map() -> dict[str, RegisteredTool]:
 
 
 @lru_cache(maxsize=8)
-def _load_surface_snapshot(surface: str) -> tuple[RegisteredTool, ...]:
+def _load_surface_snapshot(surface: ToolSurface) -> tuple[RegisteredTool, ...]:
     """Import only the modules that statically declare a tool for ``surface``.
 
     Resolved from the descriptor index so a surface load never imports the other
     surfaces' vendor executors. Runtime-registered external packages are already
     imported, so they are collected directly. Equivalent to the full snapshot
     filtered by ``surface`` (pinned by the registry-index contract test).
+
+    In a PyInstaller frozen binary the AST scanner cannot locate ``.py`` source
+    files (they are compiled to bytecode and not extracted), so
+    ``build_descriptor_index`` returns only the hand-written fallback entries and
+    Grafana / other integration tools are never discovered.  Fall back to the
+    full dynamic snapshot — which imports via ``importlib`` and works correctly
+    with the bundled bytecode — and filter by surface there.
     """
+    if getattr(sys, "frozen", False):
+        return tuple(t for t in _load_registry_snapshot() if surface in t.surfaces)
+
     from tools.registry_index import build_descriptor_index
 
     index = build_descriptor_index()
@@ -215,11 +226,11 @@ def load_tool(descriptor: ToolDescriptor) -> RegisteredTool | None:
 class RegisteredToolRegistry:
     """:class:`~core.agent_harness.ports.ToolRegistry` backed by discovered tool packages."""
 
-    def tools_for_surface(self, surface: str) -> list[RegisteredTool]:
-        return get_registered_tools(surface)  # type: ignore[arg-type]
+    def tools_for_surface(self, surface: ToolSurface) -> list[RegisteredTool]:
+        return get_registered_tools(surface)
 
-    def tool_map_for_surface(self, surface: str) -> dict[str, RegisteredTool]:
-        return get_registered_tool_map(surface)  # type: ignore[arg-type]
+    def tool_map_for_surface(self, surface: ToolSurface) -> dict[str, RegisteredTool]:
+        return get_registered_tool_map(surface)
 
 
 def resolve_tool_display_name(tool_name: str) -> str:
@@ -229,12 +240,24 @@ def resolve_tool_display_name(tool_name: str) -> str:
     return tool_name.replace("_", " ")
 
 
+def _activity_source_badge(source: str) -> str:
+    """Human source name for progress lines.
+
+    Registry sources often end in ``_mcp`` (transport qualifier). Drop that
+    last segment so badges read ``Posthog`` / ``Sentry``, not ``Posthog Mcp``.
+    """
+    parts = [part for part in str(source).replace("-", "_").split("_") if part]
+    if len(parts) > 1 and parts[-1].casefold() == "mcp":
+        parts = parts[:-1]
+    return " ".join(parts).title()
+
+
 def resolve_tool_activity_labels(tool_name: str) -> tuple[str, str]:
     """Return ``(source_badge, short_label)`` from registry metadata."""
     tool = _load_registry_tool_map().get(tool_name)
     if tool is None:
         return "Tools", tool_name.replace("_", " ")
-    source = str(tool.source).replace("_", " ").title()
+    source = _activity_source_badge(str(tool.source))
     display = tool.display_name or tool.name.replace("_", " ")
     prefix = f"{source} "
     if display.lower().startswith(prefix.lower()):

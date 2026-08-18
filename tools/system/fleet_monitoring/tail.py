@@ -44,7 +44,7 @@ _THREAD_JOIN_TIMEOUT_S: Final[float] = 1.0
 _SENTINEL: Final[object] = object()
 
 
-class AttachUnsupported(Exception):
+class AttachUnsupportedError(Exception):
     """Raised eagerly by :func:`attach` when the target cannot be tailed.
 
     ``reason`` is a short, user-facing message that the slash-command
@@ -68,17 +68,19 @@ def _check_regular_file(path: Path, *, what: str) -> Path:
     try:
         st = path.stat()
     except FileNotFoundError as exc:
-        raise AttachUnsupported(f"{what} target {path} no longer exists") from exc
+        raise AttachUnsupportedError(f"{what} target {path} no longer exists") from exc
     except PermissionError as exc:
-        raise AttachUnsupported(
+        raise AttachUnsupportedError(
             f"{what} target {path} is not readable (permission denied)"
         ) from exc
     except OSError as exc:
-        raise AttachUnsupported(
+        raise AttachUnsupportedError(
             f"{what} target {path} is unreachable: {exc.strerror or exc}"
         ) from exc
     if not stat.S_ISREG(st.st_mode):
-        raise AttachUnsupported(f"{what} is not a regular file (got {stat.filemode(st.st_mode)})")
+        raise AttachUnsupportedError(
+            f"{what} is not a regular file (got {stat.filemode(st.st_mode)})"
+        )
     return path
 
 
@@ -87,24 +89,24 @@ def _resolve_linux_target(pid: int) -> _ResolvedTarget:
     try:
         target = os.readlink(fd_link)
     except FileNotFoundError as exc:
-        raise AttachUnsupported(f"no such pid {pid}") from exc
+        raise AttachUnsupportedError(f"no such pid {pid}") from exc
     except PermissionError as exc:
-        raise AttachUnsupported(f"cannot inspect pid {pid} (permission denied)") from exc
+        raise AttachUnsupportedError(f"cannot inspect pid {pid} (permission denied)") from exc
     except OSError as exc:
-        raise AttachUnsupported(f"cannot inspect pid {pid}: {exc.strerror or exc}") from exc
+        raise AttachUnsupportedError(f"cannot inspect pid {pid}: {exc.strerror or exc}") from exc
 
     if target.startswith("socket:["):
-        raise AttachUnsupported("stdout is a socket; live tail not supported")
+        raise AttachUnsupportedError("stdout is a socket; live tail not supported")
     if target.startswith("pipe:["):
-        raise AttachUnsupported("stdout is a pipe; live tail not supported")
+        raise AttachUnsupportedError("stdout is a pipe; live tail not supported")
     if target.startswith("anon_inode:"):
-        raise AttachUnsupported(f"stdout is {target}; live tail not supported")
+        raise AttachUnsupportedError(f"stdout is {target}; live tail not supported")
     if not target.startswith("/"):
-        raise AttachUnsupported(f"stdout target {target!r} is not a filesystem path")
+        raise AttachUnsupportedError(f"stdout target {target!r} is not a filesystem path")
     if target.startswith(("/dev/pts/", "/dev/tty")):
-        raise AttachUnsupported("stdout is on a terminal; live tail not supported")
+        raise AttachUnsupportedError("stdout is on a terminal; live tail not supported")
     if target == "/dev/null":
-        raise AttachUnsupported("stdout is /dev/null; nothing to tail")
+        raise AttachUnsupportedError("stdout is /dev/null; nothing to tail")
 
     return _ResolvedTarget(pid=pid, path=_check_regular_file(Path(target), what="stdout"))
 
@@ -159,54 +161,54 @@ def _resolve_macos_target(pid: int) -> _ResolvedTarget:
             check=False,
         )
     except FileNotFoundError as exc:
-        raise AttachUnsupported("lsof not found; cannot resolve stdout on this host") from exc
+        raise AttachUnsupportedError("lsof not found; cannot resolve stdout on this host") from exc
     except subprocess.TimeoutExpired as exc:
-        raise AttachUnsupported(f"lsof timed out resolving pid {pid}") from exc
+        raise AttachUnsupportedError(f"lsof timed out resolving pid {pid}") from exc
 
     if proc.returncode != 0 and not proc.stdout:
         detail = proc.stderr.strip() or "unknown error"
-        raise AttachUnsupported(f"no such pid {pid} (lsof: {detail})")
+        raise AttachUnsupportedError(f"no such pid {pid} (lsof: {detail})")
 
     fd_type, fd_name = _parse_lsof_fd1(proc.stdout)
     if fd_type is None and fd_name is None:
-        raise AttachUnsupported(f"pid {pid} has no fd 1 (lsof returned no stdout entry)")
+        raise AttachUnsupportedError(f"pid {pid} has no fd 1 (lsof returned no stdout entry)")
     if fd_type is None:
-        raise AttachUnsupported("lsof returned no type for stdout")
+        raise AttachUnsupportedError("lsof returned no type for stdout")
     if fd_type != "REG":
         kind = fd_type.upper()
         # ``/dev/null`` and ``/dev/zero`` come back as CHR with their path in
         # ``n``; surface a tail-specific message rather than the generic
         # "stdout is on a terminal" reject so the user understands the cause.
         if fd_name == "/dev/null":
-            raise AttachUnsupported("stdout is /dev/null; nothing to tail")
+            raise AttachUnsupportedError("stdout is /dev/null; nothing to tail")
         if kind == "CHR":
-            raise AttachUnsupported("stdout is on a terminal; live tail not supported")
+            raise AttachUnsupportedError("stdout is on a terminal; live tail not supported")
         if kind == "PIPE":
-            raise AttachUnsupported("stdout is a pipe; live tail not supported")
+            raise AttachUnsupportedError("stdout is a pipe; live tail not supported")
         if kind in {"IPV4", "IPV6", "UNIX"}:
-            raise AttachUnsupported("stdout is a socket; live tail not supported")
-        raise AttachUnsupported(f"stdout fd type {kind} is not a regular file")
+            raise AttachUnsupportedError("stdout is a socket; live tail not supported")
+        raise AttachUnsupportedError(f"stdout fd type {kind} is not a regular file")
     if not fd_name:
-        raise AttachUnsupported("lsof returned no name for stdout")
+        raise AttachUnsupportedError("lsof returned no name for stdout")
 
     return _ResolvedTarget(pid=pid, path=_check_regular_file(Path(fd_name), what="stdout"))
 
 
 def _resolve_target(pid: int) -> _ResolvedTarget:
     if sys.platform == "win32":
-        raise AttachUnsupported("Windows is not supported")
+        raise AttachUnsupportedError("Windows is not supported")
     # Guard non-positive ids before probing: ``psutil.pid_exists(0)`` can
     # raise ``PermissionError`` on macOS, which the slash-command handler
-    # doesn't catch (it only catches :class:`AttachUnsupported`).
+    # doesn't catch (it only catches :class:`AttachUnsupportedError`).
     if pid <= 0:
-        raise AttachUnsupported(f"invalid pid {pid} (must be positive)")
+        raise AttachUnsupportedError(f"invalid pid {pid} (must be positive)")
     if not pid_exists(pid):
-        raise AttachUnsupported(f"no such pid {pid}")
+        raise AttachUnsupportedError(f"no such pid {pid}")
     if sys.platform == "darwin":
         return _resolve_macos_target(pid)
     if sys.platform.startswith("linux"):
         return _resolve_linux_target(pid)
-    raise AttachUnsupported(f"platform {sys.platform!r} is not supported")
+    raise AttachUnsupportedError(f"platform {sys.platform!r} is not supported")
 
 
 class TailBuffer:
@@ -290,12 +292,14 @@ class AttachSession:
         try:
             self._fd = open(target.path, "rb", buffering=0)  # noqa: SIM115
         except OSError as exc:
-            raise AttachUnsupported(f"cannot open {target.path}: {exc.strerror or exc}") from exc
+            raise AttachUnsupportedError(
+                f"cannot open {target.path}: {exc.strerror or exc}"
+            ) from exc
         try:
             self._fd.seek(0, os.SEEK_END)
         except OSError as exc:
             self._fd.close()
-            raise AttachUnsupported(
+            raise AttachUnsupportedError(
                 f"cannot seek to EOF on {target.path}: {exc.strerror or exc}"
             ) from exc
 
@@ -425,7 +429,7 @@ def attach(
 ) -> AttachSession:
     """Validate the target eagerly and return a ready-to-iterate session.
 
-    Raises :class:`AttachUnsupported` synchronously on any state we
+    Raises :class:`AttachUnsupportedError` synchronously on any state we
     cannot tail-from-EOF safely (Windows, missing pid, fd is a TTY/
     PTY/pipe/socket/anon_inode/``/dev/null``, permission denied, file
     vanished, open failed). Caller is responsible for closing the
@@ -447,7 +451,7 @@ __all__ = [
     "DEFAULT_QUEUE_MAX",
     "DEFAULT_READ_BUFFER",
     "AttachSession",
-    "AttachUnsupported",
+    "AttachUnsupportedError",
     "TailBuffer",
     "attach",
 ]

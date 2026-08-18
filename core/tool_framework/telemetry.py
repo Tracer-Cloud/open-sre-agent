@@ -52,7 +52,7 @@ def report_run_error(
     report_exception(
         exc,
         logger=logger or _DEFAULT_LOGGER,
-        message=f"Tool {tool_name} failed: {type(exc).__name__}: {exc}",
+        message=f"Tool {tool_name} failed: {type(exc).__name__}",
         severity=severity,
         tags=tags,
         extras=extras,
@@ -78,7 +78,7 @@ def invoke_tool(
         report_exception(
             exc,
             logger=_DEFAULT_LOGGER,
-            message=f"Tool {name} failed: {type(exc).__name__}: {exc}",
+            message=f"Tool {name} failed: {type(exc).__name__}",
             severity="error",
             tags={"surface": "tool", "tool_name": name, "source": source},
         )

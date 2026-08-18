@@ -44,8 +44,8 @@ def _append_turn_detail(
     response: str,
     llm_run: Any | None = None,
 ) -> None:
-    storage = getattr(session, "storage", None)
-    append_turn_detail = getattr(storage, "append_turn_detail", None)
+    store = getattr(session, "store", None)
+    append_turn_detail = getattr(store, "append_turn_detail", None)
     session_id = getattr(session, "session_id", "")
     if not callable(append_turn_detail) or not isinstance(session_id, str) or not session_id:
         return

@@ -1,62 +1,58 @@
 ---
 title: "Windows"
-description: "Run Tracer on Windows using WSL or GitHub Codespaces"
+description: "Install OpenSRE on Windows with PowerShell, or use WSL if you prefer Linux tools."
 ---
 
-<Info>
-**No Native Windows Support**<br/>
-Tracer is not natively compatible with Microsoft Windows at the moment. We recommend using one of the quick alternatives below.
-</Info>
+OpenSRE installs on Windows with PowerShell. You can also run the Linux install inside WSL if that's how you usually work.
 
-<Tabs>
-  <Tab title="Option 1: GitHub Codespaces">
+## Option 1: Native Windows (PowerShell)
 
-## GitHub Codespaces
+### 1. Install
 
-Try Tracer instantly in a cloud development environment without any local setup.
+Open PowerShell and run:
 
-<Card href="/environments/codespaces">
-  <img
-    className="block dark:hidden"
-    src="/images/other_logos/GitHub-Black.png"
-    alt="GitHub Logo"
-    style={{ width: '5%', height: 'auto', marginTop: '0rem', marginBottom: '1rem' }}
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/other_logos/GitHub-Black.png"
-    alt="GitHub Logo"
-    style={{ width: '5%', height: 'auto', marginTop: '0rem', marginBottom: '1rem' }}
-  />
+```powershell
+irm https://install.opensre.com | iex
+```
 
-  <div style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1rem', color: 'inherit' }}>
-    Launch GitHub Codespaces
-  </div>
+If a new window doesn't see `opensre`, close and reopen PowerShell so PATH updates apply.
 
-  <div style={{ color: 'inherit' }}>
-    Open your cloud development environment and follow the installation guide
-  </div>
-</Card>
+### 2. Set things up
 
-  </Tab>
-  <Tab title="Option 2: WSL (Windows Subsystem for Linux)">
+```powershell
+opensre onboard
+opensre integrations verify
+```
 
-<Card title="Step 1" href="https://learn.microsoft.com/en-us/windows/wsl/install">
-Install Windows Subsystem for Linux (WSL)
-</Card>
+### 3. Try an investigation
 
-Once WSL is installed, open your Ubuntu terminal and follow the Linux (Local) installation guide.
+```powershell
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
 
-<Card title="Step 2" href="/environments/linux-local">
-Follow Linux Installation Guide
-</Card>
+Or start the interactive shell:
 
-  </Tab>
-</Tabs>
+```powershell
+opensre
+```
 
-## Stay Updated
+GIFs for Windows install and onboard are on the [Quickstart](/quickstart).
 
-Get Notified About Native Windows Support
+## Option 2: WSL (Linux on Windows)
 
-**Want to be notified when native Windows support is available?<br/>**
-Follow our [GitHub repository](https://github.com/Tracer-Cloud) or join our community for updates on Windows compatibility.
+Prefer a Linux shell?
+
+1. Install [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and open your Ubuntu (or other) distro.
+2. Follow the [Linux](/environments/linux-local) install guide inside that terminal.
+
+## Stuck?
+
+- **Command not found** — new terminal, or check that the install directory is on PATH
+- **Onboard can't reach the LLM** — check the API key and network; you can save and retry later
+- More tips: [Quickstart troubleshooting](/quickstart#troubleshooting)
+
+## Next
+
+- [Install OpenSRE](/install) — short overview
+- [Install locally](/install-local) — more detail for self-hosted setups
+- [Integrations overview](/integrations-overview)

@@ -10,12 +10,28 @@ of being copied per caller.
 from __future__ import annotations
 
 import io
+import re
 
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
 from platform.terminal.theme import TEXT
+
+_CLAUSE_BOUNDARY = re.compile(r";\s+|\s\|\s+")
+
+
+def wrap_clauses(text: str) -> str:
+    """Break a ``"; "``/``" | "``-joined status string onto one line per clause.
+
+    Verifier ``detail`` strings are built as clauses (``"OK @user; repos=30;
+    owners=..."``). Left as a single line, a fixed-width column's fold-overflow
+    wraps at the column edge and can split a clause mid-word (there is no space
+    to break on inside a comma-separated repo list). Splitting on each clause
+    boundary up front gives the column shorter, natural-length lines instead of
+    leaving line breaks to character-level folding.
+    """
+    return "\n".join(clause.strip() for clause in _CLAUSE_BOUNDARY.split(text) if clause.strip())
 
 
 def new_table() -> Table:
@@ -49,4 +65,4 @@ def render_table(table: Table) -> str:
     return console.export_text(styles=False)
 
 
-__all__ = ["new_table", "render_table"]
+__all__ = ["new_table", "render_table", "wrap_clauses"]

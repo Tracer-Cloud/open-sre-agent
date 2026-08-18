@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
+from core.domain.types.tools import ToolSurface
+from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations.github.client import GitHubApiError, GitHubRestClient, resolve_github_token
@@ -109,8 +111,8 @@ def _count_work_items(items: list[dict[str, Any]]) -> dict[str, int]:
     ],
     anti_examples=["Creating, editing, or closing GitHub issues"],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -249,8 +251,8 @@ def _count_prs(prs: list[dict[str, Any]]) -> dict[str, int]:
         "Preparing engineering status updates without changing GitHub state",
     ],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -356,8 +358,8 @@ _ISSUE_MUTATION_OPERATIONS = {"create", "update", "close"}
         "Building a read-only engineering status report with security context",
     ],
     requires=["owner", "repo"],
-    surfaces=("investigation", "chat"),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -426,8 +428,8 @@ def list_github_security_alerts(
         "Rendering deterministic issue mutation payloads without mutating GitHub",
     ],
     anti_examples=["Directly mutating GitHub", "Inferring tasks from ambiguous Slack discussion"],
-    surfaces=("chat",),
-    side_effect_level="read_only",
+    surfaces=(ToolSurface.CHAT,),
+    side_effect_level=SideEffectLevel.READ_ONLY,
     input_schema={
         "type": "object",
         "properties": {
@@ -605,8 +607,8 @@ def _marker_exists_on_issue(
         "Creating proposals",
         "Running during investigations",
     ],
-    surfaces=("chat",),
-    side_effect_level="mutating",
+    surfaces=(ToolSurface.CHAT,),
+    side_effect_level=SideEffectLevel.MUTATING,
     input_schema={
         "type": "object",
         "properties": {

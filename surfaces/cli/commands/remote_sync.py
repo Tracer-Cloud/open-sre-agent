@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 import click
 
 from config.constants.filestorage import (
@@ -25,6 +27,8 @@ from platform.filestorage.setup import (
     disable_remote_sync,
     save_remote_sync_settings,
 )
+from surfaces.cli.commands.remote_sync_progress import CliProgress
+from surfaces.cli.telemetry import capture_exception
 
 
 @click.group(name="remote-sync", invoke_without_command=True)
@@ -54,17 +58,49 @@ def status_command() -> None:
 @click.option("--dry-run", is_flag=True, help="Preview transfers without changing anything.")
 def sync_now_command(pull_only: bool, push_only: bool, dry_run: bool) -> None:
     """Sync now: pull remote changes, then push local ones."""
+    progress = CliProgress() if click.get_text_stream("stdout").isatty() else None
     try:
-        report = run_remote_sync(pull_only=pull_only, push_only=push_only, dry_run=dry_run)
+        report = run_remote_sync(
+            pull_only=pull_only, push_only=push_only, dry_run=dry_run, on_progress=progress
+        )
     except RemoteSyncError as exc:
+        if progress is not None:
+            progress.close()
         click.echo(f"Sync failed: {exc}", err=True)
         raise SystemExit(ERROR) from exc
+    finally:
+        if progress is not None:
+            progress.close()
     if report is None:
         click.echo(DISABLED_HELP)
         raise SystemExit(SUCCESS)
     for line in format_report_lines(report, dry_run=dry_run):
         click.echo(line)
     raise SystemExit(SUCCESS)
+
+
+def run_remote_sync_on_exit() -> None:
+    """Run remote sync without changing the interactive shell's exit result."""
+    try:
+        report = run_remote_sync()
+    except Exception as exc:  # noqa: BLE001 - an optional exit hook must fail soft
+        with suppress(Exception):
+            capture_exception(exc, context="surfaces.cli.sync_on_exit")
+        click.echo(
+            "Automatic remote sync failed; run 'opensre remote-sync sync' for details.",
+            err=True,
+        )
+        return
+
+    if report is None:
+        click.echo(
+            "Automatic remote sync skipped because remote sync is off; "
+            "run 'opensre remote-sync setup' first.",
+            err=True,
+        )
+        return
+    for line in format_report_lines(report):
+        click.echo(line)
 
 
 @remote_sync_command.command(name=RemoteSyncSubcommand.SETUP.value)
@@ -220,4 +256,4 @@ def _prompt_extra_field(field: RemoteSyncField, provider: str, current: str | No
     return str(click.prompt(extra.prompt, default=current or "", show_default=False))
 
 
-__all__ = ["remote_sync_command"]
+__all__ = ["remote_sync_command", "run_remote_sync_on_exit"]

@@ -17,6 +17,7 @@ Use this package when adding a new **non-interactive** LLM that shells out to a 
 | `semver_utils.py`    | Shared semver helpers (`parse_semver_three_part`, `semver_to_tuple`). |
 | `binary_resolver.py` | Shared executable resolution helpers (`env -> PATH -> fallback paths`).                     |
 | `runner.py`          | `CLIBackedLLMClient`: guardrails, `detect()`, `subprocess.run`, ANSI strip, `LLMResponse`.  |
+| `agent_exec.py`      | Shared machinery for the *agentic* ("hands") role used by coding-agent backends: injection-guarded task prompt, deadline-polled subprocess with pipe draining, outcome classification (limit markers). Leaf — imports nothing from `integrations/pi` or `integrations/coding_agent`. |
 | `text.py`            | `flatten_messages_to_prompt` for stdin from chat-style payloads.                            |
 | `codex.py`           | Reference adapter: binary resolution, `codex exec`, `--version`, and opt-in-only `login status` probing. |
 | `opencode.py`        | Multi-provider CLI: `--version`, then `opencode auth list` (see `_parse_opencode_auth_list_output`). |
@@ -159,7 +160,7 @@ CODEX_BIN=
 - Write `_classify_<name>_auth` — test against a real logged-in **and** logged-out session before merging.
 - If the CLI reads custom env vars (e.g. `GEMINI_*`), add the prefix to `_SAFE_SUBPROCESS_ENV_PREFIXES` in `subprocess_env.py`.
 - Register the provider in `registry.py` and add the same `LLM_PROVIDER` value in `config/config.py`.
-- (Optional) Add wizard onboarding option in `surfaces/cli/wizard/config.py`.
+- (Optional) Add wizard onboarding option in `surfaces/shared/llm_setup/catalog.py`.
 - Add tests under `tests/integrations/llm_cli/` for detect/build/failure paths, including env forwarding.
 
 ## Tests

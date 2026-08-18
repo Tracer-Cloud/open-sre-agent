@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.tool_availability import tool_unavailable
 
@@ -36,7 +37,7 @@ def _fixture_backend_only(sources: dict[str, Any]) -> bool:
     source="hermes",
     description="Get structured Hermes session event log entries.",
     use_cases=["Inspect message/tool/error/retry event sequence for a Hermes session"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -63,7 +64,7 @@ def get_hermes_session_log(
     use_cases=[
         "Diagnose provider 4xx/5xx responses, malformed bodies, dropped headers, and SSE drift"
     ],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -90,7 +91,7 @@ def get_hermes_provider_traffic(
     use_cases=[
         "Identify messaging adapters, LLM providers, execution backends, and unknown adapter attribution"
     ],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -117,7 +118,7 @@ def get_hermes_adapter_catalog(
     use_cases=[
         "Diagnose provider selection, Bedrock IMDS overrides, transport limits, and adapter config mismatches"
     ],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -142,7 +143,7 @@ def get_hermes_config(
     source="hermes",
     description="Get full Hermes conversation message history for ordering/invariant checks.",
     use_cases=["Detect malformed tool_call/tool sequencing after compression"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -167,7 +168,7 @@ def get_hermes_message_history(
     source="hermes",
     description="Get Hermes KV cache counters and miss-diff diagnostics.",
     use_cases=["Diagnose cache-thrash caused by formatting drift"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -192,7 +193,7 @@ def get_hermes_kv_cache_state(
     source="hermes",
     description="Get Hermes runtime state including queue depth/progress timestamps.",
     use_cases=["Diagnose hangs via deterministic frozen_now_ts vs last_progress_ts"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -217,7 +218,7 @@ def get_hermes_runtime_state(
     source="hermes",
     description="Get Hermes cron execution and delivery timing state.",
     use_cases=["Differentiate agent completion from downstream delivery hangs"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -242,7 +243,7 @@ def get_hermes_cron_state(
     source="hermes",
     description="Get Hermes visible/continuation session topology for ghost-session detection.",
     use_cases=["Follow continuation_of chains to detect invisible forked sessions"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -267,7 +268,7 @@ def get_hermes_session_topology(
     source="hermes",
     description="Get Hermes orchestration role/topology execution state.",
     use_cases=["Diagnose collapsed orchestration, isolated ACP sessions, and role execution drift"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -292,7 +293,7 @@ def get_hermes_orchestration_state(
     source="hermes",
     description="Get Hermes capability routing decisions and model selection outcomes.",
     use_cases=["Diagnose ignored routing policies and default-model fallback behavior"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -317,7 +318,7 @@ def get_hermes_routing_decisions(
     source="hermes",
     description="Get Hermes memory backend health and parse/fallback state.",
     use_cases=["Diagnose memory backend outages, corruption, and parse failures"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -342,7 +343,7 @@ def get_hermes_memory_state(
     source="hermes",
     description="Get Hermes filesystem persistence and corruption state.",
     use_cases=["Diagnose corrupted memory snapshots and missing recovery backups"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -367,7 +368,7 @@ def get_hermes_filesystem_state(
     source="hermes",
     description="Get Hermes audit policy and observed audit-chain/signature state.",
     use_cases=["Diagnose missing cryptographic audit trails and broken hash chains"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -392,7 +393,7 @@ def get_hermes_audit_trail(
     source="hermes",
     description="Get Hermes approval prompts and destructive-command approval outcomes.",
     use_cases=["Diagnose destructive commands that ran without explicit approval"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -417,7 +418,7 @@ def get_hermes_approval_events(
     source="hermes",
     description="Get Hermes tenant scopes and observed cross-tenant access checks.",
     use_cases=["Diagnose missing RBAC checks and cross-tenant memory/context access"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -442,7 +443,7 @@ def get_hermes_rbac_state(
     source="hermes",
     description="Get Hermes credential isolation mode and outbound credential usage.",
     use_cases=["Diagnose in-process credential exposure and missing credential proxy isolation"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},
@@ -467,7 +468,7 @@ def get_hermes_credential_state(
     source="hermes",
     description="Get Hermes deterministic workflow run comparison state.",
     use_cases=["Diagnose non-deterministic workflow output drift across same-input runs"],
-    surfaces=("investigation",),
+    surfaces=(ToolSurface.INVESTIGATION,),
     input_schema={
         "type": "object",
         "properties": {"session_id": {"type": "string"}},

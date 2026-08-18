@@ -12,7 +12,7 @@ import pytest
 
 from core.agent_harness.session import (
     JsonlSessionRepo,
-    JsonlSessionStorage,
+    JsonlSessionStore,
 )
 from core.agent_harness.session.persistence.paths import sessions_dir as _sessions_dir
 from surfaces.interactive_shell.session import (
@@ -20,7 +20,7 @@ from surfaces.interactive_shell.session import (
 )
 
 
-class _SessionStoreFacade(JsonlSessionStorage, JsonlSessionRepo):
+class _SessionStoreFacade(JsonlSessionStore, JsonlSessionRepo):
     """Test facade exposing both the storage and repo APIs on one object."""
 
 
@@ -323,7 +323,7 @@ def test_append_trace_span_appends_without_reading_file(tmp_path: Path) -> None:
         SessionStore.open_session(session)
         SessionStore.append_turn(session, "chat", "hello")
 
-        with patch.object(JsonlSessionStorage, "_read_records") as read_records:
+        with patch.object(JsonlSessionStore, "_read_records") as read_records:
             SessionStore.append_trace_span(session.session_id, span_kind="tool", name="grep")
 
     read_records.assert_not_called()

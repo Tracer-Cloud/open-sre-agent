@@ -4,11 +4,11 @@ import logging
 
 import pytest
 
-from gateway.config.logging_config import (
+from gateway.core.config.logging_config import (
     _GatewayLogFormatter,
     _GatewayProcessLogFilter,
-    _quiet_noisy_loggers,
 )
+from platform.logging import quiet_noisy_third_party_loggers
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,15 @@ def _reset_root_logging() -> None:
     for handler in root.handlers[:]:
         root.removeHandler(handler)
     root.setLevel(logging.NOTSET)
-    for name in ("httpx", "httpcore", "openai", "gateway", "integrations.messaging_security"):
+    for name in (
+        "httpx",
+        "httpcore",
+        "openai",
+        "mcp",
+        "mcp.client.session",
+        "gateway",
+        "integrations.messaging_security",
+    ):
         logging.getLogger(name).setLevel(logging.NOTSET)
 
 
@@ -36,7 +44,7 @@ def _make_record(*, name: str, level: int, message: str) -> logging.LogRecord:
 def test_gateway_formatter_shortens_package_logger_names() -> None:
     formatter = _GatewayLogFormatter(fmt="%(name)s | %(message)s")
     record = _make_record(
-        name="gateway.telegram.inbound_handler",
+        name="gateway.transports.telegram.inbound_handler",
         level=logging.INFO,
         message="turn complete",
     )
@@ -61,7 +69,8 @@ def test_gateway_process_filter_hides_routine_authorized_audit_lines() -> None:
 
 
 def test_quiet_noisy_loggers_sets_warning_level() -> None:
-    _quiet_noisy_loggers()
+    quiet_noisy_third_party_loggers()
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
     assert logging.getLogger("openai").level == logging.WARNING
+    assert logging.getLogger("mcp.client.session").level == logging.ERROR

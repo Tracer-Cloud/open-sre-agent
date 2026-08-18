@@ -1,3 +1,0 @@
-[submodule "platform/deployment_multi_tenant"]
-	path = platform/deployment_multi_tenant
-	url = https://github.com/Tracer-Cloud/opensre-infra-aws.git

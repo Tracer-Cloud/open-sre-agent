@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.base import BaseTool
 from integrations.splunk._client import make_client, unavailable
 from platform.common.evidence_compaction import compact_logs, summarize_counts
@@ -38,7 +39,7 @@ class SplunkSearchTool(BaseTool):
         "Fetching recent error logs for a service identified in an alert",
         "Correlating trace IDs with Splunk log entries",
     ]
-    surfaces = ("investigation", "chat")
+    surfaces = (ToolSurface.INVESTIGATION, ToolSurface.CHAT)
     requires = []  # connection_verified check is in is_available()
     outputs = {
         "splunk_logs": "All log events returned from Splunk search",

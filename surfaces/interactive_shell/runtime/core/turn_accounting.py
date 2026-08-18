@@ -12,11 +12,8 @@ from dataclasses import dataclass
 
 # The neutral "facts only" turn-result models live in the decoupled agent
 # package; this module owns only the shell's accounting side effects over them.
-from core.agent_harness.turns.turn_results import (
-    ToolCallingAccountingStatus,
-    ToolCallingTurnResult,
-    TurnResult,
-)
+from core.agent_harness import ToolCallingTurnResult, TurnResult
+from core.agent_harness.spi.accounting import ToolCallingAccountingStatus
 from platform.analytics.cli import capture_terminal_turn_summarized
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
@@ -44,10 +41,24 @@ class ShellTurnAccounting:
     def finalize(self, result: TurnResult) -> TurnResult:
         """Flush the recorder, persist the turn, and stamp the session intent."""
         self._flush_prompt_recorder(result)
-        if result.llm_run is not None:
+        if result.llm_run is not None and not self._cli_agent_already_recorded():
+            # ActionRenderObserver may already have recorded this text on the
+            # first non-handoff tool_start (e.g. memory_remember alongside
+            # assistant_handoff). Do not append a duplicate history row.
             self.session.record("cli_agent", self.text)
         self.session.last_assistant_intent = result.final_intent
         return result
+
+    def _cli_agent_already_recorded(self) -> bool:
+        history = getattr(self.session, "history", None) or ()
+        if not history:
+            return False
+        last = history[-1]
+        return (
+            isinstance(last, dict)
+            and last.get("type") == "cli_agent"
+            and last.get("text") == self.text
+        )
 
     def _record_action_analytics(self, action_result: ToolCallingTurnResult) -> None:
         from platform.analytics.cli import (

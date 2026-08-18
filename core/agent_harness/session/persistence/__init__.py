@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.agent_harness.session.persistence.jsonl_storage import JsonlSessionStorage
-from core.agent_harness.session.persistence.memory import InMemorySessionStorage
+from core.agent_harness.session.persistence.jsonl_store import JsonlSessionStore
+from core.agent_harness.session.persistence.memory import InMemorySessionStore
 
-__all__ = ["InMemorySessionStorage", "JsonlSessionStorage"]
+__all__ = ["InMemorySessionStore", "JsonlSessionStore"]

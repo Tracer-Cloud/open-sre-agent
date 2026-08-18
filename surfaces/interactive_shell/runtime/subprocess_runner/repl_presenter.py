@@ -17,7 +17,7 @@ from platform.common.task_types import TaskKind
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, print_command_output
 from surfaces.interactive_shell.ui.execution_confirm import execution_allowed
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
+from surfaces.shared.error_handling.exception_reporting import report_exception
 from tools.interactive_shell.shared import ExecutionPolicyResult
 from tools.interactive_shell.subprocess import SubprocessPresenter, subprocess_env_with_width
 
@@ -129,6 +129,10 @@ class ReplSubprocessPresenter:
         self._console.print(_escape_markup_message(message))
 
     def print_bold_command(self, display_command: str) -> None:
+        # Blank line *before* the header so each `$ command` + its output reads
+        # as one block; a blank between header and output would visually attach
+        # the output to the following command instead.
+        self._console.print()
         self._console.print(f"[bold]$ {escape(display_command)}[/bold]")
 
     def print_command_output(self, text: str, *, style: str | None = None) -> None:

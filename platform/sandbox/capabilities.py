@@ -21,6 +21,7 @@ class Capability(StrEnum):
     PYTHON = "python execution"
     SHELL = "shell commands"
     FILE_READ = "file reading"
+    FILE_GREP = "file search with grep"
     NETWORK = "network requests"
 
 
@@ -59,6 +60,11 @@ def _file_read_available() -> bool:
         return False
 
 
+def _file_grep_available() -> bool:
+    """True when grep exists to search local files."""
+    return shutil.which("grep") is not None
+
+
 def _network_available() -> bool:
     """True when the default sandbox policy allows outbound sockets.
 
@@ -78,8 +84,20 @@ _PROBES: tuple[tuple[Capability, str], ...] = (
     (Capability.PYTHON, "_python_available"),
     (Capability.SHELL, "_shell_available"),
     (Capability.FILE_READ, "_file_read_available"),
+    (Capability.FILE_GREP, "_file_grep_available"),
     (Capability.NETWORK, "_network_available"),
 )
+
+_CAPABILITY_FIXES: dict[Capability, str] = {
+    Capability.PYTHON: "make the process temp directory writable, then run `make install`.",
+    Capability.SHELL: "install bash or sh and add it to PATH.",
+    Capability.FILE_READ: "run OpenSRE from a readable working directory.",
+    Capability.FILE_GREP: "install grep and add it to PATH.",
+    Capability.NETWORK: (
+        "use a configured integration for outbound HTTP; raw sandbox network access "
+        "is blocked by default."
+    ),
+}
 
 
 def probe_capabilities() -> dict[Capability, CapabilityStatus]:
@@ -105,7 +123,7 @@ def unavailable_capability_warnings(
     return [
         f"{status.capability} is unavailable in this environment"
         + (f" ({status.detail})" if status.detail else "")
-        + " — the agent will not be able to use it."
+        + f" — the agent will not be able to use it. Fix: {_CAPABILITY_FIXES[status.capability]}"
         for status in checked.values()
         if not status.available
     ]

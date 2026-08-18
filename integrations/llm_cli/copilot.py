@@ -209,6 +209,7 @@ class CopilotAdapter:
     """Non-interactive GitHub Copilot CLI (``copilot -p``, programmatic mode)."""
 
     name = "copilot"
+    streams_plain_stdout = True
     binary_env_key = "COPILOT_BIN"
     install_hint = "npm i -g @github/copilot"
     auth_hint = _AUTH_HINT.removesuffix(".")

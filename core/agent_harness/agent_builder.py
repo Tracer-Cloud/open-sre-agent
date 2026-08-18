@@ -11,9 +11,11 @@ from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
 from core.agent import Agent
+from core.agent.goals import Goal
 from core.events import RuntimeEventCallback
 from core.execution import ToolExecutionHooks
 from core.llm.types import AgentLLMClient, ResolvedIntegrations
+from core.provider import ProviderHooks
 from core.types import RuntimeTool
 
 RuntimeToolT = TypeVar("RuntimeToolT", bound=RuntimeTool)
@@ -33,7 +35,9 @@ class AgentConfig(Generic[RuntimeToolT]):  # noqa: UP046
     max_iterations: int
     tool_resources: dict[str, Any] = field(default_factory=dict)
     tool_hooks: ToolExecutionHooks | None = None
+    provider_hooks: ProviderHooks | None = None
     on_runtime_event: RuntimeEventCallback | None = None
+    goal: Goal | None = None
 
 
 def build_agent(  # noqa: UP047
@@ -52,7 +56,9 @@ def build_agent(  # noqa: UP047
         max_iterations=config.max_iterations,
         tool_resources=config.tool_resources,
         tool_hooks=config.tool_hooks,
+        provider_hooks=config.provider_hooks,
         on_runtime_event=config.on_runtime_event,
+        goal=config.goal,
     )
 
 

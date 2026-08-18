@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from config.constants.runtime_metadata import OPENSRE_ALLOW_NETWORK_ENV
 from platform.sandbox.capabilities import (
     Capability,
+    _file_grep_available,
     _file_read_available,
     _network_available,
+    _shell_available,
     boot_capability_warnings,
     probe_capabilities,
     unavailable_capability_warnings,
@@ -25,6 +28,40 @@ def test_python_execution_is_detected() -> None:
 def test_file_read_is_detected() -> None:
     results = probe_capabilities()
     assert results[Capability.FILE_READ].available is True
+
+
+def test_shell_probe_reports_missing_interpreters(monkeypatch: Any) -> None:
+    # Arrange
+    probed: list[str] = []
+
+    def _which(name: str) -> None:
+        probed.append(name)
+
+    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", _which)
+
+    # Act
+    available = _shell_available()
+
+    # Assert
+    assert available is False
+    assert probed == ["bash", "sh"]
+
+
+def test_file_grep_probe_reports_missing_executable(monkeypatch: Any) -> None:
+    # Arrange
+    probed: list[str] = []
+
+    def _which(name: str) -> None:
+        probed.append(name)
+
+    monkeypatch.setattr("platform.sandbox.capabilities.shutil.which", _which)
+
+    # Act
+    available = _file_grep_available()
+
+    # Assert
+    assert available is False
+    assert probed == ["grep"]
 
 
 def test_every_capability_is_reported() -> None:
@@ -47,6 +84,7 @@ def test_warnings_name_only_the_unavailable_ones() -> None:
     assert len(warnings) == 1
     assert "network" in warnings[0].lower()
     assert "blocked by policy" in warnings[0]
+    assert "configured integration" in warnings[0]
 
 
 def test_no_warnings_when_everything_works() -> None:
@@ -138,6 +176,36 @@ def test_boot_capability_warnings_merges_path_and_sandbox(monkeypatch: Any) -> N
         "dup",
         "network requests is unavailable",
     ]
+
+
+def test_boot_warnings_make_every_basic_capability_actionable(
+    monkeypatch: Any,
+) -> None:
+    # Arrange
+    monkeypatch.delenv(OPENSRE_ALLOW_NETWORK_ENV, raising=False)
+    monkeypatch.setattr(
+        "platform.sandbox.capabilities.unavailable_capability_warnings",
+        lambda _results=None: [],
+    )
+    installed_tools = {
+        "bash": "",
+        "curl": "",
+        "grep": "",
+        "python": "",
+        "python3": "",
+        "sh": "",
+    }
+
+    # Act
+    warnings = boot_capability_warnings(installed_tools=installed_tools)
+    rendered = "\n".join(warnings).lower()
+
+    # Assert
+    assert "install curl" in rendered
+    assert "install bash or sh" in rendered
+    assert "install grep" in rendered
+    assert "configured integration" in rendered
+    assert "install python 3" in rendered
 
 
 def test_file_read_available_when_cwd_is_empty(tmp_path: Any, monkeypatch: Any) -> None:

@@ -10,21 +10,20 @@ from typing import Any, cast
 
 import pytest
 
-from config.constants.billing import WEBAPP_URL_ENV
+from config.constants.billing import ORGANIZATION_ID_ENV, WEBAPP_URL_ENV
 from config.constants.paths import integrations_store_path
 from config.constants.tenancy import (
     CREDENTIALS_API_URL_ENV,
     CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV,
     INTEGRATIONS_SECRET_ARN_ENV,
     INTEGRATIONS_STORE_PATH_ENV,
-    TENANT_ORGANIZATION_ID_ENV,
 )
-from gateway.runtime.credential_hydration import (
+from gateway.core.runtime.controller import GatewayController
+from gateway.core.runtime.credential_hydration import (
     CredentialHydrationConfig,
     GatewayCredentialHydrator,
 )
-from gateway.runtime.errors import GatewayConfigurationError
-from gateway.runtime.manager import GatewayManager
+from gateway.core.runtime.errors import GatewayConfigurationError
 from integrations import store
 from integrations.credentials_api import IntegrationStoreV2
 
@@ -81,17 +80,10 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
     path = tmp_path / "home" / ".opensre" / "integrations.json"
     monkeypatch.setattr(store, "STORE_PATH", path)
     monkeypatch.setattr(
-        "gateway.runtime.credential_hydration.CredentialsApiClient",
+        "gateway.core.runtime.credential_hydration.CredentialsApiClient",
         _ApiClient,
     )
-    secrets = _Secrets(
-        json.dumps(
-            {
-                "credentials_api_token": "bootstrap-token",
-                "database_url": "postgresql://neon.invalid/test",
-            }
-        )
-    )
+    secrets = _Secrets(json.dumps({"credentials_api_token": "bootstrap-token"}))
     hydrator = GatewayCredentialHydrator(
         config=CredentialHydrationConfig(
             organization_id="org-a",
@@ -101,11 +93,10 @@ def test_hydrates_exact_secret_and_atomically_writes_private_v2_store(
         secrets_client=secrets,
     )
 
-    bootstrap = hydrator.hydrate()
+    hydrator.hydrate()
 
     assert secrets.calls == ["arn:aws:secretsmanager:region:account:secret:org-a"]
     assert _ApiClient.authorization == "bootstrap-token"
-    assert bootstrap.database_url == "postgresql://neon.invalid/test"
     assert json.loads(path.read_text())["version"] == 2
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
@@ -133,7 +124,7 @@ def test_hydrates_from_integrations_secret_when_no_credentials_api_url(
     integrations_arn = "arn:aws:secretsmanager:region:account:secret:org-a-integrations"
     secrets = _SecretsById(
         {
-            bootstrap_arn: json.dumps({"database_url": "postgresql://neon.invalid/test"}),
+            bootstrap_arn: json.dumps({}),
             integrations_arn: json.dumps(
                 {
                     "version": 2,
@@ -168,7 +159,6 @@ def test_hydrates_from_integrations_secret_when_no_credentials_api_url(
 
     assert secrets.calls == [bootstrap_arn, integrations_arn]
     assert bootstrap.integrations_hydrated is True
-    assert bootstrap.database_url == "postgresql://neon.invalid/test"
     stored = json.loads(path.read_text())
     assert stored["version"] == 2
     assert [record["service"] for record in stored["integrations"]] == ["grafana"]
@@ -218,7 +208,7 @@ def test_hydrated_secret_is_visible_to_integration_resolution(
     integrations_arn = "arn:aws:secretsmanager:region:account:secret:org-a-integrations"
     secrets = _SecretsById(
         {
-            bootstrap_arn: json.dumps({"database_url": "postgresql://neon.invalid/test"}),
+            bootstrap_arn: json.dumps({}),
             integrations_arn: json.dumps(
                 {
                     "version": 2,
@@ -262,7 +252,7 @@ def test_hydrated_secret_is_visible_to_integration_resolution(
 def test_environment_configures_the_integrations_secret(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-a")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-a")
     monkeypatch.setenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, "arn:bootstrap")
     monkeypatch.setenv(INTEGRATIONS_SECRET_ARN_ENV, "arn:integrations")
     monkeypatch.delenv(CREDENTIALS_API_URL_ENV, raising=False)
@@ -283,7 +273,7 @@ def test_partial_environment_configuration_is_rejected(
     missing bootstrap secret is a misconfiguration rather than the feature
     being off.
     """
-    monkeypatch.setenv(TENANT_ORGANIZATION_ID_ENV, "org-a")
+    monkeypatch.setenv(ORGANIZATION_ID_ENV, "org-a")
     monkeypatch.setenv(INTEGRATIONS_SECRET_ARN_ENV, "arn:aws:integrations")
     monkeypatch.delenv(CREDENTIALS_API_URL_ENV, raising=False)
     monkeypatch.delenv(CREDENTIALS_BOOTSTRAP_SECRET_ARN_ENV, raising=False)
@@ -301,7 +291,7 @@ def test_manager_fails_closed_with_generic_error() -> None:
         # The fake only needs hydrate(); cast keeps the factory signature honest.
         return cast(GatewayCredentialHydrator, BrokenHydrator())
 
-    manager = GatewayManager(credential_hydrator_factory=_broken_hydrator)
+    manager = GatewayController(credential_hydrator_factory=_broken_hydrator)
 
     with pytest.raises(GatewayConfigurationError, match="hydration failed"):
         manager._load_credentials(logging.getLogger("test"))
@@ -333,7 +323,7 @@ def test_integrations_secret_wins_when_both_routes_are_configured(
     # Arrange: both routes configured, each yielding a distinguishable service.
     monkeypatch.setattr(store, "STORE_PATH", tmp_path / "integrations.json")
     monkeypatch.setattr(
-        "gateway.runtime.credential_hydration.CredentialsApiClient",
+        "gateway.core.runtime.credential_hydration.CredentialsApiClient",
         _ApiClient,
     )
     bootstrap_arn = "arn:aws:secretsmanager:region:account:secret:bootstrap"

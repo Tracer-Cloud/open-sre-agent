@@ -1,23 +1,34 @@
-"""Tests for the package entry ``gateway.main``."""
+"""Tests for the package guard ``python -m gateway`` (``gateway/__main__.py``)."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import pytest
 
 
-def test_gateway_main_delegates_to_manager() -> None:
-    """``python -m gateway.main`` must boot ``GatewayManager.start_gateway``."""
-    mock_manager = MagicMock()
-    with patch("gateway.runtime.manager.GatewayManager", return_value=mock_manager):
-        from gateway.runtime.manager import main as runtime_main
+def test_gateway_main_fails_closed_without_slash_ports() -> None:
+    """Bare ``python -m gateway`` must not boot a slash-less gateway."""
+    import gateway.__main__ as entry
 
-        runtime_main()
+    with pytest.raises(SystemExit, match="slash-port glue"):
+        entry.main()
 
-    mock_manager.start_gateway.assert_called_once_with()
+
+def test_manager_main_fails_closed_without_slash_ports() -> None:
+    from gateway.core.runtime import controller as manager_module
+
+    with pytest.raises(SystemExit, match="slash_ports_factory"):
+        manager_module.main()
+
+
+def test_manager_start_gateway_wrapper_requires_slash_ports() -> None:
+    from gateway.core.runtime.controller import start_gateway
+
+    with pytest.raises(SystemExit, match="slash_ports_factory"):
+        start_gateway(wait=False)
 
 
 def test_gateway_main_module_exports_main() -> None:
-    import gateway.main as entry
+    import gateway.__main__ as entry
 
     assert callable(entry.main)
-    assert entry.main.__module__ == "gateway.runtime.manager"
+    assert entry.main.__module__ == "gateway.__main__"

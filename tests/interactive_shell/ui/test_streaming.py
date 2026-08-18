@@ -11,9 +11,12 @@ import pytest
 from rich.console import Console
 
 from surfaces.interactive_shell.ui.streaming import (
+    finish_deferred_closer,
     format_token_count_short,
+    render_markdown_block,
     render_response_header,
     stream_to_console,
+    stream_to_console_state,
 )
 
 
@@ -146,6 +149,16 @@ class TestTtyParagraphRender:
         assert "First para." in output
         assert "Second para." in output
         assert "**para**" not in output
+
+    def test_preserves_blank_line_between_list_and_following_paragraph(self) -> None:
+        """Standalone Rich list renders have no trailing vertical space."""
+        console, buf = _tty_console()
+        text = "Ready:\n\n- first\n- second\n\nBlocked pending a choice."
+
+        stream_to_console(console, label="OpenSRE", chunks=_yield_chunks([text]))
+
+        visible = "\n".join(line.rstrip() for line in _strip_ansi(buf.getvalue()).splitlines())
+        assert "Ready:\n\n • first\n • second\n\nBlocked pending a choice." in visible
 
     def test_paragraph_break_across_chunk_boundary_flushes(self) -> None:
         """The cross-chunk seam — chunk N ends with ``\\n``, chunk N+1
@@ -823,10 +836,15 @@ class TestParagraphFlushThrottle:
         monkeypatch.setattr(streaming_module, "Markdown", _SpyMarkdown)
         return parse_count
 
-    def test_long_single_paragraph_renders_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No ``\\n\\n`` in any chunk → the only Markdown parse is the
-        end-of-stream force-flush. Proves the fast-path skips the join
-        on every intermediate chunk."""
+    def test_long_single_paragraph_renders_progressively(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No ``\\n\\n`` in any chunk still paints before end-of-stream.
+
+        Long prose requests such as "explain OpenSRE in 10k words" may arrive as
+        one giant paragraph. The renderer should not wait for EOS before the
+        user sees body text, while still keeping Markdown parses bounded.
+        """
         parse_count = self._spy_markdown_parses(monkeypatch)
         console, _ = _tty_console()
 
@@ -836,8 +854,9 @@ class TestParagraphFlushThrottle:
 
         assert "word0" in result
         assert "word499" in result
-        # End-of-stream force-flush is the only Markdown construction.
-        assert parse_count[0] == 1, f"expected 1 parse (force-flush), got {parse_count[0]}"
+        assert 2 <= parse_count[0] <= 10, (
+            f"expected bounded progressive parses, got {parse_count[0]}"
+        )
 
     def test_paragraph_boundary_per_chunk_renders_once_per_paragraph(
         self, monkeypatch: pytest.MonkeyPatch
@@ -1000,3 +1019,93 @@ class TestSuppressionPeek:
         assert result == '  \n{"action":"slash"}'
         output = _strip_ansi(buf.getvalue())
         assert "●" not in output
+
+
+class TestRenderMarkdownBlock:
+    """The single-shot Markdown renderer shared with the action observer."""
+
+    def test_renders_heading_and_body_text(self) -> None:
+        console, buf = _non_tty_console()
+
+        render_markdown_block(console, "### [2/8] Token configuration\nVerifying the token…")
+
+        output = _strip_ansi(buf.getvalue())
+        assert "[2/8] Token configuration" in output
+        assert "Verifying the token" in output
+
+    def test_blank_text_prints_nothing(self) -> None:
+        console, buf = _non_tty_console()
+
+        render_markdown_block(console, "   \n  ")
+
+        assert buf.getvalue() == ""
+
+    def test_escapes_dunder_filenames(self) -> None:
+        """``__init__.py`` must not be eaten as Markdown strong emphasis."""
+        console, buf = _non_tty_console()
+
+        render_markdown_block(console, "Check __init__.py for the export list.")
+
+        assert "__init__.py" in _strip_ansi(buf.getvalue())
+
+
+class TestDeferWantMeToCloser:
+    """Gather path holds drifted Want-me-to until the canonical rewrite paints."""
+
+    def test_tty_holds_closer_but_paints_evidence(self) -> None:
+        console, buf = _tty_console()
+        dual = (
+            "Checkout looks unhealthy.\n\n"
+            "**Want me to:**\n"
+            "1. run a full investigation once you paste, or\n"
+            "2. `/integrations setup grafana`?"
+        )
+        paint = stream_to_console_state(
+            console,
+            label="assistant",
+            chunks=_yield_chunks([dual]),
+            defer_want_me_to_closer=True,
+        )
+        visible = _strip_ansi(buf.getvalue())
+        assert paint.deferred_closer is True
+        assert "Checkout looks unhealthy" in visible
+        assert "/integrations setup grafana" not in visible
+        assert "· " not in visible  # footer held until finish
+
+        finish_deferred_closer(
+            console,
+            "Checkout looks unhealthy.\n\n**Want me to:** run a full investigation",
+            footer_elapsed_s=paint.footer_elapsed_s,
+            footer_total_bytes=paint.footer_total_bytes,
+        )
+        after = _strip_ansi(buf.getvalue())
+        assert "run a full investigation" in after
+        assert "/integrations setup grafana" not in after
+
+    def test_non_tty_defers_entire_paint_when_closer_present(self) -> None:
+        console, buf = _non_tty_console()
+        text = "Empty.\n\n**Want me to:** kick off a full investigation after paste?"
+        paint = stream_to_console_state(
+            console,
+            label="assistant",
+            chunks=_yield_chunks([text]),
+            defer_want_me_to_closer=True,
+        )
+        assert paint.deferred_closer is True
+        assert buf.getvalue() == ""
+
+
+def test_stream_hides_session_goal_tags_but_keeps_them_in_return_text() -> None:
+    """Host evaluate needs tags; the TTY must not show them."""
+    console, buf = _tty_console()
+    text = "Hello done.\n\nsession_goal:done=0,1,2 session_goal:achieved"
+    result = stream_to_console(
+        console,
+        label="assistant",
+        chunks=_yield_chunks([text]),
+    )
+    painted = _strip_ansi(buf.getvalue())
+    assert "session_goal:" not in painted
+    assert "Hello done" in painted
+    assert "session_goal:done=0,1,2" in result
+    assert "session_goal:achieved" in result

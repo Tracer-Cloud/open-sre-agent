@@ -18,7 +18,7 @@ from tools.investigation.alert_templates import build_alert_template
 
 _logger = logging.getLogger(__name__)
 
-_SESSION_EVENT_POLL_S = 0.25
+_SESSION_EVENT_POLL_SECONDS = 0.25
 
 StreamRendererFn = Callable[[Iterator[StreamEvent]], dict[str, Any]]
 
@@ -122,8 +122,11 @@ def run_session_alert_payload(
         try:
 
             async def _pump() -> None:
+                # Session runs are always user-initiated, so the intake noise
+                # gate must not discard them.
                 async for evt in astream_investigation(
                     raw_alert=alert_payload,
+                    user_requested=True,
                 ):
                     event_queue.put(evt)
 
@@ -160,7 +163,7 @@ def run_session_alert_payload(
                     _cancel_pump()
                     raise KeyboardInterrupt
                 try:
-                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_S)
+                    item = event_queue.get(timeout=_SESSION_EVENT_POLL_SECONDS)
                 except queue.Empty:
                     continue
                 if isinstance(item, BaseException):

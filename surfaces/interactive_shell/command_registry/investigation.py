@@ -9,10 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
-from core.agent_harness.session.terminal_access import (
-    background_mode_enabled,
-    session_terminal,
-)
+from core.agent_harness.spi.session_state import background_mode_enabled, session_terminal
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
@@ -26,23 +23,23 @@ from surfaces.interactive_shell.ui import (
     HIGHLIGHT,
     print_repl_json,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
-    repl_choose_one,
-    repl_section_break,
-    repl_tty_interactive,
-)
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from surfaces.interactive_shell.ui.investigation_outcome import (
     InvestigationOutcome,
     normalize_investigation_target,
 )
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry.investigation_analytics import (
     publish_investigation_outcome_analytics,
 )
 from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_investigation_outcome,
     format_investigation_terminal_outcome,
+)
+from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.components.choice_menu import (
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
 )
 
 
@@ -75,7 +72,7 @@ def _queue_investigate_target(session: Session, target: str) -> None:
 
 
 def _interactive_investigate_menu(session: Session, console: Console) -> bool:
-    from surfaces.cli.constants import SAMPLE_ALERT_OPTIONS
+    from config.constants.investigation import SAMPLE_ALERT_OPTIONS
 
     root = "/investigate"
     choices: list[tuple[str, str]] = [
@@ -162,7 +159,7 @@ def _validate_save_args(args: list[str]) -> str | None:
 
 def _stage_investigation_turn_telemetry(session: Session, outcome: InvestigationOutcome) -> None:
     """Stage LLM run metadata and structured errors for this turn's recorder flush."""
-    from core.agent_harness.accounting.token_accounting import LlmRunInfo, record_llm_turn
+    from core.agent_harness.spi.accounting import LlmRunInfo, record_llm_turn
 
     if outcome.llm_input_tokens or outcome.llm_output_tokens:
         record_llm_turn(
@@ -227,11 +224,11 @@ def _cmd_investigate_file(session: Session, console: Console, args: list[str]) -
     from config.constants.investigation import ALERT_TEMPLATE_CHOICES
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
-    from surfaces.cli.investigation.payload import resolve_alert_path
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         run_investigation_for_session,
         run_sample_alert_for_session,
     )
+    from surfaces.shared.demo_alert import resolve_alert_path
 
     if not args and repl_tty_interactive():
         return _interactive_investigate_menu(session, console)
@@ -518,6 +515,7 @@ _TEMPLATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("grafana", "Grafana alert template"),
     ("honeycomb", "Honeycomb trigger template"),
     ("coralogix", "Coralogix alert template"),
+    ("new_relic", "New Relic incident template"),
     ("splunk", "Splunk alert template"),
 )
 
@@ -528,6 +526,7 @@ _INVESTIGATE_FIRST_ARGS: tuple[tuple[str, str], ...] = (
     ("grafana", "run Grafana sample alert"),
     ("honeycomb", "run Honeycomb sample alert"),
     ("coralogix", "run Coralogix sample alert"),
+    ("new_relic", "run New Relic sample alert"),
     ("splunk", "run Splunk sample alert"),
 )
 
@@ -543,6 +542,7 @@ COMMANDS: list[SlashCommand] = [
             "/template grafana",
             "/template honeycomb",
             "/template coralogix",
+            "/template new_relic",
             "/template splunk",
         ),
         notes=("In a TTY, bare /template opens an interactive menu.",),

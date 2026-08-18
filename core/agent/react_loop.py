@@ -12,8 +12,12 @@ host can drive it. ``run_react_loop`` is the one-line functional entry.
 from __future__ import annotations
 
 import logging
+import uuid
+from dataclasses import dataclass
 from typing import Any
 
+from core.agent.cancel import tool_resources_cancel_requested
+from core.agent.handle_conclusion import ConclusionHandler
 from core.agent.loop_host import LoopHost
 from core.agent.run_io import AgentRunInput, AgentRunResult
 from core.context_budget import (
@@ -42,13 +46,30 @@ from core.execution import (
     public_tool_input,
 )
 from core.llm.types import ToolCall
-from core.messages import MessageMapper, UserRuntimeMessage
+from core.messages import MessageMapper
 from core.provider import ProviderRequest
 from core.types import RuntimeTool
+from platform.observability.operations_log import record_operation
 from platform.observability.trace.redaction import redact_sensitive
-from platform.observability.trace.spans import llm_span
+from platform.observability.trace.spans import (
+    llm_span,
+    loop_iteration_span,
+    loop_span,
+    mark_span_outcome,
+)
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _IterationResult:
+    """Outcome summary for one loop iteration."""
+
+    should_stop: bool
+    outcome: str
+    requested_tool_count: int = 0
+    tool_error_count: int = 0
+    terminated_tool_count: int = 0
 
 
 class ReactLoop[RuntimeToolT: RuntimeTool]:
@@ -84,7 +105,11 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         self._final_system_prompt = self._system
         self._hit_cap = True
         self._terminated_by_tool = False
+        self._cancelled = False
         self._iterations_used = 0
+        self._stop_reason = "iteration_cap"
+        self._operation_run_id = uuid.uuid4().hex[:12]
+        self._conclusion = ConclusionHandler(host, self._messages, self._runtime_tools)
 
     def run(self) -> AgentRunResult:
         """Drive the loop to completion and return its outcome."""
@@ -97,43 +122,136 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 }
             )
         )
-        try:
-            for iteration in range(self._max_iterations):
-                self._iterations_used = iteration + 1
-                if self._run_iteration(iteration):
-                    break
-            return self._finalize()
-        finally:
-            note_progress = getattr(self._host, "_note_react_run_progress", None)
-            if callable(note_progress):
-                note_progress(
-                    iterations_used=self._iterations_used,
-                    executed=list(self._executed),
-                    hit_iteration_cap=self._hit_cap,
-                )
+        self._record_loop_operation("agent_loop_started")
+        with loop_span(
+            "react_loop",
+            attributes={
+                "max_iterations": self._max_iterations,
+                "initial_message_count": len(self._messages),
+                "tool_count": len(self._runtime_tools),
+                "tool_schema_count": len(self._tool_schemas),
+            },
+        ) as loop_attrs:
+            try:
+                if self._cancel_requested():
+                    self._mark_cancelled()
+                else:
+                    for iteration in range(self._max_iterations):
+                        if self._cancel_requested():
+                            self._mark_cancelled()
+                            break
+                        iteration_result = self._run_iteration(iteration)
+                        if iteration_result.should_stop:
+                            break
+                run_result = self._finalize()
+                self._mark_loop_span(loop_attrs)
+                self._record_loop_finished()
+                return run_result
+            except KeyboardInterrupt as exc:
+                self._mark_cancelled()
+                self._mark_loop_error(loop_attrs, exc)
+                self._record_loop_finished(error=exc)
+                raise
+            except BaseException as exc:
+                self._hit_cap = False
+                self._stop_reason = "error"
+                self._mark_loop_error(loop_attrs, exc)
+                self._record_loop_finished(error=exc)
+                raise
+            finally:
+                note_progress = getattr(self._host, "_note_react_run_progress", None)
+                if callable(note_progress):
+                    note_progress(
+                        iterations_used=self._iterations_used,
+                        executed=list(self._executed),
+                        hit_iteration_cap=self._hit_cap,
+                    )
 
-    def _run_iteration(self, iteration: int) -> bool:
-        """Run one think -> observe step. Return True when the loop should stop."""
+    def _run_iteration(self, iteration: int) -> _IterationResult:
+        """Run one think -> observe step."""
+        with loop_iteration_span(
+            "react_iteration",
+            iteration=iteration,
+            attributes={
+                "max_iterations": self._max_iterations,
+                "message_count_start": len(self._messages),
+                "executed_count_start": len(self._executed),
+            },
+        ) as span_attrs:
+            try:
+                result = self._run_iteration_body(iteration)
+            except BaseException as exc:
+                mark_span_outcome(
+                    span_attrs,
+                    "error",
+                    error=True,
+                    exception_type=type(exc).__name__,
+                    message_count=len(self._messages),
+                    executed_count=len(self._executed),
+                )
+                self._record_loop_operation(
+                    "agent_loop_iteration_failed",
+                    {
+                        "iteration": iteration,
+                        "exception_type": type(exc).__name__,
+                        "message_count": len(self._messages),
+                        "executed_count": len(self._executed),
+                    },
+                )
+                raise
+            self._mark_iteration_span(span_attrs, result)
+            self._record_loop_operation(
+                "agent_loop_iteration",
+                {
+                    "iteration": iteration,
+                    "outcome": result.outcome,
+                    "should_stop": result.should_stop,
+                    "requested_tool_count": result.requested_tool_count,
+                    "tool_error_count": result.tool_error_count,
+                    "terminated_tool_count": result.terminated_tool_count,
+                    "message_count": len(self._messages),
+                    "executed_count": len(self._executed),
+                },
+            )
+            return result
+
+    def _run_iteration_body(self, iteration: int) -> _IterationResult:
+        """Run one loop body after the tracing envelope has been opened."""
+        if self._cancel_requested():
+            self._mark_cancelled()
+            return _IterationResult(should_stop=True, outcome="cancelled")
+        self._iterations_used = iteration + 1
         self._host._drain_steering_messages(self._messages)
         self._host._emit_runtime(
             TurnStartEvent(
                 iteration=iteration,
-                data={"message_count": len(self._messages), "tool_count": len(self._runtime_tools)},
+                data={
+                    "message_count": len(self._messages),
+                    "tool_count": len(self._runtime_tools),
+                    "max_iterations": self._max_iterations,
+                    "executed_count": len(self._executed),
+                },
             )
         )
         response = self._think(iteration)
         assistant_message = self._msg_formatter.to_assistant_runtime_message(response)
         self._host._emit_runtime(MessageStartEvent(message=assistant_message, iteration=iteration))
         if response.content:
+            # ``has_tool_calls`` lets renderers distinguish intermediate
+            # commentary preceding this iteration's tool calls (render live)
+            # from the final no-tool-call answer (streamed as final_text).
             self._host._emit_runtime(
                 MessageUpdateEvent(
                     message=assistant_message,
                     delta=response.content,
                     iteration=iteration,
+                    data={"has_tool_calls": response.has_tool_calls},
                 )
             )
         self._messages.append(assistant_message)
 
+        # A no-tool response is a candidate conclusion; the conclusion handler
+        # may still append a nudge or queued follow-up and continue the loop.
         if not response.has_tool_calls:
             return self._handle_conclusion(response, assistant_message, iteration)
         return self._observe(response, assistant_message, iteration)
@@ -159,79 +277,73 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             ProviderRequestStartEvent(
                 iteration=iteration,
                 message_count=len(provider_request.messages),
+                data={
+                    "tool_schema_count": len(provider_request.tools or []),
+                    "fixed_overhead_tokens": self._fixed_overhead_tokens,
+                },
             )
         )
         model_name = str(getattr(self._llm, "model_id", None) or "invoke")
-        with llm_span(model_name, iteration=iteration):
+        with llm_span(
+            model_name,
+            iteration=iteration,
+            attributes={
+                "message_count": len(provider_request.messages),
+                "tool_schema_count": len(provider_request.tools or []),
+            },
+        ) as span_attrs:
             response = self._llm.invoke(
                 provider_request.messages,
                 system=provider_request.system,
                 tools=provider_request.tools,
             )
+            span_attrs["has_tool_calls"] = response.has_tool_calls
+            span_attrs["tool_call_count"] = len(response.tool_calls)
+            span_attrs["content_chars"] = len(response.content or "")
         response = self._host._after_response(provider_request, response)
         self._host._emit_runtime(
             ProviderRequestEndEvent(
                 iteration=iteration,
                 has_tool_calls=response.has_tool_calls,
+                data={
+                    "tool_call_count": len(response.tool_calls),
+                    "content_chars": len(response.content or ""),
+                },
             )
         )
         return response
 
-    def _handle_conclusion(self, response: Any, assistant_message: Any, iteration: int) -> bool:
+    def _handle_conclusion(
+        self, response: Any, assistant_message: Any, iteration: int
+    ) -> _IterationResult:
         """No tool calls: accept the answer (maybe after a follow-up) or nudge and continue."""
-        accept, nudge = self._host._should_accept_conclusion(
+        accepted = self._conclusion.handle(
+            response,
+            assistant_message,
+            iteration,
             evidence_count=len(self._executed),
-            iteration=iteration,
-            final_text=response.content or "",
         )
-        if accept:
-            follow_up = self._host._pop_follow_up_message()
-            if follow_up is not None:
-                self._messages.append(UserRuntimeMessage(content=follow_up))
-                self._host._emit_runtime(
-                    TurnEndEvent(
-                        iteration=iteration,
-                        message=assistant_message,
-                        data={"accepted": False, "queued_follow_up": True},
-                    )
-                )
-                return False
+        if accepted:
             self._final_text = response.content or ""
             self._hit_cap = False
-            self._host._emit_runtime(
-                TurnEndEvent(
-                    iteration=iteration,
-                    message=assistant_message,
-                    data={"accepted": True},
-                )
-            )
-            return True
-        if nudge is None:
-            raise ValueError(
-                f"{type(self._host).__name__}._should_accept_conclusion returned "
-                "(False, None) — a nudge string is required when rejecting "
-                "the conclusion, otherwise the LLM will loop on an unchanged "
-                "message history until max_iterations."
-            )
-        self._messages.append(UserRuntimeMessage(content=nudge))
-        self._host._emit_runtime(
-            TurnEndEvent(
-                iteration=iteration,
-                message=assistant_message,
-                data={"accepted": False, "nudge": True},
-            )
-        )
-        return False
+            self._stop_reason = "no_tools_needed" if not self._executed else "completed"
+            return _IterationResult(should_stop=True, outcome=self._stop_reason)
+        return _IterationResult(should_stop=False, outcome="conclusion_deferred")
 
-    def _observe(self, response: Any, assistant_message: Any, iteration: int) -> bool:
-        """Execute the requested tools, record results, emit events. Return True if a tool terminated."""
-        for tc in response.tool_calls:
+    def _observe(self, response: Any, assistant_message: Any, iteration: int) -> _IterationResult:
+        """Execute the requested tools, record results, and emit events."""
+        requested_tool_count = len(response.tool_calls)
+        for index, tc in enumerate(response.tool_calls):
             self._host._emit_runtime(
                 ToolExecutionStartEvent(
                     tool_call_id=tc.id,
                     tool_name=tc.name,
                     args=public_tool_input(tc.input),
                     iteration=iteration,
+                    data={
+                        "tool_call_index": index,
+                        "tool_call_count": requested_tool_count,
+                    },
                 )
             )
 
@@ -247,6 +359,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             before_tool_call=self._host._tool_hooks.before_tool_call,
             after_tool_call=self._host._tool_hooks.after_tool_call,
             on_tool_update=on_tool_update,
+            before_tool_batch=self._host._tool_hooks.before_tool_batch,
         )
         results = execute_tool_calls(
             response.tool_calls,
@@ -261,7 +374,9 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
         )
         self._messages.append(tool_result_message)
 
-        for tc, result in zip(response.tool_calls, results):
+        tool_error_count = sum(1 for result in results if result.is_error)
+        terminated_tool_count = sum(1 for result in results if result.terminate)
+        for index, (tc, result) in enumerate(zip(response.tool_calls, results, strict=True)):
             compat_payload = result.compat_payload()
             self._executed.append((tc, compat_payload))
             self._tool_results.append((tc, result))
@@ -273,7 +388,11 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                     result=redact_sensitive(compat_payload),
                     is_error=result.is_error,
                     iteration=iteration,
-                    data={"terminate": result.terminate},
+                    data={
+                        "terminate": result.terminate,
+                        "tool_call_index": index,
+                        "tool_call_count": requested_tool_count,
+                    },
                 )
             )
         self._host._emit_runtime(
@@ -281,14 +400,32 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 iteration=iteration,
                 message=assistant_message,
                 tool_results=tuple(result.compat_payload() for result in results),
-                data={"accepted": False},
+                data={
+                    "accepted": False,
+                    "tool_call_count": requested_tool_count,
+                    "tool_error_count": tool_error_count,
+                    "terminated_tool_count": terminated_tool_count,
+                },
             )
         )
-        if any(result.terminate for result in results):
+        if terminated_tool_count:
             self._terminated_by_tool = True
             self._hit_cap = False
-            return True
-        return False
+            self._stop_reason = "tool_terminated"
+            return _IterationResult(
+                should_stop=True,
+                outcome="tool_terminated",
+                requested_tool_count=requested_tool_count,
+                tool_error_count=tool_error_count,
+                terminated_tool_count=terminated_tool_count,
+            )
+        return _IterationResult(
+            should_stop=False,
+            outcome="tool_observed",
+            requested_tool_count=requested_tool_count,
+            tool_error_count=tool_error_count,
+            terminated_tool_count=0,
+        )
 
     def _emit_tool_update(
         self, request: ToolExecutionRequest, update: Any, *, event_iteration: int
@@ -320,6 +457,7 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
             executed=self._executed,
             tool_results=self._tool_results,
             terminated_by_tool=self._terminated_by_tool,
+            cancelled=self._cancelled,
             hit_iteration_cap=self._hit_cap,
             llm_iterations_used=self._iterations_used,
             final_system_prompt=self._final_system_prompt,
@@ -329,14 +467,114 @@ class ReactLoop[RuntimeToolT: RuntimeTool]:
                 messages=tuple(self._messages),
                 data={
                     "final_text": self._final_text,
+                    "stop_reason": self._stop_reason,
                     "hit_iteration_cap": self._hit_cap,
                     "terminated_by_tool": self._terminated_by_tool,
+                    "cancelled": self._cancelled,
+                    "llm_iterations_used": self._iterations_used,
+                    "max_iterations": self._max_iterations,
                     "message_count": len(self._messages),
                     "executed_count": len(self._executed),
+                    "tool_result_count": len(self._tool_results),
                 },
             )
         )
         return run_result
+
+    def _cancel_requested(self) -> bool:
+        return bool(tool_resources_cancel_requested(self._tool_resources))
+
+    def _mark_cancelled(self) -> None:
+        self._hit_cap = False
+        self._cancelled = True
+        self._stop_reason = "cancelled"
+
+    def _mark_iteration_span(
+        self,
+        span_attrs: dict[str, Any],
+        result: _IterationResult,
+    ) -> None:
+        mark_span_outcome(
+            span_attrs,
+            result.outcome,
+            should_stop=result.should_stop,
+            stop_reason=self._stop_reason if result.should_stop else None,
+            requested_tool_count=result.requested_tool_count,
+            tool_error_count=result.tool_error_count,
+            terminated_tool_count=result.terminated_tool_count,
+            message_count=len(self._messages),
+            executed_count=len(self._executed),
+        )
+
+    def _mark_loop_span(self, span_attrs: dict[str, Any]) -> None:
+        mark_span_outcome(
+            span_attrs,
+            self._stop_reason,
+            stop_reason=self._stop_reason,
+            hit_iteration_cap=self._hit_cap,
+            terminated_by_tool=self._terminated_by_tool,
+            cancelled=self._cancelled,
+            iterations_used=self._iterations_used,
+            max_iterations=self._max_iterations,
+            message_count=len(self._messages),
+            executed_count=len(self._executed),
+            tool_result_count=len(self._tool_results),
+            final_text_chars=len(self._final_text),
+        )
+
+    def _mark_loop_error(self, span_attrs: dict[str, Any], exc: BaseException) -> None:
+        mark_span_outcome(
+            span_attrs,
+            self._stop_reason,
+            error=True,
+            stop_reason=self._stop_reason,
+            exception_type=type(exc).__name__,
+            iterations_used=self._iterations_used,
+            max_iterations=self._max_iterations,
+            message_count=len(self._messages),
+            executed_count=len(self._executed),
+            tool_result_count=len(self._tool_results),
+        )
+
+    def _record_loop_operation(
+        self,
+        event: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        record_operation(event, {**self._operation_base(), **(data or {})})
+
+    def _record_loop_finished(self, *, error: BaseException | None = None) -> None:
+        data: dict[str, Any] = {
+            "stop_reason": self._stop_reason,
+            "hit_iteration_cap": self._hit_cap,
+            "terminated_by_tool": self._terminated_by_tool,
+            "cancelled": self._cancelled,
+            "iterations_used": self._iterations_used,
+            "message_count": len(self._messages),
+            "executed_count": len(self._executed),
+            "tool_result_count": len(self._tool_results),
+            "final_text_chars": len(self._final_text),
+        }
+        if error is not None:
+            data["exception_type"] = type(error).__name__
+        self._record_loop_operation("agent_loop_finished", data)
+
+    def _operation_base(self) -> dict[str, Any]:
+        model = getattr(self._llm, "model_id", None) or getattr(self._llm, "_model", None)
+        provider = getattr(self._llm, "_provider_label", None) or getattr(
+            self._llm, "provider", None
+        )
+        tool_names = [str(getattr(tool, "name", "tool")) for tool in self._runtime_tools]
+        return {
+            "run_id": self._operation_run_id,
+            "component": "react_loop",
+            "model": str(model or "unknown"),
+            "provider": str(provider or "unknown"),
+            "max_iterations": self._max_iterations,
+            "tool_count": len(self._runtime_tools),
+            "tool_names": tool_names,
+            "tool_schema_count": len(self._tool_schemas),
+        }
 
 
 def run_react_loop[RuntimeToolT: RuntimeTool](

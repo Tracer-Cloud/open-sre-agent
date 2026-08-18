@@ -23,6 +23,8 @@ notes:
   rather than blindly executing opensre investigate --input-json with potentially malformed JSON.'
 - Complements 307-new-alert-checkout-502 (single-line) by covering the structured multi-line format users
   naturally paste from incident dashboards.
+- 'Planner contract: NO investigate/analyze/diagnose/RCA verb → assistant_handoff (evidence_kind=incident),
+  never investigation_start. Rich Service/Region/deploy/logs context must not upgrade a symptom paste.'
 turn:
   expected_kind: agent
 policy:
@@ -30,6 +32,7 @@ policy:
 planned_actions:
 - kind: assistant_handoff
   content: incident_description:checkout_api_500_db_timeout
+  evidence_kind: incident
   source: llm
 response_contract:
   must_contain_any: []

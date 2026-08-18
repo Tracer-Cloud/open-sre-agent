@@ -17,7 +17,6 @@ from platform.common.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.runtime.subprocess_runner import (
     _MIN_SUBPROCESS_TERMINAL_WIDTH,
     _TASK_OUTPUT_PREFIX_WIDTH,
-    _is_interactive_wizard,
     _pump_task_pty,
     _pump_task_stream,
     read_diag,
@@ -28,6 +27,7 @@ from surfaces.interactive_shell.runtime.subprocess_runner import (
 )
 from surfaces.interactive_shell.runtime.subprocess_runner.repl_presenter import make_repl_presenter
 from surfaces.interactive_shell.session import Session
+from tools.interactive_shell.cli import is_interactive_wizard
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
@@ -180,7 +180,7 @@ def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -
         _chdir,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -489,7 +489,7 @@ def test_run_shell_command_reports_start_failure(monkeypatch: pytest.MonkeyPatch
         _raise,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -889,7 +889,7 @@ def test_task_output_stream_reports_unexpected_failure(
             raise RuntimeError("stream broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -920,7 +920,7 @@ def test_task_pty_stream_reports_unexpected_failure(
         raise RuntimeError("pty broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -952,7 +952,7 @@ def test_start_background_cli_task_reports_spawn_failure(
         raise RuntimeError("spawn broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -996,7 +996,7 @@ def test_start_background_cli_task_reports_watcher_failure(
         return _FakeProcess()
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -1107,7 +1107,7 @@ def test_watch_synthetic_subprocess_reports_daemon_failure(
             raise RuntimeError("poll broke")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
     monkeypatch.setattr(
@@ -1446,7 +1446,7 @@ def test_is_interactive_wizard_classifies_command_paths(tokens: list[str], expec
     Adding a new interactive command later should be a one-line set entry —
     this test pins the current set + the case-insensitive lookup behavior.
     """
-    assert _is_interactive_wizard(tokens) is expected
+    assert is_interactive_wizard(tokens) is expected
 
 
 def test_run_opensre_cli_command_refuses_onboard_with_helpful_message(
@@ -1639,3 +1639,42 @@ def test_run_opensre_cli_command_allows_integrations_list_without_blocking(
     assert start_calls, "background task starter was not invoked"
     assert "integrations" in start_calls[0]
     assert "list" in start_calls[0]
+
+
+def test_start_background_cli_task_echoes_command_markup_literally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``$ <command>`` header must render Rich markup literally.
+
+    ``[/api/checkout]`` raised ``MarkupError``; ``[error]`` was swallowed.
+    """
+    monkeypatch.setenv("OPENSRE_PROMPT_LOG_LOCAL_DISABLED", "1")
+
+    class _FakeProcess:
+        returncode = 0
+        stdout = io.StringIO("")
+        stderr = io.StringIO("")
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(_BACKGROUND_TASK_POPEN, lambda _command, **_kwargs: _FakeProcess())
+    monkeypatch.setattr(
+        "surfaces.interactive_shell.runtime.subprocess_runner.threading.Thread",
+        _ImmediateThread,
+    )
+
+    display_command = 'opensre investigate --alert "[error] 5xx spike on [/api/checkout]"'
+    session = Session()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    task = start_background_cli_task(
+        display_command=display_command,
+        argv_list=["python", "-m", "cli", "investigate"],
+        session=session,
+        console=console,
+    )
+
+    assert task is not None
+    assert f"$ {display_command}" in buf.getvalue().replace("\n", "")

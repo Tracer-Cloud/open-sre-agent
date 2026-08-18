@@ -5,7 +5,7 @@ from __future__ import annotations
 import click
 from pydantic import ValidationError
 
-from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+from surfaces.shared.error_handling.errors import OpenSREError
 from tools.system.watch_dog.config import WATCHDOG_SUPPORTED_PROVIDERS, WatchdogConfig
 from tools.system.watch_dog.runner import run_watchdog
 
@@ -58,8 +58,8 @@ _PROVIDER_CHOICES = [p.value for p in WATCHDOG_SUPPORTED_PROVIDERS]
     "--chat-id",
     type=str,
     default=None,
-    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID or "
-    "ROCKETCHAT_DEFAULT_CHANNEL).",
+    help="Override the provider's default chat/channel (TELEGRAM_DEFAULT_CHAT_ID, "
+    "ROCKETCHAT_DEFAULT_CHANNEL, or BUZZ_DEFAULT_CHANNEL).",
 )
 @click.option("--verbose", is_flag=True, help="Print one line per sampled process state.")
 def watchdog_command(

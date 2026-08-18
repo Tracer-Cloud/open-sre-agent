@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
 from integrations.github.helpers import (
@@ -44,7 +45,7 @@ def _search_github_code_available(sources: dict[str, dict]) -> bool:
         "Tracing config, workflow, or application code that may explain an incident",
     ],
     requires=["owner", "repo", "query"],
-    surfaces=("investigation", "chat"),
+    surfaces=(ToolSurface.INVESTIGATION, ToolSurface.CHAT),
     input_schema={
         "type": "object",
         "properties": {

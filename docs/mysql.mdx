@@ -3,7 +3,9 @@ title: "MySQL"
 description: "Connect MySQL so OpenSRE can diagnose database issues during investigations"
 ---
 
-OpenSRE uses MySQL diagnostics to investigate database-related alerts — checking server health, surfacing slow queries, monitoring replication status, and analyzing table statistics.
+## Overview
+
+OpenSRE uses MySQL diagnostics to investigate database-related alerts — checking server health, surfacing slow queries, monitoring replication status, and analyzing table statistics. Queries are wrapped as read-only.
 
 ## Prerequisites
 
@@ -16,14 +18,10 @@ OpenSRE uses MySQL diagnostics to investigate database-related alerts — checki
 ### Option 1: Interactive CLI
 
 ```bash
-opensre integrations setup
+opensre integrations setup mysql
 ```
 
-Select **MySQL** when prompted and provide your host, database, and credentials.
-
 ### Option 2: Environment variables
-
-Add to your `.env`:
 
 ```bash
 MYSQL_HOST=your-mysql-host
@@ -41,11 +39,9 @@ MYSQL_SSL_MODE=preferred   # preferred, required, or disabled
 | `MYSQL_DATABASE` | — | **Required.** Target database |
 | `MYSQL_USERNAME` | `root` | Username |
 | `MYSQL_PASSWORD` | _(empty)_ | Password |
-| `MYSQL_SSL_MODE` | `preferred` | SSL mode: `preferred`, `required`, or `disabled` |
+| `MYSQL_SSL_MODE` | `preferred` | `preferred` (no cert verify), `required`, or `disabled` |
 
 ### Option 3: Persistent store
-
-Integrations are automatically persisted to `~/.opensre/integrations.json`:
 
 ```json
 {
@@ -68,20 +64,15 @@ Integrations are automatically persisted to `~/.opensre/integrations.json`:
 }
 ```
 
-## Creating a read-only user
+## Credentials
+
+### Creating a read-only user
 
 ```sql
 CREATE USER 'opensre_readonly'@'%' IDENTIFIED BY 'secure-password';
-
--- Required for server status and process list
 GRANT PROCESS ON *.* TO 'opensre_readonly'@'%';
-
--- Required for table statistics
 GRANT SELECT ON information_schema.* TO 'opensre_readonly'@'%';
-
--- Required for slow query analysis
 GRANT SELECT ON performance_schema.* TO 'opensre_readonly'@'%';
-
 FLUSH PRIVILEGES;
 ```
 
@@ -91,31 +82,13 @@ FLUSH PRIVILEGES;
 
 ## Investigation tools
 
-When OpenSRE investigates a MySQL-related alert, five diagnostic tools are available:
-
-### Server status
-
-Retrieves version, uptime, connection counts (current, running, max used), query rates, and InnoDB buffer pool hit ratio and deadlock counts. Useful for spotting connection saturation, high deadlock rates, or poor buffer pool efficiency.
-
-### Current processes
-
-Lists active queries running longer than a configurable threshold (default 1 s), excluding sleeping connections. Surfaces long-running queries and lock contention that may be blocking other operations.
-
-### Replication status
-
-Reports replica IO and SQL thread health, seconds behind source, and last replication error. Uses `SHOW REPLICA STATUS` (MySQL 8.0.22+) with automatic fallback to `SHOW SLAVE STATUS` for older versions. Returns a note if the server is not configured as a replica.
-
-### Slow queries
-
-Reads `performance_schema.events_statements_summary_by_digest` to surface queries with the highest average execution time. Results include call count, average/total/min/max execution time (in ms), rows examined, rows sent, and full-table scan indicators.
-
-<Info>
-Slow query data requires `performance_schema` to be enabled (`performance_schema=ON` in `my.cnf`). This is the default in MySQL 5.7+.
-</Info>
-
-### Table statistics
-
-Returns row count estimates, data size, and index size for all base tables in the target database, sourced from `information_schema.TABLES`. Results are ordered by total size descending.
+| Tool | What it does |
+| --- | --- |
+| `get_mysql_server_status` | Version, uptime, connections, query rates, InnoDB buffer pool / deadlock counts |
+| `get_mysql_current_processes` | Active queries longer than a threshold (default 1s) |
+| `get_mysql_slow_queries` | Highest average time from `performance_schema.events_statements_summary_by_digest` |
+| `get_mysql_table_stats` | Row estimates, data/index size from `information_schema.TABLES` |
+| `get_mysql_replication_status` | Replica IO/SQL health, seconds behind source (`SHOW REPLICA STATUS` with `SHOW SLAVE STATUS` fallback) |
 
 ## Verify
 
@@ -135,17 +108,16 @@ Detail: Connected to MySQL 8.0.32; target database: application_db
 
 | Symptom | Fix |
 | --- | --- |
-| **Connection refused** | Verify host, port, and firewall rules. Confirm MySQL is running and accepting remote connections (`bind-address` in `my.cnf`). |
-| **Authentication failed** | Check username and password. Ensure the user exists for the connecting host (`'user'@'%'` or specific IP). |
-| **SSL error** | Set `MYSQL_SSL_MODE=disabled` to test without SSL, or `required` to enforce it. |
-| **Access denied on performance_schema** | Grant `SELECT ON performance_schema.*` to the OpenSRE user. |
-| **Slow query data empty** | Confirm `performance_schema=ON` in `my.cnf` and restart MySQL. |
-| **Replication shows empty** | Expected for primary servers — replication tools return a note, other tools still work. |
+| **Connection refused** | Check host, port, firewall, `bind-address` |
+| **Authentication failed** | Confirm user host (`'user'@'%'` or specific IP) |
+| **SSL error** | Try `MYSQL_SSL_MODE=disabled` or `required` |
+| **Access denied on performance_schema** | Grant `SELECT ON performance_schema.*` |
+| **Slow query data empty** | Confirm `performance_schema=ON` and restart MySQL |
+| **Replication shows empty** | Expected on primary — other tools still work |
 
-## Security best practices
+## Security
 
-- Use a **dedicated read-only user** — avoid root credentials for monitoring.
-- Enable **SSL** (`MYSQL_SSL_MODE=required`) in production environments.
+- Use a **dedicated read-only user** — avoid root credentials.
+- Prefer `MYSQL_SSL_MODE=required` in production.
 - Restrict the user to specific hosts rather than `'%'` where possible.
-- Store credentials in `.env`, never in source code.
-- Rotate credentials periodically.
+- Store credentials in `.env` or your secret manager — not in source control.

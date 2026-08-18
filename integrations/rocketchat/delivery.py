@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from http import HTTPStatus
 from typing import Any
 
 from platform.common.truncation import truncate
@@ -48,7 +49,7 @@ def post_rocketchat_message(
         safe_error = redact_token(response.error, auth_token)
         logger.warning("[rocketchat] post message exception: %s", safe_error)
         return False, safe_error, ""
-    if response.status_code != 200 or response.data.get("success") is not True:
+    if response.status_code != HTTPStatus.OK or response.data.get("success") is not True:
         error_message = extract_http_error(response.data, response.status_code, response.text)
         safe_error = redact_token(error_message, auth_token)
         logger.warning("[rocketchat] post message failed: %s", safe_error)
@@ -76,7 +77,7 @@ def post_rocketchat_webhook(
         safe_error = redact_token(response.error, webhook_url)
         logger.warning("[rocketchat] webhook post exception: %s", safe_error)
         return False, safe_error
-    if response.status_code != 200 or response.data.get("success") is not True:
+    if response.status_code != HTTPStatus.OK or response.data.get("success") is not True:
         error_message = extract_http_error(response.data, response.status_code, response.text)
         safe_error = redact_token(error_message, webhook_url)
         logger.warning("[rocketchat] webhook post failed: %s", safe_error)

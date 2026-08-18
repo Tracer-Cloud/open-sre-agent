@@ -3,9 +3,16 @@ title: "Grafana Tempo"
 description: "Connect Grafana Tempo so OpenSRE can query distributed traces during investigations"
 ---
 
-OpenSRE uses Grafana Tempo to investigate trace-related alerts — searching spans by service, fetching full traces by ID, listing instrumented services, and filtering by error status or latency.
+## Overview
 
-This integration talks to Tempo **directly** via its HTTP API. It does not require a Grafana instance or datasource proxy. If you run the full Grafana stack, the [Grafana](/grafana) integration already surfaces Tempo through the datasource proxy — use this integration when you run Tempo standalone.
+OpenSRE uses Grafana Tempo to investigate trace-related alerts — searching spans by service,
+fetching full traces by ID, listing instrumented services, and filtering by error status or
+latency.
+
+This integration talks to Tempo **directly** via its HTTP API. It does not require a Grafana
+instance or datasource proxy. If you run the full Grafana stack, the [Grafana](/grafana)
+integration already surfaces Tempo through the datasource proxy — use this integration when
+you run Tempo standalone.
 
 ## Prerequisites
 
@@ -21,7 +28,8 @@ This integration talks to Tempo **directly** via its HTTP API. It does not requi
 opensre integrations setup tempo
 ```
 
-You will be prompted for the Tempo URL and optional auth. Leave auth fields blank if your Tempo runs without authentication.
+You will be prompted for the Tempo URL and optional auth. Leave auth fields blank if Tempo
+runs without authentication.
 
 ### Option 2: Environment variables
 
@@ -45,7 +53,7 @@ TEMPO_ORG_ID=<tenant-id>           # optional (X-Scope-OrgID for multi-tenant)
 
 ### Option 3: Persistent store
 
-Integrations are automatically persisted to `~/.opensre/integrations.json`:
+Integrations are persisted to `~/.opensre/integrations.json`:
 
 ```json
 {
@@ -64,13 +72,31 @@ Integrations are automatically persisted to `~/.opensre/integrations.json`:
 }
 ```
 
+## Credentials
+
+Auth is optional. Many Tempo deployments run without authentication behind a gateway.
+
+When auth is required, supply one of:
+
+- Bearer token → `TEMPO_API_KEY`
+- Basic auth → `TEMPO_USERNAME` / `TEMPO_PASSWORD`
+- Multi-tenant → `TEMPO_ORG_ID` as `X-Scope-OrgID`
+
+Create tokens or accounts in your Tempo / gateway identity provider according to your
+deployment. Leave auth fields blank in setup if Tempo runs without authentication.
+
 ## Investigation tools
 
 OpenSRE exposes a single `query_tempo` tool with an `action` parameter:
 
-### search
+| Action | Use it for |
+| --- | --- |
+| `search` | Search traces by service, span name, duration, and tags (TraceQL); one summary row per trace |
+| `get_trace` | Fetch a full trace by ID and flatten its spans |
+| `list_services` | List services registered in Tempo |
+| `list_span_names` | List span names registered in Tempo |
 
-Searches traces by service, span name, duration, and tags using TraceQL. Returns one summary row per trace.
+### search
 
 ```text
 query_tempo(action="search", service="checkout-service", min_duration_ms=500)
@@ -89,23 +115,17 @@ query_tempo(action="search", tags={"http.status_code": "500"})
 
 ### get_trace
 
-Fetches a full trace by ID and flattens its spans.
-
 ```text
 query_tempo(action="get_trace", trace_id="4f8c...e21")
 ```
 
 ### list_services
 
-Lists all services registered in Tempo.
-
 ```text
 query_tempo(action="list_services")
 ```
 
 ### list_span_names
-
-Lists all span names registered in Tempo.
 
 ```text
 query_tempo(action="list_span_names")
@@ -122,21 +142,21 @@ Expected output:
 ```
 Service: tempo
 Status:  passed
-Detail:  Connected to Grafana Tempo HTTP API (/api/search, /api/traces).
+Detail:  Connected to Grafana Tempo HTTP API (/api/search/tags).
 ```
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| **Connection refused** | Verify the URL and port. Default Tempo HTTP port is `3200`. |
+| **Connection refused** | Check the URL and port. Default Tempo HTTP port is `3200`. |
 | **HTTP 401** | Set `TEMPO_API_KEY` or `TEMPO_USERNAME`/`TEMPO_PASSWORD` if your deployment requires auth. |
-| **HTTP 404 on verify** | Check your Tempo version — the `/api/search/tags` endpoint requires Tempo 1.4+. |
-| **No traces returned** | Confirm your services are sending traces to Tempo and the time range covers the period of interest. |
+| **HTTP 404 on verify** | Check Tempo version — `/api/search/tags` requires Tempo 1.4+. |
+| **No traces returned** | Confirm services send traces to Tempo and the time range covers the period of interest. |
 | **Multi-tenant 400** | Set `TEMPO_ORG_ID` to the correct tenant ID. |
 
-## Security best practices
+## Security
 
-- Use a **read-only** token or service account if your Tempo deployment supports auth.
+- Use a **read-only** token or service account if Tempo supports auth.
 - Store credentials in `.env`, never in code.
 - Restrict network access to Tempo — OpenSRE only needs the HTTP API port (`3200` by default).

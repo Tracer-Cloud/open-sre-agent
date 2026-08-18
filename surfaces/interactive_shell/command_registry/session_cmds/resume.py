@@ -5,17 +5,18 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session import SessionManager
+from core.agent_harness import SessionManager
+from core.agent_harness.spi.session_state import format_recovery_note
 from surfaces.interactive_shell.command_registry.session_cmds.resume_rendering import (
     render_resumed_session_history,
 )
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
+from surfaces.shared.terminal.components.time_format import format_repl_timestamp
 
 
 def _record_resume_slash(
@@ -37,7 +38,7 @@ def _record_resume_slash(
 
 def _interactive_resume_menu(session: Session, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     entries = [
         e for e in default_session_repo().load_recent(10) if e["session_id"] != session.session_id
@@ -130,6 +131,18 @@ def _apply_resume_data(
             + ", ".join(f"{escape(k)}={escape(str(v))}" for k, v in sorted(context.items()))
         )
 
+    recovery_note = format_recovery_note(data.get("dangling_tool_intents") or [])
+    if recovery_note:
+        # The full note goes to the next action turn's prompt; the console only
+        # gets a short heads-up so the user knows why the agent may re-check.
+        session.pending_recovery_note = recovery_note
+        interrupted = len(data.get("dangling_tool_intents") or [])
+        console.print(
+            f"[{WARNING}]this session was interrupted mid-turn "
+            f"({interrupted} tool call(s) never finished) — the agent will "
+            "verify state before resuming.[/]"
+        )
+
     if slash_command:
         session.record("slash", slash_command)
 
@@ -142,7 +155,7 @@ def _lookup_resume_session_data(
     console: Console,
 ) -> dict | None:
     """Resolve a session to resume by ID prefix or name substring."""
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     repo = default_session_repo()
     data = repo.load_session(prefix)

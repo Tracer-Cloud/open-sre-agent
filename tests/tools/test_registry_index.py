@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 import tools.registry as registry_module
+from core.domain.types.tools import ToolSurface
 from tools.registry_index import build_descriptor_index
 
 
@@ -77,7 +78,7 @@ def test_surface_scoped_load_equals_full_filtered() -> None:
     (package-declaration order) fails here rather than silently diverging.
     """
     full = registry_module.get_registered_tools()
-    for surface in ("action", "chat", "investigation"):
+    for surface in (ToolSurface.ACTION, ToolSurface.CHAT, ToolSurface.INVESTIGATION):
         scoped = {
             (tool.name, tool.origin_module)
             for tool in registry_module.get_registered_tools(surface)
@@ -92,7 +93,7 @@ def test_surface_scoped_load_equals_full_filtered() -> None:
 
 def test_get_tool_descriptors_match_surface_load() -> None:
     assert {d.name for d in registry_module.get_tool_descriptors()} == set(build_descriptor_index())
-    for surface in ("action", "chat", "investigation"):
+    for surface in (ToolSurface.ACTION, ToolSurface.CHAT, ToolSurface.INVESTIGATION):
         descriptor_names = {d.name for d in registry_module.get_tool_descriptors(surface)}
         tool_names = {tool.name for tool in registry_module.get_registered_tools(surface)}
         assert descriptor_names == tool_names, surface
@@ -104,3 +105,17 @@ def test_load_tool_materializes_the_executor() -> None:
         descriptor = next(d for d in registry_module.get_tool_descriptors() if d.name == name)
         tool = registry_module.load_tool(descriptor)
         assert tool is not None and tool.name == name
+
+
+def test_surfaces_attribute_resolution() -> None:
+    import ast
+
+    from tools.registry_index import _string_constant
+
+    # ast.Attribute for ToolSurface.CHAT
+    node = ast.Attribute(
+        value=ast.Name(id="ToolSurface", ctx=ast.Load()),
+        attr="CHAT",
+        ctx=ast.Load(),
+    )
+    assert _string_constant(node) == "chat"
