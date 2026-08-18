@@ -11,6 +11,8 @@ the scheduler ones.
 
 from __future__ import annotations
 
+from platform.scheduler.runners import SchedulerRunners
+
 
 def install_investigation_api() -> None:
     """Wire :meth:`AgentSession.investigate` to the canonical payload runner.
@@ -86,23 +88,30 @@ def install_notification_adapters() -> tuple[str, ...]:
     return registered_outbound_adapter_names()
 
 
-def install_scheduler_runners() -> None:
-    """Register the runners scheduled tasks dispatch through.
+def scheduler_runners() -> SchedulerRunners:
+    """Assemble the runners scheduled tasks dispatch through.
 
-    Investigation first: the scheduled-agent runner resolves against it.
+    The only layer that may see both ``integrations`` and ``tools``, so the
+    bundle is built here and handed to whichever host installs it.
     """
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
-    from tools.investigation.scheduler_bootstrap import (
-        install as install_investigation_runner,
+    from integrations.scheduled_agent_bootstrap import run_scheduled_agent_digest
+    from tools.investigation.scheduler_bootstrap import run_scheduled_investigation
+
+    return SchedulerRunners(
+        agent=run_scheduled_agent_digest,
+        investigation=run_scheduled_investigation,
     )
 
-    install_investigation_runner()
-    install_scheduled_agent()
+
+def install_scheduler_runners() -> None:
+    """Bind the scheduled runners ungated (worker and CLI hosts)."""
+    scheduler_runners().install()
 
 
 __all__ = [
     "install_harness_adapters",
     "install_investigation_api",
     "install_notification_adapters",
+    "scheduler_runners",
     "install_scheduler_runners",
 ]

@@ -127,16 +127,14 @@ class GatewayController:
 
     def start_scheduler(self, *, logger: logging.Logger) -> None:
         """Host the platform scheduler as a peer of the consumer channels."""
-        from bootstrap.adapters import install_scheduler_runners
+        from bootstrap.adapters import scheduler_runners
         from platform.scheduler.reload_signal import consume_scheduler_reload_request
         from platform.scheduler.runner import start_background_scheduler
 
         # Investigation + multiplexed scheduled-agent runners (Sentry digest, etc.).
-        # Adapters already registered at process boot; runners attach with the scheduler.
-        install_scheduler_runners()
-        from gateway.core.runtime.scheduler_concurrency import gate_registered_scheduler_runners
-
-        gate_registered_scheduler_runners(self.turn_gate)
+        # A scheduled run costs a turn, so both take the same capacity gate chat
+        # turns take — stated here, once, rather than rewritten in afterwards.
+        scheduler_runners().gated(self.turn_gate).install()
         # Drop any reload request queued before this process owned the scheduler.
         consume_scheduler_reload_request()
         scheduler, task_count = start_background_scheduler()

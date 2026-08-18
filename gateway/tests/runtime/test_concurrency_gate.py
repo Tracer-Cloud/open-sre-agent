@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 from gateway.core.runtime.concurrency import TurnConcurrencyGate
-from gateway.core.runtime.scheduler_concurrency import gate_registered_scheduler_runners
 from gateway.tests.runtime.concurrency_limited_handler import (
     ConcurrencyLimitedTurnHandler,
 )
@@ -19,6 +18,7 @@ from platform.scheduler.agent_runner import (
     invoke_agent_runner,
     register_agent_runner,
 )
+from platform.scheduler.runners import SchedulerRunners
 
 
 @pytest.mark.parametrize(
@@ -206,6 +206,11 @@ def test_investigation_worker_waits_for_the_same_chat_capacity(
     reset_process_turn_gate_for_tests()
 
 
+def _unused_runner(_payload: dict[str, object]) -> None:
+    """Stands in for the investigation seam, which this test never dispatches."""
+    return None
+
+
 def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
     gate = TurnConcurrencyGate(1)
     assert gate.try_acquire() is True  # active chat turn
@@ -216,8 +221,7 @@ def test_scheduler_runner_waits_for_the_same_chat_capacity() -> None:
         entered.set()
         return "done"
 
-    register_agent_runner(scheduled_runner)
-    gate_registered_scheduler_runners(gate)
+    SchedulerRunners(agent=scheduled_runner, investigation=_unused_runner).gated(gate).install()
     thread = threading.Thread(
         target=lambda: result.append(invoke_agent_runner({})),
     )

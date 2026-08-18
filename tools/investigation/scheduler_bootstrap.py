@@ -25,7 +25,7 @@ from platform.scheduler.investigation_runner import (
 )
 
 
-def _run(alert_payload: AlertPayload) -> InvestigationResult | None:
+def run_scheduled_investigation(alert_payload: AlertPayload) -> InvestigationResult | None:
     from tools.investigation import capability
 
     # ``run_investigation`` returns an ``AgentState`` TypedDict (dict-backed
@@ -43,7 +43,7 @@ def install() -> None:
     :func:`platform.scheduler.investigation_runner.register_investigation_runner`
     directly (or clear it with ``None``).
     """
-    register_investigation_runner(_run)
+    register_investigation_runner(run_scheduled_investigation)
 
 
-__all__ = ["install"]
+__all__ = ["install", "run_scheduled_investigation"]

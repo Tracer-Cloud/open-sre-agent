@@ -3,8 +3,8 @@
 Production chat turns take the gate via :class:`GatewayTurnHandler` (``gate=``).
 Path-2 ``POST /investigate`` and :class:`InvestigationWorker` use the same
 process gate (:func:`process_turn_gate`) so HTTP investigate cannot starve
-chat or the reverse. Scheduler runners wrap the same instance via
-``gate_registered_scheduler_runners``.
+chat or the reverse. Scheduled runs take the same instance: the controller builds
+``SchedulerRunners`` and calls ``.gated(turn_gate)`` before installing them.
 
 A callback wrapper for arbitrary handlers lives under tests only — not in
 production ``gateway/core/``.

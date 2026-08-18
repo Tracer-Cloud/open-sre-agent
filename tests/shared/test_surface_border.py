@@ -1,10 +1,13 @@
-"""The two terminal surfaces do not depend on each other.
+"""What a surface may depend on: not its peer, and not the gateway's insides.
 
 ``surfaces/cli`` and ``surfaces/interactive_shell`` are peers: what both need
 lives below them (``surfaces/shared``, ``config``, ``core``, ``platform``).
-Each direction's remaining imports are pinned as an exact allowlist so it can
-only shrink — a new cross-surface import fails immediately, and an entry no
-longer imported must be removed. Underscore-prefixed names never cross.
+Surfaces may also drive the gateway *process* — start it, stop it, read its
+status — but not reach into its transports, storage or middleware.
+
+Every edge is pinned as an exact allowlist so it can only shrink: a new import
+fails immediately, and an entry no longer imported must be removed.
+Underscore-prefixed names never cross.
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ from tests.shared.harness_api import python_sources
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLI = "surfaces.cli"
 SHELL = "surfaces.interactive_shell"
+SURFACES = "surfaces"
+GATEWAY = "gateway"
 
 #: CLI modules the shell imports. Empty: the two surfaces are peers.
 _SHELL_IMPORTS_FROM_CLI: frozenset[str] = frozenset()
@@ -25,6 +30,22 @@ _SHELL_IMPORTS_FROM_CLI: frozenset[str] = frozenset()
 #: gateway attached come in through ``surfaces.cli.host.CliHost`` from
 #: ``surfaces.entrypoint``.
 _CLI_IMPORTS_FROM_SHELL: frozenset[str] = frozenset()
+
+#: Gateway modules a surface may import. All three drive the gateway *process*;
+#: none of them is the gateway's turn service, and none reaches a transport,
+#: a repository or a middleware step. A surface that runs turns is a channel:
+#: it implements ``gateway.core.transport_api`` and is handed to the turn
+#: service — it does not import one.
+_SURFACES_IMPORT_FROM_GATEWAY: frozenset[str] = frozenset(
+    {
+        # `opensre gateway start|stop|status` and the REPL's /gateway commands.
+        "gateway.core.runtime.daemon",
+        # The console entry that constructs the process and starts it.
+        "gateway.core.runtime.controller",
+        # The REPL hosts the web app in-thread for local use.
+        "gateway.web.web_server",
+    }
+)
 
 
 def _imports_of(tree: ast.AST, package: str) -> tuple[set[str], set[str]]:
@@ -81,4 +102,10 @@ def test_shell_imports_from_the_cli_only_what_the_allowlist_names() -> None:
 def test_cli_imports_from_the_shell_only_what_the_allowlist_names() -> None:
     modules, private = _cross_imports(CLI, SHELL)
     _assert_matches(modules, _CLI_IMPORTS_FROM_SHELL, edge="cli → interactive_shell")
+    assert sorted(private) == []
+
+
+def test_surfaces_import_from_the_gateway_only_what_the_allowlist_names() -> None:
+    modules, private = _cross_imports(SURFACES, GATEWAY)
+    _assert_matches(modules, _SURFACES_IMPORT_FROM_GATEWAY, edge="surfaces → gateway")
     assert sorted(private) == []

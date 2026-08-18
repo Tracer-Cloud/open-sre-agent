@@ -87,6 +87,22 @@ peer transports · web  →  core leaves
 Package DAG and peer isolation are pinned by border tests. Keep gateway tests
 flat by surface (do not nest a directory named after the Discord PyPI package).
 
+### What a surface may import
+
+The package holds two different things, and only one of them faces outward:
+
+- **The deployment** — the daemon, the transports, the web app, storage. A
+  surface may drive the *process* (start, stop, status) and nothing else.
+- **The turn service** — `GatewayTurnHandler`, the middleware steps and the
+  session-agent pool. A surface never imports this. A surface that runs turns
+  is a **channel**: it implements `gateway.core.transport_api` and is handed to
+  the turn service, the same way the four chat transports are.
+
+Three modules are surface-facing today — `core.runtime.daemon`,
+`core.runtime.controller`, `web.web_server` — pinned as an exact allowlist in
+`tests/shared/test_surface_border.py`. Widening it is a deliberate change, not
+a new import.
+
 ## Gateway turn dispatch
 
 - **One turn handler:** `GatewayTurnHandler` (optional `gate=` for capacity).
