@@ -1,0 +1,108 @@
+---
+title: "First loop: GitHub stars to Slack"
+description: "A copy-pasteable checklist for wiring GitHub reads to Slack delivery without touching the OS keyring."
+---
+
+The fastest way to see OpenSRE do something useful end to end: read GitHub,
+generate a report, and post it to Slack — all using only environment
+variables, so it works the same on a laptop, a container, or a headless
+server with no OS keyring available.
+
+Requires [OpenSRE installed](/quickstart) and a `.env` file (or exported
+environment variables) in your working directory.
+
+## Checklist
+
+### 1. Configure GitHub (env only, no keyring)
+
+- [ ] Add a token to `.env`:
+
+  ```bash
+  GITHUB_TOKEN=ghp_your_personal_access_token
+  ```
+
+  (`GITHUB_MCP_AUTH_TOKEN` also works — see [GitHub setup](/github#setup) for
+  the full variable list. Both are plain environment variables; neither
+  touches the keyring.)
+
+- [ ] Verify:
+
+  ```bash
+  opensre integrations verify github
+  ```
+
+### 2. Configure Slack (env only, no keyring)
+
+- [ ] Create an incoming webhook (see
+  [Create a Slack incoming webhook](/messaging/slack#create-a-slack-incoming-webhook))
+  and add it to `.env`:
+
+  ```bash
+  SLACK_WEBHOOK_URL=https://hooks.slack.com/services/<workspace-id>/<binding-id>/<secret>
+  ```
+
+  `SLACK_WEBHOOK_URL` is the one Slack credential OpenSRE never writes to the
+  OS keyring — it only ever reads it from the integration store or a plain
+  environment variable (see [Slack credentials](/messaging/slack#credentials)).
+
+### 3. Ask for a stars report, delivered to Slack
+
+- [ ] Start the interactive shell:
+
+  ```bash
+  opensre
+  ```
+
+- [ ] Ask for a report and Slack delivery in one turn:
+
+  ```text
+  > get our GitHub star velocity for the last 30 days and post it to Slack
+  ```
+
+  This calls `get_github_star_history`, then `slack_send_message` to your
+  webhook channel — see [GitHub workflow tools](/github-workflow-tools) and
+  [Slack investigation tools](/messaging/slack#investigation-tools).
+
+### 4. Ask for a work-status report, delivered to Slack
+
+- [ ] Same shell, ask for the check-in report:
+
+  ```text
+  > generate a Slack-ready work status report for this repo and post it
+  ```
+
+  This calls `generate_work_status_report`, then `slack_send_message` — see
+  [GitHub workflow tools](/github-workflow-tools).
+
+### 5. Confirm Slack delivery
+
+- [ ] `slack_send_message` requires approval before it posts — confirm the
+  prompt when it appears.
+- [ ] Check the target Slack channel for the message.
+
+### 6. Optional: make it recurring
+
+- [ ] Schedule a report as a daily loop instead of asking each time:
+
+  ```bash
+  opensre cron add --kind daily_summary --cron "0 9 * * 1-5" \
+    --tz Europe/London --provider slack
+  ```
+
+  See [Scheduled deliveries](/cron) for the full `--kind` list, the
+  `--chat-id` rules for a webhook vs. a bot token, and how to confirm a
+  scheduled task actually fired (`opensre cron logs <task_id>`).
+
+## If something doesn't land in Slack
+
+- **No message in the channel** — re-check `SLACK_WEBHOOK_URL` in `.env` and
+  confirm you approved the `slack_send_message` prompt.
+- **GitHub tool unavailable** — run `opensre integrations verify github` and
+  confirm the token has at least `repo` scope.
+- **Credential resolution order** — GitHub never touches the keyring at all
+  (OAuth device flow, environment, or the integration store; see
+  [GitHub setup](/github#setup)). Slack's bot/app tokens fall back to the
+  keyring, but `SLACK_WEBHOOK_URL` never does — see
+  [Slack credentials](/messaging/slack#credentials).
+
+For help, ask in Discord [#contribute](https://discord.gg/opensre).
