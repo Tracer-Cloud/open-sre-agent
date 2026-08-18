@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from integrations.aws.env import make_boto3_client, require_aws_credentials
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 
 try:
     from botocore.exceptions import ClientError

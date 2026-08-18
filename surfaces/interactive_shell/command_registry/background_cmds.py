@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import (
+from core.agent_harness.spi.session_state import (
     background_investigations,
     background_mode_enabled,
     background_notification_channels,
@@ -33,7 +33,7 @@ def _allowed_notify_channels() -> tuple[str, ...]:
     modules at command time and nothing on the boot path.
     """
     from bootstrap.adapters import install_notification_adapters
-    from platform.notifications.outbound_registry import (
+    from platform.delivery.notifications.outbound_registry import (
         BACKGROUND_RCA,
         outbound_adapter_names_for,
     )

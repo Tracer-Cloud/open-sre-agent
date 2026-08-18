@@ -14,7 +14,7 @@ MODE = os.environ.get("OPENSRE_PYINSTALLER_MODE", "onedir")
 if MODE not in {"onedir", "onefile"}:
     raise ValueError(f"Unsupported OPENSRE_PYINSTALLER_MODE: {MODE!r}")
 
-manifest = runpy.run_path(str(ROOT / "platform/packaging/release_manifest.py"))
+manifest = runpy.run_path(str(ROOT / "platform/deployment/packaging/release_manifest.py"))
 runtime_hidden_imports = manifest["runtime_hidden_imports"]
 skill_data_entries = manifest["skill_data_entries"]
 
@@ -23,6 +23,7 @@ datas = [
     (str(ROOT / ".stdlib_vendor"), "_opensre_stdlib_platform"),
 ]
 datas += collect_data_files("surfaces.cli")
+datas += collect_data_files("surfaces.shared")
 datas += collect_data_files("config")
 datas += collect_data_files("litellm")
 datas += copy_metadata("opensre")
@@ -34,8 +35,12 @@ hiddenimports = [
     *runtime_hidden_imports(ROOT),
 ]
 
+# The frozen binary IS ``opensre``, so it starts where the console script does:
+# the entrypoint that composes the CLI, the interactive shell and the gateway.
+# Entering through the CLI alone would leave the binary without a shell to
+# launch and without a foreground gateway runner.
 a = Analysis(
-    [str(ROOT / "surfaces/cli/__main__.py")],
+    [str(ROOT / "surfaces/entrypoint.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,

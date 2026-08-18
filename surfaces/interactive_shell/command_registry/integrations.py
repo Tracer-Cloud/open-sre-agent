@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
-from core.agent_harness.session.terminal_access import session_terminal
+from core.agent_harness.spi.session_state import session_terminal
 from surfaces.interactive_shell.command_registry.cli_parity import (
     publish_headless_slash_response,
     run_cli_command,
@@ -24,14 +24,14 @@ from surfaces.interactive_shell.ui import (
     render_mcp_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     prepare_repl_output_line,
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.rendering import (
+from surfaces.shared.terminal.components.rendering import (
     _repl_table_width,
     print_repl_table,
     repl_print,

@@ -27,7 +27,7 @@ from platform.analytics.cli import (
 )
 from platform.analytics.source import is_test_run
 from platform.terminal.theme import DIM
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
 )
@@ -95,7 +95,7 @@ _SUGGESTIONS_BY_OPTION = {suggestion.option: suggestion for suggestion in LOOP_S
 
 
 def _no_loops_configured() -> bool:
-    from platform.scheduler.store import list_tasks
+    from platform.scheduling.scheduler.store import list_tasks
 
     return not list_tasks()
 

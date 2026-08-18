@@ -3,7 +3,7 @@
 Borders under test
 ------------------
 * ``gateway.transports.discord`` and ``gateway.transports.slack`` never import each other — the
-  shared approval broker and attention gate live in ``gateway.core.runtime``.
+  shared approval broker and attention gate live in ``gateway.core.middleware``.
 * Importing the Discord transport pulls in no Slack SDK.
 * Discord is org-scoped like Slack: two members of one org get private
   sessions, and a Discord row never answers a lookup from another transport.

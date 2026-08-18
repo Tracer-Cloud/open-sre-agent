@@ -65,7 +65,7 @@ def test_resetting_the_harness_ports_clears_the_presenter() -> None:
 def test_an_explicit_presenter_wins_over_the_registered_one() -> None:
     """A host with its own presenter (TTY console) must not get the headless default."""
     # Arrange.
-    from core.agent_harness.turns.default_headless_agent import _resolved_presenter_factory
+    from core.agent_harness.tools.tool_provider import DefaultToolProvider
 
     def _registered(*_args: object, **_kwargs: object) -> object:
         return object()
@@ -74,7 +74,9 @@ def test_an_explicit_presenter_wins_over_the_registered_one() -> None:
         return object()
 
     harness_ports.set_subprocess_presenter_factory(_registered)
+    with_explicit = DefaultToolProvider(object(), object(), subprocess_presenter_factory=_explicit)
+    without = DefaultToolProvider(object(), object())
 
     # Act / Assert.
-    assert _resolved_presenter_factory(_explicit) is _explicit
-    assert _resolved_presenter_factory(None) is _registered
+    assert with_explicit._resolved_presenter_factory() is _explicit  # noqa: SLF001
+    assert without._resolved_presenter_factory() is _registered  # noqa: SLF001

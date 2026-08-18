@@ -8,7 +8,7 @@ from core.domain.stream import StreamEvent
 from integrations.llm_cli.errors import CLIAuthenticationRequired
 from surfaces.cli.error_mapping import reraise_cli_runtime_error
 from surfaces.cli.investigation import run_investigation_cli, stream_investigation_cli
-from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+from surfaces.shared.error_handling.errors import OpenSREError
 from tools.investigation.capability import resolve_investigation_context
 
 
@@ -144,7 +144,7 @@ def test_parse_args_evaluate_flag() -> None:
 
 def test_run_investigation_cli_fails_fast_for_missing_llm_auth(monkeypatch, tmp_path) -> None:
     from config.llm_auth.credentials import CredentialStatus
-    from platform.common.errors import OpenSREError
+    from platform.errors import OpenSREError
 
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

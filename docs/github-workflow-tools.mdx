@@ -3,6 +3,8 @@ title: "GitHub workflow tools"
 description: "Use GitHub-backed tools for read snapshots, status reports, follow-up summaries, and approved issue mutations"
 ---
 
+## Overview
+
 OpenSRE provides GitHub workflow tools for engineering coordination. The public workflow is:
 
 1. Read a GitHub snapshot.
@@ -10,12 +12,14 @@ OpenSRE provides GitHub workflow tools for engineering coordination. The public 
 3. Render a mutation proposal for explicit Slack-sourced task requests.
 4. Execute the proposal only through the runtime approval path.
 
-The workflow tools deliberately separate read-only snapshots from mutating
-execution. Headless or non-approved runs can produce proposals, but they cannot
-execute workflow mutations.
+The workflow tools deliberately separate read-only snapshots from mutating execution. Headless or non-approved runs can produce proposals, but they cannot execute workflow mutations.
 
-For ad-hoc chat mutations outside the Slack proposal flow (create issue, assign,
-merge, `gh api`, etc.), use **`github_cli`** instead — see [GitHub](github).
+For ad-hoc chat mutations outside the Slack proposal flow (create issue, assign, merge, `gh api`, etc.), use **`github_cli`** instead — see [GitHub](/github).
+
+## Prerequisites
+
+- GitHub connected via [GitHub integration](/github)
+- Token with at least `repo` scope; add security-alert scopes for `list_github_security_alerts`
 
 ## Setup
 
@@ -28,7 +32,7 @@ opensre integrations verify github
 
 | Requirement | Details |
 | --- | --- |
-| **Token** | `GITHUB_MCP_AUTH_TOKEN`, or browser sign-in via `opensre integrations setup` |
+| **Token** | `GITHUB_MCP_AUTH_TOKEN`, or browser sign-in via `opensre integrations setup github` |
 | **Scopes** | `repo` minimum; add security alert scopes for `list_github_security_alerts` |
 | **Alternate env** | `GITHUB_TOKEN` / `GH_TOKEN` accepted by some workflow tools |
 
@@ -39,9 +43,13 @@ opensre integrations verify github
 · gathering via GitHub · list work items…
 ```
 
-See [GitHub workflow tools](#tools) below for the full tool table and mutation approval flow.
+## Credentials
 
-## Tools
+Set a GitHub token through the configured GitHub integration, `GITHUB_TOKEN`, or `GH_TOKEN`.
+
+Security alert endpoints require token scopes that GitHub enforces separately. If the token cannot read one alert class, the tool returns an error for that alert type while still returning any alert classes it can read.
+
+## Investigation tools
 
 | Tool | Role | Side effects |
 | --- | --- | --- |
@@ -53,9 +61,9 @@ See [GitHub workflow tools](#tools) below for the full tool table and mutation a
 | `propose_github_issue_mutation_from_slack` | Builds a deterministic proposal for creating, updating, or closing a GitHub issue from an explicit Slack request. | None |
 | `execute_github_issue_mutation` | Executes an approved proposal. | Mutating; requires runtime approval |
 
-## Workflow
+### Workflow
 
-### 1. Read snapshot
+#### 1. Read snapshot
 
 Use read tools first:
 
@@ -65,7 +73,7 @@ Use read tools first:
 
 `summarize_github_pr_status` does not trust list-endpoint mergeability. It fetches each PR detail endpoint so `mergeable` and `mergeable_state` are authoritative. Unknown mergeability is reported as `unknown`, not as ready to merge.
 
-### 2. Report or summarize
+#### 2. Report or summarize
 
 Use `generate_work_status_report` for morning check-ins, Slack updates, blockers, owners, and next actions.
 
@@ -79,7 +87,7 @@ It must not produce a false "no blockers" report from partial data.
 
 Use `summarize_community_followups` for contributor questions, community meeting agenda items, and suggested replies. It reads repository issue comments directly with pagination instead of performing one request per issue.
 
-### 3. Propose mutation
+#### 3. Propose mutation
 
 Only when the user explicitly asks to turn a Slack request into a GitHub task, call `propose_github_issue_mutation_from_slack`.
 
@@ -99,7 +107,7 @@ The proposal includes:
 - deterministic `proposal_id`
 - idempotency marker for retry detection
 
-### 4. Execute mutations
+#### 4. Execute mutations
 
 `execute_github_issue_mutation` is the only **workflow** mutating tool. It has no `confirm` argument. Ad-hoc GitHub writes in chat go through `github_cli`.
 
@@ -113,13 +121,7 @@ Mutation behavior:
 Do not expose `execute_github_issue_mutation` on investigation surfaces. Investigation and headless runs may render proposals, but should not execute mutations directly.
 </Warning>
 
-## Required GitHub access
-
-Set a GitHub token through the configured GitHub integration, `GITHUB_TOKEN`, or `GH_TOKEN`.
-
-Security alert endpoints require token scopes that GitHub enforces separately. If the token cannot read one alert class, the tool returns an error for that alert type while still returning any alert classes it can read.
-
-## Example prompts
+### Example prompts
 
 - "Which PRs are mergeable, blocked, or unknown in `Tracer-Cloud/opensre`?"
 - "What issues are taken vs up for grabs?"
@@ -127,3 +129,27 @@ Security alert endpoints require token scopes that GitHub enforces separately. I
 - "List unanswered community questions from recent issue comments."
 - "Propose a GitHub issue from this Slack request and keep the source link."
 - "Execute this approved GitHub issue proposal."
+
+## Verify
+
+```bash
+opensre integrations verify github
+```
+
+There is no separate `github-workflow` verify target. Workflow tools become available when GitHub credentials validate.
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **Tools unavailable** | Run `opensre integrations setup github` and verify |
+| **Security alerts error for one class** | Token lacks that alert scope — other alert classes may still return |
+| **False "no blockers" concern** | If report reads fail, expect `available: false` / `incomplete: true` rather than an empty green report |
+| **Mutation not executing** | Headless/non-approved runs can propose only — execute needs the runtime approval path |
+| **Want ad-hoc issue create outside Slack flow** | Use `github_cli` — see [GitHub](/github) |
+
+## Security
+
+- Keep read tools and mutating execute on separate approval paths.
+- Prefer least-privilege tokens; add security scopes only when you need alert listing.
+- Store tokens in `.env`, not in source control.

@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from core.agent_harness.tools.tool_context import (
-    object_schema,
-    string_array_property,
-    string_property,
-)
+from core.tool_framework.utils.schema import object_schema, string_array_property, string_property
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from tools.interactive_shell.shared.slash_catalog import MCP_BY_COMMAND
 

@@ -7,7 +7,7 @@ import threading
 import time
 from collections.abc import Iterable
 
-from gateway.core.runtime.status_messages import (
+from gateway.core.host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
@@ -16,8 +16,8 @@ from gateway.core.runtime.status_messages import (
 )
 from gateway.transports.telegram.poller.client import TelegramBotClient
 from integrations.telegram.formatting import markdown_to_telegram_html
-from platform.common.truncation import truncate
-from platform.notifications.limits import MAX_MESSAGE_SIZE
+from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
+from platform.text.truncation import truncate
 
 _LOG_PREVIEW_LIMIT = 500
 logger = logging.getLogger("gateway")

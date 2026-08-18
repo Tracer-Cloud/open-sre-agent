@@ -7,7 +7,7 @@ from typing import Any
 import requests
 
 from integrations.verification import register_verifier, result
-from platform.notifications.redaction import redact_token
+from platform.delivery.notifications.redaction import redact_token
 
 
 @register_verifier("telegram")

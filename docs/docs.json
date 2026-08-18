@@ -20,6 +20,9 @@
     "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js",
     "/radar-chart.js"
   ],
+  "interaction": {
+    "drilldown": false
+  },
   "navigation": {
     "directory": "card",
     "tabs": [
@@ -43,13 +46,7 @@
               "how-investigations-work",
               "interactive-shell-commands",
               "interactive-shell-assistant",
-              "deployment",
-              "api",
-              "python-api",
-              "faq",
-              "cloudopsbench",
-              "bi-weekly-giveaway",
-              "pr-review-flow"
+              "goals"
             ]
           }
         ]
@@ -95,6 +92,30 @@
         ]
       },
       {
+        "tab": "Guides",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Deploy and APIs",
+            "pages": [
+              "deployment",
+              "api",
+              "python-api",
+              "hosting-the-agent"
+            ]
+          },
+          {
+            "group": "Community",
+            "pages": [
+              "faq",
+              "cloudopsbench",
+              "bi-weekly-giveaway",
+              "pr-review-flow"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Integrations",
         "icon": "plug",
         "groups": [
@@ -102,130 +123,155 @@
             "group": "Overview",
             "pages": [
               "integrations-overview",
-              "remote-runtime-investigation",
-              "background-investigations",
-              "masking",
-              "interactive-shell-privacy",
-              "sessions",
-              "principal-scoped-storage",
-              "memory",
-              "work-management",
-              "fleet",
-              "cron",
-              "closed-loop-learning",
-              "multi-instance-integrations"
-            ]
-          },
-          {
-            "group": "LLM providers",
-            "pages": [
-              "llm-providers"
-            ]
-          },
-          {
-            "group": "Observability and incidents",
-            "expanded": false,
-            "pages": [
-              "alertmanager",
-              "azure-monitor",
-              "betterstack",
-              "coralogix",
-              "datadog",
-              "grafana",
-              "grafana_annotations",
-              "grafana-log-sink",
-              "groundcover",
-              "hermes",
-              "honeycomb",
-              "incident_io",
-              "new_relic",
-              "openobserve",
-              "opsgenie",
-              "pagerduty",
-              "posthog",
-              "posthog-mcp",
-              "sentry",
-              "sentry-mcp",
-              "servicenow",
-              "signoz",
-              "tempo",
-              "splunk",
-              "victoria_logs",
-              "x-mcp"
-            ]
-          },
-          {
-            "group": "Cloud, code, and collaboration",
-            "expanded": false,
-            "pages": [
-              "argocd",
-              "aws",
-              "yandex-cloud",
-              "aws_lambda",
-              "s3",
-              "kubernetes",
-              "cloudtrail_events",
-              "sqs_queues",
-              "bitbucket",
-              "elb",
-              "ec2",
-              "github",
-              "github-workflow-tools",
-              "github-security-fix",
-              "github-ci-fix",
-              "architecture-audit-tool",
-              "integrations/github-actions",
-              "gitlab",
-              "google-docs",
-              "helm",
-              "jenkins",
-              "jira",
-              "integrations/trello",
-              "pi-coding",
-              "fix-sentry-issue",
-              "railway",
-              "vercel"
-            ]
-          },
-          {
-            "group": "Messaging",
-            "expanded": false,
-            "pages": [
-              "messaging/index",
-              "smtp",
-              "messaging/slack",
-              "messaging/discord",
-              "messaging/telegram",
-              "messaging/rocketchat",
-              "messaging/buzz",
-              "messaging/whatsapp",
-              "messaging/twilio-sms"
-            ]
-          },
-          {
-            "group": "Data and workflow systems",
-            "expanded": false,
-            "pages": [
-              "airflow",
-              "azure-sql",
-              "clickhouse",
-              "dagster",
-              "elasticsearch",
-              "kafka",
-              "mariadb",
-              "mongodb",
-              "mongodb-atlas",
-              "mysql",
-              "openclaw",
-              "opensearch",
-              "postgresql",
-              "prefect",
-              "rabbitmq",
-              "rds",
-              "redis",
-              "snowflake",
-              "supabase",
-              "temporal"
+              "multi-instance-integrations",
+              "llm-providers",
+              {
+                "group": "Platform",
+                "expanded": false,
+                "pages": [
+                  "remote-runtime-investigation",
+                  "background-investigations",
+                  "masking",
+                  "interactive-shell-privacy",
+                  "sessions",
+                  "principal-scoped-storage",
+                  "memory",
+                  "work-management",
+                  "fleet",
+                  "cron",
+                  "closed-loop-learning"
+                ]
+              },
+              {
+                "group": "Monitoring",
+                "expanded": false,
+                "pages": [
+                  "azure-monitor",
+                  "betterstack",
+                  "coralogix",
+                  "datadog",
+                  "grafana",
+                  "grafana_annotations",
+                  "grafana-log-sink",
+                  "groundcover",
+                  "hermes",
+                  "honeycomb",
+                  "new_relic",
+                  "openobserve",
+                  "posthog",
+                  "posthog-mcp",
+                  "signoz",
+                  "splunk",
+                  "tempo",
+                  "victoria_logs",
+                  "x-mcp"
+                ]
+              },
+              {
+                "group": "Incidents",
+                "expanded": false,
+                "pages": [
+                  "alertmanager",
+                  "incident_io",
+                  "opsgenie",
+                  "pagerduty",
+                  "sentry",
+                  "sentry-mcp",
+                  "servicenow",
+                  "fix-sentry-issue"
+                ]
+              },
+              {
+                "group": "Cloud",
+                "expanded": false,
+                "pages": [
+                  "argocd",
+                  "aws",
+                  "aws_lambda",
+                  "cloudtrail_events",
+                  "ec2",
+                  "elb",
+                  "helm",
+                  "kubernetes",
+                  "yandex-cloud",
+                  "railway",
+                  "s3",
+                  "sqs_queues",
+                  "vercel"
+                ]
+              },
+              {
+                "group": "Code and CI",
+                "expanded": false,
+                "pages": [
+                  "architecture-audit-tool",
+                  "bitbucket",
+                  "github",
+                  "github-ci-fix",
+                  "github-security-fix",
+                  "github-workflow-tools",
+                  "integrations/github-actions",
+                  "gitlab",
+                  "jenkins",
+                  "pi-coding"
+                ]
+              },
+              {
+                "group": "Collaboration",
+                "expanded": false,
+                "pages": [
+                  "google-docs",
+                  "jira",
+                  "integrations/trello"
+                ]
+              },
+              {
+                "group": "Messaging",
+                "expanded": false,
+                "pages": [
+                  "messaging/index",
+                  "smtp",
+                  "messaging/buzz",
+                  "messaging/slack",
+                  "messaging/discord",
+                  "messaging/telegram",
+                  "messaging/rocketchat",
+                  "messaging/whatsapp",
+                  "messaging/twilio-sms"
+                ]
+              },
+              {
+                "group": "Databases",
+                "expanded": false,
+                "pages": [
+                  "azure-sql",
+                  "clickhouse",
+                  "elasticsearch",
+                  "mariadb",
+                  "mongodb",
+                  "mongodb-atlas",
+                  "mysql",
+                  "opensearch",
+                  "postgresql",
+                  "rds",
+                  "redis",
+                  "snowflake",
+                  "supabase"
+                ]
+              },
+              {
+                "group": "Workflows",
+                "expanded": false,
+                "pages": [
+                  "airflow",
+                  "dagster",
+                  "kafka",
+                  "openclaw",
+                  "prefect",
+                  "rabbitmq",
+                  "temporal"
+                ]
+              }
             ]
           }
         ]

@@ -15,18 +15,20 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
+from core.agent_harness.accounting.self_recording_tools import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
+    LlmFactory,
     OutputSink,
     SessionState,
     ToolProvider,
@@ -224,22 +226,6 @@ _EXECUTED_HISTORY_TYPES = {
     "implementation",
     "cli_command",
 }
-# Action tools that append their own ``session.history`` row when executed.
-# Keep this as the single catalogue: the shell observer and generic tool-result
-# accounting both key off it so new tools cannot silently double-record turns.
-SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "alert_sample",
-        "cli_exec",
-        "code_implement",
-        "investigation_start",
-        "llm_set_provider",
-        "shell_run",
-        "slash_invoke",
-        "synthetic_run",
-        "task_cancel",
-    }
-)
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
@@ -256,13 +242,6 @@ class ActionTurnPlan:
     user_message: str
     llm: Any
     max_iterations: int
-
-
-@dataclass(frozen=True)
-class ToolCallingDeps:
-    """Optional dependency seams used by tests/harnesses."""
-
-    llm_factory: Callable[[], Any] | None = None
 
 
 class _StaticToolCallLLM:
@@ -665,7 +644,7 @@ def _build_action_agent(
     agent_tools: list[Any],
     turn_snapshot: TurnSnapshot | None,
     resolved_integrations: dict[str, Any],
-    deps: ToolCallingDeps | None,
+    llm_factory: LlmFactory | None,
     tool_hooks: ToolExecutionHooks | None,
     tool_resources: dict[str, Any],
     observer: Any,
@@ -709,7 +688,7 @@ def _build_action_agent(
         system = "Execute the explicit slash_invoke tool call."
         user_message = message
     else:
-        factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
+        factory = llm_factory if llm_factory is not None else default_llm_factory
         llm = factory()
         envelope = build_action_system_prompt_envelope(
             # No turn plan means no surface is known here; setup facts are
@@ -767,7 +746,7 @@ class _ActionTurnArgs:
     tools: ToolProvider
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
-    deps: ToolCallingDeps | None = None
+    llm_factory: LlmFactory | None = None
     turn_plan: TurnPlan | None = None
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
@@ -787,7 +766,7 @@ class ActionTurnRunner:
 
     output: OutputSink
     tools: ToolProvider
-    deps: ToolCallingDeps | None = None
+    llm_factory: LlmFactory | None = None
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
 
@@ -812,7 +791,7 @@ class ActionTurnRunner:
             tools=self.tools,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
-            deps=self.deps,
+            llm_factory=self.llm_factory,
             turn_plan=turn_plan,
             error_reporter=self.error_reporter,
             tool_hooks=self.tool_hooks,
@@ -1017,7 +996,7 @@ def _run_action_turn(
             agent_tools=agent_tools,
             turn_snapshot=turn_snapshot,
             resolved_integrations=resolved_integrations,
-            deps=args.deps,
+            llm_factory=args.llm_factory,
             tool_hooks=with_duplicate_action_call_guard(args.tool_hooks),
             tool_resources=tool_resources,
             observer=observer,
@@ -1129,6 +1108,5 @@ __all__ = [
     "ActionTurnPlan",
     "ActionTurnRunner",
     "SELF_RECORDING_ACTION_TOOL_NAMES",
-    "ToolCallingDeps",
     "with_duplicate_action_call_guard",
 ]

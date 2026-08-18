@@ -713,7 +713,7 @@ def test_investigation_rendering_uses_the_supplied_console() -> None:
     the final report — the longest output the shell produces.
     """
     # Arrange
-    import surfaces.cli.ui.renderer as renderer_module
+    import surfaces.shared.terminal.stream_renderer as renderer_module
     from surfaces.interactive_shell.runtime.investigation_adapter import (
         repl_foreground_renderer,
     )
@@ -753,7 +753,7 @@ def test_investigation_progress_display_uses_the_supplied_console(
     stage progress and every tool-detail line still went to the shell terminal.
     """
     # Arrange
-    from surfaces.interactive_shell.ui.output import tracker as tracker_module
+    from surfaces.shared.terminal.output import tracker as tracker_module
 
     captured = Console(file=io.StringIO(), force_terminal=False, width=80)
     monkeypatch.setattr(tracker_module, "_repl_progress_active", lambda: True)
@@ -865,7 +865,7 @@ def test_streamed_run_paints_only_through_the_renderer_on_the_supplied_console()
         return SimpleNamespace(render_stream=_render)
 
     # Act
-    import surfaces.cli.ui.renderer as renderer_module
+    import surfaces.shared.terminal.stream_renderer as renderer_module
 
     real_renderer = renderer_module.StreamRenderer
     renderer_module.StreamRenderer = _fake_stream_renderer  # type: ignore[assignment]

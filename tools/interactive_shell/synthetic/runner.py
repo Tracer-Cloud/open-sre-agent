@@ -9,7 +9,7 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
-from platform.common.task_types import TaskKind, TaskRecord
+from platform.scheduling.task_types import TaskKind, TaskRecord
 from tools.interactive_shell.cli import build_opensre_cli_argv
 from tools.interactive_shell.shared import allow_tool
 from tools.interactive_shell.subprocess import (

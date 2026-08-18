@@ -5,7 +5,7 @@ import pytest
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
 from integrations.llm_cli.errors import CLITimeoutError
 from surfaces.cli.error_mapping import reraise_cli_runtime_error
-from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+from surfaces.shared.error_handling.errors import OpenSREError
 
 
 def test_credit_exhausted_error_maps_to_opensre_error_with_auth_hint() -> None:

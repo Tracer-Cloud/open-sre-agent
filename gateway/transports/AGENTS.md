@@ -18,7 +18,7 @@ is `gateway/startup.py`.
 The registry and worker start/stop loop live in this package's own
 `startup.py` — the one module here allowed to import its peers (their
 `startup` submodules only). Web + chat composition stays in
-`gateway/startup.py`. `GatewayController` only holds the opaque `ChannelsHandle`.
+`gateway/startup.py`. `GatewayController` only holds the opaque `StartedGateway`.
 Transport-specific work (settings load, Discord readiness wait) stays in each
 package's `startup.py`.
 

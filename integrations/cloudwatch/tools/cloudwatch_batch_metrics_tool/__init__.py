@@ -8,7 +8,7 @@ from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
 from integrations.aws.cloudwatch_client import get_metric_statistics
 from integrations.cloudwatch.availability import cloudwatch_is_available
-from platform.common.evidence_compaction import truncate_list
+from platform.evidence.evidence_compaction import truncate_list
 
 _METRIC_NAMES: dict[str, str] = {
     "cpu": "CPUUtilization",

@@ -125,6 +125,6 @@ class LazyRichGroup(click.Group):
 
     def format_help(self, ctx: click.Context, _formatter: click.HelpFormatter) -> None:
         assert isinstance(ctx.command, click.Group)
-        from surfaces.interactive_shell.ui.layout import render_help
+        from surfaces.cli.layout import render_help
 
         render_help(ctx.command)

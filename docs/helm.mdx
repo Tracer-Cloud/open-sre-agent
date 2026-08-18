@@ -3,6 +3,8 @@ title: "Helm (CLI)"
 description: "Connect Helm 3 so OpenSRE can list releases, inspect status and history, and read rendered values and manifests during Kubernetes investigations"
 ---
 
+## Overview
+
 OpenSRE runs the **Helm 3** command-line client on the machine where the agent executes. It uses **read-only** subcommands (`helm list`, `helm status`, `helm history`, `helm get values`, `helm get manifest`) with explicit `--kube-context` and `--kubeconfig` flags so investigations target the same cluster your engineers use.
 
 <Note>
@@ -19,7 +21,13 @@ OpenSRE runs the **Helm 3** command-line client on the machine where the agent e
 
 Configure Helm like other local integrations: run `opensre integrations setup helm`, use environment variables, and/or `~/.opensre/integrations.json`.
 
-### Option 1: Environment variables
+### Option 1: Interactive CLI
+
+```bash
+opensre integrations setup helm
+```
+
+### Option 2: Environment variables
 
 Enable the integration and point it at your cluster:
 
@@ -50,7 +58,7 @@ To raise the maximum size of stored manifest text (see [Advanced](#advanced)):
 HELM_MANIFEST_MAX_CHARS=600000
 ```
 
-### Option 2: Persistent store
+### Option 3: Persistent store
 
 Add an active `helm` record to `~/.opensre/integrations.json`:
 
@@ -75,15 +83,40 @@ Add an active `helm` record to `~/.opensre/integrations.json`:
 
 **Credential field aliases** (store / API compatibility): `context` for `kube_context`, `kubeconfig_path` or `kube_config` for `kubeconfig`, and `namespace` for `default_namespace`.
 
-## Verify
+The setup/store path does not require `OSRE_HELM_INTEGRATION`; that env gate applies only when discovering Helm from environment variables alone.
 
-```bash
-opensre integrations verify helm
-```
+## Credentials
 
-A passing check runs `helm version` (must report Helm 3) and a minimal `helm list -A --max 1 -o json` against your cluster to validate JSON output and reachability.
+Helm uses your local Helm binary plus kubeconfig access to the cluster. There is no separate Helm API token.
 
-## Usage in investigations
+- Point `HELM_PATH` / `helm_path` at a Helm **3.x** binary.
+- Set `HELM_KUBECONFIG` / `kubeconfig` and `HELM_KUBE_CONTEXT` / `kube_context` when you need a specific cluster identity.
+- Prefer a dedicated kubeconfig or context with **least privilege** if your policy requires it.
+
+## Investigation tools
+
+| Tool | What it does |
+| --- | --- |
+| `helm_list_releases` | Lists releases (JSON from `helm list`); uses all namespaces when no namespace filter is set. |
+| `helm_release_status` | `helm status -o json` for one release. |
+| `helm_release_history` | `helm history -o json` for one release. |
+| `helm_get_release_values` | `helm get values -o json` (user-supplied values; JSON `null` from Helm is treated as an empty object). |
+| `helm_get_release_manifest` | Rendered manifest YAML (may be truncated; see Advanced). |
+
+### Evidence keys
+
+Post-processing writes **distinct** evidence keys so parallel tools do not overwrite each other:
+
+| Evidence key | Content |
+| --- | --- |
+| `helm_releases` | Parsed release list |
+| `helm_release_status` | Status object from `helm status` |
+| `helm_release_history` | Revision history array |
+| `helm_release_values` | Values object |
+| `helm_release_manifest` | Rendered manifest YAML **string**; unchanged key name. When the manifest exceeds the size cap, this value is **truncated** text, not a separate key. |
+| `helm_manifest_truncated` | Boolean: `true` when `helm_release_manifest` was truncated because of `HELM_MANIFEST_MAX_CHARS` / the client default cap. |
+
+### Usage in investigations
 
 When Helm is configured, OpenSRE adds a `helm` entry to `detect_sources` only if the alert shows **Helm-specific** context — avoiding generic “deployment” noise.
 
@@ -127,39 +160,18 @@ Then run:
 opensre investigate -i alert.json
 ```
 
-## Investigation tools
+### Advanced
 
-| Tool | What it does |
-| --- | --- |
-| `helm_list_releases` | Lists releases (JSON from `helm list`); uses all namespaces when no namespace filter is set. |
-| `helm_release_status` | `helm status -o json` for one release. |
-| `helm_release_history` | `helm history -o json` for one release. |
-| `helm_get_release_values` | `helm get values -o json` (user-supplied values; JSON `null` from Helm is treated as an empty object). |
-| `helm_get_release_manifest` | Rendered manifest YAML (may be truncated; see below). |
-
-## Evidence keys
-
-Post-processing writes **distinct** evidence keys so parallel tools do not overwrite each other:
-
-| Evidence key | Content |
-| --- | --- |
-| `helm_releases` | Parsed release list |
-| `helm_release_status` | Status object from `helm status` |
-| `helm_release_history` | Revision history array |
-| `helm_release_values` | Values object |
-| `helm_release_manifest` | Rendered manifest YAML **string**; unchanged key name. When the manifest exceeds the size cap, this value is **truncated** text, not a separate key. |
-| `helm_manifest_truncated` | Boolean: `true` when `helm_release_manifest` was truncated because of `HELM_MANIFEST_MAX_CHARS` / the client default cap. |
-
-## Advanced
-
-- **Manifest size:** Very large charts can produce multi-megabyte manifests. The client truncates manifest text by default; override with `HELM_MANIFEST_MAX_CHARS` (see Option 1).
+- **Manifest size:** Very large charts can produce multi-megabyte manifests. The client truncates manifest text by default; override with `HELM_MANIFEST_MAX_CHARS` (see Option 2).
 - **Local kind demo:** From a repo checkout with Docker, kind, kubectl, and Helm installed, run `./tests/e2e/kubernetes/helm/scripts/demo-helm-kind.sh` to create a sample cluster and release (see script comments for teardown).
 
-## Security and operations
+## Verify
 
-- The integration is **read-only**: it does not `install`, `upgrade`, or `uninstall` releases.
-- `helm get values` output can include **secrets**; treat evidence like any other sensitive kubectl/Helm output.
-- Prefer a dedicated kubeconfig or context with **least privilege** if your policy requires it.
+```bash
+opensre integrations verify helm
+```
+
+A passing check runs `helm version` (must report Helm 3) and a minimal `helm list -A --max 1 -o json` against your cluster to validate JSON output and reachability.
 
 ## Troubleshooting
 
@@ -168,5 +180,12 @@ Post-processing writes **distinct** evidence keys so parallel tools do not overw
 | **Verify: missing** | Helm not in store / env gate `OSRE_HELM_INTEGRATION` not set / invalid JSON store entry. |
 | **Verify: Helm 3 required** | Upgrade to Helm 3 or point `helm_path` at a v3 binary. |
 | **Verify: list JSON / cluster** | kubeconfig and context; cluster reachable with `helm list -A` manually. |
-| **No Helm tools in plan** | Alert must include Helm annotations, `meta.helm.sh/*` labels, or strong Helm phrases (see above). |
+| **No Helm tools in plan** | Alert must include Helm annotations, `meta.helm.sh/*` labels, or strong Helm phrases (see Usage in investigations). |
 | **Wrong namespace / release not found** | Ensure `meta.helm.sh/release-namespace` or `helm_namespace` / `k8s_namespace` annotations match the release; set `default_namespace` in config when alerts lack namespace. |
+
+## Security
+
+- The integration is **read-only**: it does not `install`, `upgrade`, or `uninstall` releases.
+- `helm get values` output can include **secrets**; treat evidence like any other sensitive kubectl/Helm output.
+- Prefer a dedicated kubeconfig or context with **least privilege** if your policy requires it.
+- Store paths and context names in `.env` or the integration store — not in source control.

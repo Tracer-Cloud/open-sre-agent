@@ -26,7 +26,7 @@ from surfaces.interactive_shell.ui import (
     WARNING,
     resolve_provider_models,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     repl_choose_one,
     repl_section_break,
     repl_tty_interactive,

@@ -1,6 +1,6 @@
 """Test-only capacity wrapper for arbitrary gateway callbacks.
 
-Production chat uses :class:`~gateway.core.runtime.turn_handler.GatewayTurnHandler`
+Production chat uses :class:`~gateway.core.host.turn_handler.GatewayTurnHandler`
 with ``gate=``. This helper stays under ``gateway/tests/`` so it cannot be
 mistaken for a second production turn-handler class (Wave C4 quarantine).
 """
@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 
 from core.agent_harness.session import SessionCore
-from gateway.core.runtime.concurrency import TurnConcurrencyGate
+from gateway.core.host.concurrency import TurnConcurrencyGate
 from gateway.core.transport_api import GatewayAgentCallback, GatewaySink
 
 

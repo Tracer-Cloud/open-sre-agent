@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-import platform.scheduler.tasks as tasks_mod
-from platform.scheduler.loop_constants import LOOP_PROMPT_PARAM
-from platform.scheduler.types import Provider, ScheduledTask, TaskKind
+import platform.scheduling.scheduler.tasks as tasks_mod
+from platform.scheduling.scheduler.loop_constants import LOOP_PROMPT_PARAM
+from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 
 
 class TestMessageBuilders:
@@ -212,11 +212,11 @@ class TestMessageBuilders:
             return "Manual loop report"
 
         monkeypatch.setattr(
-            "platform.scheduler.tasks.invoke_agent_runner",
+            "platform.scheduling.scheduler.tasks.invoke_agent_runner",
             _mock_agent_runner,
         )
         monkeypatch.setattr(
-            "platform.scheduler.tasks.invoke_investigation_runner",
+            "platform.scheduling.scheduler.tasks.invoke_investigation_runner",
             lambda _payload: pytest.fail("manual loops must not run RCA investigation"),
         )
 
@@ -241,7 +241,9 @@ class TestMessageBuilders:
             captured.update(payload)
             return "Top clusters: checkout failures"
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        monkeypatch.setattr(
+            "platform.scheduling.scheduler.tasks.invoke_agent_runner", _mock_agent_runner
+        )
         msg = tasks_mod.build_message(task)
         assert msg == "Top clusters: checkout failures"
         assert captured["query"] == "is:unresolved"
@@ -259,7 +261,7 @@ class TestMessageBuilders:
         def _raise(_payload: dict[str, object]) -> str:
             raise RuntimeError("LLM unavailable")
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _raise)
+        monkeypatch.setattr("platform.scheduling.scheduler.tasks.invoke_agent_runner", _raise)
 
         with pytest.raises(RuntimeError, match="Sentry morning digest failed"):
             tasks_mod.build_message(task)
@@ -281,7 +283,9 @@ class TestMessageBuilders:
             captured.update(payload)
             return "CRITICAL downtime: api"
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        monkeypatch.setattr(
+            "platform.scheduling.scheduler.tasks.invoke_agent_runner", _mock_agent_runner
+        )
         msg = tasks_mod.build_message(task)
         assert msg == "CRITICAL downtime: api"
         assert captured["source"] == "scheduled_sentry_uptime_watch"
@@ -303,7 +307,9 @@ class TestMessageBuilders:
             captured.update(payload)
             return "Metric report: DAU up 12%"
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        monkeypatch.setattr(
+            "platform.scheduling.scheduler.tasks.invoke_agent_runner", _mock_agent_runner
+        )
         msg = tasks_mod.build_message(task)
         assert msg == "Metric report: DAU up 12%"
         assert captured["source"] == "scheduled_posthog_metric_report"
@@ -324,7 +330,9 @@ class TestMessageBuilders:
             captured.update(payload)
             return "report"
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        monkeypatch.setattr(
+            "platform.scheduling.scheduler.tasks.invoke_agent_runner", _mock_agent_runner
+        )
         tasks_mod.build_message(task)
         assert captured["stats_period"] == "7d"
 
@@ -344,7 +352,9 @@ class TestMessageBuilders:
             captured.update(payload)
             return "report"
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _mock_agent_runner)
+        monkeypatch.setattr(
+            "platform.scheduling.scheduler.tasks.invoke_agent_runner", _mock_agent_runner
+        )
         tasks_mod.build_message(task)
         assert "api_key" not in captured
         assert captured["stats_period"] == "7d"
@@ -360,7 +370,7 @@ class TestMessageBuilders:
         def _raise(_payload: dict[str, object]) -> str:
             raise RuntimeError("LLM unavailable")
 
-        monkeypatch.setattr("platform.scheduler.tasks.invoke_agent_runner", _raise)
+        monkeypatch.setattr("platform.scheduling.scheduler.tasks.invoke_agent_runner", _raise)
 
         with pytest.raises(RuntimeError, match="PostHog metric report failed"):
             tasks_mod.build_message(task)

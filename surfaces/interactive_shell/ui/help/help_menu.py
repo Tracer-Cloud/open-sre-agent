@@ -13,13 +13,13 @@ from rich.table import Table
 
 from platform.terminal import theme as ui_theme
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     erase_menu_lines,
     menu_columns,
     read_menu_action,
     write_menu_line,
 )
-from surfaces.interactive_shell.ui.components.rendering import (
+from surfaces.shared.terminal.components.rendering import (
     print_repl_table,
     repl_print,
     repl_table,

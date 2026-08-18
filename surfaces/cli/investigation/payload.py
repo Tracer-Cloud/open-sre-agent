@@ -5,32 +5,10 @@ from __future__ import annotations
 import json
 import re
 import sys
-from pathlib import Path
 from typing import Any
 
-from surfaces.cli.constants import SAMPLE_ALERT_OPTIONS
-
-_DEMO_ALERT_FILENAME = "alert.json"
-
-
-def bundled_demo_alert_path() -> Path | None:
-    """Return the packaged demo alert used by ``opensre investigate -i alert.json``."""
-    candidate = Path(__file__).resolve().parent / "sample_alerts" / _DEMO_ALERT_FILENAME
-    if candidate.is_file():
-        return candidate
-    return None
-
-
-def resolve_alert_path(path_str: str) -> Path:
-    """Resolve an alert path, using the bundled demo when ``alert.json`` is missing locally."""
-    path = Path(path_str)
-    if path.is_file():
-        return path
-    if path.name == _DEMO_ALERT_FILENAME and not path.is_absolute() and path.parent == Path("."):
-        bundled = bundled_demo_alert_path()
-        if bundled is not None:
-            return bundled
-    return path
+from config.constants.investigation import SAMPLE_ALERT_OPTIONS
+from surfaces.shared.demo_alert import DEMO_ALERT_FILENAME, resolve_alert_path
 
 
 def parse_payload_text(raw_text: str, source_label: str) -> dict[str, Any]:
@@ -127,9 +105,9 @@ def load_interactive() -> dict[str, Any]:
 
 def _render_guided_menu() -> list[tuple[int, str]]:
     """Render the bare investigate guided menu and return option mapping."""
-    options: list[tuple[int, str]] = [(1, f"demo:{_DEMO_ALERT_FILENAME}")]
+    options: list[tuple[int, str]] = [(1, f"demo:{DEMO_ALERT_FILENAME}")]
     print("No alert input provided. Choose an investigation input source:", file=sys.stderr)
-    print(f"  1) {_DEMO_ALERT_FILENAME} (bundled demo alert file)", file=sys.stderr)
+    print(f"  1) {DEMO_ALERT_FILENAME} (bundled demo alert file)", file=sys.stderr)
 
     next_index = 2
     for template_name, label in SAMPLE_ALERT_OPTIONS:
@@ -153,7 +131,7 @@ def _render_guided_menu() -> list[tuple[int, str]]:
 def _guided_menu_choices() -> list[tuple[str, str]]:
     """Return guided menu targets and labels for inline picker UIs."""
     choices: list[tuple[str, str]] = [
-        (f"demo:{_DEMO_ALERT_FILENAME}", f"{_DEMO_ALERT_FILENAME} (bundled demo alert file)"),
+        (f"demo:{DEMO_ALERT_FILENAME}", f"{DEMO_ALERT_FILENAME} (bundled demo alert file)"),
     ]
     for template_name, label in SAMPLE_ALERT_OPTIONS:
         choices.append((f"template:{template_name}", label))

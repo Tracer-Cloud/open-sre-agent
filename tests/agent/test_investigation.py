@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core import (
+    TupleEventCallback,
     context_budget_ceiling_for_model,
     enforce_context_budget,
     estimate_message_tokens,
@@ -177,7 +178,10 @@ def test_run_gracefully_handles_model_not_found_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -228,7 +232,10 @@ def test_run_re_raises_unmatched_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -255,7 +262,10 @@ def test_run_gracefully_handles_cli_timeout() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -289,7 +299,10 @@ def test_run_gracefully_handles_api_timeout_runtime_error() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -329,7 +342,10 @@ def test_run_gracefully_handles_tool_unsupported_model(error_msg: str) -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -367,7 +383,10 @@ def test_run_gracefully_handles_single_tool_call_only_model() -> None:
     mock_tracker = MagicMock()
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -946,7 +965,10 @@ def test_invalid_hook_return_false_none_raises_at_call_site() -> None:
     }
     agent = _BadAgent()
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker",
             return_value=mock_tracker,
@@ -1323,6 +1345,7 @@ def _run_agent_with_scripted_llm(
     *,
     invoke: Any,
     tools: list[MagicMock],
+    on_event: TupleEventCallback | None = None,
 ) -> tuple[dict[str, Any], MagicMock]:
     mock_llm = MagicMock()
     mock_llm._model = "gpt-4o"
@@ -1341,7 +1364,10 @@ def _run_agent_with_scripted_llm(
     }
 
     with (
-        patch("tools.investigation.stages.gather_evidence.agent.get_llm", return_value=mock_llm),
+        patch(
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            return_value=mock_llm,
+        ),
         patch(
             "tools.investigation.stages.gather_evidence.agent.get_tracker", return_value=MagicMock()
         ),
@@ -1350,13 +1376,14 @@ def _run_agent_with_scripted_llm(
             return_value=tools,
         ),
     ):
-        result = ConnectedInvestigationAgent().run(state)
+        result = ConnectedInvestigationAgent().run(state, on_event=on_event)
     return result, mock_llm
 
 
 def test_run_suppresses_duplicate_tool_calls() -> None:
     """A tool re-requested with identical arguments is NOT executed again."""
     tool = _fake_tool("list_posthog_tools")
+    tool_events: list[tuple[str, str | None]] = []
     responses = [
         _tool_call_response([ToolCall(id="c1", name="list_posthog_tools", input={})]),
         # identical call — must be suppressed, not re-run
@@ -1364,7 +1391,11 @@ def test_run_suppresses_duplicate_tool_calls() -> None:
         _text_response(_incident_command_diagnosis("Final diagnosis.")),
     ]
 
-    result, mock_llm = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])
+    result, mock_llm = _run_agent_with_scripted_llm(
+        invoke=responses,
+        tools=[tool],
+        on_event=lambda kind, data: tool_events.append((kind, data.get("id"))),
+    )
 
     # Executed exactly once despite being requested twice.
     assert tool.run.call_count == 1
@@ -1383,6 +1414,34 @@ def test_run_suppresses_duplicate_tool_calls() -> None:
     assert duplicate_messages[0]["role"] == "assistant"
     assert "suppressed_duplicate" in duplicate_messages[1]["content"]
     assert mock_llm.invoke.call_count == 3
+    assert [event for event in tool_events if event[0] in {"tool_start", "tool_end"}] == [
+        ("tool_start", "c1"),
+        ("tool_end", "c1"),
+    ]
+
+
+def test_run_preserves_fresh_transcript_when_provider_reuses_call_id() -> None:
+    """Later suppression must not relabel an earlier call that reused the same ID."""
+    tool = _fake_tool("list_posthog_tools")
+    responses = [
+        _tool_call_response([ToolCall(id="c", name="list_posthog_tools", input={})]),
+        _tool_call_response([ToolCall(id="c", name="list_posthog_tools", input={})]),
+        _text_response(_incident_command_diagnosis("Final diagnosis.")),
+    ]
+
+    result = _run_agent_with_scripted_llm(invoke=responses, tools=[tool])[0]
+
+    assert result["agent_messages"][1].get("_opensre_duplicate_result") is None
+    assert result["agent_messages"][2].get("_opensre_duplicate_result") is None
+    first_result = json.loads(json.loads(result["agent_messages"][2]["content"])[0])
+    assert first_result["ok"] is True
+    duplicate_messages = [
+        message
+        for message in result["agent_messages"]
+        if message.get("_opensre_duplicate_result") is True
+    ]
+    assert len(duplicate_messages) == 2
+    assert result["evidence_entries"][0]["loop_iteration"] == 0
 
 
 def test_run_does_not_suppress_calls_with_different_args() -> None:
@@ -1427,6 +1486,32 @@ def test_run_forces_conclusion_when_stuck_repeating() -> None:
     assert result["agent_messages"][-1]["content"] == _incident_command_diagnosis(
         "Final diagnosis: insufficient evidence."
     )
+
+
+def test_run_forces_conclusion_after_repeated_validation_error() -> None:
+    """A deterministic validation failure is cached so repeats count as stagnation."""
+    tool = _fake_tool("query_logs")
+    tool.validate_public_input.return_value = "invalid query"
+    call_number = 0
+
+    def invoke(messages: Any, system: Any, tools: Any) -> MagicMock:  # noqa: ARG001
+        nonlocal call_number
+        if not tools:
+            return _text_response(
+                _incident_command_diagnosis("Final diagnosis: query was invalid.")
+            )
+        call_number += 1
+        return _tool_call_response(
+            [ToolCall(id=f"c{call_number}", name="query_logs", input={"q": "bad"})]
+        )
+
+    result, mock_llm = _run_agent_with_scripted_llm(invoke=invoke, tools=[tool])
+
+    assert tool.run.call_count == 0
+    assert mock_llm.invoke.call_count < 6
+    assert mock_llm.invoke.call_args_list[-1].kwargs["tools"] == []
+    assert result["evidence_entries"][0]["data"] == {"error": "invalid query"}
+    assert result["evidence_entries"][0]["loop_iteration"] == 0
 
 
 def test_truncate_content_distributes_across_multiple_blocks() -> None:

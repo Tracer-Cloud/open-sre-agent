@@ -7,8 +7,8 @@ text that appears inside an original value.
 
 from __future__ import annotations
 
-from platform.masking.context import MaskingContext
-from platform.masking.policy import ALL_KINDS, MaskingPolicy
+from platform.safety.masking.context import MaskingContext
+from platform.safety.masking.policy import ALL_KINDS, MaskingPolicy
 
 
 def _ctx(placeholder_map: dict[str, str] | None = None) -> MaskingContext:

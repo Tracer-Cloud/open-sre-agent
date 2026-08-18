@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from platform.analytics.provider import Properties
-    from platform.common.errors import OpenSREError
+    from platform.errors import OpenSREError
 
 
 def capture_first_run_if_needed() -> None:
@@ -76,7 +76,7 @@ def report_exception(
     extra: Mapping[str, Any] | None = None,
     expected: bool = False,
 ) -> bool:
-    from surfaces.interactive_shell.utils.error_handling.exception_reporting import (
+    from surfaces.shared.error_handling.exception_reporting import (
         report_exception as _report_exception,
     )
 
@@ -84,7 +84,7 @@ def report_exception(
 
 
 def should_report_exception(exc: click.ClickException, *, expected: bool = False) -> bool:
-    from surfaces.interactive_shell.utils.error_handling.exception_reporting import (
+    from surfaces.shared.error_handling.exception_reporting import (
         should_report_exception as _should_report_exception,
     )
 
@@ -110,13 +110,13 @@ def capture_exception(
 
 
 def render_landing(group: click.Group) -> None:
-    from surfaces.interactive_shell.ui.layout import render_landing as _render_landing
+    from surfaces.cli.layout import render_landing as _render_landing
 
     _render_landing(group)
 
 
 def load_structured_error_type() -> type[OpenSREError]:
-    from platform.common.errors import OpenSREError
+    from platform.errors import OpenSREError
 
     return OpenSREError
 

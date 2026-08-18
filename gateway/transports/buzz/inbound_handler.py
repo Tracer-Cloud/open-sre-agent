@@ -24,7 +24,7 @@ from gateway.transports.buzz.principal import PrincipalResolutionError, resolve_
 from gateway.transports.buzz.session_rotation import conversation_key, resolve_or_rotate_session
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
-from platform.analytics.usage_context import SURFACE_BUZZ, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +148,7 @@ async def handle_polled_inbound_buzz_message(
                 with (
                     bound_storage_scope(scope),
                     bound_usage_context(
-                        surface=SURFACE_BUZZ,
+                        surface=UsageSurface.BUZZ,
                         session_id=session.session_id,
                         user_id=event.pubkey or None,
                     ),

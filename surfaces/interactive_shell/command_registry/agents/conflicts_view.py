@@ -8,7 +8,7 @@ from rich.markup import escape
 from rich.table import Table
 
 import platform.terminal.theme as ui_theme
-from surfaces.interactive_shell.ui.components.rendering import repl_table
+from surfaces.shared.terminal.components.rendering import repl_table
 from tools.system.fleet_monitoring.conflicts import FileWriteConflict
 
 _EMPTY_STATE = "no conflicts detected"

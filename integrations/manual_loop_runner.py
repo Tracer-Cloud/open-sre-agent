@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from core.agent_harness.harness import AgentSession
-from platform.scheduler.agent_runner import AgentPayload
+from core.agent_harness import AgentSession
+from core.agent_harness.runtime import GatherPhase
+from platform.scheduling.scheduler.agent_runner import AgentPayload
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def run_manual_prompt_loop(payload: AgentPayload) -> str:
     result = AgentSession.run_headless_turn(
         message,
         logger=logger,
-        gather_enabled=True,
+        gather=GatherPhase(),
         is_tty=False,
     )
     report = result.primary_response_text

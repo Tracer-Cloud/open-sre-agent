@@ -65,7 +65,7 @@ def run(group: Any, argv: list[str]) -> None:
         install_questionary_escape_cancel,
     )
     from surfaces.cli.signals import install_sigint_handler
-    from surfaces.interactive_shell.ui.output.boundary import install_product_adapters
+    from surfaces.shared.terminal.output.boundary import install_product_adapters
 
     command = _first_command(group, argv)
     configure_process(CLI_PROFILE)

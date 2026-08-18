@@ -10,7 +10,6 @@ from rich.markup import escape
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import ERROR
-from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
 from surfaces.interactive_shell.ui.help.help_menu import (
     HelpSection,
     choose_help_command,
@@ -18,6 +17,7 @@ from surfaces.interactive_shell.ui.help.help_menu import (
     render_help_index,
     render_section_detail,
 )
+from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 
 QUICK_ACCESS_COMMANDS: list[str] = [
     "/investigate",

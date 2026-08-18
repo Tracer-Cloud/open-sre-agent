@@ -13,7 +13,7 @@ def test_start_transports_skips_not_configured_and_failed(
     monkeypatch,
 ) -> None:
     """Not configured vs failed are distinct component statuses; others still start."""
-    from gateway.core.runtime.errors import (
+    from gateway.core.lifecycle.errors import (
         GatewayConfigurationError,
         GatewayTransportFailedError,
     )

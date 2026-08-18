@@ -187,7 +187,7 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+        from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
         self.turn_runtime = AgentTurnResources(
             session=self.session,
@@ -196,9 +196,9 @@ class InteractiveShellController:
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
             console=self.service_console,
-            action_runner=ShellActionRunner(
-                session=self.session,
-                console=self.service_console,
+            agent=build_shell_agent(
+                self.session,
+                self.service_console,
                 request_exit=self.prompt.request_exit,
             ),
         )

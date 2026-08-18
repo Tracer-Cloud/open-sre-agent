@@ -64,6 +64,35 @@ def test_missing_token_raises_typed_error(monkeypatch: pytest.MonkeyPatch) -> No
     assert "GitHub token is required" in str(exc.value)
 
 
+def test_public_read_can_omit_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_headers: dict[str, str] = {}
+
+    def fake_urlopen(req: request.Request, timeout: int = 0) -> _Response:  # noqa: ARG001
+        seen_headers.update(req.headers)
+        return _Response({"stargazers_count": 42})
+
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setattr("integrations.github.client.request.urlopen", fake_urlopen)
+    client = GitHubRestClient(github_token=None, allow_unauthenticated_read=True)
+
+    assert client.request("GET", "/repos/Tracer-Cloud/opensre") == {"stargazers_count": 42}
+    assert "Authorization" not in seen_headers
+
+
+def test_public_read_mode_still_rejects_unauthenticated_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_MCP_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    client = GitHubRestClient(github_token=None, allow_unauthenticated_read=True)
+
+    with pytest.raises(GitHubApiError, match="GitHub token is required"):
+        client.request("POST", "/repos/Tracer-Cloud/opensre/issues", body={"title": "x"})
+
+
 def test_paginate_follows_link_header(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 

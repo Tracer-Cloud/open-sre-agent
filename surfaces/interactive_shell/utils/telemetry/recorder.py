@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from config.version import get_opensre_version
-from core.agent_harness.accounting.token_accounting import LlmRunInfo
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.llm_invoke_errors import LLM_PROVIDER_FAILURE_KINDS, classify_provider_error_kind
 from platform.analytics.provider import JsonValue
 from surfaces.interactive_shell.prompt_history.policy import redact_text
@@ -247,7 +247,7 @@ class PromptRecorder:
 
         # Also write enriched turn to the session file so /resume can restore context.
         with contextlib.suppress(Exception):
-            from core.agent_harness.session import default_session_store
+            from core.agent_harness.spi.defaults import default_session_store
 
             session_kind = _TURN_TO_SESSION_KIND.get(self._turn_kind, self._turn_kind)
             default_session_store().append_turn_detail(

@@ -29,11 +29,11 @@ from platform.analytics.source import (
     TriggerMode,
     build_source_properties,
 )
-from platform.analytics.usage_context import SURFACE_CLI
+from platform.analytics.usage_context import UsageSurface
 from platform.observability.errors.sentry import capture_exception
 
 if TYPE_CHECKING:
-    from core.agent_harness.session import SessionCore
+    from core.agent_harness import SessionCore
 
 EVAL_AND_TERMINAL_KPI_QUERIES: Final[dict[str, str]] = {
     "terminal_action_execution_success_rate": """
@@ -393,7 +393,7 @@ def capture_cli_invoked(properties: Properties | None = None) -> None:
         from platform.analytics.usage_context import ensure_process_session_id
 
         analytics = get_analytics()
-        analytics.set_persistent_property("surface", SURFACE_CLI)
+        analytics.set_persistent_property("surface", UsageSurface.CLI)
         ensure_process_session_id()
         analytics.capture(Event.CLI_INVOKED, properties)
     except Exception as exc:

@@ -542,7 +542,7 @@ def test_sleep_until_or_cancel_raises_on_escape(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(flg.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(flg.sys.stdin, "fileno", lambda: 0)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.key_reader.read_key_unix",
+        "surfaces.shared.terminal.components.key_reader.read_key_unix",
         lambda **_kwargs: "cancel",
     )
     monkeypatch.setattr("termios.tcgetattr", lambda _fd: [0] * 7)

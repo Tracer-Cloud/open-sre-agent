@@ -19,9 +19,10 @@ from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_terminal_turn_outcome,
 )
 from tools.interactive_shell.shared.execution_policy import ExecutionPolicyResult
+from tools.interactive_shell.shared.host_ports import ExecutionGate
 
 
-class SlashPorts(Protocol):
+class SlashPorts(ExecutionGate, Protocol):
     def command_exists(self, name: str) -> bool:
         raise NotImplementedError
 
@@ -40,19 +41,6 @@ class SlashPorts(Protocol):
         *,
         ok: bool,
     ) -> str:
-        raise NotImplementedError
-
-    def execution_allowed(
-        self,
-        *,
-        policy: ExecutionPolicyResult,
-        session: Session,
-        console: Console,
-        action_summary: str,
-        confirm_fn: Callable[[str], str] | None,
-        is_tty: bool | None,
-        action_already_listed: bool,
-    ) -> bool:
         raise NotImplementedError
 
     def dispatch(

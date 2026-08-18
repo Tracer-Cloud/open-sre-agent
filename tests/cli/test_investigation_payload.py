@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from surfaces.cli.constants import SAMPLE_ALERT_OPTIONS
+from config.constants.investigation import SAMPLE_ALERT_OPTIONS
 from surfaces.cli.investigation.payload import load_payload
 
 

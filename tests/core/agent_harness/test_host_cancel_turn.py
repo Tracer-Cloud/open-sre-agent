@@ -126,7 +126,7 @@ def test_run_turn_cancel_during_gather_skips_answer() -> None:
 
 
 def test_live_sink_stream_stops_when_turn_cancel_set() -> None:
-    from gateway.core.runtime.live_sink import LiveOutputSink
+    from gateway.core.host.live_sink import LiveOutputSink
 
     class _Inner:
         def __init__(self) -> None:

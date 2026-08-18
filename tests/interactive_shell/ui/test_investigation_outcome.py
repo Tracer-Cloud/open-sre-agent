@@ -9,8 +9,8 @@ import pytest
 from rich.console import Console
 
 from core.llm.shared.llm_retry import LLMCreditExhaustedError
-from platform.common.errors import OpenSREError
-from platform.common.task_types import TaskRecord
+from platform.errors import OpenSREError
+from platform.scheduling.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from surfaces.interactive_shell.ui.investigation_outcome import (
@@ -166,7 +166,7 @@ def test_run_foreground_investigation_skips_feedback_when_pt_app_running(
     )
     feedback = MagicMock()
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.feedback.prompt_investigation_feedback",
+        "surfaces.shared.terminal.feedback.prompt_investigation_feedback",
         feedback,
     )
 
@@ -198,15 +198,15 @@ def test_run_foreground_investigation_prompts_feedback_when_pt_app_idle(
     )
     feedback = MagicMock()
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.feedback.prompt_investigation_feedback",
+        "surfaces.shared.terminal.feedback.prompt_investigation_feedback",
         feedback,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        "surfaces.shared.terminal.components.choice_menu.repl_tty_interactive",
         lambda: True,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.key_reader.restore_stdin_terminal",
+        "surfaces.shared.terminal.components.key_reader.restore_stdin_terminal",
         lambda: None,
     )
 
@@ -240,11 +240,11 @@ def test_run_foreground_investigation_skips_feedback_on_headless_session(
     )
     feedback = MagicMock()
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.feedback.prompt_investigation_feedback",
+        "surfaces.shared.terminal.feedback.prompt_investigation_feedback",
         feedback,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.repl_tty_interactive",
+        "surfaces.shared.terminal.components.choice_menu.repl_tty_interactive",
         lambda: True,
     )
 

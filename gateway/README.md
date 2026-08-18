@@ -1,7 +1,8 @@
 # OpenSRE Messaging Gateway
 
 Standalone inbound messaging gateway for chat platforms: Telegram DM text chat
-via long polling, Slack mentions/DMs via Socket Mode, and Discord via Gateway WebSocket.
+via long polling, Slack mentions/DMs via **Socket Mode** (default) or **Events API
+HTTP**, and Discord via Gateway WebSocket.
 
 The gateway is a separate surface. Transports receive an injected turn handler;
 agent startup and integration loading run through the shared harness, not
@@ -13,34 +14,34 @@ transport-specific code.
 |---------------|---------------|-------------------|
 | **Production entry** | CLI composition root (outside `gateway/`) | `opensre gateway start` / `--foreground` (wires slash ports) |
 | **Package main** | `gateway/__main__.py` → `main()` | Fails closed — no slash-port glue |
-| **Composition root (impl)** | `gateway/core/runtime/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
-| **Background daemon helpers** | `gateway/core/runtime/daemon.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`) |
+| **Process composition root** | `gateway/core/lifecycle/controller.py` → `GatewayController` | Injected `slash_ports_factory` from CLI; bare `controller.main` fails closed |
+| **Daemon (pidfile + spawn)** | `gateway/core/process/supervision.py` | Used by CLI `gateway start/stop/status` (pidfile + `components.json`); caller passes argv |
 | **Web surface (web-only task)** | `gateway/web/webapp.py` → `app` | `uvicorn gateway.web.webapp:app` (`MODE=web` in Docker) |
 | **Surface startup** | `gateway/startup.py` → `start_gateway` / `StartedGateway` | Called by `GatewayController.start_surfaces` |
 | **Chat transport registry** | `gateway/transports/startup.py` → `TRANSPORTS` / `start_transports` | Used by `start_gateway` |
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
 | **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
-| **Per-message turn** | `gateway/core/runtime/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
+| **Per-message turn** | `gateway/core/host/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
 opensre gateway start
         │
         ▼
-gateway.core.runtime.daemon.start_gateway_daemon
+gateway.core.process.supervision.start_gateway_daemon
         │  spawns surface-owned argv (see surfaces.shared.gateway_entrypoint):
-        │    venv:   python -m surfaces.cli.gateway_entry
+        │    venv:   python -m surfaces.gateway_entry
         │    frozen: opensre gateway start --foreground
         ▼
-surfaces/cli/gateway_entry.py  (or Click foreground → same composition root)
+surfaces/gateway_entry.py  (or Click foreground → same composition root)
         │  wires headless slash ports
         ▼
-gateway.core.runtime.controller.GatewayController.start_gateway
+gateway.core.lifecycle.controller.GatewayController.start_gateway
         ├── start_surfaces()  →  gateway.startup.start_gateway
         │     ├── web/web_server  →  web/webapp:app
         │     └── transports/startup.start_transports
         │           (telegram / slack / discord startup)
-        └── start_scheduler()   # peer of the surfaces, not a transport
+        └── start_scheduler()   # hosts platform.scheduling.scheduler; not a gateway surface
 ```
 
 Layout: `core/` (runtime, storage, …), `startup.py` (surface composer),
@@ -56,24 +57,31 @@ Three things that are easy to mix up:
   a terminal), the CLI one-shot (`surfaces/cli`, one command → one answer), and the
   **gateway** (`gateway/`, you chat with the agent from a chat app).
 - **Gateway** — one specific surface: the always-on process that connects a chat app
-  to the agent. It speaks **Telegram** (long poll), **Slack** (Socket Mode), and **Discord** (Gateway WebSocket).
+  to the agent. It speaks **Telegram** (long poll), **Slack** (Socket Mode *or*
+  Events API HTTP), and **Discord** (Gateway WebSocket). Slack's two inbound modes
+  share the same turn stack; only how the payload arrives differs
+  (`gateway/transports/slack/transport/`).
 - **Integrations + tools** — the *outbound* / teammate side: the agent reading and
-  posting in Slack. Shared client: `integrations/slack/web_client.py`. Tools:
-  `slack_send_message` (webhook), `slack_reply_message` (bot token, any channel),
-  `slack_read_messages` (history / thread), `slack_list_team_members` (roster).
-  See `docs/messaging/slack.mdx` for OAuth scopes.
+  posting on a platform. Slack's shared client is `integrations/slack/web_client.py`.
+  Common Slack tools: `slack_send_message` (webhook), `slack_reply_message` (bot
+  token, any channel), `slack_read_messages` (history / thread),
+  `slack_list_team_members` (roster), plus search / join / react helpers under
+  `integrations/slack/tools/`. See `docs/messaging/slack.mdx` for OAuth scopes.
+  Telegram has `telegram_send_message`; Discord is gateway chat + delivery today
+  (no investigation tool pack yet — see `docs/messaging/discord.mdx`).
 
-Both platforms are symmetric:
+Inbound and outbound are independent per platform:
 
 | | Inbound (person → agent) | Outbound / teammate tools |
 |---|---|---|
-| **Telegram** | Yes — `gateway/transports/telegram/` | Yes — integration + tool |
-| **Slack** | Yes — `gateway/transports/slack/` (Socket Mode; each thread is a conversation) | Yes — webhook + bot-token tools |
-| **Discord** | Yes — `gateway/transports/discord/` (DMs, mentions, threads; `/investigate`) | Yes — bot-token delivery + slash registration |
+| **Telegram** | Yes — `gateway/transports/telegram/` | Yes — integration + `telegram_send_message` |
+| **Slack** | Yes — `gateway/transports/slack/` (Socket Mode by default; Events API HTTP optional; each thread is a conversation) | Yes — webhook + bot-token tools |
+| **Discord** | Yes — `gateway/transports/discord/` (DMs, mentions, threads; `/investigate`) | Delivery + slash registration (no investigation tool pack yet) |
 
 **One core for every surface.** Shell, CLI, and the gateway transports all hand the
-message to the same place: a `HeadlessAgent` (`agent.dispatch(message)`). They differ
-only in *how they receive input and send output* — never in how the agent thinks.
+message to the same place: a session-scoped `HeadlessAgent`
+(`agent.handle(...)` via `GatewayTurnHandler`). They differ only in *how they
+receive input and send output* — never in how the agent thinks.
 
 ## Quick start
 
@@ -84,7 +92,7 @@ uv run opensre messaging allow -p telegram -u 123456789
 # Allow your Slack member id (profile → Copy member ID; see below)
 uv run opensre messaging allow -p slack -u U0123ABCD
 
-# Start the gateway daemon (web app + Telegram chat + Slack chat + task scheduler)
+# Start the gateway daemon (web + chat). The process also hosts platform.scheduling.scheduler.
 uv run opensre gateway start
 ```
 
@@ -101,8 +109,9 @@ integration store as fallback; allowed users from the integration store
 (written by `opensre messaging allow`) first with the `*_ALLOWED_USERS` env
 var as fallback.
 
-DM your bot from Telegram, or mention/DM it in Slack (see
-`docs/messaging/slack.mdx` for the Slack app setup).
+DM your bot from Telegram, mention/DM it in Slack, or chat in Discord (see
+`docs/messaging/` for app setup). Slack Socket Mode needs no public URL; Events
+API HTTP needs a reachable URL and `SLACK_SIGNING_SECRET`.
 
 ## Environment variables
 
@@ -113,6 +122,10 @@ DM your bot from Telegram, or mention/DM it in Slack (see
 | `TELEGRAM_GATEWAY_MAX_CONCURRENT` | Parallel turns across chats (default 4) |
 | `SLACK_BOT_TOKEN` | Slack bot token (`xoxb-…`) |
 | `SLACK_APP_TOKEN` | Slack app-level token for Socket Mode (`xapp-…`) |
+| `SLACK_SIGNING_SECRET` | Slack signing secret for Events API HTTP request verification |
+| `SLACK_GATEWAY_INBOUND_TRANSPORT` | `socket_mode` (default) or `events_api_http` |
+| `SLACK_GATEWAY_HTTP_PORT` | Port for the Events API HTTP listener (default `3000`) |
+| `SLACK_GATEWAY_ALLOW_LOCAL_DEDUP` | `1` allows process-local event dedup for Events API (single replica only) |
 | `SLACK_ALLOWED_USERS` | Comma-separated Slack user ids (required unless open workspace) |
 | `SLACK_ALLOW_OPEN_WORKSPACE` | `1` allows any workspace member (dogfood only) |
 | `DISCORD_BOT_TOKEN` | Discord bot token |
@@ -129,20 +142,20 @@ platform you do **not** touch the agent, prompts, or tools. You add one package
 with the same five pieces `gateway/transports/telegram/` and `gateway/transports/slack/` both have:
 
 1. **Settings** (`settings.py`): env-backed config, raising
-   `GatewayConfigurationError` (from `gateway/core/runtime/errors.py`) when missing.
+   `GatewayConfigurationError` (from `gateway/core/lifecycle/errors.py`) when missing.
 2. **A listener** (`startup.py` + the transport worker): receives inbound
    messages and calls the shared handler with `(text, session, sink, logger)`.
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
 4. **An output sink** (implement `GatewaySink` from
-   `gateway/core/runtime/sink_protocol.py`): streams status and delivers the answer.
+   `gateway/core/transport_api/__init__.py`): streams status and delivers the answer.
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 
 Then wire it in the composition root (`GatewayController` in
-`gateway/core/runtime/controller.py`) beside the existing transports. Reuse the handler
+`gateway/core/lifecycle/controller.py`) beside the existing transports. Reuse the handler
 from `GatewayTurnHandler(...)` as-is.
 
-**What you never change:** `GatewayTurnHandler`, `Agent`, prompts, tools.
-Keeping the handler transport-agnostic is exactly what makes a new platform a small,
-self-contained add.
+**What you never change:** `GatewayTurnHandler`, harness prompts/tools, or the
+session agent pool. Keeping the handler transport-agnostic is exactly what makes
+a new platform a small, self-contained add.

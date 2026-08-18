@@ -3,7 +3,7 @@
 These are the seams that keep ``agent/`` decoupled from any concrete surface.
 The interactive shell implements them as adapters over its ``Session``,
 Rich console, tool registry, and grounding caches; the headless adapters in
-:mod:`core.agent_harness.turns.headless_dispatch` implement minimal in-memory versions for API / test runs.
+:mod:`core.agent_harness.turns.headless_agent` implement minimal in-memory versions for API / test runs.
 
 Nothing here imports ``interactive_shell``.
 """
@@ -17,12 +17,17 @@ from typing import Any, Protocol, runtime_checkable
 from core.agent_harness.turns.gather_observation import GatheredEvidence
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 from core.domain.types.tools import ToolSurface
+from core.execution import ToolExecutionHooks
 
 # A tool-loop event callback: ``(kind, data)`` where kind is e.g. "tool_start".
 ToolEventObserver = Callable[[str, dict[str, Any]], None]
 
 # Confirmation prompt: given a summary, return the user's response string.
 ConfirmFn = Callable[[str], str]
+
+# Builds the LLM client the action runner drives; hosts and tests inject one
+# to replace the configured provider.
+LlmFactory = Callable[[], Any]
 
 
 @runtime_checkable
@@ -302,6 +307,27 @@ class TurnAccounting(Protocol):
         raise NotImplementedError
 
 
+@dataclass(frozen=True, slots=True)
+class TurnBinding:
+    """Everything a host binds on an agent for one turn, stated whole.
+
+    A binding replaces the previous turn's values rather than layering on
+    them, so a host cannot inherit another conversation's hooks or callback
+    by omission. ``session`` and ``output`` are identity ports: ``None`` keeps
+    the agent's current one. Every other field is the turn's value — ``None``
+    means "none this turn" (no approval hooks, no confirmation callback, tty
+    unknown), not "leave alone".
+    """
+
+    session: SessionState | None = None
+    output: OutputSink | None = None
+    accounting: TurnAccounting | None = None
+    tool_hooks: ToolExecutionHooks | None = None
+    console: Any | None = None
+    confirm_fn: ConfirmFn | None = None
+    is_tty: bool | None = None
+
+
 __all__ = [
     "AnswerRequest",
     "StreamAnswerFn",
@@ -311,17 +337,24 @@ __all__ = [
     "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
+    "InvestigationPortsFactory",
+    "LlmFactory",
+    "LlmProviderPortsFactory",
+    "OutputBindable",
     "OutputSink",
     "PromptContextProvider",
     "ReasoningClientProvider",
     "RunRecordFactory",
     "SessionBindable",
     "SessionState",
+    "SlashPortsFactory",
     "SubprocessPresenterFactory",
+    "TaskCancelPortsFactory",
     "ToolEventObserver",
     "ToolProvider",
     "ToolRegistry",
     "TurnAccounting",
+    "TurnBinding",
 ]
 
 
@@ -332,3 +365,15 @@ SubprocessPresenterFactory = Callable[
     [Any, Any, "ConfirmFn | None", bool | None, bool],
     Any,
 ]
+
+
+# Host capabilities an action tool calls back into: named commands, LLM-provider
+# switching, task cancellation and investigation launch. Their contracts live in
+# ``tools`` beside the tools that call them (see
+# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), so the seams stay
+# untyped here — ``core`` only carries a capability from the host to the tool,
+# and typing them here would mean ``core`` importing ``tools``.
+InvestigationPortsFactory = Callable[[], Any]
+LlmProviderPortsFactory = Callable[[], Any]
+TaskCancelPortsFactory = Callable[[], Any]
+SlashPortsFactory = Callable[[], Any]

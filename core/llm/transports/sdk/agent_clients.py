@@ -428,8 +428,8 @@ class BedrockConverseAgentClient:
             parse_converse_output,
             to_converse_messages,
         )
-        from platform.guardrails.apply import apply_guardrails_to_converse_payload
-        from platform.guardrails.engine import GuardrailBlockedError
+        from platform.safety.guardrails.apply import apply_guardrails_to_converse_payload
+        from platform.safety.guardrails.engine import GuardrailBlockedError
 
         converse_messages = to_converse_messages(strip_internal_message_markers(messages))
         converse_messages, system = apply_guardrails_to_converse_payload(
@@ -538,6 +538,7 @@ def _openai_max_token_kwarg(model: str) -> str:
 _PROVIDER_LABEL_OVERRIDES = {
     "OPENAI_API_KEY": "OpenAI",
     "OPENROUTER_API_KEY": "OpenRouter",
+    "TRUSTEDROUTER_API_KEY": "TrustedRouter",
     "MINIMAX_API_KEY": "MiniMax",
 }
 

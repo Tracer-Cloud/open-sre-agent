@@ -65,11 +65,11 @@ class StreamingConsole(Console):
             self._output.print(*args, **kwargs)
             return
         if not self._spinner.streaming and not isinstance(sys.stdout, FileProxy):
-            from surfaces.interactive_shell.ui.components.choice_menu import (
+            from surfaces.shared.terminal.components.choice_menu import (
                 ensure_tty_column_zero,
                 prepare_repl_output_line,
             )
-            from surfaces.interactive_shell.ui.components.rendering import (
+            from surfaces.shared.terminal.components.rendering import (
                 _repl_output_already_prepared,
                 _repl_table_width,
             )

@@ -14,7 +14,7 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.time_format import (
+from surfaces.shared.terminal.components.time_format import (
     format_repl_duration,
     format_repl_timestamp,
 )
@@ -23,7 +23,7 @@ from surfaces.interactive_shell.ui.components.time_format import (
 def _cmd_sessions(session: Session, console: Console, _args: list[str]) -> bool:
     from datetime import UTC, datetime
 
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     entries = default_session_repo().load_recent(20)
     if not entries:

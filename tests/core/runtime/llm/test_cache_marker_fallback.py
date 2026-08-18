@@ -147,7 +147,7 @@ class TestBedrockMessagesClientFallback:
     @pytest.fixture(autouse=True)
     def _inactive_guardrails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine()
+            "platform.safety.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine()
         )
 
     def test_cache_rejection_retries_without_markers(self) -> None:
@@ -203,7 +203,7 @@ class TestAnthropicMessagesClientFallback:
     @pytest.fixture(autouse=True)
     def _inactive_guardrails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "platform.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine()
+            "platform.safety.guardrails.engine.get_guardrail_engine", _InactiveGuardrailEngine()
         )
 
     def _client(self, messages: _FlakyMessages) -> sdk_llm.LLMClient:

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import surfaces.interactive_shell.command_registry.model.switching as switching
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
 
 class _Console:
@@ -39,7 +39,7 @@ def _credential_status_sequence(monkeypatch: Any, *, configured_after: bool) -> 
 
 
 def test_blank_key_cancels_without_saving(monkeypatch: Any) -> None:
-    import surfaces.cli.llm_auth.service as service
+    import surfaces.shared.llm_setup.auth_service as service
 
     _credential_status_sequence(monkeypatch, configured_after=False)
     saves: list[Any] = []
@@ -52,9 +52,9 @@ def test_blank_key_cancels_without_saving(monkeypatch: Any) -> None:
 
 
 def test_pasted_key_is_saved_and_switch_proceeds(monkeypatch: Any) -> None:
-    import surfaces.cli.llm_auth.providers as providers
-    import surfaces.cli.llm_auth.service as service
-    import surfaces.cli.wizard.env_sync as env_sync
+    import surfaces.shared.llm_setup.auth_profiles as providers
+    import surfaces.shared.llm_setup.auth_service as service
+    import surfaces.shared.llm_setup.env_sync as env_sync
 
     _credential_status_sequence(monkeypatch, configured_after=True)
     monkeypatch.setattr(providers, "resolve_auth_profile", lambda _p: object())
@@ -111,7 +111,7 @@ def test_custom_provider_missing_model_is_rejected(monkeypatch: Any) -> None:
 def test_custom_provider_no_model_preserves_configured_model(monkeypatch: Any) -> None:
     # Switching a custom provider with no explicit model keeps the configured one
     # (restore-default / provider-only path) instead of blanking it.
-    import surfaces.cli.wizard.env_sync as env_sync
+    import surfaces.shared.llm_setup.env_sync as env_sync
 
     _configured(monkeypatch)
     monkeypatch.setenv("CUSTOM_OPENAI_BASE_URL", "http://localhost:4000/v1")

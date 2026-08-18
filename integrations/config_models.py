@@ -22,7 +22,7 @@ from integrations._validators import (
     normalize_url,
     normalize_with_default,
 )
-from platform.common.url_validation import validate_https_or_loopback_http_url
+from platform.text.url_validation import validate_https_or_loopback_http_url
 
 _LOCAL_GRAFANA_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 DEFAULT_DATADOG_SITE = "datadoghq.com"
@@ -944,6 +944,10 @@ class SlackBotConfig(StrictConfigModel):
         description="Slack signing secret for webhook HMAC verification. MUST be set for Events API HTTP.",
     )
     app_id: str = ""
+    default_chat_id: str = Field(
+        default="",
+        description="Default channel ID (C…) for scheduled outbound delivery.",
+    )
     identity_policy: dict[str, object] | None = Field(
         default=None,
         description="Messaging identity policy for inbound security (MessagingIdentityPolicy shape)",

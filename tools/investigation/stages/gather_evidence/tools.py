@@ -166,10 +166,10 @@ def build_connected_tool_context(
     from pydantic import BaseModel
 
     # ``family_key`` is a platform-level seam (populated by the ``integrations``
-    # layer at import time). Importing it from ``platform.common`` keeps this
+    # layer at import time). Importing it from ``platform.service_families`` keeps this
     # module free of ``tools -> integrations`` edges (T-4 layering audit,
     # issue #3352, item 27).
-    from platform.common.service_families import family_key
+    from platform.service_families.families import family_key
 
     connected_integrations = sorted(
         key

@@ -28,9 +28,9 @@ from core.domain.work_items import (
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
 from core.types import AgentToolContext
-from platform.scheduler.store import add_task as add_scheduled_task
-from platform.scheduler.store import list_tasks, update_task
-from platform.scheduler.types import Provider, ScheduledTask, TaskKind
+from platform.scheduling.scheduler.store import add_task as add_scheduled_task
+from platform.scheduling.scheduler.store import list_tasks, update_task
+from platform.scheduling.scheduler.types import Provider, ScheduledTask, TaskKind
 from tools.system.work_items.results import (
     added_result,
     complete_result,
@@ -60,7 +60,7 @@ def _gateway_delivery_context(context: AgentToolContext | None) -> tuple[str, st
     if context is None:
         return "", ""
     try:
-        from core.agent_harness.tools.tool_context import action_context_from_agent_context
+        from core.agent_harness.tools import action_context_from_agent_context
 
         action_ctx = action_context_from_agent_context(context)
     except RuntimeError:

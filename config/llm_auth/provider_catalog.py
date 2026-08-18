@@ -21,6 +21,7 @@ from config.constants.llm import (
     NVIDIA_API_KEY_ENV,
     OPENAI_API_KEY_ENV,
     OPENROUTER_API_KEY_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
 )
 
 
@@ -28,10 +29,10 @@ class CredentialKind(StrEnum):
     """How a provider proves its identity to the LLM backend.
 
     Kept distinct from the wizard's onboarding vocabulary
-    (:class:`surfaces.cli.wizard.config.WizardCredentialKind`): the two share
+    (:class:`surfaces.shared.llm_setup.catalog.WizardCredentialKind`): the two share
     ``api_key``/``cli`` but the wizard's ``host``/``none`` map to this enum's
     ``local``/``ambient``. Do not merge them — see the ``WIZARD_TO_CATALOG_KIND``
-    translation in ``surfaces/cli/wizard/config.py``.
+    translation in ``surfaces/shared/llm_setup/catalog.py``.
     """
 
     #: A user-supplied API key stored by OpenSRE (keyring/.env).
@@ -99,6 +100,17 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
         classification_model_env="OPENROUTER_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
+        value="trustedrouter",
+        label="TrustedRouter",
+        credential_kind=CredentialKind.API_KEY,
+        api_key_env=TRUSTEDROUTER_API_KEY_ENV,
+        model_env="TRUSTEDROUTER_REASONING_MODEL",
+        legacy_model_env="TRUSTEDROUTER_MODEL",
+        toolcall_model_env="TRUSTEDROUTER_TOOLCALL_MODEL",
+        classification_model_env="TRUSTEDROUTER_CLASSIFICATION_MODEL",
         allow_custom_models=True,
     ),
     ProviderSpec(

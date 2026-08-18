@@ -10,7 +10,7 @@ def reraise_cli_runtime_error(exc: BaseException) -> NoReturn:
     from core.llm.shared.llm_retry import LLMCreditExhaustedError
     from core.llm_invoke_errors import classify_llm_invoke_failure
     from integrations.llm_cli.errors import CLIAuthenticationRequired
-    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.shared.error_handling.errors import OpenSREError
 
     if isinstance(exc, LLMCreditExhaustedError):
         raise OpenSREError(

@@ -10,7 +10,7 @@ from surfaces.interactive_shell.command_registry.types import (
 )
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import render_tools_table
-from surfaces.interactive_shell.ui.tables.tool_catalog import build_tool_catalog
+from surfaces.shared.terminal.tables.tool_catalog import build_tool_catalog
 
 
 def _list_tools(_session: Session, console: Console, _args: list[str]) -> bool:

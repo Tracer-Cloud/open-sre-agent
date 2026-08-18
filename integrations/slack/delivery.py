@@ -8,9 +8,9 @@ from typing import Any
 
 from config.config import SLACK_CHANNEL
 from config.constants.slack import SLACK_WEBHOOK_URL_ENV
-from platform.notifications.delivery_errors import extract_http_error
-from platform.notifications.delivery_transport import post_json
-from platform.notifications.redaction import redact_slack_token
+from platform.delivery.notifications.delivery_errors import extract_http_error
+from platform.delivery.notifications.delivery_transport import post_json
+from platform.delivery.notifications.redaction import redact_slack_token
 from platform.observability import debug_print
 
 logger = logging.getLogger(__name__)

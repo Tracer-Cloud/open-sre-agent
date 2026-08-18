@@ -21,7 +21,7 @@ import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
 import tools.interactive_shell.shell.execution as shell_execution
 from core.llm.types import AgentLLMResponse, ToolCall
-from platform.common.task_types import TaskKind, TaskStatus
+from platform.scheduling.task_types import TaskKind, TaskStatus
 from surfaces.interactive_shell.session import Session
 from tests.core.agent._planned_action import (
     PlannedAction,
@@ -35,7 +35,7 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "surfaces.interactive_shell.runtime.action_turn.default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
 execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
@@ -755,7 +755,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     monkeypatch: object,
 ) -> None:
-    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.shared.error_handling.errors import OpenSREError
 
     def _raise(
         *,

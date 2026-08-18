@@ -16,23 +16,23 @@ from typing import Any, Literal
 from rich.console import Console
 
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
+from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.gather_ports import GatherPorts
-from core.agent_harness.turns.headless_dispatch import (
-    BufferOutputSink,
-    HeadlessAgent,
-    NoopTurnAccounting,
-)
+from core.agent_harness.turns.gather_phase import GatherPhase
+from core.agent_harness.turns.headless_adapters import BufferOutputSink, NoopTurnAccounting
+from core.agent_harness.turns.headless_agent import HeadlessAgent
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.host.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 
 Surface = Literal["shell", "headless", "gateway_handler"]
 
@@ -308,19 +308,18 @@ def _dispatch_turn(
     gather_enabled: bool = True,
 ) -> TurnResult:
     output = BufferOutputSink()
-    agent = HeadlessAgent(
+    agent = InMemoryHeadlessBuild(
+        session=session, output=output, reasoning=DefaultReasoningClientProvider(output=output)
+    ).agent(
         tools=DefaultToolProvider(
             session,
             console(),
             slash_ports_factory=headless_slash_ports,
         ),
-        session=session,
-        output=output,
         prompts=DefaultPromptContextProvider(session),
-        reasoning=DefaultReasoningClientProvider(output=output),
-        accounting=NoopTurnAccounting(),
-        gather=GatherPorts(enabled=gather_enabled),
+        gather=GatherPhase(enabled=gather_enabled),
     )
+    agent.bind_turn(TurnBinding(accounting=NoopTurnAccounting()))
     return agent.dispatch(message)
 
 
@@ -348,17 +347,31 @@ def _install_gateway_dispatch_spy(
     monkeypatch: Any,
     captured: list[TurnResult],
 ) -> None:
-    """Spy on the gateway pool's agent factory (not ``HeadlessAgent`` directly).
+    """Spy on the gateway pool's agent construction (not ``HeadlessAgent`` directly).
 
-    ``SessionAgentPool`` builds agents via ``build_default_headless_agent``; patching
-    the class name on ``session_agents`` no longer intercepts construction.
+    ``SessionAgentPool`` builds agents via ``DefaultHeadlessBuild(...).agent(...)``; the
+    stub routes both halves through one ``build`` over the real family.
     """
-    from core.agent_harness.turns.default_headless_agent import (
-        build_default_headless_agent as real_build,
-    )
+    from core.agent_harness.turns.headless_build import DefaultHeadlessBuild as real_ports
 
-    def _spy_build(**kwargs: Any) -> HeadlessAgent:
-        agent = real_build(**kwargs)
+    def _spy_build(
+        *,
+        session: Any,
+        output: Any,
+        console: Any = None,
+        logger: Any = None,
+        surface: Any = None,
+        error_reporter: Any = None,
+        **ports: Any,
+    ) -> HeadlessAgent:
+        agent = real_ports(
+            session=session,
+            output=output,
+            console=console,
+            logger=logger,
+            surface=surface,
+            error_reporter=error_reporter,
+        ).agent(**ports)
         original_dispatch = type(agent).dispatch
 
         def dispatch(message: str) -> TurnResult:
@@ -370,8 +383,8 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.build_default_headless_agent",
-        _spy_build,
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(_spy_build),
     )
 
 
