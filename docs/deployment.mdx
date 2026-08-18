@@ -1,64 +1,65 @@
 ---
 title: "Deployment"
 slug: "deployment"
-description: "Deploy OpenSRE as a standard Python/FastAPI runtime"
+description: "Deploy OpenSRE as a hosted FastAPI app or run the local gateway."
 ---
 
-OpenSRE deploys as a standard Python/FastAPI runtime. Use the repo `Dockerfile`,
-Railway, EC2, ECS, Vercel, or another ASGI-capable host.
+OpenSRE deploys as a standard Python FastAPI application. Use the repository
+`Dockerfile` with Railway, EC2, ECS, Vercel, or another ASGI-capable host. For
+local containers, see [Docker](/environments/docker).
 
-## Runtime environment
+The image supports two values of `MODE`:
 
-<Steps>
-  <Step title="Deploy the app">
-    Deploy this repository using your hosting provider's normal app workflow.
-  </Step>
+| `MODE` | Runtime |
+| --- | --- |
+| `web` (default) | HTTP API — health checks, alert intake, and investigations |
+| `gateway` | Messaging gateway (Slack / Telegram) and related services |
 
-<Step title="Configure your model provider">
-    Add `LLM_PROVIDER` as an environment variable (for example `anthropic`,
-    `openai`, `openrouter`, or `gemini`).
-</Step>
+## Environment setup
 
-  <Step title="Add the matching provider API key">
-    Use the API key that matches your provider:
+1. Deploy this repository using your host’s normal application workflow, or
+   build the `Dockerfile` and set `MODE` to `web` or `gateway`.
+2. Set `LLM_PROVIDER` to your model provider (`anthropic`, `openai`,
+   `openrouter`, `trustedrouter`, `deepseek`, or `gemini`).
+3. Set the corresponding API key:
 
-    - `ANTHROPIC_API_KEY` for `LLM_PROVIDER=anthropic`
-    - `OPENAI_API_KEY` for `LLM_PROVIDER=openai`
-    - `OPENROUTER_API_KEY` for `LLM_PROVIDER=openrouter`
-    - `DEEPSEEK_API_KEY` for `LLM_PROVIDER=deepseek`
-    - `GEMINI_API_KEY` for `LLM_PROVIDER=gemini`
+   - `ANTHROPIC_API_KEY` for `anthropic`
+   - `OPENAI_API_KEY` for `openai`
+   - `OPENROUTER_API_KEY` for `openrouter`
+   - `TRUSTEDROUTER_API_KEY` for `trustedrouter`
+   - `DEEPSEEK_API_KEY` for `deepseek`
+   - `GEMINI_API_KEY` for `gemini`
 
-  </Step>
+4. Add any integration or storage environment variables required by your
+   deployment, then verify health with `GET /health` or `GET /ok`.
 
-  <Step title="Add integration env vars and deploy">
-    Add any storage and integration environment variables required by your runtime, then deploy and verify health.
-  </Step>
-</Steps>
-
-Minimum LLM environment example:
+Minimum configuration:
 
 ```bash
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=...
 ```
 
-The complete list of provider keys and optional model overrides is documented in `.env.example`.
+Provider keys and optional model overrides are listed in `.env.example` and
+[Environment variables](/configuration/environment-variables).
 
-## Run local gateway
+For hosted deployments that need persistent storage, set `DATABASE_URI` and
+`REDIS_URI`. The async investigations API uses `DATABASE_URL` for its Postgres
+store; see [HTTP API](/api).
 
-Use the built-in gateway command when you want a local HTTP server for investigations.
+## Local gateway
 
-| Command | What it does |
-| --- | --- |
-| `uv run opensre gateway start` | Starts the gateway daemon in the background (web app, Telegram chat, task scheduler). |
-| `uv run opensre gateway start --foreground` | Runs the gateway attached to this terminal. |
-| `uv run opensre gateway stop` | Stops the background daemon. |
-| `uv run opensre gateway status` | Shows daemon and component status. |
+Start a local HTTP server for investigations (and optional chat transports):
 
-The web app binds `0.0.0.0` on the port from the `PORT` environment variable
+```bash
+uv run opensre gateway start                 # background daemon
+uv run opensre gateway start --foreground    # attached to this terminal
+uv run opensre gateway stop
+uv run opensre gateway status
+```
+
+The web app listens on `0.0.0.0` using the `PORT` environment variable
 (default `8000`).
-
-Quick local checks:
 
 ```bash
 curl http://127.0.0.1:8000/ok
@@ -79,8 +80,8 @@ curl -X POST http://127.0.0.1:8000/investigate \
   }'
 ```
 
-By default, `/investigate` (like `/alerts`) accepts only loopback callers. Set
-`OPENSRE_ALERT_LISTENER_TOKEN` to allow remote callers with a bearer token:
+By default, `/investigate` and `/alerts` accept only loopback callers. To allow
+remote access, set `OPENSRE_ALERT_LISTENER_TOKEN` and send it as a bearer token:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/investigate \
@@ -89,13 +90,12 @@ curl -X POST http://127.0.0.1:8000/investigate \
   -d '{"raw_alert":{"alert_name":"test"}}'
 ```
 
-## Railway deployment
+Complete route reference: [HTTP API](/api).
 
-Railway is still supported as a hosted runtime option.
+## Railway
 
-Before deploying on Railway, make sure your service has:
-
-- `DATABASE_URI` pointing to your Railway Postgres instance
-- `REDIS_URI` pointing to your Railway Redis instance
-
-Then deploy the service using your Railway project workflow.
+1. Provision Postgres and Redis in the Railway project.
+2. Set `DATABASE_URI` and `REDIS_URI` on the OpenSRE service to those connection
+   strings.
+3. Optionally set `OPENSRE_DEPLOYMENT_METHOD=railway` for telemetry labeling.
+4. Deploy the service through your Railway project.

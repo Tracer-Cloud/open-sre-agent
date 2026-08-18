@@ -9,6 +9,7 @@ from core.agent_harness.prompts.assistant.text import HANDOFF_GUIDANCE
 _HANDOFF_GUIDANCE_PREFIXES: tuple[str, ...] = (
     "evidence_tier:L0_degraded:config",
     "evidence_tier:L0_degraded",
+    "evidence_tier:metric_unformed",
     "session_goal:",
     "database_query:",
     "incident_description:",

@@ -69,6 +69,7 @@ _BUILTIN_MODULES = {
     BuiltInProvider.GCS.value: "platform.filestorage.providers.gcs",
     BuiltInProvider.VERCEL.value: "platform.filestorage.providers.vercel",
     BuiltInProvider.AZURE.value: "platform.filestorage.providers.azure",
+    BuiltInProvider.S3COMPAT.value: "platform.filestorage.providers.s3compat",
 }
 
 

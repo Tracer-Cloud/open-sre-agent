@@ -77,3 +77,27 @@ def test_non_handoff_turn_still_speaks_its_closing() -> None:
 
     # Assert: suppressing here would leave the turn silent.
     assert closing in "\n".join(display_chunks)
+
+
+def test_unhandled_prose_closing_is_not_painted_before_stream_answer() -> None:
+    """Prose-only action turns still route to ``stream_answer``.
+
+    Painting the action closing first gave two ``● assistant`` replies — often
+    with different facts (action lacks live ``now_iso``; the assistant has it).
+    """
+    prose = "Today is Wednesday, 2026-08-13."
+    result = _Result([], prose)
+    counts = _TurnCounts(
+        executed_entries=[],
+        executed_count=0,
+        executed_success_count=0,
+        generic_success_count=0,
+        planned_count=0,
+        handled=False,
+        investigation_dispatched=False,
+        handoff_contents=(),
+    )
+
+    _response_text, display_chunks, _use_final_text = _compose_response(result, _Session(), counts)
+
+    assert prose not in "\n".join(display_chunks)

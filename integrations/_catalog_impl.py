@@ -145,6 +145,12 @@ from config.constants.mysql import (
     MYSQL_SSL_MODE_ENV,
     MYSQL_USERNAME_ENV,
 )
+from config.constants.new_relic import (
+    NEW_RELIC_ACCOUNT_ID_ENV,
+    NEW_RELIC_API_KEY_ENV,
+    NEW_RELIC_BASE_URL_ENV,
+    NEW_RELIC_INSTANCES_ENV,
+)
 from config.constants.openclaw import (
     OPENCLAW_MCP_ARGS_ENV,
     OPENCLAW_MCP_AUTH_TOKEN_ENV,
@@ -202,7 +208,12 @@ from config.constants.servicenow import (
     SERVICENOW_PASSWORD_ENV,
     SERVICENOW_USERNAME_ENV,
 )
-from config.constants.slack import SLACK_APP_TOKEN_ENV, SLACK_BOT_TOKEN_ENV
+from config.constants.slack import (
+    SLACK_APP_TOKEN_ENV,
+    SLACK_BOT_TOKEN_ENV,
+    SLACK_DEFAULT_CHAT_ID_ENV,
+    SLACK_WEBHOOK_URL_ENV,
+)
 from config.constants.smtp import (
     SMTP_DEFAULT_TO_ENV,
     SMTP_FROM_ADDRESS_ENV,
@@ -233,6 +244,15 @@ from config.constants.twilio import (
 )
 from config.constants.vercel import VERCEL_API_TOKEN_ENV, VERCEL_TEAM_ID_ENV
 from config.constants.x_mcp import X_MCP_AUTH_TOKEN_ENV, X_MCP_URL_ENV
+from config.constants.yandex_cloud import (
+    YC_CLOUD_ID_ENV,
+    YC_FOLDER_ID_ENV,
+    YC_IAM_TOKEN_ENV,
+    YC_SA_KEY_ENV,
+    YC_SA_KEY_FILE_ENV,
+    YC_TOKEN_ENV,
+    YC_USE_METADATA_ENV,
+)
 from config.llm_credentials import resolve_env_credential
 from integrations.airflow.config import airflow_config_from_env
 from integrations.airflow.config import classify as _classify_airflow
@@ -244,7 +264,7 @@ from integrations.azure_sql import build_azure_sql_config
 from integrations.azure_sql import classify as _classify_azure_sql
 from integrations.betterstack import build_betterstack_config
 from integrations.betterstack import classify as _classify_betterstack
-from integrations.bitbucket import classify as _classify_bitbucket
+from integrations.bitbucket.config import classify as _classify_bitbucket
 from integrations.buzz import classify as _classify_buzz
 from integrations.config_models import (
     DEFAULT_DATADOG_SITE,
@@ -256,7 +276,6 @@ from integrations.config_models import (
     DatadogIntegrationConfig,
     DiscordBotConfig,
     GrafanaIntegrationConfig,
-    GroundcoverIntegrationConfig,
     HelmIntegrationConfig,
     IncidentIoIntegrationConfig,
     JiraIntegrationConfig,
@@ -286,6 +305,7 @@ from integrations.gitlab import DEFAULT_GITLAB_BASE_URL, build_gitlab_config
 from integrations.gitlab import classify as _classify_gitlab
 from integrations.grafana import classify as _classify_grafana
 from integrations.groundcover import classify as _classify_groundcover
+from integrations.groundcover.config import GroundcoverIntegrationConfig
 from integrations.helm import classify as _classify_helm
 from integrations.honeycomb import classify as _classify_honeycomb
 from integrations.honeycomb.config import HoneycombIntegrationConfig
@@ -302,6 +322,8 @@ from integrations.mongodb_atlas import build_mongodb_atlas_config
 from integrations.mongodb_atlas import classify as _classify_mongodb_atlas
 from integrations.mysql import build_mysql_config
 from integrations.mysql import classify as _classify_mysql
+from integrations.new_relic import classify as _classify_new_relic
+from integrations.new_relic.config import NewRelicIntegrationConfig
 from integrations.openclaw import build_openclaw_config
 from integrations.openclaw import classify as _classify_openclaw
 from integrations.openobserve import classify as _classify_openobserve
@@ -359,6 +381,8 @@ from integrations.victoria_logs import classify as _classify_victoria_logs
 from integrations.whatsapp import classify as _classify_whatsapp
 from integrations.x_mcp import build_x_mcp_config
 from integrations.x_mcp import classify as _classify_x_mcp
+from integrations.yandex_cloud import classify as _classify_yandex_cloud
+from integrations.yandex_cloud.config import YandexCloudIntegrationConfig
 from platform.common.coercion import safe_int
 from platform.observability.errors.boundary import report_exception
 
@@ -532,6 +556,8 @@ _CLASSIFIERS: dict[str, _ClassifyFn] = {
     "smtp": _classify_smtp,
     "prefect": _classify_prefect,
     "railway": _classify_railway,
+    "new_relic": _classify_new_relic,
+    "yandex_cloud": _classify_yandex_cloud,
 }
 
 #: Classifiers contributed by out-of-tree integration packages.
@@ -896,6 +922,35 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 _active_env_record(
                     "honeycomb",
                     honeycomb_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
+    new_relic_multi = _parse_instances_env(NEW_RELIC_INSTANCES_ENV, "new_relic")
+    if new_relic_multi is not None:
+        integrations.append(new_relic_multi)
+        new_relic_api_key = ""
+        new_relic_account_id = ""
+        new_relic_base_url = ""
+    else:
+        new_relic_api_key = resolve_env_credential(NEW_RELIC_API_KEY_ENV)
+        new_relic_account_id = os.getenv(NEW_RELIC_ACCOUNT_ID_ENV, "").strip()
+        new_relic_base_url = os.getenv(NEW_RELIC_BASE_URL_ENV, "").strip()
+    if new_relic_api_key and new_relic_account_id:
+        try:
+            new_relic_config = NewRelicIntegrationConfig.model_validate(
+                {
+                    "api_key": new_relic_api_key,
+                    "account_id": new_relic_account_id,
+                    "base_url": new_relic_base_url,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="new_relic")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "new_relic",
+                    new_relic_config.model_dump(exclude={"integration_id"}),
                 )
             )
 
@@ -1361,12 +1416,13 @@ def load_env_integrations() -> list[dict[str, Any]]:
             )
 
     slack_bot_token = resolve_env_credential(SLACK_BOT_TOKEN_ENV)
-    slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+    slack_webhook_url = os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip()
     if slack_bot_token or slack_webhook_url:
         slack_credentials = {
             "webhook_url": slack_webhook_url,
             "bot_token": slack_bot_token,
             "app_token": resolve_env_credential(SLACK_APP_TOKEN_ENV),
+            "default_chat_id": os.getenv(SLACK_DEFAULT_CHAT_ID_ENV, "").strip(),
         }
         slack_view, _slack_key = _classify_slack(slack_credentials, record_id="env:slack")
         if slack_view is not None:
@@ -2033,6 +2089,39 @@ def load_env_integrations() -> list[dict[str, Any]]:
                 )
             )
 
+    yandex_cloud_folder = os.getenv(YC_FOLDER_ID_ENV, "").strip()
+    yandex_cloud_use_metadata = os.getenv(YC_USE_METADATA_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    # A folder alone is not a configuration: every read is folder-scoped, but it
+    # still needs a credential. On an instance the metadata service is the
+    # credential, and it also knows the folder, so that flag stands on its own.
+    if yandex_cloud_folder or yandex_cloud_use_metadata:
+        try:
+            yandex_cloud_config = YandexCloudIntegrationConfig.model_validate(
+                {
+                    "folder_id": yandex_cloud_folder,
+                    "cloud_id": os.getenv(YC_CLOUD_ID_ENV, "").strip(),
+                    "sa_key_file": os.getenv(YC_SA_KEY_FILE_ENV, "").strip(),
+                    "sa_key": resolve_env_credential(YC_SA_KEY_ENV),
+                    "oauth_token": resolve_env_credential(YC_TOKEN_ENV),
+                    "iam_token": resolve_env_credential(YC_IAM_TOKEN_ENV),
+                    "use_metadata": yandex_cloud_use_metadata,
+                }
+            )
+        except Exception as exc:
+            _report_env_loader_failure(exc, integration="yandex_cloud")
+        else:
+            integrations.append(
+                _active_env_record(
+                    "yandex_cloud",
+                    yandex_cloud_config.model_dump(exclude={"integration_id"}),
+                )
+            )
+
     for service, loader in list(_EXTERNAL_ENV_LOADERS.items()):
         try:
             record = loader()
@@ -2167,7 +2256,12 @@ def _raw_credentials(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _slack_effective_config(
-    *, webhook_url: str, bot_token: str, app_token: str, webhook_label: str
+    *,
+    webhook_url: str,
+    bot_token: str,
+    app_token: str,
+    webhook_label: str,
+    default_chat_id: str = "",
 ) -> dict[str, str]:
     """Return the Slack effective config: webhook and/or Socket Mode tokens.
 
@@ -2185,6 +2279,8 @@ def _slack_effective_config(
     if bot_token or app_token:
         config["bot_token"] = bot_token
         config["app_token"] = app_token
+    if default_chat_id.strip():
+        config["default_chat_id"] = default_chat_id.strip()
     return config
 
 
@@ -2257,16 +2353,18 @@ def resolve_effective_integrations(
             webhook_url=str(slack_credentials.get("webhook_url", "")).strip(),
             bot_token=str(slack_credentials.get("bot_token", "")).strip(),
             app_token=str(slack_credentials.get("app_token", "")).strip(),
+            default_chat_id=str(slack_credentials.get("default_chat_id", "")).strip(),
             webhook_label="Slack webhook URL from store",
         )
         if slack_config:
             effective["slack"] = _effective_entry("local store", slack_config)
     else:
         slack_config = _slack_effective_config(
-            webhook_url=os.getenv("SLACK_WEBHOOK_URL", "").strip(),
+            webhook_url=os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip(),
             bot_token=resolve_env_credential(SLACK_BOT_TOKEN_ENV),
             app_token=resolve_env_credential(SLACK_APP_TOKEN_ENV),
-            webhook_label="SLACK_WEBHOOK_URL",
+            default_chat_id=os.getenv(SLACK_DEFAULT_CHAT_ID_ENV, "").strip(),
+            webhook_label=SLACK_WEBHOOK_URL_ENV,
         )
         if slack_config:
             effective["slack"] = _effective_entry("local env", slack_config)

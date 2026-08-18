@@ -37,6 +37,14 @@ def test_read_git_origin_identity_from_config_body() -> None:
     assert read_git_origin_identity("[core]\n\trepositoryformatversion = 0\n") == ""
 
 
+def test_read_git_origin_identity_falls_back_to_upstream() -> None:
+    from config.runtime_metadata.probes import read_git_origin_identity
+
+    config = '[remote "upstream"]\n\turl = https://github.com/Tracer-Cloud/opensre.git\n'
+
+    assert read_git_origin_identity(config) == "Tracer-Cloud/opensre"
+
+
 def test_workspace_line_in_prompt_when_set(monkeypatch) -> None:
     monkeypatch.setenv(OPENSRE_WORKSPACE_REPO_ENV, "acme/widgets")
     facts = build_runtime_metadata()

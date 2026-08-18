@@ -149,11 +149,11 @@ def test_goal_set_attach_turn_does_not_consume_outer_budget() -> None:
 
 
 def test_host_owned_tool_answer_without_achieved_tag_completes_same_turn() -> None:
-    """Parity S1 R7: live metric + tools must not force a second identical turn.
+    """Live metric + tools must not force a second identical turn.
 
     Models often omit ``session_goal:achieved`` (and the shell scrubs it from
     the visible reply). Host-owned goals previously stayed ACTIVE → continuation
-    nudge → duplicate PostHog count.
+    nudge → duplicate analytics count.
     """
     session = SessionCore()
     attach_session_goal(
@@ -221,6 +221,43 @@ def test_turn_has_session_goal_evidence_counts_gather_successes() -> None:
     assert turn_has_session_goal_evidence(_result("done", gather_success=0)) is False
 
 
+def test_host_owned_fallback_route_without_tool_evidence_stays_active() -> None:
+    """Route identity is not evidence — unsupported fallbacks must not close.
+
+    ``cli_agent_fallback`` alone previously closed host-owned goals even when
+    no action/gather tool succeeded (draft-only / failed-query answers).
+    """
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition="How many Windows users in the last 7 days?",
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    verdict = evaluate_session_goal(
+        session.session_goal,  # type: ignore[arg-type]
+        TurnResult(
+            final_intent="cli_agent_fallback",
+            action_result=ToolCallingTurnResult(
+                planned_count=0,
+                executed_count=0,
+                executed_success_count=0,
+                has_unhandled_clause=False,
+                handled=False,
+            ),
+            assistant_response_text=(
+                "I could not get a live count. Here is draft HogQL and a setup CTA."
+            ),
+            gather_success_count=0,
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_HOST_SIGNAL
+
+
 def test_host_owned_without_tools_or_achieved_tag_stays_active() -> None:
     session = SessionCore()
     goal = SessionGoal(
@@ -238,6 +275,65 @@ def test_host_owned_without_tools_or_achieved_tag_stays_active() -> None:
 
     assert verdict.status == SessionGoalStatus.ACTIVE
     assert verdict.reason == SessionGoalReason.WAITING_HOST_SIGNAL
+
+
+def test_host_owned_signup_unverified_refuse_achieves_without_gather() -> None:
+    """Honest signup-unverified refuse must close the host goal."""
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition=(
+                "What is D7 retention for users who signed up on Windows in the last 30 days?"
+            ),
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    verdict = evaluate_session_goal(
+        session.session_goal,  # type: ignore[arg-type]
+        _result(
+            "signup event unverified — cannot provide a retention percentage. "
+            "Draft HogQL with a <signup_event> placeholder.",
+            gather_success=0,
+        ),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.ACHIEVED_HOST_SET
+
+
+def test_host_owned_signup_refuse_after_gather_is_host_set_not_tool_evidence() -> None:
+    """Live probes + unavailable retention must not use tool-evidence.
+
+    Tool-evidence achieves go through optional LLM confirm, which treats a
+    refuse+draft as "retention % not reached" and leaves the goal active.
+    """
+    session = SessionCore()
+    attach_session_goal(
+        session,
+        SessionGoal(
+            condition=(
+                "What is D7 retention for users who signed up on Windows "
+                "in the last 30 days? Prefer live PostHog; otherwise draft HogQL."
+            ),
+            max_outer_turns=4,
+            host_owned=True,
+        ),
+    )
+    reply = (
+        "Live PostHog returned no signup-like events in the last 30 days, so "
+        "D7 Windows retention cannot be calculated reliably. "
+        "D7 retention Unavailable — no percentage inferred. "
+        "Draft HogQL once <SIGNUP_EVENT> is confirmed."
+    )
+    verdict = evaluate_session_goal(
+        session.session_goal,  # type: ignore[arg-type]
+        _result(reply, gather_success=2),
+        session=session,
+    )
+    assert verdict.status == SessionGoalStatus.ACHIEVED
+    assert verdict.reason == SessionGoalReason.ACHIEVED_HOST_SET
 
 
 def test_bare_achieved_without_checklist_or_tools_stays_active() -> None:
@@ -735,3 +831,94 @@ def test_achieved_claim_does_not_false_complete_a_long_checklist() -> None:
     # Assert — the claim is ignored, and B..E are still outstanding.
     assert verdict.status == SessionGoalStatus.ACTIVE
     assert "checklist 0/5" in verdict.reason
+
+
+def test_pending_user_choice_outranks_an_achieved_claim_with_evidence() -> None:
+    """A queued choice gates the goal before any other rule is consulted.
+
+    The strongest possible achieve signal (claim + successful tool + a complete
+    checklist) must still lose to an unanswered question, or the session closes
+    a goal whose next step is waiting on the user.
+    """
+    from core.agent_harness.session.pending_choice import PendingUserChoice
+
+    # Arrange
+    session = SessionCore()
+    session.pending_user_choice = PendingUserChoice(
+        title="Which environment?", options=("staging", "production")
+    )
+    goal = SessionGoal(
+        condition="restart the service",
+        checklist=("Pick the environment",),
+        completed=frozenset({0}),
+    )
+    attach_session_goal(session, goal)
+
+    # Act
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Restarted. session_goal:achieved", executed=1, success=1),
+        session=session,
+    )
+
+    # Assert
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert verdict.reason == SessionGoalReason.WAITING_USER_CHOICE
+
+
+def test_prior_turn_progress_blocks_the_untagged_same_turn_completion() -> None:
+    """The untagged shortcut is for a goal answered in one turn, not a resumed one.
+
+    Without a claim, a short checklist may auto-complete only when nothing was
+    done before this turn. A goal already carrying progress is mid-walkthrough,
+    so a turn that merely ran a tool must not close the remaining item.
+    """
+    # Arrange: same shape as the untagged same-turn case that does achieve,
+    # differing only in that item 0 was completed on an earlier turn.
+    session = SessionCore()
+    goal = SessionGoal(
+        condition="how many windows users?",
+        checklist=("Query PostHog", "Report the number"),
+        completed=frozenset({0}),
+    )
+    attach_session_goal(session, goal)
+
+    # Act
+    verdict = evaluate_session_goal(
+        goal,
+        _result("Still working on it.", executed=1, success=1),
+        session=session,
+    )
+
+    # Assert
+    assert verdict.status == SessionGoalStatus.ACTIVE
+    assert "checklist 1/2" in verdict.reason
+
+
+def test_evidence_is_false_when_the_success_counts_are_not_numbers() -> None:
+    """A malformed count is absence of evidence, never a crash mid-turn.
+
+    ``executed_success_count`` and ``gather_success_count`` are read off a
+    duck-typed result, so a stub or a partially built turn can carry a
+    non-numeric value. Failing closed keeps a bad count from reading as proof.
+    """
+
+    class _BadCounts:
+        executed_success_count = "two"
+
+    class _BadResult:
+        action_result = _BadCounts()
+        # Truthy, so it survives the `or 0` and actually reaches int(). A None
+        # here would normalize to zero and leave the gather guard unexercised.
+        gather_success_count = "three"
+        assistant_response_text = "done"
+
+    class _OnlyGatherIsBad:
+        action_result = None
+        gather_success_count = "three"
+        assistant_response_text = "done"
+
+    # Act / Assert: each count is converted separately, so each guard is
+    # reached on its own rather than only via the first one that raises.
+    assert turn_has_session_goal_evidence(_BadResult()) is False
+    assert turn_has_session_goal_evidence(_OnlyGatherIsBad()) is False

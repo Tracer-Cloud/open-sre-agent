@@ -8,10 +8,13 @@ import pytest
 
 from core.llm_invoke_errors import (
     LLM_PROVIDER_FAILURE_KINDS,
+    ProviderFailureKind,
     _looks_like_timeout,
     classify_llm_invoke_failure,
+    classify_llm_provider_failure,
     classify_provider_error_kind,
     is_cli_timeout_error,
+    remediate_missing_llm_credentials,
 )
 from integrations.llm_cli.errors import CLITimeoutError
 
@@ -113,3 +116,121 @@ def test_cli_auth_required_filters_none_remediation_fields() -> None:
     assert failure.remediation_steps == [
         "Run `opensre doctor` to verify CLI installation and auth.",
     ]
+
+
+_OPENAI_MISSING_KEY_MESSAGE = (
+    "Missing credentials. Please pass an `api_key`, `workload_identity`, "
+    "`admin_api_key`, or set the `OPENAI_API_KEY` or `OPENAI_ADMIN_KEY` "
+    "environment variable."
+)
+
+
+def test_remediate_missing_credentials_rewrites_sdk_message_with_login_command() -> None:
+    # Arrange / Act: the exact OpenAI SDK text a key-less shell turn surfaces.
+    text = remediate_missing_llm_credentials(_OPENAI_MISSING_KEY_MESSAGE, provider="openai")
+
+    # Assert: in-shell commands first, terminal form and provider detail preserved.
+    assert text is not None
+    assert "No API key is set for openai" in text
+    assert "`/auth login openai`" in text
+    assert "`/onboard`" in text
+    assert "`opensre auth login openai`" in text
+    assert "Missing credentials" in text
+
+
+def test_remediate_missing_credentials_without_provider_uses_placeholder() -> None:
+    text = remediate_missing_llm_credentials(_OPENAI_MISSING_KEY_MESSAGE, provider=None)
+
+    assert text is not None
+    assert "No LLM API key is set" in text
+    assert "/auth login <provider>" in text
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Incorrect API key provided: sk-abc. You can find your key at platform.openai.com.",
+        "Error code: 429 - rate limit exceeded",
+        "The LLM request timed out after 300s.",
+        # Rejected-key wrappers cite *_API_KEY env names; they must keep their
+        # real authentication message, never the no-key guidance.
+        "AuthenticationError: invalid x-api-key. Check your ANTHROPIC_API_KEY.",
+        "401 Unauthorized: the key from OPENAI_API_KEY was rejected.",
+        "API key expired. Renew the key stored in GEMINI_API_KEY.",
+    ],
+)
+def test_remediate_missing_credentials_ignores_other_failures(message: str) -> None:
+    assert remediate_missing_llm_credentials(message) is None
+
+
+def test_remediate_missing_credentials_matches_wrapper_requires_env_message() -> None:
+    text = remediate_missing_llm_credentials(
+        "LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set.",
+        provider="anthropic",
+    )
+
+    assert text is not None
+    assert "`/auth login anthropic`" in text
+
+
+def test_remediate_missing_credentials_matches_anthropic_absence_message() -> None:
+    text = remediate_missing_llm_credentials(
+        "Could not resolve authentication method. Expected either api_key or auth_token to be set.",
+        provider="anthropic",
+    )
+
+    assert text is not None
+    assert "`/auth login anthropic`" in text
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (_OPENAI_MISSING_KEY_MESSAGE, ProviderFailureKind.MISSING_KEY),
+        (
+            "Could not resolve authentication method. Expected either api_key "
+            "or auth_token to be set.",
+            ProviderFailureKind.MISSING_KEY,
+        ),
+        (
+            "AuthenticationError: invalid x-api-key. Check your ANTHROPIC_API_KEY.",
+            ProviderFailureKind.REJECTED_KEY,
+        ),
+        ("Anthropic authentication failed.", ProviderFailureKind.REJECTED_KEY),
+        ("Error code: 429 - too many requests", ProviderFailureKind.QUOTA),
+        ("Anthropic model 'claude-x' was not found.", ProviderFailureKind.NOT_CONFIGURED),
+        ("something unexpected exploded", ProviderFailureKind.PROVIDER_ERROR),
+    ],
+)
+def test_classify_llm_provider_failure_rule_order(
+    message: str, expected: ProviderFailureKind
+) -> None:
+    assert classify_llm_provider_failure(message) == expected
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        _OPENAI_MISSING_KEY_MESSAGE,
+        "Could not resolve authentication method. Expected either api_key or auth_token to be set.",
+        "LLM provider 'anthropic' requires ANTHROPIC_API_KEY to be set.",
+        "AuthenticationError: invalid x-api-key. Check your ANTHROPIC_API_KEY.",
+        "401 Unauthorized: the key from OPENAI_API_KEY was rejected.",
+        "Error code: 429 - rate limit exceeded",
+        "something unexpected exploded",
+    ],
+)
+def test_remediation_and_analytics_always_agree(message: str) -> None:
+    """One classification, two consumers: guidance fires iff analytics says not-configured-ish.
+
+    Regression: the split classifiers disagreed on Anthropic's absence message
+    (analytics said ``auth`` while the user saw missing-key guidance).
+    """
+    remediated = remediate_missing_llm_credentials(message) is not None
+    kind = classify_llm_provider_failure(message)
+    analytics = classify_provider_error_kind(message)
+
+    assert remediated == (kind is ProviderFailureKind.MISSING_KEY)
+    if remediated:
+        assert analytics == "not_configured"
+        assert analytics != "auth"

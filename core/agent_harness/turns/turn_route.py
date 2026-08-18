@@ -73,6 +73,12 @@ def route_turn(
         return TurnRoute(intent="summarize_observation")
     if routing.action_handled and not handoff_contents:
         return TurnRoute(intent="handled_without_llm")
+    # ``/goal set`` attaches a host-owned goal mid-turn and the orchestrator
+    # injects ``session_goal:continue`` for Want-me-to suppression. That tag
+    # must not force gather on the slash attach turn itself — autosubmit owns
+    # the first real metric work turn.
+    if routing.action_handled and is_literal_slash_command(user_text):
+        return TurnRoute(intent="handled_without_llm")
     return TurnRoute(intent="gather_and_answer")
 
 

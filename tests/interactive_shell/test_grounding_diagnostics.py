@@ -40,8 +40,14 @@ def test_invalidate_clears_every_cache() -> None:
 
 
 def test_shell_prompt_provider_cli_cache_is_session_scoped() -> None:
+    from surfaces.cli.app import cli
+
     session_a = Session()
     session_b = Session()
+    # The entrypoint hands the shell the CLI group; without one there is no
+    # command catalog to cache.
+    session_a.terminal.cli_command_group = cli
+    session_b.terminal.cli_command_group = cli
     provider_a = ShellPromptContextProvider(session_a)
     provider_b = ShellPromptContextProvider(session_a)
     provider_c = ShellPromptContextProvider(session_b)

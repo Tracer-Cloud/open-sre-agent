@@ -89,6 +89,7 @@ ECS, Vercel, or another ASGI-capable host.
     - `ANTHROPIC_API_KEY` when `LLM_PROVIDER=anthropic`
     - `OPENAI_API_KEY` when `LLM_PROVIDER=openai`
     - `OPENROUTER_API_KEY` when `LLM_PROVIDER=openrouter`
+    - `TRUSTEDROUTER_API_KEY` when `LLM_PROVIDER=trustedrouter`
     - `GEMINI_API_KEY` when `LLM_PROVIDER=gemini`
 3. Add `DATABASE_URI` and `REDIS_URI` for hosted layouts that need persistence.
 4. Add any additional environment variables required by your integrations.

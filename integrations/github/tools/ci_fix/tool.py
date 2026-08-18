@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.agent_harness.tools.tool_context import action_context_from_agent_context
+from core.agent_harness.tools import action_context_from_agent_context
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.metadata import SideEffectLevel
 from core.tool_framework.tool_decorator import tool
@@ -92,8 +92,9 @@ def _confirm_fn(context: Any) -> Any:
     description=(
         "Inspect failing GitHub Actions checks on a pull request, run an "
         "auto-detected coding agent with the failing log context, commit the "
-        "result, and push it to the pull request's existing head branch. It does "
-        "not open a new PR and refuses fork PR branches."
+        "result, push it to the pull request's existing head branch, and wait "
+        "for the new checks to finish. It does not open a new PR and refuses "
+        "fork PR branches."
     ),
     use_cases=[
         "Fix failing CI on a GitHub pull request and push to the PR branch",
@@ -108,7 +109,10 @@ def _confirm_fn(context: Any) -> Any:
     surfaces=(ToolSurface.ACTION,),
     side_effect_level=SideEffectLevel.MUTATING,
     requires_approval=True,
-    approval_reason=("Checks out the PR branch, edits files, commits, and pushes to that branch."),
+    approval_reason=(
+        "Checks out the PR branch, edits files, commits, pushes to that branch, "
+        "and waits for the resulting checks."
+    ),
     parallel_safe=False,
     accepts_runtime_context=True,
     input_schema=_INPUT_SCHEMA,

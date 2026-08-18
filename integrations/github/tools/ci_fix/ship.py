@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from integrations.coding_agent import CodingResult
 from integrations.git import (
     BRANCH_FAILED,
+    COMMIT_FAILED,
     GitCommandError,
     assert_not_protected,
     changed_paths,
@@ -40,6 +41,7 @@ class PushResult:
     """Outcome of pushing a CI fix to a PR branch."""
 
     branch_name: str
+    head_sha: str
     changed_files: list[str]
 
 
@@ -69,6 +71,7 @@ def push_ci_fix(
 ) -> PushResult:
     """Commit files changed by the fix run and push the PR head branch."""
     token = resolve_github_token(github_token)
+    pushed_head_sha = ""
     try:
         ensure_git_repo(workspace)
         if current_branch(workspace) != ctx.head_branch:
@@ -81,6 +84,7 @@ def push_ci_fix(
                 branch_name=ctx.head_branch,
             )
         commit_paths(workspace, changed, _commit_message(ctx, result.summary))
+        pushed_head_sha = _head_sha(workspace)
         push_branch(
             workspace,
             ctx.head_branch,
@@ -89,7 +93,11 @@ def push_ci_fix(
         )
     except GitCommandError as exc:
         raise GitHubCiFixError(exc.kind, exc.message, branch_name=ctx.head_branch) from exc
-    return PushResult(branch_name=ctx.head_branch, changed_files=changed)
+    return PushResult(
+        branch_name=ctx.head_branch,
+        head_sha=pushed_head_sha,
+        changed_files=changed,
+    )
 
 
 def _changed_since_baseline(workspace: str, *, baseline: Mapping[str, str] | None) -> list[str]:
@@ -137,6 +145,25 @@ def _local_branch_exists(workspace: str, branch: str) -> bool:
         check=False,
     )
     return result.returncode == 0
+
+
+def _head_sha(workspace: str) -> str:
+    """Return the full identity of the commit about to be pushed."""
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        timeout=_GIT_TIMEOUT_SEC,
+        check=False,
+    )
+    sha = result.stdout.strip()
+    if result.returncode != 0 or not sha:
+        raise GitCommandError(
+            COMMIT_FAILED,
+            "Could not resolve the CI fix commit after committing the changed files.",
+        )
+    return sha
 
 
 def _fetch_branch(workspace: str, branch: str) -> None:

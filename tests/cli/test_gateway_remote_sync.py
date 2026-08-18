@@ -15,7 +15,7 @@ from platform.filestorage.engine import SyncProgress, SyncReport
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
-from surfaces.cli.gateway_entry import gateway_slash_ports_factory, start_gateway
+from surfaces.gateway_entry import gateway_slash_ports_factory, start_gateway
 from surfaces.interactive_shell.runtime import Session
 
 
@@ -36,11 +36,11 @@ def test_gateway_slash_ports_factory_is_headless_and_exposes_remote_sync() -> No
 
 def test_start_gateway_injects_remote_sync_capable_factory() -> None:
     """Changing gateway_entry must keep slash ports wired for chat turns."""
-    import gateway.core.runtime.manager as manager_module
+    import gateway.core.runtime.controller as manager_module
 
     mock_manager = MagicMock()
     mock_manager.start_gateway.return_value = mock_manager
-    with patch.object(manager_module, "GatewayManager", return_value=mock_manager) as ctor:
+    with patch.object(manager_module, "GatewayController", return_value=mock_manager) as ctor:
         start_gateway(wait=False)
 
     factory = ctor.call_args.kwargs["slash_ports_factory"]

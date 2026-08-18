@@ -25,7 +25,7 @@ from platform.scheduler.investigation_runner import (
 )
 
 
-def _run(alert_payload: AlertPayload) -> InvestigationResult | None:
+def run_scheduled_investigation(alert_payload: AlertPayload) -> InvestigationResult | None:
     from tools.investigation import capability
 
     # ``run_investigation`` returns an ``AgentState`` TypedDict (dict-backed
@@ -38,12 +38,16 @@ def _run(alert_payload: AlertPayload) -> InvestigationResult | None:
 def install() -> None:
     """Bind the canonical investigation pipeline as the scheduler runner.
 
+    Registers this seam alone. A host that wants both seams — and its capacity
+    gate applied to them — builds ``SchedulerRunners`` through
+    :func:`bootstrap.adapters.scheduler_runners` instead.
+
     Idempotent — re-registering the same shim is a no-op from the scheduler's
     perspective. Tests that need to swap the runner should call
     :func:`platform.scheduler.investigation_runner.register_investigation_runner`
     directly (or clear it with ``None``).
     """
-    register_investigation_runner(_run)
+    register_investigation_runner(run_scheduled_investigation)
 
 
-__all__ = ["install"]
+__all__ = ["install", "run_scheduled_investigation"]

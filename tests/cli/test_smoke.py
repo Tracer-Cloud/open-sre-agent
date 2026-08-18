@@ -68,6 +68,7 @@ _CLEARED_ENV_KEYS = (
     "TELEGRAM_DEFAULT_CHAT_ID",
     "TRACER_API_URL",
     "TRACER_WEB_APP_URL",
+    "TRUSTEDROUTER_API_KEY",
     "X_BEARER_TOKEN",
     "X_MCP_ARGS",
     "X_MCP_AUTH_TOKEN",
@@ -533,6 +534,15 @@ def test_investigate_print_template_smoke(cli_sandbox: CliSandbox) -> None:
     assert payload["message"]
 
 
+def test_investigate_print_template_new_relic_smoke(cli_sandbox: CliSandbox) -> None:
+    result = _run_cli(cli_sandbox, "investigate", "--print-template", "new_relic")
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["alert_source"] == "new_relic"
+    assert payload["message"]
+
+
 def test_investigate_onboard_handoff_smoke(cli_sandbox: CliSandbox, tmp_path: Path) -> None:
     """project.env written by onboard is read by investigate before it reaches the LLM.
 
@@ -567,6 +577,10 @@ def test_investigate_onboard_handoff_smoke(cli_sandbox: CliSandbox, tmp_path: Pa
         "-i",
         str(alert_path),
         extra_env={"LLM_PROVIDER": "anthropic"},
+        # Full CLI boot (adapters + verifiers) then fail closed on credentials.
+        # Under loaded ``test-cov`` (xdist + coverage) a cold subprocess can
+        # exceed the default 15s budget even though the happy path is ~3s.
+        timeout=60.0,
     )
 
     # Exit 1 is expected — no real API key in CI.

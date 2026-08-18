@@ -35,7 +35,7 @@ from tools.interactive_shell.action_names import (
     ToolKind,
 )
 
-_ACTION_LLM_FACTORY_PATCH = "surfaces.interactive_shell.runtime.action_turn.default_llm_factory"
+_ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
 execute_shell_turn = shell_turn_execution.execute_shell_turn
 
 
@@ -755,7 +755,7 @@ def test_execute_cli_actions_runs_sample_alert(monkeypatch: object) -> None:
 def test_execute_cli_actions_sample_alert_opensre_error_marks_task_failed(
     monkeypatch: object,
 ) -> None:
-    from surfaces.interactive_shell.utils.error_handling.errors import OpenSREError
+    from surfaces.shared.error_handling.errors import OpenSREError
 
     def _raise(
         *,

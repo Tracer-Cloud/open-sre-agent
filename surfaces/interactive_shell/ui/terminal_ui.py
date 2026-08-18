@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING
 from prompt_toolkit.formatted_text import ANSI
 from rich.console import Console
 
-from surfaces.interactive_shell.ui.banner import render_ready_box, render_splash
-from surfaces.interactive_shell.ui.components.cpr_stdin import strip_cpr_sequences
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
+from surfaces.shared.terminal.banner import render_ready_box, render_splash
+from surfaces.shared.terminal.components.cpr_stdin import strip_cpr_sequences
 
 if TYPE_CHECKING:
     from surfaces.interactive_shell.runtime.core.state import ReplState, SpinnerState

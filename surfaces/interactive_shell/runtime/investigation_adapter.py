@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast
 
 from rich.console import Console
 
-from core.agent_harness.session.terminal_access import background_mode_enabled
+from core.agent_harness.spi.session_state import background_mode_enabled
 from core.domain.stream import StreamEvent
 from platform.common.task_types import TaskRecord
 from surfaces.interactive_shell.session import Session
@@ -53,8 +53,8 @@ class BackgroundSampleLauncher(Protocol):
 
 def repl_foreground_renderer(console: Console | None = None) -> session_runner.StreamRendererFn:
     """Return a renderer that streams investigation progress to the REPL terminal."""
-    from surfaces.cli.ui.renderer import StreamRenderer
-    from surfaces.interactive_shell.ui.output import reset_tracker, set_tracker_console
+    from surfaces.shared.terminal.output import reset_tracker, set_tracker_console
+    from surfaces.shared.terminal.stream_renderer import StreamRenderer
 
     def _render(events: Iterator[StreamEvent]) -> dict[str, Any]:
         if console is None:
@@ -75,8 +75,8 @@ def repl_foreground_renderer(console: Console | None = None) -> session_runner.S
 
 def repl_background_renderer() -> session_runner.StreamRendererFn:
     """Return a silent renderer for background investigations."""
-    from surfaces.cli.ui.renderer import StreamRenderer
-    from surfaces.interactive_shell.ui.output import reset_tracker, set_silent_tracker
+    from surfaces.shared.terminal.output import reset_tracker, set_silent_tracker
+    from surfaces.shared.terminal.stream_renderer import StreamRenderer
 
     def _render(events: Iterator[StreamEvent]) -> dict[str, Any]:
         set_silent_tracker()

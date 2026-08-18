@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
+from config.constants.llm import LLM_PROVIDER_ENV
 from surfaces.interactive_shell.command_registry.model.switching import (
     _provider_allows_custom_models,
     restore_default_model,
@@ -18,7 +19,7 @@ from surfaces.interactive_shell.command_registry.model.switching import (
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render_models_table
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     repl_choose_one,
     repl_section_break,
@@ -29,9 +30,9 @@ _ROOT = "/model"  # breadcrumb root label
 
 
 def _provider_menu_choices() -> list[tuple[str, str]]:
-    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+    from surfaces.shared.llm_setup.catalog import SUPPORTED_PROVIDERS
 
-    current_provider = (os.getenv("LLM_PROVIDER", "anthropic") or "anthropic").strip().lower()
+    current_provider = (os.getenv(LLM_PROVIDER_ENV, "anthropic") or "anthropic").strip().lower()
     options: list[tuple[str, str]] = []
     for provider in SUPPORTED_PROVIDERS:
         suffix = "*" if provider.value == current_provider else ""
@@ -83,7 +84,7 @@ def _prompt_custom_model_id(console: Console, provider_value: str = "provider") 
 
 
 def _interactive_set_provider(console: Console) -> bool | None:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     crumb_set = f"{_ROOT}{CRUMB_SEP}set"
     while True:
@@ -164,7 +165,7 @@ def _interactive_restore_provider(console: Console) -> bool | None:
 
 
 def _interactive_set_toolcall(console: Console) -> bool | None:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     crumb_tc = f"{_ROOT}{CRUMB_SEP}toolcall"
     provider_value = repl_choose_one(
@@ -318,7 +319,7 @@ def _cmd_model(session: Session, console: Console, args: list[str]) -> bool:
             console.print(f"[{DIM}]usage:[/] /model restore [provider]")
             session.mark_latest(ok=False, kind="slash")
             return True
-        provider_name = args[1] if len(args) == 2 else os.getenv("LLM_PROVIDER", "anthropic")
+        provider_name = args[1] if len(args) == 2 else os.getenv(LLM_PROVIDER_ENV, "anthropic")
         restored = restore_default_model(provider_name, console)
         if not restored:
             session.mark_latest(ok=False, kind="slash")
@@ -336,7 +337,7 @@ def _cmd_model(session: Session, console: Console, args: list[str]) -> bool:
             )
             session.mark_latest(ok=False, kind="slash")
             return True
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         if provider_name.strip().lower() not in PROVIDER_BY_VALUE:
             if tc_model is not None:

@@ -56,6 +56,7 @@ from core.agent_harness.turns.answer_finalize import (
     finish_streamed_response,
 )
 from core.agent_harness.turns.conversation_recording import record_conversation_turn
+from core.agent_harness.turns.evidence_kind import EvidenceKind
 from core.agent_harness.turns.evidence_need import (
     EvidenceNeed,
     classify_evidence_need,
@@ -70,6 +71,10 @@ from core.agent_harness.turns.gather_observation import (
 from core.agent_harness.turns.handoff_keys import HandoffTag
 from core.agent_harness.turns.handoff_policy import is_prior_investigation_follow_up_handoff
 from core.agent_harness.turns.host_cancel import host_cancel_requested
+from core.agent_harness.turns.metric_query_floor import (
+    METRIC_UNFORMED_HANDOFF,
+    gather_formed_live_metric_query,
+)
 from core.agent_harness.turns.transcript_compaction import auto_compact_if_needed
 from core.agent_harness.turns.turn_plan import TurnPlan, build_turn_plan
 from core.agent_harness.turns.turn_results import (
@@ -80,11 +85,12 @@ from core.agent_harness.turns.turn_results import (
 from core.agent_harness.turns.turn_route import (
     TurnRoute,
     TurnRoutingInput,
+    is_literal_slash_command,
     route_turn,
     routing_input_from_result,
 )
 from core.agent_harness.turns.turn_snapshot import TurnSnapshot
-from core.llm_invoke_errors import is_cli_timeout_error
+from core.llm_invoke_errors import is_cli_timeout_error, remediate_missing_llm_credentials
 from platform.harness_ports import preferred_evidence_sources_for
 from platform.observability.trace.spans import component_span, emit_route
 
@@ -163,7 +169,13 @@ def _stream_response(
             kind = "llm_timeout" if is_cli_timeout_error(exc) else "assistant_error"
             stage_turn_error(session, kind, str(exc))
             stage_turn_llm_failure(session, client=client)
-        output.render_error(f"assistant failed: {exc}")
+        from config.config import get_configured_llm_provider
+        from core.agent_harness.accounting.token_accounting import resolve_provider_name
+
+        remediation = remediate_missing_llm_credentials(
+            str(exc), provider=resolve_provider_name(client) or get_configured_llm_provider()
+        )
+        output.render_error(remediation or f"assistant failed: {exc}")
         return None
     return run_factory.build(
         client=client,
@@ -324,10 +336,13 @@ def _gather_and_answer(
     preferred-source auth/config fails.
     """
     # Three cases skip the live gather loop:
-    # 1. Answer-only handoffs (``requires_gather=false``): the action turn's
-    #    own tool work already produced what the reply needs, and a fresh sweep
-    #    would answer a different question (observed live: a completed CI
-    #    onboarding turn re-read GitHub issues/PRs as a status report).
+    # 1. Answer-only / stream-only handoffs (``requires_gather=false``): either
+    #    (a) pure conversational/docs/greeting chat that needs no live evidence,
+    #    so the host streams the reply without a gather tool loop, or (b) the
+    #    action turn's own tool work already produced what the reply needs and
+    #    a fresh sweep would answer a different question (observed live: a
+    #    completed CI onboarding turn re-read GitHub issues/PRs as a status
+    #    report). The action planner sets this flag — never user-text keywords.
     # 2. Retrospective follow-ups, which already have grounding in
     #    ``last_state`` (injected into the assistant prompt). Running the live
     #    gather loop for those turns is wasteful and often violates "do not
@@ -365,7 +380,7 @@ def _gather_and_answer(
     gathered = coerce_gathered_evidence(gathered_raw)
 
     # L1 → L0_degraded when gather shows preferred-source config/auth failure
-    # (typed tool_unavailable envelopes; not HogQL / empty-result noise).
+    # (typed tool_unavailable envelopes; not empty-query / empty-result noise).
     # Refresh the handoff tag so the answer path gets reconnect guidance.
     answer_handoffs = handoff_contents
     if evidence_need is not None and not skip_gather:
@@ -383,6 +398,21 @@ def _gather_and_answer(
                 )
                 answer_handoffs = (*answer_handoffs, tier_tag)
                 log.debug("evidence reclassified after gather: %s", tier_tag)
+
+    if (
+        evidence_need is not None
+        and evidence_need.kind is EvidenceKind.METRIC_READ
+        and not gather_formed_live_metric_query(
+            gathered,
+            metric_source_ids=(
+                *evidence_need.preferred_sources,
+                *evidence_need.connected,
+            ),
+        )
+        and METRIC_UNFORMED_HANDOFF not in answer_handoffs
+        and not any(str(tag).startswith("evidence_tier:L0_degraded") for tag in answer_handoffs)
+    ):
+        answer_handoffs = (*answer_handoffs, METRIC_UNFORMED_HANDOFF)
 
     # Off-screen when we have evidence text so the prompt builder injects it;
     # on-screen (plain path) when there is nothing to inject.
@@ -511,8 +541,13 @@ def run_turn(
         handoff_contents = (*handoff_contents, tier_tag)
     # Host ``/goal set`` goals never appear in action handoff tags — inject a
     # guidance tag so the assistant omits Want-me-to (observation + HANDOFF).
-    if session_goal_is_active(session) and not any(
-        tag.startswith("session_goal:") for tag in handoff_contents
+    # Skip on literal slash: the attach turn must stay action-only; injecting
+    # here previously forced gather_and_answer on ``/goal set`` itself (duplicate
+    # PostHog turn before autosubmit).
+    if (
+        session_goal_is_active(session)
+        and not is_literal_slash_command(text)
+        and not any(tag.startswith("session_goal:") for tag in handoff_contents)
     ):
         handoff_contents = (*handoff_contents, "session_goal:continue")
     observation = session.last_command_observation

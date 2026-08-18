@@ -15,12 +15,12 @@ from urllib.parse import urlencode
 
 from fastapi.testclient import TestClient
 
-from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.middleware.approvals import ApprovalBroker
+from gateway.core.storage.events.repository import InMemoryHandledSlackEventRepository
 from gateway.transports.slack.settings import SlackGatewaySettings, SlackInboundTransport
 from gateway.transports.slack.transport.events_api.receiver import (
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
-    InMemorySlackEventDeduplicator,
 )
 from gateway.transports.slack.transport.events_api.server import (
     EVENTS_PATH,
@@ -56,7 +56,7 @@ def _client(submitted: list[Any]) -> TestClient:
     app = build_slack_http_app(
         settings=_settings(),
         approvals=ApprovalBroker(),
-        deduplicator=InMemorySlackEventDeduplicator(),
+        handled_events=InMemoryHandledSlackEventRepository(),
         submit_turn=submitted.append,
         gate=ListenerGate(),
     )
@@ -156,7 +156,7 @@ def test_event_gets_503_when_the_turn_executor_is_gone() -> None:
     app = build_slack_http_app(
         settings=_settings(),
         approvals=ApprovalBroker(),
-        deduplicator=InMemorySlackEventDeduplicator(),
+        handled_events=InMemoryHandledSlackEventRepository(),
         submit_turn=_dead_executor,
         gate=ListenerGate(),
     )
@@ -189,7 +189,7 @@ def test_a_503ed_event_is_not_swallowed_as_a_duplicate_on_retry() -> None:
     message is dropped with no turn ever running.
     """
     # Arrange — first delivery hits a dead executor, the retry finds a live one.
-    dedup = InMemorySlackEventDeduplicator()
+    dedup = InMemoryHandledSlackEventRepository()
     submitted: list[Any] = []
     alive = {"value": False}
 
@@ -201,7 +201,7 @@ def test_a_503ed_event_is_not_swallowed_as_a_duplicate_on_retry() -> None:
     app = build_slack_http_app(
         settings=_settings(),
         approvals=ApprovalBroker(),
-        deduplicator=dedup,
+        handled_events=dedup,
         submit_turn=_submit,
         gate=ListenerGate(),
     )
@@ -232,7 +232,7 @@ def test_a_503ed_event_is_not_swallowed_as_a_duplicate_on_retry() -> None:
     assert len(submitted) == 1
 
 
-class _ReleaseFailsDeduplicator(InMemorySlackEventDeduplicator):
+class _ReleaseFailsDeduplicator(InMemoryHandledSlackEventRepository):
     """Leaves the provisional claim in place — Greptile's failed-release case."""
 
     def release(self, _event_id: str) -> bool:
@@ -259,7 +259,7 @@ def test_failed_release_does_not_permanently_drop_the_event_on_retry() -> None:
     app = build_slack_http_app(
         settings=_settings(),
         approvals=ApprovalBroker(),
-        deduplicator=dedup,
+        handled_events=dedup,
         submit_turn=_submit,
         gate=ListenerGate(),
     )
@@ -307,7 +307,7 @@ def test_a_closed_listener_acts_on_nothing_on_either_route() -> None:
     app = build_slack_http_app(
         settings=_settings(),
         approvals=approvals,
-        deduplicator=InMemorySlackEventDeduplicator(),
+        handled_events=InMemoryHandledSlackEventRepository(),
         submit_turn=submitted.append,
         gate=gate,
     )

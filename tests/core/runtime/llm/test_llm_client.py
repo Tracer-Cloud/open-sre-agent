@@ -1551,19 +1551,22 @@ def test_openai_invoke_stream_rate_limit_retries_before_emit(monkeypatch) -> Non
     assert sleeps == [7.0]
 
 
-class _FakeInsufficientQuotaError(OpenAIRateLimitError):
-    """Fake RateLimitError with ``insufficient_quota`` error code (billing limit)."""
+class _FakeQuotaError(OpenAIRateLimitError):
+    """Fake RateLimitError with a billing-quota error code."""
 
-    def __init__(self) -> None:
-        Exception.__init__(self, "You exceeded your current quota")
+    def __init__(self, code: str = "insufficient_quota") -> None:
+        Exception.__init__(self, "You have no credits remaining")
         self.status_code = 429
         self.body = {
             "error": {
-                "message": "You exceeded your current quota",
+                "message": "You have no credits remaining. Add credits to continue using the API.",
                 "type": "insufficient_quota",
-                "code": "insufficient_quota",
+                "code": code,
             }
         }
+
+
+_FakeInsufficientQuotaError = _FakeQuotaError
 
 
 def test_openai_invoke_rate_limit_insufficient_quota_raises_immediately(monkeypatch) -> None:
@@ -1599,6 +1602,42 @@ def test_openai_invoke_rate_limit_insufficient_quota_raises_immediately(monkeypa
     assert sleeps == [], "insufficient_quota must not sleep before raising"
     msg = str(exc_info.value).lower()
     assert "quota" in msg or "billing" in msg
+
+
+def test_openai_invoke_rate_limit_credit_balance_exhausted_raises_immediately(
+    monkeypatch,
+) -> None:
+    """``credit_balance_exhausted`` is prepaid-empty, not a retryable 429."""
+    call_count = 0
+
+    class _Completions:
+        def create(self, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise _FakeQuotaError("credit_balance_exhausted")
+
+    class _Chat:
+        def __init__(self) -> None:
+            self.completions = _Completions()
+
+    class _OpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = _Chat()
+
+    monkeypatch.setattr(
+        "core.llm.providers.provider_credentials.resolve_llm_api_key", lambda _env: "k"
+    )
+    monkeypatch.setattr(sdk_llm, "OpenAI", _OpenAI)
+    sleeps: list[float] = []
+    monkeypatch.setattr(sdk_llm.time, "sleep", lambda s: sleeps.append(s))
+
+    client = sdk_llm.OpenAILLMClient(model="gpt-4", api_key_env="OPENAI_API_KEY")
+    with pytest.raises(RuntimeError) as exc_info:
+        client.invoke("hi")
+
+    assert call_count == 1
+    assert sleeps == []
+    assert "quota" in str(exc_info.value).lower() or "billing" in str(exc_info.value).lower()
 
 
 def test_openai_invoke_stream_rate_limit_insufficient_quota_raises_immediately(

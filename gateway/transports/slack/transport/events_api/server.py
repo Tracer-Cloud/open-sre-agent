@@ -25,14 +25,14 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from gateway.core.runtime.approvals import ApprovalBroker
+from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.runtime.errors import GatewayTransportFailedError
+from gateway.core.storage.events.repository import HandledSlackEventRepository
 from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
 from gateway.transports.slack.delivery.feedback import record_feedback_payload
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.settings import SlackGatewaySettings
 from gateway.transports.slack.transport.events_api.receiver import (
-    SlackEventDeduplicator,
     SlackHttpStatus,
     admit_slack_http_request,
     admit_slack_interactivity_request,
@@ -85,7 +85,7 @@ class SlackHttpServerHandle:
     def stop(self, *, timeout: float = 8.0) -> bool:
         """Stop serving and report whether the listener thread ended in time.
 
-        Signature matches ``gateway.channels.chat.TransportWorker`` so the
+        Signature matches ``gateway.startup.TransportWorker`` so the
         composition root can hold either inbound transport in one handle.
         """
         self.gate.accepting = False  # refuse first; the thread may outlive the join
@@ -99,7 +99,7 @@ def build_slack_http_app(
     *,
     settings: SlackGatewaySettings,
     approvals: ApprovalBroker,
-    deduplicator: SlackEventDeduplicator,
+    handled_events: HandledSlackEventRepository,
     submit_turn: SubmitTurn,
     gate: ListenerGate,
 ) -> FastAPI:
@@ -120,7 +120,7 @@ def build_slack_http_app(
             headers=dict(request.headers),
             body=body,
             signing_secret=settings.signing_secret,
-            deduplicator=deduplicator,
+            handled_events=handled_events,
         )
         if outcome.status is SlackHttpStatus.REJECTED:
             # Detail stays server-side (CWE-209): the caller is unauthenticated.
@@ -136,7 +136,7 @@ def build_slack_http_app(
                 # claim, then 503 so Slack retries. If release fails, still 500
                 # to page — but the next ``claim`` may reclaim the uncommitted
                 # row, so the event is not permanently answered as a duplicate.
-                released = deduplicator.release(outcome.event_id)
+                released = handled_events.release(outcome.event_id)
                 logger.warning("slack http accepted an event with no turn executor")
                 if not released:
                     logger.error(
@@ -151,7 +151,7 @@ def build_slack_http_app(
                 return JSONResponse(
                     {"error": "unavailable"}, status_code=HTTPStatus.SERVICE_UNAVAILABLE
                 )
-            if not deduplicator.confirm(outcome.event_id):
+            if not handled_events.confirm(outcome.event_id):
                 # Turn is already queued; prefer 200 over 5xx (which would
                 # invite a reclaim double-run).
                 logger.error(

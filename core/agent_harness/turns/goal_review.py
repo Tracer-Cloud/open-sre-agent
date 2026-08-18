@@ -35,7 +35,7 @@ from core.agent_harness.closed_llm_verdict import invoke_closed_goal_verdict
 from core.agent_harness.turns.gather_discovery_budget import (
     bridge_tool_target,
     is_gather_discovery_call,
-    is_mcp_metric_target,
+    is_live_metric_query_call,
 )
 from core.events import RuntimeEvent, RuntimeEventCallback, ToolExecutionEndEvent
 from core.llm.types import AgentLLMClient
@@ -149,20 +149,13 @@ def _gather_ran_only_discovery(calls: list[ExecutedToolCall]) -> bool:
 
 
 def _gather_ran_metric_query(calls: list[ExecutedToolCall]) -> bool:
-    """True when at least one executed call looks like a real metric query."""
-    for name, args in calls:
-        if is_gather_discovery_call(name, args):
-            continue
-        target = bridge_tool_target(args)
-        if target and is_mcp_metric_target(target):
-            return True
-        # Non-bridge tools (Grafana, native integrations) count as data fetches.
-        if not name.startswith("call_") and not name.startswith("list_"):
-            return True
-        # Bridge call classified as non-discovery (e.g. command-style query).
-        if name.startswith("call_") and name.endswith("_tool"):
-            return True
-    return False
+    """True when at least one executed call was a live metric/SQL/PromQL fetch.
+
+    Deliberately narrower than "not discovery": a Sentry issue read or a Slack
+    conversation fetch is real evidence but not a formed metric query, and the
+    reviewer note must not imply one ran.
+    """
+    return any(is_live_metric_query_call(name, args) for name, args in calls)
 
 
 @dataclass
@@ -179,7 +172,7 @@ class _LLMGoalReviewer:
     # gather loop has no user to ask mid-pass, so its reviewer keeps going.
     skip_on_question: bool = True
     # Gather only: args-aware tap so discovery-only stops are rejected without
-    # waiting for the LLM (which previously treated draft HogQL as reached).
+    # waiting for the LLM (which previously treated a draft query as reached).
     executed_tool_calls: list[ExecutedToolCall] = field(default_factory=list)
     reject_discovery_only: bool = False
     reviews_remaining: int = field(default=_MAX_GOAL_REVIEWS)
@@ -268,7 +261,7 @@ def build_gather_goal_reviewer(
 
     ``executed_tool_calls`` is the shared list a :func:`tap_executed_tool_calls`
     wrapper fills; discovery-only turns are rejected deterministically before
-    the LLM review (draft HogQL after schema thrash must not count as reached).
+    the LLM review (a draft query after schema thrash must not count as reached).
     """
     calls = executed_tool_calls if executed_tool_calls is not None else []
     return Goal(

@@ -4,16 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import AbstractContextManager, nullcontext
 
-from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
+from config.scope_context import bound_storage_scope
+from gateway.core.middleware.active_turns import ActiveTurnRegistry
+from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
+from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.buzz.approvals import BuzzApprovalPrompter
 from gateway.transports.buzz.inbound_security import enforce_inbound_buzz_message_security
 from gateway.transports.buzz.output_sink import BuzzOutputSink
 from gateway.transports.buzz.pending_approvals import PendingApprovals
+from gateway.transports.buzz.principal import PrincipalResolutionError, resolve_buzz_scope
 from gateway.transports.buzz.session_rotation import conversation_key, resolve_or_rotate_session
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
@@ -33,11 +40,19 @@ async def handle_polled_inbound_buzz_message(
     turn_semaphore: asyncio.Semaphore,
     approvals: ApprovalBroker,
     pending_approvals: PendingApprovals,
+    active_cancels: ActiveTurnRegistry,
+    turn_cancel: threading.Event | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     handle_callback_to_gateway_agent: GatewayAgentCallback,
     on_handled: Callable[[], None] | None = None,
 ) -> None:
     """Process one long-polled inbound Buzz mention/reply.
+
+    *turn_cancel* is the cancel Event the dispatcher registered in
+    *active_cancels* before scheduling this turn, so a ``/stop`` that lands
+    while the turn is still queued behind the conversation lock is honored
+    here without invoking the agent. Callers that pass ``None`` (direct
+    invocations) get a turn-local Event tracked for the turn's duration.
 
     *on_handled* fires on the executor thread the moment the turn body
     returns, not when the awaiting coroutine resumes. Shutdown cancels the
@@ -55,13 +70,26 @@ async def handle_polled_inbound_buzz_message(
         text=event.content,
         env_allowed_pubkeys=settings.allowed_pubkeys,
     )
-    async with user_lock, turn_semaphore:
-        session = resolve_or_rotate_session(
-            event,
-            decision,
-            session_resolver=session_resolver,
-            client=client,
+    try:
+        scope = resolve_buzz_scope(pubkey=event.pubkey)
+    except PrincipalResolutionError:
+        logger.error(
+            "[buzz-gateway] turn refused: unresolved principal pubkey=%s channel=%s",
+            event.pubkey,
+            event.channel_id,
+            exc_info=True,
         )
+        return
+
+    async with user_lock, turn_semaphore:
+        with bound_storage_scope(scope):
+            session = resolve_or_rotate_session(
+                event,
+                decision,
+                session_resolver=session_resolver,
+                client=client,
+                scope=scope,
+            )
         if session is None:
             return
 
@@ -92,13 +120,38 @@ async def handle_polled_inbound_buzz_message(
         )
 
         event_loop = loop or asyncio.get_running_loop()
+        terminal = TerminalOutcomeArbiter(cancel_event=turn_cancel)
+        sink.turn_cancel = terminal.cancel_event
+
+        def _on_turn_timeout() -> None:
+            logger.warning(
+                "[buzz-gateway] turn TIMED OUT after %.0fs channel=%s session=%s",
+                settings.turn_timeout_seconds,
+                event.channel_id,
+                session.session_id[:8],
+            )
+            try:
+                sink.finalize(TURN_TIMEOUT_MESSAGE)
+            except Exception:
+                logger.debug("[buzz-gateway] timeout finalize failed", exc_info=True)
+
+        def _on_user_stop() -> None:
+            if not terminal.claim():
+                return
+            try:
+                sink.finalize(USER_STOP_MESSAGE)
+            except Exception:
+                logger.debug("[buzz-gateway] user-stop finalize failed", exc_info=True)
 
         def _run_turn() -> None:
             try:
-                with bound_usage_context(
-                    surface=SURFACE_BUZZ,
-                    session_id=session.session_id,
-                    user_id=event.pubkey or None,
+                with (
+                    bound_storage_scope(scope),
+                    bound_usage_context(
+                        surface=SURFACE_BUZZ,
+                        session_id=session.session_id,
+                        user_id=event.pubkey or None,
+                    ),
                 ):
                     handle_callback_to_gateway_agent(
                         event.content,
@@ -110,7 +163,48 @@ async def handle_polled_inbound_buzz_message(
                 if on_handled is not None:
                     on_handled()
 
-        await event_loop.run_in_executor(executor, _run_turn)
+        if turn_cancel is None:
+            registration: AbstractContextManager[None] = active_cancels.track(
+                key,
+                terminal.cancel_event,
+                on_user_stop=_on_user_stop,
+            )
+        else:
+            active_cancels.bind_user_stop(key, turn_cancel, _on_user_stop)
+            registration = nullcontext()
+
+        if terminal.cancel_event.is_set():
+            if terminal.claim():
+                try:
+                    sink.finalize(USER_STOP_MESSAGE)
+                except Exception:
+                    logger.debug("[buzz-gateway] user-stop finalize failed", exc_info=True)
+            if on_handled is not None:
+                on_handled()
+            return
+
+        with terminal.timeout_after(settings.turn_timeout_seconds, _on_turn_timeout):
+            try:
+                with registration:
+                    await event_loop.run_in_executor(executor, _run_turn)
+            except Exception:
+                logger.exception(
+                    "[buzz-gateway] turn ERRORED channel=%s session=%s",
+                    event.channel_id,
+                    session.session_id[:8],
+                )
+                if terminal.claim():
+                    try:
+                        sink.render_error(TURN_ERROR_MESSAGE)
+                    except Exception:
+                        logger.debug("[buzz-gateway] error finalize failed", exc_info=True)
+                raise
+        if terminal.claim():
+            logger.info(
+                "[buzz-gateway] turn done channel=%s session=%s",
+                event.channel_id,
+                session.session_id[:8],
+            )
 
 
 __all__ = ["handle_polled_inbound_buzz_message"]

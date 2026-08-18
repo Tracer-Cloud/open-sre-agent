@@ -96,6 +96,20 @@ HANDOFF_GUIDANCE: dict[str, str] = {
         "and do not open an onboarding wizard unprompted. A bare user yes after "
         "that CTA will run the connect slash; do not invent a second Want-me-to.\n\n"
     ),
+    "evidence_tier:metric_unformed": (
+        "Gather ran but did not execute a live metric query (schema/list probes "
+        "only, unknown event, or the query could not be formed). Do not invent "
+        "a count.\n"
+        "Structure the reply like this:\n"
+        "1. One plain sentence: the live query could not be formed and why.\n"
+        "2. A short draft query in a fenced code block, labeled as a draft, "
+        "in the query language of the preferred connected analytics source. "
+        "Never invent metric numbers as fact.\n"
+        "3. Exactly one setup line using a valid `/integrations setup <id>` "
+        "(preferred source id from this session). Do not invent a vendor.\n"
+        "Do NOT offer a full incident investigation. Do NOT close with "
+        "**Want me to:**. Stop after this reply.\n\n"
+    ),
     # Connected preferred source failed auth/config after gather.
     # Prefix: ``evidence_tier:L0_degraded:config:<ids>`` (matched before plain L0).
     "evidence_tier:L0_degraded:config": (

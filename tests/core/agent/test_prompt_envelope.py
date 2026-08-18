@@ -4,7 +4,10 @@ import pytest
 
 from core.agent_harness.prompts import (
     PromptBlock,
+    PromptBlockId,
+    PromptBlockKind,
     PromptEnvelope,
+    PromptTier,
     build_action_system_prompt,
     build_action_system_prompt_envelope,
     build_action_user_message,
@@ -56,22 +59,35 @@ def test_action_system_prompt_envelope_matches_legacy_rendering() -> None:
     ctx = _ctx()
     envelope = build_action_system_prompt_envelope(ctx)
 
-    # "action-agent-vendor-fragments" carries integration-owned prompt recipes
+    # ACTION_VENDOR_FRAGMENTS carries integration-owned prompt recipes
     # (e.g. Slack/GitHub action routing) registered via
     # platform.harness_ports.register_action_prompt_fragment — see
     # integrations/harness_adapters.py. It renders empty (and is absent from
     # this id list) when no fragments are registered.
     assert [block.id for block in envelope.blocks] == [
-        "action-agent-system-base",
-        "action-agent-vendor-fragments",
-        "action-agent-skills",
-        "connected-integrations",
-        "recent-conversation",
+        PromptBlockId.ACTION_SYSTEM_BASE,
+        PromptBlockId.ACTION_VENDOR_FRAGMENTS,
+        PromptBlockId.ACTION_RUNTIME_FACTS,
+        PromptBlockId.ACTION_SKILLS,
+        PromptBlockId.CONNECTED_INTEGRATIONS,
+        PromptBlockId.RECENT_CONVERSATION,
     ]
-    assert envelope.require_block("action-agent-vendor-fragments").kind == "rule"
-    assert envelope.require_block("action-agent-skills").kind == "rule"
-    assert envelope.require_block("connected-integrations").kind == "context"
-    assert envelope.require_block("recent-conversation").kind == "conversation"
+    assert (
+        envelope.require_block(PromptBlockId.ACTION_VENDOR_FRAGMENTS).kind == PromptBlockKind.RULE
+    )
+    # The action agent can answer the user, so it carries the same host facts
+    # the assistant does rather than guessing them.
+    assert (
+        envelope.require_block(PromptBlockId.ACTION_RUNTIME_FACTS).kind == PromptBlockKind.CONTEXT
+    )
+    assert envelope.require_block(PromptBlockId.ACTION_SKILLS).kind == PromptBlockKind.RULE
+    assert (
+        envelope.require_block(PromptBlockId.CONNECTED_INTEGRATIONS).kind == PromptBlockKind.CONTEXT
+    )
+    assert (
+        envelope.require_block(PromptBlockId.RECENT_CONVERSATION).kind
+        == PromptBlockKind.CONVERSATION
+    )
     assert envelope.render() == build_action_system_prompt(ctx)
 
 
@@ -156,11 +172,12 @@ def test_every_block_declares_which_tier_it_belongs_to() -> None:
 
     # Assert
     assert tiers == {
-        "action-agent-system-base": "stable",
-        "action-agent-vendor-fragments": "stable",
-        "action-agent-skills": "stable",
-        "connected-integrations": "context",
-        "recent-conversation": "ephemeral",
+        PromptBlockId.ACTION_SYSTEM_BASE: PromptTier.STABLE,
+        PromptBlockId.ACTION_VENDOR_FRAGMENTS: PromptTier.STABLE,
+        PromptBlockId.ACTION_RUNTIME_FACTS: PromptTier.STABLE,
+        PromptBlockId.ACTION_SKILLS: PromptTier.STABLE,
+        PromptBlockId.CONNECTED_INTEGRATIONS: PromptTier.CONTEXT,
+        PromptBlockId.RECENT_CONVERSATION: PromptTier.EPHEMERAL,
     }
 
 
@@ -305,8 +322,8 @@ def test_split_reassembles_when_long_term_memory_is_present(
     marker = "zzmarker-memory-order-utterance"
     envelope = build_action_system_prompt_envelope(_turn([("user", marker)]))
     ids = [block.id for block in envelope.blocks]
-    assert "long-term-memory" in ids
-    assert ids.index("long-term-memory") < ids.index("recent-conversation")
+    assert PromptBlockId.LONG_TERM_MEMORY in ids
+    assert ids.index(PromptBlockId.LONG_TERM_MEMORY) < ids.index(PromptBlockId.RECENT_CONVERSATION)
 
     cached, ephemeral = envelope.render_split()
     rejoined = envelope.separator.join(half for half in (cached, ephemeral) if half)

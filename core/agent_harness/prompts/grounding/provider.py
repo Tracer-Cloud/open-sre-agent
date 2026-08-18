@@ -9,9 +9,9 @@ from config.constants.prompts import SUGGESTED_PROMPT_AFTER_FAILED_SYNTHETIC_TES
 from core.agent_harness.grounding.investigation_flow_reference import (
     build_investigation_flow_reference_text,
 )
-from core.agent_harness.llm_resolution import resolve_provider_models
 from core.agent_harness.prompts.assistant.environment import build_environment_block
 from core.agent_harness.prompts.kernel.surfaces import profile_for
+from core.llm.provider_models import resolve_provider_models
 from platform.observability.trace.spans import component_span
 
 # Minimum retrieval score for a docs page to ground an assistant answer. A

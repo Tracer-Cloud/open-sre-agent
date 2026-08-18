@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from config.config import get_tracer_base_url
-from surfaces.cli.wizard.config import PROJECT_ENV_PATH
+from surfaces.shared.llm_setup.catalog import PROJECT_ENV_PATH
 
 
 @dataclass(frozen=True)

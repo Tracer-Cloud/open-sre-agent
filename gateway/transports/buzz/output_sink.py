@@ -14,7 +14,7 @@ import threading
 import time
 from collections.abc import Iterable
 
-from gateway.core.runtime.status_messages import (
+from gateway.core.host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,
@@ -47,6 +47,10 @@ class BuzzOutputSink:
         edit_interval_seconds: float = 1.5,
         tool_hooks: object | None = None,
     ) -> None:
+        # Set per turn by the host cancel plumbing; declared here so the sink
+        # cooperates with cancellation like every other transport's, instead of
+        # relying on ``ensure_turn_cancel`` patching the attribute on.
+        self.turn_cancel: threading.Event | None = None
         self._client = client
         self._channel_id = channel_id
         self._edit_interval = edit_interval_seconds

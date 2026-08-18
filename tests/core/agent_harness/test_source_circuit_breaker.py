@@ -340,7 +340,7 @@ def test_execute_tool_calls_blocks_second_call_through_real_seam() -> None:
 
 
 def test_session_seed_blocks_sibling_on_next_gather_turn() -> None:
-    """Parity S4: SessionGoal turn 1 must not re-hit a source marked dead on turn 0."""
+    """Next SessionGoal gather must not re-hit a source marked dead earlier."""
     session = SimpleNamespace()
     first = SourceCircuitBreaker()
     hooks = first.hooks()

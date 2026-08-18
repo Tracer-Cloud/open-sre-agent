@@ -1,20 +1,20 @@
-"""Cap MCP discovery thrash during evidence gather.
+"""Limit how many schema-exploring MCP calls one evidence gather may spend.
 
 MCP bridges typically expose ``list_*_tools`` plus a ``call_*_tool`` exec
 surface where the model explores with ``search`` / ``info`` / ``schema`` and
-meta ``call read-data-schema`` before any real metric query. PostHog's bridge
-also takes a structured ``tool_name`` + ``arguments`` shape (not only an
-``exec`` command string). Those discovery calls often succeed or fail with
-taxonomy errors, so :class:`SourceCircuitBreaker` never trips — live
-SessionGoal metric asks burned discovery lines and still returned no count
-(parity S1).
+meta ``call read-data-schema`` before any real metric query. Some bridges take
+a structured ``tool_name`` + ``arguments`` shape, not only an ``exec`` command
+string. Those exploring calls succeed, or fail with taxonomy errors, so
+:class:`SourceCircuitBreaker` never trips: a gather can spend every iteration
+exploring and return no data.
 
 This hook:
 
 * Matches bridge tools by naming shape (``list_*_tools`` / ``call_*_tool``),
   not a vendor allow-list.
 * Treats structured ``tool_name`` targets as discovery unless they are a
-  known metric tool (``execute-sql`` / ``query-*``).
+  registered metric query tool (vendors opt in via
+  :func:`~platform.harness_ports.register_metric_query_tools`).
 * Dedupes exact discovery fingerprints for the gather turn (command text /
   tool target; ``context`` prose is ignored).
 * Caps how many discovery-style calls may run (including failed ones);
@@ -34,6 +34,10 @@ from core.execution import (
     ToolExecutionHooks,
     ToolExecutionRequest,
     ToolExecutionResult,
+)
+from platform.harness_ports import (
+    registered_discovery_targets,
+    registered_metric_query_tools,
 )
 
 DEFAULT_MAX_DISCOVERY_CALLS = 4
@@ -116,17 +120,46 @@ def is_mcp_discovery_target(target: str) -> bool:
         return False
     # Exact names. Prefix matching would read ``search_tweets`` as the probe
     # verb ``search`` and bill a data fetch to the discovery budget.
-    return name in _DISCOVERY_TARGETS
+    return name in _DISCOVERY_TARGETS or name in registered_discovery_targets()
 
 
 def is_mcp_metric_target(target: str) -> bool:
-    """True for MCP tools that fetch metric / query results (not schema)."""
+    """True for MCP tools registered as live metric / query fetches.
+
+    Vendors declare names via
+    :func:`~platform.harness_ports.register_metric_query_tools`. Core must not
+    hard-code PostHog ``execute-sql`` / ``query-*`` conventions here.
+    """
     name = target.strip().lower()
-    if not name:
+    return bool(name) and name in registered_metric_query_tools()
+
+
+def is_live_metric_query_call(tool_name: str, arguments: dict[str, Any]) -> bool:
+    """True when this call is a live metric/SQL/PromQL fetch — not discovery.
+
+    Narrower than ``not is_gather_discovery_call``: Sentry ``issue_get``, X
+    ``search_tweets``, and other non-discovery fetches must not count as a
+    formed metric query (that would suppress the draft-query floor).
+
+    Matching is exact against the vendor-registered closed set — no substring
+    scans and no hyphen/underscore dual checks. Alternate spellings must be
+    registered explicitly if both are real tool names.
+    """
+    name = tool_name.strip()
+    if not name or is_mcp_list_tools(name):
         return False
-    if name == "execute-sql":
-        return True
-    return name.startswith("query-")
+    if is_mcp_exec_bridge(name):
+        target = bridge_tool_target(arguments)
+        if target:
+            return is_mcp_metric_target(target)
+        command = _exec_command(arguments)
+        if not command:
+            return False
+        verb = command.split(None, 1)[0].lower()
+        if verb == "call":
+            return is_mcp_metric_target(_call_target(command))
+        return False
+    return name.lower() in registered_metric_query_tools()
 
 
 def _fingerprint_arg_hint(arguments: dict[str, Any]) -> str:
@@ -271,6 +304,7 @@ __all__ = [
     "bridge_tool_target",
     "discovery_fingerprint",
     "is_gather_discovery_call",
+    "is_live_metric_query_call",
     "is_mcp_exec_bridge",
     "is_mcp_list_tools",
     "is_mcp_metric_target",

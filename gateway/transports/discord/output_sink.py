@@ -7,7 +7,7 @@ import threading
 import time
 from collections.abc import Iterable
 
-from gateway.core.runtime.status_messages import (
+from gateway.core.host.status_messages import (
     EMPTY_RESPONSE_MESSAGE,
     initial_status_message,
     normalize_gateway_status,

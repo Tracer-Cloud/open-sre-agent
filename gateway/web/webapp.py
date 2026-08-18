@@ -36,7 +36,9 @@ ensure_project_platform_package()
 
 from bootstrap.process import WEB_PROFILE, configure_process  # noqa: E402
 from core.agent_harness import AgentSession  # noqa: E402
-from gateway.core.runtime.readiness import is_gateway_ready  # noqa: E402
+from gateway.core.process.readiness import is_gateway_ready  # noqa: E402
+from gateway.core.storage import open_database  # noqa: E402
+from gateway.core.storage.investigations.repository import investigation_repository  # noqa: E402
 from gateway.web.investigations import router as investigations_router  # noqa: E402
 from platform.observability.errors.sentry import capture_exception  # noqa: E402
 from tools.investigation.capability import resolve_investigation_context  # noqa: E402
@@ -62,6 +64,7 @@ class HealthResponse(BaseModel):
 
 
 app = FastAPI()
+app.state.investigations = investigation_repository(open_database())
 app.include_router(investigations_router)
 
 
@@ -211,7 +214,7 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
-    from gateway.core.runtime.concurrency import process_turn_gate
+    from gateway.core.host.concurrency import process_turn_gate
 
     gate = process_turn_gate()
     # Same process gate as chat / scheduler — busy-drop like GatewayTurnHandler.

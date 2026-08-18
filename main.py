@@ -2,11 +2,11 @@
 
 Prefer the ``opensre`` console script in normal use. This module exists so
 ``python main.py`` and ``python -m`` discovery reach the same CLI as
-``surfaces.cli.app:main``.
+``surfaces.entrypoint:main``.
 
 This covers the interactive shell, the landing page, and every one-shot
 subcommand. The gateway daemon is a separate process entry managed via
-``opensre gateway start`` (CLI wires slash ports). Bare ``python -m gateway.main``
+``opensre gateway start`` (CLI wires slash ports). Bare ``python -m gateway``
 fails closed — ``gateway`` and ``surfaces`` are peer packages that must not
 import each other.
 
@@ -44,7 +44,7 @@ process.
 provider is unreachable) the error message itself lands in
 ``primary_response_text``. Surfaces that need their own ports — a live gateway
 sink, a REPL console — build a ``HeadlessAgent`` (or
-``build_default_headless_agent``) and call ``attach_agent``, then ``chat``.
+``DefaultPorts(...).agent(...)``) and call ``attach_agent``, then ``chat``.
 
 Construct **one** agent per logical session (or scheduled loop), then many
 ``chat`` / ``investigate`` turns — do not rebuild every message. Gateway does
@@ -58,9 +58,9 @@ from __future__ import annotations
 
 def main() -> int:
     """Run the CLI and return its exit status."""
-    from surfaces.cli.app import main as cli_main
+    from surfaces.entrypoint import main as entrypoint_main
 
-    return cli_main()
+    return entrypoint_main()
 
 
 if __name__ == "__main__":

@@ -121,8 +121,8 @@ class TestGetInvestigationAgentClass:
         from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
 
         monkeypatch.setattr(
-            "tools.investigation.stages.gather_evidence.agent.get_llm",
-            lambda _role: mock.MagicMock(spec=CLIBackedAgentClient),
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            lambda: mock.MagicMock(spec=CLIBackedAgentClient),
         )
         assert get_investigation_agent_class() is CLIBackedInvestigationAgent
 
@@ -132,7 +132,7 @@ class TestGetInvestigationAgentClass:
         from tools.investigation.stages.gather_evidence.agent import get_investigation_agent_class
 
         monkeypatch.setattr(
-            "tools.investigation.stages.gather_evidence.agent.get_llm",
-            lambda _role: mock.MagicMock(spec=AnthropicAgentClient),
+            "tools.investigation.stages.gather_evidence.agent.default_llm_factory",
+            lambda: mock.MagicMock(spec=AnthropicAgentClient),
         )
         assert get_investigation_agent_class() is ConnectedInvestigationAgent

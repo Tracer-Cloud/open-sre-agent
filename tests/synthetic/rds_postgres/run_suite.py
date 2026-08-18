@@ -461,7 +461,7 @@ def _suppress_investigation_rendering(enabled: bool) -> Iterator[None]:
     previous_output_format = os.environ.get("TRACER_OUTPUT_FORMAT")
     os.environ["TRACER_OUTPUT_FORMAT"] = "none"
 
-    from surfaces.interactive_shell.ui import output as output_module
+    from surfaces.shared.terminal import output as output_module
 
     output_module.get_tracker(reset=True)
     try:

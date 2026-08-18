@@ -7,7 +7,7 @@ Layout:
 - package root — ``settings``, ``client``, ``startup``
 
 The per-message handler the worker drives is transport-agnostic and injected by
-the composition root (:mod:`gateway.core.runtime.manager`). Outbound-only Slack
+the composition root (:mod:`gateway.core.runtime.controller`). Outbound-only Slack
 delivery (webhooks, RCA reports) lives in :mod:`integrations.slack`.
 
 Transport entry: :mod:`gateway.transports.slack.startup` (``start_slack_worker``).

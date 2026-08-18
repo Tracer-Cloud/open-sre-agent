@@ -6,9 +6,9 @@ import io
 
 from rich.console import Console
 
-from surfaces.interactive_shell.ui.banner import banner as banner_module
-from surfaces.interactive_shell.ui.banner import banner_state as banner_state_module
-from surfaces.interactive_shell.ui.components import rendering as rendering_module
+from surfaces.interactive_shell.ui import poster as poster_module
+from surfaces.shared.terminal.banner import banner as banner_module
+from surfaces.shared.terminal.banner import banner_state as banner_state_module
 
 
 def test_integration_display_name_preserves_brand_casing() -> None:
@@ -51,7 +51,7 @@ def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> No
     render_calls: list[dict[str, object | None]] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_clear_screen",
+        "surfaces.shared.terminal.components.rendering.repl_clear_screen",
         lambda: None,
     )
 
@@ -64,11 +64,11 @@ def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> No
         render_calls.append({"session": session, "theme_notice": theme_notice})
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_render_launch_poster",
+        "surfaces.interactive_shell.ui.poster.repl_render_launch_poster",
         _fake_render,
     )
 
-    rendering_module.refresh_welcome_poster(console, session="sess", theme_notice="pink")
+    poster_module.refresh_welcome_poster(console, session="sess", theme_notice="pink")
 
     assert render_calls == [{"session": "sess", "theme_notice": "pink"}]
 
@@ -167,7 +167,9 @@ def test_count_loaded_skills_survives_loader_failure(monkeypatch: object) -> Non
     real_import = builtins.__import__
 
     def _fail_skills_loader(name: str, *args: object, **kwargs: object) -> object:
-        if name == "core.agent_harness.prompts.skills.loader":
+        # The banner reaches the loader through the harness SPI; fail the import
+        # whichever API module it comes through so the guard is about the loader, not the path.
+        if name in ("core.agent_harness.prompts.skills.loader", "core.agent_harness.spi.grounding"):
             raise ImportError("simulated heavy import failure")
         return real_import(name, *args, **kwargs)
 
@@ -202,3 +204,37 @@ def test_ready_box_expands_to_console_width() -> None:
     ]
     assert lines
     assert max(len(line) for line in lines) == 120
+
+
+def test_identity_greeting_matches_first_run_state(monkeypatch: object) -> None:
+    """First run greets 'Welcome'; a returning install greets 'Welcome back'."""
+    # Arrange: fix the username so the assertion is exact.
+    monkeypatch.setattr(banner_module, "_get_username", lambda: "casey")
+
+    # Act
+    first = banner_module._build_identity_block(
+        "openai", "gpt-5.4-mini", trust_mode=False, first_run=True
+    ).plain
+    returning = banner_module._build_identity_block(
+        "openai", "gpt-5.4-mini", trust_mode=False, first_run=False
+    ).plain
+
+    # Assert
+    assert "Welcome casey!" in first
+    assert "Welcome back" not in first
+    assert "Welcome back casey!" in returning
+
+
+def test_ready_box_greets_first_run_without_welcome_back(monkeypatch: object) -> None:
+    # Arrange: a machine where the wizard has never completed.
+    monkeypatch.setattr(banner_module, "_is_first_run", lambda: True)
+    console_file = io.StringIO()
+    console = Console(file=console_file, force_terminal=False, highlight=False, width=120)
+
+    # Act
+    banner_module.render_ready_box(console)
+
+    # Assert
+    output = console_file.getvalue()
+    assert "Welcome" in output
+    assert "Welcome back" not in output

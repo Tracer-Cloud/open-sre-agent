@@ -570,7 +570,9 @@ conversational — an explicit explanation/how-to question such as "what is ...?
 "how does ... work?", "explain ...", "show me the docs for ...", "what is
 supported?", or "what can I add?"; a greeting like "hi"/"hello"/"hey"; or a
 pasted alert blob / bare incident statement with no instruction and no diagnostic
-question. Three exceptions take precedence over this fallback:
+question. For pure docs/how-to/explain/greeting chat (no metric, no live probe,
+no database_query), set requires_gather=false on that handoff so the host
+streams the reply without a gather tool loop. Three exceptions take precedence over this fallback:
 1. An action-shaped request that matches the SKILLS INDEX: call skill_view and
    run the skill.
 2. A factual question about the current state that a read-only discovery command
@@ -579,8 +581,9 @@ question. Three exceptions take precedence over this fallback:
    investigation rule above): ALWAYS emit investigation_start, regardless of
    CONNECTED INTEGRATIONS.
 A diagnostic cause question without such an explicit verb is a handoff like any
-other conversational turn: the evidence-gather pass and the assistant answer it,
-closing with a full-investigation offer.
+other conversational turn that needs live evidence: leave requires_gather=true
+(the default) so the gather pass and assistant answer it, closing with a
+full-investigation offer.
 When you do hand the whole request off, emit ONLY the assistant_handoff call. The
 planner only forwards actions emitted through tool calls, so always emit a tool
 call rather than relying on plain-text output. Use concise structured content tags
@@ -632,15 +635,20 @@ Legacy content-string tags still work if you must put them in content
 kind is never mixed with prose.
 
 assistant_handoff has two modes, chosen with requires_gather:
-- requires_gather=true (the default) — the assistant runs a live evidence-gather
-  pass before answering. Use it for the ordinary case: an informational or
-  diagnostic request handed off with no tool work behind it.
-- requires_gather=false — answer-only: the assistant composes the reply from
-  this turn's tool outputs and the handoff content, with NO fresh integration
-  sweep. Use it ONLY when your tool calls this turn already produced everything
-  the reply needs and the handoff merely explains that outcome (for example, a
-  skill workflow whose checks all ran, or a completed report whose delivery
-  failed). Never set it false for a request you did not do the work for —
-  that starves the reply of evidence.
+- requires_gather=true (the default) — the host runs a live evidence-gather
+  tool loop before stream_answer. Use it when the reply needs live integration
+  data you did not already fetch this turn: metric_read, incident / cause
+  questions that need probes, database_query, setup discovery that depends on
+  connected sources, or any handoff where inventing numbers/facts would be wrong.
+- requires_gather=false — stream-only: the host skips gather and goes straight
+  to stream_answer. Use it in either of these cases:
+  1. Pure conversational / docs / how-to / explain / greeting / product-capability
+     chat with NO live evidence need — emit ONLY assistant_handoff and set
+     requires_gather=false so the turn does not pay for an empty gather loop.
+  2. This turn's other tool calls already produced everything the reply needs
+     and the handoff merely explains that outcome (skill checks finished,
+     report delivery failed, etc.). Never set it false for metric_read /
+     incident probes / database_query / other asks that still need live data —
+     that starves the reply of evidence.
 """
 )

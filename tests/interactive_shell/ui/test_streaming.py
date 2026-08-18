@@ -836,10 +836,15 @@ class TestParagraphFlushThrottle:
         monkeypatch.setattr(streaming_module, "Markdown", _SpyMarkdown)
         return parse_count
 
-    def test_long_single_paragraph_renders_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No ``\\n\\n`` in any chunk → the only Markdown parse is the
-        end-of-stream force-flush. Proves the fast-path skips the join
-        on every intermediate chunk."""
+    def test_long_single_paragraph_renders_progressively(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No ``\\n\\n`` in any chunk still paints before end-of-stream.
+
+        Long prose requests such as "explain OpenSRE in 10k words" may arrive as
+        one giant paragraph. The renderer should not wait for EOS before the
+        user sees body text, while still keeping Markdown parses bounded.
+        """
         parse_count = self._spy_markdown_parses(monkeypatch)
         console, _ = _tty_console()
 
@@ -849,8 +854,9 @@ class TestParagraphFlushThrottle:
 
         assert "word0" in result
         assert "word499" in result
-        # End-of-stream force-flush is the only Markdown construction.
-        assert parse_count[0] == 1, f"expected 1 parse (force-flush), got {parse_count[0]}"
+        assert 2 <= parse_count[0] <= 10, (
+            f"expected bounded progressive parses, got {parse_count[0]}"
+        )
 
     def test_paragraph_boundary_per_chunk_renders_once_per_paragraph(
         self, monkeypatch: pytest.MonkeyPatch

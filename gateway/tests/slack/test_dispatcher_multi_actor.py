@@ -143,7 +143,7 @@ def allow_all_security():
             "gateway.transports.slack.processing.dispatcher.enforce_inbound_slack_message_security",
             return_value=decision,
         ),
-        patch("gateway.transports.slack.processing.dispatcher.persist_policy_if_needed"),
+        patch("gateway.core.middleware.inbound_decision.persist_policy_if_needed"),
         patch(
             "gateway.transports.slack.processing.dispatcher.session_needs_thread_seed",
             return_value=False,

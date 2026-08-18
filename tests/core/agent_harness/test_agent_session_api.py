@@ -32,7 +32,7 @@ def _stub_turn_result() -> TurnResult:
 
 
 def test_startup_runs_the_boot_step_the_host_supplied() -> None:
-    """Parity S1/S4: an embedded host must not resolve zero integrations.
+    """An embedded host must not resolve zero integrations.
 
     ``core`` may not import ``bootstrap``, so the host passes the boot step in
     rather than the harness reaching up a tier for it.
@@ -109,6 +109,16 @@ def test_start_registers_harness_adapters_so_integrations_resolve() -> None:
         get_investigation_tools({"grafana": {"endpoint": "http://g", "connection_verified": True}})
     )
     assert any(t.name.startswith("query_grafana") for t in grafana_tools)
+
+
+def test_start_does_not_inject_an_embedded_boot_step() -> None:
+    """CLI/gateway leave ``boot_process`` unset; ``start`` must not fill one in.
+
+    ``core`` may not import ``bootstrap``. Embedded hosts use
+    ``start_embedded_session`` (or pass an explicit boot step).
+    """
+    session = AgentSession.start(SessionConfig(open_store=False, persistent_tasks=False))
+    assert session._config.boot_process is None
 
 
 def test_chat_is_the_public_verb(monkeypatch: Any) -> None:

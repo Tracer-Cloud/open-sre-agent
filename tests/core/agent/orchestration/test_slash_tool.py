@@ -143,6 +143,63 @@ def test_agent_resolved_slash_announces_itself() -> None:
     assert "$ /health" in buf.getvalue()
 
 
+def test_goal_set_banner_does_not_quote_harmless_punctuation() -> None:
+    """``days?`` / ``PostHog;`` must stay readable on the ``$`` line."""
+    ctx, buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
+    args = [
+        "set",
+        "--max-turns",
+        "4",
+        "What",
+        "is",
+        "D7",
+        "retention",
+        "for",
+        "users",
+        "who",
+        "signed",
+        "up",
+        "on",
+        "Windows",
+        "in",
+        "the",
+        "last",
+        "30",
+        "days?",
+        "Prefer",
+        "live",
+        "PostHog;",
+        "otherwise",
+        "draft",
+        "HogQL",
+    ]
+
+    slash_tool.execute_slash_tool({"command": "/goal", "args": args}, ctx)
+
+    line = ports.dispatched[0]
+    assert "'days?'" not in line
+    assert "'PostHog;'" not in line
+    assert "days?" in line
+    assert "PostHog;" in line
+    assert "days?" in buf.getvalue()
+    assert "'days?'" not in buf.getvalue()
+
+
+def test_cron_expression_stays_one_argument_after_join() -> None:
+    """Spaced cron fields must remain one token for ``dispatch_slash``."""
+    ctx, _buf, _session, ports = _ctx(ports=FakeSlashPorts(tty=True))
+
+    slash_tool.execute_slash_tool(
+        {
+            "command": "/cron",
+            "args": ["add", "--cron", "0 8 * * 1-5", "--prompt", "triage"],
+        },
+        ctx,
+    )
+
+    assert ports.dispatched == ["/cron add --cron '0 8 * * 1-5' --prompt triage"]
+
+
 def test_interactive_picker_runs_inline_when_not_a_tty() -> None:
     """Without an interactive TTY there is no live prompt to race."""
     ctx, _buf, session, ports = _ctx(ports=FakeSlashPorts(tty=False))

@@ -20,6 +20,7 @@ import platform as _platform_pkg  # noqa: E402  (first-party package after boots
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _RELEASE_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "release.yml"
+_SPEC_FILE = _REPO_ROOT / "opensre.spec"
 
 _FROZEN_STDLIB_DIR = _platform_pkg._FROZEN_STDLIB_DIR
 _candidate_stdlib_platform_paths = _platform_pkg._candidate_stdlib_platform_paths
@@ -66,15 +67,16 @@ def test_load_stdlib_platform_uses_bundled_copy_when_frozen(monkeypatch, tmp_pat
     assert getattr(module, "OPENSRE_BUNDLED_MARKER", None) == "bundled"
 
 
-def test_release_workflow_bundles_stdlib_platform() -> None:
+def test_release_packaging_bundles_stdlib_platform() -> None:
     """The release build must stage and bundle ``platform.py`` for the binary.
 
-    This ties the workflow's ``--add-data`` destination to ``_FROZEN_STDLIB_DIR``
-    so renaming the constant without updating the workflow fails fast instead of
+    This ties the spec's data destination to ``_FROZEN_STDLIB_DIR`` so renaming
+    the constant without updating the packaging contract fails fast instead of
     only surfacing as a release-time binary crash.
     """
     workflow = _RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    spec = _SPEC_FILE.read_text(encoding="utf-8")
 
     assert "platform.py" in workflow  # staging step copies the stdlib module
     assert ".stdlib_vendor" in workflow  # staged into a relative dir
-    assert _FROZEN_STDLIB_DIR in workflow  # bundled under the loader's dest dir
+    assert _FROZEN_STDLIB_DIR in spec  # bundled under the loader's dest dir

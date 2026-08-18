@@ -18,6 +18,7 @@ from config.constants.llm import (
     AZURE_OPENAI_BASE_URL_ENV,
     CUSTOM_ANTHROPIC_BASE_URL_ENV,
     CUSTOM_OPENAI_BASE_URL_ENV,
+    LLM_PROVIDER_ENV,
     normalize_anthropic_base_url,
     normalize_custom_base_url,
 )
@@ -94,6 +95,11 @@ from config.llm_models import (
     OPENROUTER_REASONING_MODEL,
     OPENROUTER_TOOLCALL_MODEL,
     PROVIDER_MODEL_DEFAULTS,
+    TRUSTEDROUTER_BASE_URL,
+    TRUSTEDROUTER_CLASSIFICATION_MODEL,
+    TRUSTEDROUTER_LLM_CONFIG,
+    TRUSTEDROUTER_REASONING_MODEL,
+    TRUSTEDROUTER_TOOLCALL_MODEL,
     VERTEX_AI_CLASSIFICATION_MODEL,
     VERTEX_AI_LLM_CONFIG,
     VERTEX_AI_REASONING_MODEL,
@@ -186,6 +192,11 @@ __all__ = (
     "SLACK_CHANNEL",
     "TRACER_BASE_URL_DEV",
     "TRACER_BASE_URL_PROD",
+    "TRUSTEDROUTER_BASE_URL",
+    "TRUSTEDROUTER_CLASSIFICATION_MODEL",
+    "TRUSTEDROUTER_LLM_CONFIG",
+    "TRUSTEDROUTER_REASONING_MODEL",
+    "TRUSTEDROUTER_TOOLCALL_MODEL",
     "VERTEX_AI_CLASSIFICATION_MODEL",
     "VERTEX_AI_LLM_CONFIG",
     "VERTEX_AI_REASONING_MODEL",
@@ -271,6 +282,7 @@ LLMProvider = Literal[
     "anthropic",
     "openai",
     "openrouter",
+    "trustedrouter",
     "deepseek",
     "gemini",
     "nvidia",
@@ -308,7 +320,7 @@ PROVIDER_VERTEX_AI: LLMProvider = "vertex-ai"
 def get_configured_llm_provider() -> str:
     """Return the active LLM provider from env/project .env."""
     bootstrap_opensre_env(override=False)
-    return os.getenv("LLM_PROVIDER", "anthropic").strip().lower() or "anthropic"
+    return os.getenv(LLM_PROVIDER_ENV, "anthropic").strip().lower() or "anthropic"
 
 
 def get_llm_provider_api_key_env(provider: str | None = None) -> str | None:
@@ -395,6 +407,7 @@ class LLMSettings(StrictConfigModel):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     openrouter_api_key: str = ""
+    trustedrouter_api_key: str = ""
     deepseek_api_key: str = ""
     gemini_api_key: str = ""
     nvidia_api_key: str = ""
@@ -414,6 +427,9 @@ class LLMSettings(StrictConfigModel):
     openrouter_reasoning_model: str = OPENROUTER_REASONING_MODEL
     openrouter_classification_model: str = OPENROUTER_CLASSIFICATION_MODEL
     openrouter_toolcall_model: str = OPENROUTER_TOOLCALL_MODEL
+    trustedrouter_reasoning_model: str = TRUSTEDROUTER_REASONING_MODEL
+    trustedrouter_classification_model: str = TRUSTEDROUTER_CLASSIFICATION_MODEL
+    trustedrouter_toolcall_model: str = TRUSTEDROUTER_TOOLCALL_MODEL
     deepseek_reasoning_model: str = DEEPSEEK_REASONING_MODEL
     deepseek_classification_model: str = DEEPSEEK_CLASSIFICATION_MODEL
     deepseek_toolcall_model: str = DEEPSEEK_TOOLCALL_MODEL

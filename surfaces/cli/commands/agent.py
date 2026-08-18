@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from platform.terminal.theme import BOLD_BRAND, DIM, HIGHLIGHT
-from surfaces.interactive_shell.ui.components.rendering import repl_table
+from surfaces.shared.terminal.components.rendering import repl_table
 from tools.system.fleet_monitoring.discovery import (
     classify_command_provider,
     discover_agent_processes,
@@ -40,7 +40,7 @@ def _pid_exists(pid: int) -> bool:
 @fleet.command(name="list")
 def list_agents() -> None:
     """List registered and auto-discovered local agents."""
-    from surfaces.interactive_shell.ui.agents.agents_view import render_agents_table
+    from surfaces.shared.terminal.agents.agents_view import render_agents_table
 
     console = Console()
     render_agents_table(console, registered_and_discovered_agents(AgentRegistry()))

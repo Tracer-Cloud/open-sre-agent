@@ -38,10 +38,6 @@ from surfaces.interactive_shell.runtime.investigation_adapter import (
 from surfaces.interactive_shell.runtime.startup import initial_input as startup_initial_input
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
-from surfaces.interactive_shell.ui.components.cpr_stdin import (
-    strip_cpr_escape_sequences,
-    strip_cpr_sequences,
-)
 from surfaces.interactive_shell.ui.input_prompt import completion as prompt_completion
 from surfaces.interactive_shell.ui.input_prompt.completion import ShellCompleter
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
@@ -55,6 +51,10 @@ from surfaces.interactive_shell.ui.input_prompt.rendering import _prompt_message
 from surfaces.interactive_shell.ui.input_prompt.style import _build_prompt_style
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.cpr_stdin import (
+    strip_cpr_escape_sequences,
+    strip_cpr_sequences,
+)
 
 
 def test_agent_presentation_import_does_not_load_shell_turn_execution() -> None:
@@ -224,10 +224,13 @@ def test_shift_enter_inserts_newline_before_submit(
         ):
             prompt = input_prompt.build_prompt_session()
             task = asyncio.create_task(prompt.prompt_async(""))
+            # Yield so prompt_async attaches readers before keystrokes arrive;
+            # under loaded ``test-cov`` (xdist + coverage) a 1s wait_for flakes.
+            await asyncio.sleep(0)
             pipe_input.send_bytes(b"first line")
             pipe_input.send_bytes(_SHIFT_ENTER_SEQUENCE.encode())
             pipe_input.send_bytes(b"second line\r")
-            return await asyncio.wait_for(task, timeout=1)
+            return await asyncio.wait_for(task, timeout=5.0)
 
     assert asyncio.run(_collect()) == "first line\nsecond line"
 
@@ -1047,11 +1050,11 @@ class TestStreamingConsole:
 
         calls: list[str] = []
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
+            "surfaces.shared.terminal.components.choice_menu.ensure_tty_column_zero",
             lambda: calls.append("ensure"),
         )
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+            "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
             lambda: calls.append("prepare"),
         )
 
@@ -1717,9 +1720,9 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
         monkeypatch.setattr(
-            "surfaces.cli.commands.config._save_config",
+            "config.local_settings.save_local_settings",
             lambda data: saved_payloads.append(dict(data)),
         )
 
@@ -1763,8 +1766,8 @@ class TestThemeCommand:
 
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         set_active_theme("green")
         session = Session()
@@ -1779,8 +1782,8 @@ class TestThemeCommand:
         monkeypatch.setattr(theme_cmd, "repl_tty_interactive", lambda: True)
         monkeypatch.setattr(theme_cmd, "repl_choose_one", lambda **_kwargs: "blue")
         monkeypatch.setattr(theme_cmd, "_refresh_prompt_style", lambda _session: None)
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         refreshed: list[dict[str, object | None]] = []
 
@@ -1793,7 +1796,7 @@ class TestThemeCommand:
             refreshed.append({"console": console, "session": session, "theme_notice": theme_notice})
 
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.poster.refresh_welcome_poster",
             _refresh,
         )
 
@@ -1838,11 +1841,11 @@ class TestThemeCommand:
             lambda: drains.append("drain"),
         )
         monkeypatch.setattr(
-            "surfaces.interactive_shell.ui.components.rendering.refresh_welcome_poster",
+            "surfaces.interactive_shell.ui.poster.refresh_welcome_poster",
             lambda *_args, **_kwargs: drains.append("poster"),
         )
-        monkeypatch.setattr("surfaces.cli.commands.config._load_config", lambda: {})
-        monkeypatch.setattr("surfaces.cli.commands.config._save_config", lambda _data: None)
+        monkeypatch.setattr("config.local_settings.load_local_settings", lambda: {})
+        monkeypatch.setattr("config.local_settings.save_local_settings", lambda _data: None)
 
         session = Session()
         console, _buf = self._capture()

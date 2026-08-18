@@ -20,6 +20,7 @@ from config.runtime_metadata import (
 )
 from config.runtime_metadata import probes as probes_module
 from config.version import get_opensre_version
+from core.agent_harness.prompts.runtime_facts.render import render_static_runtime_facts
 from core.agent_harness.session import InMemorySessionStore, SessionCore, SessionManager
 
 
@@ -327,3 +328,25 @@ def test_session_clear_repopulates_runtime_metadata() -> None:
     session.runtime_metadata = {}
     session.clear(rotate_identity=False)
     assert session.runtime_metadata["opensre_version"] == get_opensre_version()
+
+
+@pytest.mark.parametrize(
+    ("sys_platform", "expected"),
+    [("darwin", "macOS"), ("linux", "Linux"), ("linux2", "Linux"), ("win32", "Windows")],
+)
+def test_os_family_reports_the_product_not_the_kernel(
+    monkeypatch: pytest.MonkeyPatch, sys_platform: str, expected: str
+) -> None:
+    """``Darwin`` is the kernel; a user on a MacBook is running macOS."""
+    monkeypatch.setattr(probes_module.sys, "platform", sys_platform)
+    assert probes_module.host_os_facts() == {"os_family": expected}
+
+
+def test_runtime_facts_block_names_the_operating_system() -> None:
+    """The agent must be able to answer "what environment are you running in?"."""
+    runtime = build_runtime_metadata()
+    block = render_static_runtime_facts(runtime)
+    assert runtime["os_family"]
+    assert f"host operating system is {runtime['os_family']}" in block
+    # Exactly one OS line — do not also emit a duplicate operating_system fact.
+    assert block.count("host operating system is ") == 1

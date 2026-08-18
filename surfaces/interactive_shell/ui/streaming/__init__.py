@@ -7,12 +7,14 @@ does cursor manipulation (cursor-up + erase-line) for in-place redraw,
 which fights ``patch_stdout`` and blocks the input buffer from
 accepting keystrokes.
 
-Instead this path streams **paragraph-by-paragraph**: chunks accumulate
-in ``para_buffer`` and a complete paragraph (text up to the next
-``\\n\\n`` outside an open code-fence) renders as ``rich.Markdown`` the
-moment its boundary is seen. The trailing partial paragraph is
-force-flushed at end-of-stream. Code blocks are kept whole — we never
-split on ``\\n\\n`` while a triple-backtick fence is unclosed.
+Instead this path streams **paragraph-by-paragraph**, with a bounded-latency
+fallback for very long prose paragraphs: chunks accumulate in ``para_buffer``
+and a complete paragraph (text up to the next ``\\n\\n`` outside an open
+code-fence) renders as ``rich.Markdown`` the moment its boundary is seen. Long
+partial prose is also flushed once it grows past a small character budget, so a
+10k-word single paragraph does not sit invisible until end-of-stream. Code
+blocks are kept whole — we never split on ``\\n\\n`` or partial-size thresholds
+while a triple-backtick fence is unclosed.
 
 Streaming progress and cancellation are surfaced through optional
 attributes on the ``console``: ``update_streaming_progress(bytes)`` is
@@ -36,14 +38,17 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 import platform.terminal.theme as ui_theme
-from core.agent_harness.prompts.rules import normalize_three_tier_spacing
-from core.agent_harness.session.want_me_to import WANT_ME_TO_MARKER, closer_tail_from
-from core.agent_harness.session_goal.goal import strip_session_goal_progress_tags
-from surfaces.interactive_shell.ui.components.token_format import (
+from core.agent_harness.spi.prompt_chrome import (
+    WANT_ME_TO_MARKER,
+    closer_tail_from,
+    normalize_three_tier_spacing,
+)
+from core.agent_harness.spi.session_goal import strip_session_goal_progress_tags
+from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.token_format import (
     _CHARS_PER_TOKEN,
     format_token_count_short,
 )
-from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 
 # Throttle for the optional ``update_streaming_progress`` hook on the
 # console — caps cross-thread queueing on long bursts of chunks. Same
@@ -62,6 +67,9 @@ _CODE_FENCE = "```"
 # the fence to be at line start anyway, so this is a tighter and
 # more accurate check than a naive substring count.
 _CODE_FENCE_LINE_RE = re.compile(rf"^{re.escape(_CODE_FENCE)}", re.MULTILINE)
+_PARTIAL_FLUSH_CHAR_THRESHOLD = 900
+_PARTIAL_FLUSH_MIN_CHARS = 360
+_PARTIAL_FLUSH_SENTENCE_BREAKS = (". ", "? ", "! ", ".\n", "?\n", "!\n")
 # Rich inserts leading vertical space when these block types start a standalone
 # Markdown render. Other blocks do not, so paragraph-by-paragraph streaming must
 # add the consumed ``\n\n`` before rendering them.
@@ -127,6 +135,11 @@ def _format_tokens(token_count: int) -> str:
 
 def _paragraph_has_want_me_to(text: str) -> bool:
     return WANT_ME_TO_MARKER in text.lower()
+
+
+def _has_open_code_fence(text: str) -> bool:
+    """True when ``text`` contains an unclosed line-start fenced block."""
+    return len(_CODE_FENCE_LINE_RE.findall(text)) % 2 == 1
 
 
 @dataclass(frozen=True)
@@ -236,6 +249,7 @@ def stream_to_console_state(
     # are kept whole (we never split on ``\n\n`` while a fence is open).
     buffer: list[str] = list(peeked)
     para_buffer: list[str] = list(peeked)
+    para_chars = sum(len(c) for c in peeked)
     started = time.monotonic()
     progress_hook = getattr(console, "update_streaming_progress", None)
     total_bytes = sum(len(c) for c in peeked)
@@ -262,7 +276,7 @@ def stream_to_console_state(
         # so this stays False for them.
         return bool(getattr(console, "cancel_requested", False))
 
-    def _paint_paragraph_body(text: str) -> None:
+    def _paint_paragraph_body(text: str, *, source_break: bool = True) -> None:
         nonlocal rendered_paragraphs
         visible = strip_session_goal_progress_tags(text)
         if not visible.strip():
@@ -271,7 +285,7 @@ def stream_to_console_state(
         starts_with_self_spacing_block = bool(
             markdown.parsed and markdown.parsed[0].type in _SELF_SPACING_BLOCK_TOKEN_TYPES
         )
-        if rendered_paragraphs and not starts_with_self_spacing_block:
+        if rendered_paragraphs and source_break and not starts_with_self_spacing_block:
             # ``_flush_paragraphs`` consumes the source ``\n\n`` boundary.
             # Restore it explicitly unless Rich adds equivalent leading space
             # for the next standalone block. This matters most after lists,
@@ -281,7 +295,7 @@ def stream_to_console_state(
             console.print(markdown)
         rendered_paragraphs += 1
 
-    def _render_paragraph(text: str) -> None:
+    def _render_paragraph(text: str, *, source_break: bool = True) -> None:
         nonlocal deferred_closer
         # Keep raw ``text`` (with progress tags) for Want-me-to detection; paint
         # only the scrubbed visible body so ``session_goal:…`` never hits the TTY.
@@ -297,12 +311,12 @@ def stream_to_console_state(
                 start -= 2
             head = text[:start].rstrip() if start > 0 else ""
             if head.strip():
-                _paint_paragraph_body(head)
+                _paint_paragraph_body(head, source_break=source_break)
             return
-        _paint_paragraph_body(text)
+        _paint_paragraph_body(text, source_break=source_break)
 
     def _flush_paragraphs(*, force: bool = False) -> None:
-        nonlocal para_buffer
+        nonlocal para_buffer, para_chars
         break_len = len(_PARAGRAPH_BREAK)
         while True:
             text = "".join(para_buffer)
@@ -325,6 +339,7 @@ def stream_to_console_state(
                 _render_paragraph(paragraph)
                 tail = text[idx + break_len :]
                 para_buffer = [tail] if tail else []
+                para_chars = len(tail)
                 rendered = True
                 break
             if not rendered:
@@ -334,6 +349,46 @@ def stream_to_console_state(
             if tail.strip():
                 _render_paragraph(tail)
             para_buffer = []
+            para_chars = 0
+
+    def _partial_flush_index(text: str) -> int:
+        """Return a visible prose boundary for latency flushes, or ``-1``."""
+        if len(text) < _PARTIAL_FLUSH_CHAR_THRESHOLD or _has_open_code_fence(text):
+            return -1
+
+        candidate = text
+        if defer_want_me_to_closer:
+            marker_pos = text.lower().find(WANT_ME_TO_MARKER)
+            if marker_pos >= 0:
+                candidate = text[:marker_pos]
+        if len(candidate) < _PARTIAL_FLUSH_CHAR_THRESHOLD:
+            return -1
+
+        sentence_indices = [
+            candidate.rfind(sep, 0, len(candidate)) + len(sep)
+            for sep in _PARTIAL_FLUSH_SENTENCE_BREAKS
+            if candidate.rfind(sep, 0, len(candidate)) >= _PARTIAL_FLUSH_MIN_CHARS
+        ]
+        if sentence_indices:
+            return max(sentence_indices)
+
+        space_idx = candidate.rfind(" ", 0, len(candidate))
+        if space_idx >= _PARTIAL_FLUSH_MIN_CHARS:
+            return space_idx + 1
+        return _PARTIAL_FLUSH_CHAR_THRESHOLD
+
+    def _flush_partial_if_needed() -> None:
+        nonlocal para_buffer, para_chars
+        if para_chars < _PARTIAL_FLUSH_CHAR_THRESHOLD:
+            return
+        text = "".join(para_buffer)
+        idx = _partial_flush_index(text)
+        if idx <= 0:
+            return
+        _render_paragraph(text[:idx], source_break=False)
+        tail = text[idx:]
+        para_buffer = [tail] if tail else []
+        para_chars = len(tail)
 
     def _maybe_flush_after_append(chunk: str, prev_chunk: str | None) -> None:
         """Cheap fast-path before the O(buffer) join inside ``_flush_paragraphs``.
@@ -355,6 +410,7 @@ def stream_to_console_state(
             return
         if _PARAGRAPH_BREAK in chunk:
             _flush_paragraphs()
+            _flush_partial_if_needed()
             return
         # Cross-chunk boundary: previous chunk ended with ``\n`` and
         # this chunk's leading ``\n`` completes the ``\n\n``.
@@ -366,10 +422,14 @@ def stream_to_console_state(
             and chunk.startswith(newline)
         ):
             _flush_paragraphs()
+            _flush_partial_if_needed()
+            return
+        _flush_partial_if_needed()
 
     if peeked:
         last_progress_at = _maybe_update_progress(time.monotonic(), force=True)
         _flush_paragraphs()
+        _flush_partial_if_needed()
 
     # Track the chunk immediately preceding the current one so the
     # cross-chunk seam check can detect ``\n\n`` straddling the
@@ -386,6 +446,7 @@ def stream_to_console_state(
                 continue
             buffer.append(chunk)
             para_buffer.append(chunk)
+            para_chars += len(chunk)
             total_bytes += len(chunk)
             last_progress_at = _maybe_update_progress(time.monotonic())
             _maybe_flush_after_append(chunk, prev_chunk)

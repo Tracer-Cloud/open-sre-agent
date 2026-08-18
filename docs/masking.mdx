@@ -1,22 +1,38 @@
 ---
-title: 'Masking Sensitive Identifiers'
-description: 'Reversible masking of pod, cluster, and account identifiers before external LLM calls'
+title: "Masking Sensitive Identifiers"
+description: "Reversible masking of pod, cluster, and account identifiers before external LLM calls."
 ---
 
 ## Overview
 
-OpenSRE can mask sensitive infrastructure identifiers (pod names, cluster names, hostnames, account IDs, service names, IP addresses, emails) **before** sending text to external LLMs, and restore the originals in any user-facing output (Slack report, problem MD, ingest). This lets teams use external models while keeping raw identifiers private to the investigation runtime.
+OpenSRE can mask sensitive infrastructure identifiers (pod names, cluster names,
+hostnames, account IDs, service names, IP addresses, emails) **before** sending
+text to an external LLM, then restore the originals in user-facing output (Slack
+report, problem MD, and similar). Teams can use external models while keeping
+raw identifiers inside the investigation runtime.
 
-Masking is **off by default**. Enable it per investigation via environment variables — no code changes required.
+Masking is **off by default**. Turn it on with environment variables — no code
+changes required.
 
 ## How it works
 
-1. When masking is enabled, the investigation step replaces sensitive identifiers in collected evidence with stable placeholders like `<POD_0>`, `<NAMESPACE_0>`, `<CLUSTER_1>`. The placeholder→original map is stored in investigation state.
-2. The diagnosis model receives masked evidence, so raw identifiers never hit the external LLM.
-3. After the model returns its root-cause analysis, OpenSRE restores real identifiers in downstream state and display output.
-4. Report delivery (for example Slack) runs a final unmask pass before sending, as defence in depth.
+1. When masking is enabled, call sites that send text to an external model
+   replace identifiers with stable placeholders such as `<POD_0>`,
+   `<NAMESPACE_0>`, or `<CLUSTER_1>`. The placeholder → original map can be
+   stored in investigation state as `masking_map`.
+2. The model sees masked text, so raw identifiers are not sent in that payload.
+3. Where a map is present, OpenSRE restores real identifiers in downstream state
+   and display output.
+4. Report delivery (for example Slack) can run a final unmask pass before
+   sending, as defence in depth.
 
-The same identifier always maps to the same placeholder within a single investigation, so the LLM's reasoning about `<POD_0>` remains coherent.
+The same identifier always maps to the same placeholder within one investigation,
+so reasoning about `<POD_0>` stays consistent.
+
+Today, masking is applied at opt-in edges (for example selected GitHub / Sentry
+fix tools and CLI agent-exec paths) rather than as a single central step on
+every investigation. Reporting still unmasks when a map is present. Env policy
+is read when masking runs — changes apply on the next run without a restart.
 
 ## Environment variables
 
@@ -25,8 +41,6 @@ The same identifier always maps to the same placeholder within a single investig
 | `OPENSRE_MASK_ENABLED` | `false` | Master switch. Set to `true` / `1` / `yes` / `on` to activate masking. |
 | `OPENSRE_MASK_KINDS` | `pod,namespace,cluster,hostname,account_id,ip_address,email,service_name` | Comma-separated list of identifier kinds to mask. Unknown kinds are ignored with a warning. Empty value uses all defaults. |
 | `OPENSRE_MASK_EXTRA_REGEX` | *(empty)* | Optional JSON object mapping a label → regex for custom identifiers. Example: `'{"jira_key": "\\\\b[A-Z]+-\\\\d+\\\\b"}'`. Group 1 of the regex, if present, defines the span to mask. |
-
-Policies are read fresh from the environment at the start of each investigation — changes take effect on the next run without a restart.
 
 ## Built-in identifier kinds
 
@@ -43,13 +57,20 @@ Policies are read fresh from the environment at the start of each investigation 
 
 ## Round-trip guarantee
 
-For the built-in detectors and extra regex patterns, `mask → unmask` round-trips the original payload byte-for-byte. See `tests/masking/test_integration_with_k8s_fixture.py` for a worked example against a realistic Datadog k8s alert.
+For the built-in detectors and extra regex patterns, `mask → unmask` restores
+the original payload byte-for-byte. See
+`tests/masking/test_integration_with_k8s_fixture.py` for a worked example against
+a realistic Datadog Kubernetes alert.
 
 ## Relationship to guardrails
 
-The masking layer is complementary to the one-way `GuardrailEngine`. Guardrails handle hard-block rules (credit cards, API keys) and replace matches with `[REDACTED]` irreversibly. Masking handles infrastructure identifiers reversibly so they can be restored for user-facing output.
+Masking is complementary to the one-way `GuardrailEngine`. Guardrails handle
+hard-block rules (credit cards, API keys) and replace matches with `[REDACTED]`
+irreversibly. Masking handles infrastructure identifiers reversibly so they can
+be restored for user-facing output.
 
-Both can be active together: guardrails apply first at the LLM client layer, then masking at the node layer.
+Both can be active together: guardrails apply at the LLM client layer;
+masking applies at the call sites that opt in.
 
 ## Example
 
@@ -59,4 +80,6 @@ export OPENSRE_MASK_KINDS=pod,namespace,cluster,hostname
 opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
 ```
 
-During the investigation the LLM sees masked evidence; the final Slack report shows the original pod, namespace, and cluster names.
+When masking runs on a call path, the LLM sees masked identifiers; delivery
+paths that unmask show the original pod, namespace, and cluster names in the
+final report.

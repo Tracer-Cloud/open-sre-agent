@@ -13,16 +13,17 @@ import os
 from collections.abc import Callable, Mapping
 
 from gateway.core.runtime.errors import GatewayConfigurationError
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
+from gateway.core.storage import open_database
+from gateway.core.storage.events.repository import (
+    HandledSlackEventRepository,
+    handled_slack_event_repository,
+)
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.slack.processing.events import SlackInboundMessage
 from gateway.transports.slack.settings import (
     SlackGatewaySettings,
     SlackInboundTransport,
     load_slack_gateway_settings,
-)
-from gateway.transports.slack.transport.events_api.receiver import (
-    InMemorySlackEventDeduplicator,
-    SlackEventDeduplicator,
 )
 from gateway.transports.slack.transport.events_api.server import (
     ListenerGate,
@@ -52,21 +53,17 @@ def _start_socket_mode(
     return start_slack_gateway_background(settings=settings, logger=logger, handler=handler)
 
 
-def _build_deduplicator(logger: logging.Logger) -> SlackEventDeduplicator:
-    """Postgres when ``DATABASE_URL`` is set, else process-local.
+def _build_handled_event_repository(logger: logging.Logger) -> HandledSlackEventRepository:
+    """The handled-event repository, refusing a process-local one unless opted in.
 
     Slack delivers at least once, so a retry landing on another replica is
     admitted again unless the handled set is shared. The in-memory fallback is
     correct for exactly one replica — local development and single-instance
     deploys — and is warned about so it is never a silent choice.
     """
-    dsn = os.getenv("DATABASE_URL", "").strip()
-    if dsn:
-        from gateway.transports.slack.persistence.event_dedup import (
-            PostgresSlackEventDeduplicator,
-        )
-
-        return PostgresSlackEventDeduplicator(dsn)
+    database = open_database()
+    if database is not None:
+        return handled_slack_event_repository(database)
     if not _env_flag(LOCAL_DEDUP_ENV):
         raise GatewayConfigurationError(
             "Slack Events API HTTP needs a shared event store: set DATABASE_URL. "
@@ -79,7 +76,7 @@ def _build_deduplicator(logger: logging.Logger) -> SlackEventDeduplicator:
         "exactly one replica runs",
         LOCAL_DEDUP_ENV,
     )
-    return InMemorySlackEventDeduplicator()
+    return handled_slack_event_repository(None)
 
 
 def _start_events_api_http(
@@ -96,7 +93,7 @@ def _start_events_api_http(
     app = build_slack_http_app(
         settings=settings,
         approvals=stack.approvals,
-        deduplicator=_build_deduplicator(logger),
+        handled_events=_build_handled_event_repository(logger),
         submit_turn=_submit_turn,
         gate=gate,
     )

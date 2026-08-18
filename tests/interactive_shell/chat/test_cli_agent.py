@@ -28,10 +28,9 @@ from core.agent_harness.prompts.assistant import (
 )
 from core.agent_harness.prompts.grounding import DefaultPromptContextProvider
 from core.agent_harness.prompts.grounding import provider as default_prompt_context
-from surfaces.interactive_shell.runtime import answer_turn as cli_agent
-from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry import LlmRunInfo
+from tests.interactive_shell.shell_ports_helper import answer_through_shell_ports
 
 
 def _answer(
@@ -41,13 +40,8 @@ def _answer(
     *,
     request: AnswerRequest | None = None,
 ) -> LlmRunInfo | None:
-    """Call ``answer_shell_question`` with a default ``AnswerRequest``."""
-    return answer_shell_question(
-        message,
-        session,
-        console,
-        request=request if request is not None else AnswerRequest(),
-    )
+    """Answer through the shell's ports with a default ``AnswerRequest``."""
+    return answer_through_shell_ports(message, session, console, request=request)
 
 
 def _build_environment_block(session: Session) -> str:
@@ -102,7 +96,7 @@ class _FakeLLMClient:
 
 def _patch_llm(monkeypatch: Any, content: Any) -> _FakeLLMClient:
     client = _FakeLLMClient(content)
-    # ``answer_shell_question`` imports ``get_llm_for_reasoning`` lazily from
+    # the shell answer path imports ``get_llm_for_reasoning`` lazily from
     # ``core.llm.factory.get_llm``, so we patch the symbol on that module.
 
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: client)
@@ -202,9 +196,7 @@ class TestSystemPromptInvestigationFlowGrounding:
 
         assert "--- Investigation flow reference ---" not in prompt
 
-    def test_answer_shell_question_injects_investigation_flow_reference(
-        self, monkeypatch: Any
-    ) -> None:
+    def test_shell_answer_injects_investigation_flow_reference(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "Yes, I can describe the pipeline.")
         _patch_grounding(
             monkeypatch,
@@ -272,7 +264,7 @@ class TestEnvironmentIntegrationGrounding:
         assert session.configured_integrations_known is False
         assert _build_environment_block(session) == ""
 
-    def test_answer_shell_question_injects_configured_integrations(self, monkeypatch: Any) -> None:
+    def test_shell_answer_injects_configured_integrations(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "No, Sentry is not configured.")
         _patch_grounding(monkeypatch)
 
@@ -286,7 +278,7 @@ class TestEnvironmentIntegrationGrounding:
         assert "--- Environment (current shell state) ---" in client.last_prompt
         assert "gitlab" in client.last_prompt
 
-    def test_answer_shell_question_injects_active_llm_settings(self, monkeypatch: Any) -> None:
+    def test_shell_answer_injects_active_llm_settings(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "You are using OpenAI.")
         _patch_grounding(monkeypatch)
 
@@ -325,7 +317,7 @@ class TestObservationSummaryBlock:
         # The summary turn must not kick off more tool calls; offers are prose only.
         assert "not request, plan, or emit any further tool calls" in block.lower()
 
-    def test_answer_shell_question_injects_observation(self, monkeypatch: Any) -> None:
+    def test_shell_answer_injects_observation(self, monkeypatch: Any) -> None:
         client = _patch_llm(monkeypatch, "No — Sentry is not configured.")
         _patch_grounding(monkeypatch)
 
@@ -486,7 +478,7 @@ class TestStreamingMigration:
         )
 
 
-def test_answer_shell_question_injects_synthetic_observation_on_why_failed(
+def test_shell_answer_injects_synthetic_observation_on_why_failed(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
@@ -505,7 +497,7 @@ def test_answer_shell_question_injects_synthetic_observation_on_why_failed(
     assert "008-storage-full-missing-metric" in client.last_prompt
 
 
-def test_answer_shell_question_skips_observation_without_failure_question(
+def test_shell_answer_skips_observation_without_failure_question(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
@@ -531,7 +523,3 @@ def _strip_ansi(text: str) -> str:
 
     # Standard CSI-sequence regex; covers Rich's bold / color escapes.
     return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
-
-
-def test_module_exports_answer_shell_question() -> None:
-    assert "answer_shell_question" in cli_agent.__all__

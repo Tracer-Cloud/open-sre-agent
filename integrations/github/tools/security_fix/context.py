@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, Literal
 
 from integrations.github.client import GitHubApiError, GitHubRestClient
@@ -263,7 +264,7 @@ def _get_exact_alert_context(
                 client, owner=owner, repo=repo, alert_type=candidate, number=number
             )
         except GitHubApiError as exc:
-            if exc.status_code == 404:
+            if exc.status_code == HTTPStatus.NOT_FOUND:
                 not_found.append(candidate)
                 continue
             raise _github_error(exc) from exc
@@ -622,7 +623,9 @@ def _has_builtin_local_fix(alert_type: ResolvedAlertType, alert: dict[str, Any])
 
 
 def _github_error(exc: GitHubApiError) -> GitHubSecurityFixError:
-    kind = ERR_ALERT_NOT_FOUND if exc.status_code == 404 else ERR_GITHUB_UNAVAILABLE
+    kind = (
+        ERR_ALERT_NOT_FOUND if exc.status_code == HTTPStatus.NOT_FOUND else ERR_GITHUB_UNAVAILABLE
+    )
     return GitHubSecurityFixError(kind, str(exc))
 
 

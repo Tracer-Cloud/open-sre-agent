@@ -16,6 +16,8 @@ from typing import Final
 
 # --- Connection env-var names ------------------------------------------------
 
+LLM_PROVIDER_ENV: Final[str] = "LLM_PROVIDER"
+
 AZURE_OPENAI_BASE_URL_ENV: Final[str] = "AZURE_OPENAI_BASE_URL"
 AZURE_OPENAI_API_VERSION_ENV: Final[str] = "AZURE_OPENAI_API_VERSION"
 AZURE_OPENAI_API_KEY_ENV: Final[str] = "AZURE_OPENAI_API_KEY"
@@ -31,6 +33,33 @@ CUSTOM_OPENAI_BASE_URL_ENV: Final[str] = "CUSTOM_OPENAI_BASE_URL"
 CUSTOM_OPENAI_API_KEY_ENV: Final[str] = "CUSTOM_OPENAI_API_KEY"
 CUSTOM_ANTHROPIC_BASE_URL_ENV: Final[str] = "CUSTOM_ANTHROPIC_BASE_URL"
 CUSTOM_ANTHROPIC_API_KEY_ENV: Final[str] = "CUSTOM_ANTHROPIC_API_KEY"
+
+# LLM API key env names OpenSRE may persist (keychain migration + catalog).
+# Leaf SoT so ``config.secrets`` never imports ``config.llm_auth`` (cyclic).
+ANTHROPIC_API_KEY_ENV: Final[str] = "ANTHROPIC_API_KEY"
+OPENAI_API_KEY_ENV: Final[str] = "OPENAI_API_KEY"
+OPENROUTER_API_KEY_ENV: Final[str] = "OPENROUTER_API_KEY"
+TRUSTEDROUTER_API_KEY_ENV: Final[str] = "TRUSTEDROUTER_API_KEY"
+DEEPSEEK_API_KEY_ENV: Final[str] = "DEEPSEEK_API_KEY"
+GEMINI_API_KEY_ENV: Final[str] = "GEMINI_API_KEY"
+NVIDIA_API_KEY_ENV: Final[str] = "NVIDIA_API_KEY"
+MINIMAX_API_KEY_ENV: Final[str] = "MINIMAX_API_KEY"
+GROQ_API_KEY_ENV: Final[str] = "GROQ_API_KEY"
+
+OPEN_SRE_API_KEY_ENV_NAMES: Final[tuple[str, ...]] = (
+    ANTHROPIC_API_KEY_ENV,
+    OPENAI_API_KEY_ENV,
+    OPENROUTER_API_KEY_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
+    DEEPSEEK_API_KEY_ENV,
+    GEMINI_API_KEY_ENV,
+    NVIDIA_API_KEY_ENV,
+    MINIMAX_API_KEY_ENV,
+    GROQ_API_KEY_ENV,
+    AZURE_OPENAI_API_KEY_ENV,
+    CUSTOM_OPENAI_API_KEY_ENV,
+    CUSTOM_ANTHROPIC_API_KEY_ENV,
+)
 
 # Custom model env-var names: a single ``*_MODEL`` shortcut that fills every
 # tier, plus explicit per-tier overrides. Named here so config, the provider

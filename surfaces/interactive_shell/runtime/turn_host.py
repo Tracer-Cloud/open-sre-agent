@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 if TYPE_CHECKING:
-    from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+    from core.agent_harness.runtime import HeadlessAgent
 
 from platform.analytics.repl_context import bound_repl_turn_context
 from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
@@ -47,11 +47,11 @@ from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
-from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+from surfaces.shared.terminal.output.repl_progress import repl_safe_progress_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -71,8 +71,8 @@ class AgentTurnResources:
     #: terminal; an embedding caller passes its console so agent responses and
     #: tool output land in the same stream as the startup renders.
     console: Console | None = None
-    #: Session-scoped action runner; rebound to each turn's streaming console.
-    action_runner: ShellActionRunner | None = None
+    #: Session-scoped agent; rebound to each turn's streaming console.
+    agent: HeadlessAgent | None = None
 
 
 def _streaming_console(
@@ -121,6 +121,8 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     exclusive_stdin = turn_needs_exclusive_stdin(text, runtime.session)
     progress_scope = contextlib.nullcontext() if exclusive_stdin else repl_safe_progress_scope()
     runtime.session.terminal.exclusive_stdin_active = exclusive_stdin
+    # Blocks nested validate_and_handle from set_auto_command (e.g. /goal set).
+    runtime.session.terminal.dispatch_active = True
     # Expose this turn's spinner so investigation stages can animate phase labels.
     set_investigation_spinner(runtime.spinner)
     emit_thread_boundary(
@@ -145,6 +147,7 @@ async def run_agent_turn(runtime: AgentTurnResources, text: str) -> None:
     finally:
         set_investigation_spinner(None)
         runtime.session.terminal.exclusive_stdin_active = False
+        runtime.session.terminal.dispatch_active = False
         emit_thread_boundary(
             runtime.session.session_id,
             name="turn_boundary",
@@ -195,7 +198,7 @@ async def _run_agent_turn_loop(
                 confirm_fn=confirm,
                 is_tty=None,
                 request_exit=runtime.request_exit,
-                action_runner=runtime.action_runner,
+                agent=runtime.agent,
             )
     except asyncio.CancelledError:
         await emit(AgentEvent(type="turn_interrupted"))

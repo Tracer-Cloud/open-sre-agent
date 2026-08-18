@@ -135,6 +135,20 @@ def _resolve_runtime_context(
     )
 
 
+def _should_wait_until_turn_finishes(
+    *,
+    exclusive_stdin: bool,
+    goal_condition_autosubmitted: bool,
+) -> bool:
+    """True when the next prompt must not open until this turn completes.
+
+    Exclusive-stdin slash commands already wait. ``/goal`` autosubmit is prose
+    (no exclusive stdin) but must still wait — otherwise ``[N] ❯`` appears under
+    the live crawl spinner and looks like a second / finished goal.
+    """
+    return exclusive_stdin or goal_condition_autosubmitted
+
+
 class InteractiveShellController:
     """Coordinate prompt input, queued dispatch, background workers, and shutdown."""
 
@@ -173,7 +187,7 @@ class InteractiveShellController:
             self.spinner,
             self.runtime_context.pt_session,
         )
-        from surfaces.interactive_shell.runtime.action_turn import ShellActionRunner
+        from surfaces.interactive_shell.runtime.shell_agent import build_shell_agent
 
         self.turn_runtime = AgentTurnResources(
             session=self.session,
@@ -182,9 +196,9 @@ class InteractiveShellController:
             invalidate_prompt=lambda: self.prompt.invalidate_prompt(),
             request_exit=self.prompt.request_exit,
             console=self.service_console,
-            action_runner=ShellActionRunner(
-                session=self.session,
-                console=self.service_console,
+            agent=build_shell_agent(
+                self.session,
+                self.service_console,
                 request_exit=self.prompt.request_exit,
             ),
         )
@@ -260,11 +274,18 @@ class InteractiveShellController:
                 self.state.deliver_confirmation(text)
                 return True
             case SubmitTurn(text=text, wait_until_idle=wait, warning=warning):
+                # Read before render_submitted_prompt — that clears the flag.
+                wait_for_turn = _should_wait_until_turn_finishes(
+                    exclusive_stdin=wait,
+                    goal_condition_autosubmitted=bool(
+                        self.session.terminal.last_input_autosubmitted
+                    ),
+                )
                 if warning:
                     self.echo_console.print(warning)
                 self.prompt.render_submitted_prompt(self.echo_console, text)
                 await self.state.queue.put(text)
-                if wait:
+                if wait_for_turn:
                     await self.state.queue.join()
                 return True
         raise AssertionError(f"Unhandled input action: {action!r}")

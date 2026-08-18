@@ -35,6 +35,7 @@ from core.agent_harness.turns.handoff_policy import (
     is_non_investigation_handoff,
     is_prior_investigation_follow_up_handoff,
 )
+from core.agent_harness.turns.metric_query_floor import apply_unformed_metric_floor
 from core.agent_harness.turns.turn_route import RouteIntent
 from platform.harness_ports import integration_setup_command
 
@@ -148,6 +149,16 @@ def finalize_routed_answer(
     text = response_text
     if should_suppress_investigation_offer(evidence_need) or should_skip_gather(evidence_need):
         text = append_upgrade_cta(session, text, evidence_need)
+    # Metric gather that never ran a live query still gets a vendor draft
+    # block and one setup slash. Cohort SessionGoals that leave identity
+    # unresolved (vendor-registered) still get a draft fence.
+    text = apply_unformed_metric_floor(
+        text,
+        evidence_need,
+        observation=evidence_for_offer,
+        setup_command_for=integration_setup_command,
+        session=session,
+    )
     # Bookkeeping only — never feed this into route selection.
     text_changed_after_streaming = text != streamed_text
 

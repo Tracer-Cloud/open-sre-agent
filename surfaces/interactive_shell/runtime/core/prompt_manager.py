@@ -17,7 +17,6 @@ from surfaces.interactive_shell.runtime.core.state import (
 )
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import input_prompt
-from surfaces.interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
 from surfaces.interactive_shell.ui.input_prompt import rendering as prompt_rendering
 from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
     build_cancel_key_bindings,
@@ -26,6 +25,7 @@ from surfaces.interactive_shell.ui.input_prompt.key_bindings import (
 from surfaces.interactive_shell.ui.input_prompt.refresh import wire_prompt_refresh
 from surfaces.interactive_shell.ui.input_prompt.style import refresh_prompt_theme
 from surfaces.interactive_shell.ui.terminal_ui import render_prompt_region
+from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
 # Brief pause so a CPR reply still in flight lands in the stdin buffer before the
 # non-blocking drain runs; without it the reply leaks into this prompt as literal bytes.
@@ -102,6 +102,9 @@ class PromptManager:
 
         prefilled = self.session.terminal.pop_pending_prompt_default()
         if prefilled and self.session.terminal.pop_pending_autosubmit():
+            # Same paint path as Enter: mark so ``render_submitted_prompt`` can
+            # label ``/goal`` work turns distinctly from the ``/goal set`` slash.
+            self.session.terminal.last_input_autosubmitted = True
             return prefilled
 
         return await self.pt_session.prompt_async(

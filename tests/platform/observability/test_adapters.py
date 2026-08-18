@@ -28,14 +28,14 @@ from platform.observability.render.progress import (
     set_progress_tracker,
     set_progress_tracker_factory,
 )
-from surfaces.interactive_shell.ui.output import boundary as output_boundary
-from surfaces.interactive_shell.ui.output import tracker as output_tracker
-from surfaces.interactive_shell.ui.output.environment import debug_print
-from surfaces.interactive_shell.ui.output.renderers import (
+from surfaces.shared.terminal.output import boundary as output_boundary
+from surfaces.shared.terminal.output import tracker as output_tracker
+from surfaces.shared.terminal.output.environment import debug_print
+from surfaces.shared.terminal.output.renderers import (
     render_completed_investigation_footer,
     render_investigation_header,
 )
-from surfaces.interactive_shell.ui.output.tracker import ProgressTracker, get_tracker
+from surfaces.shared.terminal.output.tracker import ProgressTracker, get_tracker
 
 
 def _reset_all_ports() -> None:

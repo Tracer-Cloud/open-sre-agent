@@ -25,6 +25,19 @@ ALERT_TEMPLATE_CHOICES: Final[tuple[str, ...]] = (
     "honeycomb",
     "coralogix",
     "splunk",
+    "new_relic",
+)
+
+# Menu labels for the sample alert templates, in the order both terminal
+# surfaces list them.
+SAMPLE_ALERT_OPTIONS: Final[tuple[tuple[str, str], ...]] = (
+    ("generic", "Generic - High error rate in payments ETL"),
+    ("datadog", "Datadog - payments-etl error rate high"),
+    ("grafana", "Grafana - Pipeline failure rate high"),
+    ("honeycomb", "Honeycomb - checkout-api latency regression"),
+    ("coralogix", "Coralogix - payments worker errors"),
+    ("new_relic", "New Relic - checkout-latency threshold breach"),
+    ("splunk", "Splunk - payments service error spike"),
 )
 
 __all__ = [
@@ -33,4 +46,5 @@ __all__ = [
     "INVESTIGATION_TOOL_CACHE_MAX_CHARS",
     "INVESTIGATION_TOOL_CACHE_MAX_ENTRIES",
     "MAX_INVESTIGATION_LOOPS",
+    "SAMPLE_ALERT_OPTIONS",
 ]

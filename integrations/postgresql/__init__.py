@@ -14,6 +14,14 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
+from config.constants.postgresql import (
+    POSTGRESQL_DATABASE_ENV,
+    POSTGRESQL_HOST_ENV,
+    POSTGRESQL_PASSWORD_ENV,
+    POSTGRESQL_PORT_ENV,
+    POSTGRESQL_SSL_MODE_ENV,
+    POSTGRESQL_USERNAME_ENV,
+)
 from core.tool_framework.utils.tool_availability import tool_unavailable
 from integrations._relational import (
     RelationalConfigBase,
@@ -77,18 +85,18 @@ def build_postgresql_config(raw: dict[str, Any] | None) -> PostgreSQLConfig:
 
 def postgresql_config_from_env() -> PostgreSQLConfig | None:
     """Load a PostgreSQL config from env vars."""
-    host = env_str("POSTGRESQL_HOST")
-    database = env_str("POSTGRESQL_DATABASE")
+    host = env_str(POSTGRESQL_HOST_ENV)
+    database = env_str(POSTGRESQL_DATABASE_ENV)
     if not host or not database:
         return None
     return build_postgresql_config(
         {
             "host": host,
-            "port": env_int("POSTGRESQL_PORT", DEFAULT_POSTGRESQL_PORT),
+            "port": env_int(POSTGRESQL_PORT_ENV, DEFAULT_POSTGRESQL_PORT),
             "database": database,
-            "username": env_str("POSTGRESQL_USERNAME", DEFAULT_POSTGRESQL_USER),
-            "password": os.getenv("POSTGRESQL_PASSWORD", ""),
-            "ssl_mode": env_str("POSTGRESQL_SSL_MODE", DEFAULT_POSTGRESQL_SSL_MODE),
+            "username": env_str(POSTGRESQL_USERNAME_ENV, DEFAULT_POSTGRESQL_USER),
+            "password": os.getenv(POSTGRESQL_PASSWORD_ENV, ""),
+            "ssl_mode": env_str(POSTGRESQL_SSL_MODE_ENV, DEFAULT_POSTGRESQL_SSL_MODE),
         }
     )
 

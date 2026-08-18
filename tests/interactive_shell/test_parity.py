@@ -12,7 +12,7 @@ EXCLUDED_COMMANDS = {"agent", "gateway"}
 def test_cli_slash_command_parity():
     """Ensure every top-level Click command has a corresponding slash command in the REPL."""
     # Get all registered top-level commands from the main Click group
-    cli_commands = set(cli.commands.keys())
+    cli_commands = {name for name, command in cli.commands.items() if not command.hidden}
 
     # Filter out excluded commands
     expected_commands = cli_commands - EXCLUDED_COMMANDS

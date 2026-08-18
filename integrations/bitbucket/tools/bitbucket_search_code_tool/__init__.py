@@ -7,13 +7,13 @@ from typing import Any
 from core.domain.types.tools import ToolSurface
 from core.tool_framework.tool_decorator import tool
 from core.tool_framework.utils.code_host_unavailable import code_host_unavailable_payload
-from integrations.bitbucket import (
+from integrations.bitbucket.client import search_code
+from integrations.bitbucket.config import (
     BitbucketConfig,
     bitbucket_config_from_env,
     build_bitbucket_config,
-    search_code,
 )
-from integrations.bitbucket.availability import bitbucket_available_or_backend
+from integrations.bitbucket.tools.availability import bitbucket_available_or_backend
 
 
 def _resolve_config(

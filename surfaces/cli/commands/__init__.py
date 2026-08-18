@@ -24,6 +24,7 @@ from surfaces.cli.commands.integrations import integrations
 from surfaces.cli.commands.messaging import messaging
 from surfaces.cli.commands.misses import misses_command
 from surfaces.cli.commands.onboard import onboard
+from surfaces.cli.commands.package_smoke import package_smoke_command
 from surfaces.cli.commands.posthog_report import posthog_command
 from surfaces.cli.commands.remote_sync import remote_sync_command
 from surfaces.cli.commands.sentry_digest import sentry_command
@@ -56,6 +57,7 @@ _COMMANDS: tuple[click.Command, ...] = (
     update_command,
     uninstall_command,
     version_command,
+    package_smoke_command,
 )
 
 

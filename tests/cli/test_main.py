@@ -13,8 +13,9 @@ from config.constants.product import RELEASE_STAGE
 from config.repl_config import ReplConfig
 from platform.analytics import provider
 from platform.analytics.events import Event
-from surfaces.cli.app import cli, main
+from surfaces.cli.app import cli
 from surfaces.cli.startup import sentry_entrypoint_for
+from surfaces.entrypoint import main
 
 
 class _EmptyCatalog:
@@ -84,7 +85,7 @@ def test_main_does_not_capture_expected_usage_errors_to_sentry(
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_args: None)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured.append(exc),
     )
 
@@ -120,8 +121,8 @@ def test_main_allows_update_when_sentry_sdk_missing(monkeypatch, capsys) -> None
         raise ModuleNotFoundError("No module named 'sentry_sdk'", name="sentry_sdk")
 
     monkeypatch.setattr("platform.observability.errors.sentry.init_sentry", _raise_missing_sentry)
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._fetch_latest_version", lambda: "9999.0.0")
-    monkeypatch.setattr("surfaces.cli.lifecycle.update._is_update_available", lambda _c, _l: False)
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.fetch_latest_version", lambda: "9999.0.0")
+    monkeypatch.setattr("surfaces.cli.lifecycle.update.is_update_available", lambda _c, _l: False)
 
     exit_code = main(["update", "--check"])
 
@@ -169,7 +170,7 @@ def test_main_does_not_capture_unknown_command_to_sentry(monkeypatch, capsys) ->
     )
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -192,7 +193,7 @@ def test_main_does_not_capture_invalid_option_parse_error(monkeypatch, capsys) -
     )
     monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
     monkeypatch.setattr(
-        "surfaces.interactive_shell.utils.error_handling.exception_reporting.capture_exception",
+        "surfaces.shared.error_handling.exception_reporting.capture_exception",
         lambda exc, **_kwargs: captured_errors.append(exc),
     )
 
@@ -240,6 +241,26 @@ def test_main_fast_version_command_skips_first_run_setup(monkeypatch, capsys) ->
     assert exit_code == 0
     assert "opensre" in capsys.readouterr().out
     assert captured == []
+
+
+def test_main_fast_print_template_skips_startup(monkeypatch, capsys) -> None:
+    """``investigate --print-template`` must not install harness adapters."""
+    boot_calls: list[str] = []
+
+    monkeypatch.setattr(
+        "surfaces.cli.app.startup.run",
+        lambda *_a, **_k: boot_calls.append("startup"),
+    )
+    monkeypatch.setattr("surfaces.cli.app.capture_first_run_if_needed", lambda: None)
+    monkeypatch.setattr("surfaces.cli.app.capture_cli_invoked", lambda *_a: None)
+    monkeypatch.setattr("surfaces.cli.app.shutdown_analytics", lambda **_kw: None)
+
+    exit_code = main(["investigate", "--print-template", "generic"])
+
+    assert exit_code == 0
+    assert boot_calls == []
+    payload = capsys.readouterr().out
+    assert '"alert_source": "generic"' in payload
 
 
 def test_main_debug_sentry_sends_synthetic_event(monkeypatch, capsys) -> None:

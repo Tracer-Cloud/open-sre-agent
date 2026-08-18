@@ -122,12 +122,12 @@ def send_smtp_report(
         client = _connect_client(smtp_ctx)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[smtp] connection failed: %s", exc)
-        return False, str(exc)
+        return False, type(exc).__name__
     try:
         client.send_message(message)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[smtp] send failed: %s", exc)
-        return False, str(exc)
+        return False, type(exc).__name__
     finally:
         try:
             client.quit()

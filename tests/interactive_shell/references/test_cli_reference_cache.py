@@ -37,7 +37,7 @@ def test_cold_build_is_silent(capsys: pytest.CaptureFixture[str]) -> None:
 
     text = _reference_with_cli().build_text()
     captured = capsys.readouterr()
-    first_command = sorted(cli.commands.keys())[0]
+    first_command = sorted(name for name, command in cli.commands.items() if not command.hidden)[0]
 
     assert captured.out == ""
     assert captured.err == ""
@@ -144,15 +144,23 @@ def test_command_group_provider_is_bound_lazily() -> None:
     assert calls == [1]
 
 
+def _session_with_cli() -> Session:
+    from surfaces.cli.app import cli
+
+    session = Session()
+    session.terminal.cli_command_group = cli
+    return session
+
+
 def test_shell_prompt_context_provider_includes_cli_reference() -> None:
-    provider = cli_reference_module.shell_prompt_context_provider(Session())
+    provider = cli_reference_module.shell_prompt_context_provider(_session_with_cli())
     text = provider.cli_reference()
     assert "=== opensre --help ===" in text
     assert "Usage: opensre" in text
 
 
 def test_shell_prompt_context_provider_reuses_session_cli_cache() -> None:
-    session = Session()
+    session = _session_with_cli()
     first = cli_reference_module.shell_prompt_context_provider(session)
     second = cli_reference_module.shell_prompt_context_provider(session)
     first.cli_reference()

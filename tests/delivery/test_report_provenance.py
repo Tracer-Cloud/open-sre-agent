@@ -235,6 +235,56 @@ def test_build_report_context_adds_additional_source_provenance() -> None:
     )
 
 
+def test_build_report_context_cites_new_relic_in_provenance_and_evidence_catalog() -> None:
+    state = _make_state()
+    state["available_sources"]["new_relic"] = {
+        "account_id": "1234567",
+        "since_minutes": 60,
+    }
+    state["evidence"]["new_relic_alerts"] = [
+        {
+            "incident_id": "1",
+            "status": "open",
+            "condition_name": "checkout-latency",
+            "policy_name": "checkout-service-policy",
+        },
+        {
+            "incident_id": "2",
+            "status": "closed",
+            "condition_name": "checkout-latency",
+            "policy_name": "checkout-service-policy",
+        },
+    ]
+
+    ctx = build_report_context(state)
+
+    assert ctx["source_provenance"]["new_relic"]["summary"] == "account=1234567, window=60m"
+    catalog_entry = ctx["evidence_catalog"]["evidence/new_relic/alerts"]
+    assert catalog_entry["label"] == "New Relic Alerts (1 open)"
+    assert catalog_entry["provenance"] == "account=1234567, window=60m"
+
+
+def test_build_report_context_handles_new_relic_alert_with_no_condition_name() -> None:
+    state = _make_state()
+    state["available_sources"]["new_relic"] = {
+        "account_id": "1234567",
+        "since_minutes": 60,
+    }
+    state["evidence"]["new_relic_alerts"] = [
+        {
+            "incident_id": "1",
+            "status": "open",
+            "condition_name": None,
+            "policy_name": "checkout-service-policy",
+        },
+    ]
+
+    ctx = build_report_context(state)
+
+    catalog_entry = ctx["evidence_catalog"]["evidence/new_relic/alerts"]
+    assert catalog_entry["snippet"] is None
+
+
 def test_build_report_context_drops_empty_provenance_summaries() -> None:
     state = _make_state()
     state["available_sources"]["github"] = {}

@@ -65,6 +65,7 @@ class CursorAdapter:
     """
 
     name = "cursor"
+    streams_plain_stdout = True
     binary_env_key = "CURSOR_BIN"
     install_hint = "Install Cursor Agent with: curl https://cursor.com/install -fsS | bash"
     auth_hint = "Run: agent login."

@@ -390,21 +390,6 @@ def resolve_for_request(provider: str) -> CredentialResolution:
                 source=source,
                 detail=detail,
             )
-        if found.keyring_unreachable:
-            # The backend couldn't be reached (no D-Bus/Secret Service session,
-            # locked keychain) and no fallback copy exists — that is not evidence
-            # the credential is missing, so leave previously verified metadata
-            # alone instead of marking it stale.
-            return CredentialResolution(
-                provider=spec.value,
-                api_key="",
-                source=CredentialSource.UNKNOWN,
-                detail=(
-                    f"Could not reach the system keychain to check {spec.api_key_env}: "
-                    f"{found.keyring_error} Retry once the keychain is reachable."
-                ),
-            )
-
         detail = (
             f"Missing credential for LLM provider '{spec.value}'. Set {spec.api_key_env} "
             f"or run `opensre auth login {spec.value}`."
@@ -491,8 +476,8 @@ def delete(provider: str) -> None:
     if spec.uses_open_sre_api_key:
         from config.secrets.store import delete_secret
 
-        # Clears the keyring entry *and* any fallback-file copy — leaving the
-        # latter would let a logged-out credential keep resolving at request time.
+        # Clears the local file *and* any legacy OS-keychain copy — leaving the
+        # keychain entry would let a logged-out credential be recovered.
         delete_secret(spec.api_key_env)
     delete_provider_auth_record(spec.value)
 
@@ -530,8 +515,11 @@ def has_api_key_env_status(env_var: str) -> bool:
 
 
 def llm_api_key_source(env_var: str) -> str:
-    """Return where an LLM credential resolves from: ``env``, ``keyring``, ``fallback``, or ``none``."""
-    from config.secrets import os_keyring
+    """Return where an LLM credential resolves from: ``env``, ``fallback``, or ``none``.
+
+    Goes through the secret store so a pending keychain import can finish. Does
+    not report bare OS-keychain presence — that tier is no longer a resolve path.
+    """
     from config.secrets.store import secret_source
 
     prompt_safe_source = source_for_api_key_env(env_var)
@@ -541,19 +529,12 @@ def llm_api_key_source(env_var: str) -> str:
         return "none"
     if os.getenv(env_var, "").strip():
         return "env"
-    if os_keyring.keyring_is_disabled():
-        return "none"
-    # Answers without decrypting the secret (and so without a macOS auth prompt)
-    # when the platform supports it; falls through to a real read otherwise.
-    item_exists = os_keyring.item_exists(env_var)
-    if item_exists:
-        return "keyring"
-    return secret_source(env_var)
+    tier = secret_source(env_var)
+    return tier.value if hasattr(tier, "value") else str(tier)
 
 
 def has_llm_api_key(env_var: str) -> bool:
     """Return True when an API key is available from env or secure local storage."""
-    from config.secrets import os_keyring
     from config.secrets.store import secret_source
 
     if has_api_key_env_status(env_var):
@@ -561,10 +542,6 @@ def has_llm_api_key(env_var: str) -> bool:
     if env_var.strip() in set(API_KEY_PROVIDER_ENVS.values()):
         return False
     if os.getenv(env_var, "").strip():
-        return True
-    if os_keyring.keyring_is_disabled():
-        return False
-    if os_keyring.item_exists(env_var):
         return True
     return secret_source(env_var) != "none"
 

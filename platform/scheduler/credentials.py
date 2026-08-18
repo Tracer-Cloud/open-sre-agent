@@ -26,10 +26,17 @@ from config.constants.rocketchat import (
     ROCKETCHAT_SERVER_URL_ENV,
     ROCKETCHAT_USER_ID_ENV,
 )
-from config.constants.slack import SLACK_BOT_TOKEN_ENV
+from config.constants.slack import (
+    SLACK_BOT_TOKEN_ENV,
+    SLACK_DEFAULT_CHAT_ID_ENV,
+    SLACK_WEBHOOK_URL_ENV,
+)
 from config.constants.telegram import TELEGRAM_BOT_TOKEN_ENV, TELEGRAM_DEFAULT_CHAT_ID_ENV
 from config.llm_credentials import resolve_env_credential
-from platform.scheduler.loop_constants import LOOP_TELEGRAM_CHAT_ID_PARAM
+from platform.scheduler.loop_constants import (
+    LOOP_SLACK_CHAT_ID_PARAM,
+    LOOP_TELEGRAM_CHAT_ID_PARAM,
+)
 from platform.scheduler.types import Provider
 
 logger = logging.getLogger(__name__)
@@ -69,28 +76,65 @@ def resolve_slack_credentials(task_params: dict[str, str]) -> dict[str, str]:
     Priority: task.params > integration store > environment variable > system keyring.
     Webhook URLs stay env/store only (not keyring-eligible as ``*_URL``).
     """
+    creds, _source = _resolve_slack_with_source(task_params)
+    return creds
+
+
+def resolve_slack_default_chat_id(task_params: dict[str, str] | None = None) -> str:
+    """Resolve the default Slack destination for scheduled bot-token delivery.
+
+    Explicit ``chat_id`` / loop param always wins. Implicit defaults are
+    source-aligned with the resolved bot token: a store channel is only used
+    with a store token, and ``SLACK_DEFAULT_CHAT_ID`` only with an env/keyring
+    token. A task-level token does not pick up a store or env default.
+    """
+    params = task_params or {}
+    explicit = params.get("chat_id", "").strip() or params.get(LOOP_SLACK_CHAT_ID_PARAM, "").strip()
+    if explicit:
+        return explicit
+
+    creds, source = _resolve_slack_with_source(params)
+    if not creds.get("access_token"):
+        return ""
+    if source == "store":
+        return _get_integration_credential("slack", "default_chat_id").strip()
+    if source == "env":
+        return os.getenv(SLACK_DEFAULT_CHAT_ID_ENV, "").strip()
+    return ""
+
+
+def _resolve_slack_with_source(task_params: dict[str, str]) -> tuple[dict[str, str], str]:
+    """Return Slack creds plus the source they came from: params, store, env, or empty."""
     webhook_url = task_params.get("webhook_url", "").strip()
     if webhook_url:
-        return {"webhook_url": webhook_url}
+        return {"webhook_url": webhook_url}, "params"
 
     access_token = task_params.get("access_token", "").strip()
     if access_token:
-        return {"access_token": access_token}
+        return {"access_token": access_token}, "params"
 
     # Webhook: store then plain env — never resolve_env_credential / keyring.
     store_webhook = _get_integration_credential("slack", "webhook_url").strip()
     if store_webhook:
-        return {"webhook_url": store_webhook}
-    env_webhook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        return {"webhook_url": store_webhook}, "store"
+    env_webhook = os.getenv(SLACK_WEBHOOK_URL_ENV, "").strip()
     if env_webhook:
-        return {"webhook_url": env_webhook}
+        return {"webhook_url": env_webhook}, "env"
 
-    return _resolve_credentials(
-        {},
-        service="slack",
-        credential_key="access_token",
-        env_vars=(SLACK_BOT_TOKEN_ENV, "SLACK_ACCESS_TOKEN"),
+    # Catalog / setup persist ``bot_token``; task params and some stores use
+    # ``access_token``. Either is a store-sourced bot token.
+    store_token = (
+        _get_integration_credential("slack", "access_token").strip()
+        or _get_integration_credential("slack", "bot_token").strip()
     )
+    if store_token:
+        return {"access_token": store_token}, "store"
+
+    for env_var in (SLACK_BOT_TOKEN_ENV, "SLACK_ACCESS_TOKEN"):
+        value = resolve_env_credential(env_var).strip()
+        if value:
+            return {"access_token": value}, "env"
+    return {}, ""
 
 
 def resolve_discord_credentials(task_params: dict[str, str]) -> dict[str, str]:
@@ -250,7 +294,9 @@ def requires_explicit_chat_id(provider: str, task_params: dict[str, str] | None 
     if provider_name != Provider.SLACK.value:
         return True
     creds = resolve_slack_credentials(task_params or {})
-    return not creds.get("webhook_url", "").strip()
+    if creds.get("webhook_url", "").strip():
+        return False
+    return not resolve_slack_default_chat_id(task_params or {}).strip()
 
 
 __all__ = [
@@ -258,6 +304,7 @@ __all__ = [
     "resolve_discord_credentials",
     "resolve_rocketchat_credentials",
     "resolve_slack_credentials",
+    "resolve_slack_default_chat_id",
     "resolve_telegram_default_chat_id",
     "resolve_telegram_credentials",
 ]

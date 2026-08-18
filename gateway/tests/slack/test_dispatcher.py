@@ -25,8 +25,8 @@ _SECURITY = "gateway.transports.slack.processing.security"
 def _isolate_slack_integration_store():
     """Worker tests must not depend on the developer's ~/.opensre integrations."""
     with (
-        patch(f"{_SECURITY}.get_integration", return_value=None),
-        patch(f"{_SECURITY}.upsert_instance"),
+        patch("gateway.core.middleware.identity_policy.get_integration", return_value=None),
+        patch("gateway.core.middleware.identity_policy.upsert_instance"),
     ):
         yield
 

@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.storage.investigations.store import InvestigationStatus, InvestigationStore
+from gateway.core.storage.investigations.repository import (
+    InvestigationRepository,
+    InvestigationStatus,
+)
 from gateway.web.artifacts import upload_report_to_s3, write_local_report
 
 # The worker is opt-in so API-only processes (and tests) never run the pipeline.
@@ -46,7 +49,7 @@ class InvestigationWorker:
 
     def __init__(
         self,
-        store: InvestigationStore,
+        store: InvestigationRepository,
         *,
         runner: InvestigationRunner = _run_pipeline,
         poll_interval_seconds: float = 2.0,
@@ -76,7 +79,7 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
-        from gateway.core.runtime.concurrency import process_turn_gate
+        from gateway.core.host.concurrency import process_turn_gate
 
         # Already claimed from the queue — block like scheduler runners so the
         # work waits for a chat/Path-2 slot instead of racing the process gate.
@@ -155,7 +158,7 @@ def worker_enabled() -> bool:
     return os.getenv(WORKER_ENABLED_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def ensure_worker_started(store: InvestigationStore) -> InvestigationWorker | None:
+def ensure_worker_started(store: InvestigationRepository) -> InvestigationWorker | None:
     """Start the process-wide worker on first call; no-op unless enabled by env."""
     global _worker
     if not worker_enabled():

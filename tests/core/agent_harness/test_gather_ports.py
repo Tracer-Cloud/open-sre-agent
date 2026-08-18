@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from core.agent_harness.turns.gather_ports import GatherPorts
+from core.agent_harness.turns.port_families import HeadlessPorts
 
 
 class _Session:
@@ -54,7 +55,7 @@ class TestAgentForwardsThePorts:
     def test_progress_and_persist_reach_the_gather_phase(self, monkeypatch) -> None:
         # Arrange: a REPL supplies both so the user sees live tool lines and the
         # calls land in session history.
-        from core.agent_harness.turns import headless_dispatch
+        from core.agent_harness.turns import headless_adapters, headless_agent
 
         seen: dict[str, Any] = {}
 
@@ -62,7 +63,7 @@ class TestAgentForwardsThePorts:
             seen.update(kwargs)
             return "evidence"
 
-        monkeypatch.setattr(headless_dispatch, "gather_tool_evidence", _fake_gather)
+        monkeypatch.setattr(headless_agent, "gather_tool_evidence", _fake_gather)
 
         def _on_progress(_kind: str, _data: dict[str, Any]) -> None:
             return None
@@ -70,9 +71,8 @@ class TestAgentForwardsThePorts:
         def _persist(_executed: list[tuple[Any, Any]]) -> None:
             return None
 
-        agent = headless_dispatch.HeadlessAgent(
-            tools=headless_dispatch.NullToolProvider(),
-            session=headless_dispatch.InMemorySessionState(),
+        agent = HeadlessPorts(session=headless_adapters.InMemorySessionState()).agent(
+            tools=headless_adapters.NullToolProvider(),
             gather=GatherPorts(on_progress=_on_progress, persist=_persist, max_iterations=9),
         )
 
@@ -87,16 +87,15 @@ class TestAgentForwardsThePorts:
 
     def test_disabled_ports_skip_the_phase_entirely(self, monkeypatch) -> None:
         # Arrange
-        from core.agent_harness.turns import headless_dispatch
+        from core.agent_harness.turns import headless_adapters, headless_agent
 
         def _never(*_args: Any, **_kwargs: Any) -> str | None:
             raise AssertionError("gather ran while disabled")
 
-        monkeypatch.setattr(headless_dispatch, "gather_tool_evidence", _never)
+        monkeypatch.setattr(headless_agent, "gather_tool_evidence", _never)
 
-        agent = headless_dispatch.HeadlessAgent(
-            tools=headless_dispatch.NullToolProvider(),
-            session=headless_dispatch.InMemorySessionState(),
+        agent = HeadlessPorts(session=headless_adapters.InMemorySessionState()).agent(
+            tools=headless_adapters.NullToolProvider(),
             gather=GatherPorts(enabled=False),
         )
 

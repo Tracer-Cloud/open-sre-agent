@@ -1,86 +1,57 @@
 ---
 title: "macOS"
-description: "Install Tracer locally on your macOS under two minutes"
+description: "Install OpenSRE on a Mac and run your first investigation."
 ---
 
-## 1. Install Tracer
+Install OpenSRE on macOS, set up your LLM and tools, then try a sample investigation.
 
-Run the following command to install Tracer:
+## 1. Install
 
-```bash
-curl -sSL https://install.tracer.cloud | sh
-```
-<Accordion title="macOS Compatibility Notes">
-While Tracer can run on macOS, certain features are limited due to system restrictions.<br/>
-  **– eBPF features:** Disabled due to macOS kernel restrictions<br/>
-  **– Process recognition:** Less precise than on Linux due to limited access to low-level system data
-
-  For full functionality, including accurate process visibility and eBPF support, we recommend running Tracer directly on a Linux machine.
-</Accordion>
-
-
-## 2. Start Tracer agent
-
-To start tracking a pipeline, run the following command:
+Pick one:
 
 ```bash
-sudo tracer login
-```
-<Info>This will open up a browser window to log in to your Tracer account.</Info>
+# Homebrew
+brew tap tracer-cloud/tap
+brew install tracer-cloud/tap/opensre
 
-To start tracking a pipeline, run the following command:
+# or one-line installer
+curl -fsSL https://install.opensre.com | bash
+```
+
+You usually don't need `sudo`. If the terminal says `opensre: command not found`, open a new window or add the path the installer printed (often `~/.local/bin`).
+
+In a normal interactive terminal, install may start onboard for you. To skip that:
 
 ```bash
-sudo tracer init
+curl -fsSL https://install.opensre.com | OPENSRE_AUTO_LAUNCH=0 bash
 ```
 
-You will be prompted to configure the pipeline name. Filling this out ensures that each pipeline is uniquely identifiable, customizable, and easy to search later on.
-
-
-<Tip>
-**Tracer is now tracking your pipeline.**
-
-Every run you launch for this pipeline will be automatically monitored.
-
-**Note:** You will only need to run `tracer init` again for a new pipeline, not per pipeline run.
-</Tip>
-
-
-## 3. Launch pipeline
-
-You can now choose to run any pipeline you want or use `tracer demo` to launch a prepared pipeline.
-
-Run your own pipeline by following your usual workflow or **run this line in your terminal**:
+## 2. Set things up
 
 ```bash
-sudo tracer demo
+opensre onboard
 ```
 
-<Info>
-`tracer demo` will run an nf-core fastquorum pipeline. This pipeline requires minimum 2GB RAM, 1 core vCPU, and 30GB storage to run efficiently.
-</Info>
+You'll pick an LLM provider, paste a key, and can connect tools like Datadog, Grafana, or Slack. Then check they work:
 
-## 4. Monitor and Optimize Your Pipeline
+```bash
+opensre integrations verify
+```
 
-<Card href="https://app.tracer.cloud/">
-  <img
-    className="block dark:hidden"
-    src="/images/logo/tracer/Tracer Full Body - Black.png"
-    alt="Tracer Logo"
-    style={{ width: '10%', height: 'auto', marginBottom: '1rem' }}
-  />
-  <img
-    className="hidden dark:block"
-    src="/images/logo/tracer/Tracer Full Body - Black.png"
-    alt="Tracer Logo"
-    style={{ width: '10%', height: 'auto', marginBottom: '1rem' }}
-  />
+## 3. Try an investigation
 
-  <div style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '1rem', color: 'inherit' }}>
-    Watch your pipeline run in the Tracer dashboard
-  </div>
+```bash
+opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json
+```
 
-  <div style={{ color: 'inherit' }}>
-    View real-time metrics, resource usage, and performance insights for your pipeline runs.
-  </div>
-</Card>
+Or open the shell and describe what's going on:
+
+```bash
+opensre
+```
+
+## Next
+
+- [Quickstart](/quickstart) — same flow with GIFs
+- [Install locally](/install-local) — PATH notes, auto-onboard, on-prem tips
+- [Integrations overview](/integrations-overview) — connect more tools

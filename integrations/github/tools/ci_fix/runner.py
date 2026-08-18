@@ -18,6 +18,9 @@ from integrations.github.client import resolve_github_token
 from integrations.github.repo_scope import detect_git_remote_repo_scope
 from integrations.github.tools.ci_fix.context import CiFixContext, gather_ci_fix_context
 from integrations.github.tools.ci_fix.errors import (
+    ERR_CHECKS_FAILED,
+    ERR_CHECKS_SUPERSEDED,
+    ERR_CHECKS_TIMEOUT,
     ERR_CONFIRMATION_DENIED,
     ERR_EXECUTION,
     ERR_GITHUB_TOKEN,
@@ -27,6 +30,12 @@ from integrations.github.tools.ci_fix.errors import (
     GitHubCiFixError,
 )
 from integrations.github.tools.ci_fix.ship import PushResult, checkout_pr_branch, push_ci_fix
+from integrations.github.tools.ci_fix.verification import (
+    DEFAULT_CHECK_WAIT_SECONDS,
+    CheckState,
+    CheckVerification,
+    wait_for_pr_checks,
+)
 
 SOURCE: Final = "github"
 _YES = {"y", "yes"}
@@ -127,6 +136,8 @@ def _base_output(ctx: CiFixContext | None = None) -> dict[str, Any]:
         "diff_truncated": False,
         "error": None,
         "branch_name": None,
+        "checks_state": None,
+        "check_names": [],
     }
 
 
@@ -147,16 +158,65 @@ def to_output(ctx: CiFixContext, result: CodingResult) -> dict[str, Any]:
     }
 
 
-def with_push_output(output: dict[str, Any], push: PushResult) -> dict[str, Any]:
+def with_push_output(
+    output: dict[str, Any],
+    push: PushResult,
+    verification: CheckVerification,
+) -> dict[str, Any]:
     owner = str(output.get("owner") or "")
     repo = str(output.get("repo") or "")
     number = output.get("pr_number")
-    return {
+    result = {
         **output,
         "branch_name": push.branch_name,
         "changed_files": push.changed_files,
+        "checks_state": verification.state.value,
+        "check_names": list(verification.check_names),
+    }
+    if verification.state is CheckState.PASSED:
+        return {
+            **result,
+            "response_text": (
+                f"Fixed failing CI for {owner}/{repo}#{number}, pushed {push.branch_name}, "
+                "and all PR checks passed."
+            ),
+        }
+    if verification.state is CheckState.FAILED:
+        failing = ", ".join(verification.failing_checks) or "unknown checks"
+        return {
+            **result,
+            "success": False,
+            "error_kind": ERR_CHECKS_FAILED,
+            "error": f"Post-push PR checks failed: {failing}.",
+            "response_text": (
+                f"Pushed a CI fix to {push.branch_name}, but PR checks are still failing: "
+                f"{failing}."
+            ),
+        }
+    if verification.state is CheckState.SUPERSEDED:
+        expected = push.head_sha[:12]
+        observed = verification.observed_head_sha[:12] or "another commit"
+        return {
+            **result,
+            "success": False,
+            "error_kind": ERR_CHECKS_SUPERSEDED,
+            "error": (
+                f"PR head changed from pushed commit {expected} to {observed} "
+                "before verification finished."
+            ),
+            "response_text": (
+                f"Pushed a CI fix to {push.branch_name}, but another commit replaced "
+                f"{expected} before its checks finished; verification stopped."
+            ),
+        }
+    return {
+        **result,
+        "success": False,
+        "error_kind": ERR_CHECKS_TIMEOUT,
+        "error": "Post-push PR checks did not finish before the verification timeout.",
         "response_text": (
-            f"Fixed failing CI for {owner}/{repo}#{number} and pushed {push.branch_name}."
+            f"Pushed a CI fix to {push.branch_name}, but PR checks did not finish within "
+            f"{DEFAULT_CHECK_WAIT_SECONDS // 60} minutes."
         ),
     }
 
@@ -239,7 +299,22 @@ def run_ci_fix(
         )
     except GitHubCiFixError as exc:
         return push_error_output(output, exc)
-    return with_push_output(output, push)
+    try:
+        verification = wait_for_pr_checks(
+            ctx,
+            github_token=github_token,
+            expected_head_sha=push.head_sha,
+        )
+    except GitHubCiFixError as exc:
+        return {
+            **push_error_output(output, exc),
+            "branch_name": push.branch_name,
+            "changed_files": push.changed_files,
+            "response_text": (
+                f"Pushed a CI fix to {push.branch_name}, but could not verify the new checks."
+            ),
+        }
+    return with_push_output(output, push, verification)
 
 
 __all__ = [

@@ -1,10 +1,13 @@
-"""Background RCA notification helpers."""
+"""Background RCA notification entry point for the REPL runtime.
+
+Channel selection lives in ``platform.notifications``. This runs the registration
+bootstrap first, which ``platform`` cannot do itself because ``bootstrap`` sits
+above it. Imports stay function-local so the REPL boot path pays for none of it.
+"""
 
 from __future__ import annotations
 
-from surfaces.interactive_shell.session.background_investigations import (
-    BackgroundInvestigationRecord,
-)
+from platform.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_background_notifications(
@@ -13,64 +16,8 @@ def deliver_background_notifications(
     channels: tuple[str, ...],
 ) -> dict[str, str]:
     """Send configured notifications for a completed background RCA."""
-    # Imported lazily: email delivery only fires on background-RCA completion, so
-    # the SMTP client must not load into the base REPL boot import path.
-    from integrations.smtp.delivery import format_background_rca_email, send_smtp_report
+    from bootstrap.adapters import install_notification_adapters
+    from platform.notifications.outbound_dispatch import dispatch_background_notifications
 
-    results: dict[str, str] = {}
-    from integrations.catalog import resolve_effective_integrations
-
-    effective_integrations = resolve_effective_integrations()
-
-    for channel in channels:
-        if channel == "telegram":
-            # Imported lazily: telegram delivery only fires on background-RCA
-            # completion, so the telegram client must not load into the base
-            # REPL boot import path.
-            from surfaces.interactive_shell.runtime.background.telegram_channel import (
-                deliver_telegram_notification,
-            )
-
-            results["telegram"] = deliver_telegram_notification(record)
-            continue
-
-        if channel == "rocketchat":
-            # Imported lazily for the same reason as the telegram channel.
-            from surfaces.interactive_shell.runtime.background.rocketchat_channel import (
-                deliver_rocketchat_notification,
-            )
-
-            results["rocketchat"] = deliver_rocketchat_notification(record)
-            continue
-
-        if channel == "buzz":
-            # Imported lazily for the same reason as the telegram channel.
-            from surfaces.interactive_shell.runtime.background.buzz_channel import (
-                deliver_buzz_notification,
-            )
-
-            results["buzz"] = deliver_buzz_notification(record)
-            continue
-
-        if channel != "email":
-            results[channel] = "unsupported"
-            continue
-
-        smtp_integration = effective_integrations.get("smtp")
-        smtp_config = smtp_integration.get("config") if isinstance(smtp_integration, dict) else None
-        if not isinstance(smtp_config, dict):
-            results["email"] = "missing smtp integration"
-            continue
-
-        subject, body = format_background_rca_email(
-            task_id=record.task_id,
-            command=record.command,
-            root_cause=record.root_cause,
-            top_analysis=record.top_analysis,
-            next_steps=record.next_steps,
-            stats=record.stats,
-        )
-        ok, error = send_smtp_report(report=body, subject=subject, smtp_ctx=smtp_config)
-        results["email"] = "sent" if ok else f"failed: {error}"
-
-    return results
+    install_notification_adapters()
+    return dispatch_background_notifications(record=record, channels=channels)

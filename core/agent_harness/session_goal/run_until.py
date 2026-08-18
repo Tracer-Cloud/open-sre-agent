@@ -245,6 +245,7 @@ def run_until_session_goal(
 
     if active.turns_used == 0:
         active = active.record_turn()
+        attach_session_goal(session, active)
 
     active, last, stop = _finish_outer_turn(
         session,
@@ -272,6 +273,7 @@ def run_until_session_goal(
         _announce_working(session, active, on_progress)
         last = chat(continuation_nudge(active))
         active = active.record_turn()
+        attach_session_goal(session, active)
         active, last, stop = _finish_outer_turn(
             session,
             active,

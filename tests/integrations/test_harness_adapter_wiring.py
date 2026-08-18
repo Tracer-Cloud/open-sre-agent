@@ -18,7 +18,7 @@ import platform.harness_ports as harness_ports
 from core.domain.alerts import extraction as alert_extraction
 from core.domain.diagnosis import taxonomy_registry
 from core.domain.types import incident_anchors
-from surfaces.interactive_shell.ui.output import boundary as output_boundary
+from surfaces.shared.terminal.output import boundary as output_boundary
 
 
 @pytest.fixture(autouse=True)

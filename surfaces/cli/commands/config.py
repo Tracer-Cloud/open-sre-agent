@@ -5,12 +5,17 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import click
 
-from config.constants import OPENSRE_HOME_DIR
+from config.local_settings import (
+    LocalSettingsError,
+    load_local_settings,
+    local_settings_path,
+    save_local_settings,
+    set_nested_key,
+)
 
 _SUPPORTED_LAYOUTS = {"classic", "pinned"}
 
@@ -43,6 +48,7 @@ def _emit_llm_config() -> None:
         "anthropic": "ANTHROPIC_REASONING_MODEL",
         "openai": "OPENAI_REASONING_MODEL",
         "openrouter": "OPENROUTER_REASONING_MODEL",
+        "trustedrouter": "TRUSTEDROUTER_REASONING_MODEL",
         "deepseek": "DEEPSEEK_REASONING_MODEL",
         "gemini": "GEMINI_REASONING_MODEL",
         "nvidia": "NVIDIA_REASONING_MODEL",
@@ -86,38 +92,11 @@ def _emit_llm_config() -> None:
     click.echo("Local CLI YAML: opensre config show / opensre config set …")
 
 
-def _config_path() -> Path:
-    return OPENSRE_HOME_DIR / "config.yml"
-
-
 def _load_config() -> dict[str, Any]:
-    path = _config_path()
-    if not path.exists():
-        return {}
-
     try:
-        import yaml
-
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        raise click.ClickException(f"Could not parse local config file at {path}: {exc}") from exc
-
-    if data is None:
-        return {}
-
-    if not isinstance(data, dict):
-        raise click.ClickException(
-            f"Invalid config file at {path}: expected a mapping at the top level."
-        )
-    return data
-
-
-def _save_config(data: dict[str, Any]) -> None:
-    import yaml
-
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        return load_local_settings()
+    except LocalSettingsError as exc:
+        raise click.ClickException(f"Could not parse local config file: {exc}") from exc
 
 
 def _parse_bool(raw_value: str) -> bool:
@@ -168,16 +147,6 @@ def _coerce_value(key: str, raw_value: str) -> bool | str:
     return coercer(raw_value)
 
 
-def _set_nested_key(data: dict[str, Any], dotted_key: str, value: Any) -> dict[str, Any]:
-    head, tail = dotted_key.split(".", 1)
-    node = data.get(head)
-    if not isinstance(node, dict):
-        node = {}
-    node[tail] = value
-    data[head] = node
-    return data
-
-
 @click.group(name="config", invoke_without_command=True)
 @click.pass_context
 def config_command(ctx: click.Context) -> None:
@@ -199,7 +168,7 @@ def config_show() -> None:
 
     import yaml
 
-    path = _config_path()
+    path = local_settings_path()
     click.echo(f"# {path} (on-disk values; environment variables do not override this output)")
     click.echo(yaml.safe_dump(payload, sort_keys=False).rstrip())
 
@@ -212,6 +181,6 @@ def config_set(key: str, value: str) -> None:
     key = key.strip()
     coerced = _coerce_value(key, value)
     data = _load_config()
-    updated = _set_nested_key(data, key, coerced)
-    _save_config(updated)
+    updated = set_nested_key(data, key, coerced)
+    save_local_settings(updated)
     click.echo(f"✓ Set {key} = {coerced}")

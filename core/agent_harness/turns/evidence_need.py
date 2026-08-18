@@ -342,8 +342,10 @@ def reclassify_evidence_need_after_gather(
     (``available: False`` + ``error``). Prefer ``GatheredEvidence.tool_results``
     (or the ``tool_results`` kwarg); fall back to ``split``/``partition`` on the
     observation string — never phrase lists over prose.
-    HogQL / empty-result failures stay L1 (honest answer, no UpgradeCTA).
-    Missing-source L0 is decided before gather and is left unchanged.
+    Empty SQL / vendor-query failures stay L1 (honest answer). A metric gather
+    that never executed a live query still gets a vendor draft block and one
+    setup slash without flipping this tier. Missing-source L0 is decided before
+    gather and is left unchanged.
     """
     if need.tier != EvidenceTier.L1 or not need.required_for_authoritative or not need.connected:
         return need

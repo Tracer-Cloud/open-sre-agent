@@ -19,11 +19,11 @@ from typing import Any
 from rich.console import Console
 from rich.text import Text
 
-from core.agent_harness.turns.action_driver import SELF_RECORDING_ACTION_TOOL_NAMES
+from core.agent_harness.spi.accounting import SELF_RECORDING_ACTION_TOOL_NAMES
 from platform.terminal.theme import BOLD_SKILL, DIM, HIGHLIGHT
 from surfaces.interactive_shell.runtime import Session
-from surfaces.interactive_shell.ui.output.console_state import get_investigation_spinner
 from surfaces.interactive_shell.ui.streaming import render_markdown_block
+from surfaces.shared.terminal.output.console_state import get_investigation_spinner
 
 # Tools whose preview is just ``(label, single-arg)``. The display content is the
 # stripped string value of that single argument. Anything that needs to combine

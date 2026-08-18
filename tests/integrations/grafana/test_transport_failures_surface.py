@@ -1,8 +1,8 @@
 """Connect timeouts must not look like empty Grafana success.
 
-Parity S4: alert-rules / annotations previously logged ConnectTimeout then
-returned ``[]``, so SourceCircuitBreaker saw ``is_error=False`` and never
-marked Grafana — SessionGoal turn 1 re-paid the same 10s timeouts.
+alert-rules / annotations previously logged ConnectTimeout then returned
+``[]``, so SourceCircuitBreaker saw ``is_error=False`` and never marked
+Grafana — the next SessionGoal turn re-paid the same connect timeouts.
 """
 
 from __future__ import annotations
@@ -145,7 +145,7 @@ def test_concurrent_builds_share_one_transport_failure() -> None:
                     api_key="tok",
                     account_id="shared_inflight",
                 )
-            except BaseException as exc:  # noqa: BLE001 — collect for assert
+            except Exception as exc:  # collect for assert
                 errors.append(exc)
 
         t1 = threading.Thread(target=_call)

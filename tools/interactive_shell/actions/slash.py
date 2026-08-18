@@ -7,12 +7,12 @@ from typing import Any
 
 from rich.markup import escape
 
-from core.agent_harness.session.terminal_access import (
+from core.agent_harness.spi.session_state import (
     exclusive_stdin_active,
     session_terminal,
     set_auto_command,
 )
-from core.agent_harness.tools.tool_context import (
+from core.agent_harness.tools import (
     ActionToolContext,
     capability_available_from_sources,
     execute_with_action_context,
@@ -131,18 +131,43 @@ def _slash_observation(ctx: ActionToolContext, command: str) -> bool | dict[str,
     return True
 
 
+def _slash_arg_for_join(parts_so_far: list[str], arg: str) -> str:
+    """Quote ``arg`` only when embedding it would break a later ``shlex.split``.
+
+    Blind ``shlex.join`` quotes harmless tokens like ``days?`` and ``PostHog;``
+    on the ``$ …`` banner even though the typed ``❯`` line had no quotes.
+    Progressive round-trip keeps cron expressions / spaced args quoted and
+    leaves ordinary prose readable.
+    """
+    if arg == "":
+        return "''"
+    candidate_parts = [*parts_so_far, arg]
+    candidate = " ".join(candidate_parts)
+    try:
+        if shlex.split(candidate, posix=True) == candidate_parts:
+            return arg
+    except ValueError:
+        # Unbalanced quotes in the joined line: it cannot round-trip as-is, so
+        # fall through to quoting.
+        pass
+    return shlex.quote(arg)
+
+
 def _join_slash_command(command: str, parsed_args: list[str]) -> str:
     """Rebuild a dispatchable slash line without flattening spaced arguments.
 
     ``slash_invoke`` already carries each CLI token separately (e.g. a five-field
     cron expression as one arg). A plain ``" ".join`` turns that back into an
     unquoted line that ``dispatch_slash`` later splits on spaces — ``cron add``
-    then dies with unexpected extra arguments. ``shlex.join`` keeps those tokens
-    whole for both the ``$ …`` banner and the dispatcher.
+    then dies with unexpected extra arguments. Quote only when a later
+    ``shlex.split`` would not recover the same tokens.
     """
     if not parsed_args:
         return command
-    return shlex.join([command, *parsed_args])
+    parts = [command]
+    for arg in parsed_args:
+        parts.append(_slash_arg_for_join(parts, arg))
+    return " ".join(parts)
 
 
 def _slash_line_parts(stripped: str) -> list[str]:

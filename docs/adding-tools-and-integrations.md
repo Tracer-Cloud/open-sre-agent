@@ -60,6 +60,7 @@ Common failure modes to consider: grouped + ungrouped log content; nested/folder
 - `integrations/<name>/client.py` — a dedicated API client, when the integration makes direct remote calls
 - `integrations/<name>/verifier.py` — local verification logic
 - `integrations/<name>/tools/<tool_name>_tool/` — the vendor's agent-callable tools (see §1)
+- `integrations/<name>/background_adapter.py` — only for messaging integrations you want selectable as a background-RCA completion channel (see [Notification channels](#notification-channels))
 - `integrations/catalog.py` — resolve the integration into the shared runtime config
 - `integrations/verify.py` — wire the local verification path
 - `docs/<name>.mdx` — user-facing setup, usage, verification
@@ -81,10 +82,33 @@ Common failure modes to consider: grouped + ungrouped log content; nested/folder
 - [ ] Integration-local client added under `integrations/<name>/client.py` (only if it makes direct remote calls)
 - [ ] Tool layer is wired and stable
 - [ ] CLI setup flow is updated if the integration is user-configurable locally
+- [ ] Background-RCA delivery is wired, or intentionally out of scope (see [Notification channels](#notification-channels))
 - [ ] `opensre onboard` parity is added, or intentionally documented as out of scope
 - [ ] New required env vars / credentials are added to `.env.example` (never `.env`)
 - [ ] Sensitive credentials follow the [Credential resolution](#credential-resolution) contract below
 - [ ] `make verify-integrations` passes
+
+### Notification channels
+
+Only if the integration should appear in `/background notify set <channel>` as a destination for a completed background RCA. See [background-investigations.mdx](background-investigations.mdx) for the user-facing behaviour.
+
+Add `integrations/<name>/background_adapter.py` with three members:
+
+```python
+class _MyChannelBackgroundAdapter:
+    name = "mychannel"                             # the literal a user types
+    capabilities = frozenset({BACKGROUND_RCA})     # from platform.notifications.outbound_registry
+
+    def deliver(self, record: BackgroundInvestigationRecord) -> str:
+        return deliver_mychannel_notification(record)   # module-level function, see below
+```
+
+- [ ] Register the adapter object in `bootstrap/adapters.py`. Nothing auto-discovers it, and importing the module is **not** enough: imports are cached, so a re-import after the registry is cleared runs no module body.
+- [ ] `deliver` **never raises**. Return `"sent"`, `"failed: <reason>"`, or `"missing <name> integration: <what to configure>"`. The string is persisted on the record and shown by `/background show`, so redact any credential in the reason.
+- [ ] Import the vendor client **inside** `deliver`, not at module scope. These modules are imported when a user runs `/background notify set`, so a module-level client lands on that path.
+- [ ] Send the bounded summary from `platform.notifications.rca_summary`, not the full report, for any channel with a message-size limit.
+
+The channel becomes selectable as soon as it is registered — `/background notify set` derives its allowed list from the registry, so there is no channel list to edit.
 
 ### Credential resolution
 

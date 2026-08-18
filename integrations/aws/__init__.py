@@ -11,20 +11,26 @@ from integrations.config_models import AWSIntegrationConfig
 logger = logging.getLogger(__name__)
 
 
+def _text(credentials: dict[str, Any], key: str, default: str = "") -> str:
+    """Stored optional fields are ``None`` when unset; the config model wants ``str``."""
+    value = credentials.get(key)
+    return default if value is None else str(value)
+
+
 def classify(
     credentials: dict[str, Any], record_id: str
 ) -> tuple[AWSIntegrationConfig | None, str | None]:
     raw: dict[str, Any] = {
-        "region": credentials.get("region", "us-east-1"),
-        "role_arn": credentials.get("role_arn", ""),
-        "external_id": credentials.get("external_id", ""),
+        "region": _text(credentials, "region", "us-east-1"),
+        "role_arn": _text(credentials, "role_arn"),
+        "external_id": _text(credentials, "external_id"),
         "integration_id": record_id,
     }
     if credentials.get("access_key_id") and credentials.get("secret_access_key"):
         raw["credentials"] = {
-            "access_key_id": credentials.get("access_key_id", ""),
-            "secret_access_key": credentials.get("secret_access_key", ""),
-            "session_token": credentials.get("session_token", ""),
+            "access_key_id": _text(credentials, "access_key_id"),
+            "secret_access_key": _text(credentials, "secret_access_key"),
+            "session_token": _text(credentials, "session_token"),
         }
     try:
         return AWSIntegrationConfig.model_validate(raw), "aws"

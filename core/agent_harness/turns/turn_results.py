@@ -37,8 +37,8 @@ class ToolCallingTurnResult:
     #: Typed handoffs (schema decode). Prefer over parsing ``handoff_contents``.
     assistant_handoffs: tuple[AssistantHandoff, ...] = ()
     # False when every handoff this turn declared ``requires_gather=false``:
-    # the action work already produced what the reply needs, so the assistant
-    # answers from it without a live evidence-gather sweep.
+    # stream-only chat (no live evidence) or action tools already answered —
+    # the orchestrator skips gather and goes straight to stream_answer.
     handoff_requires_gather: bool = True
     accounting_status: ToolCallingAccountingStatus = "completed"
     investigation_dispatched: bool = False

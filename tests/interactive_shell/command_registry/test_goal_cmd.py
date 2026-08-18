@@ -52,6 +52,8 @@ def test_goal_set_queues_condition_as_immediate_turn() -> None:
     assert "◎ /goal active" in out
     assert "—" not in out.split("◎ /goal active", 1)[1].split("\n", 1)[0]
     assert "+0 tokens" in out
+    assert "own prompt turn" in out
+    assert "[N] ❯" in out
 
 
 def test_goal_show_prints_active_duration_and_tokens() -> None:

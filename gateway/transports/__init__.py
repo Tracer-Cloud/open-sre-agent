@@ -3,7 +3,7 @@
 Each transport owns settings, inbound worker, security, output sink, and
 ``startup.py``. Transports are peers: none imports another. Shared machinery
 lives under ``gateway.core``. Consumer composition (starting peers together)
-lives in ``gateway.channels``.
+lives in ``gateway.startup``.
 """
 
 from __future__ import annotations

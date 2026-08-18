@@ -88,6 +88,7 @@ def test_built_in_providers_include_aws_gcs_vercel_and_azure() -> None:
     assert "gcs" in providers
     assert "vercel" in providers
     assert "azure" in providers
+    assert "s3compat" in providers
 
 
 def test_unknown_provider_fails_closed_listing_known_ones(

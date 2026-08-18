@@ -25,10 +25,14 @@ _WARNING_FLOOR = (
     "httpcore.http11",
 )
 
+# urllib3 logs every connection retry at WARNING ("Retrying (Retry(total=2,
+# …)) after connection broken by …") — the client's internal retry loop, not
+# an outcome. The outcome (unreachable service) is reported by the caller.
 _ERROR_FLOOR = (
     "mcp",
     "mcp.client",
     "mcp.client.session",
+    "urllib3.connectionpool",
 )
 
 _MCP_SCHEMA_NOISE = "not listed by server, cannot validate"

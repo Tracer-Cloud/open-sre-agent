@@ -3,7 +3,7 @@ from __future__ import annotations
 import click
 
 from surfaces.cli.app import cli
-from surfaces.interactive_shell.ui.layout import (
+from surfaces.cli.layout import (
     RichGroup,
     _options_from_command,
     render_help,
@@ -15,8 +15,17 @@ def _normalized_output(output: str) -> str:
     return " ".join(output.split())
 
 
+def _visible_command_names(group: click.Group) -> list[str]:
+    ctx = click.Context(group)
+    return [
+        name
+        for name in group.list_commands(ctx)
+        if (command := group.get_command(ctx, name)) is not None and not command.hidden
+    ]
+
+
 def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("surfaces.interactive_shell.ui.banner.banner._is_first_run", lambda: True)
+    monkeypatch.setattr("surfaces.shared.terminal.banner.banner._is_first_run", lambda: True)
     render_help(cli)
     output = _normalized_output(capsys.readouterr().out)
 
@@ -28,8 +37,7 @@ def test_render_help_shows_all_registered_commands(monkeypatch, capsys) -> None:
     assert "Options:" in output
     assert "Welcome back" not in output
 
-    ctx = click.Context(cli)
-    for name in cli.list_commands(ctx):
+    for name in _visible_command_names(cli):
         assert name in output
 
     for label, description in _options_from_command(cli):
@@ -46,13 +54,12 @@ def test_render_help_includes_uninstall(capsys) -> None:
 def test_render_help_command_list_matches_cli_registry(capsys) -> None:
     render_help(cli)
     output = _normalized_output(capsys.readouterr().out)
-    ctx = click.Context(cli)
-    for name in cli.list_commands(ctx):
+    for name in _visible_command_names(cli):
         assert name in output, f"command '{name}' missing from help output"
 
 
 def test_render_landing_shows_header_and_examples(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("surfaces.interactive_shell.ui.banner.banner._is_first_run", lambda: True)
+    monkeypatch.setattr("surfaces.shared.terminal.banner.banner._is_first_run", lambda: True)
     render_landing(cli)
     output = _normalized_output(capsys.readouterr().out)
 
@@ -77,7 +84,7 @@ def test_rich_group_format_help_delegates_to_render_help(monkeypatch) -> None:
     def fake_render_help(group: click.Group) -> None:
         called_with.append(group)
 
-    monkeypatch.setattr("surfaces.interactive_shell.ui.layout.render_help", fake_render_help)
+    monkeypatch.setattr("surfaces.cli.layout.render_help", fake_render_help)
 
     group = RichGroup(name="opensre")
     group.format_help(click.Context(group), click.HelpFormatter())

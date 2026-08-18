@@ -49,6 +49,16 @@ def test_the_organization_id_is_re_exported() -> None:
         assert name in constants.__all__
 
 
+def test_remote_sync_endpoint_url_env_is_re_exported() -> None:
+    """Verify REMOTE_SYNC_ENDPOINT_URL_ENV is re-exported from config.constants."""
+    # Arrange / Act
+    from config import constants
+
+    # Assert
+    assert constants.REMOTE_SYNC_ENDPOINT_URL_ENV == "OPENSRE_REMOTE_SYNC_ENDPOINT_URL"
+    assert "REMOTE_SYNC_ENDPOINT_URL_ENV" in constants.__all__
+
+
 @pytest.mark.parametrize("module", ["billing", "tenancy"])
 def test_constants_module_stays_a_leaf(module: str) -> None:
     """``config`` sits at the bottom layer, so the constants must not
@@ -81,7 +91,7 @@ def test_provider_catalog_and_wizard_share_the_same_azure_constants() -> None:
     # Arrange
     from config.constants import llm
     from config.llm_auth.provider_catalog import require_provider_spec
-    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+    from surfaces.shared.llm_setup.catalog import SUPPORTED_PROVIDERS
 
     spec = require_provider_spec("azure-openai")
     (option,) = [opt for opt in SUPPORTED_PROVIDERS if opt.value == "azure-openai"]
@@ -133,7 +143,7 @@ def test_provider_catalog_and_wizard_share_the_same_custom_constants(
     """The custom spec + wizard option must reference one set of env names, so the
     onboarding catalog and the runtime cannot drift apart for either gateway."""
     from config.llm_auth.provider_catalog import require_provider_spec
-    from surfaces.cli.wizard.config import SUPPORTED_PROVIDERS
+    from surfaces.shared.llm_setup.catalog import SUPPORTED_PROVIDERS
 
     spec = require_provider_spec(slug)
     (option,) = [opt for opt in SUPPORTED_PROVIDERS if opt.value == slug]

@@ -103,12 +103,14 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
     already reaches the gather prompt; the answer path was told only when the
     set was empty, so a reply could not say what it had looked at.
 
-    Also pins valid ``/integrations setup`` ids and preferred product-analytics
-    coverage so the model cannot invent vendors (parity S5: Mixpanel CTA while
-    PostHog was already ready).
+    When something is connected, also name the valid ``/integrations setup``
+    ids and any evidence kinds whose preferred sources are already covered.
+    Replies must only recommend ids from those session facts — never invent a
+    service that is not listed. An empty session gets neither roster: hundreds
+    of setupable ids would crowd out the user's actual question.
     """
     from platform.harness_ports import (
-        preferred_evidence_sources_for,
+        preferred_evidence_sources_by_kind,
         setupable_integration_services,
     )
 
@@ -132,22 +134,23 @@ def _build_integration_guard(ctx: TurnSnapshot) -> str:
             "integrations, answer with guidance only."
         )
 
-    setupable = tuple(setupable_integration_services())
+    setupable = tuple(setupable_integration_services()) if connected else ()
     if setupable:
         parts.append(
             "Only these service ids are valid in `/integrations setup <id>`: "
-            f"{', '.join(setupable)}. Never invent a vendor that is not in that list "
-            "(for example do not suggest mixpanel unless it appears here)."
+            f"{', '.join(setupable)}. Never invent a service id that is not in "
+            "that list."
         )
 
-    preferred = preferred_evidence_sources_for("metric_read")
-    if preferred and connected and all(p in connected for p in preferred):
-        parts.append(
-            "Product analytics preferred source(s) already connected: "
-            f"{', '.join(preferred)}. If the user asks for the most important missing "
-            "vendor for product analytics, say product analytics is already covered — "
-            "do not invent another analytics vendor or a setup CTA for one."
-        )
+    if connected:
+        for kind, preferred in preferred_evidence_sources_by_kind().items():
+            if preferred and all(service_id in connected for service_id in preferred):
+                parts.append(
+                    f"Preferred source(s) for evidence kind `{kind}` already "
+                    f"connected: {', '.join(preferred)}. That kind is covered — "
+                    "do not invent another vendor or a setup CTA for a different "
+                    "id for this kind."
+                )
 
     return "\n".join(parts) + "\n\n"
 

@@ -31,11 +31,11 @@ def test_streaming_console_with_output_skips_tty_prep(monkeypatch: Any) -> None:
         prep_calls.append("ensure")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
         _boom_prepare,
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
+        "surfaces.shared.terminal.components.choice_menu.ensure_tty_column_zero",
         _boom_ensure,
     )
 
@@ -59,15 +59,15 @@ def test_streaming_console_without_output_still_prepares_tty(monkeypatch: Any) -
     prep_calls: list[str] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.prepare_repl_output_line",
+        "surfaces.shared.terminal.components.choice_menu.prepare_repl_output_line",
         lambda: prep_calls.append("prepare"),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.choice_menu.ensure_tty_column_zero",
+        "surfaces.shared.terminal.components.choice_menu.ensure_tty_column_zero",
         lambda: prep_calls.append("ensure"),
     )
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering._repl_output_already_prepared",
+        "surfaces.shared.terminal.components.rendering._repl_output_already_prepared",
         lambda: False,
     )
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)

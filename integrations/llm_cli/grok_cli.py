@@ -159,6 +159,7 @@ class GrokCLIAdapter:
     """Non-interactive xAI Grok Build CLI (``grok -p``, headless mode, no TTY)."""
 
     name = "grok-cli"
+    streams_plain_stdout = True
     binary_env_key = "GROK_CLI_BIN"
     install_hint = "curl -fsSL https://x.ai/cli/install.sh | bash"
     auth_hint = _AUTH_HINT.removesuffix(".")

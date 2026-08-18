@@ -32,7 +32,10 @@ from pydantic import BaseModel
 
 from core.llm.providers import provider_credentials
 from core.llm.providers.bedrock_model_ids import is_anthropic_bedrock_model
-from core.llm.shared.llm_retry import extract_retry_after_seconds
+from core.llm.shared.llm_retry import (
+    extract_retry_after_seconds,
+    is_credit_exhausted_error,
+)
 from core.llm.shared.openai_chat_completions import (
     _RETRY_INITIAL_BACKOFF_SEC,
     _RETRY_MAX_ATTEMPTS,
@@ -888,11 +891,7 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
-                body = getattr(err, "body", None)
-                if (
-                    isinstance(body, dict)
-                    and body.get("error", {}).get("code") == "insufficient_quota"
-                ):
+                if is_credit_exhausted_error(err):
                     raise RuntimeError(
                         f"{self._provider_label} billing quota exceeded. "
                         "Check your plan and billing details."
@@ -1006,11 +1005,7 @@ class OpenAILLMClient:
                     _format_openai_connection_error(err, self._provider_label)
                 ) from err
             except OpenAIRateLimitError as err:
-                body = getattr(err, "body", None)
-                if (
-                    isinstance(body, dict)
-                    and body.get("error", {}).get("code") == "insufficient_quota"
-                ):
+                if is_credit_exhausted_error(err):
                     raise RuntimeError(
                         f"{self._provider_label} billing quota exceeded. "
                         "Check your plan and billing details."

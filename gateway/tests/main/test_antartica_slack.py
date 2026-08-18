@@ -22,7 +22,7 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.tools.action_tools import action_tool_names
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
-from core.agent_harness.turns.action_driver import ActionTurnRunner, ToolCallingDeps
+from core.agent_harness.turns.action_driver import ActionTurnRunner
 from core.llm.types import AgentLLMResponse, ToolCall
 from tools.interactive_shell.subprocess_presenter import (
     headless_subprocess_presenter_factory,
@@ -201,7 +201,7 @@ def test_agent_computes_temperature_then_sends_it_to_slack(
     result = ActionTurnRunner(
         output=MagicMock(),
         tools=provider,
-        deps=ToolCallingDeps(llm_factory=lambda: llm),
+        llm_factory=lambda: llm,
     ).run(
         _USER_MESSAGE,
         session,

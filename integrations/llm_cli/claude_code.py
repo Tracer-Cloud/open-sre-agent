@@ -236,6 +236,7 @@ class ClaudeCodeAdapter:
     """Non-interactive Claude Code CLI (``claude -p``, print mode, no TTY)."""
 
     name = "claude-code"
+    streams_plain_stdout = True
     binary_env_key = "CLAUDE_CODE_BIN"
     install_hint = "npm i -g @anthropic-ai/claude-code"
     auth_hint = _AUTH_HINT.removesuffix(".")

@@ -128,6 +128,7 @@ class KimiAdapter:
     """Non-interactive Kimi Code CLI (`kimi -p` with --yolo)."""
 
     name = "kimi"
+    streams_plain_stdout = True
     binary_env_key = "KIMI_BIN"
     install_hint = "uv tool install --python 3.13 kimi-cli"
     auth_hint = "Run: kimi login"

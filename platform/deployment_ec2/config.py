@@ -56,7 +56,7 @@ SSM_TERMINAL_STATUSES = ("Success", "Failed", "Cancelled", "TimedOut", "Undelive
 GATEWAY_HEALTH_POLL_INTERVAL_SECONDS = 15
 GATEWAY_HEALTH_MAX_ATTEMPTS = 60
 GATEWAY_LOG_TAIL_LINES = 200
-# Transport-agnostic ready line from GatewayManager after components start.
+# Transport-agnostic ready line from GatewayController after components start.
 # Also accept legacy per-transport lines so older images still pass health waits.
 GATEWAY_READY_LOG_SENTINEL = "[gateway] ready"
 GATEWAY_READY_LOG_SENTINELS: tuple[str, ...] = (

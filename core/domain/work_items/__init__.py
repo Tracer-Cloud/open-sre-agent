@@ -14,6 +14,7 @@ from core.domain.work_items.models import (
     WorkItemChannelTarget,
     WorkItemPriority,
     WorkItemStatus,
+    WorkItemUpdates,
     dedupe_channel_targets,
     make_work_item,
     mark_work_item_completed,
@@ -29,6 +30,8 @@ from core.domain.work_items.reminders import (
 )
 from core.domain.work_items.schedule import cron_from_datetime, parse_work_item_datetime
 from core.domain.work_items.scoring import (
+    DEFAULT_PRIORITY_LIMIT,
+    PRIORITY_WEIGHTS,
     WorkItemScore,
     prioritize_work_items,
     score_work_item,
@@ -50,6 +53,8 @@ from core.domain.work_items.store import (
 
 __all__ = [
     "CompleteWorkItemsResult",
+    "DEFAULT_PRIORITY_LIMIT",
+    "PRIORITY_WEIGHTS",
     "UpdateWorkItemResult",
     "WORK_ITEM_PRIORITIES",
     "WORK_ITEM_STATUSES",
@@ -60,6 +65,7 @@ __all__ = [
     "WorkItemScore",
     "WorkItemStatus",
     "WorkItemStoreError",
+    "WorkItemUpdates",
     "add_work_item",
     "build_work_item_checkin_message",
     "build_work_item_reminder_message",

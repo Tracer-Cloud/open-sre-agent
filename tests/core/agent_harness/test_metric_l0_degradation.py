@@ -94,6 +94,8 @@ def test_before_after_metric_ask_skips_gather_and_adds_cta_without_investigate_o
     assert answer_calls == [_WINDOWS_USERS_ASK]
     text = (result.assistant_response_text or "").strip()
     assert "/integrations setup posthog_mcp" in text
+    assert "```sql" in text
+    assert "SELECT" in text
     # Investigate offer suppressed; setup offer armed so bare yes connects.
     offer = first_pending_offer(session)
     assert isinstance(offer, PendingIntegrationSetupOffer)
@@ -204,6 +206,47 @@ def test_connected_source_hogql_failure_gathers_without_cta() -> None:
     text = (result.assistant_response_text or "").strip()
     assert "/integrations setup" not in text
     assert first_pending_offer(session) is None
+
+
+def test_connected_source_without_a_live_query_still_drafts_hogql_and_setup() -> None:
+    """Analytics connected, only schema/list probes — draft + setup, then stop."""
+    session = Session()
+    session.resolved_integrations_cache = {"posthog_mcp": {"configured": True}}
+    answer_handoffs: list[tuple[str, ...]] = []
+
+    def _gather(text: str, *_args: object, **_kwargs: object) -> str:
+        return (
+            "Tool: list_posthog_tools\nArguments: {}\nResult: []\n\n"
+            "Tool: call_posthog_tool\n"
+            'Arguments: {"tool_name": "event-definitions"}\n'
+            "Result: []"
+        )
+
+    def _answer(text: str, request: AnswerRequest, **_kwargs: Any) -> Any:
+        answer_handoffs.append(tuple(request.handoff_contents or ()))
+        return type(
+            "Run",
+            (),
+            {"response_text": ("I could not identify a signup event, so I cannot return a count.")},
+        )()
+
+    result = run_turn(
+        "How many Windows users signed up in the last 7 days?",
+        session,
+        execute_actions=lambda *_a, **_k: _action_metric_handoff(),
+        gather=_gather,
+        answer=_answer,
+        accounting=DefaultTurnAccounting(
+            session, "How many Windows users signed up in the last 7 days?"
+        ),
+    )
+
+    text = (result.assistant_response_text or "").strip()
+    assert "```sql" in text
+    assert "SELECT" in text
+    assert "/integrations setup posthog_mcp" in text
+    assert any("evidence_tier:metric_unformed" in tags for tags in answer_handoffs)
+    assert session.pending_investigation_offer is None
 
 
 def test_without_evidence_kind_handoff_does_not_skip_gather() -> None:

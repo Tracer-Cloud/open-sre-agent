@@ -275,7 +275,7 @@ def test_help_section_includes_remote_sync() -> None:
     assert "/remote-sync" in {c.name for c in sections["Remote sync"]}
 
 
-def test_repl_and_headless_dispatch_same_command_object() -> None:
+def test_repl_and_headless_agent_same_command_object() -> None:
     """Gateway headless ports must not register a fork of /remote-sync."""
     from surfaces.interactive_shell.runtime.slash_adapter import repl_slash_ports
 

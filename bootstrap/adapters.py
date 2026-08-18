@@ -11,6 +11,11 @@ the scheduler ones.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from platform.scheduler.runners import SchedulerRunners
+
 
 def install_investigation_api() -> None:
     """Wire :meth:`AgentSession.investigate` to the canonical payload runner.
@@ -50,22 +55,67 @@ def install_harness_adapters() -> None:
     install_investigation_api()
 
 
-def install_scheduler_runners() -> None:
-    """Register the runners scheduled tasks dispatch through.
+def install_notification_adapters() -> tuple[str, ...]:
+    """Register the outbound channels background-RCA notices dispatch through.
 
-    Investigation first: the scheduled-agent runner resolves against it.
+    Without this the registry is empty and every configured channel reports
+    ``"unsupported"``, so the returned names are the diagnostic that tells an
+    empty registry apart from a genuinely unknown channel.
+
+    Called on background-RCA completion and when ``/background notify set``
+    validates a channel, not at boot. Importing an adapter module does not pull
+    its vendor transport, because each keeps its client import inside the
+    delivery function.
+
+    Registers the adapter objects rather than relying on the import side effect
+    alone. Imports are cached, so a re-import after
+    ``clear_outbound_adapters()`` runs no module body and would leave the
+    registry empty while this function reported success.
     """
-    from integrations.scheduled_agent_bootstrap import install as install_scheduled_agent
-    from tools.investigation.scheduler_bootstrap import (
-        install as install_investigation_runner,
+    from integrations.buzz.background_adapter import buzz_background_adapter
+    from integrations.rocketchat.background_adapter import rocketchat_background_adapter
+    from integrations.smtp.background_adapter import email_background_adapter
+    from integrations.telegram.background_adapter import telegram_background_adapter
+    from platform.notifications.outbound_registry import (
+        register_outbound_adapter,
+        registered_outbound_adapter_names,
     )
 
-    install_investigation_runner()
-    install_scheduled_agent()
+    for adapter in (
+        buzz_background_adapter,
+        rocketchat_background_adapter,
+        email_background_adapter,
+        telegram_background_adapter,
+    ):
+        register_outbound_adapter(adapter)
+    return registered_outbound_adapter_names()
+
+
+def scheduler_runners() -> SchedulerRunners:
+    """Assemble the runners scheduled tasks dispatch through.
+
+    The only layer that may see both ``integrations`` and ``tools``, so the
+    bundle is built here and handed to whichever host installs it.
+    """
+    from integrations.scheduled_agent_bootstrap import run_scheduled_agent_digest
+    from platform.scheduler.runners import SchedulerRunners
+    from tools.investigation.scheduler_bootstrap import run_scheduled_investigation
+
+    return SchedulerRunners(
+        agent=run_scheduled_agent_digest,
+        investigation=run_scheduled_investigation,
+    )
+
+
+def install_scheduler_runners() -> None:
+    """Bind the scheduled runners ungated (worker and CLI hosts)."""
+    scheduler_runners().install()
 
 
 __all__ = [
     "install_harness_adapters",
     "install_investigation_api",
+    "install_notification_adapters",
+    "scheduler_runners",
     "install_scheduler_runners",
 ]

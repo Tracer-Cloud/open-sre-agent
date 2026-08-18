@@ -3,7 +3,9 @@ title: "Azure Monitor"
 description: "Connect Azure Monitor Log Analytics so OpenSRE can pull KQL log evidence during investigations"
 ---
 
-OpenSRE queries Azure Monitor Log Analytics through the public Query REST API to surface relevant logs during alert investigations. Each query is bounded by a `take` clause so result sets stay capped at a safe row limit.
+## Overview
+
+OpenSRE queries Azure Monitor Log Analytics through the public Query REST API during alert investigations. Each query is bounded by a `take` clause so result sets stay within a safe row limit.
 
 ## Prerequisites
 
@@ -13,6 +15,8 @@ OpenSRE queries Azure Monitor Log Analytics through the public Query REST API to
 - Network access from the OpenSRE environment to `https://api.loganalytics.io` (or the sovereign cloud equivalent) over HTTPS
 
 ## Setup
+
+There is no `opensre integrations setup azure` handler. Configure Azure Monitor with environment variables or the persistent store only.
 
 ### Option 1: Environment variables
 
@@ -31,7 +35,7 @@ AZURE_MAX_RESULTS=100                          # optional, capped at 200
 | --- | --- | --- |
 | `AZURE_LOG_ANALYTICS_WORKSPACE_ID` | — | **Required.** Log Analytics Workspace ID (GUID) from the Azure portal |
 | `AZURE_LOG_ANALYTICS_TOKEN` | — | **Required.** Microsoft Entra ID OAuth2 bearer token with `Data.Read` on the workspace |
-| `AZURE_LOG_ANALYTICS_ENDPOINT` | `https://api.loganalytics.io` | Override for sovereign clouds (e.g. `https://api.loganalytics.azure.us` for Azure Government) |
+| `AZURE_LOG_ANALYTICS_ENDPOINT` | `https://api.loganalytics.io` | Override for sovereign clouds (for example `https://api.loganalytics.azure.us` for Azure Government) |
 | `AZURE_TENANT_ID` | — | Microsoft Entra ID tenant ID (informational; useful for multi-tenant audits) |
 | `AZURE_SUBSCRIPTION_ID` | — | Azure subscription ID (informational) |
 | `AZURE_MAX_RESULTS` | `100` | Per-query row cap; OpenSRE clamps to a hard maximum of `200` |
@@ -61,7 +65,7 @@ Credentials are persisted to `~/.opensre/integrations.json` with `0o600` permiss
 }
 ```
 
-## Getting credentials
+## Credentials
 
 ### 1. Find the Workspace ID
 
@@ -71,7 +75,7 @@ Credentials are persisted to `~/.opensre/integrations.json` with `0o600` permiss
 ### 2. Register an Azure AD application
 
 1. Open **Microsoft Entra ID** → **App registrations** → **New registration**.
-2. Give the app a name (e.g. `opensre-log-analytics`) and register it as a single-tenant app.
+2. Give the app a name (for example `opensre-log-analytics`) and register it as a single-tenant app.
 3. From the app's **Overview** page, copy the **Application (client) ID** and the **Directory (tenant) ID**.
 4. Open **Certificates & secrets** → **New client secret**, copy the **secret value** (it is shown only once).
 
@@ -93,9 +97,9 @@ curl -s -X POST \
   | jq -r '.access_token'
 ```
 
-Set the resulting token as `AZURE_LOG_ANALYTICS_TOKEN`. Tokens expire (usually after 60 minutes) — see the **Token rotation** note in *Security best practices*.
+Set the resulting token as `AZURE_LOG_ANALYTICS_TOKEN`. Tokens expire (usually after 60 minutes) — see the **Token rotation** note in [Security](#security).
 
-## Investigation tool
+## Investigation tools
 
 OpenSRE exposes one tool against an Azure Monitor workspace:
 
@@ -105,11 +109,13 @@ OpenSRE exposes one tool against an Azure Monitor workspace:
 
 Arguments the planner supplies:
 
-- **`query`** — KQL query text. If omitted, OpenSRE falls back to `AppTraces | order by TimeGenerated desc | take <limit>`.
-- **`time_range_minutes`** — sent as the `timespan` (`PT<N>M`); defaults to `60`.
-- **`limit`** — per-query row cap; defaults to `50` and is clamped to `max_results` (hard limit `200`).
+| Argument | Default | Description |
+| --- | --- | --- |
+| `query` | `AppTraces \| order by TimeGenerated desc \| take <limit>` | KQL query text |
+| `time_range_minutes` | `60` | Sent as the `timespan` (`PT<N>M`) |
+| `limit` | `50` | Per-query row cap; clamped to `max_results` (hard limit `200`) |
 
-OpenSRE always appends a `| take <limit>` clause to the query if one is not present, so the workspace never returns more rows than the configured cap.
+OpenSRE always appends a `| take <limit>` clause when one is missing, so the workspace never returns more rows than the configured cap. `AZURE_MAX_RESULTS` defaults to `100` and is hard-capped at `200`.
 
 ## Verify
 
@@ -126,7 +132,27 @@ azure     local env   passed   Configured for Azure Log Analytics workspace 0000
 
 The verify step is a credential-shape check — it does not call the workspace. To exercise the live path, point OpenSRE at a synthetic alert that names `azure` as the source and inspect the resulting evidence.
 
-## Example KQL queries
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| **401 Unauthorized** | Token is missing, expired, or scoped to the wrong audience. Regenerate with `scope=https://api.loganalytics.io/.default` and confirm the service principal has **Log Analytics Reader** on the workspace. |
+| **403 Forbidden** | The token is valid but the principal lacks `Data.Read`. Re-check the role assignment on the workspace (or its parent resource group). |
+| **Empty result set** | Either the KQL `where` filter excludes everything or the workspace has no data in the requested timespan. Run the same query in **Logs** in the portal to confirm. |
+| **Wrong endpoint / DNS error** | Sovereign clouds use a different host (for example `https://api.loganalytics.azure.us` for US Government, `https://api.loganalytics.azure.cn` for China). Set `AZURE_LOG_ANALYTICS_ENDPOINT` accordingly. |
+| **`Missing workspace_id` / `Missing access_token`** | One or both required credentials are absent. Confirm both env vars (or both fields in the persistent store) are populated. |
+
+## Security
+
+- Use a **dedicated app registration** for OpenSRE — do not reuse a personal token or a broadly-scoped service principal.
+- Grant only **Log Analytics Reader** on the workspace; OpenSRE only needs read access to query data.
+- Keep the client secret out of source control — store it in `.env` or in a secret manager and only export it long enough to mint a token.
+- **Rotate the bearer token** before its 60-minute expiry. Long-lived deployments should re-mint the token from the client secret on a schedule rather than pasting a static token into `.env`.
+- The integration is **read-only**: OpenSRE only issues `POST /v1/workspaces/<id>/query` requests with a `take`-bounded KQL string.
+
+## Extras
+
+### Example KQL queries
 
 Recent application errors:
 
@@ -158,21 +184,3 @@ AppDependencies
 | order by TimeGenerated desc
 | take 50
 ```
-
-## Troubleshooting
-
-| Symptom | Fix |
-| --- | --- |
-| **401 Unauthorized** | Token is missing, expired, or scoped to the wrong audience. Regenerate with `scope=https://api.loganalytics.io/.default` and confirm the service principal has **Log Analytics Reader** on the workspace. |
-| **403 Forbidden** | The token is valid but the principal lacks `Data.Read`. Re-check the role assignment on the workspace (or its parent resource group). |
-| **Empty result set** | Either the KQL `where` filter excludes everything or the workspace has no data in the requested timespan. Run the same query in **Logs** in the portal to confirm. |
-| **Wrong endpoint / DNS error** | Sovereign clouds use a different host (e.g. `https://api.loganalytics.azure.us` for US Government, `https://api.loganalytics.azure.cn` for China). Set `AZURE_LOG_ANALYTICS_ENDPOINT` accordingly. |
-| **`Missing workspace_id` / `Missing access_token`** | One or both required credentials are absent. Confirm both env vars (or both fields in the persistent store) are populated. |
-
-## Security best practices
-
-- Use a **dedicated app registration** for OpenSRE — do not reuse a personal token or a broadly-scoped service principal.
-- Grant only **Log Analytics Reader** on the workspace; OpenSRE only needs read access to query data.
-- Keep the client secret out of source control — store it in `.env` or in a secret manager and only export it long enough to mint a token.
-- **Rotate the bearer token** before its 60-minute expiry. Long-lived deployments should re-mint the token from the client secret on a schedule rather than pasting a static token into `.env`.
-- The integration is **read-only**: OpenSRE only issues `POST /v1/workspaces/<id>/query` requests with a `take`-bounded KQL string.

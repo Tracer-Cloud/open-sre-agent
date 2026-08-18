@@ -222,3 +222,6 @@ submenu
 substring
 unencrypted
 venv
+# New Relic integration docs terms
+NerdGraph
+NRQL

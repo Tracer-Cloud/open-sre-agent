@@ -19,7 +19,7 @@ def test_python_executable_uses_module_gateway_entry(
     assert ge.gateway_entry_argv() == (
         sys.executable,
         "-m",
-        "surfaces.cli.gateway_entry",
+        "surfaces.gateway_entry",
     )
 
 

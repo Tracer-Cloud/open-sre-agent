@@ -34,7 +34,7 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
+from surfaces.shared.terminal.components.time_format import format_repl_timestamp
 from tools.system.fleet_monitoring.probe import pid_exists
 from tools.system.watch_dog.monitor import start_watchdog_daemon_thread
 

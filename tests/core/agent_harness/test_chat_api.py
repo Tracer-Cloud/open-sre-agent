@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.agent_harness.turns.chat_api import ChatTurnBindings, dispatch_chat_turn
-from core.agent_harness.turns.headless_dispatch import HeadlessAgent, NullToolProvider
+from core.agent_harness.turns.headless_adapters import NullToolProvider
+from core.agent_harness.turns.port_families import HeadlessPorts
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -103,11 +104,11 @@ def test_headless_agent_dispatch_uses_dispatch_chat_turn(monkeypatch: Any) -> No
         return expected
 
     monkeypatch.setattr(
-        "core.agent_harness.turns.headless_dispatch.dispatch_chat_turn",
+        "core.agent_harness.turns.headless_agent.dispatch_chat_turn",
         _fake_dispatch,
     )
 
-    agent = HeadlessAgent(tools=NullToolProvider())
+    agent = HeadlessPorts().agent(tools=NullToolProvider())
     result = agent.dispatch("ping")
 
     assert result is expected

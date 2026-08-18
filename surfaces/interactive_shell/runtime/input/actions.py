@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from core.agent_harness.session_goal.goal import strip_shell_prompt_chrome
+from core.agent_harness.spi.prompt_chrome import strip_shell_prompt_chrome
 from surfaces.interactive_shell.runtime.core.turn_detection import (
     looks_like_cancel_request,
     looks_like_confirmation_answer,

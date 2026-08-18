@@ -15,6 +15,11 @@ def _cmd_alerts(_session: Session, console: Console, _args: list[str]) -> bool:
     inbox = get_current_inbox()
     if inbox is None:
         console.print(f"[{WARNING}]alert listener is not active.[/]")
+        console.print(
+            f"[{DIM}]Enable it with alert_listener_enabled: true in "
+            "~/.opensre/config.yml (interactive section) or "
+            "OPENSRE_ALERT_LISTENER_ENABLED=1, then restart the shell.[/]"
+        )
         return True
 
     table = repl_table(title="Alert Inbox\n", title_style=BOLD_BRAND, show_header=False)

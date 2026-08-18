@@ -16,9 +16,9 @@ from core.agent_harness.accounting.token_accounting import (
     record_llm_turn,
 )
 from core.agent_harness.ports import AnswerRequest
-from surfaces.interactive_shell.runtime.answer_turn import answer_shell_question
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.streaming import _CHARS_PER_TOKEN
+from tests.interactive_shell.shell_ports_helper import answer_through_shell_ports
 
 
 def test_estimate_tokens_uses_chars_per_token_ratio() -> None:
@@ -137,12 +137,12 @@ class _FakeLLMClient:
         yield self._content
 
 
-def test_answer_shell_question_records_session_token_usage(monkeypatch: Any) -> None:
+def test_shell_answer_records_session_token_usage(monkeypatch: Any) -> None:
     client = _FakeLLMClient("assistant reply")
     monkeypatch.setattr("core.llm.factory.get_llm", lambda _role: client)
     session = Session()
     console = Console(file=io.StringIO(), force_terminal=False)
-    answer_shell_question("hello", session, console, request=AnswerRequest())
+    answer_through_shell_ports("hello", session, console, request=AnswerRequest())
     assert session.tokens.totals["input"] > 0
     assert session.tokens.totals["output"] == estimate_tokens("assistant reply")
     assert session.tokens.has_estimates is True

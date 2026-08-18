@@ -6,10 +6,18 @@ the type without reaching through the turn machinery.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from core.agent_harness.ports import ToolEventObserver
-from core.agent_harness.turns.evidence_driver import PersistToolCalls
+
+#: Persists the tool calls a gather pass made: ``[(tool_call, result), ...]``.
+PersistToolCalls = Callable[[list[tuple[Any, Any]]], None]
+
+#: Loop budget for headless metric reports (PostHog / digests): schema discovery plus
+#: one query per metric needs more than the chat default; passed as ``max_iterations``.
+MAX_REPORT_GATHER_ITERATIONS = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,4 +46,4 @@ class GatherPorts:
 GATHER_DISABLED = GatherPorts(enabled=False)
 
 
-__all__ = ["GATHER_DISABLED", "GatherPorts"]
+__all__ = ["GATHER_DISABLED", "MAX_REPORT_GATHER_ITERATIONS", "GatherPorts", "PersistToolCalls"]

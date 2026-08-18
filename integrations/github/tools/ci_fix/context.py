@@ -82,6 +82,7 @@ class CiFixContext:
     base_branch: str
     head_branch: str
     head_sha: str
+    skipped_check_names: tuple[str, ...]
     failing_checks: tuple[FailingCheck, ...]
     task: str
 
@@ -153,9 +154,10 @@ def gather_ci_fix_context(
             ),
         )
 
+    rollup = _list_value(pr.get("statusCheckRollup"))
     checks = tuple(
         _failing_check_from_rollup(repo_full_name, item, github_token=github_token)
-        for item in _list_value(pr.get("statusCheckRollup"))
+        for item in rollup
         if _is_failing_check(item)
     )
     if not checks:
@@ -176,6 +178,7 @@ def gather_ci_fix_context(
         base_branch=str(pr.get("baseRefName") or "").strip(),
         head_branch=head_branch,
         head_sha=str(pr.get("headRefOid") or "").strip(),
+        skipped_check_names=tuple(_check_name(item) for item in rollup if _is_skipped(item)),
         failing_checks=checks,
         task="",
     )
@@ -310,6 +313,14 @@ def _is_failing_check(item: dict[str, Any]) -> bool:
     conclusion = str(item.get("conclusion") or "").strip().upper()
     state = str(item.get("state") or "").strip().upper()
     return conclusion in _FAILED_CONCLUSIONS or state in _FAILED_STATES
+
+
+def _check_name(item: dict[str, Any]) -> str:
+    return str(item.get("name") or item.get("context") or "unnamed check")
+
+
+def _is_skipped(item: dict[str, Any]) -> bool:
+    return str(item.get("conclusion") or "").strip().upper() == "SKIPPED"
 
 
 def _list_value(value: Any) -> list[dict[str, Any]]:

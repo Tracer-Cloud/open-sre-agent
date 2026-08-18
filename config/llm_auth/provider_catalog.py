@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from config.constants.llm import (
+    ANTHROPIC_API_KEY_ENV,
     AZURE_OPENAI_API_KEY_ENV,
     AZURE_OPENAI_API_VERSION_ENV,
     AZURE_OPENAI_BASE_URL_ENV,
@@ -13,6 +14,14 @@ from config.constants.llm import (
     CUSTOM_ANTHROPIC_BASE_URL_ENV,
     CUSTOM_OPENAI_API_KEY_ENV,
     CUSTOM_OPENAI_BASE_URL_ENV,
+    DEEPSEEK_API_KEY_ENV,
+    GEMINI_API_KEY_ENV,
+    GROQ_API_KEY_ENV,
+    MINIMAX_API_KEY_ENV,
+    NVIDIA_API_KEY_ENV,
+    OPENAI_API_KEY_ENV,
+    OPENROUTER_API_KEY_ENV,
+    TRUSTEDROUTER_API_KEY_ENV,
 )
 
 
@@ -20,10 +29,10 @@ class CredentialKind(StrEnum):
     """How a provider proves its identity to the LLM backend.
 
     Kept distinct from the wizard's onboarding vocabulary
-    (:class:`surfaces.cli.wizard.config.WizardCredentialKind`): the two share
+    (:class:`surfaces.shared.llm_setup.catalog.WizardCredentialKind`): the two share
     ``api_key``/``cli`` but the wizard's ``host``/``none`` map to this enum's
     ``local``/``ambient``. Do not merge them — see the ``WIZARD_TO_CATALOG_KIND``
-    translation in ``surfaces/cli/wizard/config.py``.
+    translation in ``surfaces/shared/llm_setup/catalog.py``.
     """
 
     #: A user-supplied API key stored by OpenSRE (keyring/.env).
@@ -65,7 +74,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="anthropic",
         label="Anthropic API key",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="ANTHROPIC_API_KEY",
+        api_key_env=ANTHROPIC_API_KEY_ENV,
         model_env="ANTHROPIC_REASONING_MODEL",
         legacy_model_env="ANTHROPIC_MODEL",
         toolcall_model_env="ANTHROPIC_TOOLCALL_MODEL",
@@ -75,7 +84,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="openai",
         label="OpenAI API key",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="OPENAI_API_KEY",
+        api_key_env=OPENAI_API_KEY_ENV,
         model_env="OPENAI_REASONING_MODEL",
         legacy_model_env="OPENAI_MODEL",
         toolcall_model_env="OPENAI_TOOLCALL_MODEL",
@@ -86,7 +95,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="openrouter",
         label="OpenRouter",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="OPENROUTER_API_KEY",
+        api_key_env=OPENROUTER_API_KEY_ENV,
         model_env="OPENROUTER_REASONING_MODEL",
         legacy_model_env="OPENROUTER_MODEL",
         toolcall_model_env="OPENROUTER_TOOLCALL_MODEL",
@@ -94,10 +103,21 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         allow_custom_models=True,
     ),
     ProviderSpec(
+        value="trustedrouter",
+        label="TrustedRouter",
+        credential_kind=CredentialKind.API_KEY,
+        api_key_env=TRUSTEDROUTER_API_KEY_ENV,
+        model_env="TRUSTEDROUTER_REASONING_MODEL",
+        legacy_model_env="TRUSTEDROUTER_MODEL",
+        toolcall_model_env="TRUSTEDROUTER_TOOLCALL_MODEL",
+        classification_model_env="TRUSTEDROUTER_CLASSIFICATION_MODEL",
+        allow_custom_models=True,
+    ),
+    ProviderSpec(
         value="deepseek",
         label="DeepSeek",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="DEEPSEEK_API_KEY",
+        api_key_env=DEEPSEEK_API_KEY_ENV,
         model_env="DEEPSEEK_REASONING_MODEL",
         legacy_model_env="DEEPSEEK_MODEL",
         toolcall_model_env="DEEPSEEK_TOOLCALL_MODEL",
@@ -108,7 +128,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="gemini",
         label="Google Gemini API key",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="GEMINI_API_KEY",
+        api_key_env=GEMINI_API_KEY_ENV,
         model_env="GEMINI_REASONING_MODEL",
         legacy_model_env="GEMINI_MODEL",
         toolcall_model_env="GEMINI_TOOLCALL_MODEL",
@@ -119,7 +139,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="nvidia",
         label="NVIDIA NIM",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="NVIDIA_API_KEY",
+        api_key_env=NVIDIA_API_KEY_ENV,
         model_env="NVIDIA_REASONING_MODEL",
         legacy_model_env="NVIDIA_MODEL",
         toolcall_model_env="NVIDIA_TOOLCALL_MODEL",
@@ -130,7 +150,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="minimax",
         label="MiniMax",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="MINIMAX_API_KEY",
+        api_key_env=MINIMAX_API_KEY_ENV,
         model_env="MINIMAX_REASONING_MODEL",
         legacy_model_env="MINIMAX_MODEL",
         toolcall_model_env="MINIMAX_TOOLCALL_MODEL",
@@ -141,7 +161,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         value="groq",
         label="Groq API key",
         credential_kind=CredentialKind.API_KEY,
-        api_key_env="GROQ_API_KEY",
+        api_key_env=GROQ_API_KEY_ENV,
         model_env="GROQ_REASONING_MODEL",
         legacy_model_env="GROQ_MODEL",
         toolcall_model_env="GROQ_TOOLCALL_MODEL",

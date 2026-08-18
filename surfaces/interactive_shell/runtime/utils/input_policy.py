@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
+from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 
 
 def _literal_slash_command_text(text: str) -> str | None:
@@ -87,7 +87,19 @@ _EXCLUSIVE_STDIN_SUBCOMMANDS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 _WAIT_FOR_COMPLETION_COMMANDS: frozenset[str] = frozenset(
-    {"/exit", "/quit", "/update", "/onboard", "/config", "/auth", "/login"}
+    {
+        "/exit",
+        "/quit",
+        "/update",
+        "/onboard",
+        "/config",
+        "/auth",
+        "/login",
+        # ``/goal set|resume`` queues the condition as the next prompt turn.
+        # Wait for the slash turn to finish so the work prompt renders as its
+        # own ``[N] ❯`` line (not buried under the set paint / ``$`` echo).
+        "/goal",
+    }
 )
 
 

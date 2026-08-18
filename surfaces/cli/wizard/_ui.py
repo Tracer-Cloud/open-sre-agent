@@ -21,6 +21,7 @@ from config.llm_auth.auth_method import (
 from config.llm_auth.credentials import has_llm_api_key, save_api_key
 from config.llm_auth.provider_catalog import API_KEY_PROVIDER_ENVS
 from config.llm_credentials import get_keyring_setup_instructions, save_keyring_secret
+from config.setup_store import get_store_path, load_local_config
 from config.version import get_opensre_version
 from integrations.store import get_integration
 from platform.terminal.theme import (
@@ -36,12 +37,15 @@ from platform.terminal.theme import (
     TEXT,
     WARNING,
 )
-from surfaces.cli.llm_auth.persist import AuthSetupError, persist_api_key_secret
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, ProviderOption
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.probes import ProbeResult
 from surfaces.cli.wizard.prompts import select as select_prompt
-from surfaces.cli.wizard.store import get_store_path, load_local_config
+from surfaces.shared.llm_setup.catalog import (
+    PROVIDER_BY_VALUE,
+    ProviderOption,
+    WizardCredentialKind,
+)
+from surfaces.shared.llm_setup.persist import AuthSetupError, persist_api_key_secret
 
 _console = Console(
     highlight=False, force_terminal=True, color_system="truecolor", legacy_windows=False
@@ -121,8 +125,12 @@ def _local_defaults() -> dict[str, str | bool | None]:
     api_key_env = _string_value(
         local.get("api_key_env"), api_key_provider.api_key_env if api_key_provider else ""
     )
-    is_cli = bool(raw_provider_option and raw_provider_option.credential_kind == "cli")
-    is_host = bool(api_key_provider and api_key_provider.credential_kind == "host")
+    is_cli = bool(
+        raw_provider_option and raw_provider_option.credential_kind == WizardCredentialKind.CLI
+    )
+    is_host = bool(
+        api_key_provider and api_key_provider.credential_kind == WizardCredentialKind.HOST
+    )
     is_oauth_backend = bool(raw_provider_value and raw_provider_value != provider_value)
     raw_auth_method = local.get("auth_method")
     auth_method = (
@@ -133,8 +141,8 @@ def _local_defaults() -> dict[str, str | bool | None]:
     if is_oauth_backend:
         auth_method = OAUTH_AUTH_METHOD
     wizard_mode = _string_value(wizard.get("mode"), "quickstart")
-    if wizard_mode == "aha":
-        wizard_mode = "focused"
+    if wizard_mode in {"aha", "focused"}:
+        wizard_mode = "quickstart"
     return {
         "wizard_mode": wizard_mode,
         "provider": provider_value if raw_provider_value else None,
@@ -262,7 +270,7 @@ def _choose_model(
 ) -> str:
     """Prompt the user to pick a model from ``provider.models``.
 
-    Choices come from the curated config in ``surfaces/cli/wizard/config.py``.
+    Choices come from the curated config in ``surfaces/shared/llm_setup/catalog.py``.
     A saved model that isn't in the curated list is preserved as ``current``
     so re-running the wizard never silently drops a user's prior pick, and an
     "Enter custom model ID" escape hatch is always available.
@@ -481,9 +489,9 @@ def _render_header() -> None:
       ─────────────────────────────────────────  [DIM rule]
       Setup — Configure your local AI stack …    [SECONDARY subtitle]
     """
-    from surfaces.interactive_shell.ui.components.banner_art import _render_art
+    from surfaces.shared.terminal.components.banner_art import render_art
 
-    art = _render_art()
+    art = render_art()
     version = get_opensre_version()
 
     _console.print()
@@ -623,7 +631,7 @@ def _render_integration_result(
             _console.print(detail_text)
 
 
-def _render_next_steps(*, focused: bool = False) -> None:
+def _render_next_steps() -> None:
     """Print suggested commands after onboarding."""
     _console.print(Rule(style=DIM))
 
@@ -634,28 +642,15 @@ def _render_next_steps(*, focused: bool = False) -> None:
     _console.print(Rule(style=DIM))
     _console.print()
 
-    if focused:
-        next_steps: tuple[tuple[str, str], ...] = (
-            (
-                "opensre",
-                'Start the agent and ask: "what OpenSRE version am I running?"',
-            ),
-            (
-                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-                "Run a sample investigation",
-            ),
-            ("opensre", "Start the agent and run /loops to review starter loops"),
-        )
-    else:
-        next_steps = (
-            ("opensre", "Start the interactive agent and run /loops"),
-            (
-                "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
-                "Run root-cause analysis on a sample alert",
-            ),
-            ("opensre doctor", "Verify your full environment setup"),
-            ("opensre onboard", "Re-run this setup at any time"),
-        )
+    next_steps: tuple[tuple[str, str], ...] = (
+        ("opensre", "Start the interactive agent and run /loops"),
+        (
+            "opensre investigate -i tests/e2e/kubernetes/fixtures/datadog_k8s_alert.json",
+            "Run root-cause analysis on a sample alert",
+        ),
+        ("opensre doctor", "Verify your full environment setup"),
+        ("opensre onboard", "Re-run this setup at any time"),
+    )
 
     for cmd, description in next_steps:
         cmd_line = Text()

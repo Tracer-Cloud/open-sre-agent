@@ -1,4 +1,13 @@
-"""Config-owned storage helpers for LLM provider auth metadata."""
+"""Config-owned storage helpers for LLM provider auth metadata.
+
+Credential operations are imported from :mod:`config.llm_auth.credentials`
+directly, never re-exported here: this init must stay free of that module so
+leaf importers (``provider_catalog``, keychain migration) never pull in
+:mod:`config.secrets.store` — that edge was a cyclic-import with
+``store`` → ``keychain_import`` → ``llm_auth``.
+"""
+
+from __future__ import annotations
 
 from config.llm_auth.auth_method import (
     API_KEY_AUTH_METHOD,
@@ -11,21 +20,6 @@ from config.llm_auth.auth_method import (
     get_configured_llm_auth_method,
     normalize_llm_auth_method,
     supports_oauth_auth_method,
-)
-from config.llm_auth.credentials import (
-    CredentialResolution,
-    CredentialSource,
-    CredentialStatus,
-    MissingLLMCredentialError,
-    delete,
-    has_api_key_env_status,
-    require_for_request,
-    resolve_api_key_env_for_request,
-    resolve_for_request,
-    save_api_key,
-    source_for_api_key_env,
-    status,
-    verify,
 )
 from config.llm_auth.provider_catalog import (
     API_KEY_PROVIDER_ENVS,
@@ -45,12 +39,8 @@ from config.llm_auth.records import (
 __all__ = [
     "API_KEY_PROVIDER_ENVS",
     "API_KEY_AUTH_METHOD",
-    "CredentialResolution",
-    "CredentialSource",
-    "CredentialStatus",
     "KEYLESS_PROVIDER_VALUES",
     "LLM_AUTH_METHOD_ENV",
-    "MissingLLMCredentialError",
     "OAUTH_AUTH_METHOD",
     "OAUTH_BACKEND_PROVIDER_BY_PROVIDER",
     "OAUTH_PROVIDER_BY_BACKEND_PROVIDER",
@@ -58,22 +48,13 @@ __all__ = [
     "ProviderSpec",
     "SUPPORTED_PROVIDER_VALUES",
     "canonical_llm_provider",
-    "delete",
     "delete_provider_auth_record",
     "effective_llm_provider",
     "get_configured_llm_auth_method",
-    "has_api_key_env_status",
     "normalize_llm_auth_method",
     "provider_auth_record_name",
     "provider_spec",
-    "require_for_request",
     "resolve_provider_auth_record",
-    "resolve_api_key_env_for_request",
-    "resolve_for_request",
-    "save_api_key",
     "save_provider_auth_record",
-    "source_for_api_key_env",
-    "status",
     "supports_oauth_auth_method",
-    "verify",
 ]

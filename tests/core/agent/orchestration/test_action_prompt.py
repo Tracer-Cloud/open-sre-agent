@@ -521,6 +521,21 @@ def test_l0_degraded_guidance_structures_a_useful_local_close() -> None:
     assert "invent metric numbers" in block.lower()
 
 
+def test_metric_unformed_guidance_requires_draft_query_and_setup_slash() -> None:
+    block = build_handoff_guidance_block(("evidence_tier:metric_unformed",))
+    assert "draft" in block.lower()
+    assert (
+        "fenced code block" in block.lower() or "```" in block or "query language" in block.lower()
+    )
+    assert "/integrations setup" in block
+    assert "Want me to" in block
+    assert "invent" in block.lower()
+    # Vendor-specific signup/login rules live in PostHog prompt fragments.
+    assert "user_signed_in" not in block
+    assert "HogQL" not in block
+    assert "PromQL" not in block
+
+
 def test_l0_degraded_config_guidance_is_distinct_from_missing_source() -> None:
     """Connected-but-auth-failed uses the config: suffix guidance block."""
     config = build_handoff_guidance_block(("evidence_tier:L0_degraded:config:posthog_mcp",))

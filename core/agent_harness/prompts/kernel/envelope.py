@@ -8,6 +8,35 @@ from enum import StrEnum
 from typing import Any
 
 
+class PromptBlockId(StrEnum):
+    """Identity of every block an envelope can carry.
+
+    A block id is looked up by callers (``require_block``) and asserted on by
+    contract tests, so a literal typo silently becomes a missing block rather
+    than an error. Naming them here keeps producer and consumer on one spelling.
+    """
+
+    # Action envelope.
+    ACTION_SYSTEM_BASE = "action-agent-system-base"
+    ACTION_VENDOR_FRAGMENTS = "action-agent-vendor-fragments"
+    ACTION_RUNTIME_FACTS = "action-agent-runtime-facts"
+    ACTION_SKILLS = "action-agent-skills"
+    ACTION_SETUP_STATE = "action-agent-setup-state"
+
+    # Gather envelope.
+    GATHER_SYSTEM_BASE = "gather-system-base"
+    GATHER_VENDOR_FRAGMENTS = "gather-vendor-fragments"
+    GATHER_CONNECTED_INTEGRATIONS = "gather-connected-integrations"
+    GATHER_PRIOR_INVESTIGATION = "gather-prior-investigation"
+
+    # Shared across envelopes.
+    CONNECTED_INTEGRATIONS = "connected-integrations"
+    LONG_TERM_MEMORY = "long-term-memory"
+    RECENT_CONVERSATION = "recent-conversation"
+    PRIOR_ACTION_FACTS = "prior-action-facts"
+    INTERRUPTED_TURN_RECOVERY = "interrupted-turn-recovery"
+
+
 class PromptBlockKind(StrEnum):
     """What a block is, independent of how often it changes.
 
@@ -54,7 +83,7 @@ _TIER_ORDER: dict[PromptTier, int] = {tier: index for index, tier in enumerate(P
 class PromptBlock:
     """One model-visible prompt block with optional provenance metadata."""
 
-    id: str
+    id: PromptBlockId | str
     content: str
     kind: PromptBlockKind = PromptBlockKind.CONTEXT
     #: Orthogonal to ``kind``: ``kind`` says what the block is, ``tier`` says
@@ -174,4 +203,4 @@ class PromptEnvelope:
         return self._render(self._partition()[1])
 
 
-__all__ = ["PromptBlock", "PromptBlockKind", "PromptEnvelope", "PromptTier"]
+__all__ = ["PromptBlock", "PromptBlockId", "PromptBlockKind", "PromptEnvelope", "PromptTier"]

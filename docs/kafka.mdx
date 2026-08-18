@@ -3,26 +3,21 @@ title: "Kafka"
 description: "Connect Kafka so OpenSRE can inspect topic health and consumer group lag during investigations"
 ---
 
-OpenSRE queries Kafka to retrieve topic partition health, consumer group lag, and broker metadata — helping diagnose lag spikes, under-replicated partitions, and consumer group failures during incidents.
+## Overview
+
+OpenSRE queries Kafka to retrieve topic partition health, consumer group lag, and broker metadata — helping diagnose lag spikes, under-replicated partitions, and consumer group failures during incidents. All operations are read-only.
 
 ## Prerequisites
 
 - Apache Kafka cluster (2.x or later)
 - Network access from the OpenSRE environment to the Kafka brokers
+- `confluent_kafka` available in the OpenSRE environment (installed with the project)
 
 ## Setup
 
-### Option 1: Interactive CLI
+There is no dedicated `opensre integrations setup kafka` wizard today. Configure via environment variables or the persistent store, then verify.
 
-```bash
-opensre integrations setup
-```
-
-Select **Kafka** when prompted and provide your bootstrap servers.
-
-### Option 2: Environment variables
-
-Add to your `.env`:
+### Option 1: Environment variables
 
 ```bash
 KAFKA_BOOTSTRAP_SERVERS=broker1:9092,broker2:9092
@@ -35,12 +30,12 @@ KAFKA_SASL_PASSWORD=your-password    # optional
 | Variable | Default | Description |
 | --- | --- | --- |
 | `KAFKA_BOOTSTRAP_SERVERS` | — | **Required.** Comma-separated broker addresses |
-| `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Security protocol: `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, `SASL_SSL` |
-| `KAFKA_SASL_MECHANISM` | — | SASL mechanism: `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512` |
+| `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, `SASL_SSL` |
+| `KAFKA_SASL_MECHANISM` | — | `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`, or `AWS_MSK_IAM` where supported |
 | `KAFKA_SASL_USERNAME` | — | SASL username |
 | `KAFKA_SASL_PASSWORD` | — | SASL password |
 
-### Option 3: Persistent store
+### Option 2: Persistent store
 
 ```json
 {
@@ -62,7 +57,9 @@ KAFKA_SASL_PASSWORD=your-password    # optional
 }
 ```
 
-## Common configurations
+## Credentials
+
+### Common configurations
 
 **MSK (AWS Managed Kafka) with IAM:**
 
@@ -84,12 +81,10 @@ KAFKA_SASL_PASSWORD=your-api-secret
 
 ## Investigation tools
 
-When OpenSRE investigates a Kafka-related alert, two diagnostic tools are available:
-
-- **Topic health** — lists topic partition metadata: leader, replicas, ISR status, and under-replicated partitions
-- **Consumer group lag** — retrieves committed offsets vs high watermarks per partition for a specific consumer group
-
-All operations are read-only.
+| Tool | What it does |
+| --- | --- |
+| `get_kafka_topic_health` | Partition metadata: leader, replicas, ISR, under-replicated partitions |
+| `get_kafka_consumer_group_lag` | Committed offsets vs high watermarks per partition for a consumer group |
 
 ## Verify
 
@@ -105,6 +100,8 @@ Status: passed
 Detail: Connected to Kafka cluster with 3 broker(s) and 42 topic(s)
 ```
 
+Verify uses a live `AdminClient.list_topics` call.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -114,8 +111,8 @@ Detail: Connected to Kafka cluster with 3 broker(s) and 42 topic(s)
 | **SSL handshake error** | Ensure the broker's TLS certificate is trusted or configure a CA cert |
 | **Leader not available** | Broker may be restarting — wait and retry |
 
-## Security best practices
+## Security
 
-- Use **SASL_SSL** in production — avoid `PLAINTEXT` outside of local development.
+- Use **SASL_SSL** in production — avoid `PLAINTEXT` outside local development.
 - Create a dedicated Kafka user with **Describe** permissions only — no produce or consume.
-- Store credentials in `.env`, not in source code.
+- Store credentials in `.env` or the integration store, not in source code.

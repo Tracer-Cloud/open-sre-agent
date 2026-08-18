@@ -74,6 +74,19 @@ class TestPromptRefreshAutoSubmit:
         assert app.current_buffer.text == "/integrations setup sentry"
         assert app.current_buffer.submitted is True
 
+    def test_auto_command_defers_while_dispatch_active(self) -> None:
+        """``/goal set`` must not nest validate_and_handle inside the slash turn."""
+        session = Session()
+        app = _RefreshFakeApp()
+        wire_prompt_refresh(session, app, _RefreshFakeLoop())
+        session.terminal.dispatch_active = True
+        session.terminal.set_auto_command("How many Windows users in the last 7 days?")
+        assert app.current_buffer.submitted is False
+        assert session.terminal.pending_prompt_autosubmit is True
+        assert (
+            session.terminal.pending_prompt_default == "How many Windows users in the last 7 days?"
+        )
+
     def test_plain_prefill_does_not_auto_submit(self) -> None:
         """A prefill without the auto-submit flag must wait for the user (Enter)."""
         session = Session()
@@ -103,6 +116,18 @@ class TestPromptTurnCounter:
         assert _prompt_counter_text(session) == "[2] "
         render_submitted_prompt(console, session, "and again")
         assert _prompt_turn_number(session) == 3
+
+    def test_autosubmitted_goal_condition_gets_work_turn_marker(self) -> None:
+        """``/goal set`` autosubmit must not look like part of the slash turn."""
+        session = Session()
+        console = _render_console()
+        session.terminal.last_input_autosubmitted = True
+        render_submitted_prompt(console, session, "How many Windows users in the last 7 days?")
+        out = console.file.getvalue()  # type: ignore[union-attr]
+        assert "↗ /goal — work turn" in out
+        assert "[1]" in out
+        assert "How many Windows users" in out
+        assert session.terminal.last_input_autosubmitted is False
 
     def test_history_rows_do_not_advance_counter(self) -> None:
         """One request that runs many tools adds many history rows but one number.

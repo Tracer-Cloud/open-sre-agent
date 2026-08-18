@@ -44,6 +44,12 @@ ONBOARD_INTEGRATION_CHOICES: tuple[Choice, ...] = (
         hint="Query logs from Coralogix DataPrime",
     ),
     Choice(
+        value="new_relic",
+        label="New Relic",
+        group="Observability",
+        hint="Query alerts and NRQL metrics",
+    ),
+    Choice(
         value="sentry",
         label="Sentry",
         group="Observability",

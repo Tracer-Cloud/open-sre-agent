@@ -12,9 +12,11 @@ from core.domain.work_items import (
     WorkItem,
     WorkItemChannelTarget,
     WorkItemPriority,
+    WorkItemUpdates,
     add_work_item,
     complete_work_items,
     cron_from_datetime,
+    dedupe_channel_targets,
     list_work_items,
     make_work_item,
     parse_work_item_datetime,
@@ -58,7 +60,7 @@ def _gateway_delivery_context(context: AgentToolContext | None) -> tuple[str, st
     if context is None:
         return "", ""
     try:
-        from core.agent_harness.tools.tool_context import action_context_from_agent_context
+        from core.agent_harness.tools import action_context_from_agent_context
 
         action_ctx = action_context_from_agent_context(context)
     except RuntimeError:
@@ -96,19 +98,7 @@ def _delivery_targets(
 
 
 def _dedupe_targets(targets: list[WorkItemChannelTarget]) -> list[WorkItemChannelTarget]:
-    seen: set[tuple[str, str]] = set()
-    unique: list[WorkItemChannelTarget] = []
-    for target in targets:
-        provider = target.provider.strip().lower()
-        chat_id = target.chat_id.strip()
-        if not provider:
-            continue
-        key = (provider, chat_id)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(WorkItemChannelTarget(provider=provider, chat_id=chat_id))
-    return unique
+    return list(dedupe_channel_targets(targets))
 
 
 def _validate_provider(provider: str) -> Provider | None:
@@ -118,7 +108,7 @@ def _validate_provider(provider: str) -> Provider | None:
         return None
 
 
-def _validate_datetime_arg(value: str, *, field: str) -> dict[str, Any] | None:
+def _validate_datetime_arg(value: str, *, field: str) -> dict[str, str] | None:
     if value and parse_work_item_datetime(value) is None:
         return {
             "error": f"invalid_{field}",
@@ -477,7 +467,7 @@ def work_task_update(
     timezone: str = "UTC",
     context: AgentToolContext | None = None,
 ) -> dict[str, Any]:
-    changes: dict[str, Any] = {}
+    changes: WorkItemUpdates = {}
     if status:
         normalized_status = normalize_status_filter(status)
         if normalized_status in {"active", "invalid"} or normalized_status is None:
@@ -488,15 +478,16 @@ def work_task_update(
         if parsed_priority is None:
             return {"error": "invalid_priority", "detail": valid_priority_detail()}
         changes["priority"] = parsed_priority
-    for field_name, value in (
-        ("owner", owner),
-        ("project", project),
-        ("due_at", due_at),
-        ("remind_at", remind_at),
-        ("notes", notes),
-    ):
-        if value:
-            changes[field_name] = value
+    if owner:
+        changes["owner"] = owner
+    if project:
+        changes["project"] = project
+    if due_at:
+        changes["due_at"] = due_at
+    if remind_at:
+        changes["remind_at"] = remind_at
+    if notes:
+        changes["notes"] = notes
     for field_name, value in (("due_at", due_at), ("remind_at", remind_at)):
         error = _validate_datetime_arg(value, field=field_name)
         if error is not None:

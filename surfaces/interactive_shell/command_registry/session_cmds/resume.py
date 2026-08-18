@@ -5,18 +5,18 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.session import SessionManager
-from core.agent_harness.session.persistence.wal_recovery import format_recovery_note
+from core.agent_harness import SessionManager
+from core.agent_harness.spi.session_state import format_recovery_note
 from surfaces.interactive_shell.command_registry.session_cmds.resume_rendering import (
     render_resumed_session_history,
 )
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     repl_choose_one,
     repl_tty_interactive,
 )
-from surfaces.interactive_shell.ui.components.time_format import format_repl_timestamp
+from surfaces.shared.terminal.components.time_format import format_repl_timestamp
 
 
 def _record_resume_slash(
@@ -38,7 +38,7 @@ def _record_resume_slash(
 
 def _interactive_resume_menu(session: Session, console: Console) -> bool:
     """Show a numbered list of recent sessions and resume the selected one."""
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     entries = [
         e for e in default_session_repo().load_recent(10) if e["session_id"] != session.session_id
@@ -155,7 +155,7 @@ def _lookup_resume_session_data(
     console: Console,
 ) -> dict | None:
     """Resolve a session to resume by ID prefix or name substring."""
-    from core.agent_harness.session import default_session_repo
+    from core.agent_harness.spi.defaults import default_session_repo
 
     repo = default_session_repo()
     data = repo.load_session(prefix)

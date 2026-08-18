@@ -14,20 +14,8 @@ if TYPE_CHECKING:
 # can't see them.
 __all__ = (
     "MANAGED_INTEGRATION_SERVICES",
-    "SAMPLE_ALERT_OPTIONS",
     "SETUP_SERVICES",
     "VERIFY_SERVICES",
-)
-
-# Template names for these options are the shared ALERT_TEMPLATE_CHOICES in
-# config/constants/investigation.py; the labels here are CLI-only.
-SAMPLE_ALERT_OPTIONS: tuple[tuple[str, str], ...] = (
-    ("generic", "Generic - High error rate in payments ETL"),
-    ("datadog", "Datadog - payments-etl error rate high"),
-    ("grafana", "Grafana - Pipeline failure rate high"),
-    ("honeycomb", "Honeycomb - checkout-api latency regression"),
-    ("coralogix", "Coralogix - payments worker errors"),
-    ("splunk", "Splunk - payments service error spike"),
 )
 
 

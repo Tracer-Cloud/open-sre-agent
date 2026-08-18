@@ -1,49 +1,36 @@
 """Async investigation API — enqueue now, poll later (ALB-safe).
 
-Store selection: Postgres when ``DATABASE_URL`` is set, else process-local
-memory. Do not widen the public response shape without a schema bump.
+The investigation repository comes from ``app.state.investigations``, built
+once when the app is created (``investigation_repository(open_database())``). Do not widen the public response shape without a schema bump.
 """
 
 from __future__ import annotations
 
-import os
-import threading
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from gateway.core.runtime.security_audit import audit_security_action
-from gateway.core.storage.investigations.store import (
-    InMemoryInvestigationStore,
+from gateway.core.storage.investigations.repository import (
     InvestigationRecord,
+    InvestigationRepository,
     InvestigationStatus,
-    InvestigationStore,
 )
 from gateway.web.clerk_deps import ClerkClaims
 from gateway.web.worker import ensure_worker_started
 
 router = APIRouter(prefix="/api/investigations", tags=["investigations"])
 
-_store_lock = threading.Lock()
-_store_instance: InvestigationStore | None = None
+
+def _investigations(request: Request) -> InvestigationRepository:
+    """The process's investigation repository, placed on ``app.state`` when the app is built."""
+    repository: InvestigationRepository = request.app.state.investigations
+    return repository
 
 
-def _store() -> InvestigationStore:
-    global _store_instance
-    with _store_lock:
-        if _store_instance is None:
-            dsn = os.getenv("DATABASE_URL", "").strip()
-            if dsn:
-                from gateway.core.storage.investigations.postgres import (
-                    PostgresInvestigationStore,
-                )
-
-                _store_instance = PostgresInvestigationStore(dsn)
-            else:
-                _store_instance = InMemoryInvestigationStore()
-        return _store_instance
+Investigations = Annotated[InvestigationRepository, Depends(_investigations)]
 
 
 def _audit_investigation(
@@ -108,9 +95,10 @@ class GetInvestigationResponse(BaseModel):
 def create_investigation(
     body: CreateInvestigationRequest,
     claims: ClerkClaims,
+    investigations: Investigations,
 ) -> CreateInvestigationResponse:
     """Enqueue an investigation; the background worker runs the pipeline."""
-    store = _store()
+    store = investigations
     clerk_org_id = _require_org(claims.organization)
     trigger = {
         "raw_alert": body.raw_alert,
@@ -137,10 +125,11 @@ def create_investigation(
 def cancel_investigation(
     investigation_id: str,
     claims: ClerkClaims,
+    investigations: Investigations,
 ) -> GetInvestigationResponse | JSONResponse:
     """Cancel a queued investigation before the worker claims it."""
     clerk_org_id = _require_org(claims.organization)
-    store = _store()
+    store = investigations
     record = store.get(investigation_id)
     if record is None or record.clerk_org_id != clerk_org_id:
         return JSONResponse({"error": "not found"}, status_code=status.HTTP_404_NOT_FOUND)
@@ -167,6 +156,7 @@ def cancel_investigation(
 def get_investigation(
     investigation_id: str,
     claims: ClerkClaims,
+    investigations: Investigations,
 ) -> GetInvestigationResponse | JSONResponse:
     """Poll investigation status.
 
@@ -174,7 +164,7 @@ def get_investigation(
     reserved for presigned downloads and stays null until URL generation lands.
     """
     clerk_org_id = _require_org(claims.organization)
-    record = _store().get(investigation_id)
+    record = investigations.get(investigation_id)
     if record is None:
         return JSONResponse({"error": "not found"}, status_code=status.HTTP_404_NOT_FOUND)
     if record.clerk_org_id != clerk_org_id:

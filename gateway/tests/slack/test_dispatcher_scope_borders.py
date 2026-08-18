@@ -40,8 +40,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv(ORGANIZATION_ID_ENV, TEST_ORG)
     with (
-        patch(f"{_SECURITY}.get_integration", return_value=None),
-        patch(f"{_SECURITY}.upsert_instance"),
+        patch("gateway.core.middleware.identity_policy.get_integration", return_value=None),
+        patch("gateway.core.middleware.identity_policy.upsert_instance"),
     ):
         yield tmp_path
 

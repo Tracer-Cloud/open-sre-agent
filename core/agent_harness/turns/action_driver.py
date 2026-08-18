@@ -15,18 +15,20 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from core.agent import Agent
 from core.agent.cancel import tool_resources_cancel_requested
 from core.agent.goals import Goal
+from core.agent_harness.accounting.self_recording_tools import SELF_RECORDING_ACTION_TOOL_NAMES
 from core.agent_harness.agent_builder import AgentConfig, build_agent
 from core.agent_harness.llm_resolution import default_llm_factory
 from core.agent_harness.ports import (
     ConfirmFn,
     ErrorReporter,
+    LlmFactory,
     OutputSink,
     SessionState,
     ToolProvider,
@@ -58,6 +60,7 @@ from core.execution import (
 )
 from core.llm.failure_classification import is_context_length_overflow
 from core.llm.types import AgentLLMResponse, ToolCall
+from core.llm_invoke_errors import remediate_missing_llm_credentials
 from core.tool_framework.tags import SUMMARIZE_OBSERVATION_TAG
 from platform.analytics.react_turn import run_react_agent_with_telemetry
 from platform.observability.trace.prompts import persist_turn_system_prompt
@@ -223,22 +226,6 @@ _EXECUTED_HISTORY_TYPES = {
     "implementation",
     "cli_command",
 }
-# Action tools that append their own ``session.history`` row when executed.
-# Keep this as the single catalogue: the shell observer and generic tool-result
-# accounting both key off it so new tools cannot silently double-record turns.
-SELF_RECORDING_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "alert_sample",
-        "cli_exec",
-        "code_implement",
-        "investigation_start",
-        "llm_set_provider",
-        "shell_run",
-        "slash_invoke",
-        "synthetic_run",
-        "task_cancel",
-    }
-)
 INVESTIGATION_DISPATCH_TOOL_NAMES: frozenset[str] = frozenset(
     {"investigation_start", "alert_sample"}
 )
@@ -255,13 +242,6 @@ class ActionTurnPlan:
     user_message: str
     llm: Any
     max_iterations: int
-
-
-@dataclass(frozen=True)
-class ToolCallingDeps:
-    """Optional dependency seams used by tests/harnesses."""
-
-    llm_factory: Callable[[], Any] | None = None
 
 
 class _StaticToolCallLLM:
@@ -664,7 +644,7 @@ def _build_action_agent(
     agent_tools: list[Any],
     turn_snapshot: TurnSnapshot | None,
     resolved_integrations: dict[str, Any],
-    deps: ToolCallingDeps | None,
+    llm_factory: LlmFactory | None,
     tool_hooks: ToolExecutionHooks | None,
     tool_resources: dict[str, Any],
     observer: Any,
@@ -708,7 +688,7 @@ def _build_action_agent(
         system = "Execute the explicit slash_invoke tool call."
         user_message = message
     else:
-        factory = deps.llm_factory if deps is not None and deps.llm_factory else default_llm_factory
+        factory = llm_factory if llm_factory is not None else default_llm_factory
         llm = factory()
         envelope = build_action_system_prompt_envelope(
             # No turn plan means no surface is known here; setup facts are
@@ -766,7 +746,7 @@ class _ActionTurnArgs:
     tools: ToolProvider
     confirm_fn: ConfirmFn | None = None
     is_tty: bool | None = None
-    deps: ToolCallingDeps | None = None
+    llm_factory: LlmFactory | None = None
     turn_plan: TurnPlan | None = None
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
@@ -786,7 +766,7 @@ class ActionTurnRunner:
 
     output: OutputSink
     tools: ToolProvider
-    deps: ToolCallingDeps | None = None
+    llm_factory: LlmFactory | None = None
     error_reporter: ErrorReporter | None = None
     tool_hooks: ToolExecutionHooks | None = None
 
@@ -811,7 +791,7 @@ class ActionTurnRunner:
             tools=self.tools,
             confirm_fn=confirm_fn,
             is_tty=is_tty,
-            deps=self.deps,
+            llm_factory=self.llm_factory,
             turn_plan=turn_plan,
             error_reporter=self.error_reporter,
             tool_hooks=self.tool_hooks,
@@ -870,16 +850,19 @@ def _compose_response(
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
         )
-        # A handoff means the assistant answers this turn, so the action's
-        # closing prose would be a second reply to one message.
         or bool(counts.handoff_contents)
     )
     final_text_chunk = "" if suppress_final else final_text
+    # Unhandled turns fall through to ``gather_and_answer`` / ``stream_answer``.
+    # Painting the closing here produced two ``● assistant`` bubbles (e.g. a
+    # wrong weekday from the action agent, then the grounded day from live
+    # runtime facts). Keep ``response_text``; blank only the console chunk.
+    display_final = "" if (suppress_final or not counts.handled) else final_text
     # History entries are already rendered by self-recording tools (shell/slash/…).
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
-    display_chunks = [chunk for chunk in (final_text_chunk, generic_text, hint) if chunk]
+    display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (
@@ -1013,7 +996,7 @@ def _run_action_turn(
             agent_tools=agent_tools,
             turn_snapshot=turn_snapshot,
             resolved_integrations=resolved_integrations,
-            deps=args.deps,
+            llm_factory=args.llm_factory,
             tool_hooks=with_duplicate_action_call_guard(args.tool_hooks),
             tool_resources=tool_resources,
             observer=observer,
@@ -1050,11 +1033,21 @@ def _run_action_turn(
             client=llm_client,
             error_text=error_text,
         )
-        _render_tool_calling_error(args.output, error_text)
-        _persist_tool_calling_error(session, message, error_text)
+        from config.config import get_configured_llm_provider
+        from core.agent_harness.accounting.token_accounting import resolve_provider_name
+
+        provider = resolve_provider_name(llm_client) if llm_client is not None else None
+        display_text = (
+            remediate_missing_llm_credentials(
+                error_text, provider=provider or get_configured_llm_provider()
+            )
+            or error_text
+        )
+        _render_tool_calling_error(args.output, display_text)
+        _persist_tool_calling_error(session, message, display_text)
         session.record("cli_agent", message, ok=False)
         return ToolCallingTurnResult(
-            0, 0, 0, True, True, response_text=error_text, accounting_status="not_run"
+            0, 0, 0, True, True, response_text=display_text, accounting_status="not_run"
         )
 
     counts = _count_turn(result, session, history_start)
@@ -1115,6 +1108,5 @@ __all__ = [
     "ActionTurnPlan",
     "ActionTurnRunner",
     "SELF_RECORDING_ACTION_TOOL_NAMES",
-    "ToolCallingDeps",
     "with_duplicate_action_call_guard",
 ]

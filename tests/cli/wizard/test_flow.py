@@ -8,18 +8,18 @@ from unittest.mock import MagicMock
 import pytest
 
 import integrations.setup_flow as _setup_flow
+from config import setup_store as wizard_store
 from config.secrets.store import SecretSaveResult
 from integrations.llm_cli.codex_oauth import CodexOAuthResult
 from surfaces.cli.wizard import _ui, azure_openai, flow, llm_credential
-from surfaces.cli.wizard import store as wizard_store
 from surfaces.cli.wizard.configurators import chat_notifications as _chat_notifications_configurator
 from surfaces.cli.wizard.configurators import dagster as _dagster_configurator
 from surfaces.cli.wizard.configurators import github as _github_configurator
 from surfaces.cli.wizard.configurators import gitlab as _gitlab_configurator
 from surfaces.cli.wizard.configurators import observability as _observability_configurator
-from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.probes import ProbeResult
-from surfaces.cli.wizard.validation import ValidationResult
+from surfaces.shared.llm_setup.env_sync import sync_provider_env
+from surfaces.shared.llm_setup.validation import ValidationResult
 from tests.integrations.llm_cli.testing_helpers import write_fake_runnable_cli_bin
 
 # Persisting a secret reports which storage tier accepted it, so stubs have to
@@ -503,6 +503,84 @@ def test_run_wizard_configures_coralogix(monkeypatch, tmp_path) -> None:
     assert synced_env_secrets == [("CORALOGIX_API_KEY", "cx_test")]
 
 
+def test_run_wizard_configures_new_relic(monkeypatch, tmp_path) -> None:
+    select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "new_relic"])
+    password_responses = iter(["llm-secret", "NRAK-test-key"])
+    text_responses = iter(["1234567", "https://api.newrelic.com"])
+    saved_integrations: list[tuple[str, dict]] = []
+    synced_env_values: list[dict[str, str]] = []
+    synced_env_secrets: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(select_responses)
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(password_responses)
+        return m
+
+    def _mock_text(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = next(text_responses)
+        return m
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(flow.questionary, "text", _mock_text)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(
+        _observability_configurator,
+        "NEW_RELIC_SETUP",
+        dataclasses.replace(
+            _observability_configurator.NEW_RELIC_SETUP,
+            verify=lambda _source, _config: {"status": "passed", "detail": "New Relic ok"},
+        ),
+    )
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(_ui, "save_keyring_secret", _stub_save)
+
+    def _sync_env_values(values: dict[str, str], **_kwargs):
+        synced_env_values.append(values)
+        return tmp_path / ".env"
+
+    monkeypatch.setattr(_setup_flow, "sync_env_values", _sync_env_values)
+    monkeypatch.setattr(
+        _setup_flow, "sync_env_secret", lambda key, value: synced_env_secrets.append((key, value))
+    )
+    monkeypatch.setattr(
+        _setup_flow,
+        "upsert_integration",
+        lambda service, payload: saved_integrations.append((service, payload)),
+    )
+
+    exit_code = flow.run_wizard()
+
+    assert exit_code == 0
+    assert saved_integrations == [
+        (
+            "new_relic",
+            {
+                "credentials": {
+                    "api_key": "NRAK-test-key",
+                    "account_id": "1234567",
+                    "base_url": "https://api.newrelic.com",
+                }
+            },
+        )
+    ]
+    assert synced_env_values == [
+        {
+            "NEW_RELIC_ACCOUNT_ID": "1234567",
+            "NEW_RELIC_API_URL": "https://api.newrelic.com",
+        }
+    ]
+    assert synced_env_secrets == [("NEW_RELIC_API_KEY", "NRAK-test-key")]
+
+
 def test_run_wizard_configures_dagster(monkeypatch, tmp_path) -> None:
     select_responses = iter(["quickstart", "anthropic", "api_key", "claude-opus-4-7", "dagster"])
     password_responses = iter(["llm-secret", "dag_test_token"])
@@ -703,12 +781,14 @@ def test_run_wizard_configures_slack_persists_webhook(monkeypatch, tmp_path) -> 
                     "webhook_url": "https://hooks.slack.com/services/T0/B0/XXXXX",
                     "bot_token": None,
                     "app_token": None,
+                    "default_chat_id": None,
                 }
             },
         )
     ]
     # Webhook is store-only; blank Socket Mode tokens still clear keyring slots.
-    assert synced_env_values == [{}]
+    # Unchosen default_chat_id is a non-secret env field, so it is cleared in .env.
+    assert synced_env_values == [{"SLACK_DEFAULT_CHAT_ID": ""}]
     assert synced_env_secrets == [("SLACK_BOT_TOKEN", ""), ("SLACK_APP_TOKEN", "")]
 
 
@@ -1688,7 +1768,7 @@ def test_run_cli_llm_onboarding_abort_after_max_retries(monkeypatch) -> None:
 
 
 def test_credential_line_for_saved_summary_cli_codex() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     codex = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "codex")
     assert (
@@ -1698,7 +1778,7 @@ def test_credential_line_for_saved_summary_cli_codex() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_claude_code() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     claude_code = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "claude-code")
     assert llm_credential._credential_line_for_saved_summary(claude_code) == (
@@ -1707,7 +1787,7 @@ def test_credential_line_for_saved_summary_cli_claude_code() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     gemini_cli = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "gemini-cli")
     assert llm_credential._credential_line_for_saved_summary(gemini_cli) == (
@@ -1716,7 +1796,7 @@ def test_credential_line_for_saved_summary_cli_gemini_cli() -> None:
 
 
 def test_credential_line_for_saved_summary_cli_copilot() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     copilot = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "copilot")
     line = llm_credential._credential_line_for_saved_summary(copilot)
@@ -1728,14 +1808,14 @@ def test_credential_line_for_saved_summary_cli_copilot() -> None:
 
 
 def test_credential_line_for_saved_summary_anthropic() -> None:
-    from surfaces.cli.wizard import config as wizard_config
+    from surfaces.shared.llm_setup import catalog as wizard_config
 
     anthropic = next(p for p in wizard_config.SUPPORTED_PROVIDERS if p.value == "anthropic")
     assert llm_credential._credential_line_for_saved_summary(anthropic) == "system keychain"
 
 
 def test_credential_line_for_saved_summary_cli_without_factory() -> None:
-    from surfaces.cli.wizard.config import ModelOption, ProviderOption
+    from surfaces.shared.llm_setup.catalog import ModelOption, ProviderOption
 
     p = ProviderOption(
         value="codex",
@@ -2503,7 +2583,7 @@ def test_run_wizard_telegram_retries_on_validation_failure(monkeypatch, tmp_path
 
 def test_persist_llm_credential_host_kind_writes_env_not_keyring(monkeypatch, tmp_path) -> None:
     """#3291: a host credential lands where the runtime reads it (.env), never the keyring."""
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     synced: dict[str, str] = {}
     monkeypatch.setattr(
@@ -2527,7 +2607,7 @@ def test_persist_llm_credential_host_kind_writes_env_not_keyring(monkeypatch, tm
 
 
 def test_persist_llm_credential_secret_kind_keeps_keyring(monkeypatch, tmp_path) -> None:
-    from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+    from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
     monkeypatch.setattr(
         llm_credential, "sync_env_values", lambda _values: pytest.fail("secret must not hit .env")
@@ -4401,7 +4481,12 @@ def test_run_wizard_keyring_failure_at_legacy_migration_site_reaches_the_shared_
 def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholder(
     monkeypatch, tmp_path
 ) -> None:
-    """Enter on an empty Azure key prompt must NOT save the endpoint placeholder as the key."""
+    """Enter on an empty Azure key prompt must NOT save the endpoint placeholder.
+
+    Azure's ``credential_default`` is an endpoint URL, so a pre-filled prompt
+    would let a bare Enter persist it as the API key. A blank answer now defers
+    setup instead of re-prompting, and must still persist nothing.
+    """
     monkeypatch.delenv("AZURE_OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
 
@@ -4409,7 +4494,7 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
     assert placeholder == "https://your-resource.openai.azure.com"  # sanity: the trap exists
 
     password_calls: list[dict[str, object]] = []
-    password_asks = iter(["", "az-real-key"])  # bare Enter, then a real key
+    password_asks = iter([""])  # bare Enter: no key to hand
     validated_keys: list[str] = []
     saved_llm_keys: list[tuple[str, str]] = []
 
@@ -4467,8 +4552,9 @@ def test_run_wizard_azure_empty_key_input_never_persists_the_endpoint_placeholde
     assert all(call.get("default") == "" for call in password_calls)
     assert placeholder not in validated_keys
     assert all(value != placeholder for _provider, value in saved_llm_keys)
-    assert validated_keys == ["az-real-key"]
-    assert saved_llm_keys == [("azure-openai", "az-real-key")]
+    # Deferred: nothing validated, nothing persisted, wizard still completes.
+    assert validated_keys == []
+    assert saved_llm_keys == []
 
 
 def test_run_wizard_ollama_host_prompt_keeps_its_localhost_default(monkeypatch, tmp_path) -> None:
@@ -4927,9 +5013,9 @@ def test_credential_line_for_saved_summary_ollama_host_verified() -> None:
     )
 
 
-@pytest.mark.parametrize("stale_mode", ["aha", "banana", ""])
+@pytest.mark.parametrize("stale_mode", ["aha", "focused", "banana", ""])
 def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale_mode) -> None:
-    """A saved mode that is no longer offered must default to 'focused'.
+    """A saved mode that is no longer offered must default to 'quickstart'.
 
     Saved defaults outlive the modes they name — a value persisted by an older
     build, or a mode removed in a refactor, must not be passed to the chooser as
@@ -4956,4 +5042,130 @@ def test_run_wizard_falls_back_when_saved_mode_is_not_offered(monkeypatch, stale
         flow.run_wizard()
 
     # Assert
-    assert seen["default"] == "focused"
+    assert seen["default"] == "quickstart"
+
+
+def test_run_wizard_blank_llm_key_defers_setup_instead_of_ending(monkeypatch, tmp_path) -> None:
+    """A blank key finishes onboarding; it must not cancel or loop forever.
+
+    The credential prompt was the one step with no "later": its outcomes were
+    repick, cancel, save-anyway and continue-unsaved. A user without a key to
+    hand had to abandon the wizard.
+    """
+    # Arrange
+    saved_llm_keys: list[tuple[str, str]] = []
+    validator_calls: list[tuple[str, str]] = []
+    password_asks = 0
+
+    def _mock_select(*_args, **_kwargs):
+        prompt = str(_args[0]) if _args else ""
+        m = MagicMock()
+        if "Choose your LLM provider" in prompt:
+            m.ask.return_value = "openai"
+        elif "auth method" in prompt:
+            m.ask.return_value = "api_key"
+        elif "model" in prompt:
+            m.ask.return_value = "gpt-5.4-mini"
+        elif "integration" in prompt.lower():
+            m.ask.return_value = "skip"
+        else:
+            m.ask.return_value = "quickstart"
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        nonlocal password_asks
+        password_asks += 1
+        m = MagicMock()
+        m.ask.return_value = ""  # the user has no key to hand
+        return m
+
+    def _validate(*, provider, api_key, model):
+        validator_calls.append((provider.value, api_key))
+        return ValidationResult(ok=True, detail="unexpected")
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(llm_credential, "validate_provider_credentials", _validate)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
+    )
+
+    # Act
+    exit_code = flow.run_wizard()
+
+    # Assert
+    assert exit_code == 0, "a deferred key must not fail onboarding"
+    assert saved_llm_keys == [], "nothing may be persisted for a blank key"
+    assert validator_calls == [], "a blank key must not be sent to the provider"
+    assert password_asks == 1, "the prompt must accept the blank answer, not re-ask"
+
+
+def test_run_wizard_blank_key_on_kept_provider_reports_deferred_not_keychain(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """Keeping the saved provider and submitting a blank key defers honestly.
+
+    The summary must not claim the key is in the system keychain when the
+    keep-existing-provider branch received DEFERRED from the credential prompt.
+    """
+    # Arrange: openai already configured but with no stored key; user keeps it.
+    saved_llm_keys: list[tuple[str, str]] = []
+
+    def _mock_select(*_args, choices=None, default=None, **_kwargs):
+        m = MagicMock()
+        prompt = str(_args[0]) if _args else ""
+        m.ask.return_value = "skip" if "integration" in prompt.lower() else default
+        return m
+
+    def _mock_confirm(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = False  # "Change provider?" -> keep saved openai
+        return m
+
+    def _mock_password(*_args, **_kwargs):
+        m = MagicMock()
+        m.ask.return_value = ""  # the user has no key to hand
+        return m
+
+    def _load_saved_openai(_path):
+        return {
+            "wizard": {"mode": "quickstart"},
+            "targets": {
+                "local": {
+                    "provider": "openai",
+                    "model": "gpt-5.4-mini",
+                    "api_key_env": "OPENAI_API_KEY",
+                }
+            },
+        }
+
+    monkeypatch.setattr(_ui, "select_prompt", _mock_select)
+    monkeypatch.setattr(flow.questionary, "confirm", _mock_confirm)
+    monkeypatch.setattr(flow.questionary, "password", _mock_password)
+    monkeypatch.setattr(_ui, "load_local_config", _load_saved_openai)
+    monkeypatch.setattr(_ui, "has_llm_api_key", lambda _env: False)
+    monkeypatch.setattr(_ui, "get_store_path", lambda: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "probe_local_target", lambda _path: ProbeResult("local", True, "ok"))
+    monkeypatch.setattr(flow, "save_local_config", lambda **_kwargs: tmp_path / "opensre.json")
+    monkeypatch.setattr(flow, "sync_provider_env", lambda **_kwargs: tmp_path / ".env")
+    monkeypatch.setattr(
+        _ui,
+        "save_api_key",
+        lambda provider, value, **_kwargs: _stub_save_recording(saved_llm_keys, provider, value),
+    )
+
+    # Act
+    exit_code = flow.run_wizard()
+
+    # Assert: onboarding finishes, nothing persists, and the summary is honest.
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert saved_llm_keys == []
+    assert "not set yet" in output
+    assert "system keychain" not in output

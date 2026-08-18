@@ -75,6 +75,23 @@ def test_turn_needs_exclusive_stdin_for_exit_commands(
     assert loop_input_policy.turn_needs_exclusive_stdin("quit", session) is False
 
 
+def test_turn_needs_exclusive_stdin_for_goal_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``/goal set`` must finish before the condition autosubmits as ``[N] ❯``."""
+    monkeypatch.setattr(loop_input_policy, "repl_tty_interactive", lambda: True)
+    session = Session()
+    assert (
+        loop_input_policy.turn_needs_exclusive_stdin(
+            "/goal set --max-turns 4 count windows users",
+            session,
+        )
+        is True
+    )
+    assert loop_input_policy.turn_needs_exclusive_stdin("/goal", session) is True
+    assert loop_input_policy.turn_needs_exclusive_stdin("goal set x", session) is False
+
+
 def test_turn_needs_exclusive_stdin_for_update(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -299,7 +316,7 @@ def test_execute_shell_turn_nitro_prompt_executes_remote_then_investigation(
         call_order.append(f"investigation:{alert_text}")
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.runtime.action_turn.default_llm_factory",
+        "core.agent_harness.turns.action_driver.default_llm_factory",
         lambda: FakeActionLLM(
             [
                 AgentLLMResponse(

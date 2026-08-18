@@ -91,3 +91,5 @@ class EffectiveIntegrations(StrictConfigModel):
     tempo: EffectiveIntegrationEntry | None = None
     temporal: EffectiveIntegrationEntry | None = None
     kubernetes: EffectiveIntegrationEntry | None = None
+    new_relic: EffectiveIntegrationEntry | None = None
+    yandex_cloud: EffectiveIntegrationEntry | None = None

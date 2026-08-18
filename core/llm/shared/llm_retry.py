@@ -30,15 +30,18 @@ _CREDIT_EXHAUSTED_CODES: frozenset[str] = frozenset(
     {
         "insufficient_quota",
         "billing_hard_limit_reached",
+        "credit_balance_exhausted",
     }
 )
 
 _CREDIT_EXHAUSTED_HINTS: tuple[str, ...] = (
     "insufficient_quota",
     "billing_hard_limit_reached",
+    "credit_balance_exhausted",
     "exceeded your current quota",
     "credit balance is too low",
     "credit balance too low",
+    "no credits remaining",
 )
 
 

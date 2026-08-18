@@ -139,6 +139,26 @@ def _env_or_stored(
     return str(value).strip()
 
 
+def stored_remote_sync_value(key: str) -> str:
+    """A single scalar from the stored ``remote_sync`` section, or ``""``.
+
+    For a provider-specific setting outside ``RemoteSyncConfig``'s two
+    extension slots (``region``/``profile``) that still deserves
+    ``config.yml`` persistence the same way ``bucket``/``region``/``profile``
+    get it — e.g. s3compat's endpoint URL. Reads the file fresh on every call
+    (no caching), so callers should already have checked the environment
+    first and only fall back to this on a miss. An unreadable stored section
+    mirrors "no stored settings" here too, same as :func:`_env_or_stored`.
+    """
+    section = _stored_section()
+    if section is None:
+        return ""
+    value = _validated_scalar(section.get(key), key)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
 def _exclusions(stored: Callable[[], dict[str, Any] | None]) -> ExclusionRules:
     """Patterns from the environment, else the stored list.
 
@@ -226,4 +246,9 @@ def load_remote_sync_config() -> RemoteSyncConfig | None:
     )
 
 
-__all__ = ["RemoteSyncConfig", "load_remote_sync_config", "remote_sync_enabled"]
+__all__ = [
+    "RemoteSyncConfig",
+    "load_remote_sync_config",
+    "remote_sync_enabled",
+    "stored_remote_sync_value",
+]

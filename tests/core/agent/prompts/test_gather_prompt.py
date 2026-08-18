@@ -167,6 +167,16 @@ def test_github_gather_prompt_routes_star_history_to_dedicated_tool() -> None:
     assert "execute_python_code" in prompt
 
 
+def test_posthog_gather_prompt_refuses_login_as_signup_stand_in() -> None:
+    """Retention/signup must not treat user_signed_in as signup."""
+    from integrations.posthog.gather_prompt import posthog_gather_prompt_fragment
+
+    prompt = posthog_gather_prompt_fragment()
+    assert "user_signed_in" in prompt
+    assert "signup" in prompt.lower()
+    assert "unverified" in prompt.lower()
+
+
 def test_answer_prompt_keeps_an_old_investigation_and_labels_it() -> None:
     """A retrospective question can come at any time; the RCA must survive the window.
 

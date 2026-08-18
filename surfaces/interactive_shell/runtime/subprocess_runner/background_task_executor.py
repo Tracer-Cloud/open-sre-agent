@@ -15,8 +15,8 @@ from rich.markup import escape
 
 from surfaces.interactive_shell.runtime import Session, TaskKind, TaskRecord
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT
-from surfaces.interactive_shell.utils.error_handling.exception_reporting import report_exception
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
+from surfaces.shared.error_handling.exception_reporting import report_exception
 
 from .task_streaming import (
     _MAX_COMMAND_OUTPUT_CHARS,
@@ -68,7 +68,7 @@ def start_background_cli_task(
     use_pty: bool = False,
 ) -> TaskRecord | None:
     """Start a subprocess as a REPL task while streaming output above the prompt."""
-    console.print(f"[bold]$ {display_command}[/bold]")
+    console.print(f"[bold]$ {escape(display_command)}[/bold]")
     task = session.task_registry.create(kind, command=display_command)
     task.mark_running()
     # Created at launch so the flushed prompt-log latency spans the full task

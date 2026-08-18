@@ -443,6 +443,25 @@ _BUILTIN_SPECS: tuple[IntegrationSpec, ...] = (
         setup_order=51,
         verify_order=53,
     ),
+    IntegrationSpec(
+        service="new_relic",
+        aliases=("newrelic", "new relic"),
+        has_verifier=True,
+        direct_effective=True,
+        core_verify=True,
+        setup_order=53,
+        verify_order=59,
+    ),
+    IntegrationSpec(
+        service="yandex_cloud",
+        # ``yc`` is what the vendor's own CLI is called, so it is what people
+        # type; ``yandex`` catches the rest.
+        aliases=("yc", "yandex"),
+        has_verifier=True,
+        direct_effective=True,
+        setup_order=54,
+        verify_order=100,
+    ),
 )
 
 #: Specs contributed by out-of-tree packages through

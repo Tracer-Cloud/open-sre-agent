@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from core.agent_harness.tools.tool_context import (
-    object_schema,
-    string_array_property,
-    string_property,
-)
+from core.tool_framework.utils.schema import object_schema, string_array_property, string_property
 
 _MAX_COMPACT_DESC_CHARS = 120
 
@@ -375,7 +371,8 @@ MCP_BY_COMMAND: dict[str, _SlashMcpFields] = {
         "User asks to list running or recent tasks",
     ),
     "/template": _mcp(
-        "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, splunk).",
+        "Print a starter alert JSON template (generic, datadog, grafana, honeycomb, coralogix, "
+        "splunk, new_relic).",
         "User asks for an alert template or example payload format",
     ),
     "/tools": _mcp(

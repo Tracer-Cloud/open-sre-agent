@@ -184,25 +184,25 @@ class TestBedrockProviderConfig:
     """Verify Bedrock is registered correctly in the wizard config."""
 
     def test_bedrock_in_supported_providers(self) -> None:
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         assert "bedrock" in PROVIDER_BY_VALUE
 
     def test_bedrock_credential_kind_is_none(self) -> None:
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.credential_kind == "none"
 
     def test_bedrock_has_curated_models(self) -> None:
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert len(provider.models) >= 10
 
     def test_bedrock_curated_models_use_inference_profiles(self) -> None:
         """All Claude models in the curated list must use us.* inference profile IDs."""
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         claude_models = [m for m in provider.models if "anthropic" in str(getattr(m, "value", ""))]
@@ -213,14 +213,14 @@ class TestBedrockProviderConfig:
             )
 
     def test_bedrock_has_toolcall_model_env(self) -> None:
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.toolcall_model_env == "BEDROCK_TOOLCALL_MODEL"
 
     def test_bedrock_api_key_env_is_empty(self) -> None:
         """api_key_env="" is intentional — Bedrock uses IAM auth, not an API key."""
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.api_key_env == ""
@@ -234,7 +234,7 @@ class TestBedrockProviderConfig:
         Region is picked up from AWS_DEFAULT_REGION / ~/.aws/config, not from
         the wizard credential prompt (which is skipped for credential_kind="none").
         """
-        from surfaces.cli.wizard.config import PROVIDER_BY_VALUE
+        from surfaces.shared.llm_setup.catalog import PROVIDER_BY_VALUE
 
         provider = PROVIDER_BY_VALUE["bedrock"]
         assert provider.credential_default == ""

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from rich.console import Console
 
 from platform.terminal.theme import ERROR, HIGHLIGHT, WARNING
-from surfaces.interactive_shell.ui.health import (
+from surfaces.shared.terminal.health import (
     _summary_counts,
     render_health_json,
     render_health_report,

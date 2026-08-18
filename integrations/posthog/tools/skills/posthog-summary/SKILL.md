@@ -71,7 +71,10 @@ events confirmed present in the schema):
 
 - Active users (`count(DISTINCT person_id)`)
 - Key events (`$pageview`, sessions, or the project's top custom events)
-- New signups / new users if an identifying event exists
+- New signups / new users **only** when schema confirms a signup event
+  (`user_signed_up`, `signed_up`, `signup`, …). Never substitute
+  `user_signed_in` / login / `$identify` for signup or for “signed up”
+  retention cohorts — if signup is unverified, skip the metric and say so.
 - Notable custom events surfaced by the schema
 
 ## 3. Compute per-metric deltas

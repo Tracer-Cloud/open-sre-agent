@@ -18,6 +18,7 @@ from config.constants.sentry import (
     SENTRY_BASE_URL_ENV,
     SENTRY_ORGANIZATION_SLUG_ENV,
     SENTRY_PROJECT_SLUG_ENV,
+    SENTRY_STATS_PERIOD_ENV,
 )
 from config.llm_credentials import resolve_env_credential
 from config.strict_config import StrictConfigModel
@@ -42,7 +43,7 @@ _SENTRY_VERIFY_WINDOW_LABEL = "last 7 days"
 
 def _resolve_stats_period(explicit: str | None = None) -> str:
     """Resolve the issues lookback window, overridable via ``SENTRY_STATS_PERIOD``."""
-    period = (explicit or os.getenv("SENTRY_STATS_PERIOD", "") or "").strip()
+    period = (explicit or os.getenv(SENTRY_STATS_PERIOD_ENV, "") or "").strip()
     return period or DEFAULT_SENTRY_STATS_PERIOD
 
 

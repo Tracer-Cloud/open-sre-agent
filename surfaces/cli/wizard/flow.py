@@ -26,6 +26,7 @@ from config.llm_auth.auth_method import (
     supports_oauth_auth_method,
 )
 from config.llm_auth.records import save_provider_auth_record
+from config.setup_store import get_store_path, save_local_config
 from core.llm.providers.azure_openai import is_azure_openai_provider
 from integrations.llm_cli.binary_resolver import diagnose_binary_path
 from integrations.llm_cli.codex_oauth import CodexOAuthError, run_codex_oauth_login
@@ -54,7 +55,6 @@ from surfaces.cli.wizard._ui import (
 from surfaces.cli.wizard.azure_openai import (
     choose_provider_model,
 )
-from surfaces.cli.wizard.config import PROVIDER_BY_VALUE, SUPPORTED_PROVIDERS, ProviderOption
 from surfaces.cli.wizard.configurators.github import (
     DEFAULT_GITHUB_MCP_MODE,
     DEFAULT_GITHUB_MCP_URL,
@@ -67,10 +67,10 @@ from surfaces.cli.wizard.custom_endpoints import (
 from surfaces.cli.wizard.endpoint_prompt import (
     ensure_endpoint_settings as ensure_provider_endpoint_settings,
 )
-from surfaces.cli.wizard.env_sync import sync_provider_env
 from surfaces.cli.wizard.integration_health import IntegrationHealthResult
 from surfaces.cli.wizard.llm_credential import (
     CANCEL,
+    DEFERRED,
     OK,
     REPICK,
     UNSAVED,
@@ -82,10 +82,13 @@ from surfaces.cli.wizard.llm_credential import (
     _provider_choice_label,
 )
 from surfaces.cli.wizard.probes import ProbeResult, probe_local_target, probe_remote_target
-from surfaces.cli.wizard.store import get_store_path, save_local_config
-from surfaces.cli.wizard.validation import (
-    build_demo_action_response as _build_demo_action_response,
+from surfaces.shared.llm_setup.catalog import (
+    PROVIDER_BY_VALUE,
+    SUPPORTED_PROVIDERS,
+    ProviderOption,
+    WizardCredentialKind,
 )
+from surfaces.shared.llm_setup.env_sync import sync_provider_env
 
 WIZARD_TOTAL_STEPS = 4
 logger = logging.getLogger(__name__)
@@ -116,15 +119,11 @@ __all__ = [
 ]
 
 
-# Re-export build_demo_action_response from validation as a stable module-level
-# attribute. The wrapper indirection (instead of `from x import y`) is
-# preserved so the function remains patchable via monkeypatch.setattr(flow,
-# "build_demo_action_response", ...) — but we also keep the underlying import
-# at module load time so the attribute exists immediately, even in CI parallel
-# test workers where lazy imports inside the wrapper occasionally fail to
-# materialize on first access.
-def build_demo_action_response():
-    return _build_demo_action_response()
+def build_demo_action_response() -> dict:
+    """Return a safe built-in action response for onboarding."""
+    from tools.system.sre_guidance_tool import get_sre_guidance
+
+    return get_sre_guidance(topic="recovery_remediation", max_topics=1)
 
 
 def _seed_onboarding_loops() -> int:
@@ -654,11 +653,6 @@ def run_wizard(_argv: list[str] | None = None) -> int:
         "How do you want to get started?",
         [
             Choice(
-                value="focused",
-                label="Focused",
-                hint="Provider, one integration, then run the agent",
-            ),
-            Choice(
                 value="quickstart", label="Quickstart", hint="Local setup with the usual defaults"
             ),
             Choice(
@@ -668,8 +662,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             ),
         ],
         default=default_wizard_mode
-        if default_wizard_mode in {"focused", "quickstart", "advanced"}
-        else "focused",
+        if default_wizard_mode in {"quickstart", "advanced"}
+        else "quickstart",
     )
 
     store_path = get_store_path()
@@ -804,8 +798,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
 
         if change_provider:
             if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
-                "cli",
-                "none",
+                WizardCredentialKind.CLI,
+                WizardCredentialKind.NONE,
             ):
                 credential_outcome, model = _prompt_validated_llm_credential(
                     provider,
@@ -818,7 +812,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 if credential_outcome == REPICK:
                     force_repick = True
                     continue
-                if credential_outcome == UNVERIFIED:
+                if credential_outcome == DEFERRED:
+                    # No key to hand: finish onboarding with the provider chosen
+                    # and nothing persisted, rather than ending the wizard.
+                    credential_state = DEFERRED
+                elif credential_outcome == UNVERIFIED:
                     credential_state = UNVERIFIED
                 elif credential_outcome == UNSAVED:
                     credential_state = UNSAVED
@@ -836,8 +834,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 os.environ.update(azure_env)
         else:
             if auth_method == API_KEY_AUTH_METHOD and provider.credential_kind not in (
-                "cli",
-                "none",
+                WizardCredentialKind.CLI,
+                WizardCredentialKind.NONE,
             ):
                 has_api_key = bool(defaults["has_api_key"])
                 legacy_api_key = str(defaults["legacy_api_key"] or "").strip()
@@ -845,7 +843,11 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                 # migrate a stale legacy ``api_key`` value into it — that would leak a
                 # secret-shaped value into .env and point the runtime at a bogus host. Fall
                 # through to the host prompt instead.
-                if not has_api_key and legacy_api_key and provider.credential_kind != "host":
+                if (
+                    not has_api_key
+                    and legacy_api_key
+                    and provider.credential_kind != WizardCredentialKind.HOST
+                ):
                     migration_outcome = _persist_llm_credential_with_recovery(
                         provider, legacy_api_key, session_env_sink=session_env_sink
                     )
@@ -869,7 +871,9 @@ def run_wizard(_argv: list[str] | None = None) -> int:
                     if credential_outcome == REPICK:
                         force_repick = True
                         continue
-                    if credential_outcome == UNVERIFIED:
+                    if credential_outcome == DEFERRED:
+                        credential_state = DEFERRED
+                    elif credential_outcome == UNVERIFIED:
                         credential_state = UNVERIFIED
                     elif credential_outcome == UNSAVED:
                         credential_state = UNSAVED
@@ -885,7 +889,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider_extra_env = azure_env
             os.environ.update(azure_env)
 
-        if model_provider.credential_kind == "cli":
+        if model_provider.credential_kind == WizardCredentialKind.CLI:
             cli_out = _run_cli_llm_onboarding(
                 model_provider,
                 display_label=(
@@ -925,8 +929,8 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     if credential_state == UNSAVED:
         # sync_provider_env pops every secret provider's api-key env; re-apply the
         # session-only value the user chose to continue with so the in-process shell
-        # handoff can read it. Secrets persist via the secret store (file-first by
-        # default; OS keyring only when OPENSRE_USE_KEYRING=1). A ``host`` value
+        # handoff can read it. Secrets persist via the secret store (the
+        # owner-only local credential file). A ``host`` value
         # normally goes straight to .env and never reaches this sink; it only lands
         # here when its .env write failed and the user picked "continue without
         # saving", where re-applying it to os.environ is exactly what is wanted.
@@ -935,9 +939,7 @@ def run_wizard(_argv: list[str] | None = None) -> int:
     _step_header(3, WIZARD_TOTAL_STEPS, "Integrations")
     try:
         configured_integrations, integration_env_path = (
-            _integration_configurators_module._configure_selected_integrations(
-                mode=wizard_mode,
-            )
+            _integration_configurators_module._configure_selected_integrations()
         )
     except KeyboardInterrupt:
         cancelled = Text()
@@ -961,5 +963,5 @@ def run_wizard(_argv: list[str] | None = None) -> int:
             provider, persisted_auth_method, credential_state=credential_state
         ),
     )
-    _render_next_steps(focused=wizard_mode == "focused")
+    _render_next_steps()
     return 0

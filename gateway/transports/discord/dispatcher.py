@@ -9,7 +9,6 @@ from contextlib import suppress
 
 from config.constants.gateway import (
     CREDITS_DENIED_MESSAGE,
-    NEW_SESSION_MESSAGE,
     NO_ACTIVE_TURN_MESSAGE,
     TURN_ERROR_MESSAGE,
     TURN_TIMEOUT_MESSAGE,
@@ -18,31 +17,31 @@ from config.constants.gateway import (
 )
 from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
-from core.agent_harness.session import SessionCore
+from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.runtime.active_turns import ActiveTurnRegistry, is_stop_command
-from gateway.core.runtime.approvals import ApprovalBroker, approval_tool_hooks
-from gateway.core.runtime.attention import GateDecision, ThreadAttentionGate
-from gateway.core.runtime.conversation_locks import ConversationLockRegistry
-from gateway.core.runtime.sink_protocol import GatewayAgentCallback
-from gateway.core.runtime.terminal_outcome import TerminalOutcomeArbiter
+from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
+from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
+from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
+from gateway.core.middleware.conversation_locks import ConversationLockRegistry
+from gateway.core.middleware.inbound_decision import apply_inbound_decision
+from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
 from gateway.core.storage import SessionResolver
+from gateway.core.transport_api import GatewayAgentCallback
 from gateway.transports.discord.approvals import DiscordApprovalPrompter
 from gateway.transports.discord.client import add_reaction, remove_reaction, send_message
 from gateway.transports.discord.events import DiscordInboundMessage
 from gateway.transports.discord.output_sink import DiscordOutputSink
 from gateway.transports.discord.principal import PrincipalResolutionError, resolve_discord_scope
 from gateway.transports.discord.security import (
-    _ROTATE_SESSION,
     DiscordInboundDecision,
     enforce_inbound_discord_message_security,
-    persist_policy_if_needed,
 )
 from gateway.transports.discord.settings import DiscordGatewaySettings
 from gateway.transports.discord.thread_history import (
     seed_session_from_discord_thread,
     session_needs_thread_seed,
 )
+from integrations.messaging_security import MessagingPlatform
 from platform.analytics.usage_context import SURFACE_DISCORD, bound_usage_context
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
@@ -160,39 +159,24 @@ class DiscordTurnDispatcher:
         decision: DiscordInboundDecision,
         scope: StorageScope,
     ) -> SessionCore | None:
-        persist_policy_if_needed(decision)
-
         if not inbound.addressed and (not decision.allowed or decision.reply_text):
             return None
 
-        is_rotate = decision.reply_text == _ROTATE_SESSION
-        if decision.reply_text and not is_rotate:
-            self._post(inbound, decision.reply_text)
-            if not decision.allowed:
-                return None
+        def _send(text: str) -> None:
+            self._post(inbound, text)
 
-        if not decision.allowed and not is_rotate:
-            self._post(inbound, UNAUTHORIZED_MESSAGE)
-            return None
-
-        with self._resolver_lock:
-            if is_rotate:
-                session = self._session_resolver.rotate(
-                    user_id=inbound.conversation_key,
-                    chat_id=inbound.channel_id,
-                    principal=scope.principal,
-                    actor=scope.actor,
-                )
-                self._post(inbound, NEW_SESSION_MESSAGE)
-                if inbound.text.strip().lower() == "/new":
-                    return None
-                return session
-            return self._session_resolver.resolve(
-                user_id=inbound.conversation_key,
-                chat_id=inbound.channel_id,
-                principal=scope.principal,
-                actor=scope.actor,
-            )
+        return apply_inbound_decision(
+            decision,
+            platform=MessagingPlatform.DISCORD.value,
+            resolver=self._session_resolver,
+            scope=scope,
+            conversation_key=inbound.conversation_key,
+            chat_id=inbound.channel_id,
+            text=inbound.text,
+            send=_send,
+            unauthorized_reply=UNAUTHORIZED_MESSAGE,
+            resolver_lock=self._resolver_lock,
+        )
 
     def _run_turn(self, inbound: DiscordInboundMessage, scope: StorageScope) -> None:
         with self._conversation_locks.hold(inbound.conversation_key):
