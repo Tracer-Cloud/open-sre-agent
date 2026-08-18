@@ -18,23 +18,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CLI = "surfaces.cli"
 SHELL = "surfaces.interactive_shell"
 
-#: CLI modules the shell still imports.
-_SHELL_IMPORTS_FROM_CLI: frozenset[str] = frozenset(
-    {
-        # The shell documents the CLI's commands for the model.
-        "surfaces.cli.app",
-    }
-)
+#: CLI modules the shell imports. Empty: the two surfaces are peers.
+_SHELL_IMPORTS_FROM_CLI: frozenset[str] = frozenset()
 
-#: Shell modules the CLI still imports.
-_CLI_IMPORTS_FROM_SHELL: frozenset[str] = frozenset(
-    {
-        # Launching the REPL — the composition point; belongs in the entrypoint.
-        "surfaces.interactive_shell",
-        # Slash-command adapter for the gateway entry.
-        "surfaces.interactive_shell.runtime.slash_adapter",
-    }
-)
+#: Shell modules the CLI imports. Empty: launching the REPL and running the
+#: gateway attached come in through ``surfaces.cli.host.CliHost`` from
+#: ``surfaces.entrypoint``.
+_CLI_IMPORTS_FROM_SHELL: frozenset[str] = frozenset()
 
 
 def _imports_of(tree: ast.AST, package: str) -> tuple[set[str], set[str]]:

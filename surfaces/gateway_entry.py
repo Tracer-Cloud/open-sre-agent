@@ -4,7 +4,7 @@
 surfaces. This module owns the glue — headless slash ports from the
 interactive shell wired into :class:`gateway.core.runtime.controller.GatewayController`.
 
-Started by the daemon as ``python -m surfaces.cli.gateway_entry`` (also
+Started by the daemon as ``python -m surfaces.gateway_entry`` (also
 ``opensre gateway start`` / ``opensre gateway start --foreground``).
 """
 

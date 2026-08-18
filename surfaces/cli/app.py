@@ -24,6 +24,7 @@ from config.constants.product import RELEASE_STAGE_BANNER  # noqa: E402
 from config.version import get_opensre_version  # noqa: E402
 from surfaces.cli import startup  # noqa: E402
 from surfaces.cli.group import LazyRichGroup, ThemeParamType  # noqa: E402
+from surfaces.cli.host import CLI_HOST_CONTEXT_KEY, CliHost, ShellLauncher, cli_host  # noqa: E402
 from surfaces.cli.invocation import (  # noqa: E402
     ensure_utf8_stdio,
     is_fast_version_invocation,
@@ -108,6 +109,7 @@ def _repl_preference(
 def _run_without_subcommand(
     group: click.Group,
     *,
+    launch_shell: ShellLauncher | None,
     resume_session_id: str | None,
     interactive: bool,
     passed_on_command_line: bool,
@@ -116,16 +118,15 @@ def _run_without_subcommand(
 ) -> int:
     """Serve a bare ``opensre``: open the shell, or print the landing page.
 
-    The shell needs a terminal on both ends, so a piped or redirected run falls
-    through to the landing page rather than waiting on a prompt nobody can
-    answer. ``--resume`` opens a session even when config has the shell off,
-    because resuming is the whole intent of that flag.
+    The shell needs a terminal on both ends and a host that can launch it, so a
+    piped or redirected run — or a CLI invoked without a host — falls through
+    to the landing page rather than waiting on a prompt nobody can answer.
+    ``--resume`` opens a session even when config has the shell off, because
+    resuming is the whole intent of that flag.
     """
     from config.repl_config import ReplConfig
 
-    if sys.stdin.isatty() and sys.stdout.isatty():
-        from surfaces.interactive_shell import run_repl
-
+    if launch_shell is not None and sys.stdin.isatty() and sys.stdout.isatty():
         config = ReplConfig.load(
             cli_enabled=_repl_preference(
                 resume_session_id=resume_session_id,
@@ -136,7 +137,7 @@ def _run_without_subcommand(
             cli_theme=theme,
         )
         if config.enabled or resume_session_id:
-            return run_repl(config=config, resume_session_id=resume_session_id)
+            return launch_shell(config, resume_session_id)
 
     click.echo(RELEASE_STAGE_BANNER, err=True)
     render_landing(group)
@@ -217,6 +218,7 @@ def cli(
         raise SystemExit(
             _run_without_subcommand(
                 cli,
+                launch_shell=cli_host(ctx).launch_shell,
                 resume_session_id=resume_session_id,
                 interactive=interactive,
                 passed_on_command_line=(
@@ -236,8 +238,8 @@ def _should_capture_cli_exception(exc: click.ClickException) -> bool:
     return should_report_exception(exc)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Entry point for the ``opensre`` console script."""
+def main(argv: list[str] | None = None, *, host: CliHost | None = None) -> int:
+    """Run the CLI; ``host`` supplies what only the process entrypoint can (shell, gateway)."""
     ensure_utf8_stdio()
     cli_argv = list(sys.argv[1:] if argv is None else argv)
     if is_fast_version_invocation(cli_argv):
@@ -255,7 +257,11 @@ def main(argv: list[str] | None = None) -> int:
         cli(
             args=cli_argv,
             standalone_mode=False,
-            obj={_CAPTURE_CLI_ANALYTICS: True, _CLI_ARGV: cli_argv},
+            obj={
+                _CAPTURE_CLI_ANALYTICS: True,
+                _CLI_ARGV: cli_argv,
+                CLI_HOST_CONTEXT_KEY: host or CliHost(),
+            },
         )
     except KeyboardInterrupt:
         # A KeyboardInterrupt that escapes cli() was not handled by our

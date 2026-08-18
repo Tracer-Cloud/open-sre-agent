@@ -14,6 +14,7 @@ from gateway.core.runtime.daemon import (
     start_gateway_daemon,
     stop_gateway_daemon,
 )
+from surfaces.cli.host import cli_host
 from surfaces.shared.gateway_entrypoint import gateway_entry_argv
 
 
@@ -34,13 +35,17 @@ def gateway_command() -> None:
     is_flag=True,
     help="Run attached to this terminal instead of as a background daemon.",
 )
-def gateway_start_command(foreground: bool) -> None:
+@click.pass_context
+def gateway_start_command(ctx: click.Context, foreground: bool) -> None:
     """Start the gateway daemon (background by default)."""
     if foreground:
+        start_gateway_foreground = cli_host(ctx).start_gateway_foreground
+        if start_gateway_foreground is None:
+            raise click.ClickException(
+                "Foreground mode needs the opensre entrypoint; run `opensre gateway start --foreground`."
+            )
         click.echo("Starting OpenSRE gateway (foreground)")
-        from surfaces.cli.gateway_entry import start_gateway
-
-        start_gateway()
+        start_gateway_foreground()
         return
 
     ok, message = start_gateway_daemon(argv=gateway_entry_argv())

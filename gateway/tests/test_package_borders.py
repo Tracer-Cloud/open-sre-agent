@@ -203,7 +203,7 @@ def _executable_surface_references(path: Path) -> list[str]:
 def test_gateway_never_names_a_surfaces_module_in_executable_code() -> None:
     """``surfaces`` is a peer package, and a spawned module path is still a dependency.
 
-    The daemon used to hardcode ``python -m surfaces.cli.gateway_entry`` in its
+    The daemon used to hardcode ``python -m surfaces.gateway_entry`` in its
     subprocess argv. Import-linter cannot see a dependency spelled as a string
     literal, so the cycle stayed invisible: a surface starts the daemon, and the
     daemon starts a surface back. Each surface now passes its own argv.

@@ -28,7 +28,7 @@ def test_onboarding_success_launches_shell_when_interactive(
     monkeypatch.delenv(onboard_module.OPENSRE_AUTO_LAUNCH_ENV, raising=False)
     monkeypatch.delenv(onboard_module.OPENSRE_PARENT_INTERACTIVE_SHELL_ENV, raising=False)
     monkeypatch.setattr(
-        onboard_module, "_launch_interactive_shell", lambda: (launched.append(None), 7)[1]
+        onboard_module, "_launch_interactive_shell", lambda _ctx: (launched.append(None), 7)[1]
     )
 
     with pytest.raises(SystemExit) as exc:

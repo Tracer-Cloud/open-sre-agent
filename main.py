@@ -2,7 +2,7 @@
 
 Prefer the ``opensre`` console script in normal use. This module exists so
 ``python main.py`` and ``python -m`` discovery reach the same CLI as
-``surfaces.cli.app:main``.
+``surfaces.entrypoint:main``.
 
 This covers the interactive shell, the landing page, and every one-shot
 subcommand. The gateway daemon is a separate process entry managed via
@@ -58,9 +58,9 @@ from __future__ import annotations
 
 def main() -> int:
     """Run the CLI and return its exit status."""
-    from surfaces.cli.app import main as cli_main
+    from surfaces.entrypoint import main as entrypoint_main
 
-    return cli_main()
+    return entrypoint_main()
 
 
 if __name__ == "__main__":

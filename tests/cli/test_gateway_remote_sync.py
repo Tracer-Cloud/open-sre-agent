@@ -15,7 +15,7 @@ from platform.filestorage.engine import SyncProgress, SyncReport
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import RemoteSyncConfigError
 from platform.filestorage.operations import SyncRootStatus, SyncStatus
-from surfaces.cli.gateway_entry import gateway_slash_ports_factory, start_gateway
+from surfaces.gateway_entry import gateway_slash_ports_factory, start_gateway
 from surfaces.interactive_shell.runtime import Session
 
 
