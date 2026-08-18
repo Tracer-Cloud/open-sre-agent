@@ -27,7 +27,9 @@ def test_shell_policy_does_not_withhold_investigation_tools() -> None:
     session.available_capabilities["investigation"] = ("investigate",)
     session.available_capabilities["llm_provider"] = ("set_model",)
     session.available_capabilities["task_cancel"] = ("cancel_task",)
-    shell_channel_ports().apply_capability_policy(session)
+    policy = shell_channel_ports().apply_capability_policy
+    assert policy is preserve_host_capabilities
+    policy(session)
     assert session.available_capabilities["investigation"] == ("investigate",)
     assert session.available_capabilities["llm_provider"] == ("set_model",)
     assert session.available_capabilities["task_cancel"] == ("cancel_task",)

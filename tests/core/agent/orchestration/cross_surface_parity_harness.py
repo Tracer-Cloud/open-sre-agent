@@ -361,10 +361,16 @@ def _install_gateway_dispatch_spy(
         console: Any = None,
         logger: Any = None,
         surface: Any = None,
+        error_reporter: Any = None,
         **ports: Any,
     ) -> HeadlessAgent:
         agent = real_ports(
-            session=session, output=output, console=console, logger=logger, surface=surface
+            session=session,
+            output=output,
+            console=console,
+            logger=logger,
+            surface=surface,
+            error_reporter=error_reporter,
         ).agent(**ports)
         original_dispatch = type(agent).dispatch
 
