@@ -70,7 +70,6 @@ def _text_response(text: str) -> MagicMock:
 
 def test_datadog_metric_fetch_is_live_investigation_evidence() -> None:
     harness_ports.reset_harness_ports()
-    register_harness_adapters()
     backend = _FixtureDatadogBackend()
     query = "avg:system.cpu.user{service:checkout-api,env:prod}"
     diagnosis = (
@@ -125,6 +124,7 @@ def test_datadog_metric_fetch_is_live_investigation_evidence() -> None:
                 return_value=MagicMock(),
             ),
         ):
+            register_harness_adapters()
             result = ConnectedInvestigationAgent().run(state)
 
         assert is_live_metric_query_call("query_datadog_metrics", {}) is True
