@@ -1,4 +1,4 @@
-"""Tests for the gateway turn handler.
+"""Tests for the gateway turn handler."""
 
 from __future__ import annotations
 
