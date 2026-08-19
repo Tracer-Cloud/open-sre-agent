@@ -81,7 +81,7 @@ built-in: {", ".join(builtin_providers())}), {REMOTE_SYNC_PREFIX_ENV}, {REMOTE_S
 {REMOTE_SYNC_PROFILE_ENV}. Cloud credentials stay ambient; opensre never stores them."""
 
 _KEPT_REMOTE_HINT = (
-    "Some files were left alone because the store held a newer copy. "
+    "Some files were left alone because the store held a newer copy.\n"
     "Run a full sync (no --push-only) to take those changes first."
 )
 
@@ -136,12 +136,14 @@ def format_encryption_line(encryption: EncryptionStatus) -> str:
     """
     if encryption.problem:
         return f"WARNING: {encryption.problem}"
+
     if not encryption.configured:
         return (
-            "Contents are NOT encrypted before upload. The store's operator can read "
-            "your sessions and memory — turn it on by running `opensre remote-sync setup`."
+            "Content is NOT encrypted before upload.\n"
+            "The store's operator can read your sessions and memory.\n"
+            "Turn it on by running `opensre remote-sync setup`."
         )
-    return "Contents are encrypted before upload; this machine holds the key."
+    return "Content is encrypted before upload; this machine holds the key."
 
 
 def format_status_lines(status: SyncStatus) -> tuple[str, ...]:
@@ -210,20 +212,21 @@ def format_setup_lines(config: RemoteSyncConfig, *, enabled: bool = True) -> tup
 
 
 SETUP_DISABLED_CONFIRM = (
-    "Remote sync is off. Saved enabled: false to ~/.opensre/config.yml "
-    "(stored provider/bucket kept for when you turn it back on)."
+    "Remote sync is off.\n"
+    "Saved `enabled: false` to ~/.opensre/config.yml — the stored provider and\n"
+    "bucket are kept for when you turn it back on."
 )
 
 ROTATE_CONFIRM = (
-    "Passphrase rotated. The store's contents were not rewritten — only the key "
-    "protecting them was re-wrapped, so this took effect everywhere at once and "
-    "the old passphrase no longer opens anything."
+    "Passphrase rotated.\n"
+    "No object was rewritten — only the key protecting them was re-wrapped, so this\n"
+    "took effect everywhere at once and the old passphrase no longer opens anything."
 )
 
 #: Extracted rather than written inline in the list below: two adjacent string
 #: literals inside a list display are indistinguishable from a missing comma.
 _VERSIONED_BUCKET_NOTE = (
-    "If this bucket has versioning on, the superseded versions are still readable "
+    "If this bucket has versioning on, the superseded versions are still readable\n"
     "with the old key — remove noncurrent versions yourself if that matters."
 )
 

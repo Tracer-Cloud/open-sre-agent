@@ -305,13 +305,15 @@ def _encrypted_config() -> RemoteSyncConfig:
     config = load_remote_sync_config()
     if config is None:
         raise RemoteSyncEncryptionError(
-            "remote sync is off, so there is no store to re-key. "
-            "Run `opensre remote-sync setup` first."
+            "Remote sync is off on this machine.\n"
+            "\n"
+            "  Set it up first:  `opensre remote-sync setup` or `export OPENSRE_REMOTE_SYNC=1`"
         )
     if not config.encrypted:
         raise RemoteSyncEncryptionError(
-            "encryption is off on this machine, so there is no key to change. "
-            "Run `opensre remote-sync setup` first."
+            "Encryption is off on this machine, so there is no key to change.\n"
+            "\n"
+            "  Turn it on first:  opensre remote-sync setup"
         )
     return config
 

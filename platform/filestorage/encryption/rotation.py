@@ -59,8 +59,9 @@ def rotate_passphrase(store: ObjectStore, *, old_passphrase: str, new_passphrase
     listing = store.list_objects("")
     if not manifest_in_listing(listing):
         raise RemoteSyncEncryptionError(
-            "this store is not encrypted, so there is no passphrase to rotate. "
-            "Run `opensre remote-sync setup` first."
+            "This store is not encrypted, so there is no passphrase to rotate.\n"
+            "\n"
+            "  Turn encryption on first:  opensre remote-sync setup"
         )
     updated = rewrapped(load_manifest(store), old_passphrase, new_passphrase)
     save_manifest(store, updated)
@@ -84,8 +85,8 @@ def reencrypt(store: ObjectStore, *, passphrase: str) -> ReencryptReport:
         manifest, cipher = new_manifest(passphrase)
     else:
         raise RemoteSyncEncryptionError(
-            "this store holds nothing to re-encrypt. A plain `opensre remote-sync sync` "
-            "will seal whatever you upload next."
+            "This store holds nothing to re-encrypt.\n"
+            "A plain `opensre remote-sync sync` will seal whatever you upload next."
         )
 
     resealed: list[str] = []

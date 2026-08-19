@@ -61,10 +61,11 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
     if not encrypted:
         if has_manifest:
             raise EncryptedStoreError(
-                "this store is encrypted, but encryption is switched off on this machine. "
-                "Turn it back on (`opensre remote-sync setup`) — syncing without "
-                "it would upload readable history into an encrypted store."
-                "To upload readable history, delete the manifest and re-run with encryption off"
+                "This store is encrypted, but encryption is switched off on this machine.\n"
+                "Syncing now would upload readable history into an encrypted store.\n"
+                "\n"
+                "  Turn encryption back on:  `opensre remote-sync setup`\n"
+                "  Or, to go back to plaintext, delete the manifest in the remote store first."
             )
         return ResolvedCipher(cipher=None, listing=listing)
 
@@ -77,10 +78,10 @@ def resolve_cipher(store: ObjectStore, *, encrypted: bool, dry_run: bool = False
 
     if holds_mirrored_objects(listing):
         raise PlaintextStoreError(
-            "this store already holds unencrypted sessions or memory, so encrypting only "
-            "new writes would leave them readable. Run `opensre remote-sync reencrypt` to "
-            "seal what is already there, then delete the old plaintext objects yourself — "
-            "sync never deletes."
+            "This store already holds unencrypted sessions or memory.\n"
+            "Encrypting only new writes would leave those readable.\n"
+            "\n"
+            "  Seal what is already there:  `opensre remote-sync reencrypt`"
         )
 
     manifest, cipher = new_manifest(passphrase)

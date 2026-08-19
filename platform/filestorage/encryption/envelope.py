@@ -64,7 +64,10 @@ def is_sealed(payload: bytes) -> bool:
 def parse_header(payload: bytes) -> EnvelopeHeader:
     """Read the envelope prefix, or raise when ``payload`` is not one."""
     if not is_sealed(payload):
-        raise UndecryptableObjectError("object is not an opensre encrypted envelope")
+        raise UndecryptableObjectError(
+            "This object is not an opensre encrypted envelope.\n"
+            "It was most likely written before encryption was turned on."
+        )
     if payload[len(MAGIC)] != VERSION:
         raise UndecryptableObjectError(
             f"envelope version {payload[len(MAGIC)]} is newer than this opensre understands"
@@ -124,8 +127,8 @@ def unseal(*, content_key: bytes, object_key: str, payload: bytes) -> bytes:
         # No detail from the exception: it distinguishes nothing useful here,
         # and this message can reach a chat sink.
         raise UndecryptableObjectError(
-            f"{object_key} failed authentication — wrong key, or the object was "
-            "altered or moved inside the store"
+            f"{object_key} failed authentication.\n"
+            "The key is wrong, or the object was altered or moved inside the store."
         ) from exc
 
 

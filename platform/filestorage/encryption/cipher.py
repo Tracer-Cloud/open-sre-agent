@@ -43,8 +43,8 @@ class ManifestCipher:
         key = self._by_id.get(header.key_id)
         if key is None:
             raise UndecryptableObjectError(
-                f"{object_key} was sealed with a key this store's settings no longer "
-                "carry. It was most likely written after a re-encrypt from another machine."
+                f"{object_key} was sealed with a key this store no longer carries.\n"
+                "It was most likely written after a re-encrypt on another machine."
             )
         return envelope.unseal(content_key=key.content_key, object_key=object_key, payload=payload)
 

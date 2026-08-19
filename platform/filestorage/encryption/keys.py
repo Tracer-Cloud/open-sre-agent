@@ -133,13 +133,16 @@ def unwrap_root_secret(kek: bytes, wrapped: bytes) -> bytes:
     purpose: both mean this machine cannot speak for this store.
     """
     if len(wrapped) <= _WRAP_NONCE_LEN:
-        raise WrongPassphraseError("the store's key material is malformed")
+        raise WrongPassphraseError(
+            "This store's key material is malformed and cannot be read.\n"
+            "The manifest may be truncated or damaged."
+        )
     try:
         return AESGCM(kek).decrypt(wrapped[:_WRAP_NONCE_LEN], wrapped[_WRAP_NONCE_LEN:], None)
     except InvalidTag as exc:
         raise WrongPassphraseError(
-            "that passphrase does not open this store's key. Check it, or point at "
-            "the prefix the passphrase belongs to."
+            "That passphrase does not open this store's key.\n"
+            "Check the passphrase, or point at the prefix it belongs to."
         ) from exc
 
 
@@ -153,7 +156,7 @@ def resolve_passphrase() -> str:
     passphrase = resolve_secret(REMOTE_SYNC_PASSPHRASE_ENV)
     if not passphrase:
         raise MissingPassphraseError(
-            "remote sync is encrypted but no passphrase is available on this machine. "
+            "No passphrase is available on this machine.\n"
             f"Run `opensre remote-sync setup`, or export {REMOTE_SYNC_PASSPHRASE_ENV}."
         )
     return passphrase
