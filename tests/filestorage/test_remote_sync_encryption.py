@@ -69,6 +69,21 @@ class FakeObjectStore:
         return "fake://bucket"
 
 
+class CrashingStore(FakeObjectStore):
+    """Accepts ``remaining_writes`` more writes, then fails like a dropped link."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.remaining_writes: int | None = None
+
+    def put_object(self, key: str, data: bytes) -> None:
+        if self.remaining_writes is not None:
+            if self.remaining_writes == 0:
+                raise RuntimeError("object store went away")
+            self.remaining_writes -= 1
+        super().put_object(key, data)
+
+
 @pytest.fixture(autouse=True)
 def passphrase_in_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Resolve the passphrase from the environment, never the real keychain.
@@ -371,26 +386,28 @@ def test_reencrypt_adopts_a_store_that_predates_encryption(
 def test_an_interrupted_reencrypt_leaves_every_object_readable(
     roots: tuple[SyncRoot, ...],
 ) -> None:
-    """The old generation stays in the manifest, so half-rewritten is still whole."""
-    # Arrange: a store sealed under generation one.
-    store = FakeObjectStore()
+    """The new key must reach the store before anything is sealed under it.
+
+    Sealed first and persisted after, a run that dies mid-loop strands every
+    object it already rewrote: their key existed only in the dead process. This
+    dies partway on purpose and asserts the store is still wholly readable.
+    """
+    # Arrange: a store sealed under generation one, then armed to fail.
+    store = CrashingStore()
     _encrypted_push(store, roots)
-    first_manifest = store.objects[MANIFEST_KEY]
+    store.remaining_writes = 2
 
-    # Act: re-encrypt, then simulate dying before the new manifest landed.
-    reencrypt(store, passphrase=PASSPHRASE)
-    resealed = dict(store.objects)
-    store.objects[MANIFEST_KEY] = first_manifest
+    # Act
+    with pytest.raises(RuntimeError):
+        reencrypt(store, passphrase=PASSPHRASE)
 
-    # Assert: the old manifest cannot open generation-two objects, which is
-    # exactly why the new manifest is written last.
-    store.objects.update(resealed)
-    store.objects[MANIFEST_KEY] = resealed[MANIFEST_KEY]
+    # Assert: a mix of generations, every one of them openable.
     gate = resolve_cipher(store, encrypted=True)
     assert gate.cipher is not None
-    for key, data in store.objects.items():
-        if key != MANIFEST_KEY:
-            assert gate.cipher.unseal(key, data)
+    sealed = {key: data for key, data in store.objects.items() if key != MANIFEST_KEY}
+    assert sealed
+    for key, data in sealed.items():
+        assert gate.cipher.unseal(key, data)
 
 
 def test_reencrypt_keeps_the_previous_key_in_the_manifest(

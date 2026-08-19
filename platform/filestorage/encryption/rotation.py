@@ -71,11 +71,15 @@ def rotate_passphrase(store: ObjectStore, *, old_passphrase: str, new_passphrase
 def reencrypt(store: ObjectStore, *, passphrase: str) -> ReencryptReport:
     """Seal every mirrored object under a fresh content key.
 
-    Objects already sealed under the new key are left alone, so an interrupted
-    run is simply re-run. Objects under the previous key stay readable
-    throughout — the manifest keeps carrying it, and the new manifest is written
-    only at the end — which is what makes an interruption safe rather than
-    merely survivable.
+    The manifest is written **before** the first object is resealed, and that
+    order is load-bearing. A key exists only in this process until it is
+    persisted, so anything sealed under an unpersisted key is lost the moment
+    the run dies. Writing first costs nothing — the manifest carries the old
+    generation too, so every object opens under one or the other — and makes an
+    interrupted run resumable rather than destructive.
+
+    Objects already sealed under the new key are skipped, so re-running after a
+    failure finishes the job.
     """
     listing = store.list_objects("")
     targets = [obj for obj in listing if obj.key != MANIFEST_KEY]
@@ -88,6 +92,10 @@ def reencrypt(store: ObjectStore, *, passphrase: str) -> ReencryptReport:
             "This store holds nothing to re-encrypt.\n"
             "A plain `opensre remote-sync sync` will seal whatever you upload next."
         )
+
+    # Before the loop, never after: a key that is not yet in the store(manifest josn) dies with
+    # the process, taking every object already sealed under it.
+    save_manifest(store, manifest)
 
     resealed: list[str] = []
     adopted = 0
@@ -105,10 +113,6 @@ def reencrypt(store: ObjectStore, *, passphrase: str) -> ReencryptReport:
         store.put_object(obj.key, cipher.seal(obj.key, plaintext))
         resealed.append(obj.key)
 
-    # Written last, on purpose: until it lands the old manifest still names the
-    # previous key as active, and every object opens under one or other
-    # generation, so a run interrupted anywhere leaves a readable store.
-    save_manifest(store, manifest)
     return ReencryptReport(resealed=resealed, adopted=adopted, already_current=already_current)
 
 
