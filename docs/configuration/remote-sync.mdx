@@ -94,6 +94,10 @@ opensre remote-sync reencrypt           # re-encrypts whole data and encrypts al
 
 `reencrypt` re-uploads everything and overwrites each object in place. On a **versioned** bucket the old readable versions survive — remove noncurrent versions yourself.
 
+<Warning>
+The store prefix must be dedicated to OpenSRE — `reencrypt` processes every object it finds there. If anything else shares the prefix, it will be overwritten with an encrypted copy that only OpenSRE can read.
+</Warning>
+
 Encryption fails closed. A sync is refused, never downgraded, when:
 
 - no passphrase is available, or it is wrong
