@@ -321,8 +321,9 @@ def _eks_list_clusters_case() -> ToolFailureCase:
 
 def _eks_describe_cluster_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import integrations.eks.tools as mod
-
+        import sys
+        import integrations.eks.tools.describe_eks_cluster
+        mod = sys.modules["integrations.eks.tools.describe_eks_cluster"]
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
@@ -352,8 +353,9 @@ def _eks_nodegroup_case() -> ToolFailureCase:
 
 def _eks_addon_case() -> ToolFailureCase:
     def patch(mp: pytest.MonkeyPatch) -> None:
-        import integrations.eks.tools as mod
-
+        import sys
+        import integrations.eks.tools.describe_eks_addon
+        mod = sys.modules["integrations.eks.tools.describe_eks_addon"]
         mp.setattr(mod, "EKSClient", MagicMock(side_effect=RuntimeError("eks")))
 
     def invoke() -> dict[str, Any]:
