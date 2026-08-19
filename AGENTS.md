@@ -47,7 +47,7 @@
   `...`, no `pass`, no `raise NotImplementedError`, and never a docstring *plus*
   a trailing `...`/`pass`. Precedent (all fully compliant):
   `platform/filestorage/ports.py`, `core/agent/loop_host.py`,
-  `gateway/core/host/turn_output.py`, `core/llm/types.py`.
+  `platform/turn_host/turn_output.py`, `core/llm/types.py`.
 
   ```python
   class ObjectStore(Protocol):

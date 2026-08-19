@@ -247,7 +247,7 @@ def test_scheduler_never_imports_the_gateway_turn_handler() -> None:
     ``GatewayTurnHandler``. Importing the handler here is how someone "fixes"
     the scheduler into a fifth chat channel.
     """
-    banned = ("gateway.core.host.turn_handler",)
+    banned = ("platform.turn_host.turn_handler",)
     offenders = _offenders("platform.scheduling.scheduler", banned)
     for path in _python_files("platform.scheduling.scheduler"):
         if "tests" in path.parts:

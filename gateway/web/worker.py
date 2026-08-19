@@ -79,8 +79,8 @@ class InvestigationWorker:
                 error="insufficient_credits",
             )
             return True
-        from gateway.core.host.concurrency import process_turn_gate
         from platform.process.turn_capacity import queued_turn_slot
+        from platform.turn_host.concurrency import process_turn_gate
 
         # Already claimed from the queue, so it waits for a slot rather than
         # being dropped — the same policy scheduled runs take.

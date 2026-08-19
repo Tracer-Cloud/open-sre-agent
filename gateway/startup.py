@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.transports.names import TransportName
 from gateway.transports.startup import (
     DEFAULT_STOP_TIMEOUT_SECONDS,
@@ -24,6 +23,7 @@ from gateway.transports.startup import (
 )
 from gateway.web.startup import start_web_server
 from gateway.web.web_server import WebAppServerHandle
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 # The web app is a thread join, not a network drain, so it gets a smaller slice
 # of the shutdown budget and leaves the rest for in-flight chat turns.

@@ -11,6 +11,6 @@ import logging
 from collections.abc import Callable
 
 from core.agent_harness import SessionCore
-from gateway.core.host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_output import GatewayOutputSink
 
 GatewayAgentCallback = Callable[[str, SessionCore, GatewayOutputSink, logging.Logger], None]

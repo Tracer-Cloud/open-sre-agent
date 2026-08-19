@@ -11,7 +11,6 @@ from slack_sdk.socket_mode.client import BaseSocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.storage.session.binding_store import BindingStore
 from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
@@ -23,6 +22,7 @@ from gateway.transports.slack.transport.socket_mode.heartbeat import (
     ConnectionHeartbeat,
 )
 from gateway.transports.slack.turn_stack import build_slack_turn_stack
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 _PLATFORM_SLACK = "slack"
 _EVENTS_API_REQUEST_TYPE = "events_api"

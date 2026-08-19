@@ -186,6 +186,19 @@ def get_registered_tool(tool_name: str) -> RegisteredTool | None:
     return _load_registry_tool_map().get(tool_name)
 
 
+def describe_registered_tool(tool_name: str) -> tuple[str, ...]:
+    """A tool's own wording — display name then description — for status copy.
+
+    The turn host renders live tool status but sits below this tier, so it is
+    handed this function rather than reaching into the registry itself.
+    Returns an empty tuple for an unknown tool.
+    """
+    tool = get_registered_tool(tool_name)
+    if tool is None:
+        return ()
+    return (tool.display_name or "", tool.description)
+
+
 def get_registered_tool_map(surface: ToolSurface | None = None) -> dict[str, RegisteredTool]:
     if surface is None:
         return dict(_load_registry_tool_map())

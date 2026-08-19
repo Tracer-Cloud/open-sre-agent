@@ -70,7 +70,7 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
   settings, inbound worker, security, turn output, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
   `core/` (per-turn steps in `gateway.core.middleware`, host wiring in
-  `gateway.core.host`).
+  `platform.turn_host`).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding
@@ -103,7 +103,7 @@ The package holds two different things, and only one of them faces outward:
   loop CRUD lives in CLI/shell and signals reload via `request_scheduler_reload()`.
 - **The turn service** — `GatewayTurnHandler`, the middleware steps and the
   session-agent pool. A surface never imports this. A surface that runs turns
-  is a **channel**: it implements `gateway.core.host` (turn contract) / `gateway.transports` (registry) and is handed to
+  is a **channel**: it implements `platform.turn_host` (turn contract) / `gateway.transports` (registry) and is handed to
   the turn service, the same way the four chat transports are.
 
 ## Channel vs producer
@@ -218,7 +218,7 @@ InvestigationWorker ──► blocking acquire (already claimed) ──► same 
 ```
 
 - Production chat capacity is on `GatewayTurnHandler(gate=controller.turn_gate)`.
-- `GatewayController` and Path-2 share :func:`~gateway.core.host.concurrency.process_turn_gate`.
+- `GatewayController` and Path-2 share :func:`~platform.turn_host.concurrency.process_turn_gate`.
 - `ConcurrencyLimitedTurnHandler` is tests-only. Do not reintroduce it under
   `gateway/core/` — production uses `gate=` on `GatewayTurnHandler` only.
 - **Chat + Path-2:** HTTP `/investigate` busy-drops like chat; the investigation
@@ -262,7 +262,7 @@ verb) — see Capacity above. Values: **yes** / **partial** / **no** / **n/a**.
 **Documented exceptions (do not “fix” by forking a second loop):**
 
 - Gateway chat disables `task_cancel` / investigation / llm_provider
-  (`gateway.core.host.capability_policy.ensure_gateway_capability_policy`).
+  (`platform.turn_host.capability_policy.ensure_gateway_capability_policy`).
 - Path-2 web investigate shares the process gate but has no chat approval prompter.
 - Soft turn timeout **and** user `/stop` / `stop` / `/cancel` set
   `output.turn_cancel` so the ReAct loop / remaining tools stop cooperatively

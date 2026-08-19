@@ -396,7 +396,7 @@ def test_both_hosts_reach_the_agent_through_handle_only() -> None:
     """The host loop lives once, on the agent: neither host calls run_until_session_goal itself."""
     import inspect
 
-    import gateway.core.host.turn_handler as gateway_turn
+    import platform.turn_host.turn_handler as gateway_turn
     from surfaces.interactive_shell.runtime import shell_turn_execution as shell_turn
 
     for module in (gateway_turn, shell_turn):

@@ -7,7 +7,6 @@ import logging
 import threading
 
 from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import is_stop_command
 from gateway.core.process.polling_thread import PollingBackground, start_polling_background
 from gateway.transports.telegram.approvals import handle_callback_query
@@ -21,6 +20,7 @@ from gateway.transports.telegram.runtime import (
     TelegramPollingRuntime,
 )
 from gateway.transports.telegram.settings import GatewaySettings
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 
 def start_telegram_gateway_background(

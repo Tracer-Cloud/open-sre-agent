@@ -22,7 +22,7 @@ transport-specific code.
 | **Telegram transport** | `gateway/transports/telegram/startup.py` → `start_telegram_worker` | Via the startup registry |
 | **Slack transport** | `gateway/transports/slack/startup.py` → `start_slack_worker` | Via the startup registry |
 | **Discord transport** | `gateway/transports/discord/startup.py` → `start_discord_worker` | Via the startup registry (includes readiness wait) |
-| **Per-message turn** | `gateway/core/host/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
+| **Per-message turn** | `platform/turn_host/turn_handler.py` → `GatewayTurnHandler` | Injected into chat transports as the agent callback |
 
 ```text
 opensre gateway start
@@ -148,7 +148,7 @@ with the same five pieces `gateway/transports/telegram/` and `gateway/transports
 3. **Inbound security**: authorize each message and audit-log it
    (`integrations/messaging_security`).
 4. **Turn output** (implement `GatewayOutputSink` from
-   `gateway/core/host/turn_output.py`): streams status and delivers the answer.
+   `platform/turn_host/turn_output.py`): streams status and delivers the answer.
 5. **Session binding** via `gateway/core/storage/session/resolver.py` with a new
    `platform` value: map the platform conversation key to a `Session`.
 

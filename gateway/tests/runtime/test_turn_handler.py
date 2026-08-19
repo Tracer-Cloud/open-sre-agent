@@ -15,8 +15,8 @@ from core.agent_harness.runtime import AgentBuildConfig
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.host.session_agents import SessionAgentPool
-from gateway.core.host.turn_handler import GatewayTurnHandler
+from platform.turn_host.session_agents import SessionAgentPool
+from platform.turn_host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewayOutputSink,
 )
@@ -27,13 +27,13 @@ from tests.shared.fake_agent import fake_agent
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "platform.turn_host.turn_handler.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "platform.turn_host.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "platform.turn_host.turn_handler.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -62,7 +62,7 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "platform.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(factory),
     )
     return factory
@@ -275,7 +275,7 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
 
 def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> None:
     """Soft timeout / stop owns the sink; do not overwrite with empty finalize."""
-    from gateway.core.host.cancel_console import CancelConsole
+    from platform.turn_host.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
@@ -297,7 +297,7 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
 
 def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
     """Each turn rebinds a CancelConsole so timeout Events stay turn-scoped."""
-    from gateway.core.host.cancel_console import CancelConsole
+    from platform.turn_host.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
@@ -403,11 +403,11 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     completed: list[dict[str, object]] = []
 
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_started",
+        "platform.turn_host.turn_handler.capture_gateway_turn_started",
         lambda **kwargs: started.append(kwargs),
     )
     monkeypatch.setattr(
-        "gateway.core.host.turn_handler.capture_gateway_turn_completed",
+        "platform.turn_host.turn_handler.capture_gateway_turn_completed",
         lambda **kwargs: completed.append(kwargs),
     )
     _patch_headless_agent(monkeypatch, _empty_turn_result())
@@ -563,7 +563,7 @@ def test_run_without_caller_context_is_the_transport_path(monkeypatch: Any) -> N
 def test_run_returns_none_and_says_at_capacity_when_the_gate_refuses(monkeypatch: Any) -> None:
     """At capacity the caller gets ``None``, not a result it would treat as a turn."""
     # Arrange
-    from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
+    from platform.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
 
     _patch_headless_agent(monkeypatch, _empty_turn_result())
     gate = TurnConcurrencyGate(1)

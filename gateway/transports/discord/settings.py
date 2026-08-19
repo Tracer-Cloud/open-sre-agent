@@ -11,10 +11,10 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from config.constants.discord import DISCORD_ALLOW_OPEN_GUILD_ENV, DISCORD_ALLOWED_USERS_ENV
 from config.strict_config import StrictConfigModel
-from gateway.core.host.concurrency import turn_limit_for_profile
 from gateway.core.lifecycle.errors import GatewayConfigurationError
 from integrations.messaging_security import MessagingIdentityPolicy, MessagingPlatform
 from integrations.store import get_integration
+from platform.turn_host.concurrency import turn_limit_for_profile
 
 logger = logging.getLogger(__name__)
 

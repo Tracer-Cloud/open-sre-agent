@@ -96,11 +96,13 @@ Add `integrations/<name>/background_adapter.py` with three members:
 
 ```python
 class _MyChannelBackgroundAdapter:
-    name = "mychannel"                             # the literal a user types
-    capabilities = frozenset({BACKGROUND_RCA})     # from platform.delivery.notifications.outbound_registry
+    name = "mychannel"  # the literal a user types
+    capabilities = frozenset(
+        {BACKGROUND_RCA}
+    )  # from platform.delivery.notifications.outbound_registry
 
     def deliver(self, record: BackgroundInvestigationRecord) -> str:
-        return deliver_mychannel_notification(record)   # module-level function, see below
+        return deliver_mychannel_notification(record)  # module-level function, see below
 ```
 
 - [ ] Register the adapter object in `bootstrap/adapters.py`. Nothing auto-discovers it, and importing the module is **not** enough: imports are cached, so a re-import after the registry is cleared runs no module body.

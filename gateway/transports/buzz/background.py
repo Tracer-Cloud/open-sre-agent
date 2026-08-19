@@ -9,7 +9,6 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from config.constants.gateway import NO_ACTIVE_TURN_MESSAGE
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.process.polling_thread import PollingBackground, start_polling_background
@@ -26,6 +25,7 @@ from gateway.transports.buzz.runtime import (
 from gateway.transports.buzz.session_rotation import conversation_key
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 logger = logging.getLogger(__name__)
 

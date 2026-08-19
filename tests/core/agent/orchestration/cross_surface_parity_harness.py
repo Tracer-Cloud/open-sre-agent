@@ -28,7 +28,7 @@ from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.core.host.turn_handler import GatewayTurnHandler
+from platform.turn_host.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
@@ -383,7 +383,7 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "platform.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(_spy_build),
     )
 

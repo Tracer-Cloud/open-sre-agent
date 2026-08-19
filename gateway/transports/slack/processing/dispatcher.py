@@ -18,7 +18,6 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
@@ -50,6 +49,7 @@ from gateway.transports.slack.processing.thread_history import (
 from gateway.transports.slack.settings import SlackGatewaySettings
 from integrations.messaging_security import MessagingPlatform
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /

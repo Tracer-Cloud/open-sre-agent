@@ -19,7 +19,6 @@ from config.principal import StorageScope
 from config.scope_context import bound_storage_scope
 from core.agent_harness import SessionCore
 from gateway.core.billing.credits_client import CreditsOutcome, consume_credits
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry, is_stop_command
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.attention import GateDecision, ThreadAttentionGate
@@ -43,6 +42,7 @@ from gateway.transports.discord.thread_history import (
 )
 from integrations.messaging_security import MessagingPlatform
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 # Discord's reaction API takes the literal Unicode emoji (URL-encoded), not a name.
 _WORKING_EMOJI = "\N{EYES}"

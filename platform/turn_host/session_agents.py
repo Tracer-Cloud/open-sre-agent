@@ -21,23 +21,22 @@ from core.agent_harness.runtime import (
     AgentBuildConfig,
     DefaultHeadlessBuild,
     DefaultToolProvider,
+    DescribeTool,
     GatherPhase,
     HeadlessAgent,
 )
-from gateway.core.host.bindable_output import BindableOutput
-from gateway.core.host.capability_policy import ensure_gateway_capability_policy
-from gateway.core.host.status_messages import status_from_tool_start
-from gateway.core.host.turn_output import GatewayOutputSink
-from tools.interactive_shell.subprocess_presenter import (
-    headless_subprocess_presenter_factory,
-)
+from platform.turn_host.bindable_output import BindableOutput
+from platform.turn_host.capability_policy import ensure_gateway_capability_policy
+from platform.turn_host.status_messages import status_from_tool_start
+from platform.turn_host.turn_output import GatewayOutputSink
 
 
 class _ToolStatusObserver:
     """Push live tool-progress status lines to the turn's bound output."""
 
-    def __init__(self, output: BindableOutput) -> None:
+    def __init__(self, output: BindableOutput, describe: DescribeTool | None) -> None:
         self._output = output
+        self._describe = describe
 
     def __call__(self, kind: str, data: dict[str, object]) -> None:
         if kind != "tool_start":
@@ -45,7 +44,9 @@ class _ToolStatusObserver:
         tool_name = str(data.get("name") or "").strip()
         if not tool_name or tool_name == "assistant_handoff":
             return
-        self._output.set_tool_status(status_from_tool_start(tool_name, data.get("input")))
+        self._output.set_tool_status(
+            status_from_tool_start(tool_name, data.get("input"), describe=self._describe)
+        )
 
 
 class SessionAgentPool:
@@ -133,8 +134,8 @@ class SessionAgentPool:
             cached.bind_session(session)
             return cached
 
-        observer = _ToolStatusObserver(session_output)
         build = self._build
+        observer = _ToolStatusObserver(session_output, build.describe_tool)
         if build.build_tools is not None:
             tools = build.build_tools(session, self._console, logger, observer)
         else:
@@ -143,7 +144,7 @@ class SessionAgentPool:
                 self._console,
                 tool_action_logger=logger,
                 observer_factory=lambda _message: observer,
-                subprocess_presenter_factory=headless_subprocess_presenter_factory,
+                subprocess_presenter_factory=build.subprocess_presenter_factory,
                 slash_ports_factory=self._slash_ports_factory,
             )
         prompts = build.build_prompts(session) if build.build_prompts is not None else None

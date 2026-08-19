@@ -11,7 +11,6 @@ from contextlib import AbstractContextManager, nullcontext
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
@@ -25,6 +24,7 @@ from gateway.transports.buzz.session_rotation import conversation_key, resolve_o
 from gateway.transports.buzz.settings import BuzzInboundMessage, GatewaySettings
 from integrations.buzz.client import BuzzClient
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 logger = logging.getLogger(__name__)
 

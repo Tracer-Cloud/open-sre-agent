@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import random
 import re
+from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
 
 from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
+
+#: Returns a tool's own wording (display name, description) for status copy.
+DescribeTool = Callable[[str], tuple[str, ...]]
 
 INITIAL_STATUSES: tuple[str, ...] = (
     "🔍 On it — give me a moment…",
@@ -67,21 +71,28 @@ def status_from_response_label(label: str) -> str:
     return f"✨ {label}…"
 
 
-def status_from_tool_start(tool_name: str, tool_input: Any = None) -> str:
-    """Build a one-line ``⏳ label… (hint)`` status while an action tool runs."""
+def status_from_tool_start(
+    tool_name: str,
+    tool_input: Any = None,
+    *,
+    describe: DescribeTool | None = None,
+) -> str:
+    """Build a one-line ``⏳ label… (hint)`` status while an action tool runs.
+
+    ``describe`` supplies the tool's own wording; the host is handed it rather
+    than reading a registry, so this module stays below the tool tier. Without
+    one the label is the humanized tool name.
+    """
     name = tool_name.strip()
     if not name:
         return initial_status_message()
-    return f"⏳ {_tool_label(name)}…{_input_hint(tool_input)}"
+    candidates = describe(name) if describe is not None else ()
+    return f"⏳ {_tool_label(name, candidates)}…{_input_hint(tool_input)}"
 
 
 @lru_cache(maxsize=256)
-def _tool_label(tool_name: str) -> str:
-    """First clause of the tool's display name or description, else its humanized name."""
-    from tools.registry import get_registered_tool
-
-    tool = get_registered_tool(tool_name)
-    candidates = (tool.display_name or "", tool.description) if tool else ()
+def _tool_label(tool_name: str, candidates: tuple[str, ...]) -> str:
+    """First clause of the tool's own wording, else its humanized name."""
     for text in (*candidates, tool_name.replace("_", " ")):
         clause = re.split(r"\.\s| — | - |; ", " ".join(text.split()), maxsplit=1)[0]
         if len(clause) > 72:
@@ -104,6 +115,7 @@ def _input_hint(tool_input: Any) -> str:
 
 
 __all__ = [
+    "DescribeTool",
     "EMPTY_RESPONSE_MESSAGE",
     "initial_status_message",
     "normalize_gateway_status",

@@ -14,7 +14,6 @@ from dataclasses import dataclass
 
 from slack_sdk.web import WebClient
 
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.approvals import ApprovalBroker
 from gateway.core.storage import SessionResolver
 from gateway.core.storage.session.binding_store import BindingStore, open_binding_store
@@ -22,6 +21,7 @@ from gateway.transports.slack.client import SlackWebApiClient
 from gateway.transports.slack.delivery.channel_intro import ChannelIntroGreeter
 from gateway.transports.slack.processing.dispatcher import SlackTurnDispatcher
 from gateway.transports.slack.settings import SlackGatewaySettings
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 _PLATFORM_SLACK = "slack"
 

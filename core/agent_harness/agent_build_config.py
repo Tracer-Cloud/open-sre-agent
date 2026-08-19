@@ -10,7 +10,12 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from core.agent_harness.ports import ErrorReporter, PromptContextProvider, ToolProvider
+from core.agent_harness.ports import (
+    ErrorReporter,
+    PromptContextProvider,
+    SubprocessPresenterFactory,
+    ToolProvider,
+)
 from core.agent_harness.turns.gather_phase import GatherPhase
 
 
@@ -47,6 +52,17 @@ class BuildGather(Protocol):
         """Return how this host runs the gather phase."""
 
 
+class DescribeTool(Protocol):
+    """``(tool_name) -> (display name, description)``, empty when unknown.
+
+    The host renders live tool status but must not read the tool registry
+    itself; a composer that may see both hands this in.
+    """
+
+    def __call__(self, tool_name: str, /) -> tuple[str, ...]:
+        """Return the tool's own wording for status copy."""
+
+
 class ApplyCapabilityPolicy(Protocol):
     """``(session) -> None``. ``None`` on the config field means do not call."""
 
@@ -69,6 +85,10 @@ class AgentBuildConfig:
     build_gather: BuildGather | None = None
     error_reporter: ErrorReporter | None = None
     apply_capability_policy: ApplyCapabilityPolicy | None = None
+    #: Live tool-status wording and subprocess rendering. Both reach the tool
+    #: tier, which the host sits below, so a composer supplies them.
+    describe_tool: DescribeTool | None = None
+    subprocess_presenter_factory: SubprocessPresenterFactory | None = None
 
 
 __all__ = [
@@ -77,4 +97,5 @@ __all__ = [
     "BuildGather",
     "BuildPrompts",
     "BuildTools",
+    "DescribeTool",
 ]

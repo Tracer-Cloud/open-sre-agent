@@ -215,7 +215,7 @@ def investigate(req: InvestigateRequest, request: Request) -> InvestigateRespons
     if (auth_error := _gateway_auth_error(request)) is not None:
         return auth_error
 
-    from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
+    from platform.turn_host.concurrency import AT_CAPACITY_MESSAGE, process_turn_gate
 
     # Drop rather than queue: the caller is holding an HTTP connection open, so
     # it gets an answer now. Same gate chat and the scheduler take, same sentence

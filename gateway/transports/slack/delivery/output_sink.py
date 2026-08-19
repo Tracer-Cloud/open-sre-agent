@@ -17,13 +17,6 @@ import time
 from collections.abc import Iterable
 
 from core.execution import ToolExecutionHooks
-from gateway.core.host.status_messages import (
-    EMPTY_RESPONSE_MESSAGE,
-    initial_status_message,
-    normalize_gateway_status,
-    status_from_response_label,
-    user_facing_error_message,
-)
 from gateway.transports.slack.client import (
     SLACK_MAX_MARKDOWN_BLOCK_CHARS,
     SLACK_MAX_MESSAGE_CHARS,
@@ -34,6 +27,13 @@ from gateway.transports.slack.delivery.feedback import feedback_block
 from gateway.transports.slack.delivery.turn_stream import TurnStream
 from integrations.slack.formatting import markdown_to_slack_mrkdwn
 from platform.text.truncation import truncate
+from platform.turn_host.status_messages import (
+    EMPTY_RESPONSE_MESSAGE,
+    initial_status_message,
+    normalize_gateway_status,
+    status_from_response_label,
+    user_facing_error_message,
+)
 
 logger = logging.getLogger("gateway")
 

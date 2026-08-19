@@ -12,7 +12,7 @@ import threading
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-from gateway.core.host.turn_output import GatewayOutputSink
+from platform.turn_host.turn_output import GatewayOutputSink
 
 
 class BindableOutput:

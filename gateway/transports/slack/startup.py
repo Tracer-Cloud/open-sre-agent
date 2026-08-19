@@ -12,7 +12,6 @@ import logging
 import os
 from collections.abc import Callable, Mapping
 
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.storage import open_database
 from gateway.core.storage.events.repository import (
@@ -36,6 +35,7 @@ from gateway.transports.slack.transport.socket_mode.worker import (
     start_slack_gateway_background,
 )
 from gateway.transports.slack.turn_stack import build_slack_turn_stack
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 SlackWorker = SlackGatewayBackground | SlackHttpServerHandle
 

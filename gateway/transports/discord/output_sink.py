@@ -7,13 +7,6 @@ import threading
 import time
 from collections.abc import Iterable
 
-from gateway.core.host.status_messages import (
-    EMPTY_RESPONSE_MESSAGE,
-    initial_status_message,
-    normalize_gateway_status,
-    status_from_response_label,
-    user_facing_error_message,
-)
 from gateway.transports.discord.client import (
     edit_message,
     edit_message_with_components,
@@ -22,6 +15,13 @@ from gateway.transports.discord.client import (
     split_discord_content,
 )
 from gateway.transports.discord.feedback import feedback_components
+from platform.turn_host.status_messages import (
+    EMPTY_RESPONSE_MESSAGE,
+    initial_status_message,
+    normalize_gateway_status,
+    status_from_response_label,
+    user_facing_error_message,
+)
 
 logger = logging.getLogger("gateway")
 

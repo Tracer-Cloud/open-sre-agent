@@ -106,7 +106,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     )
     # Patch the agent factory the gateway uses so the turn callback is spyable.
     monkeypatch.setattr(
-        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        "platform.turn_host.session_agents.DefaultHeadlessBuild",
         default_headless_build_stub(agent_cls),
     )
 
@@ -157,7 +157,7 @@ def test_gateway_start_returns_running_gateway_handle(monkeypatch) -> None:
     assert ctor.kwargs["session"] is session
     # Session-scoped agent holds a live sink proxy; the transport sink is bound
     # each turn (not passed as the constructor ``output`` identity).
-    from gateway.core.host.bindable_output import BindableOutput
+    from platform.turn_host.bindable_output import BindableOutput
 
     assert isinstance(ctor.kwargs["output"], BindableOutput)
     assert ctor.kwargs["surface"] == "gateway"

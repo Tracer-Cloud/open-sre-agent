@@ -36,11 +36,6 @@ from core.agent_harness.spi.session_goal import (
     format_session_goal_progress,
     format_session_goal_status_line,
 )
-from gateway.core.host.cancel_console import CancelConsole
-from gateway.core.host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
-from gateway.core.host.session_agents import SessionAgentPool
-from gateway.core.host.status_messages import EMPTY_RESPONSE_MESSAGE
-from gateway.core.host.turn_output import GatewayOutputSink
 from platform.analytics.cli import (
     capture_gateway_turn_completed,
     capture_gateway_turn_failed,
@@ -53,6 +48,11 @@ from platform.analytics.usage_context import (
 )
 from platform.observability.trace.spans import traced_session
 from platform.process.turn_capacity import turn_slot
+from platform.turn_host.cancel_console import CancelConsole
+from platform.turn_host.concurrency import AT_CAPACITY_MESSAGE, TurnConcurrencyGate
+from platform.turn_host.session_agents import SessionAgentPool
+from platform.turn_host.status_messages import EMPTY_RESPONSE_MESSAGE
+from platform.turn_host.turn_output import GatewayOutputSink
 
 
 class GatewayTurnHandler:

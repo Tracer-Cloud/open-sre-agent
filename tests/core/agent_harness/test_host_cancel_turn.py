@@ -126,7 +126,7 @@ def test_run_turn_cancel_during_gather_skips_answer() -> None:
 
 
 def test_bindable_output_stream_stops_when_turn_cancel_set() -> None:
-    from gateway.core.host.bindable_output import BindableOutput
+    from platform.turn_host.bindable_output import BindableOutput
 
     class _Inner:
         def __init__(self) -> None:

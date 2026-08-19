@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config.constants.gateway import TURN_ERROR_MESSAGE, TURN_TIMEOUT_MESSAGE, USER_STOP_MESSAGE
 from config.scope_context import bound_storage_scope
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker, approval_tool_hooks
 from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
@@ -26,6 +25,7 @@ from gateway.transports.telegram.principal import (
 from gateway.transports.telegram.session_rotation import resolve_or_rotate_session
 from gateway.transports.telegram.settings import GatewaySettings, TelegramInboundMessage
 from platform.analytics.usage_context import UsageSurface, bound_usage_context
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 logger = logging.getLogger(__name__)
 

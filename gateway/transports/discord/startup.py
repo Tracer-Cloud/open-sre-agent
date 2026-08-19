@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from gateway.core.host.turn_callback import GatewayAgentCallback
 from gateway.core.lifecycle.errors import GatewayTransportFailedError
 from gateway.transports.discord.background import (
     DiscordGatewayBackground,
@@ -14,6 +13,7 @@ from gateway.transports.discord.settings import (
     DiscordGatewaySettings,
     load_discord_gateway_settings,
 )
+from platform.turn_host.turn_callback import GatewayAgentCallback
 
 
 def start_discord_worker(

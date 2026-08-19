@@ -12,7 +12,7 @@ assemble the turn handler and start components —
 Owns signals and ``stop``/``wait``. Component states go through
 :func:`gateway.core.process.component_status.write_component_status`. Channel start/stop
 lives in :mod:`gateway.startup`; turn dispatch lives in
-:mod:`gateway.core.host.turn_handler` — not here.
+:mod:`platform.turn_host.turn_handler` — not here.
 """
 
 from __future__ import annotations
@@ -28,14 +28,8 @@ from rich.console import Console
 
 from core.agent_harness.ports import SlashPortsFactory
 from gateway import startup as gateway_startup
+from gateway.core.chat_agent_build import chat_agent_build_config
 from gateway.core.config.logging_config import configure_logging
-from gateway.core.host.concurrency import (
-    TurnConcurrencyGate,
-    process_turn_gate,
-    set_process_turn_gate,
-)
-from gateway.core.host.turn_callback import GatewayAgentCallback
-from gateway.core.host.turn_handler import GatewayTurnHandler
 from gateway.core.lifecycle.credential_hydration import (
     GatewayBootstrap,
     GatewayCredentialHydrator,
@@ -44,6 +38,13 @@ from gateway.core.lifecycle.errors import GatewayConfigurationError
 from gateway.core.process.component_status import clear_component_status, write_component_status
 from gateway.core.process.readiness import set_ready
 from gateway.core.process.supervision import GATEWAY_PID_FILE
+from platform.turn_host.concurrency import (
+    TurnConcurrencyGate,
+    process_turn_gate,
+    set_process_turn_gate,
+)
+from platform.turn_host.turn_callback import GatewayAgentCallback
+from platform.turn_host.turn_handler import GatewayTurnHandler
 
 # The reload watcher only polls a flag, so it should never need the full
 # shutdown budget; cap it so chat workers keep the rest.
@@ -95,6 +96,7 @@ class GatewayController:
         handler = GatewayTurnHandler(
             console=console,
             slash_ports_factory=self._slash_ports_factory,
+            agent_build=chat_agent_build_config(),
             gate=self.turn_gate,
         )
 
