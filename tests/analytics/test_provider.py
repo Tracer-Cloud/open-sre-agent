@@ -1001,7 +1001,8 @@ def test_shutdown_flush_spends_one_budget_not_two(
             return None
 
     class _SlowClient:
-        def __init__(self, *_args: object, **_kwargs: object) -> None: ...
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
 
         def __enter__(self) -> _SlowClient:
             return self
