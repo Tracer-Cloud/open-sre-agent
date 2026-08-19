@@ -58,7 +58,10 @@ def test_run_happy_path() -> None:
 
 
 def test_run_handles_exception() -> None:
-    with patch("integrations.eks.tools.get_eks_deployment_status.build_k8s_clients", side_effect=Exception("forbidden")):
+    with patch(
+        "integrations.eks.tools.get_eks_deployment_status.build_k8s_clients",
+        side_effect=Exception("forbidden"),
+    ):
         result = get_eks_deployment_status(
             cluster_name="c1",
             namespace="default",
