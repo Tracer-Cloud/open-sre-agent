@@ -90,19 +90,19 @@ class TelegramOutputSink:
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
-    def set_tool_status(self, text: str) -> None:
-        self._set_status(text)
+    def set_tool_status(self, status: str) -> None:
+        self._set_status(status)
 
-    def finish_streamed_response(self, text: str) -> None:
-        self._finalize(text or EMPTY_RESPONSE_MESSAGE)
+    def finish_streamed_response(self, answer: str) -> None:
+        self._finalize(answer or EMPTY_RESPONSE_MESSAGE)
 
-    def _set_status(self, text: str) -> None:
-        self._status_text = normalize_gateway_status(text)
+    def _set_status(self, status: str) -> None:
+        self._status_text = normalize_gateway_status(status)
         self._client.send_chat_action(self._chat_id, "typing")
         self._edit_preview(self._status_text)
 
-    def _edit_preview(self, text: str) -> None:
-        preview = truncate(text or self._status_text, MAX_MESSAGE_SIZE, suffix="…")
+    def _edit_preview(self, preview: str) -> None:
+        preview = truncate(preview or self._status_text, MAX_MESSAGE_SIZE, suffix="…")
         with self._lock:
             if not self._message_id:
                 # Prior answer was finalized (goal continuation). Open a fresh
@@ -116,11 +116,11 @@ class TelegramOutputSink:
             if ok:
                 self._last_edit = time.monotonic()
 
-    def finalize(self, text: str) -> None:
-        self._finalize(text)
+    def finalize(self, answer: str) -> None:
+        self._finalize(answer)
 
-    def _finalize(self, text: str) -> None:
-        final = truncate(text, MAX_MESSAGE_SIZE, suffix="…")
+    def _finalize(self, answer: str) -> None:
+        final = truncate(answer, MAX_MESSAGE_SIZE, suffix="…")
         html_final = markdown_to_telegram_html(final)
         if self._message_id and self._edit_final(html_final, final):
             logger.info("outbound chat=%s text=%r", self._chat_id, _log_preview(final))
@@ -132,7 +132,7 @@ class TelegramOutputSink:
             self._message_id = ""
 
     def _edit_final(self, html_text: str, plain_text: str) -> bool:
-        # Render the answer's Markdown as Telegram HTML, falling back to plain text
+        # Render the answer's Markdown as Telegram HTML, falling back to plain answer
         # if the API rejects the markup so a message is never lost to a bad tag.
         ok, _ = self._client.edit_message_text(
             self._chat_id, self._message_id, html_text, parse_mode="HTML"

@@ -45,8 +45,8 @@ class _CancelSink:
         self.streamed.append(text)
         return text
 
-    def finalize(self, text: str) -> None:
-        _ = text
+    def finalize(self, answer: str) -> None:
+        _ = answer
 
 
 def test_host_cancel_requested_reads_sink_event() -> None:
@@ -141,14 +141,14 @@ def test_bindable_output_stream_stops_when_turn_cancel_set() -> None:
                 parts.append(str(chunk))
             return "".join(parts)
 
-        def finalize(self, text: str) -> None:
-            _ = text
+        def finalize(self, answer: str) -> None:
+            _ = answer
 
         def render_error(self, message: str) -> None:
             _ = message
 
-        def set_tool_status(self, text: str) -> None:
-            _ = text
+        def set_tool_status(self, status: str) -> None:
+            _ = status
 
     inner = _Inner()
     bindable = BindableOutput()

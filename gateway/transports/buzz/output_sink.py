@@ -96,30 +96,30 @@ class BuzzOutputSink:
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
-    def set_tool_status(self, text: str) -> None:
-        self._set_status(text)
+    def set_tool_status(self, status: str) -> None:
+        self._set_status(status)
 
-    def finish_streamed_response(self, text: str) -> None:
-        self._finalize(text or EMPTY_RESPONSE_MESSAGE)
+    def finish_streamed_response(self, answer: str) -> None:
+        self._finalize(answer or EMPTY_RESPONSE_MESSAGE)
 
-    def _set_status(self, text: str) -> None:
-        self._status_text = normalize_gateway_status(text)
+    def _set_status(self, status: str) -> None:
+        self._status_text = normalize_gateway_status(status)
         self._edit_preview(self._status_text)
 
-    def _edit_preview(self, text: str) -> None:
+    def _edit_preview(self, preview: str) -> None:
         if not self._event_id:
             return
-        preview = truncate(text or self._status_text, MAX_MESSAGE_SIZE, suffix="…")
+        preview = truncate(preview or self._status_text, MAX_MESSAGE_SIZE, suffix="…")
         with self._lock:
             result = self._client.edit_message(event_id=self._event_id, content=preview)
             if result["success"]:
                 self._last_edit = time.monotonic()
 
-    def finalize(self, text: str) -> None:
-        self._finalize(text)
+    def finalize(self, answer: str) -> None:
+        self._finalize(answer)
 
-    def _finalize(self, text: str) -> None:
-        final = truncate(text, MAX_MESSAGE_SIZE, suffix="…")
+    def _finalize(self, answer: str) -> None:
+        final = truncate(answer, MAX_MESSAGE_SIZE, suffix="…")
         if self._event_id and self._edit_final(final):
             logger.info("outbound channel=%s text=%r", self._channel_id, _log_preview(final))
             # Release the id so the next session-goal turn cannot overwrite this answer.
@@ -129,12 +129,12 @@ class BuzzOutputSink:
             logger.info("outbound channel=%s text=%r", self._channel_id, _log_preview(final))
             self._event_id = ""
 
-    def _edit_final(self, text: str) -> bool:
-        result = self._client.edit_message(event_id=self._event_id, content=text)
+    def _edit_final(self, answer: str) -> bool:
+        result = self._client.edit_message(event_id=self._event_id, content=answer)
         return bool(result["success"])
 
-    def _send_final(self, text: str) -> bool:
-        result = self._client.send_message(channel=self._channel_id, content=text)
+    def _send_final(self, answer: str) -> bool:
+        result = self._client.send_message(channel=self._channel_id, content=answer)
         return bool(result["success"])
 
 

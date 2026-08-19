@@ -208,11 +208,11 @@ class RecordingTurnOutput:
         self.streamed.append(text)
         return text
 
-    def finish_streamed_response(self, text: str) -> None:
-        self.finalize(text)
+    def finish_streamed_response(self, answer: str) -> None:
+        self.finalize(answer)
 
-    def finalize(self, text: str) -> None:
-        self.finalized = text
+    def finalize(self, answer: str) -> None:
+        self.finalized = answer
 
     @property
     def outbound_text(self) -> str:

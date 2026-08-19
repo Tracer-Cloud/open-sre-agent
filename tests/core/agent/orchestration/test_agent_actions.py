@@ -16,9 +16,9 @@ from rich.console import Console
 import config.constants.platform as platform_module
 import surfaces.interactive_shell.runtime.action_turn as action_turn
 import surfaces.interactive_shell.runtime.llm_provider_adapter as llm_provider_adapter
-import surfaces.interactive_shell.runtime.shell_turn_execution as shell_turn_execution
 import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 import surfaces.interactive_shell.runtime.subprocess_runner as subprocess_runner
+import tests.shared.harness_turn_driver as harness_turn_driver
 import tools.interactive_shell.shell.execution as shell_execution
 from core.llm.types import AgentLLMResponse, ToolCall
 from platform.scheduling.task_types import TaskKind, TaskStatus
@@ -36,7 +36,7 @@ from tools.interactive_shell.action_names import (
 )
 
 _ACTION_LLM_FACTORY_PATCH = "core.agent_harness.turns.action_driver.default_llm_factory"
-execute_shell_turn = shell_turn_execution.execute_shell_turn
+run_harness_turn = harness_turn_driver.run_harness_turn
 
 
 def _capture() -> tuple[Console, io.StringIO]:
@@ -1283,10 +1283,10 @@ def test_execute_cli_actions_counts_planned_and_executed(monkeypatch: object) ->
 
     session = Session()
     console, _ = _capture()
-    # Analytics now fire from ShellTurnAccounting inside execute_shell_turn,
+    # Analytics now fire from ShellTurnAccounting inside run_harness_turn,
     # not from run_action_tool_turn directly. Drive the full turn with a no-op
     # answer agent so no real LLM is invoked.
-    result = execute_shell_turn(
+    result = run_harness_turn(
         "run `pwd`",
         session,
         console,
@@ -1361,8 +1361,8 @@ def test_execute_cli_actions_executes_matched_clause_ignoring_unhandled(
 
     session = Session()
     console, _ = _capture()
-    # Analytics now fire from ShellTurnAccounting inside execute_shell_turn.
-    result = execute_shell_turn(
+    # Analytics now fire from ShellTurnAccounting inside run_harness_turn.
+    result = run_harness_turn(
         "check health",
         session,
         console,

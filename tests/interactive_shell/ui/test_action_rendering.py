@@ -14,7 +14,6 @@ import surfaces.interactive_shell.runtime.slash_adapter as slash_adapter
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
 from platform.terminal.theme import BOLD_SKILL, HIGHLIGHT
 from surfaces.interactive_shell.runtime.action_turn import run_action_tool_turn
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui.action_rendering import ActionRenderObserver
 from surfaces.interactive_shell.ui.input_prompt.rendering import (
@@ -26,6 +25,7 @@ from tests.core.agent.orchestration.action_execution_test_harness import (
     FakeActionLLM,
     no_tool_response,
 )
+from tests.shared.harness_turn_driver import run_harness_turn
 
 
 def test_slash_invoke_tool_start_does_not_record_cli_agent() -> None:
@@ -299,7 +299,7 @@ def test_chat_turn_records_single_cli_agent_history_entry() -> None:
     ) -> _FakeLlmRun:
         return _FakeLlmRun()
 
-    execute_shell_turn(
+    run_harness_turn(
         "what broke in prod?",
         session,
         console,

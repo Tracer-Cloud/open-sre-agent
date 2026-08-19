@@ -62,8 +62,8 @@ def test_chat_handler_refuses_excess_turn_without_calling_handler() -> None:
         release.wait(1)
 
     class Sink:
-        def finalize(self, text: str) -> None:
-            finalized.append(text)
+        def finalize(self, answer: str) -> None:
+            finalized.append(answer)
 
     handler = ConcurrencyLimitedTurnHandler(handler=blocking_handler, gate=gate)
     first = threading.Thread(
@@ -95,8 +95,8 @@ def test_gateway_turn_handler_gate_refuses_excess_without_second_wrapper(
     ran: list[str] = []
 
     class Sink:
-        def finalize(self, text: str) -> None:
-            finalized.append(text)
+        def finalize(self, answer: str) -> None:
+            finalized.append(answer)
 
     handler = TurnHandler(console=Console(force_terminal=False), gate=gate)
 

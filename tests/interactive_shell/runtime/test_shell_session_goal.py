@@ -11,8 +11,8 @@ from rich.console import Console
 from core.agent_harness.session_goal.goal import SessionGoalStatus
 from core.agent_harness.turns.assistant_handoff import AssistantHandoff
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
+from tests.shared.harness_turn_driver import run_harness_turn
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -22,7 +22,7 @@ _FIVE_STEP = (
 )
 
 
-def test_execute_shell_turn_continues_when_action_emits_session_goal() -> None:
+def test_run_harness_turn_continues_when_action_emits_session_goal() -> None:
     session = Session()
     console = Console(force_terminal=False)
     answer_calls: list[str] = []
@@ -61,7 +61,7 @@ def test_execute_shell_turn_continues_when_action_emits_session_goal() -> None:
         n = len(answer_calls)
         return MagicMock(response_text=f"step done session_goal:done={n - 1}")
 
-    result = execute_shell_turn(
+    result = run_harness_turn(
         _FIVE_STEP,
         session,
         console,
@@ -78,7 +78,7 @@ def test_execute_shell_turn_continues_when_action_emits_session_goal() -> None:
     assert "session_goal:" not in (result.assistant_response_text or "")
 
 
-def test_execute_shell_turn_prints_checklist_progress(capsys: Any) -> None:
+def test_run_harness_turn_prints_checklist_progress(capsys: Any) -> None:
     session = Session()
     console = Console(force_terminal=True)
     answer_calls: list[str] = []
@@ -102,7 +102,7 @@ def test_execute_shell_turn_prints_checklist_progress(capsys: Any) -> None:
         n = len(answer_calls)
         return MagicMock(response_text=f"session_goal:done={n - 1}")
 
-    execute_shell_turn(
+    run_harness_turn(
         "run checklist",
         session,
         console,
@@ -125,7 +125,7 @@ def test_execute_shell_turn_prints_checklist_progress(capsys: Any) -> None:
     assert "checklist complete" in painted or "achieved" in painted
 
 
-def test_execute_shell_turn_does_not_loop_on_user_prose_alone() -> None:
+def test_run_harness_turn_does_not_loop_on_user_prose_alone() -> None:
     session = Session()
     console = Console(force_terminal=False)
     answer_calls: list[str] = []
@@ -144,7 +144,7 @@ def test_execute_shell_turn_does_not_loop_on_user_prose_alone() -> None:
         answer_calls.append(text)
         return MagicMock(response_text="one turn only")
 
-    execute_shell_turn(
+    run_harness_turn(
         _FIVE_STEP,
         session,
         console,
@@ -159,7 +159,7 @@ def test_execute_shell_turn_does_not_loop_on_user_prose_alone() -> None:
     assert session.session_goal is None
 
 
-def test_execute_shell_turn_continues_from_typed_assistant_handoff() -> None:
+def test_run_harness_turn_continues_from_typed_assistant_handoff() -> None:
     """Schema-only session_goal (no content tags) must still multi-turn."""
     session = Session()
     console = Console(force_terminal=False)
@@ -199,7 +199,7 @@ def test_execute_shell_turn_continues_from_typed_assistant_handoff() -> None:
         n = len(answer_calls)
         return MagicMock(response_text=f"step done session_goal:done={n - 1}")
 
-    result = execute_shell_turn(
+    result = run_harness_turn(
         _FIVE_STEP,
         session,
         console,

@@ -325,8 +325,8 @@ def test_turn_handler_tolerates_sinks_without_tool_hooks(monkeypatch: Any) -> No
     """Sinks without tool_hooks (Telegram today) run unhooked — documented host gap."""
 
     class _BareSink:
-        def finalize(self, text: str) -> None:
-            self.finalized = text
+        def finalize(self, answer: str) -> None:
+            self.finalized = answer
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     handler = TurnHandler(console=Console(force_terminal=False))

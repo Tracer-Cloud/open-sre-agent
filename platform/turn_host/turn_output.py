@@ -14,8 +14,8 @@ from core.agent_harness import OutputSink
 
 @runtime_checkable
 class TurnOutput(OutputSink, Protocol):
-    def set_tool_status(self, text: str) -> None:
+    def set_tool_status(self, status: str) -> None:
         """Show live tool progress for the running turn."""
 
-    def finalize(self, text: str) -> None:
+    def finalize(self, answer: str) -> None:
         """Deliver the turn's final answer to the chat."""

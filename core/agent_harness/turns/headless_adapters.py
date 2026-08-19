@@ -97,9 +97,9 @@ class BufferOutputSink:
         self.streamed.append(text)
         return text
 
-    def finish_streamed_response(self, text: str) -> None:
+    def finish_streamed_response(self, answer: str) -> None:
         # Headless tests assert on ``TurnResult.assistant_response_text``.
-        _ = text
+        _ = answer
 
     @property
     def text(self) -> str:

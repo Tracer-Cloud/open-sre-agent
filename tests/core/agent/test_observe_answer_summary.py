@@ -16,9 +16,9 @@ from core.agent_harness.ports import AnswerRequest
 from surfaces.interactive_shell.runtime.core.turn_accounting import (
     ToolCallingTurnResult,
 )
-from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.utils.telemetry.recorder import LlmRunInfo
+from tests.shared.harness_turn_driver import run_harness_turn
 
 _OBSERVATION = "Integration status from `/integrations`:\n- sentry: missing (Not configured.)"
 
@@ -57,7 +57,7 @@ def test_discovery_output_is_summarized_into_a_direct_answer() -> None:
         return LlmRunInfo(response_text="No — Sentry is not configured.")
 
     session = Session()
-    execute_shell_turn(
+    run_harness_turn(
         "is sentry installed?",
         session,
         _console(),
@@ -94,7 +94,7 @@ def test_no_observation_keeps_silent_handled_turn() -> None:
         return None
 
     session = Session()
-    execute_shell_turn(
+    run_harness_turn(
         "deploy the remote instance",
         session,
         _console(),
@@ -131,7 +131,7 @@ def test_literal_slash_command_skips_observation_summary() -> None:
         return None
 
     session = Session()
-    execute_shell_turn(
+    run_harness_turn(
         "/integrations list",
         session,
         _console(),
@@ -168,7 +168,7 @@ def test_failed_discovery_is_not_summarized() -> None:
         return None
 
     session = Session()
-    execute_shell_turn(
+    run_harness_turn(
         "is sentry installed?",
         session,
         _console(),
@@ -206,7 +206,7 @@ def test_observation_is_reset_each_turn() -> None:
 
     session = Session()
     session.last_command_observation = "stale observation from a previous turn"
-    execute_shell_turn(
+    run_harness_turn(
         "deploy the remote instance",
         session,
         _console(),

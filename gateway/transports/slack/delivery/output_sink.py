@@ -124,17 +124,17 @@ class SlackOutputSink:
         self._finalize(text or EMPTY_RESPONSE_MESSAGE)
         return text
 
-    def set_tool_status(self, text: str) -> None:
-        self._set_status(text)
+    def set_tool_status(self, status: str) -> None:
+        self._set_status(status)
 
-    def finalize(self, text: str) -> None:
-        self._finalize(text)
+    def finalize(self, answer: str) -> None:
+        self._finalize(answer)
 
-    def finish_streamed_response(self, text: str) -> None:
-        self._finalize(text or EMPTY_RESPONSE_MESSAGE)
+    def finish_streamed_response(self, answer: str) -> None:
+        self._finalize(answer or EMPTY_RESPONSE_MESSAGE)
 
-    def _set_status(self, text: str) -> None:
-        status = normalize_gateway_status(text)
+    def _set_status(self, status: str) -> None:
+        status = normalize_gateway_status(status)
         with self._lock:
             if self._turn_stream.note_task(status):
                 return
@@ -148,25 +148,25 @@ class SlackOutputSink:
         if ts:
             self._client.delete_message(channel=self._channel_id, ts=ts)
 
-    def _edit_preview(self, text: str) -> None:
+    def _edit_preview(self, preview: str) -> None:
         if not self._message_ts:
             return
-        preview = truncate(text, SLACK_MAX_MESSAGE_CHARS, suffix="…")
+        preview = truncate(preview, SLACK_MAX_MESSAGE_CHARS, suffix="…")
         with self._lock:
             if self._message_ts and self._client.update_message(
                 channel=self._channel_id, ts=self._message_ts, text=preview
             ):
                 self._last_update = time.monotonic()
 
-    def _finalize(self, text: str) -> None:
+    def _finalize(self, answer: str) -> None:
         with self._lock:
             if self._turn_stream.is_open:
-                if self._turn_stream.finish(text, blocks=self._closing_blocks()):
+                if self._turn_stream.finish(answer, blocks=self._closing_blocks()):
                     logger.info(
                         "outbound channel=%s thread_ts=%s mode=stream chars=%d",
                         self._channel_id,
                         self._thread_ts,
-                        len(text),
+                        len(answer),
                     )
                     return
                 # Stream broke mid-turn: deliver the full answer the classic way.
@@ -178,20 +178,20 @@ class SlackOutputSink:
                 )
             elif self._turn_stream.closed:
                 # Prior stopStream (session goal continuation, or a raced finalize).
-                # Open a fresh stream so later-turn text is not treated as already
+                # Open a fresh stream so later-turn answer is not treated as already
                 # delivered; if start fails, fall through to classic post.
                 if self._turn_stream.ensure_started_for_continuation() and self._turn_stream.finish(
-                    text, blocks=self._closing_blocks()
+                    answer, blocks=self._closing_blocks()
                 ):
                     logger.info(
                         "outbound channel=%s thread_ts=%s mode=stream-continuation chars=%d",
                         self._channel_id,
                         self._thread_ts,
-                        len(text),
+                        len(answer),
                     )
                     return
-        final = truncate(markdown_to_slack_mrkdwn(text), SLACK_MAX_MESSAGE_CHARS, suffix="…")
-        blocks = self._final_blocks(text)
+        final = truncate(markdown_to_slack_mrkdwn(answer), SLACK_MAX_MESSAGE_CHARS, suffix="…")
+        blocks = self._final_blocks(answer)
         mode = "edit"
         with self._lock:
             delivered = self._message_ts is not None and self._client.update_message(
@@ -227,7 +227,7 @@ class SlackOutputSink:
                 len(final),
             )
 
-    def _final_blocks(self, text: str) -> Blocks | None:
+    def _final_blocks(self, answer: str) -> Blocks | None:
         """Compose the final reply: a ``markdown`` block + a context footer.
 
         Slack built the markdown block for LLM output: standard markdown
@@ -238,7 +238,7 @@ class SlackOutputSink:
         text-only; the mrkdwn text is always sent alongside as the
         notification/fallback rendering.
         """
-        body = text.strip()
+        body = answer.strip()
         if not body or len(body) > SLACK_MAX_MARKDOWN_BLOCK_CHARS:
             return None
         return [{"type": "markdown", "text": body}, *self._closing_blocks()]
@@ -264,12 +264,12 @@ def _format_duration(seconds: float) -> str:
     return f"{whole // 60}m {whole % 60:02d}s"
 
 
-def _as_status_line(text: str) -> str:
+def _as_status_line(status: str) -> str:
     """Render an in-progress status as one italic mrkdwn line.
 
     Mirrors the "is thinking…" affordance in Claude Tag / Slack assistant
-    threads: progress reads as muted meta-text, clearly distinct from the
+    threads: progress reads as muted meta-status, clearly distinct from the
     final answer that replaces it.
     """
-    line = " ".join(text.split())
+    line = " ".join(status.split())
     return f"_{line}_" if line else line

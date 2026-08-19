@@ -90,15 +90,15 @@ class BindableOutput:
                 return
             yield chunk
 
-    def finalize(self, text: str) -> None:
-        self._require().finalize(text)
+    def finalize(self, answer: str) -> None:
+        self._require().finalize(answer)
 
-    def finish_streamed_response(self, text: str) -> None:
+    def finish_streamed_response(self, answer: str) -> None:
         finish = getattr(self._require(), "finish_streamed_response", None)
         if callable(finish):
-            finish(text)
+            finish(answer)
             return
-        self.finalize(text)
+        self.finalize(answer)
 
     def set_tool_status(self, status: str) -> None:
         set_status = getattr(self._require(), "set_tool_status", None)

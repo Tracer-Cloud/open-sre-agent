@@ -81,14 +81,14 @@ class DiscordOutputSink:
                 self._edit_preview(combined)
         return "".join(parts)
 
-    def set_tool_status(self, text: str) -> None:
-        self._set_status(text)
+    def set_tool_status(self, status: str) -> None:
+        self._set_status(status)
 
-    def finish_streamed_response(self, text: str) -> None:
-        self.finalize(text)
+    def finish_streamed_response(self, answer: str) -> None:
+        self.finalize(answer)
 
-    def finalize(self, text: str) -> None:
-        body = (text or EMPTY_RESPONSE_MESSAGE).strip()
+    def finalize(self, answer: str) -> None:
+        body = (answer or EMPTY_RESPONSE_MESSAGE).strip()
         chunks = split_discord_content(body)
         if not chunks:
             return
@@ -140,16 +140,16 @@ class DiscordOutputSink:
                 bot_token=self._bot_token,
             )
 
-    def _set_status(self, text: str) -> None:
-        status = normalize_gateway_status(text)
+    def _set_status(self, status: str) -> None:
+        status = normalize_gateway_status(status)
         self._edit_preview(f"*{status}*")
 
-    def _edit_preview(self, text: str) -> None:
+    def _edit_preview(self, preview: str) -> None:
         with self._lock:
             if not self._message_id:
                 self._message_id = send_message(
                     channel_id=self._channel_id,
-                    content=text[:2000],
+                    content=preview[:2000],
                     bot_token=self._bot_token,
                 )
                 return
@@ -159,7 +159,7 @@ class DiscordOutputSink:
             if edit_message(
                 channel_id=self._channel_id,
                 message_id=self._message_id,
-                content=text[:2000],
+                content=preview[:2000],
                 bot_token=self._bot_token,
             ):
                 self._last_edit = now
