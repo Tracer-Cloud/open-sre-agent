@@ -857,8 +857,12 @@ class Analytics:
         with contextlib.suppress(queue.Full):
             self._queue.put_nowait(None)
         if flush and self._worker is not None:
+            # One budget for the whole drain, not one per wait: these run back to
+            # back, so passing ``timeout`` to each made a documented 0.5s exit
+            # block for 1.0s whenever a send outlived it.
+            deadline = time.monotonic() + timeout
             self._drained.wait(timeout=timeout)
-            self._worker.join(timeout=timeout)
+            self._worker.join(timeout=max(0.0, deadline - time.monotonic()))
 
     def _ensure_worker(self) -> None:
         if self._worker is not None:
