@@ -333,13 +333,13 @@ def test_each_org_gets_its_own_bindings_database() -> None:
     assert acme_db != globex_db
 
 
-def test_telegram_runtime_wiring_can_read_and_write_bindings(
+def test_telegram_runtime_store_can_read_and_write_bindings(
     host: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Exercise the store Telegram actually builds, not a hand-made one.
 
-    The previous test built a store directly, so it kept passing when the real
-    wiring pointed at a database without the bindings table.
+    The previous test built a store directly, so it kept passing when the
+    runtime store pointed at a database without the bindings table.
     """
     # Arrange: the store the Telegram runtime constructs at startup.
     from gateway.core.storage.session.binding_store import open_binding_store
