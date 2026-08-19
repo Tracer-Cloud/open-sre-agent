@@ -78,14 +78,3 @@ Out of scope (do not do here)
 - Rewriting client code or the tools themselves. If a tool fails and shows a
   design problem, open a separate bug referencing this issue.
 - Adding CI tests that require live AWS credentials.
-
-If verification exposes a reproducible bug
-
-- File a new issue with: failing command, truncated output, and suggested
-  severity. Link the new issue from #5105.
-
-Change log
-
-- Created docs/aws_lambda_verification.md to satisfy "environment recipe"
-  requirement for #5105.
-
