@@ -9,7 +9,7 @@ from typing import Any
 
 import config.constants.platform as _platform
 from platform.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
-from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout
+from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout, note_quiet_shell_run
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -54,6 +54,10 @@ def _shell_payload(
         payload["response_text"] = response_text.strip()
         if quiet:
             buffer_quiet_stdout(payload["response_text"])
+    elif quiet:
+        # Outputless quiet still counts as a probe so a sibling command's
+        # buffered stdout is not painted as a single-command answer.
+        note_quiet_shell_run()
     return payload
 
 

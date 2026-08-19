@@ -9,6 +9,7 @@ from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutpu
 from tools.interactive_shell.quiet_stdout import (
     buffer_quiet_stdout,
     clear_quiet_stdout,
+    note_quiet_shell_run,
     take_quiet_stdout,
 )
 
@@ -77,6 +78,26 @@ def test_take_quiet_stdout_drops_multi_chunk_buffer() -> None:
     buffer_quiet_stdout("probe-a")
     buffer_quiet_stdout("probe-b")
 
+    assert take_quiet_stdout() == ""
+
+
+def test_paint_quiet_stdout_ignores_probe_beside_outputless_quiet() -> None:
+    # Arrange: touch-style quiet (no buffer) then one probe with stdout.
+    note_quiet_shell_run()
+    buffer_quiet_stdout("Amsterdam: +18C")
+    lines: list[str] = []
+
+    class _Console:
+        def print(self, message: str = "", **_kwargs: object) -> None:
+            lines.append(str(message))
+
+    sink = ShellOutputSink(_Console())  # type: ignore[arg-type]
+
+    # Act
+    assert sink.paint_quiet_stdout() is False
+
+    # Assert: the lone buffered probe is not treated as a single-command answer.
+    assert lines == []
     assert take_quiet_stdout() == ""
 
 
