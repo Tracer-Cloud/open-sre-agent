@@ -170,6 +170,30 @@ def test_run_cd_command_chdirs_to_target(monkeypatch: pytest.MonkeyPatch) -> Non
     assert session.history[-1]["type"] == "shell"
 
 
+def test_run_shell_command_quiet_cd_hides_cwd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "tools.interactive_shell.shell.runner.os.chdir",
+        lambda _target: None,
+    )
+    monkeypatch.setattr(
+        "tools.interactive_shell.shell.runner.Path.cwd",
+        classmethod(lambda _cls: Path("/tmp/example")),
+    )
+
+    session = Session()
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False)
+
+    result = run_shell_command("cd /tmp/example", _presenter(session, console), quiet=True)
+
+    assert "$" not in buf.getvalue()
+    assert "/tmp/example" not in buf.getvalue()
+    assert result["ok"] is True
+    assert result["response_text"] == "/tmp/example"
+
+
 def test_run_cd_command_reports_chdir_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_errors: list[BaseException] = []
 

@@ -82,9 +82,9 @@ def run_shell_command(
     argv_builtin = argv_for_repl_builtin_detection(parsed=parsed, is_windows=_platform.IS_WINDOWS)
 
     if argv_builtin is not None and argv_builtin[0].lower() == "cd":
-        return run_cd_command(parsed.command, presenter)
+        return run_cd_command(parsed.command, presenter, quiet=quiet)
     if argv_builtin is not None and argv_builtin[0].lower() == "pwd":
-        return run_pwd_command(parsed.command, presenter)
+        return run_pwd_command(parsed.command, presenter, quiet=quiet)
 
     use_shell = parsed.use_shell
     if parsed.passthrough and not quiet:
@@ -151,7 +151,8 @@ def run_shell_command(
         else:
             # Outputless success (e.g. ``touch``): there is no stdout to hide.
             # Quiet already skipped the ``$`` line; still print the same marker
-            # the loud path shows so a suppressed-closing turn is not blank.
+            # the loud path shows. A quiet turn may also keep a model closing —
+            # the glyph is live feedback, not a second answer.
             presenter.print(f"[{HIGHLIGHT}]{GLYPH_SUCCESS}[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"

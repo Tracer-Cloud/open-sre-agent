@@ -78,6 +78,27 @@ def test_single_quiet_shell_run_keeps_the_model_closing() -> None:
     assert "Amsterdam: +18C" not in shown
 
 
+def test_quiet_string_false_still_suppresses_loud_closing() -> None:
+    # Arrange: models sometimes emit quiet as a string; "false" must not keep closings.
+    call = ToolCall(
+        id="1",
+        name="shell_run",
+        input={"command": "echo hi", "quiet": "false"},
+    )
+    result = _Result(
+        tool_results=[(call, _ToolResult(_payload("hi")))],
+        final_text="done",
+    )
+
+    # Act
+    _response_text, display_chunks, _use_final_text = _compose_response(
+        result, _Session(), _counts(1)
+    )
+
+    # Assert: treated as loud — closing suppressed, no stdout reprint.
+    assert "\n".join(display_chunks) == ""
+
+
 def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
     # Arrange: a multi-step chain keeps its closing, so the probes stay hidden.
     closing = "Amsterdam: sunny. Top story: markets open higher."

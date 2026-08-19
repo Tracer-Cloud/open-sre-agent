@@ -486,7 +486,7 @@ def _has_quiet_shell_run(result: Any) -> bool:
         raw = getattr(tool_call, "input", None)
         if not isinstance(raw, dict):
             continue
-        if bool(public_tool_input(raw).get("quiet")):
+        if _coerce_fingerprint_quiet(public_tool_input(raw).get("quiet", False)):
             return True
     return False
 
