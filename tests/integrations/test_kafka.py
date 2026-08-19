@@ -4,7 +4,6 @@ from typing import Any
 
 import pytest
 
-import integrations.kafka as kafka_module
 from integrations.kafka import (
     KafkaConfig,
     KafkaValidationResult,
@@ -197,8 +196,8 @@ class TestGetConsumerGroupLagImportCompat:
         from confluent_kafka._model import ConsumerGroupTopicPartitions as ModelClass
 
         admin = _FakeAdminClient()
-        monkeypatch.setattr(kafka_module, "_get_admin_client", lambda _config: admin)
-        monkeypatch.setattr(kafka_module, "_get_consumer", lambda _config: _FakeConsumer())
+        monkeypatch.setattr("integrations.kafka._get_admin_client", lambda _config: admin)
+        monkeypatch.setattr("integrations.kafka._get_consumer", lambda _config: _FakeConsumer())
 
         result = get_consumer_group_lag(self._config(), group_id="verify-group")
 
@@ -230,8 +229,8 @@ class TestGetConsumerGroupLagImportCompat:
         )
 
         admin = _FakeAdminClient()
-        monkeypatch.setattr(kafka_module, "_get_admin_client", lambda _config: admin)
-        monkeypatch.setattr(kafka_module, "_get_consumer", lambda _config: _FakeConsumer())
+        monkeypatch.setattr("integrations.kafka._get_admin_client", lambda _config: admin)
+        monkeypatch.setattr("integrations.kafka._get_consumer", lambda _config: _FakeConsumer())
 
         result = get_consumer_group_lag(self._config(), group_id="verify-group")
 
