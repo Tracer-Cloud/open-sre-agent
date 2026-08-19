@@ -16,6 +16,7 @@ from config.local_settings import (
     save_local_settings,
     set_nested_key,
 )
+from platform.terminal.theme import GLYPH_SUCCESS
 
 _SUPPORTED_LAYOUTS = {"classic", "pinned"}
 
@@ -183,4 +184,4 @@ def config_set(key: str, value: str) -> None:
     data = _load_config()
     updated = set_nested_key(data, key, coerced)
     save_local_settings(updated)
-    click.echo(f"✓ Set {key} = {coerced}")
+    click.echo(f"{GLYPH_SUCCESS} Set {key} = {coerced}")

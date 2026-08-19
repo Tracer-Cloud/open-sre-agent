@@ -348,7 +348,7 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
 
     _print_context(final_state, console=console)
 
-    from platform.terminal.theme import BRAND, DIM
+    from platform.terminal.theme import BRAND, DIM, GLYPH_SUCCESS
 
     if console is not None:
         console.print(
@@ -403,13 +403,13 @@ def _collect(final_state: dict[str, Any], *, console: Console | None) -> None:
         miss_record = _classify_miss(record, final_state=final_state, console=console)
 
     if console is not None:
-        console.print(f"[{BRAND}]✓ Feedback saved.[/] [{DIM}]{_feedback_path()}[/]")
+        console.print(f"[{BRAND}]{GLYPH_SUCCESS} Feedback saved.[/] [{DIM}]{_feedback_path()}[/]")
         if miss_record is not None:
             from core.domain.feedback import misses_path
 
             console.print(f"[{DIM}]  Miss recorded → {misses_path()}[/]")
     else:
-        message = f"\n{_H}✓ Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n"
+        message = f"\n{_H}{GLYPH_SUCCESS} Feedback saved.{_R}  {_D}{_feedback_path()}{_R}\n"
         if miss_record is not None:
             from core.domain.feedback import misses_path
 

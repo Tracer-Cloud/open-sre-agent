@@ -71,10 +71,12 @@ class ShellOutputSink:
         self._console.print(message, markup=False)
 
     def paint_quiet_stdout(self) -> bool:
-        """Show buffered quiet ``shell_run`` stdout, if any.
+        """Show a single quiet ``shell_run`` result, if that is all we have.
 
-        Used when the action closer was suppressed and the turn would otherwise
-        leave a blank line. Returns True when something was painted.
+        Used when the action closer was suppressed and one quiet command
+        produced the turn's only output. Multiple buffered chunks stay
+        hidden (probes for a composed answer that never arrived). Returns
+        True when something was painted.
         """
         message = take_quiet_stdout()
         if not message:

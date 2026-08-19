@@ -26,6 +26,7 @@ from platform.terminal.theme import (
     ANSI_DIM,
     ANSI_RESET,
     DEVICE_CODE_ANSI,
+    GLYPH_SUCCESS,
 )
 
 if TYPE_CHECKING:
@@ -894,7 +895,7 @@ def cmd_setup(service: str | None) -> str:
         _die(f"Usage: setup <service>. Supported: {', '.join(available)}")
     print(f"\n  Setting up {_B}{service}{_R}\n")
     _HANDLERS[service]()
-    print(f"\n  ✓ Saved → {STORE_PATH}\n")
+    print(f"\n  {GLYPH_SUCCESS} Saved → {STORE_PATH}\n")
     return service
 
 
@@ -917,7 +918,7 @@ def cmd_list() -> None:
     from rich.markup import escape
 
     from integrations._table_render import new_table, render_table
-    from platform.terminal.theme import GLYPH_SUCCESS, HIGHLIGHT, SECONDARY, TEXT
+    from platform.terminal.theme import HIGHLIGHT, SECONDARY, TEXT
 
     table = new_table()
     table.add_column("SERVICE", style=TEXT, no_wrap=True)
@@ -964,7 +965,7 @@ def cmd_remove(service: str | None) -> None:
             return
     if remove_integration(service):
         delete_webapp_org_integration(service)
-        print(f"  ✓ Removed '{service}'.")
+        print(f"  {GLYPH_SUCCESS} Removed '{service}'.")
     else:
         print(f"  No integration found for '{service}'.")
 

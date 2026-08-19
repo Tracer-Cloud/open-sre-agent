@@ -53,6 +53,33 @@ def test_paint_quiet_stdout_shows_outputless_success_marker() -> None:
     assert take_quiet_stdout() == ""
 
 
+def test_paint_quiet_stdout_does_not_dump_multi_probe_buffer() -> None:
+    # Arrange: several quiet probes ran; no composed closer arrived.
+    buffer_quiet_stdout("Amsterdam: +18C")
+    buffer_quiet_stdout("rate limit 4998")
+    lines: list[str] = []
+
+    class _Console:
+        def print(self, message: str = "", **_kwargs: object) -> None:
+            lines.append(str(message))
+
+    sink = ShellOutputSink(_Console())  # type: ignore[arg-type]
+
+    # Act
+    assert sink.paint_quiet_stdout() is False
+
+    # Assert: probes stay withheld; buffer is drained.
+    assert lines == []
+    assert take_quiet_stdout() == ""
+
+
+def test_take_quiet_stdout_drops_multi_chunk_buffer() -> None:
+    buffer_quiet_stdout("probe-a")
+    buffer_quiet_stdout("probe-b")
+
+    assert take_quiet_stdout() == ""
+
+
 def test_empty_print_clears_buffer_without_flashing_it() -> None:
     # Arrange: quiet probes ran, then an error path prints a blank spacer.
     buffer_quiet_stdout("Amsterdam: +18C")
