@@ -18,8 +18,15 @@ from typing import Any
 from rich.console import Console
 
 from core.agent_harness import OutputSink, TurnResult
-from core.agent_harness.ports import ToolExecutionHooks, TurnBinding
+from core.agent_harness.ports import (
+    AnswerRequest,
+    GatheredEvidence,
+    StreamAnswerFn,
+    ToolExecutionHooks,
+    TurnBinding,
+)
 from core.agent_harness.runtime import HeadlessAgent
+from core.agent_harness.spi.accounting import LlmRunInfo
 from core.agent_harness.spi.session_goal import SessionGoal, format_session_goal_progress
 from core.agent_harness.turns.host_cancel import host_cancel_requested
 from surfaces.interactive_shell.runtime.agent_harness_adapters import resolve_output_sink
@@ -97,4 +104,23 @@ def run_harness_turn(
     )
 
 
-__all__ = ["run_harness_turn"]
+def no_evidence(text: str, *, turn_plan: Any = None) -> GatheredEvidence | None:
+    """An EvidenceGatherer that finds nothing."""
+    return None
+
+
+def fake_llm_run(*, response_text: str = "") -> LlmRunInfo:
+    """A real LlmRunInfo for turn tests; fill whatever the type requires."""
+    return LlmRunInfo(response_text=response_text)
+
+
+def answer_with_text(response_text: str) -> StreamAnswerFn:
+    """An answer stage returning one fixed response."""
+
+    def _answer(text: str, request: AnswerRequest) -> LlmRunInfo:
+        return fake_llm_run(response_text=response_text)
+
+    return _answer
+
+
+__all__ = ["answer_with_text", "fake_llm_run", "no_evidence", "run_harness_turn"]
