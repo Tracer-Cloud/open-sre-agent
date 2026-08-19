@@ -76,8 +76,8 @@ _DEDUPE_ACTION_TOOL_NAMES: frozenset[str] = frozenset({"slash_invoke", "shell_ru
 _ActionCallFingerprint = tuple[Any, ...]
 
 
-def _coerce_fingerprint_quiet(value: Any) -> bool:
-    """Match ``shell_run`` quiet coercion so retries compare equal."""
+def _coerce_quiet(value: Any) -> bool:
+    """Same truthy strings ``shell_run`` accepts for ``quiet``."""
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
@@ -103,7 +103,7 @@ def _action_call_fingerprint(name: str, args: Any) -> _ActionCallFingerprint:
     return (
         name,
         str(args.get("command", "")),
-        _coerce_fingerprint_quiet(args.get("quiet", False)),
+        _coerce_quiet(args.get("quiet", False)),
     )
 
 
@@ -408,6 +408,29 @@ def _preferred_tool_response_text(tool_result: Any) -> str:
         return ""
     response_text = parsed.get("response_text")
     return response_text.strip() if isinstance(response_text, str) else ""
+
+
+def _shell_run_is_quiet(tool_call: Any) -> bool:
+    if tool_call.name != "shell_run":
+        return False
+    args = public_tool_input(tool_call.input)
+    return _coerce_quiet(args.get("quiet", False))
+
+
+def _response_text_from_quiet_shell_runs(result: Any) -> str:
+    """Join ``response_text`` from ``shell_run`` calls that set ``quiet``.
+
+    ``quiet`` skips printing the command line and stdout during the tool call.
+    When the action closing is also dropped, this is the stdout still to show.
+    """
+    chunks: list[str] = []
+    for tool_call, tool_result in getattr(result, "tool_results", []):
+        if not _shell_run_is_quiet(tool_call):
+            continue
+        text = _preferred_tool_response_text(tool_result)
+        if text:
+            chunks.append(text)
+    return "\n".join(chunks)
 
 
 def _has_preferred_tool_response_text(result: Any) -> bool:
@@ -862,7 +885,14 @@ def _compose_response(
     # Console display uses final_text + generic results + hints only so users see
     # github_cli / other registry tools without double-printing shell output.
     # response_text still includes history for persistence / non-TTY surfaces.
+    #
+    # ``quiet`` shell_run never printed stdout. When the closing is dropped too,
+    # show that stdout so the turn is not a blank line.
     display_chunks = [chunk for chunk in (display_final, generic_text, hint) if chunk]
+    if suppress_final and not generic_text:
+        quiet_text = _response_text_from_quiet_shell_runs(result)
+        if quiet_text:
+            display_chunks = [chunk for chunk in (quiet_text, hint) if chunk]
     response_chunks = [
         chunk
         for chunk in (

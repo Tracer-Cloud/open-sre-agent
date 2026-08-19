@@ -85,16 +85,10 @@ class ShellOutputSink:
             self._console.print(f"[{DIM}]{escape(status)}[/]")
 
     def finalize(self, answer: str) -> None:
-        """No-op: the REPL has already shown everything this turn produced.
+        """Do nothing: chat fills a placeholder here, and the terminal has none.
 
-        A chat transport holds one placeholder message and ``finalize`` is how
-        it gets its final text, so the host calls this whenever the turn was not
-        ``answered``. But ``answered`` means "the conversational LLM produced a
-        run" — an action-phase answer (a skill, a tool chain) leaves it False
-        while the console has already painted the reply. Printing here rendered
-        every such answer a second time, unformatted.
-
-        The terminal has no placeholder to resolve: output lands as it happens.
+        Terminal output lands as it happens, so by the time the host finalizes
+        an unstreamed turn there is nothing left to show.
         """
         _ = answer
 
