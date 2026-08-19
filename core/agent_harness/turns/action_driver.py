@@ -473,6 +473,24 @@ def _asks_the_user(final_text: str) -> bool:
     return final_text.rstrip().endswith("?")
 
 
+def _has_quiet_shell_run(result: Any) -> bool:
+    """True when any ``shell_run`` this turn opted into quiet mode.
+
+    Quiet withholds live ``$``/stdout, so the usual self-recording assumption
+    ("output is already on screen") is false. The model closing is the
+    display — do not suppress it.
+    """
+    for tool_call, _tool_result in getattr(result, "tool_results", []):
+        if getattr(tool_call, "name", None) != "shell_run":
+            continue
+        raw = getattr(tool_call, "input", None)
+        if not isinstance(raw, dict):
+            continue
+        if bool(public_tool_input(raw).get("quiet")):
+            return True
+    return False
+
+
 def _response_text_from_generic_results(result: Any) -> str:
     chunks: list[str] = []
     for tool_call, tool_result in _generic_tool_results(result):
@@ -839,8 +857,10 @@ def _compose_response(
     # Drop model closings so they cannot contradict what the user just saw
     # (classic failure: inventing "health check passed" after a failed /health).
     # Exceptions: a multi-step shell/slash chain, whose closing summary is
-    # grounded in the output the model observed between steps, and a closing
-    # question, which seeks direction instead of restating output.
+    # grounded in the output the model observed between steps; a closing
+    # question, which seeks direction instead of restating output; and any
+    # quiet ``shell_run``, which withheld live stdout so the closing *is*
+    # the turn's display.
     # A handoff means the assistant answers this turn, so the action's closing
     # prose would be a second reply to one message ("good morning" twice).
     suppress_final = (
@@ -849,6 +869,7 @@ def _compose_response(
             _self_recording_tools_only(result)
             and not _multi_step_grounded_chain(result)
             and not _asks_the_user(final_text)
+            and not _has_quiet_shell_run(result)
         )
         or bool(counts.handoff_contents)
     )
@@ -917,14 +938,7 @@ def _show_response(
 
 
 def _end_silent_tool_turn(output: OutputSink) -> None:
-    """After silent tool work: paint surface-buffered output, else a blank line.
-
-    Optional ``paint_quiet_stdout`` (shell sink) shows quiet ``shell_run``
-    stdout the tool withheld. Other sinks get a blank line via ``print()``.
-    """
-    paint = getattr(output, "paint_quiet_stdout", None)
-    if callable(paint) and paint():
-        return
+    """After silent tool work with nothing to show: leave a blank line."""
     output.print()
 
 

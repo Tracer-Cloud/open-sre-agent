@@ -9,7 +9,6 @@ from typing import Any
 
 import config.constants.platform as _platform
 from platform.terminal.theme import ERROR, GLYPH_ERROR, GLYPH_SUCCESS, HIGHLIGHT
-from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout, note_quiet_shell_run
 from tools.interactive_shell.shell import execution as shell_execution
 from tools.interactive_shell.shell.display import format_shell_command_for_display
 from tools.interactive_shell.shell.parsing import (
@@ -36,7 +35,6 @@ def _shell_payload(
     truncated: bool = False,
     executed_with_shell: bool | None = None,
     cancelled: bool = False,
-    quiet: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "ok": ok,
@@ -52,12 +50,6 @@ def _shell_payload(
         payload["executed_with_shell"] = executed_with_shell
     if response_text:
         payload["response_text"] = response_text.strip()
-        if quiet:
-            buffer_quiet_stdout(payload["response_text"])
-    elif quiet:
-        # Outputless quiet still counts as a probe so a sibling command's
-        # buffered stdout is not painted as a single-command answer.
-        note_quiet_shell_run()
     return payload
 
 
@@ -82,7 +74,6 @@ def run_shell_command(
             ok=False,
             response_text=plan.policy.reason or "shell command blocked",
             cancelled=plan.policy.verdict != "deny",
-            quiet=quiet,
         )
 
     if not quiet:
@@ -91,9 +82,9 @@ def run_shell_command(
     argv_builtin = argv_for_repl_builtin_detection(parsed=parsed, is_windows=_platform.IS_WINDOWS)
 
     if argv_builtin is not None and argv_builtin[0].lower() == "cd":
-        return run_cd_command(parsed.command, presenter, quiet=quiet)
+        return run_cd_command(parsed.command, presenter)
     if argv_builtin is not None and argv_builtin[0].lower() == "pwd":
-        return run_pwd_command(parsed.command, presenter, quiet=quiet)
+        return run_pwd_command(parsed.command, presenter)
 
     use_shell = parsed.use_shell
     if parsed.passthrough and not quiet:
@@ -125,7 +116,6 @@ def run_shell_command(
             response_text=response_text,
             stderr=str(exc),
             executed_with_shell=use_shell,
-            quiet=quiet,
         )
 
     if not quiet:
@@ -149,7 +139,6 @@ def run_shell_command(
             timed_out=True,
             truncated=result.truncated,
             executed_with_shell=result.executed_with_shell,
-            quiet=quiet,
         )
     ok = result.exit_code == 0
     had_stdout = bool((result.stdout or "").strip())
@@ -162,10 +151,7 @@ def run_shell_command(
         else:
             # Outputless success (e.g. ``touch``): there is no stdout to hide.
             # Quiet already skipped the ``$`` line; still print the same marker
-            # the loud path shows so the turn is not a blank line after the
-            # action closer is dropped. Do not put the marker in
-            # ``response_text`` — that would also buffer it and the sink would
-            # print the glyph a second time.
+            # the loud path shows so a suppressed-closing turn is not blank.
             presenter.print(f"[{HIGHLIGHT}]{GLYPH_SUCCESS}[/]")
     else:
         code = result.exit_code if result.exit_code is not None else "?"
@@ -193,7 +179,6 @@ def run_shell_command(
         timed_out=False,
         truncated=result.truncated,
         executed_with_shell=result.executed_with_shell,
-        quiet=quiet,
     )
 
 
@@ -220,7 +205,7 @@ def run_cd_command(
         if not quiet:
             presenter.print_error(f"cd failed: {exc}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     if len(tokens) > 2:
         response_text = "cd failed: too many arguments"
@@ -228,7 +213,7 @@ def run_cd_command(
         if not quiet:
             presenter.print("[error]cd failed:[/] too many arguments")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     target = Path(tokens[1]).expanduser() if len(tokens) == 2 else Path.home()
     try:
@@ -241,13 +226,13 @@ def run_cd_command(
         if not quiet:
             presenter.print_error(f"cd failed: {exc}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     cwd = str(Path.cwd())
     if not quiet:
         presenter.print_plain(cwd)
     session.record("shell", command)
-    return _shell_payload(command=command, ok=True, response_text=cwd, quiet=quiet)
+    return _shell_payload(command=command, ok=True, response_text=cwd)
 
 
 def run_pwd_command(
@@ -265,7 +250,7 @@ def run_pwd_command(
         if not quiet:
             presenter.print_error(f"pwd failed: {exc}")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     if len(tokens) != 1:
         response_text = "pwd failed: too many arguments"
@@ -273,13 +258,13 @@ def run_pwd_command(
         if not quiet:
             presenter.print("[error]pwd failed:[/] too many arguments")
         session.record("shell", command, ok=False, response_text=response_text)
-        return _shell_payload(command=command, ok=False, response_text=response_text, quiet=quiet)
+        return _shell_payload(command=command, ok=False, response_text=response_text)
 
     cwd = str(Path.cwd())
     if not quiet:
         presenter.print_plain(cwd)
     session.record("shell", command)
-    return _shell_payload(command=command, ok=True, response_text=cwd, stdout=cwd, quiet=quiet)
+    return _shell_payload(command=command, ok=True, response_text=cwd, stdout=cwd)
 
 
 __all__ = ["run_cd_command", "run_pwd_command", "run_shell_command"]

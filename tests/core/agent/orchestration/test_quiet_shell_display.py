@@ -1,8 +1,7 @@
-"""Core does not paint quiet shell stdout. That is a surface concern.
+"""Quiet ``shell_run`` keeps the model closing — it withheld live stdout.
 
-The action closer still drops a single-step self-recording closing. Quiet
-stdout is buffered by the shell tool and shown by the REPL sink when the turn
-would otherwise be blank.
+Loud single ``shell_run`` still suppresses closings (output is already on
+screen). Quiet probes never enter display_chunks; the composed closing does.
 """
 
 from __future__ import annotations
@@ -59,12 +58,13 @@ def _counts(steps: int) -> _TurnCounts:
     )
 
 
-def test_single_quiet_shell_run_does_not_put_stdout_in_display_chunks() -> None:
-    # Arrange: one quiet step, whose closing the single-step rule drops.
-    call = _shell_call("1", "echo hi", quiet=True)
+def test_single_quiet_shell_run_keeps_the_model_closing() -> None:
+    # Arrange: quiet withheld live stdout; the closing is the turn display.
+    closing = "Amsterdam is +18C and clear."
+    call = _shell_call("1", "curl wttr.in", quiet=True)
     result = _Result(
-        tool_results=[(call, _ToolResult(_payload("hi")))],
-        final_text="Command completed successfully.",
+        tool_results=[(call, _ToolResult(_payload("Amsterdam: +18C")))],
+        final_text=closing,
     )
 
     # Act
@@ -72,9 +72,10 @@ def test_single_quiet_shell_run_does_not_put_stdout_in_display_chunks() -> None:
         result, _Session(), _counts(1)
     )
 
-    # Assert: core does not reprint stdout; the dropped closing stays dropped.
-    assert "\n".join(display_chunks) == ""
-    assert "Command completed successfully." not in _response_text
+    # Assert: closing shown; raw probe stdout is not reprinted by core.
+    shown = "\n".join(display_chunks)
+    assert closing in shown
+    assert "Amsterdam: +18C" not in shown
 
 
 def test_quiet_probes_stay_hidden_when_a_composed_closing_is_shown() -> None:
@@ -123,51 +124,7 @@ def test_loud_shell_run_does_not_reprint_stdout_in_display_chunks() -> None:
     assert "\n".join(display_chunks) == ""
 
 
-def test_silent_tool_turn_prefers_paint_quiet_stdout_over_blank_print() -> None:
-    """Surface-buffered quiet stdout is painted; empty print is only the fallback."""
-    from core.agent_harness.turns.action_driver import _end_silent_tool_turn
-
-    painted: list[str] = []
-    printed: list[str] = []
-
-    class _Sink:
-        def paint_quiet_stdout(self) -> bool:
-            painted.append("ok")
-            return True
-
-        def print(self, message: str = "") -> None:
-            printed.append(message)
-
-    _end_silent_tool_turn(_Sink())  # type: ignore[arg-type]
-
-    assert painted == ["ok"]
-    assert printed == []
-
-
-def test_silent_tool_turn_paints_through_bindable_output() -> None:
-    """REPL production path: BindableOutput → ShellOutputSink must reach paint."""
-    from core.agent_harness.turns.action_driver import _end_silent_tool_turn
-    from platform.turn_host.bindable_output import BindableOutput
-    from surfaces.interactive_shell.runtime.agent_harness_adapters import ShellOutputSink
-    from tools.interactive_shell.quiet_stdout import buffer_quiet_stdout, clear_quiet_stdout
-
-    clear_quiet_stdout()
-    buffer_quiet_stdout("hi")
-    lines: list[str] = []
-
-    class _Console:
-        def print(self, message: str = "", **_kwargs: object) -> None:
-            lines.append(str(message))
-
-    bindable = BindableOutput()
-    bindable.bind(ShellOutputSink(_Console()))  # type: ignore[arg-type]
-
-    _end_silent_tool_turn(bindable)  # type: ignore[arg-type]
-
-    assert "hi" in "\n".join(lines)
-
-
-def test_silent_tool_turn_falls_back_to_blank_print_without_paint_hook() -> None:
+def test_silent_tool_turn_prints_a_blank_line() -> None:
     from core.agent_harness.turns.action_driver import _end_silent_tool_turn
 
     printed: list[str] = []

@@ -105,18 +105,6 @@ class BindableOutput:
         if callable(set_status):
             set_status(status)
 
-    def paint_quiet_stdout(self) -> bool:
-        """Forward optional quiet-stdout paint to the bound transport.
-
-        Explicit (not only ``__getattr__``) so the action driver's silent-turn
-        hook reaches a shell sink that implements the method. Other transports
-        return False.
-        """
-        paint = getattr(self._require(), "paint_quiet_stdout", None)
-        if callable(paint):
-            return bool(paint())
-        return False
-
     def __getattr__(self, name: str) -> Any:
         # Forward optional transport-specific attributes (e.g. tool_hooks readers).
         return getattr(self._require(), name)

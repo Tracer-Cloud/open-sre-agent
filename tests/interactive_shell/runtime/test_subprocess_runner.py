@@ -32,7 +32,6 @@ from tools.interactive_shell.cli import is_interactive_wizard
 from tools.interactive_shell.implementation.claude_code_executor import (
     run_claude_code_implementation,
 )
-from tools.interactive_shell.quiet_stdout import clear_quiet_stdout
 from tools.interactive_shell.shell.execution import (
     ShellExecutionResult,
 )
@@ -406,7 +405,6 @@ def test_run_shell_command_quiet_hides_command_and_stdout(
     assert result["stdout"] == "hi"
     assert result["response_text"] == "hi"
     assert session.history[-1]["ok"] is True
-    clear_quiet_stdout()
 
 
 def test_run_shell_command_quiet_outputless_success_prints_checkmark(
@@ -414,14 +412,9 @@ def test_run_shell_command_quiet_outputless_success_prints_checkmark(
 ) -> None:
     """``touch``-style quiet success still prints the success glyph.
 
-    Quiet only hides ``$`` / stdout. There is no stdout to withhold. Buffering
-    a marker for a later blank-line fallback left the turn empty when that
-    fallback printed nothing. Print the same live marker as loud mode; do not
-    buffer it.
+    Quiet only hides ``$`` / stdout. There is no stdout to withhold. Print the
+    same live marker as loud mode so an empty closer does not leave a blank turn.
     """
-    from tools.interactive_shell.quiet_stdout import clear_quiet_stdout, take_quiet_stdout
-
-    clear_quiet_stdout()
 
     def _fake_execute(**_kwargs: object) -> ShellExecutionResult:
         return ShellExecutionResult(
@@ -450,7 +443,6 @@ def test_run_shell_command_quiet_outputless_success_prints_checkmark(
     assert "$" not in buf.getvalue()
     assert result["ok"] is True
     assert "response_text" not in result
-    assert take_quiet_stdout() == ""
     assert session.history[-1] == {
         "type": "shell",
         "text": "touch file",
