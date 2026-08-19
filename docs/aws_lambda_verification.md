@@ -13,57 +13,118 @@ Scope
 
 Prerequisites
 
-- Valid AWS credentials available to the environment (any standard boto3 chain):
+- Valid AWS credentials available to the environment (boto3 credential chain):
   - AWS_ACCESS_KEY_ID
   - AWS_SECRET_ACCESS_KEY
   - AWS_SESSION_TOKEN (if required)
-  - AWS_DEFAULT_REGION or AWS_REGION
+- Region configuration: the tools use the environment variable AWS_REGION (falling
+  back to "us-east-1") via the project's boto3 wrapper. Set AWS_REGION to the
+  target region. Setting AWS_DEFAULT_REGION is harmless but not relied upon by
+  the client helper.
 - boto3 and requests installed in the running environment (the repo dev env
   normally provides these).
 - A real Lambda function name to test (example: my-lambda-function). Use a
   non-production function or redact sensitive output before posting evidence.
 
+Required IAM permissions (minimum)
+
+The verification commands exercise Lambda and CloudWatch Logs APIs. The test
+identity must have at least these actions on the target account / resources:
+
+- lambda:GetFunctionConfiguration
+- lambda:GetFunction
+- lambda:ListFunctions (optional, used by list code path)
+- logs:FilterLogEvents
+- logs:GetLogEvents
+- logs:DescribeLogGroups (optional, for discovery)
+
+If you prefer a fine-grained role, scope these actions to the relevant function
+ARN and the /aws/lambda/{function_name} log group.
+
 Verification steps (single-file Python invocations)
 
 Notes:
-- These commands call the same Python functions used by the tool wrappers.
-- Run them from the repo root so the package imports resolve.
+- These one-liners invoke the repository's internal tool wrappers. They are a
+  developer-facing verification method; do not consider the Python symbol names
+  to be public API. The tools are also callable from the interactive shell
+  surfaces.
+- Run from the repo root so package imports resolve.
 - Redact any customer or host-identifying details before adding evidence to the
   issue.
 
-1) Verify AWS verifier (optional sanity check):
+1) Sanity check: AWS verifier (optional)
 
    uv run opensre integrations verify aws
 
    Expectation: verifier passes and reports account access. If it fails, stop
    and fix credentials first — do not proceed to claim the tools.
 
-2) get_lambda_configuration (lightweight configuration)
+2) Lambda configuration (user-facing name: "Lambda configuration") — quick check
 
-   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_config_tool import get_lambda_configuration; print(json.dumps(get_lambda_configuration('my-lambda-function'), indent=2))"
+Developer command (internal):
 
-   Expected: JSON with found=true and fields like runtime, handler, timeout.
+   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_config_tool import get_lambda_configuration as _cmd; print(json.dumps(_cmd('my-lambda-function'), indent=2))"
 
-3) inspect_lambda_function (configuration + optional code)
+Sanitized example output:
 
-   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_inspect_tool import inspect_lambda_function; print(json.dumps(inspect_lambda_function('my-lambda-function', include_code=False), indent=2))"
+   {
+     "found": true,
+     "function_name": "my-lambda-function",
+     "runtime": "python3.12",
+     "handler": "handler.main",
+     "timeout": 300
+   }
 
-   Expected: JSON similar to configuration; when include_code=True the tool may
-   return extracted files (if small) — redact file contents or only show file
-   names and counts.
+3) Lambda inspect (user-facing name: "Lambda config") — configuration + optional code
 
-4) get_lambda_invocation_logs (invocation logs, recent invocations)
+Developer command (internal):
 
-   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_invocation_logs_tool import get_lambda_invocation_logs; print(json.dumps(get_lambda_invocation_logs('my-lambda-function', limit=20), indent=2))"
+   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_inspect_tool import inspect_lambda_function as _cmd; print(json.dumps(_cmd('my-lambda-function', include_code=False), indent=2))"
 
-   Expected: JSON with invocation_count, invocations (summaries), or recent_logs.
+Sanitized example output:
 
-5) get_lambda_errors (filtered errors)
+   {
+     "found": true,
+     "function_name": "my-lambda-function",
+     "function_arn": "arn:aws:lambda:...:function:my-lambda-function",
+     "runtime": "python3.12",
+     "timeout": 300
+   }
 
-   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_errors_tool import get_lambda_errors; print(json.dumps(get_lambda_errors('my-lambda-function', limit=50), indent=2))"
+4) Invocation logs (user-facing name: "Lambda logs")
 
-   Expected: JSON with error-focused logs (same shape as invocation logs but
-   filtered). An empty result is a valid outcome but must be reported as such.
+Developer command (internal):
+
+   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_invocation_logs_tool import get_lambda_invocation_logs as _cmd; print(json.dumps(_cmd('my-lambda-function', limit=20), indent=2))"
+
+Sanitized example output:
+
+   {
+     "found": true,
+     "function_name": "my-lambda-function",
+     "invocation_count": 2,
+     "invocations": [
+       {"request_id": "r1", "duration_ms": 100, "memory_used_mb": 128}
+     ]
+   }
+
+5) Errors (user-facing name: "Lambda errors")
+
+Developer command (internal):
+
+   uv run python -c "import json; from integrations.aws_lambda.tools.lambda_errors_tool import get_lambda_errors as _cmd; print(json.dumps(_cmd('my-lambda-function', limit=50), indent=2))"
+
+Sanitized example output:
+
+   {
+     "found": true,
+     "function_name": "my-lambda-function",
+     "invocations": []
+   }
+
+If a tool returns only an error or an empty result, record the exact command and
+output in the issue and file a follow-up bug if the output looks like a stub or
+an unexpected failure.
 
 Recording evidence
 
