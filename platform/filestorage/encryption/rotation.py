@@ -1,21 +1,13 @@
 """Changing the passphrase, and re-keying the objects themselves.
 
-Two very different operations, and the distinction is the point of the two-level
-key design:
+**Rotating the passphrase** re-wraps the content keys: one small object, instant
+whatever the store's size, and the old passphrase stops working at once.
 
-**Rotating the passphrase** re-wraps the existing content keys. It touches one
-small object, finishes instantly however large the store is, and immediately
-stops the old passphrase from opening anything.
-
-**Re-encrypting** mints a new content key and rewrites every object under it, at
-the cost of a full upload. Each object is overwritten at its own key, so the
-previous ciphertext is replaced rather than accumulating — with one exception
-worth stating plainly: on a **versioned** bucket the superseded versions remain,
-and they still open under the old key. Removing noncurrent versions is the
-operator's job; this never deletes anything.
-
-Re-encrypting is also the migration path for a store that predates encryption,
-so it accepts objects that are not sealed at all and seals them.
+**Re-encrypting** mints a new content key and rewrites every object, costing a
+full upload. Objects are overwritten in place, so old ciphertext is replaced —
+except on a **versioned** bucket, where superseded versions remain readable
+under the old key and are the operator's to remove. It is also the migration
+path, so it accepts objects that were never sealed.
 """
 
 from __future__ import annotations

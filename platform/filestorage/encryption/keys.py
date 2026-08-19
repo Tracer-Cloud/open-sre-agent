@@ -1,25 +1,14 @@
 """Deriving, wrapping, and caching the keys that seal a store's objects.
 
-Two levels, because the sync engine never deletes. Content is sealed under a
-random **root key**; the root key is wrapped by a **KEK** derived from the
-user's passphrase. Changing the passphrase re-wraps ~100 bytes and takes
-effect immediately, whereas re-keying the content would mean re-uploading every
-object while the old ciphertext stayed in the store forever — revoking nothing.
+Two levels, because the sync engine never deletes: content is sealed under a
+random `root key`, which is wrapped by a `KEK` derived from the passphrase.
+Changing the passphrase re-wraps ~100 bytes and takes effect at once, whereas
+re-keying content would re-upload everything and still revoke nothing.
 
-The passphrase resolves through :mod:`config.secrets.store` like any other
-opensre secret: the environment first, then the owner-only (``0600``) local
-file. That file is **plaintext**, which is deliberate. This key defends the
-*remote* store against the party operating it; someone who can already read
-files in the user's home directory can read the sessions there directly, so
-encrypting it would not raise the bar it exists to raise. (Contrast
-:mod:`config.secrets.local_file`, which declined to encrypt itself on the
-grounds that a key stored beside its ciphertext protects nothing — true there,
-where both lived on one disk, and not the case here, where the ciphertext is in
-somebody else's bucket.)
-
-``OPENSRE_DISABLE_KEYRING=1`` takes a machine out of local persistence
-entirely; the environment is then the only source, and setup refuses rather
-than storing a passphrase it cannot keep.
+The passphrase resolves through :mod:`config.secrets.store` — environment, then
+local file(~/.opensre/credentials.json). That file is plaintext by design: this key
+defends the *remote* store, and anyone who can read it can already read
+``~/.opensre/sessions/`` beside it.
 """
 
 from __future__ import annotations

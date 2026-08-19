@@ -1,16 +1,9 @@
 """Decide whether a run may proceed, and with which cipher.
 
-Every combination of "is this machine configured to encrypt" and "is this store
-encrypted" is answered here, and every mismatch fails the run. The two that
-matter are opposites of each other:
-
-* encryption on, store already holds readable objects — refuse, because a run
-  that quietly sealed new writes would report success while the existing
-  history stayed exposed;
-* encryption off, store is encrypted — refuse, because this is the path that
-  would push readable history into a store whose purpose was to hold none.
-
-Neither is recoverable by guessing, so both name the command that fixes them.
+Every mismatch between "does this machine encrypt" and "is this store encrypted"
+fails the run, in both directions. Encrypting over existing readable objects
+would report success while leaving them exposed; syncing with encryption off
+would push readable history into a store meant to hold none.
 """
 
 from __future__ import annotations

@@ -1,18 +1,13 @@
 """The store's own record of how it is encrypted.
 
-One small JSON object beside the mirrored roots. It holds the KDF salt and cost,
-and the root secrets wrapped under the passphrase-derived KEK — never a key in
-the clear, so it is no more sensitive than the ciphertext it sits next to. A
-second machine needs only the passphrase: everything else it reads from here,
-which is why the salt is not something the user has to carry.
+One small JSON object holding the KDF salt and cost plus the root secrets
+wrapped under the KEK — never a key in the clear. A second machine needs only
+the passphrase; the salt comes from here.
 
-``wrapped_keys`` is a map rather than a single value so a re-encrypt can be
-interrupted. Objects name the generation that sealed them, and every generation
-still listed here can be opened.
-
-The manifest key has no root prefix, so :func:`platform.filestorage.engine.pull`
-already declines to map it to a local path — it is fetched and written here, and
-never mirrors onto a laptop.
+``wrapped_keys`` is a map, not a single value, so an interrupted re-encrypt
+leaves every generation openable. The manifest key has no root prefix, so
+:func:`platform.filestorage.engine.pull` already declines to map it onto a local
+path.
 """
 
 from __future__ import annotations
@@ -20,7 +15,6 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 
 from platform.filestorage.encryption.cipher import ManifestCipher
 from platform.filestorage.encryption.keys import (
@@ -51,8 +45,6 @@ class EncryptionManifest:
     active_key_id: str
     #: hex key id -> root secret wrapped under the KEK.
     wrapped_keys: dict[str, bytes] = field(default_factory=dict)
-    created_at: str = ""
-    rotated_at: str = ""
 
     def to_bytes(self) -> bytes:
         """Serialize for upload."""
@@ -71,16 +63,10 @@ class EncryptionManifest:
                     key_id: base64.b64encode(wrapped).decode()
                     for key_id, wrapped in sorted(self.wrapped_keys.items())
                 },
-                "created_at": self.created_at,
-                "rotated_at": self.rotated_at,
             },
             indent=2,
             sort_keys=True,
         ).encode("utf-8")
-
-
-def _now() -> str:
-    return datetime.now(tz=UTC).isoformat()
 
 
 def parse_manifest(data: bytes) -> EncryptionManifest:
@@ -105,8 +91,6 @@ def parse_manifest(data: bytes) -> EncryptionManifest:
                 str(key_id): base64.b64decode(value)
                 for key_id, value in raw["wrapped_keys"].items()
             },
-            created_at=str(raw.get("created_at", "")),
-            rotated_at=str(raw.get("rotated_at", "")),
         )
     except RemoteSyncEncryptionError:
         raise
@@ -144,14 +128,11 @@ def new_manifest(passphrase: str) -> tuple[EncryptionManifest, ManifestCipher]:
     root_secret = generate_root_secret()
     root = derive_root_key(root_secret)
     key_id = root.key_id.hex()
-    created = _now()
     manifest = EncryptionManifest(
         salt=salt,
         params=params,
         active_key_id=key_id,
         wrapped_keys={key_id: wrap_root_secret(kek, root_secret)},
-        created_at=created,
-        rotated_at=created,
     )
     return manifest, ManifestCipher(root)
 
@@ -210,8 +191,6 @@ def rewrapped(
         params=params,
         active_key_id=manifest.active_key_id,
         wrapped_keys=rewrapped_keys,
-        created_at=manifest.created_at,
-        rotated_at=_now(),
     )
 
 
@@ -230,8 +209,6 @@ def with_new_generation(
         params=manifest.params,
         active_key_id=key_id,
         wrapped_keys=wrapped_keys,
-        created_at=manifest.created_at,
-        rotated_at=_now(),
     )
     return updated, open_manifest(updated, passphrase)
 

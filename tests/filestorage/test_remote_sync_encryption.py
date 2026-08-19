@@ -21,7 +21,7 @@ from platform.filestorage.encryption.keys import derive_root_key, generate_root_
 from platform.filestorage.encryption.manifest import MANIFEST_KEY, load_manifest
 from platform.filestorage.encryption.resolver import resolve_cipher
 from platform.filestorage.encryption.rotation import reencrypt, rotate_passphrase
-from platform.filestorage.engine import SyncDirection, content_tag, run_sync
+from platform.filestorage.engine import SyncDirection, SyncReport, content_tag, run_sync
 from platform.filestorage.enums import SyncRootName
 from platform.filestorage.errors import (
     EncryptedStoreError,
@@ -98,15 +98,18 @@ def roots(home: Path) -> tuple[SyncRoot, ...]:
     )
 
 
-def _encrypted_push(store: FakeObjectStore, roots: tuple[SyncRoot, ...]) -> None:
+def _encrypted_sync(
+    store: FakeObjectStore, roots: tuple[SyncRoot, ...], direction: SyncDirection
+) -> SyncReport:
+    """Resolve the gate and run one direction, the way a real surface would."""
     gate = resolve_cipher(store, encrypted=True)
-    run_sync(
-        store,
-        direction=SyncDirection.PUSH,
-        roots=roots,
-        cipher=gate.cipher,
-        listing=gate.listing,
+    return run_sync(
+        store, direction=direction, roots=roots, cipher=gate.cipher, listing=gate.listing
     )
+
+
+def _encrypted_push(store: FakeObjectStore, roots: tuple[SyncRoot, ...]) -> None:
+    _encrypted_sync(store, roots, SyncDirection.PUSH)
 
 
 # ── The store holds nothing readable ────────────────────────────────────────
@@ -143,14 +146,7 @@ def test_round_trip_restores_the_original_bytes(
     )
 
     # Act
-    gate = resolve_cipher(store, encrypted=True)
-    run_sync(
-        store,
-        direction=SyncDirection.PULL,
-        roots=second,
-        cipher=gate.cipher,
-        listing=gate.listing,
-    )
+    _encrypted_sync(store, second, SyncDirection.PULL)
 
     # Assert
     assert (other / "sessions" / "abc.jsonl").read_bytes() == (
@@ -165,14 +161,7 @@ def test_manifest_never_mirrors_onto_the_laptop(home: Path, roots: tuple[SyncRoo
     assert MANIFEST_KEY in store.objects
 
     # Act
-    gate = resolve_cipher(store, encrypted=True)
-    run_sync(
-        store,
-        direction=SyncDirection.PULL,
-        roots=roots,
-        cipher=gate.cipher,
-        listing=gate.listing,
-    )
+    _encrypted_sync(store, roots, SyncDirection.PULL)
 
     # Assert: it has no root prefix, so it maps to no local path.
     assert not (home / MANIFEST_KEY).exists()
@@ -188,14 +177,7 @@ def test_unchanged_files_are_not_re_uploaded(roots: tuple[SyncRoot, ...]) -> Non
     _encrypted_push(store, roots)
 
     # Act
-    gate = resolve_cipher(store, encrypted=True)
-    report = run_sync(
-        store,
-        direction=SyncDirection.PUSH,
-        roots=roots,
-        cipher=gate.cipher,
-        listing=gate.listing,
-    )
+    report = _encrypted_sync(store, roots, SyncDirection.PUSH)
 
     # Assert
     assert report.uploaded == []
@@ -208,14 +190,7 @@ def test_unchanged_files_are_not_re_downloaded(roots: tuple[SyncRoot, ...]) -> N
     _encrypted_push(store, roots)
 
     # Act
-    gate = resolve_cipher(store, encrypted=True)
-    report = run_sync(
-        store,
-        direction=SyncDirection.PULL,
-        roots=roots,
-        cipher=gate.cipher,
-        listing=gate.listing,
-    )
+    report = _encrypted_sync(store, roots, SyncDirection.PULL)
 
     # Assert
     assert report.downloaded == []

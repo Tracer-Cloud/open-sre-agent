@@ -8,25 +8,15 @@
     nonce       12 bytes    derived, not random - see below
     ciphertext + GCM tag    remainder
 
-The object key is authenticated as associated data but never stored in the
-envelope, so an object copied or renamed inside the store fails to open rather
-than decrypting as if it had always lived there.
+The object key is authenticated as associated data but never stored, so an
+object copied or renamed inside the store fails to open.
 
-**Why the nonce is derived, not random.** The sync engine decides whether a file
-changed by comparing the store's ETag against the MD5 of what it would upload.
-A random nonce makes every seal produce different bytes, so every file would
-look modified on every sync and downloads would fall back to comparing mtimes.
-Deriving the nonce from ``HMAC(nonce_key, object_key || plaintext)`` makes
-sealing a pure function and keeps that comparison meaningful.
-
-This is safe despite the usual warning about GCM nonce reuse. Reuse is
-catastrophic when one ``(key, nonce)`` pair covers *different* plaintexts; here
-an equal nonce implies equal object key and equal plaintext, hence identical
-ciphertext, so no pair is ever reused across differing messages. The same
-reasoning underpins the SIV constructions. The residual leak is that an
-observer can tell a file did not change between syncs — under the user's own
-key, in the user's own store, alongside sizes and timestamps that already say
-as much.
+The nonce is ``HMAC(nonce_key, object_key || plaintext)``, not random, because
+the engine detects change by comparing the store's ETag against the MD5 of what
+it would upload — a random nonce would make every file look modified on every
+sync. Safe despite the usual GCM warning: an equal nonce implies equal plaintext
+and therefore equal ciphertext, so no key/nonce pair ever covers two different
+messages.
 """
 
 from __future__ import annotations
