@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import pytest
+
 import integrations.kafka as kafka_module
 from integrations.kafka import (
     KafkaConfig,
@@ -191,6 +193,7 @@ class TestGetConsumerGroupLagImportCompat:
         return KafkaConfig(bootstrap_servers="broker:9092")
 
     def test_uses_the_model_location_when_available(self, monkeypatch: Any) -> None:
+        pytest.importorskip("confluent_kafka")
         from confluent_kafka._model import ConsumerGroupTopicPartitions as ModelClass
 
         admin = _FakeAdminClient()
@@ -205,10 +208,11 @@ class TestGetConsumerGroupLagImportCompat:
     def test_falls_back_to_the_admin_location_when_model_lacks_it(self, monkeypatch: Any) -> None:
         """Simulates an older confluent-kafka where the class is only public
         under confluent_kafka.admin, by hiding it from confluent_kafka._model
-        and installing a distinct stand-in class at the admin location — so
+        and installing a distinct stand-in class at the admin location, so
         the assertion (isinstance of *that* stand-in) can only pass if the
         except branch actually ran, not the try branch.
         """
+        pytest.importorskip("confluent_kafka")
         import confluent_kafka._model as model_module
         import confluent_kafka.admin as admin_module
 
@@ -237,9 +241,10 @@ class TestGetConsumerGroupLagImportCompat:
 
     def test_raises_clean_error_when_neither_location_has_it(self, monkeypatch: Any) -> None:
         """Both locations missing the class is a genuinely broken confluent-kafka
-        install — confirms that case fails closed through the outer except
+        install. Confirms that case fails closed through the outer except
         (tool_unavailable), not with an unrelated traceback.
         """
+        pytest.importorskip("confluent_kafka")
         import confluent_kafka._model as model_module
         import confluent_kafka.admin as admin_module
 
