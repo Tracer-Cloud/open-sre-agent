@@ -25,7 +25,7 @@ from surfaces.interactive_shell.ui import (
     print_repl_table,
     repl_table,
 )
-from surfaces.interactive_shell.ui.components.choice_menu import (
+from surfaces.shared.terminal.components.choice_menu import (
     CRUMB_SEP,
     repl_choose_one,
     repl_section_break,

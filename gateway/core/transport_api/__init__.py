@@ -7,7 +7,7 @@ In API-framework terms the gateway splits like this:
 * ``gateway/core/middleware/`` — the shared per-turn steps every ingress
   adapter runs (inbound decision, identity policy, approvals, stop/cancel, attention,
   conversation locks, terminal outcome).
-* ``gateway/core/runtime/`` — the service layer: the turn handler bridging
+* ``gateway/core/lifecycle/`` — the service layer: the turn handler bridging
   into the agent harness, and process plumbing.
 * ``gateway/startup.py`` — the facade: the one ``start_gateway`` entry the
   daemon calls. The transport registry and worker start/stop loop live with

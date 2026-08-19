@@ -176,7 +176,7 @@ class SigNozClient:
         except httpx.HTTPStatusError as err:
             message = _extract_http_error_message(err)
             if err.response.status_code == HTTPStatus.NOT_FOUND:
-                return None, f"404: {message or 'not found'}"
+                return None, f"{HTTPStatus.NOT_FOUND}: {message or 'not found'}"
             return None, message
         except Exception as err:
             return None, str(err)
@@ -300,7 +300,7 @@ class SigNozClient:
 
         response_json, error_message = self._query_range_post(payload)
         if error_message:
-            if "not found" in error_message.lower() or "404" in error_message:
+            if "not found" in error_message.lower() or str(HTTPStatus.NOT_FOUND) in error_message:
                 return {
                     "source": "signoz_metrics",
                     "available": True,

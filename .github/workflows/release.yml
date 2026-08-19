@@ -6,7 +6,7 @@ on:
     paths-ignore:
       - "docs/**"
       - "tests/benchmarks/cloudopsbench/infra/**"
-      - "platform/cloudflare_install_proxy/**"
+      - "infra/cloudflare_install_proxy/**"
       - "tests/e2e/kubernetes/helm/scripts/**"
       - "tests/**"
       - "**/*.md"
@@ -162,7 +162,7 @@ jobs:
 
       - name: Sync release version
         shell: bash
-        run: python platform/packaging/sync_release_version.py --tag "$TAG_NAME"
+        run: python platform/deployment/packaging/sync_release_version.py --tag "$TAG_NAME"
 
       - name: Build Python distributions
         run: |
@@ -177,7 +177,7 @@ jobs:
           VERSION="${TAG_NAME#v}"
           test -f "dist/opensre-${VERSION}.tar.gz"
           test -f "dist/opensre-${VERSION}-py3-none-any.whl"
-          uv run python platform/packaging/validate_wheel.py \
+          uv run python platform/deployment/packaging/validate_wheel.py \
             "dist/opensre-${VERSION}-py3-none-any.whl"
 
       - name: Upload Python distributions
@@ -297,7 +297,7 @@ jobs:
 
       - name: Sync binary version
         shell: bash
-        run: python platform/packaging/sync_release_version.py --version "$VERSION_NAME"
+        run: python platform/deployment/packaging/sync_release_version.py --version "$VERSION_NAME"
 
       - name: Install binary build dependencies
         shell: bash

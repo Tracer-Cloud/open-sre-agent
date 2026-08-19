@@ -25,8 +25,8 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from gateway.core.lifecycle.errors import GatewayTransportFailedError
 from gateway.core.middleware.approvals import ApprovalBroker
-from gateway.core.runtime.errors import GatewayTransportFailedError
 from gateway.core.storage.events.repository import HandledSlackEventRepository
 from gateway.transports.slack.delivery.approvals import handle_block_actions_payload
 from gateway.transports.slack.delivery.feedback import record_feedback_payload

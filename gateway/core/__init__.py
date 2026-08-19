@@ -2,7 +2,10 @@
 
 Subpackages:
 
-* ``runtime/`` — composition root, turn handler, approvals, daemon
+* ``host/`` — turn handler, session agents, cancel console, capacity
+* ``process/`` — daemon supervision, polling thread, readiness
+* ``runtime/`` — composition root, credential hydration, security audit
+* ``middleware/`` — per-turn steps every transport runs
 * ``storage/`` — session bindings and investigation stores
 * ``billing/`` — credits client
 * ``attachments/`` — attachment helpers
@@ -10,7 +13,7 @@ Subpackages:
 * ``config/`` — logging and gateway config helpers
 
 Must not import ``gateway.transports.*`` or ``gateway.web`` (surfaces).
-Sole exception: :mod:`gateway.core.runtime.controller`, the composition root,
+Sole exception: :mod:`gateway.core.lifecycle.controller`, the composition root,
 which wires the transports and the web surface together.
 """
 

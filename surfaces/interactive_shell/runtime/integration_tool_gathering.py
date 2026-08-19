@@ -3,7 +3,7 @@
 The bounded think -> call-tools -> observe loop is the harness's
 :func:`core.agent_harness.turns.evidence_driver.gather_tool_evidence`, driven by
 :class:`HeadlessAgent`. This module supplies the two ports a REPL plugs into it
-as a :class:`~core.agent_harness.turns.gather_ports.GatherPorts`: a
+as a :class:`~core.agent_harness.turns.gather_phase.GatherPhase`: a
 console-bound progress renderer and a persister into the shell's session store.
 """
 
@@ -16,7 +16,7 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
-from core.agent_harness.runtime import GatherPorts
+from core.agent_harness.runtime import GatherPhase
 from surfaces.interactive_shell.session import Session
 from surfaces.interactive_shell.ui import DIM
 from tools.registry import resolve_tool_activity_labels
@@ -166,13 +166,13 @@ class ShellGatherProgress:
             self._console.print(f"[{DIM}]· gathering cancelled[/]")
 
 
-def shell_gather_ports(session: Session, console: Console) -> GatherPorts:
+def shell_gather_phase(session: Session, console: Console) -> GatherPhase:
     """The REPL's gather phase: live progress on ``console``, tool calls persisted to ``session``."""
 
     def persist(executed: list[tuple[Any, Any]]) -> None:
         _persist_tool_calls(session, executed)
 
-    return GatherPorts(on_progress=ShellGatherProgress(console), persist=persist)
+    return GatherPhase(on_progress=ShellGatherProgress(console), persist=persist)
 
 
-__all__ = ["ShellGatherProgress", "shell_gather_ports"]
+__all__ = ["ShellGatherProgress", "shell_gather_phase"]

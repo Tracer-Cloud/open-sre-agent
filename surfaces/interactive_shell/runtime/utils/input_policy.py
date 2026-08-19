@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
+from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 
 
 def _literal_slash_command_text(text: str) -> str | None:

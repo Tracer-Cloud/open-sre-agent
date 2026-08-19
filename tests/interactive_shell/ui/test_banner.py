@@ -6,9 +6,9 @@ import io
 
 from rich.console import Console
 
-from surfaces.interactive_shell.ui.banner import banner as banner_module
-from surfaces.interactive_shell.ui.banner import banner_state as banner_state_module
-from surfaces.interactive_shell.ui.components import rendering as rendering_module
+from surfaces.interactive_shell.ui import poster as poster_module
+from surfaces.shared.terminal.banner import banner as banner_module
+from surfaces.shared.terminal.banner import banner_state as banner_state_module
 
 
 def test_integration_display_name_preserves_brand_casing() -> None:
@@ -51,7 +51,7 @@ def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> No
     render_calls: list[dict[str, object | None]] = []
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_clear_screen",
+        "surfaces.shared.terminal.components.rendering.repl_clear_screen",
         lambda: None,
     )
 
@@ -64,11 +64,11 @@ def test_refresh_welcome_poster_uses_repl_safe_render(monkeypatch: object) -> No
         render_calls.append({"session": session, "theme_notice": theme_notice})
 
     monkeypatch.setattr(
-        "surfaces.interactive_shell.ui.components.rendering.repl_render_launch_poster",
+        "surfaces.interactive_shell.ui.poster.repl_render_launch_poster",
         _fake_render,
     )
 
-    rendering_module.refresh_welcome_poster(console, session="sess", theme_notice="pink")
+    poster_module.refresh_welcome_poster(console, session="sess", theme_notice="pink")
 
     assert render_calls == [{"session": "sess", "theme_notice": "pink"}]
 
@@ -184,7 +184,7 @@ def test_count_scheduled_tasks_survives_store_failure(monkeypatch: object) -> No
     real_import = builtins.__import__
 
     def _fail_scheduler_store(name: str, *args: object, **kwargs: object) -> object:
-        if name == "platform.scheduler.store":
+        if name == "platform.scheduling.scheduler.store":
             raise ImportError("simulated scheduler store failure")
         return real_import(name, *args, **kwargs)
 

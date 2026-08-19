@@ -13,8 +13,9 @@ from config.constants.product import RELEASE_STAGE
 from config.repl_config import ReplConfig
 from platform.analytics import provider
 from platform.analytics.events import Event
-from surfaces.cli.app import cli, main
+from surfaces.cli.app import cli
 from surfaces.cli.startup import sentry_entrypoint_for
+from surfaces.entrypoint import main
 
 
 class _EmptyCatalog:

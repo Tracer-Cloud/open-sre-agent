@@ -11,7 +11,7 @@ import logging
 from typing import Any, cast
 
 from core.state import InvestigationState
-from platform.reporting.delivery_registry import (
+from platform.delivery.reporting.delivery_registry import (
     DeliveryContext,
     register_delivery_adapter,
 )

@@ -292,13 +292,14 @@ def _slash_commands() -> Mapping[str, object]:
     return SLASH_COMMANDS
 
 
-def _cli_command_group() -> click.Command | None:
-    from surfaces.cli.app import cli
-
-    return cli
-
-
 _SESSION_CLI_REFERENCE_ATTR = "_shell_cli_reference"
+
+
+def _session_cli_command_group(session: Any) -> click.Command | None:
+    """The Click group the entrypoint handed the shell, if any."""
+    terminal = getattr(session, "terminal", None)
+    group = getattr(terminal, "cli_command_group", None)
+    return group if isinstance(group, click.Command) else None
 
 
 def session_cli_reference(session: Any) -> CliReference:
@@ -307,7 +308,7 @@ def session_cli_reference(session: Any) -> CliReference:
     if isinstance(cached, CliReference):
         return cached
     cli = CliReference()
-    cli.set_command_group_provider(_cli_command_group)
+    cli.set_command_group_provider(lambda: _session_cli_command_group(session))
     cli.set_slash_commands_provider(_slash_commands)
     setattr(session, _SESSION_CLI_REFERENCE_ATTR, cli)
     return cli
@@ -323,7 +324,7 @@ class ShellPromptContextProvider(DefaultPromptContextProvider):
 
     Overrides only what differs from
     :class:`~core.agent_harness.prompts.grounding.DefaultPromptContextProvider`:
-    the surface, the CLI reference (``surfaces.cli`` + slash commands, cached per
+    the surface, the CLI reference (the entrypoint's Click group + slash commands, cached per
     session), and cache diagnostics that include that catalog.
     """
 

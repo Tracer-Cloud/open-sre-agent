@@ -20,19 +20,19 @@ from core.agent_harness.runtime import TurnBinding
 from core.agent_harness.session import InMemorySessionStore
 from core.agent_harness.tools.tool_provider import DefaultToolProvider
 from core.agent_harness.turns.default_reasoning_client import DefaultReasoningClientProvider
-from core.agent_harness.turns.gather_ports import GatherPorts
+from core.agent_harness.turns.gather_phase import GatherPhase
 from core.agent_harness.turns.headless_adapters import BufferOutputSink, NoopTurnAccounting
 from core.agent_harness.turns.headless_agent import HeadlessAgent
-from core.agent_harness.turns.port_families import HeadlessPorts
+from core.agent_harness.turns.headless_build import InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import TurnResult
 from core.domain.types.tools import ToolSurface
 from core.llm.types import AgentLLMResponse, ToolCall
 from core.tool_framework.registered_tool import RegisteredTool
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.host.turn_handler import GatewayTurnHandler
 from surfaces.interactive_shell.runtime.shell_turn_execution import execute_shell_turn
 from surfaces.interactive_shell.runtime.slash_adapter import headless_slash_ports
 from surfaces.interactive_shell.session import Session
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 
 Surface = Literal["shell", "headless", "gateway_handler"]
 
@@ -308,7 +308,7 @@ def _dispatch_turn(
     gather_enabled: bool = True,
 ) -> TurnResult:
     output = BufferOutputSink()
-    agent = HeadlessPorts(
+    agent = InMemoryHeadlessBuild(
         session=session, output=output, reasoning=DefaultReasoningClientProvider(output=output)
     ).agent(
         tools=DefaultToolProvider(
@@ -317,7 +317,7 @@ def _dispatch_turn(
             slash_ports_factory=headless_slash_ports,
         ),
         prompts=DefaultPromptContextProvider(session),
-        gather=GatherPorts(enabled=gather_enabled),
+        gather=GatherPhase(enabled=gather_enabled),
     )
     agent.bind_turn(TurnBinding(accounting=NoopTurnAccounting()))
     return agent.dispatch(message)
@@ -349,10 +349,10 @@ def _install_gateway_dispatch_spy(
 ) -> None:
     """Spy on the gateway pool's agent construction (not ``HeadlessAgent`` directly).
 
-    ``SessionAgentPool`` builds agents via ``DefaultPorts(...).agent(...)``; the
+    ``SessionAgentPool`` builds agents via ``DefaultHeadlessBuild(...).agent(...)``; the
     stub routes both halves through one ``build`` over the real family.
     """
-    from core.agent_harness.turns.port_families import DefaultPorts as real_ports
+    from core.agent_harness.turns.headless_build import DefaultHeadlessBuild as real_ports
 
     def _spy_build(
         *,
@@ -361,10 +361,16 @@ def _install_gateway_dispatch_spy(
         console: Any = None,
         logger: Any = None,
         surface: Any = None,
+        error_reporter: Any = None,
         **ports: Any,
     ) -> HeadlessAgent:
         agent = real_ports(
-            session=session, output=output, console=console, logger=logger, surface=surface
+            session=session,
+            output=output,
+            console=console,
+            logger=logger,
+            surface=surface,
+            error_reporter=error_reporter,
         ).agent(**ports)
         original_dispatch = type(agent).dispatch
 
@@ -377,7 +383,8 @@ def _install_gateway_dispatch_spy(
         return agent
 
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(_spy_build)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(_spy_build),
     )
 
 

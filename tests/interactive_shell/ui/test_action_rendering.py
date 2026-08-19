@@ -179,7 +179,7 @@ def test_skill_view_tool_end_without_start_prints_nothing() -> None:
 def test_llm_start_advances_spinner_verb_every_two_steps() -> None:
     """The spinner verb re-rolls once per two agent steps, not every step."""
     from surfaces.interactive_shell.runtime.core.state import SpinnerState
-    from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
+    from surfaces.shared.terminal.output.console_state import set_investigation_spinner
 
     observer, _buffer = _observer_with_buffer()
     spinner = SpinnerState()

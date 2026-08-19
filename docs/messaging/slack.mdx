@@ -176,6 +176,14 @@ Example prompts:
 - "Join #ops then reply that mitigation is rolled out."
 - "Who is on the team, and what does Vaibhav do?"
 - "Add task: ping owners about the deploy window."
+- "Get GitHub star velocity for the last 30 days on `your-org/your-repo` and post it to Slack."
+- "Generate a Slack-ready work status report for `your-org/your-repo` and post it."
+
+The last two need [GitHub configured](/github) and name the repository explicitly
+(`your-org/your-repo`) so the GitHub tools can resolve it — see
+[GitHub workflow tools](/github-workflow-tools) for what they can report on.
+`slack_send_message` requires approval before it posts; confirm the prompt when
+it appears, then check the channel for the message.
 
 ### Production Engineer schedules (Slack)
 

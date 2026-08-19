@@ -337,7 +337,9 @@ __all__ = [
     "EvidenceGatherer",
     "ExecuteActions",
     "GatheredEvidence",
+    "InvestigationPortsFactory",
     "LlmFactory",
+    "LlmProviderPortsFactory",
     "OutputBindable",
     "OutputSink",
     "PromptContextProvider",
@@ -345,7 +347,9 @@ __all__ = [
     "RunRecordFactory",
     "SessionBindable",
     "SessionState",
+    "SlashPortsFactory",
     "SubprocessPresenterFactory",
+    "TaskCancelPortsFactory",
     "ToolEventObserver",
     "ToolProvider",
     "ToolRegistry",
@@ -361,3 +365,15 @@ SubprocessPresenterFactory = Callable[
     [Any, Any, "ConfirmFn | None", bool | None, bool],
     Any,
 ]
+
+
+# Host capabilities an action tool calls back into: named commands, LLM-provider
+# switching, task cancellation and investigation launch. Their contracts live in
+# ``tools`` beside the tools that call them (see
+# ``tools.interactive_shell.shared.host_ports.ExecutionGate``), so the seams stay
+# untyped here — ``core`` only carries a capability from the host to the tool,
+# and typing them here would mean ``core`` importing ``tools``.
+InvestigationPortsFactory = Callable[[], Any]
+LlmProviderPortsFactory = Callable[[], Any]
+TaskCancelPortsFactory = Callable[[], Any]
+SlashPortsFactory = Callable[[], Any]

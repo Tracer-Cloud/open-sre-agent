@@ -39,7 +39,7 @@ def _emit_llm_config() -> None:
         get_llm_provider_api_key_env,
     )
     from config.llm_auth.credentials import status as credential_status
-    from platform.common.runtime_flags import is_json_output
+    from platform.process.runtime_flags import is_json_output
 
     provider = get_configured_llm_provider()
     auth_status = credential_status(provider)
@@ -158,7 +158,7 @@ def config_command(ctx: click.Context) -> None:
 @config_command.command(name="show")
 def config_show() -> None:
     """Show local ~/.opensre/config.yml values."""
-    from platform.common.runtime_flags import is_json_output
+    from platform.process.runtime_flags import is_json_output
 
     payload = _load_config()
 

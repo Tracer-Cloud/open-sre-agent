@@ -51,7 +51,7 @@ def _cmd_health(_session: Session, console: Console, _args: list[str]) -> bool:
     from config.config import get_environment
     from config.constants.paths import integrations_store_path
     from integrations.verify import verify_integrations
-    from surfaces.interactive_shell.ui.health import render_health_report
+    from surfaces.shared.terminal.health import render_health_report
 
     results = verify_integrations()
     environment = get_environment().value

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from platform.background_investigations.types import BackgroundInvestigationRecord
-from platform.common.errors import OpenSREError
-from platform.notifications.outbound_registry import (
+from platform.delivery.notifications.outbound_registry import (
     BACKGROUND_RCA,
     register_outbound_adapter,
 )
-from platform.notifications.rca_summary import summary_sections
+from platform.delivery.notifications.rca_summary import summary_sections
+from platform.errors import OpenSREError
+from platform.scheduling.background_investigations.types import BackgroundInvestigationRecord
 
 
 def deliver_telegram_notification(record: BackgroundInvestigationRecord) -> str:
@@ -18,7 +18,7 @@ def deliver_telegram_notification(record: BackgroundInvestigationRecord) -> str:
     from integrations.smtp.delivery import format_background_rca_email
     from integrations.telegram.credentials import load_credentials_from_env
     from integrations.telegram.delivery import send_telegram_report
-    from platform.notifications.redaction import redact_token
+    from platform.delivery.notifications.redaction import redact_token
 
     try:
         creds = load_credentials_from_env()

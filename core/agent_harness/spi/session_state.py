@@ -1,11 +1,13 @@
 """Session state a host reads and sets around a turn.
 
 Background and trust mode, the terminal, auto-command and turn-outcome hints,
-resume notes from an interrupted turn, and transcript compaction.
+resume notes from an interrupted turn, transcript compaction, and the
+capabilities a host withholds.
 """
 
 from __future__ import annotations
 
+from core.agent_harness.session.capabilities import withhold_capabilities
 from core.agent_harness.session.pending_choice import PendingUserChoice
 from core.agent_harness.session.pending_offer import (
     PendingScheduleOffer,
@@ -42,4 +44,5 @@ __all__ = [
     "set_auto_command",
     "set_turn_outcome_hint",
     "trust_mode_enabled",
+    "withhold_capabilities",
 ]

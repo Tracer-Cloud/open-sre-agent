@@ -118,6 +118,43 @@ or delivery errors, the RCA still completes, stays in `/background list`, and
 can still be promoted with `/background use`.
 </Note>
 
+<Warning>
+Slack and Discord are **not supported** as background notification channels. If you set them, the notification result will show `unsupported`.
+</Warning>
+
+---
+
+## Scheduled Tasks (Cron)
+
+Recurring scheduled tasks created with `opensre cron add` execute automatically in the background while the scheduler daemon (`opensre cron start`) or gateway is running.
+
+<Warning>
+If no scheduler process is running, configured tasks will never fire and no execution history or delivery will appear. Start the daemon with `opensre cron start` or run `opensre gateway start` to ensure your tasks execute.
+</Warning>
+
+Cron delivery supports a different set of providers than background notifications:
+
+| Provider | Notes |
+| --- | --- |
+| `telegram` | Requires `--chat-id` |
+| `slack` | Uses incoming webhook or bot token; `--chat-id` optional with webhook |
+| `discord` | Requires `--chat-id` |
+| `rocketchat` | Requires `--chat-id` |
+| `interactive_shell` | Delivers to the local shell inbox; no `--chat-id` needed |
+
+- **List active cron tasks:** Run `opensre cron list` to view all configured tasks and their next fire times.
+- **View execution history:** Use `opensre cron logs <task_id>` to see the execution history, statuses, and any errors for a specific task.
+- **Interactive shell loops:** If you use `/loops add`, you can check their status using `/loops` and view recent messages with `/loops messages`.
+
+For a deep dive into the scheduling system, refer to the [Scheduled Deliveries (Cron)](/cron) documentation.
+
+<Note>
+**Product Gaps & Proactive Delivery**
+
+Proactive Slack delivery and further enhancements to chat-based monitoring are currently tracked in product task **T-SR-12**. These gaps will be addressed as part of that upstream work.
+</Note>
+
+---
 ## Session lifecycle
 
 - Jobs are not saved across REPL restarts. Exiting the process stops in-flight

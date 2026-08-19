@@ -5,7 +5,7 @@ up the web server and every chat transport together and returns the running
 handle. Worker initialization lives with the transports
 (:mod:`gateway.transports.startup`); this module only composes.
 
-Only :class:`~gateway.core.runtime.controller.GatewayController` imports this
+Only :class:`~gateway.core.lifecycle.controller.GatewayController` imports this
 module, and only this module imports ``gateway.transports.startup``.
 """
 

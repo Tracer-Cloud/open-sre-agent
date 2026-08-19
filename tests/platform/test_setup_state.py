@@ -116,7 +116,7 @@ class TestLatestDeliveryOrdering:
     ) -> None:
         # Arrange: overlapping runs. The slow one started first but finished
         # last, so its outcome is the operator's most recent delivery.
-        from platform.scheduler.types import TaskRun, TaskStatus
+        from platform.scheduling.scheduler.types import TaskRun, TaskStatus
 
         slow_failed = TaskRun(
             task_id="slow",
@@ -154,8 +154,8 @@ class TestLatestDeliveryOrdering:
     ) -> None:
         # Arrange: Greptile P1 — more than five newer RUNNING rows (by start)
         # must not hide an earlier-started finished delivery.
-        from platform.scheduler import claim_store
-        from platform.scheduler.types import TaskStatus
+        from platform.scheduling.scheduler import claim_store
+        from platform.scheduling.scheduler.types import TaskStatus
 
         db = tmp_path / "scheduler.db"
         monkeypatch.setattr(claim_store, "_default_db_path", lambda: db)

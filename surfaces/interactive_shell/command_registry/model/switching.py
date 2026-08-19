@@ -10,7 +10,7 @@ from rich.markup import escape
 import surfaces.interactive_shell.command_registry.repl_data as repl_data
 from config.constants.llm import LLM_PROVIDER_ENV
 from surfaces.interactive_shell.ui import DIM, ERROR, HIGHLIGHT, WARNING, render_models_table
-from surfaces.interactive_shell.ui.components.choice_menu import print_valid_choice_list
+from surfaces.shared.terminal.components.choice_menu import print_valid_choice_list
 
 
 def _format_supported_models(provider_models: tuple[object, ...]) -> str:

@@ -12,12 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from gateway.core.runtime.security_audit import audit_security_action
 from gateway.core.storage.investigations.repository import (
     InvestigationRecord,
     InvestigationRepository,
     InvestigationStatus,
 )
+from gateway.core.storage.security_audit import audit_security_action
 from gateway.web.clerk_deps import ClerkClaims
 from gateway.web.worker import ensure_worker_started
 

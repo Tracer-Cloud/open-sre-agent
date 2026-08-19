@@ -11,27 +11,29 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
+from core.agent_harness.runtime import AgentBuildConfig
 from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
-from gateway.core.runtime.turn_handler import GatewayTurnHandler
+from gateway.core.host.session_agents import SessionAgentPool
+from gateway.core.host.turn_handler import GatewayTurnHandler
 from tests.core.agent.orchestration.cross_surface_parity_harness import (
     RecordingGatewaySink,
 )
-from tests.shared.default_ports_stub import default_ports_stub
+from tests.shared.default_headless_build_stub import default_headless_build_stub
 from tests.shared.fake_agent import fake_agent
 
 
 @pytest.fixture(autouse=True)
 def _stub_gateway_turn_analytics(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_started", lambda **_: None
+        "gateway.core.host.turn_handler.capture_gateway_turn_started", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed", lambda **_: None
+        "gateway.core.host.turn_handler.capture_gateway_turn_completed", lambda **_: None
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_failed", lambda **_: None
+        "gateway.core.host.turn_handler.capture_gateway_turn_failed", lambda **_: None
     )
 
 
@@ -60,7 +62,8 @@ def _patch_headless_agent(monkeypatch: Any, result: TurnResult) -> MagicMock:
     factory.side_effect = _build
     factory.return_value = agent
     monkeypatch.setattr(
-        "gateway.core.runtime.session_agents.DefaultPorts", default_ports_stub(factory)
+        "gateway.core.host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(factory),
     )
     return factory
 
@@ -272,7 +275,7 @@ def test_turn_handler_skips_finalize_when_answer_was_streamed(monkeypatch: Any) 
 
 def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> None:
     """Soft timeout / stop owns the sink; do not overwrite with empty finalize."""
-    from gateway.core.runtime.cancel_console import CancelConsole
+    from gateway.core.host.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
@@ -294,7 +297,7 @@ def test_turn_handler_skips_finalize_when_turn_cancelled(monkeypatch: Any) -> No
 
 def test_turn_handler_binds_cancel_console_each_turn(monkeypatch: Any) -> None:
     """Each turn rebinds a CancelConsole so timeout Events stay turn-scoped."""
-    from gateway.core.runtime.cancel_console import CancelConsole
+    from gateway.core.host.cancel_console import CancelConsole
 
     agent_cls = _patch_headless_agent(monkeypatch, _empty_turn_result())
     sink = MagicMock()
@@ -400,25 +403,25 @@ def test_turn_handler_emits_gateway_turn_analytics(monkeypatch: Any) -> None:
     completed: list[dict[str, object]] = []
 
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_started",
+        "gateway.core.host.turn_handler.capture_gateway_turn_started",
         lambda **kwargs: started.append(kwargs),
     )
     monkeypatch.setattr(
-        "gateway.core.runtime.turn_handler.capture_gateway_turn_completed",
+        "gateway.core.host.turn_handler.capture_gateway_turn_completed",
         lambda **kwargs: completed.append(kwargs),
     )
     _patch_headless_agent(monkeypatch, _empty_turn_result())
 
-    from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+    from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
     session = SessionCore(store=InMemorySessionStore())
     handler = GatewayTurnHandler(console=Console(force_terminal=False))
-    with bound_usage_context(surface=SURFACE_SLACK, user_id="U1"):
+    with bound_usage_context(surface=UsageSurface.SLACK, user_id="U1"):
         handler("hi", session, MagicMock(), logging.getLogger("test"))
 
-    assert started == [{"surface": SURFACE_SLACK}]
+    assert started == [{"surface": UsageSurface.SLACK}]
     assert len(completed) == 1
-    assert completed[0]["surface"] == SURFACE_SLACK
+    assert completed[0]["surface"] == UsageSurface.SLACK
     assert completed[0]["answered"] is False
 
 
@@ -451,3 +454,19 @@ def test_turn_handler_holds_the_session_lock_for_the_whole_turn(monkeypatch: Any
     # Assert: the turn ran inside the lock. Calling agent_for directly would
     # leave this empty, since session_agent would never be entered.
     assert events == ["lock-acquired", "lock-released"]
+
+
+def test_turn_handler_forwards_agent_build_to_the_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[Any] = []
+    original_init = SessionAgentPool.__init__
+
+    def _init(self: SessionAgentPool, **kwargs: Any) -> None:
+        seen.append(kwargs.get("agent_build"))
+        original_init(self, **kwargs)
+
+    monkeypatch.setattr(SessionAgentPool, "__init__", _init)
+    agent_build = AgentBuildConfig()
+    GatewayTurnHandler(console=Console(force_terminal=False), agent_build=agent_build)
+    assert seen == [agent_build]

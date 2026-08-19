@@ -16,7 +16,7 @@ from typing import Any
 import httpx
 
 from integrations.verification import register_validation_verifier
-from platform.common.url_validation import validate_https_or_loopback_http_url
+from platform.text.url_validation import validate_https_or_loopback_http_url
 
 
 @dataclass(frozen=True)

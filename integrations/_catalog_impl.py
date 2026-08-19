@@ -383,8 +383,8 @@ from integrations.x_mcp import build_x_mcp_config
 from integrations.x_mcp import classify as _classify_x_mcp
 from integrations.yandex_cloud import classify as _classify_yandex_cloud
 from integrations.yandex_cloud.config import YandexCloudIntegrationConfig
-from platform.common.coercion import safe_int
 from platform.observability.errors.boundary import report_exception
+from platform.text.coercion import safe_int
 
 logger = logging.getLogger(__name__)
 

@@ -26,8 +26,8 @@ from surfaces.interactive_shell.ui import (
     ERROR,
     WARNING,
 )
-from surfaces.interactive_shell.ui.components.cpr_stdin import drain_stale_cpr_bytes
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
+from surfaces.shared.terminal.components.cpr_stdin import drain_stale_cpr_bytes
 
 
 @dataclass(frozen=True)

@@ -33,7 +33,7 @@ SetupState = SetupSnapshot
 
 
 def _scheduled_tasks() -> list[Any]:
-    from platform.scheduler.store import list_tasks
+    from platform.scheduling.scheduler.store import list_tasks
 
     return list(list_tasks())
 
@@ -45,8 +45,8 @@ def _store_paths() -> tuple[Path, ...]:
     ``-wal`` sidecar and the main file keeps its size and mtime until a
     checkpoint. Both are watched, or a completed run stays invisible.
     """
-    from platform.scheduler.claim_store import _default_db_path
-    from platform.scheduler.store import _default_store_path
+    from platform.scheduling.scheduler.claim_store import _default_db_path
+    from platform.scheduling.scheduler.store import _default_store_path
 
     db = _default_db_path()
     return _default_store_path(), db, db.with_name(f"{db.name}-wal")
@@ -78,7 +78,7 @@ def _task_can_deliver(task: Any) -> bool:
     the caller counts across every task, so one malformed row must not collapse
     the whole snapshot and report a configured install as empty.
     """
-    from platform.scheduler.delivery import task_can_deliver
+    from platform.scheduling.scheduler.delivery import task_can_deliver
 
     try:
         return task_can_deliver(
@@ -92,7 +92,7 @@ def _task_can_deliver(task: Any) -> bool:
 
 
 def _latest_finished_run(task_id: str) -> Any | None:
-    from platform.scheduler.claim_store import get_latest_finished_run
+    from platform.scheduling.scheduler.claim_store import get_latest_finished_run
 
     return get_latest_finished_run(task_id)
 
@@ -111,7 +111,7 @@ def _latest_delivery_ok(tasks: Sequence[Any]) -> bool | None:
     are ignored at the store layer so a burst of pending claims cannot hide
     the last completed delivery.
     """
-    from platform.scheduler.types import TaskStatus
+    from platform.scheduling.scheduler.types import TaskStatus
 
     finished = [run for task in tasks if (run := _latest_finished_run(task.id)) is not None]
     if not finished:

@@ -75,7 +75,7 @@ def run_incident_investigation(
     from platform.analytics.cli import track_investigation
     from platform.analytics.source import EntrypointSource, TriggerMode
     from platform.analytics.usage_context import (
-        SURFACE_CLI,
+        UsageSurface,
         bound_usage_context,
         ensure_process_session_id,
         get_surface,
@@ -86,7 +86,7 @@ def run_incident_investigation(
     # for standalone Hermes watch processes.
     with (
         bound_usage_context(
-            surface=None if get_surface() else SURFACE_CLI,
+            surface=None if get_surface() else UsageSurface.CLI,
             session_id=ensure_process_session_id(),
         ),
         track_investigation(

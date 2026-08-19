@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from core.agent_harness.harness import AgentSession, SessionConfig
-from core.agent_harness.turns.gather_ports import GATHER_DISABLED
+from core.agent_harness.turns.gather_phase import GATHER_DISABLED
 from core.agent_harness.turns.headless_adapters import (
     BufferOutputSink,
     EmptyPromptContextProvider,
@@ -24,7 +24,7 @@ from core.agent_harness.turns.headless_adapters import (
     StaticReasoningClientProvider,
 )
 from core.agent_harness.turns.headless_agent import HeadlessAgent
-from core.agent_harness.turns.port_families import DefaultPorts, HeadlessPorts
+from core.agent_harness.turns.headless_build import DefaultHeadlessBuild, InMemoryHeadlessBuild
 from core.agent_harness.turns.turn_results import ToolCallingTurnResult, TurnResult
 
 
@@ -110,7 +110,7 @@ def _controlled_agent(
     prompts: Any | None = None,
 ) -> tuple[HeadlessAgent, Any]:
     sink = output if output is not None else BufferOutputSink()
-    agent = HeadlessPorts(
+    agent = InMemoryHeadlessBuild(
         output=sink, reasoning=StaticReasoningClientProvider(client=_EchoClient())
     ).agent(
         tools=NullToolProvider(),
@@ -157,15 +157,15 @@ def test_follow_up_reuses_the_same_attached_agent(stub_action_planner: None) -> 
 def test_documented_custom_sink_path_captures_streamed_answer(
     stub_action_planner: None,
 ) -> None:
-    """``startup`` → ``DefaultPorts(...).agent()`` → ``attach_agent``."""
+    """``startup`` → ``DefaultHeadlessBuild(...).agent()`` → ``attach_agent``."""
     # Arrange
     harness = AgentSession(_headless_config())
     startup = harness.startup()
     sink = BufferOutputSink()
-    agent = DefaultPorts(session=startup.session, output=sink).agent()
+    agent = DefaultHeadlessBuild(session=startup.session, output=sink).agent()
     agent._tools = NullToolProvider()  # noqa: SLF001
     agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
+    agent._gather_phase = GATHER_DISABLED  # noqa: SLF001
     harness.attach_agent(agent)
 
     # Act
@@ -185,7 +185,7 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
     assert harness.agent is not None
     harness.agent._tools = NullToolProvider()  # noqa: SLF001
     harness.agent._reasoning = StaticReasoningClientProvider(client=_EchoClient())  # noqa: SLF001
-    harness.agent._gather_ports = GATHER_DISABLED  # noqa: SLF001
+    harness.agent._gather_phase = GATHER_DISABLED  # noqa: SLF001
 
     # Act
     result = harness.chat("what is our on-call policy?")
@@ -198,7 +198,7 @@ def test_start_honours_caller_grounding_provider(stub_action_planner: None) -> N
 
 
 def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
-    """The explicit ``DefaultPorts.agent`` path must take ``prompts=``."""
+    """The explicit ``DefaultHeadlessBuild.agent`` path must take ``prompts=``."""
     # Arrange
     harness = AgentSession(_headless_config())
     startup = harness.startup()
@@ -206,7 +206,7 @@ def test_builder_accepts_caller_grounding_on_the_second_path() -> None:
     sink = BufferOutputSink()
 
     # Act
-    agent = DefaultPorts(session=startup.session, output=sink).agent(prompts=prompts)
+    agent = DefaultHeadlessBuild(session=startup.session, output=sink).agent(prompts=prompts)
 
     # Assert — wired before any dispatch
     assert agent._prompts is prompts  # noqa: SLF001

@@ -49,7 +49,7 @@ from gateway.transports.slack.processing.thread_history import (
 )
 from gateway.transports.slack.settings import SlackGatewaySettings
 from integrations.messaging_security import MessagingPlatform
-from platform.analytics.usage_context import SURFACE_SLACK, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 
 
 # Only an explicit 402 from the credit ledger posts this; UNCONFIGURED /
@@ -332,7 +332,7 @@ class SlackTurnDispatcher:
                             on_user_stop=_on_user_stop,
                         ),
                         bound_usage_context(
-                            surface=SURFACE_SLACK,
+                            surface=UsageSurface.SLACK,
                             session_id=session.session_id,
                             user_id=inbound.user_id or None,
                         ),

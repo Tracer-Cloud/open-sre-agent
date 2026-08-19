@@ -13,8 +13,8 @@ from __future__ import annotations
 from typing import Any, cast
 
 from core.state import InvestigationState
-from platform.masking import MaskingContext
-from platform.notifications.ingest_delivery import create_investigation_and_attach_url
+from platform.delivery.notifications.ingest_delivery import create_investigation_and_attach_url
+from platform.safety.masking import MaskingContext
 from tools.investigation.reporting.context import build_report_context
 from tools.investigation.reporting.delivery import dispatch_report
 from tools.investigation.reporting.evaluation import run_optional_opensre_evaluation

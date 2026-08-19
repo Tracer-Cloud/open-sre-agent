@@ -16,7 +16,11 @@ OpenSRE queries Azure Monitor Log Analytics through the public Query REST API du
 
 ## Setup
 
-There is no `opensre integrations setup azure` handler. Configure Azure Monitor with environment variables or the persistent store only.
+```bash
+opensre integrations setup azure
+```
+
+That writes the workspace id, bearer token, and optional fields to the store, keyring, and project `.env` in one pass. You can still set the same values by hand.
 
 ### Option 1: Environment variables
 

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from core.agent_harness.runtime import HeadlessAgent
 
 from platform.analytics.repl_context import bound_repl_turn_context
-from platform.analytics.usage_context import SURFACE_CLI, bound_usage_context
+from platform.analytics.usage_context import UsageSurface, bound_usage_context
 from platform.observability.trace.spans import bind_session_trace, emit_thread_boundary
 from surfaces.interactive_shell.runtime.agent_presentation import (
     AgentEvent,
@@ -47,11 +47,11 @@ from surfaces.interactive_shell.runtime.utils.input_policy import (
     turn_needs_exclusive_stdin,
 )
 from surfaces.interactive_shell.session import Session
-from surfaces.interactive_shell.ui.output.console_state import set_investigation_spinner
-from surfaces.interactive_shell.ui.output.repl_progress import repl_safe_progress_scope
 from surfaces.interactive_shell.ui.streaming.console import StreamingConsole
 from surfaces.interactive_shell.utils.telemetry import PromptRecorder
 from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.output.console_state import set_investigation_spinner
+from surfaces.shared.terminal.output.repl_progress import repl_safe_progress_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -180,7 +180,7 @@ async def _run_agent_turn_loop(
 
         with (
             bound_usage_context(
-                surface=SURFACE_CLI,
+                surface=UsageSurface.CLI,
                 session_id=runtime.session.session_id,
             ),
             bound_repl_turn_context(

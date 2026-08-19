@@ -12,7 +12,6 @@ from platform.terminal import theme as ui_theme
 from surfaces.interactive_shell.command_registry import SLASH_COMMANDS
 from surfaces.interactive_shell.command_registry.help import QUICK_ACCESS_COMMANDS
 from surfaces.interactive_shell.command_registry.types import SlashCommand
-from surfaces.interactive_shell.ui.components.choice_menu import repl_tty_interactive
 from surfaces.interactive_shell.ui.input_prompt.layout import (
     _DEFAULT_TERMINAL_COLUMNS,
     _clip_text,
@@ -20,6 +19,7 @@ from surfaces.interactive_shell.ui.input_prompt.layout import (
     _short_meta,
     _terminal_columns,
 )
+from surfaces.shared.terminal.components.choice_menu import repl_tty_interactive
 
 _COMPLETION_PREVIEW_SEP = " — "
 

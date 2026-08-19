@@ -5,7 +5,7 @@ Not a chat transport — no turn-handler / sink wiring.
 
 | May import | Must not |
 |------------|----------|
-| `gateway.core.*` | `gateway.transports.*`, `gateway.channels` |
+| `gateway.core.*` | `gateway.transports.*`, `gateway.startup` |
 
 Entry: `webapp.py` (`app`) — `uvicorn gateway.web.webapp:app` when `MODE=web`,
 or daemon / shell via `web_server.serve_webapp_in_thread`.
@@ -26,7 +26,7 @@ safe to re-enter, not invent a divergent registry.
 ## Capacity (Path-2)
 
 `POST /investigate` and `InvestigationWorker` take
-:func:`~gateway.core.runtime.concurrency.process_turn_gate` — the same
+:func:`~gateway.core.host.concurrency.process_turn_gate` — the same
 process gate as chat/scheduler (`OPENSRE_SIZE_PROFILE`). Sync HTTP
 `try_acquire` → 503 when full; the worker `acquire`s (blocking) after claim.
 Capacity is process gate + transport pools + Fargate fleet (same rules as the gateway package).

@@ -286,21 +286,21 @@ docs-dev:
 # Gateway deploy (Telegram; AMI + systemd on EC2)
 # Step 1 — bake once per code change (launches temp EC2, installs opensre, snapshots AMI):
 build-gateway-image:
-	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle build-server-image
+	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle build-server-image
 
 # Step 2 — launch gateway instance from pre-baked AMI (fast):
 deploy-gateway:
-	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle deploy
+	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle deploy
 
 destroy-gateway:
-	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle destroy
+	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle destroy
 
 # Gateway install on a new server (no pre-baked AMI — installs inline via SSM)
 install-gateway-on-new-server:
-	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle install-on-new-server
+	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle install-on-new-server
 
 destroy-gateway-on-new-server:
-	$(PYTHON) -m platform.deployment_ec2.telegram_gateway.lifecycle destroy-installed-server
+	$(PYTHON) -m platform.deployment.ec2.telegram_gateway.lifecycle destroy-installed-server
 
 # Deploy Lambda test case
 deploy-lambda:

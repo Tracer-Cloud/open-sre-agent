@@ -10,7 +10,7 @@ from rich.markup import escape
 
 from config.llm_reasoning_effort import apply_reasoning_effort
 from core.agent_harness.spi.session_state import background_mode_enabled, session_terminal
-from platform.common.task_types import TaskRecord
+from platform.scheduling.task_types import TaskRecord
 from surfaces.interactive_shell.command_registry.types import SlashCommand
 from surfaces.interactive_shell.runtime import Session
 from surfaces.interactive_shell.runtime.background.runner import (
@@ -22,11 +22,6 @@ from surfaces.interactive_shell.ui import (
     ERROR,
     HIGHLIGHT,
     print_repl_json,
-)
-from surfaces.interactive_shell.ui.components.choice_menu import (
-    repl_choose_one,
-    repl_section_break,
-    repl_tty_interactive,
 )
 from surfaces.interactive_shell.ui.foreground_investigation import run_foreground_investigation
 from surfaces.interactive_shell.ui.investigation_outcome import (
@@ -41,6 +36,11 @@ from surfaces.interactive_shell.utils.telemetry.turn_outcome import (
     format_investigation_terminal_outcome,
 )
 from surfaces.shared.error_handling.exception_reporting import report_exception
+from surfaces.shared.terminal.components.choice_menu import (
+    repl_choose_one,
+    repl_section_break,
+    repl_tty_interactive,
+)
 
 
 def _interactive_template_menu(session: Session, console: Console) -> bool:

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 import platform.harness_ports as harness_ports
-from surfaces.interactive_shell.ui.output.boundary import install_harness_ports
+from surfaces.shared.terminal.output.boundary import install_harness_ports
 
 
 @pytest.fixture(autouse=True)

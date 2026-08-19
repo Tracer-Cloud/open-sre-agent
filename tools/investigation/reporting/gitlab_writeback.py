@@ -5,7 +5,7 @@ import os
 
 from core.state import InvestigationState
 from integrations.gitlab import build_gitlab_config, post_gitlab_mr_note
-from platform.common.truncation import truncate
+from platform.text.truncation import truncate
 
 logger = logging.getLogger(__name__)
 
