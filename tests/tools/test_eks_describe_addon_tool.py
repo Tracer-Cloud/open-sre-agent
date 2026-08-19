@@ -37,7 +37,7 @@ def test_run_happy_path() -> None:
         "health": {},
         "marketplaceVersion": None,
     }
-    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.describe_eks_addon.EKSClient", return_value=mock_client):
         result = describe_eks_addon(
             cluster_name="c1", addon_name="coredns", role_arn="arn:aws:iam::123:role/r"
         )
@@ -52,7 +52,7 @@ def test_run_handles_client_error() -> None:
         {"Error": {"Code": "NotFoundException", "Message": "Addon not found"}}, "DescribeAddon"
     )
     mock_client.describe_addon.side_effect = error
-    with patch("integrations.eks.tools.EKSClient", return_value=mock_client):
+    with patch("integrations.eks.tools.describe_eks_addon.EKSClient", return_value=mock_client):
         result = describe_eks_addon(
             cluster_name="c1", addon_name="coredns", role_arn="arn:aws:iam::123:role/r"
         )

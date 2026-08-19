@@ -1,326 +1,38 @@
-# ======== from tools/eks_deployment_status_tool/ ========
-
 """EKS workload investigation tools — Kubernetes Python SDK backed."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
-
-from core.tool_framework.metadata import EvidenceType, SideEffectLevel
-from core.tool_framework.tool_decorator import tool
-from core.tool_framework.utils.tool_availability import tool_unavailable
-from integrations.eks.eks_k8s_client import build_k8s_clients
-
-logger = logging.getLogger(__name__)
-
-
-def _deployment_status_is_available(sources: dict[str, dict]) -> bool:
-    return bool(_eks_available(sources) and sources.get("eks", {}).get("deployment"))
-
-
-def _deployment_status_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    eks = sources["eks"]
-    return {
-        "cluster_name": eks["cluster_name"],
-        "namespace": eks.get("namespace", "default"),
-        "deployment_name": eks["deployment"],
-        **_eks_creds(eks),
-    }
-
-
-@tool(
-    name="get_eks_deployment_status",
-    source="eks",
-    description="Get EKS deployment rollout status — desired vs ready vs unavailable replicas.",
-    use_cases=[
-        "Checking if a deployment has unavailable replicas",
-        "Verifying rollout status after a deployment change",
-    ],
-    requires=["cluster_name", "deployment_name"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "cluster_name": {"type": "string"},
-            "namespace": {"type": "string"},
-            "deployment_name": {"type": "string"},
-            "role_arn": {"type": "string"},
-            "external_id": {"type": "string", "default": ""},
-            "region": {"type": "string", "default": "us-east-1"},
-            "credentials": {"type": ["object", "null"], "default": None},
-        },
-        "required": ["cluster_name", "namespace", "deployment_name", "role_arn"],
-    },
-    is_available=_deployment_status_is_available,
-    injected_params=("credentials", "external_id", "role_arn"),
-    extract_params=_deployment_status_extract_params,
-)
-def get_eks_deployment_status(
-    cluster_name: str,
-    namespace: str,
-    deployment_name: str,
-    role_arn: str,
-    external_id: str = "",
-    region: str = "us-east-1",
-    credentials: dict[str, Any] | None = None,
-    **_kwargs: Any,
-) -> dict[str, Any]:
-    """Get EKS deployment rollout status — desired vs ready vs unavailable replicas."""
-    logger.info(
-        "[eks] get_eks_deployment_status cluster=%s ns=%s deployment=%s",
-        cluster_name,
-        namespace,
-        deployment_name,
-    )
-    try:
-        _, apps_v1 = build_k8s_clients(
-            cluster_name,
-            role_arn,
-            external_id,
-            region,
-            credentials=credentials,
-        )
-        dep = apps_v1.read_namespaced_deployment(name=deployment_name, namespace=namespace)
-        spec = dep.spec
-        status = dep.status
-        conditions = [
-            {"type": c.type, "status": c.status, "reason": c.reason, "message": c.message}
-            for c in (status.conditions or [])
-        ]
-        return {
-            "source": "eks",
-            "available": True,
-            "cluster_name": cluster_name,
-            "namespace": namespace,
-            "deployment_name": deployment_name,
-            "desired_replicas": spec.replicas,
-            "ready_replicas": status.ready_replicas,
-            "available_replicas": status.available_replicas,
-            "unavailable_replicas": status.unavailable_replicas,
-            "conditions": conditions,
-            "error": None,
-        }
-    except Exception as e:
-        logger.error("[eks] get_eks_deployment_status FAILED: %s", e, exc_info=True)
-        return tool_unavailable("eks", str(e), deployment_name=deployment_name)
-
-
-# ======== from tools/eks_describe_addon_tool/ ========
-
-"""EKS cluster-level investigation tools — boto3 backed."""
-
+from typing import Any, cast
 
 from botocore.exceptions import ClientError
+from pydantic import BaseModel, Field
 
+from core.tool_framework.metadata import EvidenceType, SideEffectLevel
 from core.tool_framework.telemetry import report_run_error
 from core.tool_framework.tool_decorator import tool
+from core.tool_framework.utils.tool_availability import tool_unavailable
+from integrations.eks.availability import eks_available_or_backend
 from integrations.eks.eks_client import EKSClient
+from integrations.eks.eks_k8s_client import build_k8s_clients
+from integrations.eks.tools._shared import _eks_available, _eks_creds  # noqa: F401
 
-
-def _addon_is_available(sources: dict[str, dict]) -> bool:
-    return bool(_eks_available(sources) and sources.get("eks", {}).get("cluster_name"))
-
-
-def _addon_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    eks = sources["eks"]
-    return {"cluster_name": eks["cluster_name"], "addon_name": "coredns", **_eks_creds(eks)}
-
-
-@tool(
-    name="describe_eks_addon",
-    source="eks",
-    description="Describe an EKS addon — coredns, kube-proxy, vpc-cni, aws-ebs-csi-driver, etc.",
-    use_cases=[
-        "Investigating DNS resolution failures (coredns)",
-        "Checking networking issues (vpc-cni)",
-        "Finding storage attachment failures (ebs-csi)",
-    ],
-    requires=["cluster_name"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "cluster_name": {"type": "string"},
-            "addon_name": {"type": "string", "default": "coredns"},
-            "role_arn": {"type": "string"},
-            "external_id": {"type": "string", "default": ""},
-            "region": {"type": "string", "default": "us-east-1"},
-            "credentials": {"type": ["object", "null"], "default": None},
-        },
-        "required": ["cluster_name", "role_arn"],
-    },
-    is_available=_addon_is_available,
-    injected_params=("credentials", "external_id", "role_arn"),
-    extract_params=_addon_extract_params,
+# Re-exported from their own modules — import triggers @tool registration.
+from integrations.eks.tools.describe_eks_addon import (
+    describe_eks_addon as describe_eks_addon,  # noqa: F401
 )
-def describe_eks_addon(
-    cluster_name: str,
-    addon_name: str,
-    role_arn: str,
-    external_id: str = "",
-    region: str = "us-east-1",
-    credentials: dict[str, Any] | None = None,
-    **_kwargs: Any,
-) -> dict[str, Any]:
-    """Describe an EKS addon — coredns, kube-proxy, vpc-cni, aws-ebs-csi-driver, etc."""
-    try:
-        client = EKSClient(
-            role_arn=role_arn,
-            external_id=external_id,
-            region=region,
-            credentials=credentials,
-        )
-        addon = client.describe_addon(cluster_name, addon_name)
-        return {
-            "source": "eks",
-            "available": True,
-            "cluster_name": cluster_name,
-            "addon_name": addon_name,
-            "status": addon.get("status"),
-            "addon_version": addon.get("addonVersion"),
-            "health": addon.get("health", {}),
-            "marketplace_version": addon.get("marketplaceVersion"),
-            "error": None,
-        }
-    except ClientError as e:
-        report_run_error(
-            e,
-            tool_name="describe_eks_addon",
-            source="eks",
-            component="tools.eks_describe_addon_tool",
-            method="EKSClient.describe_addon",
-            severity="warning",
-            extras={
-                "cluster_name": cluster_name,
-                "addon_name": addon_name,
-                "region": region,
-            },
-        )
-        return tool_unavailable("eks", str(e), cluster_name=cluster_name, addon_name=addon_name)
-    except Exception as e:
-        report_run_error(
-            e,
-            tool_name="describe_eks_addon",
-            source="eks",
-            component="tools.eks_describe_addon_tool",
-            method="EKSClient.describe_addon",
-            extras={
-                "cluster_name": cluster_name,
-                "addon_name": addon_name,
-                "region": region,
-            },
-        )
-        return tool_unavailable("eks", str(e), cluster_name=cluster_name, addon_name=addon_name)
-
-
-# ======== from tools/eks_describe_cluster_tool/ ========
-
-"""EKS cluster-level investigation tools — boto3 backed."""
-
-
-from core.tool_framework.tool_decorator import tool
+from integrations.eks.tools.describe_eks_cluster import (
+    describe_eks_cluster as describe_eks_cluster,  # noqa: F401
+)
+from integrations.eks.tools.get_eks_deployment_status import (
+    get_eks_deployment_status as get_eks_deployment_status,  # noqa: F401
+)
+from integrations.eks.workload_helper import extract_cluster_params, extract_workload_params
 
 logger = logging.getLogger(__name__)
-
-
-def _describe_cluster_is_available(sources: dict[str, dict]) -> bool:
-    return bool(_eks_available(sources) and sources.get("eks", {}).get("cluster_name"))
-
-
-def _describe_cluster_extract_params(sources: dict[str, dict]) -> dict[str, Any]:
-    eks = sources["eks"]
-    return {"cluster_name": eks["cluster_name"], **_eks_creds(eks)}
-
-
-@tool(
-    name="describe_eks_cluster",
-    source="eks",
-    description="Describe an EKS cluster — health, version, status, endpoint, logging config.",
-    use_cases=[
-        "Investigating cluster-level issues: version mismatches, endpoint problems",
-        "Checking if control plane logging is disabled",
-        "Verifying cluster status (ACTIVE, DEGRADED, FAILED)",
-    ],
-    requires=["cluster_name"],
-    input_schema={
-        "type": "object",
-        "properties": {
-            "cluster_name": {"type": "string"},
-            "role_arn": {"type": "string"},
-            "external_id": {"type": "string", "default": ""},
-            "region": {"type": "string", "default": "us-east-1"},
-            "credentials": {"type": ["object", "null"], "default": None},
-        },
-        "required": ["cluster_name", "role_arn"],
-    },
-    is_available=_describe_cluster_is_available,
-    injected_params=("credentials", "external_id", "role_arn"),
-    extract_params=_describe_cluster_extract_params,
-)
-def describe_eks_cluster(
-    cluster_name: str,
-    role_arn: str,
-    external_id: str = "",
-    region: str = "us-east-1",
-    credentials: dict[str, Any] | None = None,
-    **_kwargs: Any,
-) -> dict[str, Any]:
-    """Describe an EKS cluster — health, version, status, endpoint, logging config."""
-    logger.info("[eks] describe_eks_cluster cluster=%s region=%s", cluster_name, region)
-    try:
-        client = EKSClient(
-            role_arn=role_arn,
-            external_id=external_id,
-            region=region,
-            credentials=credentials,
-        )
-        cluster = client.describe_cluster(cluster_name)
-        return {
-            "source": "eks",
-            "available": True,
-            "cluster_name": cluster_name,
-            "status": cluster.get("status"),
-            "kubernetes_version": cluster.get("version"),
-            "endpoint": cluster.get("endpoint"),
-            "cluster_role_arn": cluster.get("roleArn"),
-            "logging": cluster.get("logging", {}),
-            "resources_vpc_config": cluster.get("resourcesVpcConfig", {}),
-            "tags": cluster.get("tags", {}),
-            "error": None,
-        }
-    except ClientError as e:
-        report_run_error(
-            e,
-            tool_name="describe_eks_cluster",
-            source="eks",
-            component="tools.eks_describe_cluster_tool",
-            method="EKSClient.describe_cluster",
-            severity="warning",
-            extras={"cluster_name": cluster_name, "region": region},
-        )
-        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
-    except Exception as e:
-        report_run_error(
-            e,
-            tool_name="describe_eks_cluster",
-            source="eks",
-            component="tools.eks_describe_cluster_tool",
-            method="EKSClient.describe_cluster",
-            extras={"cluster_name": cluster_name, "region": region},
-        )
-        return tool_unavailable("eks", str(e), cluster_name=cluster_name)
 
 
 # ======== from tools/eks_events_tool/ ========
-
-"""EKS workload investigation tools — Kubernetes Python SDK backed."""
-
-
-from typing import cast
-
-from core.tool_framework.tool_decorator import tool
-from integrations.eks.availability import eks_available_or_backend
-
-logger = logging.getLogger(__name__)
 
 
 def _events_is_available(sources: dict[str, dict]) -> bool:
@@ -443,17 +155,7 @@ from integrations.eks.workload_helper import extract_cluster_params
 logger = logging.getLogger(__name__)
 
 
-def _eks_available(sources: dict[str, dict]) -> bool:
-    return bool(sources.get("eks", {}).get("connection_verified"))
-
-
-def _eks_creds(eks: dict) -> dict:
-    return {
-        "role_arn": eks.get("role_arn", ""),
-        "external_id": eks.get("external_id", ""),
-        "region": eks.get("region", "us-east-1"),
-        "credentials": eks.get("credentials"),
-    }
+# _eks_available and _eks_creds are imported from _shared at the top of the file.
 
 
 @tool(
