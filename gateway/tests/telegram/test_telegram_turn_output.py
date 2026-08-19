@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock
 
-from gateway.transports.telegram.output_sink import TelegramOutputSink
 from gateway.transports.telegram.poller.client import TelegramBotClient
+from gateway.transports.telegram.turn_output import TelegramTurnOutput
 from platform.delivery.notifications.limits import MAX_MESSAGE_SIZE
 
 
@@ -13,7 +13,7 @@ def test_initial_status_is_not_working_placeholder() -> None:
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
 
-    TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sent = client.send_message.call_args.args[1]
     assert sent != "Working…"
@@ -25,7 +25,7 @@ def test_set_status_never_shows_working_placeholder() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.set_tool_status("Working…")
 
@@ -38,7 +38,7 @@ def test_render_response_header_uses_friendly_assistant_status() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.render_response_header("assistant")
 
@@ -50,7 +50,7 @@ def test_stream_throttles_edits() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=10.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=10.0)
     text = sink.stream(label="assistant", chunks=["hello", " world"])
     assert text == "hello world"
     assert client.edit_message_text.call_count >= 1
@@ -60,7 +60,7 @@ def test_finalize_truncates_long_text() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
     sink.finalize("x" * 5000)
     edited = client.edit_message_text.call_args[0][2]
     assert len(edited) <= MAX_MESSAGE_SIZE
@@ -70,7 +70,7 @@ def test_finalize_logs_outbound_edited_message(caplog) -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     with caplog.at_level(logging.INFO, logger="gateway"):
         sink.finalize("hello\nteam")
@@ -82,7 +82,7 @@ def test_finalize_logs_outbound_fallback_send(caplog) -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.side_effect = [(True, "", "1"), (True, "", "2")]
     client.edit_message_text.return_value = (False, "edit failed")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     with caplog.at_level(logging.INFO, logger="gateway"):
         sink.finalize("fallback message")
@@ -94,7 +94,7 @@ def test_finalize_renders_headers_and_tables_as_html() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.finalize("## Open PRs\n\n| # | Title |\n|---|---|\n| 3811 | docs fix |\n\n---\n\n**Done**")
 
@@ -109,7 +109,7 @@ def test_finalize_renders_markdown_as_html() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.finalize("**bold** and `code`")
 
@@ -124,7 +124,7 @@ def test_finalize_falls_back_to_plain_when_html_rejected() -> None:
     client.send_message.return_value = (True, "", "1")
     # HTML edit fails (bad markup); plain retry succeeds.
     client.edit_message_text.side_effect = [(False, "can't parse entities"), (True, "")]
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.finalize("**bold**")
 
@@ -141,7 +141,7 @@ def test_render_error_appends_auth_login_hint_on_credit_exhaustion() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.render_error(f"Anthropic {CREDIT_EXHAUSTED_MARKER}. Original error: 400")
 
@@ -153,7 +153,7 @@ def test_render_error_no_auth_hint_for_generic_error() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.render_error("something else broke")
 
@@ -166,7 +166,7 @@ def test_render_error_strips_raw_exception_detail() -> None:
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     # Act: hand render_error a raw exception string with a secret in it.
     sink.render_error("RuntimeError: token sk-DO-NOT-LEAK rejected by db-host:5432")
@@ -191,7 +191,7 @@ def test_goal_continuation_keeps_both_streamed_answers() -> None:
         (True, "", "2"),  # continuation placeholder / answer
     ]
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     first = sink.stream(label="assistant", chunks=["step one"])
     second = sink.stream(label="assistant", chunks=["step two"])
@@ -219,7 +219,7 @@ def test_finalize_after_finished_turn_sends_a_new_message() -> None:
         (True, "", "2"),
     ]
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     sink.finalize("step one")
     sink.finalize("step two from finalize")
@@ -248,7 +248,7 @@ def test_a_second_goal_turn_posts_a_new_message_instead_of_overwriting() -> None
     client = MagicMock(spec=TelegramBotClient)
     client.send_message.return_value = (True, "", "1")
     client.edit_message_text.return_value = (True, "")
-    sink = TelegramOutputSink(client=client, chat_id="123", edit_interval_seconds=0.0)
+    sink = TelegramTurnOutput(client=client, chat_id="123", edit_interval_seconds=0.0)
 
     # Act: two turns of one continued goal.
     sink.finalize("turn one answer")

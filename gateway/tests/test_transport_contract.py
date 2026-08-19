@@ -51,9 +51,9 @@ _REQUIRED_CONCERNS: dict[str, str] = {
     "stop command handling": "is_stop_command",
     # Turns are metered.
     "credit metering": "consume_credits",
-    # The sink cooperates with host-side cancellation instead of relying on
-    # the harness patching the attribute on.
-    "sink declares turn_cancel": "self.turn_cancel",
+    # Turn output cooperates with host-side cancellation instead of relying
+    # on the harness patching the attribute on.
+    "turn output declares turn_cancel": "self.turn_cancel",
 }
 
 #: Concerns each existing transport is known to lack. Ledger, not allowlist:

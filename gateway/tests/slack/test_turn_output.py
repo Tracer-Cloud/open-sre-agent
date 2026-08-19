@@ -6,8 +6,8 @@ from gateway.transports.slack.client import (
     SLACK_MAX_MARKDOWN_BLOCK_CHARS,
     SLACK_MAX_MESSAGE_CHARS,
 )
-from gateway.transports.slack.delivery.output_sink import (
-    SlackOutputSink,
+from gateway.transports.slack.delivery.turn_output import (
+    SlackTurnOutput,
 )
 
 
@@ -81,8 +81,8 @@ class _FakeMessagingClient:
         return [chunk for append in self.stream_appends for chunk in append["chunks"]]
 
 
-def _sink(client: _FakeMessagingClient) -> SlackOutputSink:
-    return SlackOutputSink(
+def _sink(client: _FakeMessagingClient) -> SlackTurnOutput:
+    return SlackTurnOutput(
         client=client,
         channel_id="C222",
         thread_ts="1700.100",

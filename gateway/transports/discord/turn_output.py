@@ -1,4 +1,4 @@
-"""Discord gateway output sink."""
+"""Discord turn output."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from platform.turn_host.status_messages import (
 logger = logging.getLogger("gateway")
 
 
-class DiscordOutputSink:
+class DiscordTurnOutput:
     """Stream assistant output back to a Discord channel or thread."""
 
     def __init__(

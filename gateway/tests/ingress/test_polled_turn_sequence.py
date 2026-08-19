@@ -27,12 +27,12 @@ from core.agent_harness.session import SessionCore
 from core.agent_harness.session.persistence.memory import InMemorySessionStore
 from gateway.core.middleware.active_turns import ActiveTurnRegistry
 from gateway.core.middleware.approvals import ApprovalBroker
-from gateway.transports.buzz.output_sink import BuzzOutputSink
-from gateway.transports.telegram.output_sink import TelegramOutputSink
+from gateway.transports.buzz.turn_output import BuzzTurnOutput
+from gateway.transports.telegram.turn_output import TelegramTurnOutput
 
 _REAL_TRACK = ActiveTurnRegistry.track
-_REAL_TELEGRAM_FINALIZE = TelegramOutputSink.finalize
-_REAL_BUZZ_FINALIZE = BuzzOutputSink.finalize
+_REAL_TELEGRAM_FINALIZE = TelegramTurnOutput.finalize
+_REAL_BUZZ_FINALIZE = BuzzTurnOutput.finalize
 
 # Happy-path order both handlers must produce. Reordering claim, timeout,
 # cancel tracking or dispatch changes this list.
@@ -77,8 +77,8 @@ class _RecordingResolver:
 def _recording_callback(recorder: _Recorder):
     """A turn callback that records what the host handed it."""
 
-    def _callback(text: str, session: Any, sink: Any, _logger: logging.Logger) -> None:
-        if isinstance(getattr(sink, "turn_cancel", None), threading.Event):
+    def _callback(text: str, session: Any, output: Any, _logger: logging.Logger) -> None:
+        if isinstance(getattr(output, "turn_cancel", None), threading.Event):
             recorder.note("cancel_armed_before_turn")
         if session is not None:
             recorder.note("session_bound_to_turn")
@@ -93,7 +93,7 @@ def _recording_callback(recorder: _Recorder):
 def _instrument_host_sequence(
     monkeypatch: pytest.MonkeyPatch, recorder: _Recorder
 ) -> ActiveTurnRegistry:
-    """Record claim, cancel tracking, timeout arming, and sink finalize.
+    """Record claim, cancel tracking, timeout arming, and reply finalize.
 
     The callback only sees what the host passed *into* the turn. Reordering
     ``track`` / ``timeout_after`` / ``claim`` / ``finalize`` around that
@@ -102,9 +102,9 @@ def _instrument_host_sequence(
     from gateway.core.middleware.active_turns import ActiveTurnRegistry
     from gateway.core.middleware.terminal_outcome import TerminalOutcomeArbiter
     from gateway.transports.buzz import inbound_handler as buzz_handler
-    from gateway.transports.buzz.output_sink import BuzzOutputSink
+    from gateway.transports.buzz.turn_output import BuzzTurnOutput
     from gateway.transports.telegram import inbound_handler as telegram_handler
-    from gateway.transports.telegram.output_sink import TelegramOutputSink
+    from gateway.transports.telegram.turn_output import TelegramTurnOutput
 
     class _RecordingTerminal(TerminalOutcomeArbiter):
         def claim(self) -> bool:
@@ -146,8 +146,8 @@ def _instrument_host_sequence(
 
         monkeypatch.setattr(cls, "finalize", finalize)
 
-    _wrap_finalize(TelegramOutputSink, _REAL_TELEGRAM_FINALIZE)
-    _wrap_finalize(BuzzOutputSink, _REAL_BUZZ_FINALIZE)
+    _wrap_finalize(TelegramTurnOutput, _REAL_TELEGRAM_FINALIZE)
+    _wrap_finalize(BuzzTurnOutput, _REAL_BUZZ_FINALIZE)
     return registry
 
 

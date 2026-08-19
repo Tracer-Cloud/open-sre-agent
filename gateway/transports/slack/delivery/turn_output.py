@@ -1,10 +1,10 @@
-"""Slack output sink: streamed timeline reply with placeholder-edit fallback.
+"""Slack turn output: streamed timeline reply with placeholder-edit fallback.
 
 Preferred delivery is Slack's streaming surface (``chat.startStream`` →
 ``chat.appendStream`` → ``chat.stopStream``): tool progress renders as
 timeline task cards and the answer streams as native markdown, like Claude
 Tag. When streaming is unavailable (feature-gated workspace, old plan, API
-error) the sink falls back to the classic flow — one status placeholder
+error) this class falls back to the classic flow — one status placeholder
 posted in-thread, edited in place while the turn runs, replaced by the final
 answer.
 """
@@ -38,7 +38,7 @@ from platform.turn_host.status_messages import (
 logger = logging.getLogger("gateway")
 
 
-class SlackOutputSink:
+class SlackTurnOutput:
     """Stream assistant output back to the triggering Slack thread."""
 
     def __init__(
@@ -79,7 +79,7 @@ class SlackOutputSink:
         )
         if self._message_ts is None:
             logger.warning(
-                "[slack-sink] placeholder post FAILED channel=%s thread_ts=%s; "
+                "[slack-turn-output] placeholder post FAILED channel=%s thread_ts=%s; "
                 "final answer will be posted as a new message",
                 channel_id,
                 thread_ts,
@@ -171,7 +171,7 @@ class SlackOutputSink:
                     return
                 # Stream broke mid-turn: deliver the full answer the classic way.
                 logger.warning(
-                    "[slack-sink] stream delivery failed channel=%s thread_ts=%s; "
+                    "[slack-turn-output] stream delivery failed channel=%s thread_ts=%s; "
                     "falling back to a plain message",
                     self._channel_id,
                     self._thread_ts,
@@ -220,7 +220,7 @@ class SlackOutputSink:
             # Both the in-place edit and the fresh post failed: the user is left
             # staring at the "Digging in…" placeholder with no answer.
             logger.error(
-                "[slack-sink] DELIVERY FAILED channel=%s thread_ts=%s chars=%d "
+                "[slack-turn-output] DELIVERY FAILED channel=%s thread_ts=%s chars=%d "
                 "(both update and post rejected)",
                 self._channel_id,
                 self._thread_ts,

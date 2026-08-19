@@ -70,7 +70,7 @@ class ActiveTurnRegistry:
     ) -> None:
         """Attach the stop finalizer to an already registered ``event``.
 
-        Dispatch-time registration happens before the turn has a sink to
+        Dispatch-time registration happens before the turn has an output to
         finalize; the turn binds the callback once it starts. A stop that
         lands in between only sets the Event — the turn must check it before
         invoking the agent.

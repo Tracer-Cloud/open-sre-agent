@@ -1,4 +1,4 @@
-"""Telegram output sink with typing indicator and throttled message streaming."""
+"""Telegram turn output with typing indicator and throttled message streaming."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _log_preview(text: str) -> str:
     return preview
 
 
-class TelegramOutputSink:
+class TelegramTurnOutput:
     """Stream assistant output back through the Telegram Bot API."""
 
     def __init__(

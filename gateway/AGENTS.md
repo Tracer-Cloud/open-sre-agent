@@ -74,7 +74,7 @@ Packages are split like `core/agent_harness/prompts/`: **core infra** vs
   settings, inbound worker, security, turn output, and `startup.py`. Peers
   never import each other or `gateway.startup`/`web`; anything two need belongs in
   `core/` (per-turn steps in `gateway.core.middleware`) or
-  `platform.turn_host` (turn handler, output sink, session agents).
+  `platform.turn_host` (turn handler, turn output, session agents).
 - `web/` — web surface (FastAPI app, investigations API, worker/artifacts).
   May import `core/`; must not import chat transports or `gateway.startup`.
 - `core/storage/session/resolver.py` — per-conversation session binding

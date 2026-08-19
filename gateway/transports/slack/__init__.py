@@ -2,7 +2,7 @@
 
 Layout:
 - ``inbound/`` — event parsing, authorization, attachments, dispatcher
-- ``outbound/`` — thread-reply sink, approvals, feedback, streamed replies
+- ``outbound/`` — thread-reply posting, approvals, feedback, streamed replies
 - ``connection/`` — Socket Mode worker and heartbeat
 - package root — ``settings``, ``client``, ``startup``
 

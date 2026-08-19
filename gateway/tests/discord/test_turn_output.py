@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.transports.discord.output_sink import DiscordOutputSink
+from gateway.transports.discord.turn_output import DiscordTurnOutput
 
 
 @pytest.fixture
@@ -55,23 +55,23 @@ def _patch_discord_client(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return "msg-extra"
 
     monkeypatch.setattr(
-        "gateway.transports.discord.output_sink.send_message",
+        "gateway.transports.discord.turn_output.send_message",
         _send_message,
     )
     monkeypatch.setattr(
-        "gateway.transports.discord.output_sink.edit_message",
+        "gateway.transports.discord.turn_output.edit_message",
         _edit_message,
     )
     monkeypatch.setattr(
-        "gateway.transports.discord.output_sink.edit_message_with_components",
+        "gateway.transports.discord.turn_output.edit_message_with_components",
         _edit_with_components,
     )
     monkeypatch.setattr(
-        "gateway.transports.discord.output_sink.send_message_with_components",
+        "gateway.transports.discord.turn_output.send_message_with_components",
         _send_with_components,
     )
     monkeypatch.setattr(
-        "gateway.transports.discord.output_sink.feedback_components",
+        "gateway.transports.discord.turn_output.feedback_components",
         lambda: [],
     )
     return state
@@ -81,7 +81,7 @@ def test_render_error_hides_raw_detail_behind_generic_copy(
     _patch_discord_client: dict[str, Any],
 ) -> None:
     # Arrange
-    sink = DiscordOutputSink(
+    sink = DiscordTurnOutput(
         bot_token="tok",
         channel_id="chan-1",
         edit_interval_seconds=0.0,
@@ -102,7 +102,7 @@ def test_render_error_keeps_credit_exhaustion_guidance(
 ) -> None:
     from core.llm.shared.llm_retry import CREDIT_EXHAUSTED_MARKER
 
-    sink = DiscordOutputSink(
+    sink = DiscordTurnOutput(
         bot_token="tok",
         channel_id="chan-1",
         edit_interval_seconds=0.0,
@@ -117,7 +117,7 @@ def test_sink_accepts_tool_hooks_attribute(
     _patch_discord_client: dict[str, Any],
 ) -> None:
     hooks = MagicMock(name="approval_hooks")
-    sink = DiscordOutputSink(
+    sink = DiscordTurnOutput(
         bot_token="tok",
         channel_id="chan-1",
         edit_interval_seconds=0.0,
@@ -136,7 +136,7 @@ def test_a_second_goal_turn_posts_instead_of_overwriting(
     already read, and returning early would drop the later turn entirely.
     """
     # Arrange.
-    sink = DiscordOutputSink(bot_token="t", channel_id="c", edit_interval_seconds=0.0)
+    sink = DiscordTurnOutput(bot_token="t", channel_id="c", edit_interval_seconds=0.0)
     sink._message_id = "msg-1"
 
     # Act: two turns of one continued goal.

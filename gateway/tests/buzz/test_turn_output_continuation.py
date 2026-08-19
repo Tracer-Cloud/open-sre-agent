@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from gateway.transports.buzz.output_sink import BuzzOutputSink
+from gateway.transports.buzz.turn_output import BuzzTurnOutput
 
 
 def _client() -> MagicMock:
@@ -23,7 +23,7 @@ def test_a_second_goal_turn_sends_a_new_message() -> None:
     """
     # Arrange.
     client = _client()
-    sink = BuzzOutputSink(client=client, channel_id="c1", edit_interval_seconds=0.0)
+    sink = BuzzTurnOutput(client=client, channel_id="c1", edit_interval_seconds=0.0)
     sends_after_placeholder = client.send_message.call_count
 
     # Act.

@@ -1,4 +1,4 @@
-"""Buzz gateway output sink with throttled status editing.
+"""Buzz turn output with throttled status editing.
 
 Unlike Telegram, Buzz content is already markdown (Desktop renders it
 directly), so no HTML transform is needed on the way out. Status updates edit
@@ -36,7 +36,7 @@ def _log_preview(text: str) -> str:
     return preview
 
 
-class BuzzOutputSink:
+class BuzzTurnOutput:
     """Stream assistant output back through the Buzz channel."""
 
     def __init__(
@@ -47,7 +47,7 @@ class BuzzOutputSink:
         edit_interval_seconds: float = 1.5,
         tool_hooks: object | None = None,
     ) -> None:
-        # Set per turn by the host cancel plumbing; declared here so the sink
+        # Set per turn by the host cancel plumbing; declared here so this class
         # cooperates with cancellation like every other transport's, instead of
         # relying on ``ensure_turn_cancel`` patching the attribute on.
         self.turn_cancel: threading.Event | None = None
@@ -138,4 +138,4 @@ class BuzzOutputSink:
         return bool(result["success"])
 
 
-__all__ = ["BuzzOutputSink"]
+__all__ = ["BuzzTurnOutput"]
