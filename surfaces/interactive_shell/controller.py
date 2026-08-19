@@ -200,6 +200,9 @@ class InteractiveShellController:
             turn_handler=TurnHandler(
                 console=self.service_console,
                 agent_build=shell_agent_build_config(request_exit=self.prompt.request_exit),
+                # One handler for the REPL lifetime; /new and /resume rotate
+                # session_id on the live handle — keep only that id's agent.
+                retain_only_current_session=True,
             ),
         )
         # Prompt echoes belong in the same stream as everything else this turn

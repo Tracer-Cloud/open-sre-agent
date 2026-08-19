@@ -76,16 +76,22 @@ class TurnHandler:
         agent_build: AgentBuildConfig | None = None,
         gate: TurnConcurrencyGate | None = None,
         busy_message: str = AT_CAPACITY_MESSAGE,
+        retain_only_current_session: bool = False,
     ) -> None:
         self._console = console
         self._pool = SessionAgentPool(
             console=console,
             slash_ports_factory=slash_ports_factory,
             agent_build=agent_build,
+            retain_only_current_session=retain_only_current_session,
         )
         # Gateway already bootstrapped env at process start; turns must not reload.
         self._gate = gate
         self._busy_message = busy_message
+
+    def drop_session(self, session_id: str) -> None:
+        """Drop a pooled agent for ``session_id`` (after /new, /resume, or chat rotate)."""
+        self._pool.drop_session(session_id)
 
     def __call__(
         self,

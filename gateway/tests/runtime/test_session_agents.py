@@ -249,3 +249,63 @@ def test_different_sessions_still_run_concurrently(monkeypatch: pytest.MonkeyPat
 
     # Assert
     assert len(reached) == 2, reached
+
+
+def test_drop_session_removes_cached_agent_and_output(monkeypatch: pytest.MonkeyPatch) -> None:
+    pool = _fake_agent_pool(monkeypatch)
+    session = SessionCore(store=InMemorySessionStore())
+    logger = logging.getLogger("test.pool.drop")
+    first = pool.agent_for(session=session, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({session.session_id})
+
+    pool.drop_session(session.session_id)
+
+    assert pool.cached_session_ids == frozenset()
+    second = pool.agent_for(session=session, output=MagicMock(), logger=logger)
+    assert second is not first
+
+
+def test_retain_only_current_session_drops_stale_ids_after_rotation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shell /new and /resume rotate session_id; the REPL keeps one TurnHandler."""
+    constructed: list[str] = []
+
+    class _FakeAgent:
+        def __init__(self, **kwargs: Any) -> None:
+            constructed.append(str(kwargs["session"].session_id))
+            self.bind_turn = MagicMock()
+            self.bind_session = MagicMock()
+
+    monkeypatch.setattr(
+        "platform.turn_host.session_agents.DefaultHeadlessBuild",
+        default_headless_build_stub(lambda **kwargs: _FakeAgent(**kwargs)),
+    )
+    pool = SessionAgentPool(
+        console=Console(force_terminal=False),
+        retain_only_current_session=True,
+    )
+    logger = logging.getLogger("test.pool.retain")
+    first = SessionCore(store=InMemorySessionStore())
+    second = SessionCore(store=InMemorySessionStore())
+
+    pool.agent_for(session=first, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({first.session_id})
+
+    pool.agent_for(session=second, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({second.session_id})
+    assert constructed == [first.session_id, second.session_id]
+
+
+def test_gateway_default_retains_multiple_session_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Chat hosts many conversations on one TurnHandler — do not cull peers."""
+    pool = _fake_agent_pool(monkeypatch)
+    assert pool._retain_only_current_session is False
+    logger = logging.getLogger("test.pool.gateway")
+    a = SessionCore(store=InMemorySessionStore())
+    b = SessionCore(store=InMemorySessionStore())
+    pool.agent_for(session=a, output=MagicMock(), logger=logger)
+    pool.agent_for(session=b, output=MagicMock(), logger=logger)
+    assert pool.cached_session_ids == frozenset({a.session_id, b.session_id})

@@ -58,6 +58,7 @@ class SessionAgentPool:
         console: Console,
         slash_ports_factory: SlashPortsFactory | None = None,
         agent_build: AgentBuildConfig | None = None,
+        retain_only_current_session: bool = False,
     ) -> None:
         self._console = console
         self._slash_ports_factory = slash_ports_factory
@@ -68,6 +69,11 @@ class SessionAgentPool:
                 apply_capability_policy=ensure_gateway_capability_policy,
             )
         )
+        # Interactive shell keeps one TurnHandler for the REPL lifetime while
+        # /new and /resume rotate session_id in place. When this flag is set,
+        # handing out an agent for the live id drops every other cached entry
+        # so rotations do not accumulate unreachable agents, outputs, and locks.
+        self._retain_only_current_session = retain_only_current_session
         self._agents: dict[str, HeadlessAgent] = {}
         self._outputs: dict[str, BindableOutput] = {}
         # One agent serves every turn of a session, and each turn rebinds its
@@ -76,6 +82,20 @@ class SessionAgentPool:
         # sessions are independent and stay concurrent.
         self._session_locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
+
+    def drop_session(self, session_id: str) -> None:
+        """Forget a session's cached agent, bindable output, and lock."""
+        if not session_id:
+            return
+        self._agents.pop(session_id, None)
+        self._outputs.pop(session_id, None)
+        with self._locks_guard:
+            self._session_locks.pop(session_id, None)
+
+    def _drop_sessions_except(self, keep_session_id: str) -> None:
+        for session_id in tuple(self._agents):
+            if session_id != keep_session_id:
+                self.drop_session(session_id)
 
     def _lock_for(self, session_id: str) -> threading.Lock:
         """The lock guarding one session's agent, created on first use."""
@@ -120,6 +140,8 @@ class SessionAgentPool:
         if policy is not None:
             policy(session)
         session_id = str(getattr(session, "session_id", "") or "")
+        if self._retain_only_current_session and session_id:
+            self._drop_sessions_except(session_id)
         session_output = self._outputs.get(session_id) if session_id else None
         if session_output is None:
             session_output = BindableOutput()

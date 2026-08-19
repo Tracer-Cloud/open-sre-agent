@@ -58,6 +58,7 @@ def execute_shell_turn(
         handler = TurnHandler(
             console=console,
             agent_build=shell_agent_build_config(request_exit=request_exit),
+            retain_only_current_session=True,
         )
 
     def _on_progress(goal: SessionGoal) -> None:
